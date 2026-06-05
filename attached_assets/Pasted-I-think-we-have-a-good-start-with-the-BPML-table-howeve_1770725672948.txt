@@ -1,0 +1,25 @@
+I think we have a good start with the BPML table, however there are many gaps still.
+
+In no particular order:
+
+1. When I open up the BPM L sheet and I'm faced with a large set of data, I have no option to scroll to the right to see all the other available fields. Equally I can't scroll up or down to see all the data so there are no scrolling bars to move vertically or horizontally to see the data and this is absolutely required
+
+2. the table is large and will also need some borders within the table like the Monday table where we have grey lines within the actual table itself horizontally and vertically. This is definitely needed for this large table.
+
+3. I have no way of changing the orders of the table, in other words the field headings if I want to change or remove or add to the layout This capability is not available and active like I have in the other Tables. I could also previously drag and move columns around and this is no longer available.
+
+4. The save view does not work, of course we need to first be able to change the layouts and the view of the data before we can actually even use the save view function. Can we fix this so we have that ability to have multiple views of the data.
+
+5. like the Monday table we can add an additional tab to see a filtered view of the master data. So for example I might want to create an OTC tab and a PTP and a RTR tab. this is the same functionality we have on the Monday table where we can save multiple views of the master data.
+
+6. if I want to change the library or edit the library, I don't have the option to add a new process type. e.g. we might have order to cash or record to report or hire to retire or purchase to pay I don't want to select only one process type but I might need one that says All process types Or the need to create a user specific process type Can you add the feature that allows users to add process types that are customer or company specific
+
+7. the add entry button does not work and even if it did, there are no scroll bars for me to scroll to the bottom of the screen.
+
+8. the one feature which I do like a lot and I think will do very well is when you click on any line, it brings up the summary window on the right hand side. Is there a way to have three sizes for that window IE small medium or large and this way we can showcase more information on a screen if a user has a large screen But if they have a small screen they might want to use the small layout. In addition if it's possible to have a scrolling function where you open up one record and you see the summary window and you can then scroll through all the records line by line but through the summary window which presents the data in a more consumable way. Equally if there is a better way to improve the user experience when looking at this large set of data, feel free to provide some suggestions.
+
+9. The configuration icon called Sections allows me to see all the available fields and also allows me to create user defined fields However I'm not sure whether this function should allow me to enable or disabled the viewing of fields If that is the case it is then not working. 
+
+10. when I select Filter or sort or group, I don't seem to have all the fields available to use them in the function. For example if I want to sort my list by L4 sub processes or L5 task this is not available for me. Can this be addressed with all those buttons where there is a dropdown and a further list to select from
+
+11. Finally given the high volume of data If there are any other best practises on how to best display this data please let me know and suggest anything that could make the viewing of this data more palatable. In some cases I think the lines are too long and also I can't change the width of the columns and if we could have an auto fit function that makes the tables or columns widen if there is long text, that would be ideal but also the ability to individually change the width of some of the columns by double clicking on the column border.

@@ -1,0 +1,132 @@
+✅ PART 1 — BPML TABLE DESIGN (FIELD DEFINITIONS)
+
+This is a universal BPML schema that supports:
+
+L1–L5 process hierarchy
+
+Cross-ERP usage
+
+Implementation lifecycle tracking
+
+Controls & SOX
+
+Roles & security
+
+Testing coverage
+
+Demo showcase scenarios
+
+Optional/hidden fields for advanced governance
+
+You can implement this as:
+
+SQL table
+
+JSON schema
+
+NoSQL document
+
+Replit seed dataset
+
+Grid/table UI
+
+🧱 Core BPML Identity Fields
+
+These define the process hierarchy and structure.
+
+Field	Type	Required	Description
+bpml_id	string	✅	Unique ID (e.g. O2C-L3-001)
+process_code	string	✅	Structured code
+process_name	string	✅	Process title
+process_description	text	✅	Description
+level_1	string	✅	End-to-End (O2C, P2P, RTR, HTR)
+level_2	string	✅	Process Group
+level_3	string	✅	Business Process
+level_4	string	optional	Subprocess
+level_5	string	optional	Task
+parent_id	string	optional	Parent BPML ID
+sequence_order	number	optional	Order in flow
+🏢 ERP Mapping Fields
+
+Supports multi-platform mapping.
+
+Field	Type	Required
+erp_platform	enum	optional (SAP / Oracle / MS / Multi)
+sap_module	string	optional
+oracle_module	string	optional
+ms_module	string	optional
+application	string	optional
+transaction_codes	array	optional
+fiori_app	string	optional
+👤 Ownership & Governance
+Field	Type
+process_owner	string
+business_owner	string
+it_owner	string
+raci_role	string
+department	string
+✅ Implementation Lifecycle Tracking Fields
+
+(These are your optional/hideable Replit UI fields)
+
+You can group these under collapsible UI sections.
+
+🎯 Process Design Stage
+Field	Type
+design_status	enum(Not Started / In Progress / Approved)
+design_document_link	string
+design_version	string
+design_signoff_date	date
+🛠 Process Build / Configuration
+Field	Type
+build_status	enum
+configuration_complete	boolean
+config_object_ids	array
+transport_ids	array
+build_notes	text
+🧪 Testing Tracking
+
+Split into proper ERP testing layers.
+
+Unit Testing
+Field	Type
+unit_test_required	boolean
+unit_test_status	enum
+unit_test_script_id	string
+unit_test_passed	boolean
+Integration / SIT
+Field	Type
+sit_required	boolean
+sit_status	enum
+sit_test_case_ids	array
+End-to-End Testing
+Field	Type
+e2e_test_required	boolean
+e2e_status	enum
+e2e_scenario_id	string
+UAT
+Field	Type
+uat_required	boolean
+uat_status	enum
+uat_signoff	boolean
+uat_signoff_date	date
+🔐 Roles & Authorisations
+Field	Type
+role_required	boolean
+role_names	array
+segregation_of_duties_flag	boolean
+security_review_status	enum
+🧾 Controls & SOX
+Field	Type
+sox_relevant	boolean
+control_id	string
+control_description	text
+control_type	enum(Preventive/Detective)
+control_owner	string
+control_frequency	enum
+control_tested	boolean
+🔄 Change & Release
+Field	Type
+change_request_id	string
+release_version	string
+deployment_status	enum

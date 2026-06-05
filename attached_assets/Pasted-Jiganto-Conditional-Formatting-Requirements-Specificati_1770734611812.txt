@@ -1,0 +1,417 @@
+Jiganto Conditional Formatting — Requirements Specification
+1️⃣ Objective
+
+Implement a reusable Conditional Formatting Framework for Jiganto data grids and tables that allows users to define rules that automatically format:
+
+Cells
+
+Rows
+
+Columns
+
+Entire records
+
+based on configurable conditions applied to field values.
+
+The feature must work across all Jiganto modules and support small, medium, and large datasets.
+
+2️⃣ Scope of Capability
+
+Conditional formatting must support:
+
+Numeric fields
+
+Text fields
+
+Dates
+
+Status fields
+
+Boolean fields
+
+Calculated fields
+
+Lookup / reference fields
+
+Formula results
+
+Formatting should update:
+
+In real-time on data load
+
+After edits
+
+After recalculation
+
+After filter/sort
+
+After API refresh
+
+3️⃣ User Stories
+End User
+
+I can define rules like Excel conditional formatting
+
+I can highlight values above/below thresholds
+
+I can color rows based on status
+
+I can flag overdue items
+
+I can apply multiple rules
+
+I can prioritize rules
+
+I can preview formatting before saving
+
+Admin
+
+I can define rules globally per module
+
+I can create reusable rule templates
+
+I can apply rules to all users or selected roles
+
+4️⃣ Rule Builder UI Requirements
+
+Create a Conditional Formatting Rule Builder Panel.
+
+UI Elements
+
+Each rule must include:
+
+Rule Name
+Target Scope
+Target Field(s)
+Condition Type
+Operator
+Comparison Value
+Formatting Style
+Priority
+Enabled/Disabled Toggle
+Target Scope Options
+
+Single Cell
+
+Entire Row
+
+Entire Column
+
+Multiple Fields
+
+Entire Table Dataset
+
+5️⃣ Supported Condition Types
+Basic Comparisons
+
+equals
+
+not equals
+
+greater than
+
+less than
+
+greater or equal
+
+less or equal
+
+between
+
+not between
+
+Text Conditions
+
+contains
+
+does not contain
+
+starts with
+
+ends with
+
+matches pattern (regex)
+
+Date Conditions
+
+before
+
+after
+
+between dates
+
+today
+
+overdue
+
+due within X days
+
+Empty Checks
+
+is empty
+
+is not empty
+
+is null
+
+is not null
+
+Boolean Conditions
+
+true
+
+false
+
+Status Conditions
+
+matches status value
+
+in status set
+
+Formula-Based Conditions
+
+Allow rule condition based on:
+
+custom expression / formula
+
+Example:
+
+Amount > Budget * 1.2
+DaysOpen > SLA_Days
+Progress < PlannedProgress
+6️⃣ Multi-Condition Logic
+
+Rules must support:
+
+AND logic
+OR logic
+Nested condition groups
+
+Example:
+
+(Status = "Open" AND Priority = "High")
+OR
+(DaysOpen > 10)
+7️⃣ Formatting Options
+Cell Formatting
+
+Background color
+
+Text color
+
+Bold
+
+Italic
+
+Underline
+
+Border style
+
+Font size
+
+Icon overlay
+
+Row Formatting
+
+Row background color
+
+Row text style
+
+Row icon flag
+
+Visual Indicators
+
+Support icon sets like Excel:
+
+🔴 red / 🟡 amber / 🟢 green
+
+Arrows up/down
+
+Check / warning / cross
+
+Custom SVG icons
+
+Data Bars (Advanced — Phase 2)
+
+Gradient fill bars inside cells
+
+Percent scale
+
+Value scale
+
+8️⃣ Rule Priority & Conflict Resolution
+
+Rules must support priority ordering:
+
+Priority number (1 = highest)
+
+Conflict resolution modes:
+
+Stop processing lower rules if matched
+
+Allow multiple styles to merge
+
+Highest priority wins
+
+9️⃣ Rule Storage Model (Replit Implementation)
+
+Rules stored as JSON objects.
+
+Example Rule JSON
+{
+  "ruleId": "CF-001",
+  "name": "Highlight High Amount",
+  "scope": "cell",
+  "field": "amount",
+  "condition": {
+    "operator": ">",
+    "value": 10000
+  },
+  "format": {
+    "backgroundColor": "#FFE0E0",
+    "textColor": "#B00020",
+    "bold": true
+  },
+  "priority": 1,
+  "enabled": true
+}
+10️⃣ Rule Engine Requirements
+
+Create a Conditional Rule Engine Service
+
+Engine Behavior
+
+Evaluate rules per row
+
+Evaluate rules per cell
+
+Apply formatting dynamically
+
+Cache rule evaluation for performance
+
+Re-evaluate on data change
+
+Evaluation Timing
+
+Rules must execute on:
+
+Table load
+
+Cell edit
+
+Row update
+
+API refresh
+
+Filter/sort change
+
+Formula recalculation
+
+11️⃣ Performance Requirements
+
+Must support:
+
+Tables with 10,000+ rows
+
+Virtual scrolling grids
+
+Lazy rule evaluation
+
+Batched evaluation
+
+Memoization caching
+
+12️⃣ Integration Requirements
+
+Conditional formatting must work with:
+
+Jiganto Data Grid
+
+Org Charts
+
+Help Desk tables
+
+BPM task lists
+
+Finance tables
+
+CRM pipelines
+
+Project task boards
+
+13️⃣ Permissions & Governance
+
+Rules must support:
+
+User-level rules
+Role-level rules
+Module-level rules
+Global rules
+
+Permissions:
+
+View rule
+
+Edit rule
+
+Create rule
+
+Delete rule
+
+14️⃣ Rule Templates Library
+
+Provide built-in templates:
+
+Overdue highlight
+
+SLA breach warning
+
+High value alert
+
+Status color mapping
+
+Risk severity colors
+
+Budget variance alerts
+
+15️⃣ Export / Import Rules
+
+Support:
+
+Export rules as JSON
+Import rules
+Share rule packs
+Apply rule sets to modules
+16️⃣ Preview Mode
+
+Rule builder must include:
+
+Live preview sample data
+
+Test rule button
+
+Highlight matched rows preview
+
+17️⃣ Accessibility Requirements
+
+Formatting must also support:
+
+Pattern overlays
+
+Icons in addition to color
+
+Color-blind friendly palettes
+
+18️⃣ Future Extensions (Design Now, Build Later)
+
+Architecture must allow:
+
+Conditional formatting in charts
+
+Conditional formatting in dashboards
+
+Conditional formatting in Kanban cards
+
+Conditional formatting in Gantt bars
+
+AI-suggested formatting rules

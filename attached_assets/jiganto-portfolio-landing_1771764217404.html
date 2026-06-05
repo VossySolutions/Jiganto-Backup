@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jiganto – Portfolio Command Centre</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Syne:wght@700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-base:      #070d1a;
+  --bg-surface:   #0c1526;
+  --bg-raised:    #101e35;
+  --bg-overlay:   #152440;
+  --bg-hover:     #1a2d50;
+  --border-sub:   rgba(99,132,196,0.11);
+  --border-mid:   rgba(99,132,196,0.22);
+  --border-str:   rgba(99,132,196,0.38);
+  --blue:   #3b82f6;
+  --teal:   #14b8a6;
+  --amber:  #f59e0b;
+  --rose:   #f43f5e;
+  --violet: #8b5cf6;
+  --green:  #10b981;
+  --orange: #f97316;
+  --gray:   #64748b;
+  --txt1:   #dde8f5;
+  --txt2:   #7fa2cc;
+  --txt3:   #3d5a7a;
+  --txtA:   #82bcff;
+  --font:   'Plus Jakarta Sans', sans-serif;
+  --disp:   'Syne', sans-serif;
+  --mono:   'JetBrains Mono', monospace;
+  --r4: 4px; --r8: 8px; --r12: 12px;
+  --sw: 220px; --th: 52px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);background:var(--bg-base);color:var(--txt1);font-size:13px;display:flex;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(99,132,196,0.18);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(99,132,196,0.35)}
+
+/* ─── SIDEBAR ─── */
+.sidebar{width:var(--sw);background:var(--bg-surface);border-right:1px solid var(--border-sub);display:flex;flex-direction:column;flex-shrink:0;z-index:50;position:relative}
+.sidebar::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(59,130,246,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,0.025) 1px,transparent 1px);background-size:22px 22px;pointer-events:none}
+.sb-logo{display:flex;align-items:center;gap:10px;height:var(--th);padding:0 16px;border-bottom:1px solid var(--border-sub);flex-shrink:0;position:relative}
+.logo-mark{width:28px;height:28px;background:linear-gradient(135deg,#3b82f6,#14b8a6);border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-size:14px;font-weight:800;color:#fff;flex-shrink:0;box-shadow:0 0 14px rgba(59,130,246,0.35)}
+.logo-name{font-family:var(--disp);font-size:15px;font-weight:800;color:var(--txt1);letter-spacing:-0.3px;line-height:1}
+.logo-tag{font-size:9px;color:var(--txt3);letter-spacing:1px;text-transform:uppercase;margin-top:2px}
+.sb-ws{margin:8px 10px;padding:8px 10px;background:var(--bg-raised);border:1px solid var(--border-sub);border-radius:var(--r8);display:flex;align-items:center;gap:8px;cursor:pointer;transition:.15s}
+.sb-ws:hover{border-color:var(--border-mid);background:var(--bg-overlay)}
+.ws-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);flex-shrink:0}
+.ws-name{font-size:11.5px;font-weight:600;color:var(--txt2);flex:1}
+.ws-caret{font-size:9px;color:var(--txt3)}
+.nav-scroll{flex:1;overflow-y:auto;padding:4px 0 8px}
+.nav-grp{padding:10px 0 2px}
+.nav-lbl{font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:1.2px;padding:0 16px 5px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 16px;font-size:12.5px;font-weight:400;color:var(--txt2);cursor:pointer;transition:.1s;position:relative;user-select:none}
+.nav-item:hover{background:var(--bg-hover);color:var(--txt1)}
+.nav-item.active{background:linear-gradient(90deg,rgba(59,130,246,0.13),transparent);color:var(--txtA);font-weight:600}
+.nav-item.active::before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:2px;background:var(--blue);border-radius:0 2px 2px 0;box-shadow:0 0 7px var(--blue)}
+.nav-ico{width:16px;text-align:center;font-size:13px;flex-shrink:0;opacity:.75}
+.nav-item.active .nav-ico{opacity:1}
+.nav-badge{margin-left:auto;font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:10px;font-family:var(--mono)}
+.nb-blue{background:rgba(59,130,246,.18);color:var(--blue)}
+.nb-amber{background:rgba(245,158,11,.18);color:var(--amber)}
+.nb-rose{background:rgba(244,63,94,.18);color:var(--rose)}
+.nb-teal{background:rgba(20,184,166,.18);color:var(--teal)}
+.sb-foot{flex-shrink:0;border-top:1px solid var(--border-sub);padding:8px 10px}
+.user-chip{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:var(--r8);cursor:pointer;transition:.12s}
+.user-chip:hover{background:var(--bg-hover)}
+.user-av{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;flex-shrink:0}
+.user-name{font-size:12px;font-weight:600;color:var(--txt1);line-height:1.2}
+.user-role{font-size:10px;color:var(--txt3)}
+
+/* ─── MAIN ─── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* ─── TOPBAR ─── */
+.topbar{height:var(--th);background:var(--bg-surface);border-bottom:1px solid var(--border-sub);display:flex;align-items:center;padding:0 20px;gap:10px;flex-shrink:0;z-index:40}
+.vtg{display:flex;background:var(--bg-raised);border:1px solid var(--border-sub);border-radius:var(--r8);padding:3px;gap:2px}
+.vtb{padding:4px 12px;border-radius:var(--r4);font-family:var(--font);font-size:11.5px;font-weight:600;color:var(--txt3);cursor:pointer;border:none;background:transparent;transition:.15s}
+.vtb.active{background:var(--blue);color:#fff;box-shadow:0 0 12px rgba(59,130,246,.3)}
+.vtb:not(.active):hover{color:var(--txt2);background:var(--bg-hover)}
+.period-tabs{display:flex;background:var(--bg-raised);border:1px solid var(--border-sub);border-radius:var(--r8);padding:3px;gap:2px}
+.ptab{padding:4px 10px;border-radius:var(--r4);font-size:11px;font-weight:600;color:var(--txt3);cursor:pointer;border:none;background:transparent;font-family:var(--font);transition:.12s}
+.ptab.active{background:var(--bg-overlay);color:var(--txt2)}
+.ptab:hover:not(.active){color:var(--txt2)}
+.tb-div{width:1px;height:22px;background:var(--border-sub);flex-shrink:0}
+.tb-sp{flex:1}
+.search-bar{display:flex;align-items:center;gap:7px;background:var(--bg-raised);border:1px solid var(--border-sub);border-radius:var(--r8);padding:5px 12px;min-width:200px;transition:.15s}
+.search-bar:focus-within{border-color:var(--border-mid)}
+.search-bar input{border:none;background:transparent;outline:none;font-family:var(--font);font-size:12.5px;color:var(--txt1);width:100%}
+.search-bar input::placeholder{color:var(--txt3)}
+.search-ico{color:var(--txt3);font-size:13px}
+.tb-btn{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:var(--r8);border:1px solid var(--border-sub);background:var(--bg-raised);color:var(--txt2);cursor:pointer;font-size:13px;transition:.12s;position:relative}
+.tb-btn:hover{border-color:var(--border-mid);color:var(--txt1);background:var(--bg-overlay)}
+.notif-dot{position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--amber);box-shadow:0 0 6px var(--amber);border:1.5px solid var(--bg-surface)}
+.btn-prim{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r8);background:var(--blue);color:#fff;font-family:var(--font);font-size:12.5px;font-weight:700;cursor:pointer;border:none;transition:.15s;white-space:nowrap;box-shadow:0 0 14px rgba(59,130,246,.22)}
+.btn-prim:hover{background:#2563eb;box-shadow:0 0 22px rgba(59,130,246,.4);transform:translateY(-1px)}
+.live-clock{font-family:var(--mono);font-size:11px;color:var(--txt3);letter-spacing:.5px;white-space:nowrap}
+.live-clock span{color:var(--teal)}
+
+/* ─── PAGE ─── */
+.page{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.page-inner{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+
+/* ─── PAGE HEADER ─── */
+.page-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.page-eyebrow{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--teal);margin-bottom:4px;font-family:var(--mono)}
+.page-title{font-family:var(--disp);font-size:22px;font-weight:800;color:var(--txt1);letter-spacing:-0.5px;line-height:1}
+.page-sub{font-size:12px;color:var(--txt3);margin-top:5px}
+.hdr-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.act-btn{font-size:11px;color:var(--txt3);cursor:pointer;padding:5px 10px;border-radius:var(--r4);border:1px solid var(--border-sub);background:transparent;font-family:var(--font);transition:.12s}
+.act-btn:hover{color:var(--txt2);border-color:var(--border-mid);background:var(--bg-raised)}
+.live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal);box-shadow:0 0 6px var(--teal);margin-right:5px;animation:blink 1.5s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ─── STAT CARDS ─── */
+.stat-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:12px}
+.sc{background:var(--bg-surface);border:1px solid var(--border-sub);border-radius:var(--r12);padding:16px 18px;cursor:pointer;transition:.2s;position:relative;overflow:hidden}
+.sc::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.018),transparent 60%);pointer-events:none}
+.sc:hover{border-color:var(--border-mid);transform:translateY(-1px);box-shadow:0 8px 28px rgba(0,0,0,.4)}
+.sc.g{border-top:2px solid var(--green)}.sc.a{border-top:2px solid var(--amber)}.sc.b{border-top:2px solid var(--blue)}.sc.r{border-top:2px solid var(--rose)}
+.sc-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.sc-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--txt3)}
+.sc-trend{font-size:10px;font-weight:700;font-family:var(--mono);padding:2px 6px;border-radius:4px}
+.tr-up{background:rgba(16,185,129,.12);color:var(--green)}.tr-dn{background:rgba(244,63,94,.12);color:var(--rose)}.tr-fl{background:rgba(100,116,139,.12);color:var(--gray)}
+.sc-val{font-family:var(--disp);font-size:30px;font-weight:800;line-height:1;letter-spacing:-1px;color:var(--txt1);margin-bottom:5px;animation:countUp .5s ease-out both}
+@keyframes countUp{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+.sc-sub{font-size:11px;color:var(--txt3)}
+.sc-bar{display:flex;gap:2px;margin-top:10px;height:4px;border-radius:2px;overflow:hidden}
+.sc-seg{height:100%;border-radius:2px}
+/* RAG summary */
+.rag-card{background:var(--bg-surface);border:1px solid var(--border-sub);border-radius:var(--r12);padding:16px 18px;min-width:155px;display:flex;flex-direction:column;gap:0}
+.rag-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--txt3);margin-bottom:12px}
+.rag-rows{display:flex;flex-direction:column;gap:8px}
+.rag-row{display:flex;align-items:center;gap:8px}
+.rd{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.rd.g{background:var(--green);box-shadow:0 0 7px rgba(16,185,129,.6)}
+.rd.a{background:var(--amber);box-shadow:0 0 7px rgba(245,158,11,.6)}
+.rd.r{background:var(--rose);box-shadow:0 0 7px rgba(244,63,94,.6);animation:pulseR 2s ease-in-out infinite}
+@keyframes pulseR{0%,100%{box-shadow:0 0 7px rgba(244,63,94,.5)}50%{box-shadow:0 0 16px rgba(244,63,94,.8)}}
+.rd.x{background:var(--gray)}
+.rag-count{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--txt1);min-width:18px}
+.rag-lbl{font-size:11px;color:var(--txt3);flex:1}
+.rag-mini{height:4px;border-radius:2px;background:var(--bg-overlay);overflow:hidden;flex:1}
+.rag-fill{height:100%;border-radius:2px}
+
+/* ─── TIMELINE ─── */
+.tl-strip{background:var(--bg-surface);border:1px solid var(--border-sub);border-radius:var(--r12);overflow:hidden}
+.panel-hdr{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border-sub);gap:10px}
+.panel-title{font-size:12px;font-weight:700;color:var(--txt1);flex:1}
+.panel-ico{font-size:14px}
+.pbadge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;font-family:var(--mono)}
+.pb-blue{background:rgba(59,130,246,.12);color:var(--blue);border:1px solid rgba(59,130,246,.2)}
+.pb-amber{background:rgba(245,158,11,.12);color:var(--amber);border:1px solid rgba(245,158,11,.2)}
+.pb-rose{background:rgba(244,63,94,.12);color:var(--rose);border:1px solid rgba(244,63,94,.2)}
+.act-btn-sm{font-size:11px;color:var(--txt3);cursor:pointer;padding:3px 8px;border-radius:var(--r4);border:1px solid var(--border-sub);background:transparent;font-family:var(--font);transition:.12s}
+.act-btn-sm:hover{color:var(--txt2);border-color:var(--border-mid);background:var(--bg-raised)}
+.tl-body{padding:14px 16px;overflow-x:auto}
+.tl-wrap{position:relative;min-width:580px}
+.tl-months{display:flex;border-bottom:1px solid var(--border-sub);padding-bottom:7px;margin-bottom:10px;position:relative}
+.tl-month{flex:1;font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;text-align:center;position:relative}
+.tl-month::before{content:'';position:absolute;left:0;top:0;bottom:-7px;width:1px;background:var(--border-sub)}
+.tl-today-line{position:absolute;top:0;bottom:0;width:1px;background:var(--teal);box-shadow:0 0 6px var(--teal);z-index:2;pointer-events:none}
+.tl-today-line::before{content:'NOW';position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:7px;font-weight:800;color:var(--teal);letter-spacing:1px;white-space:nowrap;font-family:var(--mono)}
+.tl-tracks{display:flex;flex-direction:column;gap:7px}
+.tl-track{display:flex;align-items:center;gap:10px}
+.tl-lbl{width:128px;flex-shrink:0;font-size:10.5px;font-weight:600;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;padding-right:8px}
+.tl-area{flex:1;position:relative;height:22px}
+.tl-bar{position:absolute;height:16px;top:3px;border-radius:4px;display:flex;align-items:center;padding:0 7px;font-size:9px;font-weight:700;color:rgba(255,255,255,.88);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:.15s;opacity:.88}
+.tl-bar:hover{opacity:1;transform:scaleY(1.1);filter:brightness(1.15)}
+.tl-ms{position:absolute;top:2px;width:16px;height:16px;transform:rotate(45deg);border-radius:3px;cursor:pointer;transition:.2s;z-index:3}
+.tl-ms:hover{transform:rotate(45deg) scale(1.25)}
+.tl-ms-lbl{position:absolute;bottom:-14px;font-size:8px;font-weight:700;white-space:nowrap;transform:translateX(-50%);font-family:var(--mono);opacity:.85}
+
+/* ─── GRID ─── */
+.grid2{display:grid;grid-template-columns:1fr 296px;gap:14px;min-height:0}
+.col-left{display:flex;flex-direction:column;gap:14px;min-width:0}
+.col-right{display:flex;flex-direction:column;gap:14px;min-width:0}
+
+/* ─── PORTFOLIO TABLE ─── */
+.pt-panel{background:var(--bg-surface);border:1px solid var(--border-sub);border-radius:var(--r12);overflow:hidden}
+.pt-filters{display:flex;align-items:center;gap:7px;padding:9px 14px;border-bottom:1px solid var(--border-sub);flex-wrap:wrap}
+.fchip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border-sub);background:transparent;color:var(--txt3);font-family:var(--font);transition:.12s;white-space:nowrap}
+.fchip:hover{border-color:var(--border-mid);color:var(--txt2)}
+.fchip.active{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.3);color:var(--blue)}
+.fchip.fa.active{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3);color:var(--amber)}
+.fchip.fr.active{background:rgba(244,63,94,.1);border-color:rgba(244,63,94,.3);color:var(--rose)}
+.fchip.fg.active{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.3);color:var(--green)}
+.fsep{flex:1}
+.fsel{background:var(--bg-raised);border:1px solid var(--border-sub);border-radius:var(--r8);padding:4px 26px 4px 9px;font-family:var(--font);font-size:11.5px;font-weight:500;color:var(--txt2);cursor:pointer;outline:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%233d5a7a'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;transition:.12s}
+.fsel:hover{border-color:var(--border-mid)}
+.fsel option{background:var(--bg-raised)}
+.pt-wrap{overflow-x:auto}
+.pt-tbl{width:100%;border-collapse:collapse;font-size:12.5px;min-width:700px}
+.pt-tbl thead tr{border-bottom:1px solid var(--border-sub)}
+.pt-tbl th{padding:9px 13px;text-align:left;font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;cursor:pointer;user-select:none;transition:.12s}
+.pt-tbl th:hover{color:var(--txt2)}
+.pt-tbl td{padding:0;border-bottom:1px solid var(--border-sub);vertical-align:middle}
+.pt-tbl tr:last-child td{border-bottom:none}
+.pt-row{cursor:pointer;transition:background .1s}
+.pt-row:hover td{background:var(--bg-raised)}
+.pt-row.prow td{background:rgba(59,130,246,.025)}
+.pt-row.prow:hover td{background:rgba(59,130,246,.06)}
+.tdi{padding:8px 13px;display:flex;align-items:center;gap:8px}
+.tdp{padding:8px 13px}
+.ex-tog{width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--txt3);border-radius:3px;flex-shrink:0;transition:transform .2s;background:var(--bg-overlay);border:1px solid var(--border-sub);cursor:pointer}
+.ex-tog.open{transform:rotate(90deg)}
+.rn{font-weight:600;color:var(--txt1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.rn.ch{font-weight:500;color:var(--txt2);max-width:200px}
+.rd2{font-size:10.5px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.type-pill{display:inline-flex;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap}
+.st-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:10px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.st-dot{width:5px;height:5px;border-radius:50%}
+.hi{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;white-space:nowrap}
+.hl{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.hl-g{background:var(--green);box-shadow:0 0 6px var(--green)}
+.hl-a{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.hl-r{background:var(--rose);box-shadow:0 0 6px var(--rose)}
+.hl-x{background:var(--gray)}
+.prog-w{display:flex;align-items:center;gap:7px;min-width:90px}
+.prog-b{flex:1;height:4px;background:var(--bg-overlay);border-radius:2px;overflow:hidden}
+.prog-f{height:100%;border-radius:2px;transition:width .4s}
+.prog-p{font-family:var(--mono);font-size:10.5px;color:var(--txt3);min-width:27px;text-align:right}
+.due{font-family:var(--mono);font-size:10.5px;color:var(--txt3);white-space:nowrap}
+.due.od{color:var(--rose)}.due.soon{color:var(--amber)}
+.av{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7.5px;font-weight:800;color:#fff;border:1.5px solid var(--bg-surface)}
+.open-btn{padding:3px 8px;border-radius:var(--r4);border:1px solid var(--border-sub);background:transparent;color:var(--txt3);font-size:10px;font-weight:600;cursor:pointer;font-family:var(--font);transition:.12s;white-space:nowrap}
+.open-btn:hover{border-color:var(--border-mid);color:var(--txt2);background:var(--bg-overlay)}
+.pt-foot{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-top:1px solid var(--border-sub);background:var(--bg-raised)}
+.pt-info{font-size:11px;color:var(--txt3);font-family:var(--mono)}
+.pt-link{font-size:11px;font-weight:700;color:var(--blue);cursor:pointer;border:none;background:none;font-family:var(--font);transition:.12s}
+.pt-link:hover{color:#60a5fa;text-decoration:underline}
+.child-wrap{overflow:hidden;transition:max-height .3s ease}
+.child-wrap.col{max-height:0!important}
+
+/* ─── RIGHT PANELS ─── */
+.panel{background:var(--bg-surface);border:1px solid var(--border-sub);border-radius:var(--r12);overflow:hidden}
+.att-item{display:flex;align-items:flex-start;gap:11px;padding:11px 16px;border-bottom:1px solid var(--border-sub);cursor:pointer;transition:.1s}
+.att-item:last-child{border-bottom:none}
+.att-item:hover{background:var(--bg-raised)}
+.att-item.cr{border-left:2px solid var(--rose)}
+.att-item.wa{border-left:2px solid var(--amber)}
+.att-item.inf{border-left:2px solid var(--blue)}
+.att-item.ok{border-left:2px solid var(--green)}
+.ai-ico{width:27px;height:27px;border-radius:var(--r8);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;margin-top:1px}
+.ai-ico.cr{background:rgba(244,63,94,.12)}.ai-ico.wa{background:rgba(245,158,11,.12)}.ai-ico.inf{background:rgba(59,130,246,.12)}.ai-ico.ok{background:rgba(16,185,129,.12)}
+.ai-bd{flex:1;min-width:0}
+.ai-title{font-size:12px;font-weight:600;color:var(--txt1);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ai-meta{font-size:10.5px;color:var(--txt3);display:flex;gap:5px;align-items:center}
+.ai-tag{font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:4px;white-space:nowrap}
+.at-cr{background:rgba(244,63,94,.1);color:var(--rose)}
+.at-wa{background:rgba(245,158,11,.1);color:var(--amber)}
+.at-in{background:rgba(59,130,246,.1);color:var(--blue)}
+.at-ok{background:rgba(16,185,129,.1);color:var(--green)}
+.ai-time{font-size:10px;color:var(--txt3);font-family:var(--mono);white-space:nowrap;flex-shrink:0;margin-top:2px}
+/* Capacity */
+.cap-item{display:flex;align-items:center;gap:10px;padding:9px 15px;border-bottom:1px solid var(--border-sub);cursor:pointer;transition:.1s}
+.cap-item:last-child{border-bottom:none}
+.cap-item:hover{background:var(--bg-raised)}
+.cap-av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;flex-shrink:0}
+.cap-info{flex:1;min-width:0}
+.cap-name{font-size:11.5px;font-weight:600;color:var(--txt1)}
+.cap-role{font-size:10px;color:var(--txt3)}
+.cap-bar{width:58px;flex-shrink:0}
+.cap-track{height:4px;background:var(--bg-overlay);border-radius:2px;overflow:hidden;margin-bottom:2px}
+.cap-fill{height:100%;border-radius:2px}
+.cap-pct{font-family:var(--mono);font-size:10px;text-align:right}
+/* Activity */
+.act-item{display:flex;gap:9px;padding:9px 15px;border-bottom:1px solid var(--border-sub);cursor:pointer;transition:.1s}
+.act-item:last-child{border-bottom:none}
+.act-item:hover{background:var(--bg-raised)}
+.act-dot-col{display:flex;flex-direction:column;align-items:center;padding-top:4px}
+.a-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.a-line{width:1px;flex:1;background:var(--border-sub);margin-top:4px}
+.act-item:last-child .a-line{display:none}
+.act-bd{flex:1;min-width:0}
+.act-txt{font-size:11.5px;color:var(--txt2);line-height:1.5}
+.act-txt strong{color:var(--txt1);font-weight:600}
+.act-time{font-size:10px;color:var(--txt3);font-family:var(--mono);margin-top:2px}
+
+/* ─── ANIMATIONS ─── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.fi1{animation:fadeUp .4s ease-out .05s both}
+.fi2{animation:fadeUp .4s ease-out .12s both}
+.fi3{animation:fadeUp .4s ease-out .2s both}
+.fi4{animation:fadeUp .4s ease-out .28s both}
+.fi5{animation:fadeUp .4s ease-out .36s both}
+
+/* ─── RESPONSIVE ─── */
+@media(max-width:1120px){.grid2{grid-template-columns:1fr}.col-right{display:none}.stat-row{grid-template-columns:repeat(3,1fr)}.rag-card{display:none}}
+@media(max-width:780px){:root{--sw:46px}.logo-text-block,.nav-lbl,.ws-name,.ws-caret,.user-name,.user-role,.nav-badge{display:none}.sb-logo{justify-content:center;padding:0}.nav-item{justify-content:center;padding:9px}.sb-ws{justify-content:center}.user-chip{justify-content:center}.stat-row{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sb-logo">
+    <div class="logo-mark">J</div>
+    <div class="logo-text-block">
+      <div class="logo-name">Jiganto</div>
+      <div class="logo-tag">Enterprise Suite</div>
+    </div>
+  </div>
+  <div class="sb-ws">
+    <div class="ws-dot"></div>
+    <span class="ws-name">Meridian Partners</span>
+    <span class="ws-caret">▾</span>
+  </div>
+  <nav class="nav-scroll">
+    <div class="nav-grp">
+      <div class="nav-lbl">Workspace</div>
+      <div class="nav-item"><span class="nav-ico">💬</span><span>Chat</span><span class="nav-badge nb-teal">6</span></div>
+      <div class="nav-item"><span class="nav-ico">👥</span><span>CRM</span></div>
+      <div class="nav-item"><span class="nav-ico">📌</span><span>Workspaces</span></div>
+    </div>
+    <div class="nav-grp">
+      <div class="nav-lbl">Portfolio</div>
+      <div class="nav-item active"><span class="nav-ico">🏛️</span><span>Portfolio</span><span class="nav-badge nb-amber">3</span></div>
+      <div class="nav-item"><span class="nav-ico">🗂️</span><span>Projects</span><span class="nav-badge nb-blue">14</span></div>
+      <div class="nav-item"><span class="nav-ico">🔗</span><span>Programmes</span></div>
+      <div class="nav-item"><span class="nav-ico">📢</span><span>Campaigns</span></div>
+    </div>
+    <div class="nav-grp">
+      <div class="nav-lbl">Management</div>
+      <div class="nav-item"><span class="nav-ico">💰</span><span>Finance</span></div>
+      <div class="nav-item"><span class="nav-ico">👤</span><span>Resources</span><span class="nav-badge nb-rose">2</span></div>
+      <div class="nav-item"><span class="nav-ico">🏢</span><span>Business</span></div>
+      <div class="nav-item"><span class="nav-ico">📄</span><span>Documents</span></div>
+    </div>
+    <div class="nav-grp">
+      <div class="nav-lbl">Tools</div>
+      <div class="nav-item"><span class="nav-ico">🎧</span><span>Help Desk</span><span class="nav-badge nb-rose">4</span></div>
+      <div class="nav-item"><span class="nav-ico">🧪</span><span>Test Mgmt</span></div>
+      <div class="nav-item"><span class="nav-ico">⚙️</span><span>Processes</span></div>
+      <div class="nav-item"><span class="nav-ico">📊</span><span>Surveys</span></div>
+    </div>
+  </nav>
+  <div class="sb-foot">
+    <div class="user-chip">
+      <div class="user-av">SA</div>
+      <div>
+        <div class="user-name">Sarah Ahmed</div>
+        <div class="user-role">Portfolio Director</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="vtg">
+      <button class="vtb active" onclick="setView(this,'portfolio')">Portfolio View</button>
+      <button class="vtb" onclick="setView(this,'my')">My View</button>
+    </div>
+    <div class="tb-div"></div>
+    <div class="period-tabs">
+      <button class="ptab" onclick="setPeriod(this)">Q1</button>
+      <button class="ptab active" onclick="setPeriod(this)">Q2</button>
+      <button class="ptab" onclick="setPeriod(this)">Q3</button>
+      <button class="ptab" onclick="setPeriod(this)">FY25</button>
+    </div>
+    <div class="tb-sp"></div>
+    <div class="search-bar">
+      <span class="search-ico">⌕</span>
+      <input type="text" placeholder="Search projects, programmes, people…" id="searchInput" oninput="onSearch()">
+    </div>
+    <div class="tb-btn" title="Notifications">🔔<span class="notif-dot"></span></div>
+    <div class="tb-btn" title="Settings">⚙</div>
+    <div class="tb-btn" title="Help">?</div>
+    <button class="btn-prim" onclick="alert('New Work Item wizard → opens 3-step wizard from previous prototype')">＋ New Work Item</button>
+    <div class="live-clock" id="clk"><span>●</span> --:--:--</div>
+  </div>
+
+  <!-- PAGE -->
+  <div class="page">
+    <div class="page-inner">
+
+      <!-- PAGE HEADER -->
+      <div class="page-hdr fi1">
+        <div>
+          <div class="page-eyebrow"><span class="live-dot"></span>Live Portfolio</div>
+          <div class="page-title" id="pageTitle">Portfolio Command Centre</div>
+          <div class="page-sub" id="pageSub">Meridian Partners · 14 active work items across 4 programmes · Last synced 2 min ago</div>
+        </div>
+        <div class="hdr-acts">
+          <button class="act-btn" onclick="alert('Export portfolio report as PDF or XLSX')">⬇ Export</button>
+          <button class="act-btn" onclick="alert('Share portfolio view link')">⤴ Share</button>
+          <button class="act-btn" onclick="alert('Customise dashboard layout')">⚏ Customise</button>
+        </div>
+      </div>
+
+      <!-- STAT CARDS -->
+      <div class="stat-row fi2">
+        <div class="sc g" onclick="quickFilter('all')" title="Click to view all active items">
+          <div class="sc-hd"><span class="sc-lbl">Active Work Items</span><span class="sc-trend tr-up">↑ 2 this week</span></div>
+          <div class="sc-val" style="color:var(--green)">14</div>
+          <div class="sc-sub">8 on track · 4 at risk · 2 critical</div>
+          <div class="sc-bar">
+            <div class="sc-seg" style="width:57%;background:var(--green)"></div>
+            <div class="sc-seg" style="width:29%;background:var(--amber)"></div>
+            <div class="sc-seg" style="width:14%;background:var(--rose)"></div>
+          </div>
+        </div>
+        <div class="sc a" onclick="alert('Navigate to Finance Tracker')" title="Budget overview">
+          <div class="sc-hd"><span class="sc-lbl">Portfolio Budget</span><span class="sc-trend tr-dn">↓ 3% forecast</span></div>
+          <div class="sc-val">£4.2M</div>
+          <div class="sc-sub">£2.9M spent · £1.3M remaining</div>
+          <div class="sc-bar">
+            <div class="sc-seg" style="width:69%;background:var(--blue)"></div>
+            <div class="sc-seg" style="width:31%;background:var(--bg-overlay)"></div>
+          </div>
+        </div>
+        <div class="sc b" onclick="alert('Filter to items with milestones due')">
+          <div class="sc-hd"><span class="sc-lbl">Milestones (30d)</span><span class="sc-trend tr-fl">→ on pace</span></div>
+          <div class="sc-val" style="color:var(--blue)">11</div>
+          <div class="sc-sub">3 overdue · 5 this week · 3 upcoming</div>
+          <div class="sc-bar">
+            <div class="sc-seg" style="width:27%;background:var(--rose)"></div>
+            <div class="sc-seg" style="width:46%;background:var(--amber)"></div>
+            <div class="sc-seg" style="width:27%;background:var(--blue)"></div>
+          </div>
+        </div>
+        <div class="sc r" onclick="quickFilter('critical')" title="Click to filter critical items">
+          <div class="sc-hd"><span class="sc-lbl">Needs Attention</span><span class="sc-trend tr-dn">↑ 1 today</span></div>
+          <div class="sc-val" style="color:var(--rose)">7</div>
+          <div class="sc-sub">3 overdue · 2 blocked · 2 approvals</div>
+          <div class="sc-bar">
+            <div class="sc-seg" style="width:43%;background:var(--rose)"></div>
+            <div class="sc-seg" style="width:29%;background:var(--amber)"></div>
+            <div class="sc-seg" style="width:28%;background:var(--blue)"></div>
+          </div>
+        </div>
+        <div class="rag-card">
+          <div class="rag-title">Portfolio RAG</div>
+          <div class="rag-rows">
+            <div class="rag-row"><div class="rd g"></div><span class="rag-count">8</span><span class="rag-lbl">On Track</span><div class="rag-mini"><div class="rag-fill" style="width:57%;background:var(--green)"></div></div></div>
+            <div class="rag-row"><div class="rd a"></div><span class="rag-count">4</span><span class="rag-lbl">At Risk</span><div class="rag-mini"><div class="rag-fill" style="width:29%;background:var(--amber)"></div></div></div>
+            <div class="rag-row"><div class="rd r"></div><span class="rag-count">2</span><span class="rag-lbl">Critical</span><div class="rag-mini"><div class="rag-fill" style="width:14%;background:var(--rose)"></div></div></div>
+            <div class="rag-row"><div class="rd x"></div><span class="rag-count">5</span><span class="rag-lbl">Planning</span><div class="rag-mini"><div class="rag-fill" style="width:36%;background:var(--gray)"></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TIMELINE -->
+      <div class="tl-strip fi3">
+        <div class="panel-hdr">
+          <span class="panel-ico">📅</span>
+          <span class="panel-title">Critical Dates — Next 90 Days</span>
+          <span class="pbadge pb-blue">11 milestones</span>
+          <span class="pbadge pb-amber" style="margin-left:4px">3 overdue</span>
+          <div style="flex:1"></div>
+          <button class="act-btn-sm" onclick="alert('Open full timeline / Gantt view across all programmes')">Full Timeline →</button>
+        </div>
+        <div class="tl-body">
+          <div class="tl-wrap" id="tlWrap">
+            <div class="tl-months" id="tlMonths"></div>
+            <div class="tl-today-line" id="tlNow"></div>
+            <div class="tl-tracks" id="tlTracks"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRID -->
+      <div class="grid2 fi4">
+
+        <!-- LEFT: Portfolio Table -->
+        <div class="col-left">
+          <div class="pt-panel">
+            <div class="panel-hdr">
+              <span class="panel-ico">🗂️</span>
+              <span class="panel-title">Active Portfolio</span>
+              <span class="pbadge pb-blue" id="ptCount">14 items</span>
+              <div style="flex:1"></div>
+              <button class="act-btn-sm" onclick="alert('View all 55 work items including draft, completed and cancelled')">View All →</button>
+            </div>
+            <div class="pt-filters">
+              <button class="fchip active" id="fc-all" onclick="filterChip(this,'all')">All Types</button>
+              <button class="fchip" id="fc-prog" onclick="filterChip(this,'programme')">Programmes</button>
+              <button class="fchip" id="fc-proj" onclick="filterChip(this,'project')">Projects</button>
+              <button class="fchip fa" id="fc-risk" onclick="filterChip(this,'risk')">⚠ At Risk</button>
+              <button class="fchip fr" id="fc-crit" onclick="filterChip(this,'critical')">🔴 Critical</button>
+              <div class="fsep"></div>
+              <select class="fsel" onchange="render()" id="fCust">
+                <option value="">All Customers</option>
+                <option>Internal</option><option>Acme Corp</option>
+                <option>TechStart Ltd</option><option>GlobalBank</option><option>Nexus Media</option>
+              </select>
+              <select class="fsel" onchange="render()" id="fLead">
+                <option value="">All Leads</option>
+                <option>SA</option><option>DK</option><option>PV</option><option>ML</option>
+              </select>
+            </div>
+            <div class="pt-wrap">
+              <table class="pt-tbl">
+                <thead>
+                  <tr>
+                    <th style="width:30px"></th>
+                    <th style="min-width:200px">Name</th>
+                    <th style="width:88px">Type</th>
+                    <th style="width:88px">Status</th>
+                    <th style="width:90px">Health</th>
+                    <th style="width:90px">Customer</th>
+                    <th style="width:36px">Lead</th>
+                    <th style="width:115px">Progress</th>
+                    <th style="width:70px">Due</th>
+                    <th style="width:56px"></th>
+                  </tr>
+                </thead>
+                <tbody id="ptBody"></tbody>
+              </table>
+            </div>
+            <div class="pt-foot">
+              <span class="pt-info" id="ptInfo">Showing 14 of 55 work items</span>
+              <button class="pt-link" onclick="alert('Navigates to full All Projects view showing all 55 work items with full filter suite')">See all 55 work items →</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT -->
+        <div class="col-right">
+
+          <!-- Attention Queue -->
+          <div class="panel">
+            <div class="panel-hdr">
+              <span class="panel-ico">🎯</span>
+              <span class="panel-title">Your Attention Queue</span>
+              <span class="pbadge pb-amber">7 items</span>
+              <button class="act-btn-sm" onclick="alert('Dismiss all attention items')">Clear</button>
+            </div>
+            <div>
+              <div class="att-item cr" onclick="alert('Open Risk: Vendor delivery escalated → CRM Phase 2')">
+                <div class="ai-ico cr">🔴</div>
+                <div class="ai-bd"><div class="ai-title">Vendor delivery risk escalated</div><div class="ai-meta"><span class="ai-tag at-cr">CRITICAL</span><span>CRM Phase 2</span></div></div>
+                <div class="ai-time">2h ago</div>
+              </div>
+              <div class="att-item wa" onclick="alert('Open Budget Warning → Digital Transformation')">
+                <div class="ai-ico wa">⚠️</div>
+                <div class="ai-bd"><div class="ai-title">Budget forecast +12% over target</div><div class="ai-meta"><span class="ai-tag at-wa">WARNING</span><span>Digital Transform.</span></div></div>
+                <div class="ai-time">4h ago</div>
+              </div>
+              <div class="att-item inf" onclick="alert('Open: Status report due today → ERP Pilot')">
+                <div class="ai-ico inf">📋</div>
+                <div class="ai-bd"><div class="ai-title">Weekly status report due today</div><div class="ai-meta"><span class="ai-tag at-in">ACTION</span><span>ERP Pilot Programme</span></div></div>
+                <div class="ai-time">Today</div>
+              </div>
+              <div class="att-item cr" onclick="alert('Open: Overdue milestone → Partner API Integration')">
+                <div class="ai-ico cr">🏁</div>
+                <div class="ai-bd"><div class="ai-title">Milestone "API v2 Go-Live" overdue</div><div class="ai-meta"><span class="ai-tag at-cr">OVERDUE</span><span>Partner API</span></div></div>
+                <div class="ai-time">Yesterday</div>
+              </div>
+              <div class="att-item wa" onclick="alert('Open: Resource conflict → Priya double-booked')">
+                <div class="ai-ico wa">👤</div>
+                <div class="ai-bd"><div class="ai-title">Priya V. double-booked next week</div><div class="ai-meta"><span class="ai-tag at-wa">RESOURCE</span><span>DevOps Transform.</span></div></div>
+                <div class="ai-time">Mar 12</div>
+              </div>
+              <div class="att-item inf" onclick="alert('Open: Change request awaiting sign-off')">
+                <div class="ai-ico inf">🔄</div>
+                <div class="ai-bd"><div class="ai-title">Change request pending sign-off</div><div class="ai-meta"><span class="ai-tag at-in">APPROVAL</span><span>Customer Portal v2</span></div></div>
+                <div class="ai-time">Mar 11</div>
+              </div>
+              <div class="att-item ok" onclick="alert('Open: Sprint 4 review ready')">
+                <div class="ai-ico ok">✅</div>
+                <div class="ai-bd"><div class="ai-title">Sprint 4 complete — review ready</div><div class="ai-meta"><span class="ai-tag at-ok">COMPLETE</span><span>Data Warehouse</span></div></div>
+                <div class="ai-time">Mar 10</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Capacity -->
+          <div class="panel">
+            <div class="panel-hdr">
+              <span class="panel-ico">📊</span>
+              <span class="panel-title">Resource Utilisation</span>
+              <span class="pbadge pb-rose">2 overloaded</span>
+              <button class="act-btn-sm" onclick="alert('Open full Resource Management module')">Details →</button>
+            </div>
+            <div>
+              <div class="cap-item">
+                <div class="cap-av" style="background:linear-gradient(135deg,#3b82f6,#8b5cf6)">SA</div>
+                <div class="cap-info"><div class="cap-name">Sarah Ahmed</div><div class="cap-role">Portfolio Director · 5 items</div></div>
+                <div class="cap-bar"><div class="cap-track"><div class="cap-fill" style="width:85%;background:var(--amber)"></div></div><div class="cap-pct" style="color:var(--amber)">85%</div></div>
+              </div>
+              <div class="cap-item">
+                <div class="cap-av" style="background:linear-gradient(135deg,#f43f5e,#f97316)">DK</div>
+                <div class="cap-info"><div class="cap-name">Dan Kowalski</div><div class="cap-role">Programme Lead · 4 items</div></div>
+                <div class="cap-bar"><div class="cap-track"><div class="cap-fill" style="width:100%;background:var(--rose)"></div></div><div class="cap-pct" style="color:var(--rose)">110%</div></div>
+              </div>
+              <div class="cap-item">
+                <div class="cap-av" style="background:linear-gradient(135deg,#14b8a6,#3b82f6)">PV</div>
+                <div class="cap-info"><div class="cap-name">Priya Venkat</div><div class="cap-role">Tech Lead · 3 items</div></div>
+                <div class="cap-bar"><div class="cap-track"><div class="cap-fill" style="width:95%;background:var(--rose)"></div></div><div class="cap-pct" style="color:var(--rose)">95%</div></div>
+              </div>
+              <div class="cap-item">
+                <div class="cap-av" style="background:linear-gradient(135deg,#10b981,#14b8a6)">ML</div>
+                <div class="cap-info"><div class="cap-name">Marcus Lee</div><div class="cap-role">PM · 3 items</div></div>
+                <div class="cap-bar"><div class="cap-track"><div class="cap-fill" style="width:70%;background:var(--green)"></div></div><div class="cap-pct" style="color:var(--green)">70%</div></div>
+              </div>
+              <div class="cap-item">
+                <div class="cap-av" style="background:linear-gradient(135deg,#8b5cf6,#6366f1)">JP</div>
+                <div class="cap-info"><div class="cap-name">James Park</div><div class="cap-role">Engineer · 2 items</div></div>
+                <div class="cap-bar"><div class="cap-track"><div class="cap-fill" style="width:55%;background:var(--green)"></div></div><div class="cap-pct" style="color:var(--green)">55%</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Activity Feed -->
+          <div class="panel">
+            <div class="panel-hdr">
+              <span class="panel-ico">⚡</span>
+              <span class="panel-title">Portfolio Activity</span>
+              <button class="act-btn-sm">View all</button>
+            </div>
+            <div>
+              <div class="act-item"><div class="act-dot-col"><div class="a-dot" style="background:var(--green)"></div><div class="a-line"></div></div><div class="act-bd"><div class="act-txt"><strong>Dan Kowalski</strong> updated risk log on <strong>CRM Phase 2</strong></div><div class="act-time">14:18 today</div></div></div>
+              <div class="act-item"><div class="act-dot-col"><div class="a-dot" style="background:var(--amber)"></div><div class="a-line"></div></div><div class="act-bd"><div class="act-txt"><strong>Priya Venkat</strong> raised new issue on <strong>Digital Transformation</strong></div><div class="act-time">11:42 today</div></div></div>
+              <div class="act-item"><div class="act-dot-col"><div class="a-dot" style="background:var(--blue)"></div><div class="a-line"></div></div><div class="act-bd"><div class="act-txt"><strong>Marcus Lee</strong> completed milestone <strong>Phase 1 Sign-off</strong></div><div class="act-time">09:05 today</div></div></div>
+              <div class="act-item"><div class="act-dot-col"><div class="a-dot" style="background:var(--gray)"></div><div class="a-line"></div></div><div class="act-bd"><div class="act-txt"><strong>Sarah Ahmed</strong> created <strong>ERP Pilot Programme</strong></div><div class="act-time">Yesterday 16:30</div></div></div>
+              <div class="act-item"><div class="act-dot-col"><div class="a-dot" style="background:var(--violet)"></div><div class="a-line"></div></div><div class="act-bd"><div class="act-txt"><strong>James Park</strong> submitted timesheet for <strong>DevOps Transformation</strong></div><div class="act-time">Yesterday 12:00</div></div></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div><!-- /page-inner -->
+  </div><!-- /page -->
+</div><!-- /main -->
+
+<script>
+/* ──────────────── DATA ──────────────── */
+const TS = {
+  'Programme':      {bg:'rgba(59,130,246,.15)',  c:'#82bcff',  lbl:'Programme'},
+  'Project':        {bg:'rgba(139,92,246,.15)',  c:'#c4b5fd',  lbl:'Project'},
+  'Initiative':     {bg:'rgba(99,102,241,.15)',  c:'#a5b4fc',  lbl:'Initiative'},
+  'Campaign':       {bg:'rgba(249,115,22,.15)',  c:'#fdba74',  lbl:'Campaign'},
+  'POC':            {bg:'rgba(20,184,166,.15)',  c:'#5eead4',  lbl:'POC'},
+  'Pilot':          {bg:'rgba(16,185,129,.15)',  c:'#6ee7b7',  lbl:'Pilot'},
+  'Sprint':         {bg:'rgba(59,130,246,.1)',   c:'#93c5fd',  lbl:'Sprint'},
+  'Change Request': {bg:'rgba(244,63,94,.1)',    c:'#fda4af',  lbl:'Chg Req'},
+};
+const SS = {
+  'Active':    {bg:'rgba(16,185,129,.12)', c:'#6ee7b7', dot:'#10b981'},
+  'Planning':  {bg:'rgba(245,158,11,.12)', c:'#fcd34d', dot:'#f59e0b'},
+  'On Hold':   {bg:'rgba(249,115,22,.12)', c:'#fdba74', dot:'#f97316'},
+  'Draft':     {bg:'rgba(100,116,139,.12)',c:'#94a3b8', dot:'#64748b'},
+  'Completed': {bg:'rgba(16,185,129,.08)', c:'#6ee7b7', dot:'#10b981'},
+};
+const HS = {
+  'On Track':{cls:'hl-g',lbl:'On Track',    col:'#10b981'},
+  'At Risk':  {cls:'hl-a',lbl:'At Risk',     col:'#f59e0b'},
+  'Critical': {cls:'hl-r',lbl:'Critical',    col:'#f43f5e'},
+  'Blocked':  {cls:'hl-r',lbl:'Blocked',     col:'#f43f5e'},
+  'Early':    {cls:'hl-x',lbl:'Early Stage', col:'#64748b'},
+};
+const LC = {SA:'#3b82f6',DK:'#f43f5e',PV:'#14b8a6',ML:'#f59e0b',JP:'#8b5cf6'};
+const LN = {SA:'Sarah A.',DK:'Dan K.',PV:'Priya V.',ML:'Marcus L.',JP:'James P.'};
+const LCUST = {SA:'Internal',DK:'Acme Corp',PV:'TechStart Ltd',ML:'Nexus Media',JP:'Internal'};
+
+const DATA = [
+  {id:'p1',name:'Digital Transformation',desc:'Core systems modernisation',type:'Programme',status:'Active',health:'On Track',customer:'Internal',lead:'SA',progress:68,due:'Dec 2025',color:'#3b82f6',isParent:true,open:true,
+   children:[
+    {id:'c1a',name:'Legacy Data Migration',desc:'ETL pipeline rebuild',type:'Project',status:'Active',health:'On Track',customer:'Internal',lead:'PV',progress:75,due:'Aug 2025',color:'#10b981'},
+    {id:'c1b',name:'API Gateway Rebuild',desc:'Microservices architecture',type:'Project',status:'Active',health:'At Risk',customer:'Internal',lead:'JP',progress:44,due:'Sep 2025',color:'#f59e0b'},
+    {id:'c1c',name:'UX Platform Uplift',desc:'Design system + accessibility',type:'Project',status:'Planning',health:'Early',customer:'Internal',lead:'ML',progress:12,due:'Nov 2025',color:'#64748b'},
+  ]},
+  {id:'p2',name:'CRM Phase 2',desc:'Salesforce migration & integrations',type:'Project',status:'Active',health:'Critical',customer:'Acme Corp',lead:'DK',progress:42,due:'Mar 2025',color:'#f43f5e'},
+  {id:'p3',name:'ERP Pilot Programme',desc:'SAP S/4HANA — 3 sites',type:'Programme',status:'Active',health:'On Track',customer:'GlobalBank',lead:'SA',progress:28,due:'Jun 2025',color:'#14b8a6',isParent:true,open:false,
+   children:[
+    {id:'c3a',name:'Site A Rollout (London)',desc:'HQ go-live',type:'Project',status:'Active',health:'On Track',customer:'GlobalBank',lead:'ML',progress:55,due:'Apr 2025',color:'#14b8a6'},
+    {id:'c3b',name:'Site B Rollout (Manchester)',desc:'Regional office',type:'Project',status:'Planning',health:'Early',customer:'GlobalBank',lead:'DK',progress:10,due:'May 2025',color:'#64748b'},
+  ]},
+  {id:'p4',name:'DevOps Transformation',desc:'CI/CD, cloud & IaC',type:'Initiative',status:'Active',health:'On Track',customer:'Internal',lead:'DK',progress:73,due:'Aug 2025',color:'#8b5cf6'},
+  {id:'p5',name:'Brand Refresh Campaign',desc:'Q2 go-to-market push',type:'Campaign',status:'Active',health:'At Risk',customer:'Nexus Media',lead:'ML',progress:55,due:'Apr 2025',color:'#f97316'},
+  {id:'p6',name:'Mobile App POC',desc:'React Native feasibility',type:'POC',status:'Planning',health:'Early',customer:'TechStart Ltd',lead:'PV',progress:15,due:'Feb 2025',color:'#64748b'},
+  {id:'p7',name:'Customer Portal v2',desc:'Self-service portal redesign',type:'Project',status:'On Hold',health:'Blocked',customer:'Acme Corp',lead:'PV',progress:30,due:'Jul 2025',color:'#f43f5e'},
+  {id:'p8',name:'Partner API Integration',desc:'Third-party connector framework',type:'Project',status:'Active',health:'At Risk',customer:'TechStart Ltd',lead:'DK',progress:61,due:'May 2025',color:'#f59e0b'},
+  {id:'p9',name:'Data Warehouse Sprint 4',desc:'Analytics pipeline & reporting',type:'Sprint',status:'Active',health:'On Track',customer:'Internal',lead:'ML',progress:89,due:'Mar 2025',color:'#10b981'},
+];
+
+const openMap = {};
+DATA.forEach(d => { if(d.isParent) openMap[d.id] = d.open !== false; });
+
+/* ──────────────── RENDER TABLE ──────────────── */
+let activeF = 'all', srchQ = '';
+
+function rowHtml(item, isChild) {
+  const t = TS[item.type]||{bg:'rgba(100,116,139,.12)',c:'#94a3b8',lbl:item.type};
+  const s = SS[item.status]||SS['Draft'];
+  const h = HS[item.health]||HS['Early'];
+  const pc = item.health==='Critical'?'#f43f5e':item.health==='At Risk'?'#f59e0b':'#10b981';
+  const pl = isChild?'padding-left:22px;':'';
+  const od = item.due&&item.health==='Critical'?'od':'';
+  return `<tr class="pt-row${isChild?'':' prow'}" data-type="${item.type.toLowerCase()}" data-health="${item.health}" onclick="openItem('${item.name}','${item.type}')">
+    <td><div class="tdi" style="justify-content:center;padding:7px 5px">
+      ${item.isParent
+        ?`<div class="ex-tog${openMap[item.id]?' open':''}" onclick="event.stopPropagation();toggle('${item.id}')" title="Expand/collapse">▶</div>`
+        :`<div style="width:4px;height:4px;border-radius:50%;background:var(--border-mid);margin:0 auto"></div>`}
+    </div></td>
+    <td><div class="tdi" style="${pl}">
+      <div style="width:3px;height:26px;border-radius:2px;background:${item.color};flex-shrink:0;opacity:.75"></div>
+      <div style="min-width:0"><div class="rn${isChild?' ch':''}">${item.name}</div><div class="rd2">${item.desc}</div></div>
+    </div></td>
+    <td><div class="tdp"><span class="type-pill" style="background:${t.bg};color:${t.c}">${t.lbl}</span></div></td>
+    <td><div class="tdp"><span class="st-pill" style="background:${s.bg};color:${s.c}"><span class="st-dot" style="background:${s.dot}"></span>${item.status}</span></div></td>
+    <td><div class="tdp"><div class="hi"><div class="hl ${h.cls}"></div><span style="color:${h.col}">${h.lbl}</span></div></div></td>
+    <td><div class="tdp" style="font-size:11.5px;color:var(--txt2)">${item.customer}</div></td>
+    <td><div class="tdp" title="${LN[item.lead]||item.lead}"><div class="av" style="background:${LC[item.lead]||'#3b82f6'}">${item.lead}</div></div></td>
+    <td><div class="tdp"><div class="prog-w"><div class="prog-b"><div class="prog-f" style="width:${item.progress}%;background:${pc}"></div></div><span class="prog-p">${item.progress}%</span></div></div></td>
+    <td><div class="tdp"><span class="due${od?' od':''}">${item.due}</span></div></td>
+    <td><div class="tdp"><button class="open-btn" onclick="event.stopPropagation();openItem('${item.name}','${item.type}')">Open →</button></div></td>
+  </tr>`;
+}
+
+function childWrap(pid, children) {
+  const open = openMap[pid];
+  const mh = open ? children.length*47+'px' : '0px';
+  return `<tr id="ctr-${pid}"><td colspan="10" style="padding:0;border:none">
+    <div class="child-wrap${open?'':' col'}" id="cw-${pid}" style="max-height:${mh}">
+      <table style="width:100%;border-collapse:collapse"><tbody>
+        ${children.map(c=>rowHtml(c,true)).join('')}
+      </tbody></table>
+    </div>
+  </td></tr>`;
+}
+
+function render() {
+  const body = document.getElementById('ptBody');
+  if(!body) return;
+  const q = srchQ;
+  const cf = document.getElementById('fCust')?.value||'';
+  const lf = document.getElementById('fLead')?.value||'';
+  let html='', cnt=0;
+  DATA.forEach(item=>{
+    if(activeF==='programme'&&item.type!=='Programme') return;
+    if(activeF==='project'&&item.type==='Programme') return;
+    if(activeF==='risk'&&item.health!=='At Risk') return;
+    if(activeF==='critical'&&item.health!=='Critical'&&item.health!=='Blocked') return;
+    if(q&&!item.name.toLowerCase().includes(q)&&!item.desc.toLowerCase().includes(q)) return;
+    if(cf&&item.customer!==cf) return;
+    if(lf&&item.lead!==lf) return;
+    html+=rowHtml(item,false); cnt++;
+    if(item.isParent&&item.children){
+      html+=childWrap(item.id,item.children);
+      if(openMap[item.id]) cnt+=item.children.length;
+    }
+  });
+  body.innerHTML=html;
+  document.getElementById('ptCount').textContent=cnt+' items';
+  document.getElementById('ptInfo').textContent=`Showing ${cnt} of 55 work items`;
+}
+
+function toggle(id){
+  openMap[id]=!openMap[id];
+  const w=document.getElementById('cw-'+id);
+  const t=document.querySelector(`[onclick*="toggle('${id}')"]`);
+  if(w){
+    const par=DATA.find(p=>p.id===id);
+    const n=(par?.children||[]).length;
+    if(openMap[id]){w.classList.remove('col');w.style.maxHeight=n*47+'px';t?.classList.add('open')}
+    else{w.classList.add('col');w.style.maxHeight='0';t?.classList.remove('open')}
+  }
+  render();
+}
+
+function filterChip(el, f){
+  document.querySelectorAll('.fchip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active'); activeF=f; render();
+}
+function quickFilter(f){
+  if(f==='critical') filterChip(document.getElementById('fc-crit'),'critical');
+  else filterChip(document.getElementById('fc-all'),'all');
+}
+function openItem(n,t){ alert(`Opening ${t}: "${n}"\n\nIn the full app, this navigates to the project detail view with all selected execution tools.`); }
+function onSearch(){ srchQ=document.getElementById('searchInput').value.toLowerCase().trim(); render(); }
+
+/* ──────────────── TIMELINE ──────────────── */
+function buildTimeline(){
+  const months_el=document.getElementById('tlMonths');
+  const now_el=document.getElementById('tlNow');
+  const tracks_el=document.getElementById('tlTracks');
+  if(!months_el) return;
+
+  const today=new Date(2025,2,14); // demo date Mar 14 2025
+  const rStart=new Date(2025,1,1).getTime();
+  const rEnd=new Date(2025,4,31).getTime();
+  const span=rEnd-rStart;
+  const pct=ts=>Math.max(0,Math.min(100,((ts-rStart)/span)*100));
+
+  // months
+  const ms=[];
+  for(let i=2;i<=4;i++){const d=new Date(2025,i,1);ms.push(d)}
+  months_el.innerHTML=`<div class="tl-month" style="flex:1.5">FEB 2025</div>`+
+    ms.map(m=>`<div class="tl-month">${m.toLocaleString('en',{month:'short'}).toUpperCase()} ${m.getFullYear()}</div>`).join('');
+
+  // today
+  now_el.style.left=pct(today.getTime())+'%';
+
+  const tlData=[
+    {lbl:'Digital Transform.',bars:[{s:new Date(2025,1,1),e:new Date(2025,4,31),c:'#3b82f6',t:'Ongoing'}],ms:[{d:new Date(2025,2,28),c:'#3b82f6',t:'Phase 2 Review'}]},
+    {lbl:'CRM Phase 2',       bars:[{s:new Date(2025,1,10),e:new Date(2025,3,15),c:'#f43f5e',t:'Delivery'}],ms:[{d:new Date(2025,2,20),c:'#f43f5e',t:'Go-live'}]},
+    {lbl:'ERP Pilot',         bars:[{s:new Date(2025,2,1),e:new Date(2025,4,31),c:'#14b8a6',t:'Pilot phase'}],ms:[{d:new Date(2025,3,30),c:'#14b8a6',t:'Site A Done'}]},
+    {lbl:'DevOps Transform.',  bars:[{s:new Date(2025,1,1),e:new Date(2025,4,15),c:'#8b5cf6',t:'Execution'}],ms:[{d:new Date(2025,3,10),c:'#8b5cf6',t:'v2 Deploy'}]},
+    {lbl:'Brand Campaign',    bars:[{s:new Date(2025,2,5),e:new Date(2025,3,30),c:'#f97316',t:'Active'}],ms:[{d:new Date(2025,3,1),c:'#f97316',t:'Launch'}]},
+  ];
+
+  tracks_el.innerHTML=tlData.map(track=>{
+    const bars=track.bars.map(b=>{
+      const l=pct(b.s.getTime()),r=pct(b.e.getTime()),w=r-l;
+      if(w<=0) return '';
+      return `<div class="tl-bar" style="left:${l}%;width:${w}%;background:${b.c}" title="${b.t}">${w>8?b.t:''}</div>`;
+    }).join('');
+    const milestones=(track.ms||[]).map(m=>{
+      const x=pct(m.d.getTime());
+      return `<div class="tl-ms" style="left:calc(${x}% - 8px);background:${m.c}" title="${m.t}"></div>
+              <div class="tl-ms-lbl" style="left:${x}%;color:${m.c}">${m.t}</div>`;
+    }).join('');
+    return `<div class="tl-track"><div class="tl-lbl">${track.lbl}</div><div class="tl-area">${bars}${milestones}</div></div>`;
+  }).join('');
+}
+
+/* ──────────────── VIEW TOGGLE ──────────────── */
+function setView(btn, mode){
+  document.querySelectorAll('.vtb').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const ey=document.querySelector('.page-eyebrow');
+  if(mode==='my'){
+    document.getElementById('pageTitle').textContent='My Work Overview';
+    document.getElementById('pageSub').textContent='Sarah Ahmed · 5 assigned items · 3 items need your attention today';
+    if(ey) ey.innerHTML='<span class="live-dot"></span>My Workspace';
+  } else {
+    document.getElementById('pageTitle').textContent='Portfolio Command Centre';
+    document.getElementById('pageSub').textContent='Meridian Partners · 14 active work items across 4 programmes · Last synced 2 min ago';
+    if(ey) ey.innerHTML='<span class="live-dot"></span>Live Portfolio';
+  }
+  activeF='all';
+  filterChip(document.getElementById('fc-all'),'all');
+}
+
+function setPeriod(btn){
+  document.querySelectorAll('.ptab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+/* ──────────────── CLOCK ──────────────── */
+function tick(){
+  const el=document.getElementById('clk');
+  if(!el) return;
+  const n=new Date();
+  el.innerHTML=`<span>●</span> ${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+}
+setInterval(tick,1000); tick();
+
+/* ──────────────── INIT ──────────────── */
+render();
+buildTimeline();
+</script>
+</body>
+</html>

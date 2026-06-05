@@ -1,0 +1,327 @@
+Jiganto CRM Module
+Goal
+
+Build a modular CRM module for an application called Jiganto.
+The CRM must support customer and sales management while integrating tightly with Projects, Resourcing, and future Billing modules. The system should be extensible, roadmap-aware, and suitable for professional services and delivery-driven businesses.
+
+Application Context
+
+Jiganto is a multi-tenant business platform with:
+
+Companies
+
+Internal users
+
+Customers
+
+Projects
+
+Resourcing (existing or planned)
+
+The CRM module must respect tenant isolation and role-based access.
+
+Core CRM Capabilities (Current Scope)
+1. Accounts & Contacts
+
+Manage Accounts (customers, prospects, partners)
+
+Manage Contacts linked to Accounts
+
+Support:
+
+Multiple contacts per account
+
+Contact roles (decision maker, technical, finance)
+
+Account hierarchy (parent / child)
+
+2. Leads, Opportunities & Sales Pipeline
+
+Capture Leads and convert them into Opportunities
+
+Opportunities must include:
+
+Configurable pipeline stage
+
+Deal value (one-time and recurring)
+
+Expected close date
+
+Opportunity owner
+
+Win / loss reason
+
+Support multiple pipelines (future-ready design)
+
+3. Resource Requirements for Opportunities
+
+Allow users to define resource needs per opportunity:
+
+Required skills
+
+Optional named resources
+
+Estimated effort and duration
+
+Resource requirements must:
+
+Link to the Resourcing module
+
+Support future capacity and demand planning
+
+4. Activities & Tasks
+
+Log activities:
+
+Calls
+
+Meetings
+
+Emails (manual entry initially)
+
+Tasks with:
+
+Due dates
+
+Status
+
+Reminders
+
+Activities and tasks can be linked to:
+
+Accounts
+
+Contacts
+
+Opportunities
+
+Projects
+
+5. Notes & Attachments
+
+Rich-text notes on CRM records
+
+File attachments linked to:
+
+Accounts
+
+Opportunities
+
+Contracts
+
+Secure storage and access control
+
+6. Contract Management
+
+Store customer contracts
+
+Capture contract metadata:
+
+Type
+
+Start / end date
+
+Value
+
+Link contracts to:
+
+Accounts
+
+Opportunities
+
+Projects
+
+7. Customer Systems Register
+
+Maintain a register of systems managed for customers:
+
+ERP
+
+CRM
+
+Applications
+
+Platforms
+
+Systems can be linked to:
+
+Accounts
+
+Contracts
+
+Projects
+
+8. Dashboards & Reporting
+
+Provide dashboards for:
+
+Sales pipeline overview
+
+Opportunities by stage
+
+Resource demand (current and future)
+
+Account activity
+
+Reports must be exportable (CSV initially)
+
+Board-Based Data Tracking (Cross-Module Requirement)
+Board System
+
+Implement configurable boards as a visual layer over CRM data
+
+Boards can be created for:
+
+Leads
+
+Opportunities
+
+Accounts
+
+Boards must support:
+
+Custom columns mapped to statuses or stages
+
+Drag-and-drop between columns
+
+Filters (owner, value, dates, status)
+
+Custom fields per board
+
+Boards must not duplicate data; they reflect underlying CRM records
+
+AI Features (Early Scope)
+
+AI-based lead scoring
+
+Deal win probability estimation
+
+Auto-summaries of:
+
+Notes
+
+Activities
+
+Account interactions
+
+Future Scope (Roadmap – Visible in UI)
+
+These features should appear as menu items or “coming soon” indicators but do not need full implementation.
+
+Customer & Document Features
+
+Customer Systems Log (expanded)
+
+Customer Contracts & Document Management
+
+Customer Portal for external access to:
+
+Projects
+
+Documents
+
+Contracts
+
+Selected CRM data
+
+Resource & Billing Features
+
+Time capture against projects
+
+Resource-based billing
+
+Billing models:
+
+Time & Materials
+
+Fixed Price
+
+Invoice creation from CRM
+
+Export or push invoices to ERP systems
+
+Integrations
+
+API integrations with:
+
+Xero
+
+QuickBooks
+
+Other ERP systems
+
+Sync customers, invoices, and billing data
+
+Data Model Requirements
+
+At minimum, implement the following entities:
+
+Account
+
+Contact
+
+Lead
+
+Opportunity
+
+OpportunityStage
+
+Activity
+
+Task
+
+Note
+
+Attachment
+
+Contract
+
+CustomerSystem
+
+ResourceRequirement
+
+Board
+
+BoardColumn
+
+BoardField
+
+Define clear relationships between CRM, Projects, and Resourcing.
+
+Architecture & Technical Expectations
+
+Use a relational database (PostgreSQL preferred)
+
+Use an ORM where appropriate
+
+Enforce authorization and tenant isolation on all endpoints
+
+Design modular services:
+
+Models
+
+Services
+
+API routes
+
+Boards should be reusable across other Jiganto modules
+
+MVP Constraints
+
+Focus on correctness, security, and extensibility
+
+UI can be minimal but functional
+
+Avoid over-engineering future features, but design for extension
+
+Success Criteria
+
+CRM supports full sales lifecycle from lead to contract
+
+Resource needs are visible before project delivery
+
+Boards provide a flexible visual tracking mechanism
+
+Future features are visible but clearly marked as not yet active
+
+System supports multiple companies safely

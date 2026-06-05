@@ -1,0 +1,34 @@
+You are absolutely right on both counts, and this is a critical architectural decision that needs to be resolved before the Replit build begins. Let me give you my full thinking.
+
+1. Project / Programme as the Top-Level Container
+Yes, this is genuinely missing and it's a foundational gap. Right now the design implicitly assumes a single project context — everything sits in one flat space. That works for a demo but completely breaks down across your four use cases.
+What you're describing is a multi-tenant, multi-project hierarchy where the container at the very top is not a Test Plan or a Test Strategy — it's a Project or Programme or Initiative. Every single object in the system (requirement, scenario, test case, test plan, execution, defect) needs to belong to a project context.
+The hierarchy should read:
+Organisation → Project/Programme → Test Strategy → Test Plan → Scenario → Test Case → Execution → Defect
+The "Project Type" field you're suggesting would sit on that top-level container and would include types like Programme, Project, POC, Initiative, BAU Release, Audit, Regression Cycle, and so on. This matters enormously because the four use cases you've described all have fundamentally different working patterns around that container.
+A professional services firm running PMO for multiple clients needs to see across all their client projects in one place but keep each client's data completely separate. A software company needs to track which version or release a test cycle belongs to. A system integrator needs to manage simultaneous implementations for different customers, potentially on the same platform (e.g. SAP for Client A and SAP for Client B) without any cross-contamination. A customer using an implementation partner needs to see their own project data and potentially grant their partner controlled access into it.
+Without the project container, none of those models work cleanly.
+
+2. Multi-Tenancy and the "Side" Problem
+Your fourth use case introduces something particularly important — the distinction between the SI side and the customer side looking at the same data. This is actually a two-organisation access model on a single project, which is more complex than standard role-based access control.
+You need to think about this in three layers.
+Layer 1 — Organisation / Tenant. Each company (the SI, the customer, the PS firm) is a separate organisation in the system. Data is partitioned at this level by default. An organisation can own projects, or be invited into projects as a partner.
+Layer 2 — Project Membership. Within a project, users from different organisations can be members. So the SI's test manager and the customer's UAT lead can both be members of "ERP Implementation — Client X" with different roles. This is the sharing model that makes your use case 4 work.
+Layer 3 — Role-Based Access within a Project. Within a project, access is controlled by role. A tester only sees the test cases assigned to them and the execution console. A developer only sees defects assigned to them. A customer stakeholder might only see the Dashboard and RTM in read-only mode. An auditor sees evidence and audit trail but cannot create or edit anything.
+This means your access control model needs to be role + project scope not just role. A user might be a Test Manager on Project A but only a Tester on Project B.
+
+3. Navigation Impact
+The way users navigate the system needs to change fundamentally once you add the project container. Right now the sidebar is tool-first — you click "Test Cases" and see all test cases. In a multi-project world it needs to be project-first — you select your project context at the top, and everything in the sidebar is then scoped to that project.
+Think of how Jira works — you always start by selecting a project, and then all the boards, backlogs, and reports are scoped to it. Or how Azure DevOps works with organisations and projects. That model is the right one here.
+The practical implication for the design is a project selector in the topbar or sidebar header, showing the active project, with the ability to switch context. The Test Navigator then becomes even more powerful because it shows the hierarchy within the selected project.
+
+4. Data Model Implications for Replit
+Before the build starts, the database schema needs a projects table and a project_memberships table added at the top of the hierarchy. Every other table (requirements, test_scenarios, test_cases, test_plans, test_runs, defects, evidence) needs a project_id foreign key. The audit_log already has this indirectly but needs it explicitly.
+The access control tables need to capture organisation_id, project_id, user_id, and role as a combined permission record — not just user and role in isolation.
+This is not a small change to bolt on later — it needs to be in the schema from day one, because retrofitting multi-tenancy into a single-tenant data model is one of the most painful refactoring exercises in software development.
+
+My Recommendation
+Before touching the Replit build, I'd suggest agreeing on three things:
+First, the exact project type taxonomy — what are the valid values for project/event type, and do any of them change the workflow or available features (for example, a POC might not need a full audit trail, whereas a regulated implementation absolutely does).
+Second, the organisation model — is Jiganto itself multi-tenant SaaS (each company gets their own isolated tenant), or is it a single instance where organisations share the platform with data partitioning? These have very different infrastructure implications.
+Third, the cross-organisation sharing rules — specifically for use case 4, what can the customer see that the SI creates, and vice versa? Can a customer's Test Manager reassign a defect to the SI's developer? These business rules need to be defined before the access model can be built.

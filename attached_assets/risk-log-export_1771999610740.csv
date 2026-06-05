@@ -1,0 +1,21 @@
+Code,Title,Status,Priority,Category,Owner,Workstream,Escalated,Description
+R-0001,Budget overrun on O2C workstream Ñ £180k variance vs. baseline,Budget,12,High,Escalated,L. Chen,Steering Cmte,
+R-0002,Data quality issues in legacy GL may cause reconciliation failures post go-live,Technical,9,High,Mitigating,M. Walsh,Ñ,
+R-0003,ERP integration test environment not provisioned Ñ UAT blocked,Technical,16,Critical,Escalated,S. Patel,PMO,
+R-0004,Key SME resource shared across three workstreams Ñ capacity constraint,Resource,15,Critical,Mitigating,A. Turner,Ñ,
+R-0005,Regulatory sign-off delay may push cutover beyond compliance window,Compliance,10,High,Open,R. Blake,Ñ,
+R-0006,Scope creep in P2P workstream impacting sprint velocity,Scope,6,Medium,Open,D. Khan,Ñ,
+R-0007,Third-party data migration vendor unable to meet go-live cutover date,Vendor,20,Critical,Escalated,J. Morris,Project Board,
+R-0008,Delayed infrastructure provisioning impacting SIT start,Open,17,Infrastructure,M. Walsh,Technical,Yes,Cloud environments not fully configured; blocking integration testing.
+R-0009,Data migration transformation rules incomplete,Mitigating,15,Data,J. Morris,Data Migration,Yes,Mapping specifications only 80% signed off.
+R-0010,SME availability reduced during financial year-end,Open,13,Resource,A. Turner,GL,No,Finance SMEs prioritising statutory reporting.
+R-0011,Integration latency may exceed SLA thresholds,Monitoring,14,Technical,S. Patel,Integration,No,Early performance tests show response time variance.
+R-0012,Vendor contract renewal not finalised before Phase 2,Open,16,Vendor,L. Chen,Steering Cmte,Yes,Commercial negotiations ongoing.
+R-0013,Change resistance from regional business units,Open,12,Change,A. Turner,Change,No,Adoption survey shows low readiness score in EMEA.
+R-0014,Regulatory update expected during deployment window,Monitoring,18,Compliance,R. Blake,Governance,Yes,Anticipated policy amendment may affect reporting logic.
+R-0015,Insufficient regression coverage for customised workflows,Mitigating,14,Testing,S. Patel,PMO,No,Automation scripts incomplete for edge cases.
+R-0016,Budget contingency below recommended 10% threshold,Open,11,Financial,L. Chen,PMO,No,Remaining buffer may not absorb additional change requests.
+R-0017,Cybersecurity threat escalation during go-live,Monitoring,19,Security,M. Walsh,Security,Yes,Heightened monitoring required during cutover weekend.
+R-0018,Parallel run reconciliation variances exceed tolerance,Open,15,Data,J. Morris,O2C,Yes,Variances > £25k may delay full transition.
+R-0019,Cloud cost overrun due to extended testing cycles,Mitigating,10,Financial,M. Walsh,Technical,No,Additional environments increasing monthly run rate.
+R-0020,Failure to achieve DR recovery time objective (RTO),Technical,20,Critical,P Tonge,Change,Escalated,

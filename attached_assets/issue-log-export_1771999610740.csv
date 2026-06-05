@@ -1,0 +1,21 @@
+Code,Title,Status,Priority,Category,Owner,Workstream,Escalated,Description
+I-0001,UAT Cycle 1 failed due to incomplete test scripts,Open,18,Testing,S. Patel,PMO,Yes,Test scripts only 70% complete; business unable to execute full regression suite.
+I-0002,Interfaces to banking gateway returning duplicate transactions,Investigating,16,Technical,L. Chen,O2C,Yes,Duplicate payment files generated during SIT; root cause under analysis.
+I-0003,Data migration rehearsal exceeded downtime window by 4 hours,Open,17,Data,J. Morris,Data Migration,Yes,Cutover runbook timing underestimated transformation processing time.
+I-0004,P2P workflow approval hierarchy incorrect in production config,Resolved,12,Configuration,D. Khan,P2P,No,Approval matrix missing Level 3 Finance Director step.
+I-0005,Security roles misaligned with segregation of duties policy,Open,19,Compliance,R. Blake,Security,Yes,Audit identified 14 role conflicts requiring remediation.
+I-0006,Reporting dashboard performance latency > 25 seconds,Open,10,Performance,M. Walsh,Reporting,No,BI extract layer not optimised; indexes missing.
+I-0007,Resource attrition Ð Lead Data Architect resigned,Critical,20,Resource,A. Turner,Data Migration,Yes,Replacement recruitment underway; knowledge transfer incomplete.
+I-0008,VAT configuration incorrect for cross-border transactions,Open,14,Compliance,L. Chen,O2C,Yes,Incorrect tax codes applied for EU customers.
+I-0009,API throttling limit exceeded during integration testing,Investigating,13,Integration,S. Patel,Technical,No,Middleware rate limiting misconfigured.
+I-0010,Legacy system access revoked before data extraction completed,Open,15,Data,J. Morris,Data Migration,Yes,IT decommissioned environment prematurely.
+I-0011,Budget forecast not updated in latest financial pack,Resolved,8,Financial,D. Khan,PMO,No,PMO pack corrected and redistributed.
+I-0012,Business SMEs unavailable during critical sprint,Open,11,Resource,A. Turner,P2P,No,Competing BAU priorities impacting attendance.
+I-0013,Cutover rehearsal sign-off not obtained from Infrastructure,Open,16,Governance,S. Patel,PMO,Yes,Infra team requesting revised rollback plan.
+I-0014,Encryption certificates expired in SIT environment,Resolved,9,Technical,M. Walsh,Technical,No,Certificates renewed and deployed.
+I-0015,Chart of Accounts mapping incomplete,Open,14,Finance,R. Blake,GL,Yes,38 accounts remain unmapped.
+I-0016,"Vendor invoice processing backlog > 1,200 items",Open,13,Operations,D. Khan,P2P,No,Manual intervention required for failed invoices.
+I-0017,Data reconciliation variance of £52k in AR,Investigating,15,Data,L. Chen,O2C,Yes,Variance traced to timing differences; under validation.
+I-0018,Disaster Recovery test failed,Critical,20,Infrastructure,M. Walsh,Technical,Yes,Recovery time objective not achieved.
+I-0019,Training materials not approved by HR,Open,7,Change,A. Turner,Change,No,HR requesting alignment to corporate standards.
+I-0020,Steering Committee pack distributed late,Resolved,6,Governance,S. Patel,PMO,No,Delay due to reporting consolidation issues.

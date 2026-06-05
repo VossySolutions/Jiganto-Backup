@@ -1,0 +1,52 @@
+ 
+	1	Design Changes
+ 
+I've just done a very basic audit against all the module pages, i.e. the landing page and what you see at the top of the header and there is a lot of inconsistency when it comes to the module title and the sub module title and whether there's a search bar or a Notification icon or a quick action ICON or Settings icon or even the AI insights ICON.   The Page that currently presents the best layout is the CRM page where you have the title, and then the CRM subtitle followed by the search bar and then the help icon where you can raise a bug or development suggestion, etc.  After the help ICON, you have the notification ICON, followed by the quick actions button and then the AI insights button. Then underneath you have all the different tabs with the correct design and shading for which ever tab you're on and then you have an underneath that the main page with the light grey area and a light or rather no borderline to differentiate between the head of the page and then the body of the Page. However, when I look at all the other modules we are consistently inconsistent and I think we should bring everything back to the same design as CRO and that also includes the workspace is module and the documents module and the chat module and the Settings module.  Happy to take advice and guidance if there's anything else better from a Best practice point of view for what I'd like to do is be more consistent with the Page design. Also when you have the different tabs in that page there is a small space between the actual tabs and then the body of the Page.
+ 
+I know on the Project's page those tabs keep touching the second part of the page or the body of the page and that does not look neat and also where those tabs are behind or surrounding that is grey and not white background like CRM or tasks module. Also, when you hover over those buttons or icons, it should be a little indicator as to what that icon or button is for and that is missing.
+ 
+The AI insights button, although that will be an optional paid feature for users down the line, for now we're going make that active so that everyone can see that Jiganto comes with AI insights.
+ 
+I welcome any feedback in terms of the suggested changes I would like to make to be consistent.
+ 
+	1	Module Sub Titles Missing or needing to be changed
+ 
+The other thing that is missing is the subtext for three modules as per below and I have suggested text to be used, i.e.
+ 
+For documents = Track and manage your documents across all areas
+For resources = Skills, capacity and time management
+For testing = End to end Project and Business testing
+For BPM = Business Process Management
+For Helpdesk = Service and Helpdesk Management
+ 
+	1	Module Tabs - Proposed Changes
+ 
+CHAT MODULE - For the chat module, as per request number one we need to standardise the header on top and bring the current design slightly down but the other suggestion is to have a few tabs or action buttons to help with standardising the use experience. I would welcome your guidance and reflection on best practice if this makes sense. The action icon is that I was thinking of adding where as follows:  -> New chat,  New team, New Channel,
+ 
+The "+" icon can still remain for now - as mentioned, if there's a better approach, I am happy to consider this based on best practice  WORKSPACE MODULE - having taken back feedback from the number of colleagues and prospects, there is a sense that the landing Page needs to guide us as quickly as to what people can do with the workspace module. Whilst the navigator on the left-hand side or the explorer bar has the + or the three dots to allow users to create folders and sub folders and then content, i.e. notes or a database table, it's not evident to the average user what workspaces will be full and it might be that we have an introduction page that introduces the module and gives a very simple overview of what people can do there with some graphics to make it a lot more appealing and consumable because at the moment when you open the module app you see the new page ICON but no one really knows what it's for. We could have a setting maybe down the line where the intro page is removed once people are very familiar with the module, always simply keep it there to be consistent. Again I welcome any suggested changes to the above based on best practice.  DOCUMENTS MODULE - the document module is probably more understood and known by users however we still need to be consistent with the head asexual and the one idea I had to provide some consistency with the tabs whilst still keeping the Explorer folder because this is unique and powerful is the ability to have tabs where the first tab is as follows:  ALL Documents  or All Docs
+My Documents  or My  Docs
+Business Documents  or Business Docs
+Customer Documents  or Customer Docs
+Project Documents  or Project Docs
+Finance Documents  or Finance Docs
+Testing Documents  or Testing Docs
+BPM Documents  or BPM Docs
+ 
+The two cool action buttons will still be new document and new folder.
+ 
+The thought process is that when users create documents in the other modules, they are automatically tagged with the module name, so for example if I create a project document it automatically has Project as a tag or if I create a document in the testing module it has testing as a tag. And when users go to the documents module, they can flick between the different tabs which means the explorer on the left-hand side will then only show the documents that were created in those respective modules. The idea here is that users can go to the dedicated document management module and see the different documents based on the modules. There will of course be other documents that might not be relevant to the modules and they can be seen and filtered on through the ALL Docs tab.
+ 
+Again, I welcome your input as to whether you think based on best practice this would be a good user experience or not, but my thought process was that it ties together all the documents from the modules and makes it easy for the user to navigate and find
+ 
+RESOURCES MODULE - I know we have not set up the resources module yet, however in anticipation of certain design elements that I will provide later on I want to change the menu slightly to be as follows:
+ 
+Dashboard, Project Users, Skills Matrix, Capacity Planning, Pipeline, Timesheets, Approvals
+ 
+	•	Dashboard, Tab to present summary data of all the users across projects, etc
+	•	Project Users, Tab two manage users who typically work on projects and are allocated based on skill set and capacity
+	•	Skills Matrix, Tab to present and maintain the skills matrix for all the users in a company that can be used on projects
+	•	Capacity Planning, Tab to manage the capacity plans for all the resources that are available or currently booked on projects or Helpdesk tickets or other initiatives
+	•	Pipeline, Tab to help with understanding what the future resource requirements are based on CRM pipe plan
+	•	Timesheets, Tab to allow users to enter their timesheets for the project work done, including contractors
+	•	Approvals, Tab to allow the setup of approval workflow and a summary review of which uses me to have their timesheets approved or not based on timesheet approval rules.   
+GENERAL - whilst not every module will necessarily have a dashboard page, one of the Foord processes was to have a landing Page that is designed to make the users understand exactly what that module is about and if they want any quick links to help guides they can find it on the landing page. And that landing Page can also be switched off by users once they are ofey with how to use Jiganto. In addition, each module can potentially be used on its own without all the other menus and therefore it's important to have a good landing page that makes the system want to be consumed and not flat looking. Whilst it's highly unlikely that uses will only use one module and rather combination of two or three. I'm just trying to understand how we can Best create a landing environment if use genuinely only registered to use one possibly two modules so that they know what their modules is for and how to Best use it. Again keen to hear based on Best practice what could be considered to make the design and the entry into each module or the application is a whole the most user-friendly and effective way to get people to buy into the overall product set.

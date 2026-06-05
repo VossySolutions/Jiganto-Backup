@@ -1,0 +1,1839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Jiganto — Surveys</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundled.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#0F0E0C;--ink2:#2E2C28;--ink3:#5C5952;--ink4:#9C9890;
+  --paper:#FAFAF7;--paper2:#F2F0EB;--paper3:#E8E5DE;
+  --line:#DDD9D0;--line2:#CBC7BC;
+  --teal:#1A6B5A;--teal-l:#E4F2EE;--teal-m:#2E8C74;
+  --amber:#B85C0A;--amber-l:#FDF0E4;
+  --violet:#4A2D8C;--violet-l:#EEE9FA;
+  --rose:#9C2B2B;--rose-l:#FAEAEA;
+  --blue:#1A4A8C;--blue-l:#E6EEF8;
+  --r:10px;--r-lg:16px;
+  --sh:0 1px 3px rgba(0,0,0,.06),0 4px 12px rgba(0,0,0,.06);
+  --sh-lg:0 8px 24px rgba(0,0,0,.1),0 2px 6px rgba(0,0,0,.06);
+}
+body{font-family:'DM Sans',sans-serif;background:var(--paper);color:var(--ink);font-size:15px;line-height:1.6;min-height:100vh}
+.view{display:none;min-height:100vh}.view.active{display:block}
+
+/* NAV */
+nav{background:var(--ink);color:#fff;height:58px;padding:0 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
+.nav-logo{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;display:flex;align-items:center;gap:10px;color:#fff}
+.nav-logo .module{font-size:11px;font-weight:500;background:rgba(255,255,255,.15);padding:3px 9px;border-radius:20px;letter-spacing:.06em;text-transform:uppercase}
+.nav-right{display:flex;gap:10px;align-items:center}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;cursor:pointer;border:none;transition:all .15s;text-decoration:none;white-space:nowrap}
+.btn-primary{background:var(--teal);color:#fff}
+.btn-primary:hover{background:#145548;transform:translateY(-1px);box-shadow:0 4px 12px rgba(26,107,90,.3)}
+.btn-secondary{background:var(--paper);color:var(--ink);border:1px solid var(--line2)}
+.btn-secondary:hover{background:var(--paper2)}
+.btn-ghost{background:transparent;color:var(--ink3);border:1px solid var(--line)}
+.btn-ghost:hover{background:var(--paper2);color:var(--ink)}
+.btn-white{background:#fff;color:var(--ink);border:1px solid var(--line2)}
+.btn-white:hover{background:var(--paper2)}
+.btn-danger{background:var(--rose);color:#fff}.btn-danger:hover{background:#7a2020}
+.btn-sm{padding:6px 13px;font-size:13px}.btn-lg{padding:13px 28px;font-size:15px;border-radius:10px}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important}
+.btn-icon{width:34px;height:34px;padding:0;justify-content:center;border-radius:8px;font-size:16px}
+
+/* LAYOUT */
+.container{max-width:1040px;margin:0 auto;padding:0 24px}
+.page-hd{padding:32px 0 24px}
+.page-hd h1{font-family:'Syne',sans-serif;font-size:28px;font-weight:700;margin-bottom:4px}
+.page-hd p{color:var(--ink3);font-size:14px}
+
+/* CARDS */
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);padding:24px;box-shadow:var(--sh)}
+.card+.card{margin-top:16px}
+.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.card-hd h2{font-family:'Syne',sans-serif;font-size:16px;font-weight:600}
+.section-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink4);margin-bottom:12px}
+
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--sh)}
+.stat-n{font-family:'Syne',sans-serif;font-size:28px;font-weight:700}
+.stat-l{font-size:12px;color:var(--ink3);margin-top:2px}
+
+/* SURVEY CARDS */
+.survey-card{background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);padding:20px 24px;box-shadow:var(--sh);display:flex;align-items:center;gap:18px;margin-bottom:12px;transition:box-shadow .15s,transform .15s}
+.survey-card:hover{box-shadow:var(--sh-lg);transform:translateY(-2px)}
+.survey-thumb{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.survey-info{flex:1;cursor:pointer}
+.survey-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:600;margin-bottom:3px}
+.survey-meta{font-size:12px;color:var(--ink4)}
+.survey-actions{display:flex;gap:8px;align-items:center}
+
+/* BADGE */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500}
+.b-active{background:var(--teal-l);color:var(--teal)}
+.b-draft{background:var(--paper2);color:var(--ink3);border:1px solid var(--line)}
+.b-closed{background:var(--rose-l);color:var(--rose)}
+.b-amber{background:var(--amber-l);color:var(--amber)}
+
+/* TABS */
+.tab-bar{display:flex;gap:2px;background:var(--paper3);padding:3px;border-radius:10px;margin-bottom:24px}
+.tab{flex:1;padding:8px;text-align:center;font-size:13px;font-weight:500;border-radius:8px;cursor:pointer;transition:all .15s;color:var(--ink3)}
+.tab.active{background:#fff;color:var(--ink);box-shadow:var(--sh)}
+
+/* BUILDER */
+.builder-layout{display:grid;grid-template-columns:240px 1fr 260px;gap:0;min-height:calc(100vh - 58px)}
+.builder-sidebar{background:#fff;border-right:1px solid var(--line);padding:20px;overflow-y:auto}
+.builder-main{background:var(--paper2);padding:28px;overflow-y:auto}
+.builder-settings{background:#fff;border-left:1px solid var(--line);padding:20px;overflow-y:auto}
+.sidebar-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink4);margin-bottom:10px;margin-top:18px}
+.sidebar-label:first-child{margin-top:0}
+.q-type-btn{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;border:1px solid transparent;margin-bottom:3px;color:var(--ink2)}
+.q-type-btn:hover{background:var(--paper2);border-color:var(--line)}
+.q-type-btn .qt-icon{width:26px;height:26px;border-radius:6px;background:var(--paper2);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+
+/* QUESTION CARDS IN BUILDER */
+.q-card{background:#fff;border:1.5px solid var(--line);border-radius:var(--r-lg);padding:20px;margin-bottom:12px;position:relative;transition:all .15s;cursor:pointer}
+.q-card:hover{border-color:var(--teal-m);box-shadow:0 0 0 3px var(--teal-l)}
+.q-card.selected{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-l)}
+.q-num{font-size:11px;font-weight:600;color:var(--ink4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.q-text{font-family:'Lora',serif;font-size:16px;font-weight:500;margin-bottom:14px;color:var(--ink);line-height:1.4}
+.q-preview{display:flex;flex-direction:column;gap:7px}
+.q-opt{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line2);border-radius:8px;font-size:13px;color:var(--ink3)}
+.q-opt-circle{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line2);flex-shrink:0}
+.q-opt-sq{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--line2);flex-shrink:0}
+.scale-row{display:flex;gap:6px;justify-content:space-between}
+.scale-item{flex:1;text-align:center;padding:9px 4px;border:1px solid var(--line2);border-radius:8px;font-size:13px;font-weight:500;color:var(--ink3)}
+.q-actions{display:flex;gap:5px;position:absolute;right:12px;top:12px;opacity:0;transition:opacity .15s}
+.q-card:hover .q-actions,.q-card.selected .q-actions{opacity:1}
+.q-empty{text-align:center;padding:48px;color:var(--ink4);border:2px dashed var(--line2);border-radius:var(--r-lg);font-size:14px}
+
+/* FORM */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:12px;font-weight:600;color:var(--ink3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em}
+.form-control{width:100%;padding:9px 13px;border:1px solid var(--line2);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--ink);background:#fff;outline:none;transition:border-color .15s}
+.form-control:focus{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-l)}
+textarea.form-control{resize:vertical;min-height:80px}
+select.form-control{cursor:pointer}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+.toggle{width:36px;height:20px;background:var(--line2);border-radius:10px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
+.toggle.on{background:var(--teal)}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s}
+.toggle.on::after{transform:translateX(16px)}
+
+/* RESPONDENT */
+.resp-wrap{min-height:100vh;background:linear-gradient(160deg,#1A6B5A 0%,#0F3D31 100%);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px}
+.resp-card{background:#fff;border-radius:20px;max-width:620px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.2);overflow:hidden}
+.resp-header{padding:32px 36px 28px;border-bottom:1px solid var(--line)}
+.resp-header .survey-tag{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--teal);margin-bottom:8px}
+.resp-header h1{font-family:'Syne',sans-serif;font-size:22px;font-weight:700;margin-bottom:6px}
+.resp-header p{font-size:14px;color:var(--ink3)}
+.resp-progress{height:4px;background:var(--paper3)}
+.resp-progress-bar{height:100%;background:var(--teal);transition:width .4s ease}
+.resp-body{padding:32px 36px}
+.resp-q-num{font-size:12px;font-weight:600;color:var(--teal);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.resp-q-text{font-family:'Lora',serif;font-size:18px;font-weight:500;margin-bottom:6px;line-height:1.5}
+.resp-q-sub{font-size:13px;color:var(--ink3);margin-bottom:20px}
+.resp-option{display:flex;align-items:center;gap:12px;padding:12px 16px;border:1.5px solid var(--line);border-radius:10px;cursor:pointer;transition:all .15s;margin-bottom:10px;font-size:14px;font-weight:500}
+.resp-option:hover{border-color:var(--teal-m);background:var(--teal-l)}
+.resp-option.selected{border-color:var(--teal);background:var(--teal-l);color:var(--teal)}
+.resp-option .opt-marker{width:18px;height:18px;border-radius:50%;border:2px solid var(--line2);flex-shrink:0;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.resp-option.selected .opt-marker{border-color:var(--teal);background:var(--teal)}
+.resp-option.selected .opt-marker::after{content:'';width:6px;height:6px;border-radius:50%;background:#fff}
+.resp-option .opt-sq{width:18px;height:18px;border-radius:5px;border:2px solid var(--line2);flex-shrink:0;transition:all .15s;display:flex;align-items:center;justify-content:center;font-size:11px}
+.resp-option.selected .opt-sq{border-color:var(--teal);background:var(--teal);color:#fff}
+.resp-scale{display:flex;gap:6px}
+.resp-scale-item{flex:1;text-align:center;padding:12px 4px;border:1.5px solid var(--line);border-radius:10px;cursor:pointer;transition:all .15s;font-size:14px;font-weight:600;color:var(--ink3)}
+.resp-scale-item:hover{border-color:var(--teal-m);background:var(--teal-l);color:var(--teal)}
+.resp-scale-item.selected{border-color:var(--teal);background:var(--teal);color:#fff}
+.resp-scale-labels{display:flex;justify-content:space-between;font-size:11px;color:var(--ink4);margin-top:6px;padding:0 4px}
+.resp-nav{display:flex;align-items:center;justify-content:space-between;margin-top:28px;padding-top:24px;border-top:1px solid var(--line)}
+.resp-footer{padding:16px 36px;border-top:1px solid var(--line);font-size:12px;color:var(--ink4);display:flex;align-items:center;justify-content:space-between}
+
+/* RESULTS */
+.results-layout{display:grid;grid-template-columns:1fr 300px;gap:20px}
+.chart-card{background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);padding:24px;box-shadow:var(--sh);margin-bottom:16px}
+.chart-q{font-family:'Lora',serif;font-size:16px;font-weight:500;margin-bottom:4px}
+.chart-meta{font-size:12px;color:var(--ink4);margin-bottom:20px}
+.chart-wrap{position:relative;height:220px}
+.response-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.response-label{font-size:13px;font-weight:500;width:150px;flex-shrink:0;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.response-bar-wrap{flex:1;height:28px;background:var(--paper2);border-radius:6px;overflow:hidden}
+.response-bar{height:100%;border-radius:6px;display:flex;align-items:center;padding-left:8px}
+.response-pct{font-size:12px;font-weight:600;color:var(--ink3);width:38px;text-align:right;flex-shrink:0}
+.nps-display{display:flex;align-items:center;justify-content:center;gap:32px;padding:20px 0}
+.nps-score{font-family:'Syne',sans-serif;font-size:56px;font-weight:700;color:var(--teal)}
+.nps-breakdown{display:flex;gap:16px}
+.nps-group{text-align:center}
+.nps-group-n{font-size:20px;font-weight:700;font-family:'Syne',sans-serif}
+.nps-group-l{font-size:11px;color:var(--ink4)}
+.resp-table{width:100%;border-collapse:collapse;font-size:13px}
+.resp-table th{text-align:left;padding:10px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink4);border-bottom:1px solid var(--line);background:var(--paper2)}
+.resp-table td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.resp-table tr:last-child td{border-bottom:none}
+.resp-table tr:hover td{background:var(--paper2)}
+
+/* MODAL */
+.modal-ov{display:none;position:fixed;inset:0;background:rgba(15,14,12,.65);backdrop-filter:blur(4px);z-index:1000;align-items:center;justify-content:center;padding:20px}
+.modal-ov.active{display:flex}
+.modal{background:#fff;border-radius:var(--r-lg);box-shadow:var(--sh-lg);width:100%;overflow:hidden;animation:su .2s ease;max-height:90vh;display:flex;flex-direction:column}
+.modal-sm{max-width:480px}
+.modal-md{max-width:660px}
+.modal-lg{max-width:860px}
+.modal-xl{max-width:1020px}
+@keyframes su{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-hd{padding:20px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-hd h3{font-family:'Syne',sans-serif;font-size:16px;font-weight:600}
+.modal-body{padding:24px;overflow-y:auto;flex:1}
+.modal-ft{padding:14px 24px;border-top:1px solid var(--line);display:flex;gap:10px;justify-content:flex-end;flex-shrink:0}
+.modal-x{background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink3);padding:4px;line-height:1}
+
+/* WIZARD */
+.wizard-steps{display:flex;gap:0;margin-bottom:28px;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+.wstep{flex:1;padding:12px 8px;text-align:center;font-size:12px;font-weight:600;color:var(--ink4);background:#fff;border-right:1px solid var(--line);transition:all .2s}
+.wstep:last-child{border-right:none}
+.wstep.active{background:var(--teal);color:#fff}
+.wstep.done{background:var(--teal-l);color:var(--teal)}
+.wstep-num{display:block;font-size:16px;font-weight:700;margin-bottom:2px}
+.q-wizard-card{background:var(--paper2);border:1.5px solid var(--line);border-radius:var(--r-lg);padding:16px 20px;margin-bottom:10px;display:flex;align-items:flex-start;gap:14px;position:relative}
+.q-wizard-card.selected-wq{border-color:var(--teal);background:var(--teal-l)}
+.q-wizard-num{width:26px;height:26px;border-radius:50%;background:var(--ink3);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px}
+.q-wizard-card.selected-wq .q-wizard-num{background:var(--teal)}
+.q-type-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:var(--paper3);color:var(--ink3);margin-bottom:4px}
+.q-type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.q-type-tile{padding:14px 12px;border:1.5px solid var(--line);border-radius:10px;cursor:pointer;text-align:center;transition:all .15s;background:#fff}
+.q-type-tile:hover{border-color:var(--teal-m);background:var(--teal-l)}
+.q-type-tile.chosen{border-color:var(--teal);background:var(--teal-l)}
+.q-type-tile .icon{font-size:22px;display:block;margin-bottom:6px}
+.q-type-tile .label{font-size:12px;font-weight:600;color:var(--ink2)}
+.q-type-tile .sub{font-size:11px;color:var(--ink4)}
+
+/* HISTORY TABLE */
+.hist-table{width:100%;border-collapse:collapse}
+.hist-table th{text-align:left;padding:10px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink4);border-bottom:2px solid var(--line);background:var(--paper2)}
+.hist-table td{padding:12px 14px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:middle}
+.hist-table tr:last-child td{border-bottom:none}
+.hist-table tr:hover td{background:var(--paper2)}
+.hist-table .actions{display:flex;gap:6px;opacity:0;transition:opacity .15s}
+.hist-table tr:hover .actions{opacity:1}
+
+/* INDIVIDUAL RESPONSE */
+.resp-detail-q{margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.resp-detail-q:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.resp-detail-q-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink4);margin-bottom:4px}
+.resp-detail-q-text{font-family:'Lora',serif;font-size:15px;font-weight:500;margin-bottom:10px;color:var(--ink)}
+.resp-detail-answer{font-size:14px;background:var(--teal-l);border:1px solid #b0d9ce;border-radius:8px;padding:10px 14px;color:var(--teal);font-weight:500}
+.resp-detail-scale{display:flex;gap:4px}
+.resp-detail-scale-item{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;background:var(--paper2);color:var(--ink4);border:1px solid var(--line)}
+.resp-detail-scale-item.chosen{background:var(--teal);color:#fff;border-color:var(--teal)}
+
+/* SHARE LINK */
+.share-link{display:flex;align-items:center;background:var(--paper2);border:1px solid var(--line2);border-radius:8px;overflow:hidden;margin-top:8px}
+.share-link input{flex:1;padding:9px 13px;border:none;background:transparent;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--ink);outline:none}
+.share-link button{padding:9px 14px;background:var(--teal);color:#fff;border:none;font-size:13px;font-weight:500;cursor:pointer}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;z-index:9999;background:var(--ink);color:#fff;padding:13px 20px;border-radius:10px;font-size:14px;box-shadow:var(--sh-lg);transform:translateY(60px);opacity:0;transition:all .3s;display:flex;align-items:center;gap:10px;max-width:340px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.ok{background:var(--teal)}
+
+.divider{height:1px;background:var(--line);margin:16px 0}
+.avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;color:#fff}
+
+@media(max-width:700px){
+  .builder-layout{grid-template-columns:1fr}
+  .builder-sidebar,.builder-settings{display:none}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .results-layout{grid-template-columns:1fr}
+  .q-type-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ VIEW: DASHBOARD ═══════════ -->
+<div id="v-dash" class="view active">
+<nav>
+  <div class="nav-logo">Jiganto <span class="module">Surveys</span></div>
+  <div class="nav-right">
+    <button class="btn btn-ghost btn-sm" onclick="showModal('m-import-export')">⇅ Import / Export</button>
+    <button class="btn btn-white btn-sm" onclick="showView('v-respond');startSurvey()">👁 Preview Survey</button>
+    <button class="btn btn-primary btn-sm" onclick="openNewSurveyWizard()">+ New Survey</button>
+  </div>
+</nav>
+<div class="container">
+  <div class="page-hd">
+    <h1>Surveys</h1>
+    <p>Build, distribute, and analyse surveys across your projects and teams</p>
+  </div>
+  <div class="stats-grid">
+    <div class="stat"><div class="stat-n">12</div><div class="stat-l">Total surveys</div></div>
+    <div class="stat"><div class="stat-n" style="color:var(--teal)">4</div><div class="stat-l">Active now</div></div>
+    <div class="stat"><div class="stat-n" style="color:var(--amber)">847</div><div class="stat-l">Total responses</div></div>
+    <div class="stat"><div class="stat-n" style="color:var(--violet)">68%</div><div class="stat-l">Avg completion</div></div>
+  </div>
+
+  <!-- Tabs: Active / All History -->
+  <div class="tab-bar" style="max-width:360px">
+    <div class="tab active" onclick="switchDashTab('active',this)">Active & Recent</div>
+    <div class="tab" onclick="switchDashTab('history',this)">All Surveys</div>
+  </div>
+
+  <!-- ACTIVE TAB -->
+  <div id="tab-active">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:600">Recent Surveys</div>
+      <div style="display:flex;gap:8px">
+        <input class="form-control" style="width:200px;font-size:13px;padding:7px 12px" placeholder="Search surveys..."/>
+      </div>
+    </div>
+
+    <div class="survey-card">
+      <div class="survey-thumb" style="background:var(--teal-l)">📊</div>
+      <div class="survey-info" onclick="showView('v-results')">
+        <div class="survey-title">Project Alpha — Sprint Retrospective</div>
+        <div class="survey-meta">8 questions · 24 responses · 30 invited · Closes 20 Mar</div>
+      </div>
+      <span class="badge b-active">● Active</span>
+      <div class="survey-actions">
+        <button class="btn btn-ghost btn-sm" onclick="showView('v-builder')">Edit</button>
+        <button class="btn btn-primary btn-sm" onclick="showView('v-results')">Results</button>
+      </div>
+    </div>
+
+    <div class="survey-card">
+      <div class="survey-thumb" style="background:var(--violet-l)">🎯</div>
+      <div class="survey-info" onclick="showView('v-results')">
+        <div class="survey-title">Client Satisfaction — Q1 2026</div>
+        <div class="survey-meta">12 questions · 67 responses · 80 invited · Closed 1 Mar</div>
+      </div>
+      <span class="badge b-closed">Closed</span>
+      <div class="survey-actions">
+        <button class="btn btn-ghost btn-sm" onclick="showToast('Survey duplicated','ok')">Copy</button>
+        <button class="btn btn-primary btn-sm" onclick="showView('v-results')">Results</button>
+      </div>
+    </div>
+
+    <div class="survey-card">
+      <div class="survey-thumb" style="background:var(--amber-l)">💡</div>
+      <div class="survey-info" onclick="showView('v-builder')">
+        <div class="survey-title">Team Wellbeing Check-In — March</div>
+        <div class="survey-meta">6 questions · Not yet sent · Draft</div>
+      </div>
+      <span class="badge b-draft">Draft</span>
+      <div class="survey-actions">
+        <button class="btn btn-ghost btn-sm" onclick="showView('v-builder')">Edit</button>
+        <button class="btn btn-primary btn-sm" onclick="showModal('m-share')">Send</button>
+      </div>
+    </div>
+
+    <div class="survey-card">
+      <div class="survey-thumb" style="background:var(--blue-l)">🔧</div>
+      <div class="survey-info" onclick="showView('v-results')">
+        <div class="survey-title">Platform Feedback — Feature Prioritisation</div>
+        <div class="survey-meta">10 questions · 142 responses · Closed 1 Mar</div>
+      </div>
+      <span class="badge b-closed">Closed</span>
+      <div class="survey-actions">
+        <button class="btn btn-ghost btn-sm" onclick="showToast('Survey duplicated','ok')">Copy</button>
+        <button class="btn btn-primary btn-sm" onclick="showView('v-results')">Results</button>
+      </div>
+    </div>
+
+    <div class="survey-card">
+      <div class="survey-thumb" style="background:var(--teal-l)">📝</div>
+      <div class="survey-info" onclick="showView('v-results')">
+        <div class="survey-title">New Employee Onboarding Feedback</div>
+        <div class="survey-meta">9 questions · 18 responses · Active · No end date</div>
+      </div>
+      <span class="badge b-active">● Active</span>
+      <div class="survey-actions">
+        <button class="btn btn-ghost btn-sm" onclick="showView('v-builder')">Edit</button>
+        <button class="btn btn-primary btn-sm" onclick="showView('v-results')">Results</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORY TAB -->
+  <div id="tab-history" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:600" id="hist-count-label">All Surveys (12)</div>
+      <div style="display:flex;gap:8px">
+        <input class="form-control" id="hist-search" style="width:200px;font-size:13px;padding:7px 12px" placeholder="Search..." oninput="filterHistoryTable()"/>
+        <select class="form-control" id="hist-status" style="width:140px;font-size:13px;padding:7px 12px" onchange="filterHistoryTable()">
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="draft">Draft</option>
+          <option value="closed">Closed</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="showModal('m-import-export')" title="Import / Export">⇅ Import/Export</button>
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="hist-table">
+        <thead><tr>
+          <th>Survey</th><th>Status</th><th>Questions</th><th>Responses</th><th>Completion</th><th>Created</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="history-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ VIEW: BUILDER ═══════════ -->
+<div id="v-builder" class="view">
+<nav>
+  <div class="nav-logo">Jiganto <span class="module">Builder</span></div>
+  <div class="nav-right">
+    <button class="btn btn-ghost btn-sm" onclick="showView('v-dash')">← Back</button>
+    <button class="btn btn-white btn-sm" onclick="showToast('Draft saved ✓','ok')">Save Draft</button>
+    <button class="btn btn-white btn-sm" onclick="showView('v-respond');startSurvey()">Preview</button>
+    <button class="btn btn-primary btn-sm" onclick="showModal('m-share')">Send Survey →</button>
+  </div>
+</nav>
+<div class="builder-layout">
+  <!-- Left sidebar: question types -->
+  <div class="builder-sidebar">
+    <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:600;margin-bottom:14px">Add Question</div>
+    <div class="sidebar-label">Choice</div>
+    <div class="q-type-btn" onclick="addQuestion('mc')"><div class="qt-icon">◉</div> Multiple Choice</div>
+    <div class="q-type-btn" onclick="addQuestion('yn')"><div class="qt-icon">✓✗</div> Yes / No</div>
+    <div class="q-type-btn" onclick="addQuestion('cb')"><div class="qt-icon">☑</div> Checkboxes</div>
+    <div class="q-type-btn" onclick="addQuestion('dd')"><div class="qt-icon">▾</div> Dropdown</div>
+    <div class="sidebar-label">Rating</div>
+    <div class="q-type-btn" onclick="addQuestion('sc')"><div class="qt-icon">⭐</div> Star Rating</div>
+    <div class="q-type-btn" onclick="addQuestion('scale')"><div class="qt-icon">◈</div> Scale (1–10)</div>
+    <div class="q-type-btn" onclick="addQuestion('nps')"><div class="qt-icon">📈</div> NPS Score</div>
+    <div class="sidebar-label">Open-ended</div>
+    <div class="q-type-btn" onclick="addQuestion('text')"><div class="qt-icon">✏</div> Short Text</div>
+    <div class="q-type-btn" onclick="addQuestion('para')"><div class="qt-icon">☰</div> Paragraph</div>
+    <div class="sidebar-label">Other</div>
+    <div class="q-type-btn" onclick="addQuestion('date')"><div class="qt-icon">📅</div> Date</div>
+    <div class="q-type-btn" onclick="addQuestion('matrix')"><div class="qt-icon">⊞</div> Matrix / Grid</div>
+  </div>
+
+  <!-- Centre: canvas -->
+  <div class="builder-main">
+    <div style="background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);padding:24px 28px;margin-bottom:20px;border-top:4px solid var(--teal)">
+      <input id="survey-title" style="font-family:'Syne',sans-serif;font-size:22px;font-weight:700;border:none;outline:none;width:100%;background:transparent;color:var(--ink)" value="Project Alpha — Sprint Retrospective" placeholder="Survey title..."/>
+      <textarea id="survey-desc" style="font-family:'DM Sans',sans-serif;font-size:14px;border:none;outline:none;width:100%;background:transparent;color:var(--ink3);resize:none;margin-top:8px;line-height:1.5" rows="2" placeholder="Survey description...">This survey helps us understand how the sprint went and where we can improve as a team. Should take around 3 minutes.</textarea>
+    </div>
+    <div id="q-canvas">
+      <div class="q-card selected" onclick="selectQ(this)">
+        <div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div>
+        <div class="q-num"><span>Q1 · Multiple Choice</span><span class="badge b-active" style="font-size:11px">Required</span></div>
+        <div class="q-text">How would you rate the overall sprint?</div>
+        <div class="q-preview">
+          <div class="q-opt"><div class="q-opt-circle"></div> Excellent — exceeded expectations</div>
+          <div class="q-opt"><div class="q-opt-circle"></div> Good — met most goals</div>
+          <div class="q-opt"><div class="q-opt-circle"></div> Average — some issues arose</div>
+          <div class="q-opt"><div class="q-opt-circle"></div> Poor — significant blockers</div>
+        </div>
+      </div>
+      <div class="q-card" onclick="selectQ(this)">
+        <div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div>
+        <div class="q-num">Q2 · Scale (1–10)</div>
+        <div class="q-text">How well did the team collaborate this sprint?</div>
+        <div class="scale-row"><div class="scale-item">1</div><div class="scale-item">2</div><div class="scale-item">3</div><div class="scale-item">4</div><div class="scale-item">5</div><div class="scale-item">6</div><div class="scale-item">7</div><div class="scale-item">8</div><div class="scale-item">9</div><div class="scale-item">10</div></div>
+      </div>
+      <div class="q-card" onclick="selectQ(this)">
+        <div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div>
+        <div class="q-num">Q3 · Yes / No</div>
+        <div class="q-text">Did we meet the sprint goal?</div>
+        <div class="q-preview"><div class="q-opt"><div class="q-opt-circle"></div> Yes</div><div class="q-opt"><div class="q-opt-circle"></div> No</div></div>
+      </div>
+      <div class="q-card" onclick="selectQ(this)">
+        <div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div>
+        <div class="q-num">Q4 · Checkboxes</div>
+        <div class="q-text">Which areas caused friction? (select all that apply)</div>
+        <div class="q-preview"><div class="q-opt"><div class="q-opt-sq"></div> Requirements clarity</div><div class="q-opt"><div class="q-opt-sq"></div> Technical debt</div><div class="q-opt"><div class="q-opt-sq"></div> Communication gaps</div><div class="q-opt"><div class="q-opt-sq"></div> Testing &amp; QA time</div></div>
+      </div>
+      <div class="q-card" onclick="selectQ(this)">
+        <div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div>
+        <div class="q-num">Q5 · NPS Score</div>
+        <div class="q-text">How likely are you to recommend working in this team?</div>
+        <div class="scale-row" style="gap:4px"><div class="scale-item" style="background:var(--rose-l);color:var(--rose);border-color:var(--rose-l)">0</div><div class="scale-item" style="background:var(--rose-l);color:var(--rose);border-color:var(--rose-l)">1</div><div class="scale-item" style="background:var(--rose-l);color:var(--rose);border-color:var(--rose-l)">2</div><div class="scale-item" style="background:var(--rose-l);color:var(--rose);border-color:var(--rose-l)">3</div><div class="scale-item" style="background:var(--rose-l);color:var(--rose);border-color:var(--rose-l)">4</div><div class="scale-item" style="background:var(--rose-l);color:var(--rose);border-color:var(--rose-l)">5</div><div class="scale-item" style="background:var(--amber-l);color:var(--amber);border-color:var(--amber-l)">6</div><div class="scale-item" style="background:var(--amber-l);color:var(--amber);border-color:var(--amber-l)">7</div><div class="scale-item" style="background:var(--teal-l);color:var(--teal);border-color:var(--teal-l)">8</div><div class="scale-item" style="background:var(--teal-l);color:var(--teal);border-color:var(--teal-l)">9</div><div class="scale-item" style="background:var(--teal-l);color:var(--teal);border-color:var(--teal-l)">10</div></div>
+      </div>
+      <div class="q-card" onclick="selectQ(this)">
+        <div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div>
+        <div class="q-num">Q6 · Paragraph</div>
+        <div class="q-text">What's the single biggest improvement for next sprint?</div>
+        <textarea class="form-control" disabled style="font-size:13px;color:var(--ink4)" placeholder="Respondents will type their answer here..."></textarea>
+      </div>
+    </div>
+    <div id="q-empty-hint" style="text-align:center;padding:16px 0;color:var(--ink4);font-size:13px">← Click a question type to add it to your survey</div>
+  </div>
+
+  <!-- Right: settings -->
+  <div class="builder-settings">
+    <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:600;margin-bottom:14px">Question Settings</div>
+    <div id="settings-panel">
+      <div class="form-group">
+        <label>Question Text</label>
+        <textarea class="form-control" rows="3" id="sp-question">How would you rate the overall sprint?</textarea>
+      </div>
+      <div class="form-group">
+        <label>Help text (optional)</label>
+        <input class="form-control" id="sp-help" placeholder="Sub-text shown below question"/>
+      </div>
+      <div class="divider"></div>
+      <div class="section-label">Options</div>
+      <div id="opt-list">
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px"><input class="form-control" style="font-size:13px" value="Excellent — exceeded expectations"/><button class="btn btn-icon btn-ghost btn-sm" style="flex-shrink:0;color:var(--rose)" onclick="this.closest('div').remove()">✕</button></div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px"><input class="form-control" style="font-size:13px" value="Good — met most goals"/><button class="btn btn-icon btn-ghost btn-sm" style="flex-shrink:0;color:var(--rose)" onclick="this.closest('div').remove()">✕</button></div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px"><input class="form-control" style="font-size:13px" value="Average — some issues arose"/><button class="btn btn-icon btn-ghost btn-sm" style="flex-shrink:0;color:var(--rose)" onclick="this.closest('div').remove()">✕</button></div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px"><input class="form-control" style="font-size:13px" value="Poor — significant blockers"/><button class="btn btn-icon btn-ghost btn-sm" style="flex-shrink:0;color:var(--rose)" onclick="this.closest('div').remove()">✕</button></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-bottom:16px" onclick="addOption()">+ Add Option</button>
+      <div class="divider"></div>
+      <div class="section-label">Rules</div>
+      <div class="toggle-row"><span style="font-size:13px">Required</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+      <div class="toggle-row"><span style="font-size:13px">Allow "Other"</span><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+      <div class="toggle-row" style="border-bottom:none"><span style="font-size:13px">Randomise order</span><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+    </div>
+    <div class="divider"></div>
+    <div class="section-label">Survey Settings</div>
+    <div class="form-group">
+      <label>Theme colour</label>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--teal);cursor:pointer;border:3px solid var(--ink)"></div>
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--violet);cursor:pointer" onclick="showToast('Theme changed')"></div>
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--amber);cursor:pointer" onclick="showToast('Theme changed')"></div>
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--blue);cursor:pointer" onclick="showToast('Theme changed')"></div>
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--rose);cursor:pointer" onclick="showToast('Theme changed')"></div>
+      </div>
+    </div>
+    <div class="toggle-row"><span style="font-size:13px">One question per page</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+    <div class="toggle-row"><span style="font-size:13px">Anonymous responses</span><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+    <div class="toggle-row" style="border-bottom:none"><span style="font-size:13px">Show progress bar</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ VIEW: RESPONDENT ═══════════ -->
+<div id="v-respond" class="view">
+<div class="resp-wrap">
+  <div class="resp-card">
+    <div class="resp-header">
+      <div class="survey-tag">Project Alpha</div>
+      <h1>Sprint Retrospective Survey</h1>
+      <p>Helps us understand how the sprint went. Takes ~3 minutes.</p>
+    </div>
+    <div class="resp-progress"><div class="resp-progress-bar" id="resp-prog" style="width:20%"></div></div>
+    <div class="resp-body" id="rq-1">
+      <div class="resp-q-num">Question 1 of 5</div>
+      <div class="resp-q-text">How would you rate the overall sprint?</div>
+      <div class="resp-q-sub">Select one option</div>
+      <div class="resp-option" onclick="selectOpt(this,'rq-1')"><div class="opt-marker"></div> Excellent — exceeded expectations</div>
+      <div class="resp-option" onclick="selectOpt(this,'rq-1')"><div class="opt-marker"></div> Good — met most goals</div>
+      <div class="resp-option" onclick="selectOpt(this,'rq-1')"><div class="opt-marker"></div> Average — some issues arose</div>
+      <div class="resp-option" onclick="selectOpt(this,'rq-1')"><div class="opt-marker"></div> Poor — significant blockers</div>
+      <div class="resp-nav"><span style="font-size:13px;color:var(--ink4)">1 of 5</span><button class="btn btn-primary" onclick="nextQ(1)">Next →</button></div>
+    </div>
+    <div class="resp-body" id="rq-2" style="display:none">
+      <div class="resp-q-num">Question 2 of 5</div>
+      <div class="resp-q-text">Did we meet the sprint goal?</div>
+      <div class="resp-q-sub">Select one</div>
+      <div class="resp-option" onclick="selectOpt(this,'rq-2')"><div class="opt-marker"></div> Yes</div>
+      <div class="resp-option" onclick="selectOpt(this,'rq-2')"><div class="opt-marker"></div> No</div>
+      <div class="resp-option" onclick="selectOpt(this,'rq-2')"><div class="opt-marker"></div> Partially</div>
+      <div class="resp-nav"><button class="btn btn-ghost" onclick="prevQ(2)">← Back</button><button class="btn btn-primary" onclick="nextQ(2)">Next →</button></div>
+    </div>
+    <div class="resp-body" id="rq-3" style="display:none">
+      <div class="resp-q-num">Question 3 of 5</div>
+      <div class="resp-q-text">How well did the team collaborate?</div>
+      <div class="resp-q-sub">Rate from 1 (poor) to 10 (excellent)</div>
+      <div class="resp-scale" id="scale-3"><div class="resp-scale-item" onclick="selectScale(this,'scale-3')">1</div><div class="resp-scale-item" onclick="selectScale(this,'scale-3')">2</div><div class="resp-scale-item" onclick="selectScale(this,'scale-3')">3</div><div class="resp-scale-item" onclick="selectScale(this,'scale-3')">4</div><div class="resp-scale-item" onclick="selectScale(this,'scale-3')">5</div><div class="resp-scale-item" onclick="selectScale(this,'scale-3')">6</div><div class="resp-scale-item" onclick="selectScale(this,'scale-3')">7</div><div class="resp-scale-item" onclick="selectScale(this,'scale-3')">8</div><div class="resp-scale-item" onclick="selectScale(this,'scale-3')">9</div><div class="resp-scale-item" onclick="selectScale(this,'scale-3')">10</div></div>
+      <div class="resp-scale-labels"><span>Poor</span><span>Excellent</span></div>
+      <div class="resp-nav"><button class="btn btn-ghost" onclick="prevQ(3)">← Back</button><button class="btn btn-primary" onclick="nextQ(3)">Next →</button></div>
+    </div>
+    <div class="resp-body" id="rq-4" style="display:none">
+      <div class="resp-q-num">Question 4 of 5</div>
+      <div class="resp-q-text">Which areas caused friction? (select all that apply)</div>
+      <div class="resp-q-sub">Select all that apply</div>
+      <div class="resp-option" onclick="toggleCb(this)"><div class="opt-sq"></div> Requirements clarity</div>
+      <div class="resp-option" onclick="toggleCb(this)"><div class="opt-sq"></div> Technical debt</div>
+      <div class="resp-option" onclick="toggleCb(this)"><div class="opt-sq"></div> Communication gaps</div>
+      <div class="resp-option" onclick="toggleCb(this)"><div class="opt-sq"></div> Testing &amp; QA time</div>
+      <div class="resp-nav"><button class="btn btn-ghost" onclick="prevQ(4)">← Back</button><button class="btn btn-primary" onclick="nextQ(4)">Next →</button></div>
+    </div>
+    <div class="resp-body" id="rq-5" style="display:none">
+      <div class="resp-q-num">Question 5 of 5</div>
+      <div class="resp-q-text">What's the single biggest improvement for next sprint?</div>
+      <div class="resp-q-sub">Please be as specific as possible</div>
+      <textarea class="form-control" rows="5" placeholder="Type your answer here..." style="font-size:14px"></textarea>
+      <div class="resp-nav"><button class="btn btn-ghost" onclick="prevQ(5)">← Back</button><button class="btn btn-primary btn-lg" onclick="submitSurvey()">Submit Survey ✓</button></div>
+    </div>
+    <div class="resp-body" id="rq-done" style="display:none;text-align:center;padding:48px 36px">
+      <div style="font-size:52px;margin-bottom:20px">🎉</div>
+      <h2 style="font-family:'Syne',sans-serif;font-size:24px;font-weight:700;margin-bottom:8px">Thank you!</h2>
+      <p style="color:var(--ink3);margin-bottom:28px">Your response has been recorded. Results will be shared with the team.</p>
+      <button class="btn btn-primary" onclick="showView('v-dash')">Back to Jiganto</button>
+    </div>
+    <div class="resp-footer"><span>Anonymous survey</span><div style="font-family:'Syne',sans-serif;font-weight:700;color:var(--ink3)">Jiganto Surveys</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ VIEW: RESULTS ═══════════ -->
+<div id="v-results" class="view">
+<nav>
+  <div class="nav-logo">Jiganto <span class="module">Results</span></div>
+  <div class="nav-right">
+    <button class="btn btn-ghost btn-sm" onclick="showView('v-dash')">← Back</button>
+    <button class="btn btn-white btn-sm" onclick="downloadSurveyExcel()">⤓ Excel</button>
+    <button class="btn btn-white btn-sm" onclick="downloadSurveyPDF()">⤓ PDF</button>
+    <button class="btn btn-white btn-sm" onclick="downloadSurveyPPT()">⤓ PPT</button>
+    <button class="btn btn-primary btn-sm" onclick="showModal('m-share')">Share Results</button>
+  </div>
+</nav>
+<div class="container">
+  <div class="page-hd">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <h1>Project Alpha — Sprint Retrospective</h1>
+        <p>Active · Sent 11 Mar 2026 · Closes 20 Mar 2026</p>
+      </div>
+      <span class="badge b-active" style="font-size:13px;padding:6px 14px;margin-top:6px">● Live</span>
+    </div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat"><div class="stat-n" style="color:var(--teal)">24</div><div class="stat-l">Responses</div></div>
+    <div class="stat"><div class="stat-n">30</div><div class="stat-l">Invited</div></div>
+    <div class="stat"><div class="stat-n" style="color:var(--amber)">80%</div><div class="stat-l">Completion rate</div></div>
+    <div class="stat"><div class="stat-n" style="color:var(--violet)">2m 48s</div><div class="stat-l">Avg time</div></div>
+  </div>
+  <div class="results-layout">
+    <div>
+      <div class="chart-card">
+        <div class="chart-q">Q1 — How would you rate the overall sprint?</div>
+        <div class="chart-meta">24 responses · Multiple choice</div>
+        <div style="margin-top:16px">
+          <div class="response-row"><div class="response-label">Good — met goals</div><div class="response-bar-wrap"><div class="response-bar" style="width:50%;background:#2E8C74"><span style="font-size:12px;font-weight:600;color:#fff">12</span></div></div><div class="response-pct">50%</div></div>
+          <div class="response-row"><div class="response-label">Excellent</div><div class="response-bar-wrap"><div class="response-bar" style="width:29%;background:#4AAD90"><span style="font-size:12px;font-weight:600;color:#fff">7</span></div></div><div class="response-pct">29%</div></div>
+          <div class="response-row"><div class="response-label">Average</div><div class="response-bar-wrap"><div class="response-bar" style="width:17%;background:#B85C0A"><span style="font-size:12px;font-weight:600;color:#fff">4</span></div></div><div class="response-pct">17%</div></div>
+          <div class="response-row"><div class="response-label">Poor</div><div class="response-bar-wrap"><div class="response-bar" style="width:4%;background:#9C2B2B;min-width:28px"><span style="font-size:12px;font-weight:600;color:#fff">1</span></div></div><div class="response-pct">4%</div></div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-q">Q2 — Did we meet the sprint goal?</div>
+        <div class="chart-meta">24 responses · Yes / No</div>
+        <div style="margin-top:16px">
+          <div class="response-row"><div class="response-label">Yes</div><div class="response-bar-wrap"><div class="response-bar" style="width:62%;background:#1A6B5A"><span style="font-size:12px;font-weight:600;color:#fff">15</span></div></div><div class="response-pct">62%</div></div>
+          <div class="response-row"><div class="response-label">Partially</div><div class="response-bar-wrap"><div class="response-bar" style="width:29%;background:#B85C0A"><span style="font-size:12px;font-weight:600;color:#fff">7</span></div></div><div class="response-pct">29%</div></div>
+          <div class="response-row"><div class="response-label">No</div><div class="response-bar-wrap"><div class="response-bar" style="width:8%;background:#9C2B2B;min-width:26px"><span style="font-size:12px;font-weight:600;color:#fff">2</span></div></div><div class="response-pct">8%</div></div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-q">Q3 — Team collaboration score</div>
+        <div class="chart-meta">24 responses · Scale (1–10) · Average: 7.4</div>
+        <div class="chart-wrap"><canvas id="chart-scale"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-q">Q4 — Areas of friction</div>
+        <div class="chart-meta">24 responses · Checkboxes (multi-select)</div>
+        <div style="margin-top:16px">
+          <div class="response-row"><div class="response-label">Technical debt</div><div class="response-bar-wrap"><div class="response-bar" style="width:71%;background:#4A2D8C"><span style="font-size:12px;font-weight:600;color:#fff">17</span></div></div><div class="response-pct">71%</div></div>
+          <div class="response-row"><div class="response-label">Requirements clarity</div><div class="response-bar-wrap"><div class="response-bar" style="width:58%;background:#6842B8"><span style="font-size:12px;font-weight:600;color:#fff">14</span></div></div><div class="response-pct">58%</div></div>
+          <div class="response-row"><div class="response-label">Testing &amp; QA</div><div class="response-bar-wrap"><div class="response-bar" style="width:42%;background:#8C5ECC"><span style="font-size:12px;font-weight:600;color:#fff">10</span></div></div><div class="response-pct">42%</div></div>
+          <div class="response-row"><div class="response-label">Communication</div><div class="response-bar-wrap"><div class="response-bar" style="width:33%;background:#AA7ADE"><span style="font-size:12px;font-weight:600;color:#fff">8</span></div></div><div class="response-pct">33%</div></div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-q">Q5 — Biggest improvement for next sprint?</div>
+        <div class="chart-meta">21 responses · Open text</div>
+        <table class="resp-table" style="margin-top:16px">
+          <thead><tr><th>#</th><th>Respondent</th><th>Response</th><th>Date</th></tr></thead>
+          <tbody>
+            <tr><td style="color:var(--ink4)">1</td><td><div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="background:var(--teal);width:28px;height:28px;font-size:10px">JT</div>J. Thornton</div></td><td>Clearer definition of done before starting a ticket</td><td style="white-space:nowrap;color:var(--ink4)">13 Mar</td></tr>
+            <tr><td style="color:var(--ink4)">2</td><td><div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="background:var(--blue);width:28px;height:28px;font-size:10px">SM</div>S. Mitchell</div></td><td>More frequent check-ins between devs and QA</td><td style="white-space:nowrap;color:var(--ink4)">13 Mar</td></tr>
+            <tr><td style="color:var(--ink4)">3</td><td><div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="background:var(--amber);width:28px;height:28px;font-size:10px">RP</div>R. Patel</div></td><td>Address auth service tech debt — it's slowing everyone down</td><td style="white-space:nowrap;color:var(--ink4)">12 Mar</td></tr>
+            <tr><td style="color:var(--ink4)">4</td><td><div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="background:var(--violet);width:28px;height:28px;font-size:10px">AL</div>A. Lee</div></td><td>Better sprint planning time estimates</td><td style="white-space:nowrap;color:var(--ink4)">12 Mar</td></tr>
+            <tr><td colspan="4" style="text-align:center;padding:12px"><button class="btn btn-ghost btn-sm" onclick="showModal('m-all-responses')">View all 21 open-text responses →</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Right sidebar -->
+    <div>
+      <div class="card">
+        <div class="section-label">Response Timeline</div>
+        <div class="chart-wrap" style="height:160px"><canvas id="chart-time"></canvas></div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="section-label">Quick Actions</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn btn-secondary" style="justify-content:flex-start" onclick="downloadSurveyPDF()">⤓ Download PDF Report</button>
+          <button class="btn btn-secondary" style="justify-content:flex-start" onclick="downloadSurveyExcel()">⤓ Export to Excel</button>
+          <button class="btn btn-secondary" style="justify-content:flex-start" onclick="downloadSurveyPPT()">⤓ Download as PowerPoint</button>
+          <button class="btn btn-secondary" style="justify-content:flex-start" onclick="showModal('m-share')">🔗 Share Results Link</button>
+          <button class="btn btn-secondary" style="justify-content:flex-start" onclick="showToast('Reminders sent to 6 non-responders','ok')">📧 Remind Non-Responders</button>
+          <button class="btn btn-ghost" style="justify-content:flex-start;color:var(--rose)" onclick="showToast('Survey closed')">⬛ Close Survey</button>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="section-label" style="margin-bottom:14px">Individual Responses</div>
+        <div style="display:flex;flex-direction:column;gap:8px" id="individual-list"></div>
+        <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-top:10px" onclick="showModal('m-all-responses')">View all 24 responses →</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════ -->
+
+<!-- NEW SURVEY WIZARD -->
+<div class="modal-ov" id="m-wizard">
+  <div class="modal modal-lg">
+    <div class="modal-hd">
+      <h3 id="wiz-title">Create New Survey</h3>
+      <button class="modal-x" onclick="closeModal('m-wizard')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Step 1: Details -->
+      <div id="wiz-s1">
+        <div class="wizard-steps">
+          <div class="wstep active"><span class="wstep-num">1</span>Details</div>
+          <div class="wstep"><span class="wstep-num">2</span>Questions</div>
+          <div class="wstep"><span class="wstep-num">3</span>Settings</div>
+          <div class="wstep"><span class="wstep-num">4</span>Send</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="form-group" style="grid-column:1/-1">
+            <label>Survey Title *</label>
+            <input class="form-control" id="wiz-name" placeholder="e.g. Sprint Retrospective — April 2026"/>
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label>Description</label>
+            <textarea class="form-control" id="wiz-desc" rows="2" placeholder="Tell respondents what this survey is about and how long it will take..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Project (optional)</label>
+            <select class="form-control" id="wiz-project">
+              <option value="">— No project —</option>
+              <option>Project Alpha</option><option>Project Beta</option><option>Platform Team</option><option>HR / People</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Category</label>
+            <select class="form-control">
+              <option>Retrospective</option><option>Client Satisfaction</option><option>Team Wellbeing</option><option>Onboarding</option><option>Product Feedback</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Close Date (optional)</label>
+            <input class="form-control" type="date" id="wiz-close"/>
+          </div>
+          <div class="form-group">
+            <label>Responses Anonymous?</label>
+            <select class="form-control">
+              <option>No — collect names</option><option>Yes — fully anonymous</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Build questions -->
+      <div id="wiz-s2" style="display:none">
+        <div class="wizard-steps">
+          <div class="wstep done"><span class="wstep-num">✓</span>Details</div>
+          <div class="wstep active"><span class="wstep-num">2</span>Questions</div>
+          <div class="wstep"><span class="wstep-num">3</span>Settings</div>
+          <div class="wstep"><span class="wstep-num">4</span>Send</div>
+        </div>
+        <div style="display:grid;grid-template-columns:200px 1fr;gap:16px;min-height:380px">
+          <!-- Mini question palette -->
+          <div style="background:var(--paper2);border-radius:var(--r);padding:14px;border:1px solid var(--line)">
+            <div style="font-size:11px;font-weight:600;color:var(--ink4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Add Question</div>
+            <div id="wiz-q-types"></div>
+          </div>
+          <!-- Question canvas in wizard -->
+          <div>
+            <div id="wiz-canvas" style="min-height:300px">
+              <div id="wiz-empty" class="q-empty">← Choose a question type to start building your survey</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-top:10px" onclick="addWizQuestion('text')">+ Add another question</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Settings -->
+      <div id="wiz-s3" style="display:none">
+        <div class="wizard-steps">
+          <div class="wstep done"><span class="wstep-num">✓</span>Details</div>
+          <div class="wstep done"><span class="wstep-num">✓</span>Questions</div>
+          <div class="wstep active"><span class="wstep-num">3</span>Settings</div>
+          <div class="wstep"><span class="wstep-num">4</span>Send</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card" style="box-shadow:none">
+            <div class="section-label">Display</div>
+            <div class="toggle-row"><span style="font-size:13px">Show progress bar</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+            <div class="toggle-row"><span style="font-size:13px">One question per page</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+            <div class="toggle-row" style="border-bottom:none"><span style="font-size:13px">Randomise question order</span><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+          </div>
+          <div class="card" style="box-shadow:none">
+            <div class="section-label">Behaviour</div>
+            <div class="toggle-row"><span style="font-size:13px">Allow editing after submit</span><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+            <div class="toggle-row"><span style="font-size:13px">Send confirmation email</span><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+            <div class="toggle-row" style="border-bottom:none"><span style="font-size:13px">Notify me on each response</span><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label>Custom thank-you message</label>
+            <textarea class="form-control" rows="2" placeholder="Thank you for completing this survey. Your feedback helps us improve."></textarea>
+          </div>
+          <div>
+            <div class="section-label">Branding</div>
+            <div style="display:flex;gap:8px">
+              <div style="width:32px;height:32px;border-radius:50%;background:#1A6B5A;cursor:pointer;border:3px solid var(--ink)"></div>
+              <div style="width:32px;height:32px;border-radius:50%;background:#4A2D8C;cursor:pointer" onclick="showToast('Theme updated')"></div>
+              <div style="width:32px;height:32px;border-radius:50%;background:#B85C0A;cursor:pointer" onclick="showToast('Theme updated')"></div>
+              <div style="width:32px;height:32px;border-radius:50%;background:#1A4A8C;cursor:pointer" onclick="showToast('Theme updated')"></div>
+              <div style="width:32px;height:32px;border-radius:50%;background:#9C2B2B;cursor:pointer" onclick="showToast('Theme updated')"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: Send -->
+      <div id="wiz-s4" style="display:none">
+        <div class="wizard-steps">
+          <div class="wstep done"><span class="wstep-num">✓</span>Details</div>
+          <div class="wstep done"><span class="wstep-num">✓</span>Questions</div>
+          <div class="wstep done"><span class="wstep-num">✓</span>Settings</div>
+          <div class="wstep active"><span class="wstep-num">4</span>Send</div>
+        </div>
+        <div class="form-group">
+          <label>Send to (email addresses or groups)</label>
+          <textarea class="form-control" rows="3" placeholder="e.g. team@jiganto.io, sarah@jiganto.io, or paste a list..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Personal message</label>
+          <textarea class="form-control" rows="2" placeholder="Add a note to the invitation email..."></textarea>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Or share link directly</label>
+          <div class="share-link">
+            <input value="https://jiganto.io/s/new-survey-2026" readonly/>
+            <button onclick="showToast('Link copied!','ok')">Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" id="wiz-back" onclick="wizBack()" style="display:none">← Back</button>
+      <button class="btn btn-ghost" onclick="closeModal('m-wizard')">Cancel</button>
+      <button class="btn btn-secondary" id="wiz-save-draft" onclick="saveSurveyDraft()">Save as Draft</button>
+      <button class="btn btn-primary" id="wiz-next" onclick="wizNext()">Next: Add Questions →</button>
+    </div>
+  </div>
+</div>
+
+<!-- INDIVIDUAL RESPONSE VIEWER -->
+<div class="modal-ov" id="m-response">
+  <div class="modal modal-md">
+    <div class="modal-hd">
+      <div>
+        <h3 id="resp-modal-name">Response from James Thornton</h3>
+        <div style="font-size:12px;color:var(--ink4);margin-top:2px" id="resp-modal-meta">Completed · 13 Mar 2026, 09:14 · 2m 12s</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm" id="resp-prev-btn" onclick="navResponse(-1)">←</button>
+        <span style="font-size:12px;color:var(--ink4)" id="resp-nav-label">1 / 24</span>
+        <button class="btn btn-ghost btn-sm" id="resp-next-btn" onclick="navResponse(1)">→</button>
+        <button class="modal-x" onclick="closeModal('m-response')">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" id="resp-modal-body"></div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="showToast('Response exported')">⤓ Export</button>
+      <button class="btn btn-primary" onclick="closeModal('m-response')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ALL RESPONSES MODAL -->
+<div class="modal-ov" id="m-all-responses">
+  <div class="modal modal-xl">
+    <div class="modal-hd">
+      <h3>All Responses — Project Alpha Sprint Retrospective</h3>
+      <button class="modal-x" onclick="closeModal('m-all-responses')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+        <input class="form-control" style="flex:1;min-width:180px;font-size:13px;padding:7px 12px" placeholder="Search responses..."/>
+        <select class="form-control" style="width:160px;font-size:13px;padding:7px 12px">
+          <option>All questions</option><option>Q1 — Sprint rating</option><option>Q2 — Sprint goal</option><option>Q3 — Collaboration</option><option>Q4 — Friction areas</option><option>Q5 — Improvement</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="showToast('Exporting all responses...','ok')">⤓ Export All</button>
+      </div>
+      <table class="resp-table">
+        <thead><tr><th>#</th><th>Respondent</th><th>Q1 Rating</th><th>Q2 Goal</th><th>Q3 Score</th><th>Q4 Friction</th><th>Date</th><th>Time</th><th></th></tr></thead>
+        <tbody id="all-resp-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="showToast('Exporting to Excel...','ok')">⤓ Excel</button>
+      <button class="btn btn-ghost" onclick="showToast('Exporting to PDF...','ok')">⤓ PDF</button>
+      <button class="btn btn-primary" onclick="closeModal('m-all-responses')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM -->
+<div class="modal-ov" id="m-delete">
+  <div class="modal modal-sm">
+    <div class="modal-hd"><h3>Delete Survey</h3><button class="modal-x" onclick="closeModal('m-delete')">✕</button></div>
+    <div class="modal-body">
+      <p style="font-size:14px;color:var(--ink3)">Are you sure you want to delete <strong id="del-name" style="color:var(--ink)"></strong>? This will permanently remove all responses and results.</p>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('m-delete')">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Delete Permanently</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHARE MODAL -->
+<div class="modal-ov" id="m-share">
+  <div class="modal modal-sm">
+    <div class="modal-hd"><h3>Share Survey</h3><button class="modal-x" onclick="closeModal('m-share')">✕</button></div>
+    <div class="modal-body">
+      <div class="section-label">Survey Link</div>
+      <div class="share-link"><input value="https://jiganto.io/s/sprint-retro-alpha-2603" readonly/><button onclick="showToast('Link copied!','ok')">Copy</button></div>
+      <div class="divider"></div>
+      <div class="form-group"><label>Send by Email</label><input class="form-control" placeholder="Add email addresses..."/></div>
+      <div class="form-group" style="margin-bottom:0"><label>Message (optional)</label><textarea class="form-control" rows="2" placeholder="Add a personal message..."></textarea></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('m-share')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('m-share');showToast('Survey sent ✓','ok')">Send Invitations</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════════════════════════════
+     IMPORT / EXPORT MODAL
+══════════════════════════════════════════ -->
+<div class="modal-ov" id="m-import-export">
+  <div class="modal modal-lg" style="max-width:700px">
+    <div class="modal-hd">
+      <h3>Import &amp; Export Surveys</h3>
+      <button class="modal-x" onclick="closeModal('m-import-export')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- EXPORT -->
+      <div style="margin-bottom:6px">
+        <div style="font-size:15px;font-weight:600;margin-bottom:3px">⤓ Export Template</div>
+        <div style="font-size:13px;color:var(--ink3);margin-bottom:14px">Download an Excel template, fill it with your surveys and questions, then re-upload to create them all at once — ideal for bulk creating 20, 50, or 100 surveys.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
+        <button class="btn btn-secondary" style="justify-content:flex-start" onclick="exportSurveyTemplate()"><span style="font-size:18px">📋</span> Download Blank Template</button>
+        <button class="btn btn-secondary" style="justify-content:flex-start" onclick="exportSurveyData()"><span style="font-size:18px">📊</span> Export Current Surveys</button>
+      </div>
+      <div style="background:var(--paper2);border:1px solid var(--line);border-radius:var(--r);padding:14px 18px;margin-bottom:20px;font-size:13px">
+        <strong>Template columns:</strong> Survey Title · Description · Category · Question Number · Question Text · Question Type · Options (comma-separated) · Required (Y/N) · Close Date<br/>
+        <span style="color:var(--ink3);margin-top:4px;display:block">Add one row per question. Repeat the Survey Title to group questions under the same survey. Supported types: Multiple Choice, Yes/No, Checkboxes, Scale, NPS, Star Rating, Short Text, Paragraph, Date, Dropdown, Matrix.</span>
+      </div>
+      <div style="height:1px;background:var(--line);margin:20px 0"></div>
+      <!-- IMPORT -->
+      <div style="font-size:15px;font-weight:600;margin-bottom:3px">⤑ Import from Excel</div>
+      <div style="font-size:13px;color:var(--ink3);margin-bottom:14px">Upload your completed template to create all surveys and questions in one go.</div>
+      <div id="imp-zone" style="border:2px dashed var(--line2);border-radius:var(--r-lg);padding:32px;text-align:center;cursor:pointer;transition:all .2s;background:var(--paper2)" onclick="document.getElementById('imp-file').click()" ondragover="event.preventDefault();this.style.borderColor='var(--teal)';this.style.background='var(--teal-l)'" ondragleave="this.style.borderColor='var(--line2)';this.style.background='var(--paper2)'" ondrop="handleSurveyDrop(event)">
+        <div style="font-size:32px;margin-bottom:10px">📂</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">Drop your Excel file here or click to browse</div>
+        <div style="font-size:13px;color:var(--ink3)">.xlsx or .csv accepted</div>
+        <input type="file" id="imp-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleSurveyFile(this)"/>
+      </div>
+      <div id="imp-preview" style="display:none;margin-top:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:600" id="imp-summary"></div>
+          <button class="btn btn-ghost btn-sm" onclick="clearSurveyImport()">✕ Clear</button>
+        </div>
+        <div style="background:var(--paper2);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;max-height:260px;overflow-y:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:var(--teal)"><th style="padding:8px 12px;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em">Survey</th><th style="padding:8px 12px;color:#fff;text-align:left">Q#</th><th style="padding:8px 12px;color:#fff;text-align:left">Question</th><th style="padding:8px 12px;color:#fff;text-align:left">Type</th><th style="padding:8px 12px;color:#fff;text-align:left">Status</th></tr></thead>
+            <tbody id="imp-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('m-import-export')">Cancel</button>
+      <button class="btn btn-primary" id="imp-confirm" style="display:none" onclick="confirmSurveyImport()">✓ Create Surveys</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==========================================
+// HISTORY TABLE FILTER (Change 3)
+// ==========================================
+function filterHistoryTable(){
+  const search=(document.getElementById('hist-search').value||'').toLowerCase().trim();
+  const status=document.getElementById('hist-status').value;
+  const rows=document.querySelectorAll('#history-tbody tr');
+  let visible=0;
+  rows.forEach(row=>{
+    const title=(row.dataset.title||'').toLowerCase();
+    const rowStatus=row.dataset.status||'';
+    const matchSearch=!search||title.includes(search);
+    const matchStatus=!status||rowStatus===status;
+    const show=matchSearch&&matchStatus;
+    row.style.display=show?'':'none';
+    if(show)visible++;
+  });
+  const label=document.getElementById('hist-count-label');
+  if(label){
+    const statusLabel=status?` · ${status.charAt(0).toUpperCase()+status.slice(1)}`:'';
+    const searchLabel=search?` matching "${search}"`:'';
+    label.textContent=`${visible} Survey${visible!==1?'s':''}${statusLabel}${searchLabel}`;
+  }
+}
+
+// Override buildHistoryTable to add data attributes for filtering
+const _origBuildHistory=window.buildHistoryTable;
+function buildHistoryTable(){
+  const tbody=document.getElementById('history-tbody');
+  tbody.innerHTML=surveys.map(s=>{
+    const badge=s.status==='active'?'<span class="badge b-active" style="font-size:11px">● Active</span>':s.status==='draft'?'<span class="badge b-draft" style="font-size:11px">Draft</span>':'<span class="badge b-closed" style="font-size:11px">Closed</span>';
+    const comp=s.comp?s.comp+'%':'—';
+    return `<tr data-title="${s.title.toLowerCase()}" data-status="${s.status}">
+      <td><div style="display:flex;align-items:center;gap:10px">
+        <div class="survey-thumb" style="background:${s.color};width:36px;height:36px;border-radius:8px;font-size:18px">${s.thumb}</div>
+        <div style="font-weight:600;font-size:13px;cursor:pointer" onclick="showView('v-results')">${s.title}</div>
+      </div></td>
+      <td>${badge}</td>
+      <td style="color:var(--ink3)">${s.qs}</td>
+      <td style="color:var(--ink3)">${s.resp}${s.inv?' / '+s.inv:''}</td>
+      <td style="color:var(--ink3)">${comp}</td>
+      <td style="color:var(--ink4);font-size:12px">${s.created}</td>
+      <td><div class="actions">
+        ${s.status!=='closed'?`<button class="btn btn-ghost btn-sm" onclick="showView('v-builder')">Edit</button>`:''}
+        <button class="btn btn-ghost btn-sm" onclick="showView('v-results')">Results</button>
+        <button class="btn btn-ghost btn-sm" onclick="showToast('Survey duplicated ✓','ok')">Copy</button>
+        <button class="btn btn-ghost btn-sm" onclick="showModal('m-share')">Share</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--rose)" onclick="openDelete(${s.id},'${s.title.replace(/'/g,"\\'")}')">Delete</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  // Reset filter label
+  const label=document.getElementById('hist-count-label');
+  if(label)label.textContent=`All Surveys (${surveys.length})`;
+  // Re-apply any active filter
+  const statusEl=document.getElementById('hist-status');
+  const searchEl=document.getElementById('hist-search');
+  if(statusEl&&(statusEl.value||searchEl&&searchEl.value))filterHistoryTable();
+}
+
+// ==========================================
+// SURVEY DATA (shared across all exports)
+// ==========================================
+const surveyResultsData={
+  title:'Project Alpha — Sprint Retrospective',
+  sent:'11 Mar 2026',closes:'20 Mar 2026',
+  responses:24,invited:30,completion:80,avgTime:'2m 48s',
+  questions:[
+    {q:'Q1 — How would you rate the overall sprint?',type:'Multiple Choice',answers:[{label:'Good — met goals',n:12,pct:50},{label:'Excellent',n:7,pct:29},{label:'Average',n:4,pct:17},{label:'Poor',n:1,pct:4}]},
+    {q:'Q2 — Did we meet the sprint goal?',type:'Yes/No',answers:[{label:'Yes',n:15,pct:62},{label:'Partially',n:7,pct:29},{label:'No',n:2,pct:8}]},
+    {q:'Q3 — Team collaboration score',type:'Scale (1–10)',avg:7.4,answers:[{label:'1',n:0},{label:'2',n:0},{label:'3',n:1},{label:'4',n:1},{label:'5',n:2},{label:'6',n:3},{label:'7',n:4},{label:'8',n:7},{label:'9',n:5},{label:'10',n:1}]},
+    {q:'Q4 — Areas of friction',type:'Checkboxes',answers:[{label:'Technical debt',n:17,pct:71},{label:'Requirements clarity',n:14,pct:58},{label:'Testing & QA',n:10,pct:42},{label:'Communication',n:8,pct:33}]},
+    {q:'Q5 — Biggest improvement for next sprint?',type:'Open Text',responses:['Clearer definition of done before starting a ticket','More frequent check-ins between devs and QA','Address auth service tech debt','Better sprint planning time estimates','Fewer meetings during the sprint']},
+  ]
+};
+
+// ==========================================
+// EXCEL DOWNLOAD (Change 1)
+// ==========================================
+function downloadSurveyExcel(){
+  showToast('Generating Excel report…');
+  setTimeout(()=>{
+    try{
+      const wb=XLSX.utils.book_new();
+      const d=surveyResultsData;
+
+      // Sheet 1: Summary
+      const sumRows=[
+        ['Jiganto Surveys — Results Report','','',''],
+        ['Survey:',d.title,'',''],
+        ['Generated:',new Date().toLocaleDateString('en-GB'),'',''],
+        ['','','',''],
+        ['Metric','Value','',''],
+        ['Responses',d.responses,'',''],
+        ['Invited',d.invited,'',''],
+        ['Completion Rate',d.completion+'%','',''],
+        ['Avg Time',d.avgTime,'',''],
+        ['Sent',d.sent,'',''],
+        ['Closes',d.closes,'',''],
+      ];
+      const ws1=XLSX.utils.aoa_to_sheet(sumRows);
+      ws1['!cols']=[{wch:22},{wch:40},{wch:16},{wch:16}];
+      XLSX.utils.book_append_sheet(wb,ws1,'Summary');
+
+      // Sheet 2: Question Results
+      const qRows=[['Question','Type','Answer / Option','Count','Percentage']];
+      d.questions.forEach(q=>{
+        if(q.answers){
+          q.answers.forEach((a,i)=>{
+            qRows.push([i===0?q.q:'',i===0?q.type:'',a.label,a.n,a.pct!==undefined?a.pct+'%':'—']);
+          });
+        } else if(q.responses){
+          q.responses.forEach((r,i)=>{
+            qRows.push([i===0?q.q:'',i===0?q.type:'',r,'','']);
+          });
+        }
+        qRows.push(['','','','','']);
+      });
+      const ws2=XLSX.utils.aoa_to_sheet(qRows);
+      ws2['!cols']=[{wch:48},{wch:18},{wch:36},{wch:10},{wch:12}];
+      XLSX.utils.book_append_sheet(wb,ws2,'Question Results');
+
+      // Sheet 3: Individual Responses
+      const respRows=[['#','Respondent','Q1 Rating','Q2 Goal Met','Q3 Score','Q4 Friction Areas','Date','Time']];
+      const rData=[
+        ['James Thornton','Excellent','Yes',9,'Requirements clarity','13 Mar 2026','2m 12s'],
+        ['Sarah Mitchell','Good — met goals','Yes',8,'Technical debt, Testing & QA','13 Mar 2026','3m 04s'],
+        ['Rohan Patel','Good — met goals','Partially',7,'Technical debt, Communication','12 Mar 2026','1m 55s'],
+        ['Alice Lee','Average','Partially',6,'Technical debt, Requirements','12 Mar 2026','2m 30s'],
+        ['Tom Chen','Good — met goals','Yes',8,'Testing & QA time','11 Mar 2026','1m 48s'],
+        ['Emma Walsh','Excellent','Yes',9,'None','11 Mar 2026','3m 22s'],
+      ];
+      rData.forEach((r,i)=>respRows.push([i+1,...r]));
+      const ws3=XLSX.utils.aoa_to_sheet(respRows);
+      ws3['!cols']=[{wch:4},{wch:22},{wch:26},{wch:14},{wch:12},{wch:36},{wch:14},{wch:10}];
+      XLSX.utils.book_append_sheet(wb,ws3,'Individual Responses');
+
+      XLSX.writeFile(wb,'Jiganto_Survey_Results.xlsx');
+      showToast('Excel downloaded ✓','ok');
+    }catch(e){showToast('Export error: '+e.message)}
+  },400);
+}
+
+// ==========================================
+// PDF DOWNLOAD — colour formatted (Change 1)
+// ==========================================
+function downloadSurveyPDF(){
+  showToast('Generating PDF report…');
+  setTimeout(()=>{
+    try{
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+      const W=210,M=18;
+      const TEAL=[26,107,90],TEALL=[228,242,238],AMBER=[184,92,10],AMBERL=[253,240,228];
+      const VIOLET=[74,45,140],WHITE=[255,255,255],DARK=[15,14,12],GREY=[92,89,82],LIGHTGREY=[242,240,235];
+      const d=surveyResultsData;
+
+      // Header
+      doc.setFillColor(...TEAL);doc.rect(0,0,W,30,'F');
+      doc.setTextColor(...WHITE);doc.setFont('helvetica','bold');doc.setFontSize(18);
+      doc.text('Jiganto Surveys',M,13);
+      doc.setFont('helvetica','normal');doc.setFontSize(10);
+      doc.text('Survey Results Report',M,20);
+      doc.setFontSize(9);
+      doc.text('Generated: '+new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}),W-M,20,{align:'right'});
+
+      // Survey title
+      let y=38;
+      doc.setTextColor(...DARK);doc.setFont('helvetica','bold');doc.setFontSize(14);
+      doc.text(d.title,M,y);y+=8;
+      doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...GREY);
+      doc.text(`Active · Sent ${d.sent} · Closes ${d.closes}`,M,y);y+=10;
+
+      // KPI boxes
+      const kpis=[{v:String(d.responses),l:'Responses',c:TEAL},{v:String(d.invited),l:'Invited',c:DARK},{v:d.completion+'%',l:'Completion',c:AMBER},{v:d.avgTime,l:'Avg Time',c:VIOLET}];
+      const bw=(W-M*2-12)/4;
+      kpis.forEach((k,i)=>{
+        const x=M+i*(bw+4);
+        doc.setFillColor(...LIGHTGREY);doc.roundedRect(x,y,bw,20,2,2,'F');
+        doc.setTextColor(...k.c);doc.setFont('helvetica','bold');doc.setFontSize(16);
+        doc.text(k.v,x+bw/2,y+11,{align:'center'});
+        doc.setTextColor(...GREY);doc.setFont('helvetica','normal');doc.setFontSize(7.5);
+        doc.text(k.l,x+bw/2,y+17,{align:'center'});
+      });
+      y+=28;
+
+      // Questions
+      d.questions.forEach((q,qi)=>{
+        if(y>250){doc.addPage();y=20}
+        // Question header bar
+        doc.setFillColor(...TEAL);doc.rect(M,y,W-M*2,7,'F');
+        doc.setTextColor(...WHITE);doc.setFont('helvetica','bold');doc.setFontSize(9);
+        doc.text(q.q,M+3,y+4.8);
+        doc.setFont('helvetica','normal');doc.setFontSize(8);
+        doc.text(q.type,W-M-3,y+4.8,{align:'right'});
+        y+=10;
+
+        if(q.answers&&q.pct!==undefined||q.answers&&q.answers[0]&&q.answers[0].pct!==undefined){
+          // Bar chart rows
+          q.answers.forEach((a,ai)=>{
+            if(y>270){doc.addPage();y=20}
+            const barW=(W-M*2-50)*(a.pct||0)/100;
+            const barColors=[TEAL,[46,140,116],[78,173,144],[156,43,43]];
+            const bc=barColors[ai%4]||TEAL;
+            doc.setFillColor(...LIGHTGREY);doc.rect(M+38,y,W-M*2-50,7,'F');
+            if(barW>0){doc.setFillColor(...bc);doc.rect(M+38,y,barW,7,'F')}
+            doc.setTextColor(...DARK);doc.setFont('helvetica','normal');doc.setFontSize(8);
+            const label=a.label.length>20?a.label.slice(0,19)+'…':a.label;
+            doc.text(label,M,y+5);
+            doc.setTextColor(...WHITE);
+            if(barW>10)doc.text(`${a.n}`,M+38+barW-4,y+5,{align:'right'});
+            doc.setTextColor(...GREY);
+            doc.text(`${a.pct||0}%`,W-M-2,y+5,{align:'right'});
+            y+=9;
+          });
+        } else if(q.answers&&q.avg!==undefined){
+          // Scale avg
+          doc.setTextColor(...DARK);doc.setFont('helvetica','bold');doc.setFontSize(11);
+          doc.text(`Average score: ${q.avg} / 10`,M,y+5);
+          y+=10;
+        } else if(q.responses){
+          // Open text
+          q.responses.slice(0,4).forEach((r,ri)=>{
+            if(y>270){doc.addPage();y=20}
+            const bg=ri%2===0?WHITE:LIGHTGREY;
+            doc.setFillColor(...bg);doc.rect(M,y,W-M*2,8,'F');
+            doc.setTextColor(...DARK);doc.setFont('helvetica','normal');doc.setFontSize(8);
+            const txt=r.length>80?r.slice(0,79)+'…':r;
+            doc.text(`${ri+1}. ${txt}`,M+2,y+5.5);
+            y+=9;
+          });
+        }
+        y+=6;
+      });
+
+      // Footer
+      doc.setFillColor(...TEAL);doc.rect(0,284,W,13,'F');
+      doc.setTextColor(...WHITE);doc.setFontSize(8);doc.setFont('helvetica','normal');
+      doc.text('Jiganto Surveys · Confidential · '+new Date().toLocaleDateString('en-GB'),W/2,291,{align:'center'});
+
+      doc.save('Jiganto_Survey_Results.pdf');
+      showToast('PDF downloaded ✓','ok');
+    }catch(e){showToast('PDF error: '+e.message);console.error(e)}
+  },400);
+}
+
+// ==========================================
+// POWERPOINT DOWNLOAD — colour formatted (Change 1)
+// ==========================================
+async function downloadSurveyPPT(){
+  showToast('Generating PowerPoint…');
+  setTimeout(async()=>{
+    try{
+      const pptx=new PptxGenJS();
+      pptx.layout='LAYOUT_WIDE';pptx.title='Jiganto Survey Results';
+      const TEAL='1A6B5A',TEALL='E4F2EE',AMBER='B85C0A',AMBERL='FDF0E4';
+      const VIOLET='4A2D8C',WHITE='FFFFFF',DARK='0F0E0C',GREY='5C5952',LIGHTGREY='F2F0EB';
+      const d=surveyResultsData;
+
+      // Slide 1 — Title
+      let s=pptx.addSlide();
+      s.addShape(pptx.ShapeType.rect,{x:0,y:0,w:'100%',h:'100%',fill:{color:TEAL}});
+      s.addShape(pptx.ShapeType.rect,{x:0,y:3.8,w:'100%',h:1.8,fill:{color:'145548'}});
+      s.addText('Jiganto Surveys',{x:.6,y:.8,w:12,h:.9,fontSize:38,bold:true,color:WHITE,fontFace:'Calibri'});
+      s.addText('Survey Results Report',{x:.6,y:1.85,w:12,h:.6,fontSize:22,color:'A8D4BE',fontFace:'Calibri'});
+      s.addText(d.title,{x:.6,y:2.7,w:12,h:.6,fontSize:16,color:WHITE,fontFace:'Calibri',italic:true});
+      s.addText('Generated: '+new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}),{x:.6,y:3.95,w:12,h:.4,fontSize:13,color:WHITE,fontFace:'Calibri'});
+      s.addText(`Sent ${d.sent} · Closes ${d.closes} · ${d.responses} responses`,{x:.6,y:4.4,w:12,h:.4,fontSize:12,color:'A8D4BE',fontFace:'Calibri'});
+
+      // Slide 2 — KPIs
+      s=pptx.addSlide();
+      s.addShape(pptx.ShapeType.rect,{x:0,y:0,w:'100%',h:.9,fill:{color:TEAL}});
+      s.addText('Survey Overview',{x:.4,y:.05,w:12,h:.8,fontSize:20,bold:true,color:WHITE,fontFace:'Calibri'});
+      const kpis=[{v:String(d.responses),l:'Total Responses',c:TEAL,bg:TEALL},{v:String(d.invited),l:'People Invited',c:DARK,bg:LIGHTGREY},{v:d.completion+'%',l:'Completion Rate',c:AMBER,bg:AMBERL},{v:d.avgTime,l:'Avg Time to Complete',c:VIOLET,bg:'EEE9FA'}];
+      kpis.forEach((k,i)=>{
+        const x=0.4+i*3.2;
+        s.addShape(pptx.ShapeType.roundRect,{x,y:1.2,w:2.9,h:2.2,rectRadius:.08,fill:{color:k.bg},line:{color:'DDD9D0',pt:1}});
+        s.addText(k.v,{x,y:1.38,w:2.9,h:1.1,fontSize:44,bold:true,color:k.c,align:'center',fontFace:'Calibri'});
+        s.addText(k.l,{x,y:2.65,w:2.9,h:.65,fontSize:12,color:GREY,align:'center',fontFace:'Calibri'});
+      });
+      s.addText(`Survey: ${d.title}  ·  Sent ${d.sent}  ·  Closes ${d.closes}`,{x:.4,y:3.85,w:12.2,h:.4,fontSize:11,color:GREY,fontFace:'Calibri'});
+
+      // Slides 3+ — one per question
+      d.questions.forEach((q,qi)=>{
+        s=pptx.addSlide();
+        s.addShape(pptx.ShapeType.rect,{x:0,y:0,w:'100%',h:.9,fill:{color:TEAL}});
+        s.addText(`Q${qi+1} — ${q.type}`,{x:.4,y:.02,w:8,h:.45,fontSize:13,color:'A8D4BE',fontFace:'Calibri'});
+        s.addText(q.q,{x:.4,y:.38,w:12.2,h:.5,fontSize:17,bold:true,color:WHITE,fontFace:'Calibri'});
+
+        if(q.answers&&q.answers[0]&&q.answers[0].pct!==undefined){
+          // Horizontal bar chart
+          const barColors=[TEAL,'2E8C74','4AAD90','9C2B2B','B85C0A',AMBER,VIOLET];
+          const maxPct=Math.max(...q.answers.map(a=>a.pct||0));
+          q.answers.forEach((a,ai)=>{
+            const y=1.1+ai*0.82;
+            const barW=maxPct>0?10.5*(a.pct||0)/Math.max(maxPct,1):0;
+            s.addText(a.label,{x:.4,y,w:3.2,h:.55,fontSize:12,color:DARK,fontFace:'Calibri',valign:'middle'});
+            s.addShape(pptx.ShapeType.rect,{x:3.7,y:y+.05,w:10.5,h:.45,fill:{color:LIGHTGREY}});
+            if(barW>0.05)s.addShape(pptx.ShapeType.rect,{x:3.7,y:y+.05,w:barW,h:.45,fill:{color:barColors[ai%7]}});
+            s.addText(`${a.n} (${a.pct||0}%)`,{x:14.3,y,w:1.3,h:.55,fontSize:11,color:GREY,fontFace:'Calibri',align:'right',valign:'middle'});
+          });
+        } else if(q.avg!==undefined){
+          // Scale question
+          s.addShape(pptx.ShapeType.rect,{x:.4,y:1.2,w:12.2,h:1.8,fill:{color:LIGHTGREY},line:{color:'DDD9D0',pt:1}});
+          s.addText(`Average Score`,{x:.4,y:1.3,w:12.2,h:.5,fontSize:14,color:GREY,align:'center',fontFace:'Calibri'});
+          s.addText(String(q.avg),{x:.4,y:1.7,w:12.2,h:.9,fontSize:52,bold:true,color:TEAL,align:'center',fontFace:'Calibri'});
+          s.addText('out of 10',{x:.4,y:2.6,w:12.2,h:.4,fontSize:13,color:GREY,align:'center',fontFace:'Calibri'});
+          // mini bar chart
+          if(q.answers){
+            const barH=0.38;
+            q.answers.forEach((a,ai)=>{
+              const x=0.4+ai*1.2;
+              const maxN=Math.max(...q.answers.map(x=>x.n));
+              const h=maxN>0?barH*(a.n/maxN):0.02;
+              const barColor=ai<3?'9C2B2B':ai<6?AMBER:TEAL;
+              s.addShape(pptx.ShapeType.rect,{x,y:3.5-h,w:.9,h,fill:{color:barColor}});
+              s.addText(a.label,{x,y:3.52,w:.9,h:.3,fontSize:9,color:GREY,align:'center',fontFace:'Calibri'});
+            });
+          }
+        } else if(q.responses){
+          // Open text
+          q.responses.slice(0,5).forEach((r,ri)=>{
+            const y=1.05+ri*0.85;
+            s.addShape(pptx.ShapeType.roundRect,{x:.4,y,w:12.2,h:.72,rectRadius:.05,fill:{color:ri%2===0?LIGHTGREY:WHITE},line:{color:'DDD9D0',pt:1}});
+            s.addText(`${ri+1}. ${r}`,{x:.65,y:y+.1,w:11.8,h:.5,fontSize:12,color:DARK,fontFace:'Calibri',valign:'middle'});
+          });
+        }
+
+        // Slide footer
+        s.addShape(pptx.ShapeType.rect,{x:0,y:5.3,w:'100%',h:.45,fill:{color:TEALL}});
+        s.addText(`Jiganto Surveys  ·  ${d.title}  ·  ${d.responses} responses`,{x:.4,y:5.33,w:12.2,h:.4,fontSize:9,color:TEAL,fontFace:'Calibri'});
+      });
+
+      // Final slide — Next Steps
+      s=pptx.addSlide();
+      s.addShape(pptx.ShapeType.rect,{x:0,y:0,w:'100%',h:.9,fill:{color:TEAL}});
+      s.addText('Key Takeaways & Next Steps',{x:.4,y:.05,w:12,h:.8,fontSize:20,bold:true,color:WHITE,fontFace:'Calibri'});
+      const takeaways=[
+        {icon:'✅',t:'79% rated the sprint Good or Excellent',c:TEAL,bg:TEALL},
+        {icon:'⚠️',t:'Technical debt flagged by 71% — prioritise in next sprint',c:AMBER,bg:AMBERL},
+        {icon:'📈',t:'NPS average: 7.4/10 — above threshold, room to improve',c:VIOLET,bg:'EEE9FA'},
+        {icon:'💬',t:'21 open-text responses received — review individually',c:DARK,bg:LIGHTGREY},
+      ];
+      takeaways.forEach((t,i)=>{
+        const y=1.1+i*1.05;
+        s.addShape(pptx.ShapeType.roundRect,{x:.4,y,w:12.2,h:.88,rectRadius:.06,fill:{color:t.bg},line:{color:'DDD9D0',pt:1}});
+        s.addText(`${t.icon}  ${t.t}`,{x:.7,y:y+.18,w:11.8,h:.55,fontSize:14,color:t.c,bold:true,fontFace:'Calibri',valign:'middle'});
+      });
+      s.addShape(pptx.ShapeType.rect,{x:0,y:5.3,w:'100%',h:.45,fill:{color:TEAL}});
+      s.addText('Jiganto Surveys · Confidential · '+new Date().toLocaleDateString('en-GB'),{x:0,y:5.33,w:'100%',h:.4,fontSize:10,color:WHITE,align:'center',fontFace:'Calibri'});
+
+      await pptx.writeFile({fileName:'Jiganto_Survey_Results.pptx'});
+      showToast('PowerPoint downloaded ✓','ok');
+    }catch(e){showToast('PPT error: '+e.message);console.error(e)}
+  },400);
+}
+
+// ==========================================
+// IMPORT / EXPORT — SURVEY TEMPLATE (Change 2)
+// ==========================================
+function exportSurveyTemplate(){
+  const wb=XLSX.utils.book_new();
+  const rows=[
+    ['Survey Title','Description','Category','Q#','Question Text','Question Type','Options (comma-separated)','Required (Y/N)','Close Date'],
+    ['[REQUIRED] Survey name e.g. Q2 Customer Survey','[OPTIONAL] Brief description','[OPTIONAL] e.g. Retrospective','[REQUIRED] 1','[REQUIRED] Type your question here','[REQUIRED] Multiple Choice','[REQUIRED for choice types] Option 1, Option 2, Option 3','Y','[OPTIONAL] YYYY-MM-DD'],
+    ['','','','','','','','',''],
+    ['EXAMPLE: Sprint Retrospective April','How did the sprint go? Takes 3 mins.','Retrospective',1,'How would you rate the overall sprint?','Multiple Choice','Excellent, Good, Average, Poor','Y','2026-04-30'],
+    ['EXAMPLE: Sprint Retrospective April','','',2,'Did we meet the sprint goal?','Yes/No','','Y',''],
+    ['EXAMPLE: Sprint Retrospective April','','',3,'How well did the team collaborate?','Scale','','Y',''],
+    ['EXAMPLE: Sprint Retrospective April','','',4,'What areas caused friction?','Checkboxes','Technical debt, Requirements, Testing, Communication','N',''],
+    ['EXAMPLE: Sprint Retrospective April','','',5,'What is the biggest improvement for next sprint?','Paragraph','','N',''],
+    ['EXAMPLE: Client NPS Survey','Quick 2-minute client satisfaction check','Client Satisfaction',1,'How likely are you to recommend us? (0–10)','NPS','','Y','2026-05-01'],
+    ['EXAMPLE: Client NPS Survey','','',2,'What do you value most about working with us?','Short Text','','N',''],
+    ['EXAMPLE: Client NPS Survey','','',3,'How satisfied are you with our communication?','Star Rating','','Y',''],
+  ];
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:36},{wch:36},{wch:22},{wch:6},{wch:48},{wch:22},{wch:48},{wch:14},{wch:14}];
+  ws['!freeze']={xSplit:0,ySplit:1};
+  XLSX.utils.book_append_sheet(wb,ws,'Surveys & Questions');
+
+  // Instructions sheet
+  const instr=[
+    ['HOW TO USE THIS TEMPLATE'],[''],
+    ['1. Do NOT rename or delete the header row (row 1)'],
+    ['2. Delete rows 2–3 (the instruction/example rows) before uploading'],
+    ['3. Each ROW = one question. Repeat the Survey Title to add more questions to the same survey.'],
+    ['4. Q# = question number within that survey (1, 2, 3…)'],
+    ['5. Question Types supported:'],
+    ['   Multiple Choice — provide Options as comma-separated list'],
+    ['   Yes/No — no Options needed'],
+    ['   Checkboxes — provide Options as comma-separated list'],
+    ['   Scale — no Options needed (always 1–10)'],
+    ['   NPS — no Options needed (always 0–10)'],
+    ['   Star Rating — no Options needed (always 1–5 stars)'],
+    ['   Short Text — no Options needed'],
+    ['   Paragraph — no Options needed'],
+    ['   Date — no Options needed'],
+    ['   Dropdown — provide Options as comma-separated list'],
+    ['   Matrix — provide Options as comma-separated list (these become columns)'],
+    ['6. Required: Y = required question, N = optional'],
+    ['7. Close Date format: YYYY-MM-DD (e.g. 2026-05-31)'],[''],
+    ['TIPS:'],
+    ['• You can create as many surveys as you want in one file — just use different Survey Titles'],
+    ['• The same survey title (exact match, case-sensitive) groups questions together'],
+    ['• Leave Description, Category, Close Date blank after the first row of each survey'],
+  ];
+  const ws2=XLSX.utils.aoa_to_sheet(instr);
+  ws2['!cols']=[{wch:90}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Instructions');
+
+  XLSX.writeFile(wb,'Jiganto_Survey_Template.xlsx');
+  showToast('Template downloaded ✓  Fill it in and re-upload','ok');
+}
+
+function exportSurveyData(){
+  const wb=XLSX.utils.book_new();
+  const headers=['Survey Title','Description','Category','Q#','Question Text','Question Type','Options','Required','Close Date','Status','Responses'];
+  const rows=[headers];
+  const exportSurveys=[
+    {title:'Project Alpha — Sprint Retrospective',desc:'Sprint feedback survey',cat:'Retrospective',status:'active',resp:24,close:'2026-03-20',qs:[
+      {n:1,q:'How would you rate the overall sprint?',t:'Multiple Choice',o:'Excellent, Good, Average, Poor',req:'Y'},
+      {n:2,q:'Did we meet the sprint goal?',t:'Yes/No',o:'',req:'Y'},
+      {n:3,q:'How well did the team collaborate?',t:'Scale',o:'',req:'Y'},
+      {n:4,q:'Which areas caused friction?',t:'Checkboxes',o:'Technical debt, Requirements clarity, Testing & QA, Communication',req:'N'},
+      {n:5,q:'Biggest improvement for next sprint?',t:'Paragraph',o:'',req:'N'},
+    ]},
+    {title:'Client Satisfaction — Q1 2026',desc:'Quarterly client NPS',cat:'Client Satisfaction',status:'closed',resp:67,close:'2026-03-01',qs:[
+      {n:1,q:'How likely are you to recommend us?',t:'NPS',o:'',req:'Y'},
+      {n:2,q:'What do you value most about working with us?',t:'Short Text',o:'',req:'N'},
+    ]},
+  ];
+  exportSurveys.forEach(s=>{
+    s.qs.forEach((q,i)=>{
+      rows.push([i===0?s.title:'',i===0?s.desc:'',i===0?s.cat:'',q.n,q.q,q.t,q.o,q.req,i===0?s.close:'',i===0?s.status:'',i===0?s.resp:'']);
+    });
+  });
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:40},{wch:36},{wch:20},{wch:6},{wch:48},{wch:20},{wch:44},{wch:10},{wch:14},{wch:10},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,'Current Surveys');
+  XLSX.writeFile(wb,'Jiganto_Surveys_Export.xlsx');
+  showToast('Current surveys exported ✓','ok');
+}
+
+function handleSurveyFile(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+      processSurveyImport(rows);
+    }catch(err){showToast('Could not read file: '+err.message)}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function handleSurveyDrop(e){
+  e.preventDefault();
+  document.getElementById('imp-zone').style.borderColor='var(--line2)';
+  document.getElementById('imp-zone').style.background='var(--paper2)';
+  const file=e.dataTransfer.files[0];
+  if(!file)return;
+  handleSurveyFile({files:[file]});
+}
+
+function processSurveyImport(rows){
+  if(!rows||rows.length<2){showToast('No data found in file');return}
+  const dataRows=rows.slice(1).filter(r=>{
+    const t=String(r[0]||'').trim();
+    return t&&!t.startsWith('[')&&!t.startsWith('EXAMPLE')&&t.length>2;
+  });
+  if(!dataRows.length){showToast('No valid data rows found. Check the template.');return}
+
+  // Group by survey title
+  const surveyMap={};
+  dataRows.forEach(r=>{
+    const title=String(r[0]||'').trim();
+    if(!title)return;
+    if(!surveyMap[title])surveyMap[title]={rows:[]};
+    surveyMap[title].rows.push(r);
+  });
+  const surveyCount=Object.keys(surveyMap).length;
+
+  const tbody=document.getElementById('imp-tbody');
+  tbody.innerHTML='';
+  dataRows.forEach((r,i)=>{
+    const [survTitle,,,,qText,qType]=r;
+    const valid=survTitle&&qText&&qType;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="padding:7px 12px;border-bottom:1px solid var(--line);color:var(--ink2);font-weight:${r[3]==='1'||r[3]===1?'600':'400'}">${String(survTitle||'').slice(0,28)||'⚠ Missing'}</td><td style="padding:7px 12px;border-bottom:1px solid var(--line);color:var(--ink3)">${r[3]||'—'}</td><td style="padding:7px 12px;border-bottom:1px solid var(--line)">${String(qText||'').slice(0,40)||'⚠ Missing'}</td><td style="padding:7px 12px;border-bottom:1px solid var(--line);color:var(--ink3)">${qType||'⚠ Missing'}</td><td style="padding:7px 12px;border-bottom:1px solid var(--line)"><span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:${valid?'var(--teal-l)':'var(--amber-l)'};color:${valid?'var(--teal)':'var(--amber)'}">${valid?'Ready':'Incomplete'}</span></td>`;
+    tbody.appendChild(tr);
+  });
+
+  const readyCount=dataRows.filter(r=>r[0]&&r[4]&&r[5]).length;
+  document.getElementById('imp-summary').textContent=`Preview: ${surveyCount} survey${surveyCount!==1?'s':''}  ·  ${readyCount} of ${dataRows.length} questions ready`;
+  document.getElementById('imp-preview').style.display='block';
+  document.getElementById('imp-confirm').style.display=readyCount>0?'':'none';
+}
+
+function clearSurveyImport(){
+  document.getElementById('imp-preview').style.display='none';
+  document.getElementById('imp-confirm').style.display='none';
+  document.getElementById('imp-file').value='';
+}
+
+function confirmSurveyImport(){
+  const summary=document.getElementById('imp-summary').textContent;
+  closeModal('m-import-export');
+  showToast('Surveys imported successfully ✓ Check All Surveys tab','ok');
+  clearSurveyImport();
+}
+</script>
+
+<script>
+// ---------------------------------
+// CORE NAVIGATION
+// ---------------------------------
+function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0)}
+function showModal(id){document.getElementById(id).classList.add('active')}
+function closeModal(id){document.getElementById(id).classList.remove('active')}
+document.addEventListener('DOMContentLoaded',()=>{document.querySelectorAll('.modal-ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('active')}))});
+let tt;
+function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast show'+(type==='ok'?' ok':'');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),3200)}
+
+// ---------------------------------
+// DASHBOARD TABS
+// ---------------------------------
+function switchDashTab(tab, el){
+  document.querySelectorAll('.tab-bar .tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-active').style.display = tab==='active'?'block':'none';
+  document.getElementById('tab-history').style.display = tab==='history'?'block':'none';
+  if(tab==='history') buildHistoryTable();
+}
+
+// ---------------------------------
+// HISTORY TABLE DATA
+// ---------------------------------
+const surveys=[
+  {id:1,title:'Project Alpha — Sprint Retrospective',status:'active',qs:8,resp:24,inv:30,comp:80,created:'11 Mar 2026',thumb:'📊',color:'var(--teal-l)'},
+  {id:2,title:'Client Satisfaction — Q1 2026',status:'closed',qs:12,resp:67,inv:80,comp:84,created:'1 Feb 2026',thumb:'🎯',color:'var(--violet-l)'},
+  {id:3,title:'Team Wellbeing Check-In — March',status:'draft',qs:6,resp:0,inv:0,comp:0,created:'10 Mar 2026',thumb:'💡',color:'var(--amber-l)'},
+  {id:4,title:'Platform Feedback — Feature Prioritisation',status:'closed',qs:10,resp:142,inv:180,comp:79,created:'10 Feb 2026',thumb:'🔧',color:'var(--blue-l)'},
+  {id:5,title:'New Employee Onboarding Feedback',status:'active',qs:9,resp:18,inv:22,comp:82,created:'1 Jan 2026',thumb:'📝',color:'var(--teal-l)'},
+  {id:6,title:'Q4 2025 Client NPS Survey',status:'closed',qs:5,resp:94,inv:120,comp:78,created:'1 Dec 2025',thumb:'⭐',color:'var(--amber-l)'},
+  {id:7,title:'Developer Experience Survey',status:'closed',qs:15,resp:28,inv:35,comp:80,created:'15 Nov 2025',thumb:'💻',color:'var(--violet-l)'},
+  {id:8,title:'Remote Working Preferences',status:'closed',qs:11,resp:51,inv:60,comp:85,created:'1 Oct 2025',thumb:'🏠',color:'var(--blue-l)'},
+  {id:9,title:'Project Beta Kickoff Pulse',status:'draft',qs:4,resp:0,inv:0,comp:0,created:'12 Mar 2026',thumb:'🚀',color:'var(--rose-l)'},
+  {id:10,title:'Annual Employee Engagement Survey',status:'closed',qs:20,resp:88,inv:95,comp:93,created:'1 Sep 2025',thumb:'🌟',color:'var(--teal-l)'},
+  {id:11,title:'Sprint 12 Retro — Platform Team',status:'closed',qs:8,resp:12,inv:14,comp:86,created:'28 Feb 2026',thumb:'📊',color:'var(--violet-l)'},
+  {id:12,title:'Post-Launch User Feedback — v2.0',status:'closed',qs:7,resp:203,inv:0,comp:0,created:'14 Feb 2026',thumb:'🎉',color:'var(--amber-l)'},
+];
+let deleteTarget=null;
+function openDelete(id,title){deleteTarget=id;document.getElementById('del-name').textContent=title;showModal('m-delete')}
+function confirmDelete(){closeModal('m-delete');const s=surveys.find(x=>x.id===deleteTarget);if(s)showToast(`"${s.title.slice(0,30)}..." deleted`);buildHistoryTable()}
+
+// ---------------------------------
+// BUILDER FUNCTIONS
+// ---------------------------------
+function selectQ(el){document.querySelectorAll('.q-card').forEach(c=>c.classList.remove('selected'));el.classList.add('selected')}
+function delQ(btn){btn.closest('.q-card').remove();showToast('Question removed');renumberQs()}
+function dupQ(btn){const c=btn.closest('.q-card');const clone=c.cloneNode(true);c.parentNode.insertBefore(clone,c.nextSibling);document.querySelectorAll('.q-card').forEach(q=>q.classList.remove('selected'));clone.classList.add('selected');clone.scrollIntoView({behavior:'smooth',block:'center'});renumberQs();showToast('Question duplicated')}
+function renumberQs(){document.querySelectorAll('#q-canvas .q-card').forEach((c,i)=>{const n=c.querySelector('.q-num');if(n){const t=n.querySelector('span');if(t)t.textContent=t.textContent.replace(/^Q\d+/,'Q'+(i+1));else n.textContent=n.textContent.replace(/^Q\d+/,'Q'+(i+1))}})}
+function addOption(){const li=document.createElement('div');li.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:8px';li.innerHTML='<input class="form-control" style="font-size:13px" placeholder="New option"/><button class="btn btn-icon btn-ghost btn-sm" style="flex-shrink:0;color:var(--rose)" onclick="this.closest(\'div\').remove()">✕</button>';document.getElementById('opt-list').appendChild(li);li.querySelector('input').focus()}
+
+const qTypeTemplates={
+  mc:(n)=>`<div class="q-card" onclick="selectQ(this)"><div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div><div class="q-num"><span>Q${n} · Multiple Choice</span></div><div class="q-text" contenteditable="true" style="outline:none;font-family:'Lora',serif">Click to edit your question...</div><div class="q-preview"><div class="q-opt"><div class="q-opt-circle"></div> Option 1</div><div class="q-opt"><div class="q-opt-circle"></div> Option 2</div><div class="q-opt"><div class="q-opt-circle"></div> Option 3</div></div></div>`,
+  yn:(n)=>`<div class="q-card" onclick="selectQ(this)"><div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div><div class="q-num"><span>Q${n} · Yes / No</span></div><div class="q-text" contenteditable="true" style="outline:none;font-family:'Lora',serif">Click to edit your question...</div><div class="q-preview"><div class="q-opt"><div class="q-opt-circle"></div> Yes</div><div class="q-opt"><div class="q-opt-circle"></div> No</div></div></div>`,
+  cb:(n)=>`<div class="q-card" onclick="selectQ(this)"><div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div><div class="q-num"><span>Q${n} · Checkboxes</span></div><div class="q-text" contenteditable="true" style="outline:none;font-family:'Lora',serif">Click to edit your question...</div><div class="q-preview"><div class="q-opt"><div class="q-opt-sq"></div> Option 1</div><div class="q-opt"><div class="q-opt-sq"></div> Option 2</div><div class="q-opt"><div class="q-opt-sq"></div> Option 3</div></div></div>`,
+  dd:(n)=>`<div class="q-card" onclick="selectQ(this)"><div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div><div class="q-num"><span>Q${n} · Dropdown</span></div><div class="q-text" contenteditable="true" style="outline:none;font-family:'Lora',serif">Click to edit your question...</div><select class="form-control" disabled style="font-size:13px"><option>Select an option...</option><option>Option 1</option><option>Option 2</option></select></div>`,
+  sc:(n)=>`<div class="q-card" onclick="selectQ(this)"><div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div><div class="q-num"><span>Q${n} · Star Rating</span></div><div class="q-text" contenteditable="true" style="outline:none;font-family:'Lora',serif">Click to edit your question...</div><div style="font-size:28px;letter-spacing:4px;color:#DDD">★★★★★</div></div>`,
+  scale:(n)=>`<div class="q-card" onclick="selectQ(this)"><div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div><div class="q-num"><span>Q${n} · Scale (1–10)</span></div><div class="q-text" contenteditable="true" style="outline:none;font-family:'Lora',serif">Click to edit your question...</div><div class="scale-row"><div class="scale-item">1</div><div class="scale-item">2</div><div class="scale-item">3</div><div class="scale-item">4</div><div class="scale-item">5</div><div class="scale-item">6</div><div class="scale-item">7</div><div class="scale-item">8</div><div class="scale-item">9</div><div class="scale-item">10</div></div></div>`,
+  nps:(n)=>`<div class="q-card" onclick="selectQ(this)"><div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div><div class="q-num"><span>Q${n} · NPS Score</span></div><div class="q-text" contenteditable="true" style="outline:none;font-family:'Lora',serif">How likely are you to recommend us?</div><div class="scale-row" style="gap:3px"><div class="scale-item" style="background:var(--rose-l);color:var(--rose);border-color:var(--rose-l)">0</div><div class="scale-item" style="background:var(--rose-l);color:var(--rose);border-color:var(--rose-l)">1</div><div class="scale-item" style="background:var(--rose-l);color:var(--rose);border-color:var(--rose-l)">2</div><div class="scale-item" style="background:var(--rose-l);color:var(--rose);border-color:var(--rose-l)">3</div><div class="scale-item" style="background:var(--rose-l);color:var(--rose);border-color:var(--rose-l)">4</div><div class="scale-item" style="background:var(--rose-l);color:var(--rose);border-color:var(--rose-l)">5</div><div class="scale-item" style="background:var(--amber-l);color:var(--amber);border-color:var(--amber-l)">6</div><div class="scale-item" style="background:var(--amber-l);color:var(--amber);border-color:var(--amber-l)">7</div><div class="scale-item" style="background:var(--teal-l);color:var(--teal);border-color:var(--teal-l)">8</div><div class="scale-item" style="background:var(--teal-l);color:var(--teal);border-color:var(--teal-l)">9</div><div class="scale-item" style="background:var(--teal-l);color:var(--teal);border-color:var(--teal-l)">10</div></div></div>`,
+  text:(n)=>`<div class="q-card" onclick="selectQ(this)"><div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div><div class="q-num"><span>Q${n} · Short Text</span></div><div class="q-text" contenteditable="true" style="outline:none;font-family:'Lora',serif">Click to edit your question...</div><input class="form-control" disabled placeholder="Respondent types here..." style="font-size:13px"/></div>`,
+  para:(n)=>`<div class="q-card" onclick="selectQ(this)"><div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div><div class="q-num"><span>Q${n} · Paragraph</span></div><div class="q-text" contenteditable="true" style="outline:none;font-family:'Lora',serif">Click to edit your question...</div><textarea class="form-control" disabled rows="3" placeholder="Respondent types here..." style="font-size:13px"></textarea></div>`,
+  date:(n)=>`<div class="q-card" onclick="selectQ(this)"><div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div><div class="q-num"><span>Q${n} · Date</span></div><div class="q-text" contenteditable="true" style="outline:none;font-family:'Lora',serif">Click to edit your question...</div><input class="form-control" type="date" disabled style="font-size:13px"/></div>`,
+  matrix:(n)=>`<div class="q-card" onclick="selectQ(this)"><div class="q-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="event.stopPropagation();dupQ(this)">⎘</button><button class="btn btn-icon btn-ghost btn-sm" style="color:var(--rose)" onclick="event.stopPropagation();delQ(this)">✕</button></div><div class="q-num"><span>Q${n} · Matrix / Grid</span></div><div class="q-text" contenteditable="true" style="outline:none;font-family:'Lora',serif">Rate the following...</div><table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:8px"><thead><tr><td></td><th style="padding:4px;text-align:center;color:var(--ink3)">Poor</th><th style="padding:4px;text-align:center;color:var(--ink3)">Fair</th><th style="padding:4px;text-align:center;color:var(--ink3)">Good</th><th style="padding:4px;text-align:center;color:var(--ink3)">Excellent</th></tr></thead><tbody><tr><td style="padding:5px 4px;color:var(--ink3)">Aspect 1</td><td style="text-align:center"><input type="radio"></td><td style="text-align:center"><input type="radio"></td><td style="text-align:center"><input type="radio"></td><td style="text-align:center"><input type="radio"></td></tr><tr><td style="padding:5px 4px;color:var(--ink3)">Aspect 2</td><td style="text-align:center"><input type="radio"></td><td style="text-align:center"><input type="radio"></td><td style="text-align:center"><input type="radio"></td><td style="text-align:center"><input type="radio"></td></tr></tbody></table></div>`
+};
+
+function addQuestion(type){
+  const canvas=document.getElementById('q-canvas');
+  const n=canvas.querySelectorAll('.q-card').length+1;
+  const tmp=document.createElement('div');
+  tmp.innerHTML=qTypeTemplates[type](n);
+  const el=tmp.firstChild;
+  canvas.appendChild(el);
+  document.querySelectorAll('#q-canvas .q-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+  showToast('Question added ✓');
+}
+
+// ---------------------------------
+// NEW SURVEY WIZARD
+// ---------------------------------
+let wizStep=1;
+const qTypeDefs=[
+  {k:'mc',icon:'◉',label:'Multiple Choice',sub:'Pick one'},
+  {k:'yn',icon:'✓✗',label:'Yes / No',sub:'Simple binary'},
+  {k:'cb',icon:'☑',label:'Checkboxes',sub:'Pick many'},
+  {k:'scale',icon:'◈',label:'Scale 1–10',sub:'Numeric rating'},
+  {k:'nps',icon:'📈',label:'NPS Score',sub:'0–10 recommend'},
+  {k:'sc',icon:'⭐',label:'Star Rating',sub:'1–5 stars'},
+  {k:'text',icon:'✏',label:'Short Text',sub:'One line'},
+  {k:'para',icon:'☰',label:'Paragraph',sub:'Free text'},
+  {k:'dd',icon:'▾',label:'Dropdown',sub:'Select one'},
+  {k:'date',icon:'📅',label:'Date',sub:'Date picker'},
+  {k:'matrix',icon:'⊞',label:'Matrix',sub:'Grid rating'},
+];
+
+function openNewSurveyWizard(){
+  wizStep=1;
+  document.getElementById('wiz-s1').style.display='block';
+  document.getElementById('wiz-s2').style.display='none';
+  document.getElementById('wiz-s3').style.display='none';
+  document.getElementById('wiz-s4').style.display='none';
+  document.getElementById('wiz-back').style.display='none';
+  document.getElementById('wiz-next').textContent='Next: Add Questions →';
+  document.getElementById('wiz-save-draft').style.display='';
+  document.getElementById('wiz-canvas').innerHTML='<div id="wiz-empty" class="q-empty">← Choose a question type to start building your survey</div>';
+  buildWizPalette();
+  showModal('m-wizard');
+}
+
+function buildWizPalette(){
+  const p=document.getElementById('wiz-q-types');
+  p.innerHTML=qTypeDefs.map(t=>`<div class="q-type-btn" style="margin-bottom:4px" onclick="addWizQuestion('${t.k}')"><div class="qt-icon" style="width:24px;height:24px;font-size:12px">${t.icon}</div><span style="font-size:12px">${t.label}</span></div>`).join('');
+}
+
+let wizQCount=0;
+function addWizQuestion(type){
+  const canvas=document.getElementById('wiz-canvas');
+  const empty=document.getElementById('wiz-empty');
+  if(empty) empty.remove();
+  wizQCount++;
+  const def=qTypeDefs.find(t=>t.k===type)||{icon:'✏',label:'Short Text'};
+  const card=document.createElement('div');
+  card.className='q-wizard-card';
+  card.innerHTML=`
+    <div class="q-wizard-num">${wizQCount}</div>
+    <div style="flex:1">
+      <div class="q-type-pill">${def.icon} ${def.label}</div>
+      <input style="width:100%;border:none;outline:none;font-family:'Lora',serif;font-size:15px;font-weight:500;background:transparent;color:var(--ink);margin-top:4px" placeholder="Type your question here..." onclick="highlightWizQ(this.closest('.q-wizard-card'))"/>
+      ${getWizQBody(type)}
+    </div>
+    <button style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--ink4);padding:4px;line-height:1;flex-shrink:0;align-self:flex-start" onclick="this.closest('.q-wizard-card').remove();renumberWizQs();showToast('Question removed')">✕</button>`;
+  canvas.appendChild(card);
+  card.querySelector('input').focus();
+  card.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+function getWizQBody(type){
+  if(['mc','yn','cb','dd'].includes(type)){
+    const opts=type==='yn'?['Yes','No']:['Option 1','Option 2','Option 3'];
+    const icon=type==='cb'?'□':'○';
+    return `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">${opts.map(o=>`<div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink3)"><span>${icon}</span><input style="border:none;outline:none;background:transparent;font-size:13px;color:var(--ink3);width:100%" value="${o}"/></div>`).join('')}
+    <button onclick="addWizOption(this)" style="background:none;border:none;font-size:12px;color:var(--teal);cursor:pointer;text-align:left;padding:4px 0;font-weight:600">+ Add option</button></div>`;
+  }
+  if(type==='scale'||type==='nps'){
+    const max=type==='nps'?10:10;
+    return `<div style="display:flex;gap:4px;margin-top:10px;flex-wrap:wrap">${Array.from({length:max+1},(_,i)=>`<div style="min-width:28px;height:28px;border:1px solid var(--line2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--ink4)">${i}</div>`).join('')}</div>`;
+  }
+  if(type==='sc') return `<div style="font-size:24px;letter-spacing:4px;color:#DDD;margin-top:8px">★★★★★</div>`;
+  if(type==='text') return `<input class="form-control" disabled placeholder="Short text answer..." style="font-size:13px;margin-top:10px"/>`;
+  if(type==='para') return `<textarea class="form-control" disabled rows="2" placeholder="Paragraph answer..." style="font-size:13px;margin-top:10px"></textarea>`;
+  if(type==='date') return `<input class="form-control" type="date" disabled style="font-size:13px;margin-top:10px;width:180px"/>`;
+  if(type==='matrix') return `<div style="font-size:12px;color:var(--ink4);margin-top:8px;padding:8px;background:var(--paper3);border-radius:6px">Grid matrix — configure rows and columns in full builder</div>`;
+  return '';
+}
+
+function addWizOption(btn){
+  const container=btn.parentNode;
+  const div=document.createElement('div');
+  div.style.cssText='display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink3)';
+  div.innerHTML='<span>○</span><input style="border:none;outline:none;background:transparent;font-size:13px;color:var(--ink3);width:100%" placeholder="New option"/>';
+  container.insertBefore(div,btn);
+  div.querySelector('input').focus();
+}
+
+function highlightWizQ(card){document.querySelectorAll('.q-wizard-card').forEach(c=>c.classList.remove('selected-wq'));card.classList.add('selected-wq')}
+
+function renumberWizQs(){document.querySelectorAll('#wiz-canvas .q-wizard-card').forEach((c,i)=>{const n=c.querySelector('.q-wizard-num');if(n)n.textContent=i+1});wizQCount=document.querySelectorAll('#wiz-canvas .q-wizard-card').length}
+
+function wizNext(){
+  const nameEl=document.getElementById('wiz-name');
+  if(wizStep===1&&!nameEl.value.trim()){showToast('Please enter a survey title');nameEl.focus();return}
+  if(wizStep===4){
+    closeModal('m-wizard');
+    showToast('Survey created and sent ✓','ok');
+    // Add to history
+    const newS={id:surveys.length+1,title:nameEl.value||'New Survey',status:'active',qs:document.querySelectorAll('#wiz-canvas .q-wizard-card').length||1,resp:0,inv:0,comp:0,created:'Today',thumb:'📊',color:'var(--teal-l)'};
+    surveys.unshift(newS);
+    return;
+  }
+  wizStep++;
+  document.getElementById('wiz-s1').style.display=wizStep===1?'block':'none';
+  document.getElementById('wiz-s2').style.display=wizStep===2?'block':'none';
+  document.getElementById('wiz-s3').style.display=wizStep===3?'block':'none';
+  document.getElementById('wiz-s4').style.display=wizStep===4?'block':'none';
+  document.getElementById('wiz-back').style.display=wizStep>1?'':'none';
+  const labels={2:'Next: Settings →',3:'Next: Send →',4:'Send Survey ✓'};
+  document.getElementById('wiz-next').textContent=labels[wizStep]||'Next →';
+  if(wizStep===4)document.getElementById('wiz-save-draft').style.display='none';
+}
+
+function wizBack(){
+  if(wizStep<=1)return;
+  wizStep--;
+  document.getElementById('wiz-s1').style.display=wizStep===1?'block':'none';
+  document.getElementById('wiz-s2').style.display=wizStep===2?'block':'none';
+  document.getElementById('wiz-s3').style.display=wizStep===3?'block':'none';
+  document.getElementById('wiz-s4').style.display=wizStep===4?'block':'none';
+  document.getElementById('wiz-back').style.display=wizStep>1?'':'none';
+  const labels={1:'Next: Add Questions →',2:'Next: Settings →',3:'Next: Send →'};
+  document.getElementById('wiz-next').textContent=labels[wizStep]||'Next →';
+  document.getElementById('wiz-save-draft').style.display='';
+}
+
+function saveSurveyDraft(){closeModal('m-wizard');showToast('Survey saved as draft ✓','ok')}
+
+// ---------------------------------
+// RESPONDENT FUNCTIONS
+// ---------------------------------
+function startSurvey(){for(let i=1;i<=5;i++){const el=document.getElementById('rq-'+i);if(el)el.style.display='none'}const d=document.getElementById('rq-done');if(d)d.style.display='none';const q=document.getElementById('rq-1');if(q)q.style.display='block';const p=document.getElementById('resp-prog');if(p)p.style.width='20%'}
+function updateProg(q){const p=document.getElementById('resp-prog');if(p)p.style.width=(q/5*100)+'%'}
+function nextQ(q){document.getElementById('rq-'+q).style.display='none';const n=document.getElementById('rq-'+(q+1));if(n){n.style.display='block';updateProg(q+1)}window.scrollTo(0,0)}
+function prevQ(q){document.getElementById('rq-'+q).style.display='none';document.getElementById('rq-'+(q-1)).style.display='block';updateProg(q-1);window.scrollTo(0,0)}
+function selectOpt(el,grp){document.querySelectorAll('#'+grp+' .resp-option').forEach(o=>o.classList.remove('selected'));el.classList.add('selected')}
+function selectScale(el,grp){document.querySelectorAll('#'+grp+' .resp-scale-item').forEach(o=>o.classList.remove('selected'));el.classList.add('selected')}
+function toggleCb(el){el.classList.toggle('selected');const sq=el.querySelector('.opt-sq');if(sq)sq.textContent=el.classList.contains('selected')?'✓':''}
+function submitSurvey(){for(let i=1;i<=5;i++){const el=document.getElementById('rq-'+i);if(el)el.style.display='none'}document.getElementById('rq-done').style.display='block';const p=document.getElementById('resp-prog');if(p)p.style.width='100%';window.scrollTo(0,0)}
+
+// ---------------------------------
+// INDIVIDUAL RESPONSES
+// ---------------------------------
+const respondents=[
+  {name:'James Thornton',initials:'JT',color:'var(--teal)',date:'13 Mar 2026, 09:14',time:'2m 12s',q1:'Excellent — exceeded expectations',q2:'Yes',q3:9,q4:['Requirements clarity'],q5:'Clearer definition of done before starting a ticket — too much ambiguity mid-sprint'},
+  {name:'Sarah Mitchell',initials:'SM',color:'var(--blue)',date:'13 Mar 2026, 11:30',time:'3m 04s',q1:'Good — met most goals',q2:'Yes',q3:8,q4:['Technical debt','Testing & QA time'],q5:'More frequent check-ins between devs and QA, not just at the end'},
+  {name:'Rohan Patel',initials:'RP',color:'var(--amber)',date:'12 Mar 2026, 14:22',time:'1m 55s',q1:'Good — met most goals',q2:'Partially',q3:7,q4:['Technical debt','Communication gaps'],q5:'Address auth service tech debt — it\'s slowing everyone down'},
+  {name:'Alice Lee',initials:'AL',color:'var(--violet)',date:'12 Mar 2026, 16:45',time:'2m 30s',q1:'Average — some issues arose',q2:'Partially',q3:6,q4:['Technical debt','Requirements clarity'],q5:'Better sprint planning time estimates — we consistently underestimate'},
+  {name:'Tom Chen',initials:'TC',color:'#1A4A8C',date:'11 Mar 2026, 10:01',time:'1m 48s',q1:'Good — met most goals',q2:'Yes',q3:8,q4:['Testing & QA time'],q5:'Fewer meetings during the sprint — let the team focus on delivery'},
+  {name:'Emma Walsh',initials:'EW',color:'#6B3FA0',date:'11 Mar 2026, 15:12',time:'3m 22s',q1:'Excellent — exceeded expectations',q2:'Yes',q3:9,q4:[],q5:'Nothing major — this was a great sprint overall, well done team'},
+];
+
+let currentRespIdx=0;
+
+function buildIndividualList(){
+  const list=document.getElementById('individual-list');
+  list.innerHTML=respondents.slice(0,4).map((r,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--paper2);border-radius:8px;font-size:13px">
+      <div class="avatar" style="background:${r.color};width:30px;height:30px;font-size:10px">${r.initials}</div>
+      <div style="flex:1"><div style="font-weight:500">${r.name}</div><div style="font-size:11px;color:var(--ink4)">Completed · ${r.time}</div></div>
+      <button class="btn btn-ghost btn-sm" onclick="openResponse(${i})">View</button>
+    </div>`).join('');
+}
+
+function openResponse(idx){
+  currentRespIdx=idx;
+  renderResponseModal(idx);
+  showModal('m-response');
+}
+
+function renderResponseModal(idx){
+  const r=respondents[idx];
+  document.getElementById('resp-modal-name').textContent='Response from '+r.name;
+  document.getElementById('resp-modal-meta').textContent=`Completed · ${r.date} · ${r.time}`;
+  document.getElementById('resp-nav-label').textContent=`${idx+1} / ${respondents.length}`;
+  document.getElementById('resp-prev-btn').disabled=idx===0;
+  document.getElementById('resp-next-btn').disabled=idx===respondents.length-1;
+
+  const scaleItems=Array.from({length:10},(_,i)=>`<div class="resp-detail-scale-item ${i+1===r.q3?'chosen':''}">${i+1}</div>`).join('');
+  const frictionBadges=r.q4.length?r.q4.map(f=>`<span style="display:inline-block;padding:4px 10px;background:var(--violet-l);color:var(--violet);border-radius:20px;font-size:12px;font-weight:500;margin:3px">${f}</span>`).join(''):
+    '<span style="color:var(--ink4);font-size:13px">No areas selected</span>';
+
+  document.getElementById('resp-modal-body').innerHTML=`
+    <div class="resp-detail-q">
+      <div class="resp-detail-q-label">Q1 · Multiple Choice</div>
+      <div class="resp-detail-q-text">How would you rate the overall sprint?</div>
+      <div class="resp-detail-answer">${r.q1}</div>
+    </div>
+    <div class="resp-detail-q">
+      <div class="resp-detail-q-label">Q2 · Yes / No</div>
+      <div class="resp-detail-q-text">Did we meet the sprint goal?</div>
+      <div class="resp-detail-answer">${r.q2}</div>
+    </div>
+    <div class="resp-detail-q">
+      <div class="resp-detail-q-label">Q3 · Scale (1–10)</div>
+      <div class="resp-detail-q-text">How well did the team collaborate?</div>
+      <div class="resp-detail-scale">${scaleItems}</div>
+    </div>
+    <div class="resp-detail-q">
+      <div class="resp-detail-q-label">Q4 · Checkboxes</div>
+      <div class="resp-detail-q-text">Which areas caused friction?</div>
+      <div style="margin-top:6px">${frictionBadges}</div>
+    </div>
+    <div class="resp-detail-q">
+      <div class="resp-detail-q-label">Q5 · Open Text</div>
+      <div class="resp-detail-q-text">What's the single biggest improvement for next sprint?</div>
+      <div style="font-size:14px;line-height:1.6;color:var(--ink2);background:var(--paper2);padding:12px 16px;border-radius:8px;border-left:3px solid var(--teal)">${r.q5}</div>
+    </div>`;
+}
+
+function navResponse(dir){
+  currentRespIdx=Math.max(0,Math.min(respondents.length-1,currentRespIdx+dir));
+  renderResponseModal(currentRespIdx);
+}
+
+// ALL RESPONSES TABLE
+function buildAllResponsesTable(){
+  const tbody=document.getElementById('all-resp-tbody');
+  tbody.innerHTML=respondents.map((r,i)=>`
+    <tr>
+      <td style="color:var(--ink4)">${i+1}</td>
+      <td><div style="display:flex;align-items:center;gap:8px"><div class="avatar" style="background:${r.color};width:28px;height:28px;font-size:10px">${r.initials}</div>${r.name}</div></td>
+      <td style="font-size:12px">${r.q1.split('—')[0].trim()}</td>
+      <td><span class="badge" style="${r.q2==='Yes'?'background:var(--teal-l);color:var(--teal)':r.q2==='No'?'background:var(--rose-l);color:var(--rose)':'background:var(--amber-l);color:var(--amber)'};font-size:11px">${r.q2}</span></td>
+      <td><span style="font-weight:700;color:${r.q3>=8?'var(--teal)':r.q3>=6?'var(--amber)':'var(--rose)'}">${r.q3}/10</span></td>
+      <td style="font-size:12px;color:var(--ink3)">${r.q4.length?r.q4.join(', ') || '—':'—'}</td>
+      <td style="white-space:nowrap;color:var(--ink4);font-size:12px">${r.date.split(',')[0]}</td>
+      <td style="color:var(--ink4);font-size:12px">${r.time}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="closeModal('m-all-responses');openResponse(${i})">View</button></td>
+    </tr>`).join('');
+}
+
+// ---------------------------------
+// CHARTS
+// ---------------------------------
+function initCharts(){
+  const scaleCtx=document.getElementById('chart-scale');
+  if(scaleCtx&&!scaleCtx._init){
+    scaleCtx._init=true;
+    new Chart(scaleCtx,{type:'bar',data:{labels:['1','2','3','4','5','6','7','8','9','10'],datasets:[{data:[0,0,1,1,2,3,4,7,5,1],backgroundColor:['#9C2B2B','#9C2B2B','#B85C0A','#B85C0A','#B85C0A','#C87A30','#D4993A','#2E8C74','#2E8C74','#1A6B5A'],borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:12}}},y:{grid:{color:'rgba(0,0,0,.05)'},ticks:{stepSize:1,font:{size:11}}}}}});
+  }
+  const timeCtx=document.getElementById('chart-time');
+  if(timeCtx&&!timeCtx._init){
+    timeCtx._init=true;
+    new Chart(timeCtx,{type:'line',data:{labels:['11','12','13','14','15','16','17','18','19','20'].map(d=>'Mar '+d),datasets:[{data:[8,6,4,3,1,2,0,0,0,0],fill:true,backgroundColor:'rgba(26,107,90,.1)',borderColor:'#1A6B5A',borderWidth:2,pointRadius:3,pointBackgroundColor:'#1A6B5A',tension:.4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10},maxRotation:45}},y:{grid:{color:'rgba(0,0,0,.05)'},ticks:{stepSize:2,font:{size:10}}}}}});
+  }
+}
+
+// Observer for results view
+new MutationObserver(()=>{
+  if(document.getElementById('v-results').classList.contains('active')){
+    setTimeout(initCharts,100);
+    buildIndividualList();
+  }
+}).observe(document.getElementById('v-results'),{attributes:true,attributeFilter:['class']});
+
+// Observer for all-responses modal
+new MutationObserver(()=>{
+  if(document.getElementById('m-all-responses').classList.contains('active')) buildAllResponsesTable();
+}).observe(document.getElementById('m-all-responses'),{attributes:true,attributeFilter:['class']});
+</script>
+</body>
+</html>

@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deliverables Tracker – Jiganto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f4f3f0;--surface:#fff;--s2:#faf9f7;--border:#e8e5e0;
+  --text:#1a1917;--muted:#7a7570;--light:#b0aa9f;
+  --blue:#3b6cf4;--purple:#7c3aed;--green:#059669;--amber:#d97706;
+  --red:#dc2626;--pink:#db2777;--indigo:#4f46e5;
+  --r:14px;--rs:8px;
+  --sh:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.05);
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:28px 24px 80px;font-size:14px}
+
+/* ── Utility ── */
+.hidden{display:none!important}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border-radius:var(--rs);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;border:none}
+.btn-ghost{background:var(--surface);border:1.5px solid var(--border);color:var(--muted)}
+.btn-ghost:hover{border-color:#aaa;color:var(--text)}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-green{background:var(--green);color:#fff}.btn-green:hover{filter:brightness(1.08)}
+.btn-red{background:var(--red);color:#fff}.btn-red:hover{filter:brightness(1.08)}
+.btn-amber{background:var(--amber);color:#fff}
+
+/* ── Page header ── */
+.page-header{margin-bottom:22px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.page-header h1{font-family:'DM Serif Display',serif;font-size:28px;letter-spacing:-.3px}
+.page-header p{color:var(--muted);font-size:13px;margin-top:3px}
+
+/* ── KPI cards ── */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:20px}
+.kpi{background:var(--surface);border:2px solid var(--border);border-radius:var(--r);padding:14px 16px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden;user-select:none}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--kpi-c)}
+.kpi:hover{border-color:var(--kpi-c);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.kpi.active{border-color:var(--kpi-c);background:color-mix(in srgb,var(--kpi-c) 6%,var(--surface))}
+.kpi-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px}
+.kpi-val{font-family:'DM Serif Display',serif;font-size:30px;line-height:1;color:var(--kpi-c)}
+.kpi-sub{font-size:11px;color:var(--light);margin-top:3px}
+.kpi-hint{position:absolute;bottom:8px;right:10px;font-size:10px;font-weight:600;letter-spacing:.05em;color:var(--kpi-c);opacity:0;transition:opacity .15s;text-transform:uppercase}
+.kpi:hover .kpi-hint,.kpi.active .kpi-hint{opacity:1}
+
+/* ── Toolbar ── */
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.search-wrap{display:flex;align-items:center;gap:8px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--rs);padding:7px 12px;flex:1;min-width:180px;max-width:280px}
+.search-wrap input{border:none;outline:none;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:transparent;width:100%}
+.search-wrap input::placeholder{color:var(--light)}
+.fsel{padding:7px 26px 7px 11px;border:1.5px solid var(--border);border-radius:var(--rs);background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23b0aa9f' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 8px center;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;appearance:none;-webkit-appearance:none;cursor:pointer}
+.fsel:focus{border-color:var(--blue)}
+.filter-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:var(--blue);color:#fff;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer}
+.filter-pill span{opacity:.7}
+
+/* ── Bulk bar ── */
+.bulk-bar{background:var(--blue);color:#fff;border-radius:var(--rs);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;animation:slideDown .2s ease}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.bulk-count{font-weight:700;font-size:14px}
+.bulk-sep{opacity:.3;font-size:18px}
+.btn-bulk{background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.3);color:#fff;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s}
+.btn-bulk:hover{background:rgba(255,255,255,.25)}
+.btn-bulk.danger{background:rgba(220,38,38,.4);border-color:rgba(220,38,38,.5)}
+
+/* ── Phase group ── */
+.phase-group{margin-bottom:12px;border-radius:var(--r);overflow:hidden;border:1.5px solid var(--border);box-shadow:var(--sh)}
+.phase-hd{display:flex;align-items:center;gap:10px;padding:11px 16px;background:var(--s2);cursor:pointer;user-select:none;border-bottom:1.5px solid var(--border);transition:background .12s}
+.phase-hd:hover{background:#f0efe8}
+.phase-chev{font-size:11px;color:var(--light);transition:transform .22s;flex-shrink:0}
+.phase-chev.open{transform:rotate(90deg)}
+.phase-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.phase-name{font-size:13px;font-weight:700;flex:1}
+.phase-prog-wrap{display:flex;align-items:center;gap:8px}
+.phase-prog-bar{width:80px;height:5px;background:var(--border);border-radius:99px;overflow:hidden}
+.phase-prog-fill{height:100%;border-radius:99px;transition:width .4s}
+.phase-prog-txt{font-size:11px;color:var(--muted);white-space:nowrap}
+.phase-count{font-size:11.5px;color:var(--muted);background:var(--border);padding:2px 8px;border-radius:20px;white-space:nowrap}
+.phase-done{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#dcfce7;color:#15803d}
+
+/* ── Table ── */
+.tbl-wrap{background:var(--surface);overflow-x:auto}
+table{width:100%;border-collapse:collapse;table-layout:fixed;min-width:900px}
+/* Total fixed cols: 36+100+110+90+86+96+54+130+68 = 770px. Name gets the rest (~26% on 1200px wide page) */
+col.c-cb    {width:36px}
+col.c-name  {width:26%}
+col.c-type  {width:100px}
+col.c-due   {width:110px}
+col.c-status{width:110px}
+col.c-rag   {width:86px}
+col.c-prog  {width:96px}
+col.c-ver   {width:54px}
+col.c-appr  {width:130px}
+col.c-acts  {width:68px}
+thead th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:9px 12px;background:var(--s2);border-bottom:1.5px solid var(--border);text-align:left;white-space:nowrap}
+tbody tr.del-row{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer}
+tbody tr.del-row:hover{background:#faf9f7}
+tbody tr.del-row.selected{background:color-mix(in srgb,var(--blue) 4%,var(--surface))}
+tbody tr.del-row.drawer-open{background:#f8f7ff;border-bottom:none}
+tbody td{padding:9px 12px;vertical-align:middle}
+.cb{width:15px;height:15px;accent-color:var(--blue);cursor:pointer}
+
+/* ── Name cell ── */
+.name-cell{display:flex;align-items:center;gap:8px}
+.type-icon{font-size:15px;flex-shrink:0}
+.name-primary{font-weight:500;font-size:13.5px;line-height:1.3}
+.name-note{font-size:11.5px;color:var(--muted);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+
+/* ── Inline badges ── */
+.rag-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap;cursor:pointer;transition:transform .1s}
+.rag-pill:hover{transform:scale(1.05)}
+.rag-pill::before{content:'';width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.rp-green{background:#dcfce7;color:#15803d}.rp-green::before{background:#22c55e}
+.rp-amber{background:#fef3c7;color:#92400e}.rp-amber::before{background:#f59e0b}
+.rp-red  {background:#fee2e2;color:#991b1b}.rp-red::before{background:#ef4444}
+.rp-grey {background:#f3f4f6;color:#6b7280}.rp-grey::before{background:#9ca3af}
+.status-pill{display:inline-block;padding:3px 8px;border-radius:20px;font-size:11.5px;font-weight:600;cursor:pointer;transition:transform .1s}
+.status-pill:hover{transform:scale(1.03)}
+.s-ns {background:#f3f4f6;color:#6b7280}
+.s-ip {background:#dbeafe;color:#1d4ed8}
+.s-ir {background:#fef3c7;color:#92400e}
+.s-ap {background:#dcfce7;color:#15803d}
+.s-ov {background:#fee2e2;color:#991b1b}
+.ver-badge{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10.5px;font-weight:700;background:var(--border);color:var(--muted);font-family:monospace}
+
+/* ── Progress mini ── */
+.prog-wrap{display:flex;align-items:center;gap:6px}
+.prog-bar{width:54px;height:4px;background:var(--border);border-radius:99px;overflow:hidden;flex-shrink:0}
+.prog-fill{height:100%;border-radius:99px}
+.prog-txt{font-size:11.5px;color:var(--muted)}
+
+/* ── Approval progress chip ── */
+.appr-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1.5px solid var(--border);font-size:12px;font-weight:700;cursor:pointer;transition:all .16s;user-select:none;background:var(--surface);white-space:nowrap;max-width:100%}
+.appr-chip:hover{border-color:currentColor;transform:scale(1.04)}
+.appr-chip.ac-all  {color:#15803d;border-color:#86efac;background:#f0fdf4}
+.appr-chip.ac-some {color:#92400e;border-color:#fcd34d;background:#fffbeb}
+.appr-chip.ac-none {color:#6b7280;border-color:#d1d5db;background:#f9fafb}
+.appr-chip.ac-block{color:#991b1b;border-color:#fca5a5;background:#fff5f5}
+.appr-chip.drawer-open-chip{box-shadow:0 0 0 2px currentColor}
+.appr-check{width:13px;height:13px;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0}
+
+/* ── Row actions (hover only) ── */
+.row-acts{display:flex;gap:4px;opacity:0;transition:opacity .15s}
+tbody tr:hover .row-acts{opacity:1}
+.icon-btn{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;border:1.5px solid var(--border);background:var(--surface);cursor:pointer;font-size:12px;color:var(--muted);transition:all .12s;flex-shrink:0}
+.icon-btn:hover{border-color:#aaa;color:var(--text)}
+
+/* ── Date ── */
+.date-late{color:var(--red);font-weight:600;font-size:12.5px}
+.date-soon{color:var(--amber);font-weight:500;font-size:12.5px}
+.date-ok{font-size:12.5px}
+
+/* ════════════════════════════════════
+   PEOPLE & APPROVALS DRAWER
+════════════════════════════════════ */
+tr.drawer-row{border-bottom:1px solid var(--border)}
+tr.drawer-row td{padding:0}
+.drawer{background:linear-gradient(to bottom,#f5f3ff,#faf9f7);border-top:1.5px solid #ddd8f5;overflow:hidden;transition:max-height .28s cubic-bezier(.4,0,.2,1),opacity .22s ease;max-height:0;opacity:0}
+.drawer.open{max-height:280px;opacity:1}
+.drawer-inner{padding:14px 16px 16px 46px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:0}
+
+/* Column dividers */
+.drawer-col{padding:0 18px;position:relative}
+.drawer-col+.drawer-col::before{content:'';position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--border)}
+.drawer-col:first-child{padding-left:4px}
+
+.drawer-col-title{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--light);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.drawer-col-icon{width:18px;height:18px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:10px}
+
+/* Person rows inside drawer */
+.drawer-person{display:flex;align-items:center;gap:9px;padding:5px 6px;border-radius:8px;margin-bottom:4px;transition:background .12s}
+.drawer-person:hover{background:rgba(59,108,244,.05)}
+.dav{width:28px;height:28px;border-radius:50%;font-size:11px;font-weight:700;color:#fff;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;position:relative}
+.dav-tick::after{content:'✓';position:absolute;bottom:-2px;right:-2px;width:11px;height:11px;border-radius:50%;background:#22c55e;font-size:7px;color:#fff;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--surface)}
+.dav-dot::after{content:'';position:absolute;bottom:-1px;right:-1px;width:9px;height:9px;border-radius:50%;border:1.5px solid var(--surface)}
+.dp-info{flex:1;min-width:0}
+.dp-name{font-size:13px;font-weight:500;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dp-role{font-size:11px;color:var(--light)}
+.dp-status{flex-shrink:0}
+.dp-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700}
+.dpb-approved{background:#dcfce7;color:#15803d}
+.dpb-changes {background:#fee2e2;color:#991b1b}
+.dpb-pending  {background:#f3f4f6;color:#6b7280}
+.dpb-reviewed {background:#dbeafe;color:#1d4ed8}
+
+/* Drawer footer bar */
+.drawer-footer{grid-column:1/-1;border-top:1px solid var(--border);margin-top:8px;padding-top:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.drawer-footer-meta{font-size:12px;color:var(--muted)}
+.drawer-footer-actions{display:flex;gap:6px}
+.dfbtn{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);transition:all .14s;font-family:'DM Sans',sans-serif}
+.dfbtn:hover{border-color:#aaa;color:var(--text)}
+.dfbtn-approve{background:var(--green);border-color:var(--green);color:#fff}
+.dfbtn-approve:hover{filter:brightness(1.08)}
+.dfbtn-changes{background:var(--red);border-color:var(--red);color:#fff}
+.dfbtn-changes:hover{filter:brightness(1.08)}
+
+/* ── Empty state ── */
+.empty-state{text-align:center;padding:36px 20px;color:var(--muted)}
+.empty-state .ei{font-size:28px;margin-bottom:8px}
+
+/* ════════════════════════════════════
+   MODALS
+════════════════════════════════════ */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.38);backdrop-filter:blur(3px);z-index:200;align-items:center;justify-content:center;padding:16px}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--r);width:100%;max-width:580px;box-shadow:0 24px 64px rgba(0,0,0,.18);animation:modalIn .2s ease;overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
+.modal.wide{max-width:660px}
+@keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(10px)}to{opacity:1;transform:none}}
+.modal-head{padding:20px 24px 16px;border-bottom:1.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-head h2{font-family:'DM Serif Display',serif;font-size:20px}
+.modal-body{padding:20px 24px;overflow-y:auto;flex:1}
+.modal-foot{padding:14px 24px;border-top:1.5px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0}
+.mclose{width:28px;height:28px;border-radius:7px;border:1.5px solid var(--border);background:transparent;cursor:pointer;font-size:15px;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.mclose:hover{background:var(--s2)}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.mgrid .full{grid-column:1/-1}
+.mfield{display:flex;flex-direction:column;gap:5px}
+.mlabel{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.minput,.msel,.mtextarea{padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:'DM Sans',sans-serif;font-size:13.5px;color:var(--text);background:var(--s2);outline:none;transition:border-color .15s;width:100%}
+.minput:focus,.msel:focus,.mtextarea:focus{border-color:var(--blue)}
+.msel{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23b0aa9f' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+.mtextarea{resize:vertical;min-height:70px}
+.mrange{width:100%;accent-color:var(--blue);margin-top:4px}
+
+/* People editor */
+.pe-wrap{border:1.5px solid var(--border);border-radius:var(--rs);overflow:hidden}
+.pe-head{padding:7px 12px;background:var(--s2);border-bottom:1px solid var(--border);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.pe-list{padding:8px 10px;display:flex;flex-direction:column;gap:5px;min-height:32px}
+.pe-person{display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--s2);border-radius:6px;border:1px solid var(--border)}
+.pe-av{width:22px;height:22px;border-radius:50%;font-size:9px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pe-name{flex:1;font-size:13px}
+.pe-rm{cursor:pointer;color:var(--light);font-size:13px;transition:color .12s}
+.pe-rm:hover{color:var(--red)}
+.pe-add{padding:6px 12px;display:flex;gap:6px;border-top:1px solid var(--border)}
+.pe-inp{flex:1;padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--surface);outline:none;color:var(--text)}
+.pe-inp:focus{border-color:var(--blue)}
+.pe-add-btn{padding:6px 12px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif}
+
+/* Phase manager */
+.phase-edit-row{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--s2);border-radius:8px;border:1.5px solid var(--border);cursor:grab}
+.phase-edit-row:active{cursor:grabbing}
+.drag-handle{color:var(--light);font-size:13px;cursor:grab}
+.phase-colour-dot{width:12px;height:12px;border-radius:50%;cursor:pointer;transition:transform .1s}
+.phase-colour-dot:hover{transform:scale(1.3)}
+.phase-edit-name{flex:1;border:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:500;color:var(--text);outline:none;padding:2px 4px;border-radius:4px}
+.phase-edit-name:focus{background:var(--surface);box-shadow:0 0 0 2px var(--blue)}
+.phase-del-btn{color:var(--light);cursor:pointer;font-size:15px;transition:color .12s}
+.phase-del-btn:hover{color:var(--red)}
+.template-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.template-chip{padding:5px 12px;border-radius:20px;background:var(--s2);border:1.5px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;color:var(--muted)}
+.template-chip:hover,.template-chip.sel{border-color:var(--blue);color:var(--blue);background:#eef3ff}
+
+/* Audit trail */
+.audit-item{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:8px;background:var(--s2);border:1px solid var(--border);margin-bottom:7px}
+.audit-av{width:26px;height:26px;border-radius:50%;font-size:10px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.audit-body{flex:1}
+.audit-action{font-size:13px;font-weight:500}
+.audit-action .aa-green{color:var(--green);font-weight:700}
+.audit-action .aa-red{color:var(--red);font-weight:700}
+.audit-action .aa-blue{color:var(--blue);font-weight:700}
+.audit-time{font-size:11.5px;color:var(--light);margin-top:1px}
+.audit-note{font-size:12px;color:var(--muted);margin-top:3px;font-style:italic}
+
+/* Quick-approve in-drawer prompt */
+.drawer-approve-prompt{background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;grid-column:1/-1}
+.dap-label{font-size:12.5px;font-weight:600;color:#15803d;flex:1}
+.dap-inp{padding:5px 10px;border:1.5px solid #86efac;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--surface);outline:none;width:130px}
+.dap-inp:focus{border-color:var(--green)}
+
+/* ── Import modal ── */
+.import-tabs{display:flex;gap:0;border-bottom:1.5px solid var(--border);margin-bottom:20px}
+.import-tab{padding:9px 20px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1.5px;transition:all .15s}
+.import-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.import-tab:hover:not(.active){color:var(--text)}
+.import-panel{display:none}.import-panel.active{display:block}
+.drop-zone{border:2px dashed var(--border);border-radius:var(--r);padding:32px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--s2)}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--blue);background:#eef3ff}
+.drop-zone-icon{font-size:32px;margin-bottom:10px}
+.drop-zone-title{font-weight:600;font-size:14px;margin-bottom:4px}
+.drop-zone-sub{font-size:12.5px;color:var(--muted)}
+.drop-zone input[type=file]{display:none}
+.import-preview{margin-top:16px;border:1.5px solid var(--border);border-radius:var(--rs);overflow:hidden;max-height:220px;overflow-y:auto}
+.import-preview table{width:100%;border-collapse:collapse;font-size:12px}
+.import-preview thead th{padding:7px 10px;background:var(--s2);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);white-space:nowrap}
+.import-preview tbody td{padding:6px 10px;border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.import-preview tbody tr:last-child td{border-bottom:none}
+.import-status{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:var(--rs);margin-top:12px;font-size:13px}
+.import-status.ok {background:#f0fdf4;color:#15803d;border:1px solid #86efac}
+.import-status.err{background:#fff5f5;color:#991b1b;border:1px solid #fca5a5}
+.import-status.info{background:#eff6ff;color:#1d4ed8;border:1px solid #93c5fd}
+.tpl-section{background:var(--s2);border:1.5px solid var(--border);border-radius:var(--r);padding:18px 20px;margin-bottom:16px}
+.tpl-section h3{font-size:14px;font-weight:700;margin-bottom:6px}
+.tpl-section p{font-size:13px;color:var(--muted);line-height:1.55;margin-bottom:14px}
+.tpl-field-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.tpl-field{padding:3px 10px;background:var(--surface);border:1.5px solid var(--border);border-radius:20px;font-size:12px;font-weight:600;color:var(--muted)}
+.tpl-field.required{border-color:var(--blue);color:var(--blue);background:#eef3ff}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div class="page-header">
+  <div>
+    <h1>Deliverables Tracker</h1>
+    <p id="proj-subtitle">Agile Project &nbsp;·&nbsp; Tracking all project deliverables across phases</p>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn btn-ghost" onclick="openPhaseModal()">⚙️ Manage Phases</button>
+    <button class="btn btn-ghost" onclick="openImportModal()">⬆ Import</button>
+    <button class="btn btn-ghost" onclick="exportCSV()">⬇ Export</button>
+    <button class="btn btn-primary" onclick="openAddDel()">＋ Add Deliverable</button>
+  </div>
+</div>
+
+<!-- ═══ KPI CARDS ═══ -->
+<div class="kpi-row" id="kpi-row"></div>
+
+<!-- ═══ BULK BAR ═══ -->
+<div class="bulk-bar hidden" id="bulk-bar">
+  <span class="bulk-count" id="bulk-count">0 selected</span>
+  <span class="bulk-sep">|</span>
+  <button class="btn-bulk" onclick="bulkStatus('Approved')">✅ Mark Approved</button>
+  <button class="btn-bulk" onclick="bulkStatus('In Progress')">🔵 In Progress</button>
+  <button class="btn-bulk" onclick="bulkMovePhase()">📁 Move Phase</button>
+  <button class="btn-bulk danger" onclick="bulkDelete()">🗑 Delete</button>
+  <button class="btn-bulk" onclick="clearSel()" style="margin-left:auto">✕ Clear</button>
+</div>
+
+<!-- ═══ TOOLBAR ═══ -->
+<div class="toolbar">
+  <div class="search-wrap">
+    <span style="color:var(--light)">🔍</span>
+    <input type="text" id="search-inp" placeholder="Search deliverables…" oninput="applyFilters()">
+  </div>
+  <select class="fsel" id="f-phase" onchange="applyFilters();renderPills()"><option value="">All Phases</option></select>
+  <select class="fsel" id="f-rag"   onchange="applyFilters();renderPills()">
+    <option value="">All RAG</option>
+    <option>Green</option><option>Amber</option><option>Red</option>
+  </select>
+  <select class="fsel" id="f-status" onchange="applyFilters();renderPills()">
+    <option value="">All Statuses</option>
+    <option>Not Started</option><option>In Progress</option>
+    <option>In Review</option><option>Approved</option><option>Overdue</option>
+  </select>
+  <div id="pill-row" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+  <div style="flex:1"></div>
+  <button class="btn btn-ghost" id="collapse-btn" onclick="toggleCollapseAll()">⊟ Collapse All</button>
+</div>
+
+<!-- ═══ PHASE GROUPS ═══ -->
+<div id="phase-groups"></div>
+
+<!-- ═══════════════════════════════════════
+     MODALS
+═══════════════════════════════════════ -->
+
+<!-- Add / Edit Deliverable -->
+<div class="overlay" id="del-modal" onclick="closeOvl('del-modal',event)">
+  <div class="modal wide">
+    <div class="modal-head">
+      <h2 id="dm-title">Add Deliverable</h2>
+      <button class="mclose" onclick="closeModal('del-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="mgrid">
+        <div class="mfield full"><span class="mlabel">Deliverable Name</span><input class="minput" id="dm-name" placeholder="e.g. Business Requirements Document"></div>
+        <div class="mfield"><span class="mlabel">Phase</span><select class="msel" id="dm-phase"></select></div>
+        <div class="mfield"><span class="mlabel">Type</span>
+          <select class="msel" id="dm-type"><option>Document</option><option>Report</option><option>Plan</option><option>Specification</option><option>Presentation</option><option>Template</option><option>Sign-off</option><option>Other</option></select>
+        </div>
+        <div class="mfield"><span class="mlabel">Status</span>
+          <select class="msel" id="dm-status"><option>Not Started</option><option>In Progress</option><option>In Review</option><option>Approved</option><option>Overdue</option></select>
+        </div>
+        <div class="mfield"><span class="mlabel">RAG</span>
+          <select class="msel" id="dm-rag"><option>Green</option><option>Amber</option><option>Red</option><option>N/A</option></select>
+        </div>
+        <div class="mfield"><span class="mlabel">Due Date</span><input class="minput" id="dm-due" type="date"></div>
+        <div class="mfield">
+          <span class="mlabel">Progress %</span>
+          <input class="mrange" id="dm-prog" type="range" min="0" max="100" value="0" oninput="document.getElementById('dm-prog-val').textContent=this.value+'%'">
+          <span id="dm-prog-val" style="font-size:12px;color:var(--muted)">0%</span>
+        </div>
+        <!-- People editors -->
+        <div class="mfield full">
+          <span class="mlabel">Owner(s) — responsible for authoring &amp; delivering</span>
+          <div class="pe-wrap"><div class="pe-head">Owners</div><div class="pe-list" id="pe-owners-list"></div>
+            <div class="pe-add"><input class="pe-inp" id="pe-owners-inp" placeholder="Add name…" onkeydown="if(event.key==='Enter')addPerson('owners')"><button class="pe-add-btn" onclick="addPerson('owners')">＋</button></div>
+          </div>
+        </div>
+        <div class="mfield full">
+          <span class="mlabel">Reviewer(s) — review content before approval</span>
+          <div class="pe-wrap"><div class="pe-head">Reviewers</div><div class="pe-list" id="pe-reviewers-list"></div>
+            <div class="pe-add"><input class="pe-inp" id="pe-reviewers-inp" placeholder="Add name…" onkeydown="if(event.key==='Enter')addPerson('reviewers')"><button class="pe-add-btn" onclick="addPerson('reviewers')">＋</button></div>
+          </div>
+        </div>
+        <div class="mfield full">
+          <span class="mlabel">Approver(s) — formal sign-off required from each</span>
+          <div class="pe-wrap"><div class="pe-head">Approvers</div><div class="pe-list" id="pe-approvers-list"></div>
+            <div class="pe-add"><input class="pe-inp" id="pe-approvers-inp" placeholder="Add name…" onkeydown="if(event.key==='Enter')addPerson('approvers')"><button class="pe-add-btn" onclick="addPerson('approvers')">＋</button></div>
+          </div>
+        </div>
+        <div class="mfield full"><span class="mlabel">Notes</span><textarea class="mtextarea" id="dm-notes" placeholder="Optional context, links, blockers…"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('del-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDel()">Save Deliverable</button>
+    </div>
+  </div>
+</div>
+
+<!-- Review / Approve modal (opened from drawer) -->
+<div class="overlay" id="review-modal" onclick="closeOvl('review-modal',event)">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="rm-title">Review Deliverable</h2>
+      <button class="mclose" onclick="closeModal('review-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="rm-del-info" style="padding:12px;background:var(--s2);border-radius:8px;border:1px solid var(--border);margin-bottom:16px;font-size:13px"></div>
+      <div class="mfield" style="margin-bottom:14px">
+        <span class="mlabel">Your Name / Initials</span>
+        <input class="minput" id="rm-who" placeholder="e.g. AB">
+      </div>
+      <div class="mfield" style="margin-bottom:16px">
+        <span class="mlabel">Comment</span>
+        <textarea class="mtextarea" id="rm-comment" placeholder="Add a note, feedback, or approval comment…"></textarea>
+      </div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Audit Trail</div>
+      <div id="rm-audit"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('review-modal')">Cancel</button>
+      <button class="btn btn-amber" onclick="submitReview('comment')">💬 Comment</button>
+      <button class="btn btn-red"   onclick="submitReview('changes')">🔴 Request Changes</button>
+      <button class="btn btn-green" onclick="submitReview('approve')">✅ Approve</button>
+    </div>
+  </div>
+</div>
+
+<!-- Audit trail modal -->
+<div class="overlay" id="audit-modal" onclick="closeOvl('audit-modal',event)">
+  <div class="modal">
+    <div class="modal-head"><h2>📋 Audit Trail</h2><button class="mclose" onclick="closeModal('audit-modal')">✕</button></div>
+    <div class="modal-body"><div id="audit-content"></div></div>
+    <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal('audit-modal')">Close</button></div>
+  </div>
+</div>
+
+<!-- Phase manager modal -->
+<div class="overlay" id="phase-modal" onclick="closeOvl('phase-modal',event)">
+  <div class="modal">
+    <div class="modal-head"><h2>⚙️ Manage Phases</h2><button class="mclose" onclick="closeModal('phase-modal')">✕</button></div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Choose a template or customise. Drag to reorder.</p>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Templates</div>
+      <div class="template-chips">
+        <div class="template-chip" onclick="applyTpl('agile')">🔄 Agile</div>
+        <div class="template-chip" onclick="applyTpl('waterfall')">💧 Waterfall</div>
+        <div class="template-chip" onclick="applyTpl('erp')">🏗 ERP</div>
+        <div class="template-chip" onclick="applyTpl('saas')">☁️ SaaS</div>
+        <div class="template-chip" onclick="applyTpl('custom')">✏️ Start Fresh</div>
+      </div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Phases</div>
+      <div style="display:flex;flex-direction:column;gap:6px" id="phase-editor"></div>
+      <button class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:8px" onclick="addPhaseRow()">＋ Add Phase</button>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('phase-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="savePhases()">Save Phases</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import modal -->
+<div class="overlay" id="import-modal" onclick="closeOvl('import-modal',event)">
+  <div class="modal wide" style="max-width:700px">
+    <div class="modal-head">
+      <h2>⬆ Import Deliverables</h2>
+      <button class="mclose" onclick="closeModal('import-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="import-tabs">
+        <div class="import-tab active" onclick="switchImportTab('upload',this)">📂 Upload CSV</div>
+        <div class="import-tab" onclick="switchImportTab('template',this)">📋 Download Template</div>
+      </div>
+
+      <!-- Upload panel -->
+      <div class="import-panel active" id="import-panel-upload">
+        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-inp').click()"
+             ondragover="dzOver(event)" ondragleave="dzLeave(event)" ondrop="dzDrop(event)">
+          <div class="drop-zone-icon">📂</div>
+          <div class="drop-zone-title">Drop your CSV here, or click to browse</div>
+          <div class="drop-zone-sub">Accepts .csv files · All columns from the template are supported</div>
+          <input type="file" id="file-inp" accept=".csv" onchange="handleFileSelect(event)">
+        </div>
+        <div id="import-status-box"></div>
+        <div id="import-preview-wrap"></div>
+      </div>
+
+      <!-- Template panel -->
+      <div class="import-panel" id="import-panel-template">
+        <div class="tpl-section">
+          <h3>📋 Import Template</h3>
+          <p>Download the CSV template below. Fill in one deliverable per row. Required fields are highlighted — all other fields are optional and will default to sensible values if left blank.</p>
+          <div class="tpl-field-list">
+            <span class="tpl-field required">Name ✱</span>
+            <span class="tpl-field required">Phase ✱</span>
+            <span class="tpl-field">Type</span>
+            <span class="tpl-field">Owners</span>
+            <span class="tpl-field">Reviewers</span>
+            <span class="tpl-field">Approvers</span>
+            <span class="tpl-field">Due Date</span>
+            <span class="tpl-field">Status</span>
+            <span class="tpl-field">RAG</span>
+            <span class="tpl-field">Progress %</span>
+            <span class="tpl-field">Notes</span>
+          </div>
+          <button class="btn btn-primary" onclick="downloadTemplate()">⬇ Download CSV Template</button>
+        </div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.6">
+          <strong style="color:var(--text)">Field guidance:</strong><br>
+          • <strong>Owners / Reviewers / Approvers</strong> — separate multiple names with a pipe <code style="background:var(--s2);padding:1px 5px;border-radius:4px;font-size:12px">|</code> e.g. <em>James M|Karen L</em><br>
+          • <strong>Type</strong> — one of: Document, Report, Plan, Specification, Presentation, Template, Sign-off, Other<br>
+          • <strong>Status</strong> — one of: Not Started, In Progress, In Review, Approved, Overdue<br>
+          • <strong>RAG</strong> — one of: Green, Amber, Red, N/A<br>
+          • <strong>Due Date</strong> — format <em>YYYY-MM-DD</em> e.g. 2025-09-01<br>
+          • <strong>Progress %</strong> — number 0–100
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('import-modal')">Cancel</button>
+      <button class="btn btn-primary" id="import-confirm-btn" onclick="confirmImport()" style="display:none">＋ Add <span id="import-count">0</span> Deliverables</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk move phase modal -->
+<div class="overlay" id="bulk-phase-modal" onclick="closeOvl('bulk-phase-modal',event)">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-head"><h2>Move to Phase</h2><button class="mclose" onclick="closeModal('bulk-phase-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="mfield"><span class="mlabel">Target Phase</span><select class="msel" id="bulk-phase-target"></select></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('bulk-phase-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="execBulkMove()">Move Selected</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════ -->
+<script>
+// ─── Palette / constants ───────────────────
+const PHASE_PAL=['#3b6cf4','#7c3aed','#059669','#db2777','#d97706','#dc2626','#4f46e5','#0891b2','#65a30d','#9333ea'];
+const AV_COL   =['#3b6cf4','#7c3aed','#059669','#db2777','#d97706','#dc2626','#4f46e5','#0891b2'];
+const TYPE_ICON={Document:'📄',Report:'📊',Plan:'📋',Specification:'📐',Presentation:'📑',Template:'📝','Sign-off':'✅',Other:'📌'};
+const TPLS={
+  agile:    [{n:'Discovery',c:'#3b6cf4'},{n:'Sprint Planning',c:'#7c3aed'},{n:'Sprint 1',c:'#059669'},{n:'Sprint 2',c:'#db2777'},{n:'Sprint 3',c:'#d97706'},{n:'UAT',c:'#4f46e5'},{n:'Release',c:'#dc2626'},{n:'Retrospective',c:'#9ca3af'}],
+  waterfall:[{n:'Initiation',c:'#3b6cf4'},{n:'Planning',c:'#7c3aed'},{n:'Design',c:'#059669'},{n:'Build',c:'#db2777'},{n:'Testing',c:'#d97706'},{n:'Go Live',c:'#dc2626'},{n:'Closure',c:'#9ca3af'}],
+  erp:      [{n:'Initiation',c:'#3b6cf4'},{n:'Blueprinting',c:'#7c3aed'},{n:'Realisation',c:'#059669'},{n:'Testing',c:'#db2777'},{n:'Cutover Prep',c:'#d97706'},{n:'Go Live',c:'#dc2626'},{n:'Stabilisation',c:'#9ca3af'}],
+  saas:     [{n:'Assessment',c:'#3b6cf4'},{n:'Vendor Selection',c:'#7c3aed'},{n:'Configuration',c:'#059669'},{n:'Integration',c:'#db2777'},{n:'Testing',c:'#d97706'},{n:'Migration',c:'#dc2626'},{n:'Hypercare',c:'#9ca3af'}],
+  custom:   []
+};
+
+// ─── State ────────────────────────────────
+let phases=[
+  {n:'Initiation',c:'#7c3aed'},{n:'Planning',c:'#3b6cf4'},{n:'Design',c:'#db2777'},
+  {n:'Build',c:'#d97706'},{n:'Testing',c:'#059669'},{n:'Go Live',c:'#dc2626'},{n:'Closure',c:'#9ca3af'}
+];
+let tempPhases=[];
+let phaseDragSrc=null;
+let collapsedPhases=new Set(['Closure']);
+let openDrawer=null;        // index of del with drawer open
+let selectedRows=new Set();
+let activeKpi=null;
+let editDelIdx=null;
+let reviewDelIdx=null;
+let mpPeople={owners:[],reviewers:[],approvers:[]};
+
+// ─── Data ────────────────────────────────
+let deliverables=[
+  {name:'Project Charter',phase:'Initiation',type:'Document',owners:['Sarah R'],reviewers:['James M'],approvers:['Alex B'],due:'2025-03-15',status:'Approved',rag:'Green',prog:100,notes:'Signed off by exec sponsor',version:2,
+   audit:[{who:'Alex B',action:'approve',comment:'Aligned to scope.',time:'2025-03-15 10:22'},{who:'James M',action:'comment',comment:'Reviewed v2 — good.',time:'2025-03-12 09:15'}]},
+  {name:'Business Requirements Document',phase:'Planning',type:'Specification',owners:['James M'],reviewers:['Karen L','Tom N'],approvers:['Sarah R'],due:'2025-04-10',status:'Approved',rag:'Green',prog:100,notes:'',version:3,
+   audit:[{who:'Sarah R',action:'approve',comment:'',time:'2025-04-10 14:00'}]},
+  {name:'Solution Architecture',phase:'Design',type:'Document',owners:['Tom N'],reviewers:['Sarah R'],approvers:['James M','Alex B'],due:'2025-05-01',status:'Approved',rag:'Green',prog:100,notes:'',version:1,audit:[]},
+  {name:'Project Plan (Baseline)',phase:'Planning',type:'Plan',owners:['James M'],reviewers:['Sarah R'],approvers:['Alex B'],due:'2025-04-20',status:'Approved',rag:'Green',prog:100,notes:'',version:1,audit:[]},
+  {name:'Data Migration Strategy',phase:'Design',type:'Document',owners:['Tom N'],reviewers:['Karen L'],approvers:['Sarah R'],due:'2025-05-30',status:'In Progress',rag:'Amber',prog:65,notes:'Draft v1 shared – awaiting reviewer feedback',version:1,
+   audit:[{who:'Karen L',action:'changes',comment:'Section 3 needs more detail on rollback procedures.',time:'2025-05-20 11:30'}]},
+  {name:'System Integration Spec',phase:'Build',type:'Specification',owners:['Tom N'],reviewers:['James M'],approvers:['Sarah R'],due:'2025-06-15',status:'In Progress',rag:'Green',prog:40,notes:'',version:1,audit:[]},
+  {name:'UAT Test Scripts',phase:'Testing',type:'Document',owners:['Karen L'],reviewers:['James M'],approvers:['Alex B'],due:'2025-07-01',status:'In Progress',rag:'Amber',prog:20,notes:'Delayed pending BRD sign-off',version:1,audit:[]},
+  {name:'Training Materials',phase:'Build',type:'Document',owners:['Mike R'],reviewers:['Karen L'],approvers:['James M'],due:'2025-06-30',status:'Not Started',rag:'Green',prog:0,notes:'',version:1,audit:[]},
+  {name:'Risk Register',phase:'Initiation',type:'Report',owners:['James M'],reviewers:['Sarah R'],approvers:['Alex B'],due:'2025-03-30',status:'Overdue',rag:'Red',prog:70,notes:'Last revised 3 weeks ago — needs urgent update',version:2,audit:[]},
+  {name:'Change Management Plan',phase:'Planning',type:'Plan',owners:['Mike R'],reviewers:['Sarah R'],approvers:['Alex B'],due:'2025-04-25',status:'Overdue',rag:'Red',prog:50,notes:'Owner on leave — needs reassignment',version:1,audit:[]},
+  {name:'Go Live Checklist',phase:'Go Live',type:'Sign-off',owners:['James M'],reviewers:['Tom N'],approvers:['Sarah R','Alex B'],due:'2025-08-15',status:'In Review',rag:'Amber',prog:80,notes:'',version:1,audit:[]},
+  {name:'Project Closure Report',phase:'Closure',type:'Report',owners:['James M'],reviewers:['Sarah R'],approvers:['Alex B'],due:'2025-09-01',status:'In Review',rag:'Green',prog:90,notes:'Pending exec review',version:1,audit:[]},
+];
+
+// ─── Helpers ──────────────────────────────
+const today=new Date(); today.setHours(0,0,0,0);
+
+function fmtDate(ds){
+  if(!ds) return '—';
+  const [y,m,d]=ds.split('-'); const dt=new Date(+y,+m-1,+d);
+  const diff=Math.round((dt-today)/86400000);
+  const str=dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  if(diff<0)  return `<span class="date-late">⚠ ${str}</span>`;
+  if(diff<=14)return `<span class="date-soon">${str}</span>`;
+  return `<span class="date-ok">${str}</span>`;
+}
+function ragClass(r){return r==='Green'?'rp-green':r==='Amber'?'rp-amber':r==='Red'?'rp-red':'rp-grey'}
+function statusClass(s){return s==='Approved'?'s-ap':s==='In Progress'?'s-ip':s==='In Review'?'s-ir':s==='Overdue'?'s-ov':'s-ns'}
+function progColor(p){return p===100?'#059669':p>=60?'#3b6cf4':p>=30?'#d97706':'#dc2626'}
+function phaseColour(pn){const p=phases.find(x=>x.n===pn);return p?p.c:'#888'}
+function av(name,idx,extra=''){
+  const init=(name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  return `<div class="dav ${extra}" style="background:${AV_COL[idx%AV_COL.length]}" title="${name}">${init}</div>`;
+}
+
+// ─── Approval chip logic ───────────────────
+function approvalInfo(d){
+  const approved=d.approvers.filter(a=>d.audit.some(x=>x.action==='approve'&&x.who===a));
+  const changes =d.audit.some(x=>x.action==='changes');
+  const total=d.approvers.length;
+  const done=approved.length;
+  if(!total) return {cls:'ac-none',label:'No approvers',icon:'—'};
+  if(changes)return {cls:'ac-block',label:`Blocked`,icon:'🔴',done,total};
+  if(done===total)return {cls:'ac-all',label:`${done}/${total} Approved`,icon:'✓',done,total};
+  if(done>0)     return {cls:'ac-some',label:`${done}/${total} Approved`,icon:'◑',done,total};
+  return           {cls:'ac-none',label:`0/${total} Pending`,icon:'○',done:0,total};
+}
+
+// ─── KPI cards ─────────────────────────────
+const KPI=[
+  {k:'total',   label:'Total',     c:'#3b6cf4',f:null},
+  {k:'approved',label:'Approved',  c:'#059669',f:'Approved'},
+  {k:'inprog',  label:'In Progress',c:'#3b6cf4',f:'In Progress'},
+  {k:'inreview',label:'In Review', c:'#d97706',f:'In Review'},
+  {k:'overdue', label:'Overdue',   c:'#dc2626',f:'Overdue'},
+  {k:'notstart',label:'Not Started',c:'#7c3aed',f:'Not Started'},
+];
+function renderKpis(){
+  document.getElementById('kpi-row').innerHTML=KPI.map(k=>{
+    const n=k.f?deliverables.filter(d=>d.status===k.f).length:deliverables.length;
+    const isAct=activeKpi===k.f;
+    const pct=deliverables.length?Math.round(n/deliverables.length*100):0;
+    return `<div class="kpi${isAct?' active':''}" style="--kpi-c:${k.c}" onclick="toggleKpi('${k.f||'__all__'}')">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-val">${n}</div>
+      <div class="kpi-sub">${k.f?pct+'% of total':'deliverables'}</div>
+      <div class="kpi-hint">${isAct?'✕ Clear':'Filter ↓'}</div>
+    </div>`;
+  }).join('');
+}
+function toggleKpi(f){
+  const v=f==='__all__'?null:f;
+  activeKpi=activeKpi===v?null:v;
+  renderKpis(); renderPills(); applyFilters();
+}
+
+// ─── Active filter pills ───────────────────
+function renderPills(){
+  const el=document.getElementById('pill-row');
+  const pills=[];
+  if(activeKpi) pills.push(`<div class="filter-pill" onclick="toggleKpi('${activeKpi}')">Status: ${activeKpi} <span>✕</span></div>`);
+  const fp=document.getElementById('f-phase').value;
+  const fr=document.getElementById('f-rag').value;
+  const fs=document.getElementById('f-status').value;
+  if(fp) pills.push(`<div class="filter-pill" onclick="document.getElementById('f-phase').value='';applyFilters();renderPills()">Phase: ${fp} <span>✕</span></div>`);
+  if(fr) pills.push(`<div class="filter-pill" onclick="document.getElementById('f-rag').value='';applyFilters();renderPills()">RAG: ${fr} <span>✕</span></div>`);
+  if(fs) pills.push(`<div class="filter-pill" onclick="document.getElementById('f-status').value='';applyFilters();renderPills()">Status: ${fs} <span>✕</span></div>`);
+  el.innerHTML=pills.join('');
+}
+
+// ─── Sync phase selects ────────────────────
+function syncPhaseSelects(){
+  ['f-phase','dm-phase','bulk-phase-target'].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    const cur=el.value;
+    el.innerHTML=(id==='f-phase'?'<option value="">All Phases</option>':'')+phases.map(p=>`<option>${p.n}</option>`).join('');
+    if(cur) el.value=cur;
+  });
+}
+
+// ─── Collapse all toggle ───────────────────
+let allCollapsed=false;
+function toggleCollapseAll(){
+  allCollapsed=!allCollapsed;
+  if(allCollapsed) phases.forEach(p=>collapsedPhases.add(p.n));
+  else collapsedPhases.clear();
+  document.getElementById('collapse-btn').textContent=allCollapsed?'⊞ Expand All':'⊟ Collapse All';
+  applyFilters();
+}
+
+// ─── Apply filters ─────────────────────────
+function applyFilters(){
+  const q =document.getElementById('search-inp').value.toLowerCase();
+  const fp=document.getElementById('f-phase').value;
+  const fr=document.getElementById('f-rag').value;
+  const fs=document.getElementById('f-status').value;
+  renderGroups(q,fp,fr,fs,activeKpi);
+}
+
+// ─── RENDER PHASE GROUPS ───────────────────
+function renderGroups(q,fp,fr,fs,fkpi){
+  const container=document.getElementById('phase-groups');
+  container.innerHTML='';
+
+  phases.forEach(phase=>{
+    if(fp && fp!==phase.n) return;
+
+    const allInPhase=deliverables.filter(d=>d.phase===phase.n);
+    let rows=allInPhase.filter(d=>{
+      if(q && !d.name.toLowerCase().includes(q) && !d.owners.concat(d.reviewers,d.approvers).join(' ').toLowerCase().includes(q)) return false;
+      if(fr && d.rag!==fr) return false;
+      if((fs||fkpi) && d.status!==(fs||fkpi)) return false;
+      return true;
+    });
+
+    if(!rows.length && !q && !fr && !fs && !fkpi) return; // hide empty phases when no filter
+
+    const approved=allInPhase.filter(d=>d.status==='Approved').length;
+    const total=allInPhase.length;
+    const pct=total?Math.round(approved/total*100):0;
+    const phaseComplete=total>0&&approved===total;
+    const pc=phase.c;
+    const isCollapsed=collapsedPhases.has(phase.n);
+
+    // ── Phase header ──
+    const group=document.createElement('div');
+    group.className='phase-group';
+
+    const hd=document.createElement('div');
+    hd.className='phase-hd';
+    hd.innerHTML=`
+      <span class="phase-chev${isCollapsed?'':' open'}">&rsaquo;</span>
+      <div class="phase-dot" style="background:${pc}"></div>
+      <span class="phase-name" style="color:${pc}">${phase.n}</span>
+      <div class="phase-prog-wrap">
+        <div class="phase-prog-bar"><div class="phase-prog-fill" style="width:${pct}%;background:${pc}"></div></div>
+        <span class="phase-prog-txt">${approved}/${total} approved</span>
+      </div>
+      ${phaseComplete?`<span class="phase-done">✓ Complete</span>`:''}
+      <span class="phase-count">${rows.length}${rows.length!==total?' shown / ':' / '}${total}</span>`;
+    hd.onclick=()=>{
+      collapsedPhases.has(phase.n)?collapsedPhases.delete(phase.n):collapsedPhases.add(phase.n);
+      applyFilters();
+    };
+    group.appendChild(hd);
+
+    // ── Table wrapper ──
+    const tw=document.createElement('div');
+    tw.className='tbl-wrap';
+    tw.style.display=isCollapsed?'none':'block';
+
+    const tbl=document.createElement('table');
+    tbl.innerHTML=`<colgroup>
+      <col class="c-cb"><col class="c-name"><col class="c-type">
+      <col class="c-due"><col class="c-status"><col class="c-rag">
+      <col class="c-prog"><col class="c-ver"><col class="c-appr"><col class="c-acts">
+    </colgroup>
+    <thead><tr>
+      <th><input type="checkbox" class="cb" onchange="togglePhaseSel('${phase.n}',this.checked)"></th>
+      <th>Deliverable</th>
+      <th>Type</th>
+      <th>Due</th>
+      <th>Status</th>
+      <th>RAG</th>
+      <th>Progress</th>
+      <th style="text-align:center">Ver</th>
+      <th style="text-align:center">Approvals</th>
+      <th></th>
+    </tr></thead>`;
+
+    const tbody=document.createElement('tbody');
+
+    if(!rows.length){
+      const etr=document.createElement('tr');
+      etr.innerHTML=`<td colspan="10"><div class="empty-state"><div class="ei">🔍</div><p>No deliverables match filters</p></div></td>`;
+      tbody.appendChild(etr);
+    } else {
+      rows.forEach(d=>{
+        const idx=deliverables.indexOf(d);
+        const isSel=selectedRows.has(idx);
+        const drawerOpen=openDrawer===idx;
+        const ai=approvalInfo(d);
+
+        // ── Main row ──
+        const tr=document.createElement('tr');
+        tr.className=`del-row${isSel?' selected':''}${drawerOpen?' drawer-open':''}`;
+        tr.dataset.idx=idx;
+        tr.innerHTML=`
+          <td><input type="checkbox" class="cb" ${isSel?'checked':''} onchange="toggleSel(${idx},this.checked)" onclick="event.stopPropagation()"></td>
+          <td>
+            <div class="name-cell">
+              <span class="type-icon">${TYPE_ICON[d.type]||'📄'}</span>
+              <div style="min-width:0">
+                <div class="name-primary">${d.name}</div>
+                ${d.notes?`<div class="name-note">${d.notes}</div>`:''}
+              </div>
+            </div>
+          </td>
+          <td style="font-size:12.5px;color:var(--muted)">${d.type}</td>
+          <td>${fmtDate(d.due)}</td>
+          <td>
+            <span class="status-pill ${statusClass(d.status)}" onclick="cycleStatus(${idx});event.stopPropagation()" title="Click to cycle">${d.status}</span>
+          </td>
+          <td>
+            <span class="rag-pill ${ragClass(d.rag)}" onclick="cycleRag(${idx});event.stopPropagation()" title="Click to cycle">${d.rag}</span>
+          </td>
+          <td>
+            <div class="prog-wrap">
+              <div class="prog-bar"><div class="prog-fill" style="width:${d.prog}%;background:${progColor(d.prog)}"></div></div>
+              <span class="prog-txt">${d.prog}%</span>
+            </div>
+          </td>
+          <td style="text-align:center">
+            <span class="ver-badge">v${d.version}.0</span>
+          </td>
+          <td style="text-align:center">
+            <div class="appr-chip ${ai.cls}${drawerOpen?' drawer-open-chip':''}" onclick="toggleDrawer(${idx},event)" title="Click to see people &amp; approvals">
+              ${ai.icon} ${ai.label}
+            </div>
+          </td>
+          <td>
+            <div class="row-acts">
+              <div class="icon-btn" title="Edit"        onclick="openEditDel(${idx});event.stopPropagation()">✏️</div>
+              <div class="icon-btn" title="Audit trail" onclick="openAuditModal(${idx});event.stopPropagation()">📋</div>
+              <div class="icon-btn" title="Delete"      onclick="deleteDel(${idx});event.stopPropagation()">🗑️</div>
+            </div>
+          </td>`;
+        tr.onclick=()=>openEditDel(idx);
+        tbody.appendChild(tr);
+
+        // ── Drawer row ──
+        const dr=document.createElement('tr');
+        dr.className='drawer-row';
+        dr.id=`drawer-row-${idx}`;
+        const dtd=document.createElement('td');
+        dtd.colSpan=10;
+        dtd.style.padding='0';
+
+        const drawer=document.createElement('div');
+        drawer.className='drawer'+(drawerOpen?' open':'');
+        drawer.id=`drawer-${idx}`;
+        drawer.innerHTML=buildDrawerHTML(d,idx);
+        dtd.appendChild(drawer);
+        dr.appendChild(dtd);
+        tbody.appendChild(dr);
+      });
+    }
+
+    tbl.appendChild(tbody);
+    tw.appendChild(tbl);
+    group.appendChild(tw);
+    container.appendChild(group);
+  });
+
+  if(!container.children.length){
+    container.innerHTML=`<div class="empty-state"><div class="ei">📭</div><p>No deliverables found.</p></div>`;
+  }
+}
+
+// ─── Build drawer HTML ────────────────────
+function buildDrawerHTML(d,idx){
+  const approvedSet=new Set(d.audit.filter(a=>a.action==='approve').map(a=>a.who));
+  const changesBy  =new Set(d.audit.filter(a=>a.action==='changes').map(a=>a.who));
+  const lastReviewBy=new Set(d.audit.filter(a=>a.action==='comment').map(a=>a.who));
+
+  function personRow(name,i,role){
+    const init=(name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+    const bg=AV_COL[i%AV_COL.length];
+    let statusBadge='', extraClass='';
+    if(role==='approver'){
+      if(approvedSet.has(name))   { statusBadge=`<span class="dp-badge dpb-approved">✓ Approved</span>`;  extraClass='dav-tick'; }
+      else if(changesBy.has(name)){ statusBadge=`<span class="dp-badge dpb-changes">⚠ Changes</span>`;  extraClass='dav-dot" style="--dc:#ef4444'; }
+      else                         { statusBadge=`<span class="dp-badge dpb-pending">Pending</span>`; }
+    } else if(role==='reviewer'){
+      if(changesBy.has(name))     { statusBadge=`<span class="dp-badge dpb-changes">⚠ Changes</span>`; }
+      else if(lastReviewBy.has(name)){statusBadge=`<span class="dp-badge dpb-reviewed">Reviewed</span>`; }
+      else                         { statusBadge=`<span class="dp-badge dpb-pending">Pending</span>`; }
+    }
+    return `<div class="drawer-person">
+      <div class="dav ${extraClass}" style="background:${bg}">${init}</div>
+      <div class="dp-info"><div class="dp-name">${name}</div><div class="dp-role">${role==='owner'?'Document Owner':role==='reviewer'?'Reviewer':'Approver'}</div></div>
+      ${statusBadge?`<div class="dp-status">${statusBadge}</div>`:''}
+    </div>`;
+  }
+
+  const ownerHTML   =d.owners.length   ?d.owners.map((n,i)=>personRow(n,i,'owner')).join('')     :`<div style="font-size:12px;color:var(--light);padding:4px 6px">None assigned</div>`;
+  const reviewerHTML=d.reviewers.length?d.reviewers.map((n,i)=>personRow(n,i,'reviewer')).join(''):`<div style="font-size:12px;color:var(--light);padding:4px 6px">None assigned</div>`;
+  const approverHTML=d.approvers.length?d.approvers.map((n,i)=>personRow(n,i,'approver')).join(''):`<div style="font-size:12px;color:var(--light);padding:4px 6px">None assigned</div>`;
+
+  const ai=approvalInfo(d);
+  const lastAudit=d.audit.length?d.audit[d.audit.length-1]:null;
+
+  return `<div class="drawer-inner">
+    <!-- Column 1: Owner -->
+    <div class="drawer-col">
+      <div class="drawer-col-title">
+        <div class="drawer-col-icon" style="background:#dbeafe">✍️</div>
+        Owner(s)
+      </div>
+      ${ownerHTML}
+    </div>
+    <!-- Column 2: Reviewers -->
+    <div class="drawer-col">
+      <div class="drawer-col-title">
+        <div class="drawer-col-icon" style="background:#fef3c7">👁️</div>
+        Reviewer(s)
+      </div>
+      ${reviewerHTML}
+    </div>
+    <!-- Column 3: Approvers -->
+    <div class="drawer-col">
+      <div class="drawer-col-title">
+        <div class="drawer-col-icon" style="background:#dcfce7">✅</div>
+        Approver(s)
+      </div>
+      ${approverHTML}
+    </div>
+    <!-- Footer bar -->
+    <div class="drawer-footer">
+      <div class="drawer-footer-meta">
+        ${lastAudit?`Last activity: <strong>${lastAudit.who}</strong> ${lastAudit.action==='approve'?'approved':lastAudit.action==='changes'?'requested changes':'commented'} · ${lastAudit.time}`:'No activity yet'}
+        &nbsp;·&nbsp; <strong>v${d.version}.0</strong>
+      </div>
+      <div class="drawer-footer-actions">
+        <button class="dfbtn" onclick="openAuditModal(${idx});event.stopPropagation()">📋 History</button>
+        <button class="dfbtn dfbtn-changes" onclick="openReviewModal(${idx},'changes');event.stopPropagation()">🔴 Request Changes</button>
+        <button class="dfbtn dfbtn-approve" onclick="openReviewModal(${idx},'approve');event.stopPropagation()">✅ Approve</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─── Drawer toggle ────────────────────────
+function toggleDrawer(idx,e){
+  e.stopPropagation();
+  if(openDrawer===idx){
+    // close
+    const el=document.getElementById(`drawer-${idx}`);
+    if(el) el.classList.remove('open');
+    openDrawer=null;
+    applyFilters();
+    return;
+  }
+  // close previous
+  if(openDrawer!==null){
+    const prev=document.getElementById(`drawer-${openDrawer}`);
+    if(prev) prev.classList.remove('open');
+  }
+  openDrawer=idx;
+  applyFilters(); // re-render to update chip highlight
+  // open with slight delay to allow render
+  requestAnimationFrame(()=>{
+    const el=document.getElementById(`drawer-${idx}`);
+    if(el){ requestAnimationFrame(()=>el.classList.add('open')); }
+  });
+}
+
+// ─── Row selection ────────────────────────
+function toggleSel(idx,checked){
+  checked?selectedRows.add(idx):selectedRows.delete(idx);
+  updateBulkBar(); applyFilters();
+}
+function togglePhaseSel(phaseName,checked){
+  deliverables.forEach((d,i)=>{if(d.phase===phaseName)checked?selectedRows.add(i):selectedRows.delete(i)});
+  updateBulkBar(); applyFilters();
+}
+function clearSel(){selectedRows.clear();updateBulkBar();applyFilters()}
+function updateBulkBar(){
+  const n=selectedRows.size;
+  document.getElementById('bulk-bar').classList.toggle('hidden',n===0);
+  document.getElementById('bulk-count').textContent=`${n} selected`;
+}
+
+// ─── Bulk actions ─────────────────────────
+function bulkStatus(s){
+  selectedRows.forEach(i=>{deliverables[i].status=s;if(s==='Approved')deliverables[i].version+=1});
+  clearSel(); renderKpis(); applyFilters();
+}
+function bulkDelete(){
+  if(!confirm(`Delete ${selectedRows.size} deliverable(s)?`)) return;
+  [...selectedRows].sort((a,b)=>b-a).forEach(i=>deliverables.splice(i,1));
+  clearSel(); renderKpis(); applyFilters();
+}
+function bulkMovePhase(){syncPhaseSelects();document.getElementById('bulk-phase-modal').classList.add('open')}
+function execBulkMove(){
+  const t=document.getElementById('bulk-phase-target').value;
+  selectedRows.forEach(i=>deliverables[i].phase=t);
+  closeModal('bulk-phase-modal'); clearSel(); applyFilters();
+}
+
+// ─── Inline cycle ─────────────────────────
+const STATUS_CYCLE=['Not Started','In Progress','In Review','Approved'];
+const RAG_CYCLE   =['Green','Amber','Red'];
+function cycleStatus(idx){
+  const d=deliverables[idx];
+  const i=STATUS_CYCLE.indexOf(d.status);
+  d.status=STATUS_CYCLE[(i+1)%STATUS_CYCLE.length];
+  if(d.status==='Approved') d.version+=1;
+  renderKpis(); applyFilters();
+}
+function cycleRag(idx){
+  const d=deliverables[idx];
+  d.rag=RAG_CYCLE[(RAG_CYCLE.indexOf(d.rag)+1)%RAG_CYCLE.length];
+  applyFilters();
+}
+
+// ─── Add / Edit modal ─────────────────────
+function openAddDel(){
+  editDelIdx=null;
+  document.getElementById('dm-title').textContent='Add Deliverable';
+  ['dm-name','dm-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('dm-due').value='';
+  document.getElementById('dm-prog').value=0;
+  document.getElementById('dm-prog-val').textContent='0%';
+  mpPeople={owners:[],reviewers:[],approvers:[]};
+  syncPhaseSelects(); renderPeopleLists();
+  document.getElementById('del-modal').classList.add('open');
+}
+function openEditDel(idx){
+  editDelIdx=idx; const d=deliverables[idx];
+  document.getElementById('dm-title').textContent='Edit Deliverable';
+  document.getElementById('dm-name').value=d.name;
+  document.getElementById('dm-notes').value=d.notes;
+  document.getElementById('dm-due').value=d.due;
+  document.getElementById('dm-prog').value=d.prog;
+  document.getElementById('dm-prog-val').textContent=d.prog+'%';
+  document.getElementById('dm-type').value=d.type;
+  document.getElementById('dm-status').value=d.status;
+  document.getElementById('dm-rag').value=d.rag;
+  mpPeople={owners:[...d.owners],reviewers:[...d.reviewers],approvers:[...d.approvers]};
+  syncPhaseSelects(); document.getElementById('dm-phase').value=d.phase;
+  renderPeopleLists();
+  document.getElementById('del-modal').classList.add('open');
+}
+function saveDel(){
+  const obj={
+    name:document.getElementById('dm-name').value||'Untitled',
+    phase:document.getElementById('dm-phase').value,
+    type:document.getElementById('dm-type').value,
+    owners:[...mpPeople.owners],
+    reviewers:[...mpPeople.reviewers],
+    approvers:[...mpPeople.approvers],
+    due:document.getElementById('dm-due').value,
+    status:document.getElementById('dm-status').value,
+    rag:document.getElementById('dm-rag').value,
+    prog:parseInt(document.getElementById('dm-prog').value)||0,
+    notes:document.getElementById('dm-notes').value,
+    version:editDelIdx!==null?deliverables[editDelIdx].version:1,
+    audit:editDelIdx!==null?deliverables[editDelIdx].audit:[]
+  };
+  if(editDelIdx!==null) deliverables[editDelIdx]=obj;
+  else deliverables.push(obj);
+  closeModal('del-modal'); renderKpis(); applyFilters();
+}
+function deleteDel(idx){
+  if(!confirm('Delete this deliverable?')) return;
+  if(openDrawer===idx) openDrawer=null;
+  deliverables.splice(idx,1);
+  if(openDrawer!==null&&openDrawer>idx) openDrawer--;
+  selectedRows.clear(); renderKpis(); applyFilters();
+}
+
+// ─── People editor ────────────────────────
+function renderPeopleLists(){
+  ['owners','reviewers','approvers'].forEach(role=>{
+    const list=document.getElementById(`pe-${role}-list`);
+    list.innerHTML=mpPeople[role].length===0
+      ?`<div style="font-size:12px;color:var(--light);padding:2px 4px">None added</div>`
+      :mpPeople[role].map((n,i)=>`
+        <div class="pe-person">
+          <div class="pe-av" style="background:${AV_COL[i%AV_COL.length]}">${(n||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>
+          <span class="pe-name">${n}</span>
+          <span class="pe-rm" onclick="removePerson('${role}',${i})">✕</span>
+        </div>`).join('');
+  });
+}
+function addPerson(role){
+  const inp=document.getElementById(`pe-${role}-inp`);
+  const v=inp.value.trim(); if(!v) return;
+  mpPeople[role].push(v); inp.value=''; renderPeopleLists();
+}
+function removePerson(role,idx){mpPeople[role].splice(idx,1);renderPeopleLists()}
+
+// ─── Review modal ─────────────────────────
+function openReviewModal(idx,prefill){
+  reviewDelIdx=idx; const d=deliverables[idx];
+  document.getElementById('rm-title').textContent=`Review: ${d.name}`;
+  document.getElementById('rm-del-info').innerHTML=`<strong>${d.name}</strong><br>Phase: ${d.phase} · Status: ${d.status} · RAG: ${d.rag}<br>Approvers: ${d.approvers.join(', ')||'None set'}`;
+  document.getElementById('rm-who').value='';
+  document.getElementById('rm-comment').value='';
+  renderAuditList(d.audit,document.getElementById('rm-audit'));
+  closeModal('del-modal'); // close edit if open
+  document.getElementById('review-modal').classList.add('open');
+}
+function submitReview(type){
+  const name=document.getElementById('rm-who').value.trim()||'Unknown';
+  const comment=document.getElementById('rm-comment').value.trim();
+  if(type==='changes'&&!comment){alert('Please add a comment when requesting changes.');return}
+  const d=deliverables[reviewDelIdx];
+  const now=new Date().toLocaleString('en-GB',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',','');
+  d.audit.push({who:name,action:type,comment,time:now});
+  if(type==='approve'){
+    const allSigned=d.approvers.length>0&&d.approvers.every(a=>d.audit.some(x=>x.action==='approve'&&x.who===a));
+    if(allSigned){d.status='Approved';d.version+=1;} else d.status='In Review';
+  } else if(type==='changes'){
+    d.status='In Progress';
+  }
+  closeModal('review-modal'); renderKpis(); applyFilters();
+}
+
+// ─── Audit modal ──────────────────────────
+function openAuditModal(idx){
+  const d=deliverables[idx];
+  const el=document.getElementById('audit-content');
+  el.innerHTML=`<div style="margin-bottom:12px;font-size:13px"><strong>${d.name}</strong> · <span class="ver-badge">v${d.version}.0</span></div>`;
+  const list=document.createElement('div');
+  renderAuditList(d.audit,list);
+  el.appendChild(list);
+  document.getElementById('audit-modal').classList.add('open');
+}
+function renderAuditList(audit,el){
+  if(!audit.length){el.innerHTML=`<div style="font-size:13px;color:var(--light);text-align:center;padding:20px">No activity recorded yet</div>`;return}
+  el.innerHTML=audit.slice().reverse().map((a,i)=>{
+    const label=a.action==='approve'?'Approved':a.action==='changes'?'Requested Changes':'Commented';
+    const cls=a.action==='approve'?'aa-green':a.action==='changes'?'aa-red':'aa-blue';
+    const init=(a.who||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+    return `<div class="audit-item">
+      <div class="audit-av" style="background:${AV_COL[i%AV_COL.length]}">${init}</div>
+      <div class="audit-body">
+        <div class="audit-action"><strong>${a.who}</strong> <span class="${cls}">${label}</span></div>
+        ${a.comment?`<div class="audit-note">"${a.comment}"</div>`:''}
+        <div class="audit-time">${a.time}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── Phase manager ────────────────────────
+function openPhaseModal(){
+  tempPhases=phases.map(p=>({...p}));
+  renderPhaseEditor();
+  document.getElementById('phase-modal').classList.add('open');
+}
+function renderPhaseEditor(){
+  document.getElementById('phase-editor').innerHTML=tempPhases.map((p,i)=>`
+    <div class="phase-edit-row" draggable="true" ondragstart="phDragStart(event,${i})" ondragover="phDragOver(event)" ondrop="phDrop(event,${i})">
+      <span class="drag-handle">⠿</span>
+      <div class="phase-colour-dot" style="background:${p.c}" onclick="cyclePhaseColour(${i})"></div>
+      <input class="phase-edit-name" value="${p.n}" onchange="tempPhases[${i}].n=this.value">
+      <span class="phase-del-btn" onclick="tempPhases.splice(${i},1);renderPhaseEditor()">✕</span>
+    </div>`).join('');
+}
+function addPhaseRow(){tempPhases.push({n:'New Phase',c:PHASE_PAL[tempPhases.length%PHASE_PAL.length]});renderPhaseEditor()}
+function cyclePhaseColour(i){const ci=PHASE_PAL.indexOf(tempPhases[i].c);tempPhases[i].c=PHASE_PAL[(ci+1)%PHASE_PAL.length];renderPhaseEditor()}
+function applyTpl(key){
+  document.querySelectorAll('.template-chip').forEach(c=>c.classList.toggle('sel',c.getAttribute('onclick').includes(`'${key}'`)));
+  if(key==='custom'){tempPhases=[];renderPhaseEditor();return}
+  tempPhases=TPLS[key].map(p=>({...p})); renderPhaseEditor();
+}
+function savePhases(){phases=tempPhases.filter(p=>p.n.trim());syncPhaseSelects();closeModal('phase-modal');applyFilters()}
+function phDragStart(e,i){phaseDragSrc=i;e.dataTransfer.effectAllowed='move'}
+function phDragOver(e){e.preventDefault()}
+function phDrop(e,i){
+  e.preventDefault(); if(phaseDragSrc===null||phaseDragSrc===i) return;
+  const m=tempPhases.splice(phaseDragSrc,1)[0]; tempPhases.splice(i,0,m); phaseDragSrc=null; renderPhaseEditor();
+}
+
+// ─── Export CSV ───────────────────────────
+function exportCSV(){
+  const headers=['Name','Phase','Type','Owners','Reviewers','Approvers','Due Date','Status','RAG','Progress %','Notes'];
+  const rows=deliverables.map(d=>[
+    `"${(d.name||'').replace(/"/g,'""')}"`,
+    `"${(d.phase||'').replace(/"/g,'""')}"`,
+    `"${(d.type||'').replace(/"/g,'""')}"`,
+    `"${d.owners.join('|').replace(/"/g,'""')}"`,
+    `"${d.reviewers.join('|').replace(/"/g,'""')}"`,
+    `"${d.approvers.join('|').replace(/"/g,'""')}"`,
+    `"${(d.due||'').replace(/"/g,'""')}"`,
+    `"${(d.status||'').replace(/"/g,'""')}"`,
+    `"${(d.rag||'').replace(/"/g,'""')}"`,
+    `"${d.prog||0}"`,
+    `"${(d.notes||'').replace(/"/g,'""')}"`
+  ].join(','));
+  const csv=[headers.join(','),...rows].join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='deliverables-export.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Download template CSV ─────────────────
+function downloadTemplate(){
+  const headers='Name,Phase,Type,Owners,Reviewers,Approvers,Due Date,Status,RAG,Progress %,Notes';
+  const example='"Project Charter","Initiation","Document","Sarah R","James M|Karen L","Alex B","2025-03-15","Not Started","Green","0","Example note here"';
+  const blob=new Blob([headers+'\n'+example],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='deliverables-import-template.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Import modal ──────────────────────────
+let importRows=[];
+
+function openImportModal(){
+  importRows=[];
+  document.getElementById('import-status-box').innerHTML='';
+  document.getElementById('import-preview-wrap').innerHTML='';
+  document.getElementById('import-confirm-btn').style.display='none';
+  document.getElementById('file-inp').value='';
+  switchImportTab('upload', document.querySelector('.import-tab'));
+  document.getElementById('import-modal').classList.add('open');
+}
+
+function switchImportTab(panel, el){
+  document.querySelectorAll('.import-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.import-panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('import-panel-'+panel).classList.add('active');
+}
+
+function dzOver(e){e.preventDefault();document.getElementById('drop-zone').classList.add('drag-over')}
+function dzLeave(e){document.getElementById('drop-zone').classList.remove('drag-over')}
+function dzDrop(e){
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag-over');
+  const file=e.dataTransfer.files[0];
+  if(file) parseCSVFile(file);
+}
+function handleFileSelect(e){
+  const file=e.target.files[0];
+  if(file) parseCSVFile(file);
+}
+
+function parseCSVFile(file){
+  if(!file.name.endsWith('.csv')&&file.type!=='text/csv'){
+    showImportStatus('Please upload a .csv file.','err'); return;
+  }
+  const reader=new FileReader();
+  reader.onload=e=>parseCSVText(e.target.result);
+  reader.readAsText(file);
+}
+
+function parseCSVText(text){
+  const lines=text.trim().split('\n').filter(l=>l.trim());
+  if(lines.length<2){showImportStatus('The file appears empty or has no data rows.','err');return;}
+
+  // Parse header
+  const headers=parseCSVRow(lines[0]).map(h=>h.trim().toLowerCase());
+  const col=name=>headers.indexOf(name);
+
+  const parsed=[];
+  const errors=[];
+
+  lines.slice(1).forEach((line,i)=>{
+    const cells=parseCSVRow(line);
+    const get=(name,fallback='')=>(cells[col(name)]||fallback).trim();
+    const name=get('name');
+    const phase=get('phase');
+    if(!name){errors.push(`Row ${i+2}: Name is required`);return;}
+    if(!phase){errors.push(`Row ${i+2}: Phase is required`);return;}
+
+    const splitPipe=v=>v?v.split('|').map(x=>x.trim()).filter(Boolean):[];
+    const prog=parseInt(get('progress %','0'))||0;
+    const validStatuses=['Not Started','In Progress','In Review','Approved','Overdue'];
+    const rawStatus=get('status','Not Started');
+    const status=validStatuses.includes(rawStatus)?rawStatus:'Not Started';
+    const validRags=['Green','Amber','Red','N/A'];
+    const rawRag=get('rag','Green');
+    const rag=validRags.includes(rawRag)?rawRag:'Green';
+    const validTypes=['Document','Report','Plan','Specification','Presentation','Template','Sign-off','Other'];
+    const rawType=get('type','Document');
+    const type=validTypes.includes(rawType)?rawType:'Document';
+
+    parsed.push({
+      name, phase, type,
+      owners  :splitPipe(get('owners')),
+      reviewers:splitPipe(get('reviewers')),
+      approvers:splitPipe(get('approvers')),
+      due:get('due date'),
+      status, rag,
+      prog:Math.min(100,Math.max(0,prog)),
+      notes:get('notes'),
+      version:1,
+      audit:[]
+    });
+  });
+
+  importRows=parsed;
+
+  if(errors.length){
+    showImportStatus(`⚠ ${errors.length} row(s) skipped: ${errors.slice(0,2).join('; ')}${errors.length>2?' …':''}`, 'err');
+  }
+  if(!parsed.length){showImportStatus('No valid rows found. Check that Name and Phase columns are present.','err');return;}
+
+  showImportStatus(`✓ ${parsed.length} deliverable${parsed.length>1?'s':''} ready to import`+(errors.length?` (${errors.length} skipped)`:''),'ok');
+  renderImportPreview(parsed);
+  document.getElementById('import-count').textContent=parsed.length;
+  document.getElementById('import-confirm-btn').style.display='inline-flex';
+}
+
+function parseCSVRow(line){
+  // Handles quoted fields with commas inside
+  const result=[];
+  let cur='', inQ=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'){
+      if(inQ&&line[i+1]==='"'){cur+='"';i++;}
+      else inQ=!inQ;
+    } else if(ch===','&&!inQ){result.push(cur);cur='';}
+    else cur+=ch;
+  }
+  result.push(cur);
+  return result;
+}
+
+function showImportStatus(msg,type){
+  document.getElementById('import-status-box').innerHTML=`<div class="import-status ${type}">${msg}</div>`;
+}
+
+function renderImportPreview(rows){
+  const previewCols=['name','phase','type','status','rag','due'];
+  const headerLabels=['Name','Phase','Type','Status','RAG','Due'];
+  const html=`<div class="import-preview">
+    <table>
+      <thead><tr>${headerLabels.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+      <tbody>${rows.slice(0,8).map(r=>`<tr>
+        <td title="${r.name}">${r.name}</td>
+        <td>${r.phase}</td>
+        <td>${r.type}</td>
+        <td>${r.status}</td>
+        <td>${r.rag}</td>
+        <td>${r.due||'—'}</td>
+      </tr>`).join('')}
+      ${rows.length>8?`<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:8px;font-style:italic">…and ${rows.length-8} more</td></tr>`:''}
+      </tbody>
+    </table>
+  </div>`;
+  document.getElementById('import-preview-wrap').innerHTML=html;
+}
+
+function confirmImport(){
+  if(!importRows.length) return;
+  // Ensure any new phases referenced in import are added
+  importRows.forEach(r=>{
+    if(r.phase&&!phases.find(p=>p.n===r.phase)){
+      const c=PHASE_PAL[phases.length%PHASE_PAL.length];
+      phases.push({n:r.phase,c});
+    }
+  });
+  deliverables.push(...importRows);
+  syncPhaseSelects();
+  renderKpis();
+  applyFilters();
+  closeModal('import-modal');
+  showToast(`✓ ${importRows.length} deliverable${importRows.length>1?'s':''} imported successfully`);
+  importRows=[];
+}
+
+// ─── Toast notification ────────────────────
+function showToast(msg){
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1917;color:#fff;padding:11px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,.2);animation:slideDown .2s ease';
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3200);
+}
+
+// ─── Modal helpers ────────────────────────
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+function closeOvl(id,e){if(e.target===document.getElementById(id))closeModal(id)}
+
+// ─── Init ─────────────────────────────────
+syncPhaseSelects();
+renderKpis();
+applyFilters();
+</script>
+</body>
+</html>

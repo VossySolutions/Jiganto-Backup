@@ -1,0 +1,135 @@
+When building a Requirements Traceability Matrix (RTM) for large enterprise programmes (like SAP S/4HANA, Oracle ERP Cloud, Microsoft Dynamics 365, or CRM/IT systems), the RTM is not just a list of requirements — it is the central control structure linking business intent → design → build → test → release.
+
+Since Jiganto is intended to support complex enterprise programmes, it’s worth designing the RTM to support multiple traceability dimensions, not just requirements.
+
+Below is the full set of fields typically used in mature enterprise RTMs (e.g., SAP transformation programmes).
+
+1️⃣ Core Requirement Identification Fields
+
+These fields uniquely identify and structure the requirement.
+
+Field	Description
+Requirement ID	Unique identifier (REQ-0001)
+Parent Requirement	Link to higher-level requirement
+Requirement Title	Short name
+Requirement Description	Detailed description
+Requirement Type	Business / Functional / Technical / Non-functional
+Requirement Category	Feature / Capability / Process
+Requirement Source	Stakeholder, regulation, system constraint
+Functional Area	Finance, Sales, Procurement, HR etc
+Business Process	Procure-to-Pay, Order-to-Cash etc
+Sub-Process	Invoice Processing, Credit Check etc
+Requirement Priority	Must / Should / Could / Won’t
+Business Value	High / Medium / Low
+Complexity	Low / Medium / High
+2️⃣ Ownership & Governance Fields
+
+These define accountability.
+
+Field	Description
+Business Owner	Accountable business stakeholder
+Product Owner	Product responsibility
+IT Owner	Responsible system owner
+Author	Who documented requirement
+Approver	Who approved requirement
+Stakeholders	Interested parties
+3️⃣ Requirement Lifecycle Fields
+
+Track maturity and approval stage.
+
+Field	Description
+Status	Draft / In Review / Approved / Implemented
+Version	Version number
+Created Date	Creation date
+Last Updated	Last modification
+Approval Date	Date approved
+Target Release	Planned release
+Sprint / Iteration	Agile sprint
+4️⃣ Traceability Mapping Fields
+
+This is the core RTM purpose — trace links.
+
+Field	Description
+Linked Epic	Strategic initiative
+Linked Feature	Product feature
+Linked User Story	Agile user story
+Linked Design	Design specification
+Linked Architecture Component	System architecture element
+Linked Interface	Integration point
+Linked Data Object	Master data or entity
+Linked Business Rule	Rule governing behaviour
+5️⃣ Development Traceability
+
+Link requirement to build artifacts.
+
+Field	Description
+Development Task	Development work item
+Module / System	SAP FI, CRM, Custom App etc
+Component	Microservice / Module
+Code Repository	Git repository
+Build Version	Software version
+6️⃣ Test Traceability
+
+Critical for compliance and project assurance.
+
+Field	Description
+Test Case ID	Linked test case
+Test Scenario	Test scenario
+Test Script	Execution script
+Test Phase	Unit / SIT / UAT / Regression
+Test Status	Pass / Fail / Blocked
+Defect ID	Linked defect
+Defect Severity	Critical / High / Medium / Low
+7️⃣ Deployment & Release Fields
+Field	Description
+Release Version	Release number
+Deployment Environment	Dev / Test / Prod
+Release Date	Planned release
+Deployment Package	Build artifact
+8️⃣ Compliance & Audit Fields
+
+Important for regulated industries (banks, healthcare, government).
+
+Field	Description
+Regulatory Requirement	Regulation reference
+Compliance Category	GDPR / Financial / Security
+Risk Rating	High / Medium / Low
+Control ID	Internal control reference
+Audit Reference	Audit requirement
+9️⃣ Security & Data Fields
+Field	Description
+Data Classification	Public / Internal / Confidential
+Security Requirement	Security control
+Privacy Requirement	GDPR related
+Encryption Required	Yes / No
+🔟 Change Management Fields
+Field	Description
+Change Request ID	Linked change request
+Change Impact	Impact analysis
+Change Approval	CAB approval
+Change Date	Change implemented
+1️⃣1️⃣ Dependencies & Relationships
+Field	Description
+Dependency ID	Related requirement
+Dependency Type	Predecessor / Successor
+Blocked By	Blocking item
+Blocks	Items blocked
+1️⃣2️⃣ Quality Attributes (Non-Functional Requirements)
+Field	Description
+Performance Requirement	Response time
+Availability	Uptime requirement
+Scalability	Load capacity
+Reliability	Error tolerance
+Maintainability	Support considerations
+Usability	UX constraints
+⭐ Example RTM Row
+Field	Example
+Requirement ID	REQ-FI-001
+Functional Area	Finance
+Process	Procure-to-Pay
+Description	System must support 3-way invoice matching
+Priority	Must
+Linked Feature	Accounts Payable Automation
+Linked Test Case	TC-FI-145
+Linked Defect	DEF-334
+Status	Implemented

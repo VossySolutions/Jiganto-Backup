@@ -1,0 +1,130 @@
+Redesign Tables to Monday.com Style
+Design / UI Refactor Task
+Redesign all data tables in the Jiganto application to follow the Monday.com table layout and interaction model.
+The goal is to make tables feel lightweight, visual, scannable, and interactive, rather than dense or spreadsheet-like.
+
+Table Design Principles (Critical)
+1. Visual Style
+	• Flat, card-like rows (not heavy grid lines)
+	• Minimal borders:
+		○ Horizontal row separators only
+		○ No vertical grid lines
+	• Soft background colors
+	• Subtle row hover highlight
+	• Rounded corners on cells where appropriate
+	• Clean, modern SaaS look
+
+2. Column Structure
+Each column has a defined data type, similar to Monday.com:
+The exiting column types / attributes is fine. Below are examples of what is widely used.
+	• Text
+	• Status (colored pill)
+	• Priority (colored pill)
+	• Person / Assignee (avatar + name)
+	• Date
+	• Timeline (start + end date)
+	• Tags (multi-select pills)
+	• Checkbox
+	• Number / Currency
+	• Link
+	• Progress (bar or percentage)
+	• RAG indicator
+Each column:
+	• Has a header with:
+		○ Column name
+		○ Column type icon
+		○ Column menu (⋮)
+	• Can be reordered via drag-and-drop
+	• Can be shown / hidden per user view
+
+3. Row Behavior
+	• Each row represents a single object (task, project, risk, document, etc.)
+	• Clicking a row opens a right-hand side detail panel (not a new page)
+	• Rows support:
+		○ Inline editing (single-click)
+		○ Multi-select
+		○ Bulk actions
+
+4. Cell Behavior
+	• Cells are editable inline
+	• Status / Priority cells use color-coded pills
+	• Person cells show:
+		○ Avatar
+		○ Hover tooltip with full details
+	• Date cells open a date picker
+	• Tags are displayed as colored labels
+	• Empty cells show subtle placeholder text
+
+5. Views (Monday-style)
+Tables must support multiple saved views as per the current design. Example below:
+	• Table View (default)
+	• Column / Kanban View
+	• Table / Spreadsheet View
+	• Calendar View (where applicable) / Date Based View
+	• Gantt / Timeline View
+	• List View
+	• Form / Data Collection Form
+	• Document / Wiki Documentation
+	• Chart / Data Visualisation
+	
+Users can:
+	• Save personal views
+	• Share views with teams
+	• Apply filters and sorting per view
+
+6. Grouping & Sections
+	• Rows can be grouped by:
+		○ Status
+		○ Owner
+		○ Priority
+		○ Custom field
+	• Groups can be collapsed or expanded
+	• Group headers show summary info (counts, progress)
+
+7. Actions & Controls
+	• “+ Add Item” button at top or bottom of table
+	• Column menu actions:
+		○ Change column type
+		○ Rename column
+		○ Hide column
+	• Row menu actions:
+		○ Duplicate
+		○ Archive
+		○ Delete
+	• Bulk actions toolbar appears when rows are selected
+
+8. Performance & UX
+	• Smooth animations (drag, hover, open panel)
+	• Virtualized rows for large datasets
+	• Responsive layout for different screen sizes
+
+9. Reusability
+	• This table component must be reusable across:
+		○ Task Management
+		○ Projects
+		○ CRM
+		○ RAIDD logs
+		○ Boards
+		○ Business Management
+	• Column definitions must be dynamic and data-driven
+
+Explicit Constraints
+	• Do NOT use traditional spreadsheet-style grids
+	• Do NOT use heavy borders or dense layouts
+	• Do NOT navigate away from the table on row click
+
+Success Criteria
+	• Tables feel similar in usability and appearance to Monday.com
+	• Users can scan, update, and manage data quickly
+	• Tables support inline editing and multiple views
+	• The design is modern, friendly, and intuitive
+
+Optional (If Supported)
+	• Keyboard navigation
+	• Color themes
+	• Per-user column layout persistence
+
+Optional Add-on
+If needed, reference:
+	“Design inspiration: Monday.com board tables”
+(No need to clone visuals exactly, but match interaction and usability patterns.)

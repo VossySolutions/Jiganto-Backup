@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jiganto — Resource Management</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brand-green:#1a7a4a; --brand-green-dark:#145e38; --brand-green-light:#e8f5ee; --brand-green-mid:#2ea06a;
+    --accent-gold:#f5a623; --accent-amber:#fff3dc;
+    --bg:#f4f6f4; --surface:#ffffff; --surface-2:#f9faf9;
+    --border:#dde5de; --border-light:#eef2ee;
+    --text-primary:#1a2b1e; --text-secondary:#5a6b5e; --text-muted:#8fa394;
+    --status-open:#6b7280; --status-proposed:#7c3aed; --status-tentative:#d97706; --status-confirmed:#059669;
+    --red:#dc2626; --over-red:#7f1d1d;
+    --break-bg:#f1f5f9; --break-border:#cbd5e1; --break-text:#64748b;
+    --shadow-sm:0 1px 3px rgba(26,42,30,0.07); --shadow-md:0 4px 16px rgba(26,42,30,0.10); --shadow-lg:0 8px 32px rgba(26,42,30,0.13);
+    --radius:10px; --radius-sm:6px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.5;min-height:100vh;}
+
+  /* NAV */
+  .topnav{background:var(--brand-green-dark);display:flex;align-items:center;padding:0 24px;height:52px;gap:32px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.18);}
+  .logo{font-size:20px;font-weight:700;color:#fff;letter-spacing:-0.5px;display:flex;align-items:center;gap:8px;}
+  .logo-dot{width:8px;height:8px;background:var(--accent-gold);border-radius:50%;display:inline-block;}
+  .nav-links{display:flex;gap:2px;flex:1;}
+  .nav-link{color:rgba(255,255,255,0.65);font-size:13px;font-weight:500;padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;transition:all 0.15s;}
+  .nav-link:hover{color:#fff;background:rgba(255,255,255,0.1);}
+  .nav-link.active{color:#fff;background:rgba(255,255,255,0.15);}
+  .nav-right{display:flex;align-items:center;gap:12px;margin-left:auto;}
+  .user-avatar{width:30px;height:30px;background:var(--brand-green-mid);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;border:2px solid rgba(255,255,255,0.25);}
+
+  /* LAYOUT */
+  .page-wrapper{max-width:1440px;margin:0 auto;padding:24px 24px 48px;}
+  .page-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
+  .page-heading h1{font-size:22px;font-weight:700;letter-spacing:-0.3px;}
+  .breadcrumb{font-size:12px;color:var(--text-muted);margin-top:2px;}
+  .breadcrumb span{color:var(--brand-green);font-weight:600;}
+
+  /* PANEL TABS */
+  .panel-tabs{display:flex;margin-bottom:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:4px;width:fit-content;box-shadow:var(--shadow-sm);}
+  .panel-tab{padding:8px 20px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.18s;color:var(--text-secondary);display:flex;align-items:center;gap:7px;border:none;background:none;font-family:'DM Sans',sans-serif;}
+  .panel-tab.active{background:var(--brand-green);color:#fff;box-shadow:0 2px 8px rgba(26,122,74,0.3);}
+  .panel-tab:not(.active):hover{background:var(--brand-green-light);color:var(--brand-green);}
+  .panel{display:none;} .panel.active{display:block;}
+
+  /* CARD */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;}
+  .card-header{padding:14px 20px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  .card-title{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;}
+  .card-icon{width:28px;height:28px;background:var(--brand-green-light);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;}
+
+  /* BUTTONS */
+  .btn{padding:7px 14px;border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all 0.15s;display:inline-flex;align-items:center;gap:6px;}
+  .btn-primary{background:var(--brand-green);color:#fff;}
+  .btn-primary:hover{background:var(--brand-green-dark);box-shadow:0 2px 8px rgba(26,122,74,0.3);}
+  .btn-secondary{background:var(--surface);color:var(--text-secondary);border:1px solid var(--border);}
+  .btn-secondary:hover{background:var(--bg);color:var(--text-primary);}
+  .btn-ghost{background:none;color:var(--brand-green);border:1px solid var(--brand-green-light);}
+  .btn-ghost:hover{background:var(--brand-green-light);}
+  .btn-danger{background:none;color:var(--red);border:1px solid #fde8e8;}
+  .btn-danger:hover{background:#fde8e8;}
+  .btn-sm{padding:4px 10px;font-size:12px;}
+  .btn-xs{padding:3px 8px;font-size:11px;border-radius:4px;}
+
+  /* FORM */
+  .form-group{display:flex;flex-direction:column;gap:4px;}
+  .form-label{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;}
+  .form-control{padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text-primary);background:var(--surface);transition:border-color 0.15s,box-shadow 0.15s;outline:none;width:100%;}
+  .form-control:focus{border-color:var(--brand-green);box-shadow:0 0 0 3px rgba(26,122,74,0.12);}
+  .form-control-sm{padding:5px 8px;font-size:12px;}
+
+  /* TOGGLE */
+  .toggle-group{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:2px;gap:2px;}
+  .toggle-btn{padding:5px 12px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--text-secondary);transition:all 0.15s;font-family:'DM Sans',sans-serif;}
+  .toggle-btn.active{background:var(--brand-green);color:#fff;box-shadow:0 1px 4px rgba(26,122,74,0.25);}
+
+  /* OPP HEADER */
+  .opp-header{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr;gap:1px;background:var(--border-light);border-bottom:1px solid var(--border);}
+  .opp-field{background:var(--surface-2);padding:12px 16px;display:flex;flex-direction:column;gap:3px;}
+  .opp-label{font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;}
+  .opp-value{font-size:14px;font-weight:600;}
+  .opp-value.highlight{color:var(--brand-green);font-size:15px;}
+  .prob-badge{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;}
+  .prob-bar{width:56px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+  .prob-fill{height:100%;background:linear-gradient(90deg,var(--brand-green-mid),var(--brand-green));border-radius:3px;}
+
+  /* TEMPLATE PICKER */
+  .template-picker{display:flex;gap:8px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--border-light);align-items:center;}
+  .tpl-label{font-size:12px;font-weight:600;color:var(--text-muted);}
+  .template-chip{padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;color:var(--text-secondary);background:var(--surface);display:flex;align-items:center;gap:5px;}
+  .template-chip:hover{border-color:var(--brand-green);color:var(--brand-green);background:var(--brand-green-light);}
+  .template-chip.active{border-color:var(--brand-green);background:var(--brand-green);color:#fff;}
+
+  /* VIEW TOOLBAR */
+  .view-toolbar{display:flex;align-items:center;gap:10px;padding:10px 20px;border-bottom:1px solid var(--border-light);background:var(--surface-2);flex-wrap:wrap;}
+  .view-hint{font-size:11px;color:var(--text-muted);font-style:italic;}
+
+  /* TABLE VIEW */
+  .resource-table-wrap{overflow-x:auto;}
+  .resource-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .resource-table thead tr{background:var(--surface-2);}
+  .resource-table th{padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid var(--border);white-space:nowrap;}
+  .resource-table td{padding:7px 12px;border-bottom:1px solid var(--border-light);vertical-align:middle;}
+  .resource-table tbody tr.main-row:hover{background:var(--surface-2);}
+  .resource-table td input,.resource-table td select{width:100%;padding:5px 8px;border:1px solid transparent;border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text-primary);background:transparent;transition:all 0.15s;outline:none;}
+  .resource-table td input:hover,.resource-table td select:hover{border-color:var(--border);background:var(--surface);}
+  .resource-table td input:focus,.resource-table td select:focus{border-color:var(--brand-green);background:var(--surface);box-shadow:0 0 0 3px rgba(26,122,74,0.1);}
+  .phase-cell{font-weight:600;color:var(--brand-green-dark);}
+  .cost-cell{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;text-align:right;}
+  .totals-row td{background:var(--brand-green-light)!important;font-weight:700;border-top:2px solid var(--brand-green);font-family:'DM Mono',monospace;font-size:12px;}
+  .break-indicator{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--break-text);background:var(--break-bg);border:1px solid var(--break-border);border-radius:10px;padding:2px 8px;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+  .break-indicator:hover{background:#e2e8f0;border-color:#94a3b8;}
+  .break-indicator.has-breaks{color:#b45309;background:#fff7ed;border-color:#fed7aa;}
+
+  /* TIMELINE VIEW */
+  #timelineView{display:none;}
+  .tl-scroll{overflow-x:auto;max-height:600px;overflow-y:auto;}
+  .tl-table{border-collapse:collapse;font-size:12px;}
+  .tl-table th{padding:7px 4px;text-align:center;font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;border-bottom:2px solid var(--border);background:var(--surface-2);white-space:nowrap;position:sticky;top:0;z-index:2;}
+  /* FIX: proper left padding on sticky info column */
+  .tl-info-th{text-align:left!important;padding:7px 14px 7px 20px!important;min-width:250px;width:250px;position:sticky;left:0;z-index:4!important;background:var(--surface-2)!important;border-right:2px solid var(--border-light);}
+  .tl-month-th{background:var(--brand-green-light)!important;color:var(--brand-green-dark)!important;border-left:2px solid var(--brand-green)!important;font-size:11px!important;}
+  .tl-table td{padding:0;border-bottom:1px solid var(--border-light);}
+  /* FIX: proper left padding on sticky info body cell */
+  .tl-info-td{padding:10px 14px 10px 20px;position:sticky;left:0;background:var(--surface);z-index:1;min-width:250px;width:250px;border-right:2px solid var(--border-light);}
+  .tl-table tbody tr:hover .tl-info-td{background:#f0f9f4;}
+  .tl-table tbody tr:hover td{background:#f7fdf9;}
+  .tl-res-name{font-weight:600;font-size:13px;color:var(--text-primary);}
+  .tl-res-sub{font-size:11px;color:var(--text-muted);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .tl-phase-pill{font-size:10px;padding:1px 7px;border-radius:8px;font-weight:700;}
+  .tl-week-td{text-align:center;padding:3px 2px;min-width:50px;width:50px;border-left:1px solid var(--border-light);}
+  .tl-week-td.month-start{border-left:2px solid var(--border);}
+
+  /* Timeline blocks */
+  .tl-block{border-radius:4px;margin:2px 3px;padding:4px 2px;font-size:11px;font-weight:700;font-family:'DM Mono',monospace;text-align:center;min-height:28px;display:flex;align-items:center;justify-content:center;transition:filter 0.12s,box-shadow 0.12s;position:relative;user-select:none;}
+  .tl-block.editable{cursor:pointer;}
+  .tl-block.editable:hover{filter:brightness(0.88);box-shadow:0 0 0 2px rgba(26,122,74,0.5);}
+  .tl-block.week-override{border:2px dashed currentColor;opacity:0.8;}
+  .tl-block.week-zero{background:#f1f5f9!important;color:#94a3b8!important;border:2px dashed #cbd5e1;font-size:10px;}
+  .tl-empty{min-height:28px;margin:2px 3px;}
+
+  /* Break block — hatched */
+  .tl-block-break{border-radius:4px;margin:2px 3px;min-height:28px;
+    background:repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0 3px,#f1f5f9 3px,#f1f5f9 8px);
+    border:1px solid #cbd5e1;display:flex;align-items:center;justify-content:center;
+    font-size:12px;cursor:default;transition:filter 0.12s;position:relative;}
+  .tl-block-break:hover{filter:brightness(0.95);}
+
+  /* Tooltip */
+  .tl-block-break[data-tip]:hover::after,.tl-block[data-tip]:hover::after{
+    content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
+    background:#1a2b1e;color:#fff;font-size:10px;font-weight:500;font-family:'DM Sans',sans-serif;
+    padding:4px 8px;border-radius:5px;white-space:nowrap;z-index:50;pointer-events:none;
+    box-shadow:0 2px 8px rgba(0,0,0,0.25);
+  }
+  .tl-block-break[data-tip]:hover::before,.tl-block[data-tip]:hover::before{
+    content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);
+    border:4px solid transparent;border-top-color:#1a2b1e;z-index:50;pointer-events:none;
+  }
+
+  /* Phase colours */
+  .ph-Discovery{background:#dbeafe;color:#1e40af;}
+  .ph-Design{background:#ede9fe;color:#5b21b6;}
+  .ph-Build{background:#d1fae5;color:#065f46;}
+  .ph-UAT{background:#fef3c7;color:#92400e;}
+  .ph-GoLive{background:#fee2e2;color:#991b1b;}
+  .ph-Hypercare{background:#fce7f3;color:#9d174d;}
+  .ph-Default{background:var(--brand-green-light);color:var(--brand-green-dark);}
+
+  /* Total row */
+  .tl-total-td{background:var(--brand-green-light)!important;font-weight:700;border-top:2px solid var(--brand-green);}
+  .tl-total-info{background:var(--brand-green-light)!important;font-size:12px;font-weight:700;color:var(--brand-green-dark);padding:10px 14px 10px 20px!important;}
+  .tl-total-val{font-family:'DM Mono',monospace;font-weight:700;font-size:13px;color:var(--brand-green-dark);}
+
+  /* INLINE EDIT POPOVER */
+  .week-popover{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);padding:12px 14px;z-index:500;width:210px;display:none;animation:popIn 0.15s ease;}
+  .week-popover.open{display:block;}
+  @keyframes popIn{from{opacity:0;transform:scale(0.95) translateY(4px);}to{opacity:1;transform:scale(1) translateY(0);}}
+  .wp-title{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;}
+  .wp-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .wp-label{font-size:12px;color:var(--text-secondary);min-width:70px;}
+  .wp-input{width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;text-align:center;outline:none;}
+  .wp-input:focus{border-color:var(--brand-green);box-shadow:0 0 0 2px rgba(26,122,74,0.15);}
+  .wp-actions{display:flex;gap:6px;margin-top:6px;}
+  .wp-close{position:absolute;top:6px;right:8px;font-size:14px;cursor:pointer;color:var(--text-muted);background:none;border:none;padding:0;}
+
+  /* SUMMARY STRIP */
+  .summary-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border-light);border-top:2px solid var(--brand-green);}
+  .summary-stat{background:var(--surface);padding:14px 18px;display:flex;flex-direction:column;gap:2px;}
+  .s-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);}
+  .s-value{font-size:22px;font-weight:700;font-family:'DM Mono',monospace;}
+  .s-value.green{color:var(--brand-green);}
+  .s-sub{font-size:11px;color:var(--text-muted);}
+
+  /* CAPACITY BOARD */
+  .cap-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .filter-chip{padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;color:var(--text-secondary);background:var(--surface);font-family:'DM Sans',sans-serif;}
+  .filter-chip.active{border-color:var(--brand-green);background:var(--brand-green-light);color:var(--brand-green);}
+  .legend{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+  .legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-secondary);}
+  .legend-dot{width:10px;height:10px;border-radius:2px;}
+  .legend-dot.hatched{background:repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0 2px,#f1f5f9 2px,#f1f5f9 5px);border:1px solid #cbd5e1;}
+  .legend-dot.over{background:#7f1d1d;}
+
+  /* FIX: capacity grid scrollable wrapper */
+  .cap-outer{overflow-x:auto;width:100%;}
+  .cap-grid{border-collapse:collapse;font-size:12px;min-width:1100px;width:100%;}
+  .cap-grid th{padding:8px 5px;text-align:center;font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;border-bottom:2px solid var(--border);background:var(--surface-2);white-space:nowrap;}
+  .cap-grid th.res-col{text-align:left;min-width:220px;width:220px;padding:8px 14px;}
+  .cap-grid th.month-th{background:var(--brand-green-light);color:var(--brand-green-dark);border-left:2px solid var(--brand-green);font-size:11px;}
+  .cap-grid td{padding:0;border-bottom:1px solid var(--border-light);vertical-align:middle;}
+  .parent-row{cursor:pointer;}
+  .parent-row:hover td{background:#f0f9f4;}
+  .res-info{padding:10px 14px;display:flex;align-items:center;gap:10px;}
+  .res-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;}
+  .res-name{font-weight:600;font-size:13px;line-height:1.2;}
+  .res-role{font-size:11px;color:var(--text-muted);}
+  .expand-icon{width:20px;height:20px;border-radius:4px;background:var(--bg);border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;margin-left:auto;transition:all 0.2s;color:var(--text-muted);}
+  .expand-icon.open{background:var(--brand-green-light);border-color:var(--brand-green);color:var(--brand-green);transform:rotate(90deg);}
+  .sub-row{display:none;}
+  .sub-row.visible{display:table-row;}
+  .sub-row td{background:var(--surface-2);}
+  .proj-info{padding:6px 14px 6px 52px;display:flex;align-items:center;gap:8px;}
+  .proj-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+  .proj-name{font-size:12px;font-weight:600;color:var(--text-secondary);}
+  .proj-badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;}
+
+  /* Cap cells */
+  .cap-cell{text-align:center;padding:5px 2px;border-left:1px solid var(--border-light);min-width:48px;width:48px;}
+  .cap-cell.mb{border-left:2px solid var(--border);}
+  .cap-bar-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;}
+  .cap-bar-outer{width:40px;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden;display:flex;}
+  .bar-conf{height:100%;background:#059669;}
+  .bar-tent{height:100%;background:#d97706;opacity:0.85;}
+  .bar-break{height:100%;background:repeating-linear-gradient(45deg,#cbd5e1,#cbd5e1 2px,#e2e8f0 2px,#e2e8f0 4px);}
+  .bar-unavail{height:100%;background:#94a3b8;}
+  .cap-val{font-family:'DM Mono',monospace;font-size:11px;font-weight:700;}
+  .cap-val.ok{color:#059669;}
+  .cap-val.med{color:#d97706;}
+  .cap-val.high{color:#dc2626;}
+  .cap-val.over{color:#fff;background:#7f1d1d;border-radius:3px;padding:0 4px;font-size:10px;}
+  .cap-val.low{color:var(--text-muted);}
+  .sub-cap-cell{text-align:center;padding:4px 2px;border-left:1px solid var(--border-light);min-width:48px;width:48px;}
+  .sub-cap-cell.mb{border-left:2px solid var(--border);}
+  .sub-mini-bar{width:34px;height:5px;border-radius:3px;margin:0 auto 2px;background:#e5e7eb;overflow:hidden;}
+  .sub-mini-fill{height:100%;border-radius:3px;}
+  .sub-val{font-family:'DM Mono',monospace;font-size:10px;color:var(--text-muted);}
+
+  /* Break sub-rows */
+  .break-sub-row{display:none;}
+  .break-sub-row.visible{display:table-row;}
+  .break-sub-row td{background:#f8fafc;}
+  .break-proj-info{padding:5px 14px 5px 52px;display:flex;align-items:center;gap:8px;}
+
+  /* MODAL */
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(26,42,30,0.45);backdrop-filter:blur(3px);z-index:200;align-items:center;justify-content:center;}
+  .modal-overlay.open{display:flex;}
+  .modal{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow-lg);width:540px;max-width:96vw;max-height:90vh;overflow-y:auto;animation:slideUp 0.2s ease;}
+  @keyframes slideUp{from{transform:translateY(16px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+  .modal-header{padding:18px 20px 14px;border-bottom:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;}
+  .modal-title{font-size:16px;font-weight:700;}
+  .modal-close{width:28px;height:28px;border-radius:50%;border:none;background:var(--bg);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);}
+  .modal-close:hover{background:var(--border);}
+  .modal-body{padding:20px;display:flex;flex-direction:column;gap:14px;}
+  .modal-footer{padding:14px 20px;border-top:1px solid var(--border-light);display:flex;justify-content:flex-end;gap:8px;}
+  .modal-section-title{font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;padding-bottom:8px;border-bottom:1px solid var(--border-light);}
+  .break-modal-list{display:flex;flex-direction:column;gap:8px;margin-bottom:4px;}
+  .break-modal-item{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;}
+  .bm-reason{font-weight:700;font-size:11px;padding:2px 8px;border-radius:10px;}
+  .bm-dates{font-family:'DM Mono',monospace;font-size:11px;color:var(--text-secondary);flex:1;}
+  .bm-days{font-family:'DM Mono',monospace;font-size:11px;color:var(--red);font-weight:600;}
+  .add-break-form{background:var(--surface-2);border:1px dashed var(--border);border-radius:var(--radius-sm);padding:12px;display:flex;flex-direction:column;gap:10px;}
+  .add-break-form-title{font-size:12px;font-weight:700;color:var(--brand-green);}
+
+  /* TOAST */
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--brand-green-dark);color:#fff;padding:12px 18px;border-radius:var(--radius);box-shadow:var(--shadow-lg);font-size:13px;font-weight:500;z-index:600;display:flex;align-items:center;gap:10px;opacity:0;transform:translateY(8px);transition:all 0.25s;pointer-events:none;max-width:380px;}
+  .toast.show{opacity:1;transform:translateY(0);}
+
+  ::-webkit-scrollbar{width:6px;height:6px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--text-muted);}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="logo"><span class="logo-dot"></span> Jiganto</div>
+  <div class="nav-links">
+    <span class="nav-link">CRM</span><span class="nav-link">Projects</span>
+    <span class="nav-link">Portfolio</span><span class="nav-link">Finance</span>
+    <span class="nav-link active">Resources</span>
+  </div>
+  <div class="nav-right"><div class="user-avatar">RM</div></div>
+</nav>
+
+<div class="page-wrapper">
+  <div class="page-heading">
+    <div>
+      <h1>Resource Management</h1>
+      <div class="breadcrumb">Enterprise Suite &rsaquo; <span>Resource Management</span></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary btn-sm" onclick="showToast('📧 Notification sent to Resource Manager')">🔔 Notify RM</button>
+      <button class="btn btn-primary btn-sm" onclick="openAddRowModal()">＋ New Requirement</button>
+    </div>
+  </div>
+
+  <div class="panel-tabs">
+    <button class="panel-tab active" id="tabPlan" onclick="switchPanel('plan')">📋 Opportunity Resource Plan</button>
+    <button class="panel-tab" id="tabCap" onclick="switchPanel('capacity')">📊 Capacity Board</button>
+  </div>
+
+  <!-- ══ PANEL 1: RESOURCE PLAN ══ -->
+  <div id="panel-plan" class="panel active">
+    <div class="card">
+      <div class="opp-header">
+        <div class="opp-field"><span class="opp-label">Opportunity</span><span class="opp-value highlight">Project X — SAP S/4HANA Implementation</span></div>
+        <div class="opp-field"><span class="opp-label">Customer</span><span class="opp-value">Acme Industries Ltd</span></div>
+        <div class="opp-field"><span class="opp-label">Stage</span><span class="opp-value"><span style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:#fff3dc;color:#d97706">Proposal</span></span></div>
+        <div class="opp-field"><span class="opp-label">Win Probability</span><span class="opp-value"><div class="prob-badge"><div class="prob-bar"><div class="prob-fill" style="width:70%"></div></div>70%</div></span></div>
+        <div class="opp-field"><span class="opp-label">Rate Card</span><span class="opp-value">Standard 2026</span></div>
+        <div class="opp-field"><span class="opp-label">Owner</span><span class="opp-value">Sarah Mitchell</span></div>
+      </div>
+
+      <div class="template-picker">
+        <span class="tpl-label">Template:</span>
+        <div class="template-chip active" onclick="loadTemplate('sap',this)">🔷 SAP S/4HANA</div>
+        <div class="template-chip" onclick="loadTemplate('oracle',this)">🔶 Oracle Cloud</div>
+        <div class="template-chip" onclick="loadTemplate('microsoft',this)">🪟 Microsoft D365</div>
+        <div class="template-chip" onclick="loadTemplate('crm',this)">💼 CRM</div>
+        <div class="template-chip" onclick="loadTemplate('custom',this)">＋ Custom</div>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" onclick="openAddRowModal()">＋ Add Row</button>
+          <button class="btn btn-secondary btn-sm" onclick="clearRows()">Clear</button>
+        </div>
+      </div>
+
+      <div class="view-toolbar">
+        <span style="font-size:12px;font-weight:600;color:var(--text-muted)">View:</span>
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="btnTable" onclick="setPlanView('table')">☰ Table</button>
+          <button class="toggle-btn" id="btnTimeline" onclick="setPlanView('timeline')">📅 Timeline</button>
+        </div>
+        <span id="tlHint" class="view-hint" style="display:none">12-month view — scroll right to navigate → &nbsp;|&nbsp; Click any active week to edit days inline</span>
+        <div id="phaseLegend" style="display:none;gap:8px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:11px;font-weight:700;color:var(--text-muted)">PHASE:</span>
+          <span style="font-size:11px;padding:2px 8px;border-radius:10px" class="ph-Discovery">Discovery</span>
+          <span style="font-size:11px;padding:2px 8px;border-radius:10px" class="ph-Design">Design</span>
+          <span style="font-size:11px;padding:2px 8px;border-radius:10px" class="ph-Build">Build</span>
+          <span style="font-size:11px;padding:2px 8px;border-radius:10px" class="ph-UAT">UAT</span>
+          <span style="font-size:11px;padding:2px 8px;border-radius:10px" class="ph-GoLive">Go Live</span>
+          <span style="font-size:11px;padding:2px 8px;border-radius:10px" class="ph-Hypercare">Hypercare</span>
+          <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--break-bg);color:var(--break-text);border:1px solid var(--break-border)">⬚ Break</span>
+        </div>
+      </div>
+
+      <!-- TABLE VIEW -->
+      <div id="tableView">
+        <div class="resource-table-wrap">
+          <table class="resource-table">
+            <thead><tr>
+              <th style="width:28px">#</th>
+              <th style="width:108px">Phase</th>
+              <th style="min-width:148px">Role / Skill</th>
+              <th style="min-width:128px">Name</th>
+              <th style="width:93px">Start</th>
+              <th style="width:93px">End</th>
+              <th style="width:70px">Days/Wk</th>
+              <th style="width:70px">Days</th>
+              <th style="width:86px">Rate £</th>
+              <th style="width:66px">Disc %</th>
+              <th style="width:100px">Cost £</th>
+              <th style="width:108px">Status</th>
+              <th style="width:100px">Breaks</th>
+              <th style="width:36px"></th>
+            </tr></thead>
+            <tbody id="resourceRows"></tbody>
+            <tfoot><tr class="totals-row">
+              <td colspan="7" style="padding:10px 12px">TOTAL</td>
+              <td id="totalDays" class="cost-cell">—</td>
+              <td></td><td></td>
+              <td id="totalCost" class="cost-cell">—</td>
+              <td colspan="3"></td>
+            </tr></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- TIMELINE VIEW -->
+      <div id="timelineView">
+        <div class="tl-scroll" id="tlScroll">
+          <table class="tl-table" id="tlTable">
+            <thead id="tlHead"></thead>
+            <tbody id="tlBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="summary-strip">
+        <div class="summary-stat"><span class="s-label">Total Resources</span><span class="s-value green" id="sumResources">0</span><span class="s-sub">roles planned</span></div>
+        <div class="summary-stat"><span class="s-label">Total Days</span><span class="s-value" id="sumDays">0</span><span class="s-sub">excl. breaks</span></div>
+        <div class="summary-stat"><span class="s-label">Cost to Customer</span><span class="s-value green" id="sumCost">£0</span><span class="s-sub">before tax</span></div>
+        <div class="summary-stat"><span class="s-label">Weighted Value</span><span class="s-value" id="sumWeighted">£0</span><span class="s-sub">at 70% probability</span></div>
+        <div class="summary-stat"><span class="s-label">Confirmed</span><span class="s-value" id="sumConfirmed">0</span><span class="s-sub">of total planned</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PANEL 2: CAPACITY BOARD ══ -->
+  <div id="panel-capacity" class="panel">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><div class="card-icon">📊</div>Capacity &amp; Utilisation Board</div>
+        <div class="cap-controls">
+          <div class="toggle-group">
+            <button class="toggle-btn active" id="capPctBtn" onclick="setCapView('pct',this)">% Utilisation</button>
+            <button class="toggle-btn" id="capDaysBtn" onclick="setCapView('days',this)">Raw Days</button>
+          </div>
+          <div class="filter-chip active" onclick="singleFilter(this)">All</div>
+          <div class="filter-chip" onclick="singleFilter(this)">Project X</div>
+          <div class="filter-chip" onclick="singleFilter(this)">Project Y</div>
+          <button class="btn btn-ghost btn-sm" id="expandAllBtn" onclick="toggleExpandAll()">⊞ Expand All</button>
+          <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#059669"></div>Confirmed</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#d97706"></div>Tentative</div>
+            <div class="legend-item"><div class="legend-dot hatched"></div>Break/Leave</div>
+            <div class="legend-item"><div class="legend-dot over"></div>Over-allocated</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#e5e7eb"></div>Available</div>
+          </div>
+        </div>
+      </div>
+      <!-- FIX: outer scrollable wrapper so capacity board scrolls right -->
+      <div class="cap-outer">
+        <table class="cap-grid">
+          <thead id="capHead"></thead>
+          <tbody id="capBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- INLINE EDIT POPOVER (Option 4) -->
+<div class="week-popover" id="weekPopover">
+  <button class="wp-close" onclick="closePopover()">✕</button>
+  <div class="wp-title" id="wpTitle">Edit Week</div>
+  <div class="wp-row">
+    <span class="wp-label">Days/week</span>
+    <input type="number" class="wp-input" id="wpDays" min="0" max="5" step="0.5">
+    <span style="font-size:12px;color:var(--text-muted)">of 5</span>
+  </div>
+  <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Set to 0 to mark week as unavailable</div>
+  <div class="wp-actions">
+    <button class="btn btn-primary btn-sm" onclick="applyWeekEdit()">Apply</button>
+    <button class="btn btn-secondary btn-sm" onclick="resetWeekOverride()">Reset</button>
+    <button class="btn btn-ghost btn-sm" onclick="openBreakFromPopover()">＋ Break</button>
+  </div>
+</div>
+
+<!-- ADD ROW MODAL -->
+<div class="modal-overlay" id="addRowModal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Add Resource Requirement</span><button class="modal-close" onclick="closeModal('addRowModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Phase</label>
+        <select class="form-control" id="m-phase"><option>Discovery</option><option>Design</option><option>Build</option><option>UAT</option><option>Go Live</option><option>Hypercare</option></select></div>
+      <div class="form-group"><label class="form-label">Role / Skill</label>
+        <select class="form-control" id="m-role"><option>Program Manager</option><option>Project Manager</option><option>Solution Architect</option><option>Business Analyst</option><option>Scrum Master</option><option>Technical Lead</option><option>Developer</option><option>Data Migration Lead</option><option>Change Manager</option><option>Test Manager</option><option>SAP FICO Consultant</option><option>SAP SD/MM Consultant</option><option>Integration Specialist</option></select></div>
+      <div class="form-group"><label class="form-label">Named Resource (Optional)</label>
+        <select class="form-control" id="m-name"><option value="">— To be assigned —</option><option>Consultant 1</option><option>Consultant 2</option><option>Isaac Thompson</option><option>Gemma Clarke</option><option>Priya Mehta</option><option>David Osei</option></select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group"><label class="form-label">Start Date</label><input type="date" class="form-control" id="m-start" value="2026-01-05"></div>
+        <div class="form-group"><label class="form-label">End Date</label><input type="date" class="form-control" id="m-end" value="2026-06-26"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div class="form-group"><label class="form-label">Days/Week</label><input type="number" class="form-control" id="m-dpw" value="5" min="0.5" max="5" step="0.5"></div>
+        <div class="form-group"><label class="form-label">Daily Rate £</label><input type="number" class="form-control" id="m-rate" value="900"></div>
+        <div class="form-group"><label class="form-label">Discount %</label><input type="number" class="form-control" id="m-disc" value="0" min="0" max="100"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Status</label>
+        <select class="form-control" id="m-status"><option>Open</option><option>Proposed</option><option selected>Tentative</option><option>Confirmed</option></select></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addRowModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAddRow()">Add Resource</button>
+    </div>
+  </div>
+</div>
+
+<!-- BREAK MODAL -->
+<div class="modal-overlay" id="breakModal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title" id="breakModalTitle">Manage Breaks</span><button class="modal-close" onclick="closeModal('breakModal')">✕</button></div>
+    <div class="modal-body">
+      <div><div class="modal-section-title" style="margin-bottom:10px">Existing Breaks</div>
+        <div id="breakModalList" class="break-modal-list"></div>
+        <div id="noBreaksMsg" style="font-size:12px;color:var(--text-muted);padding:8px 0;display:none">No breaks added yet.</div>
+      </div>
+      <div class="add-break-form">
+        <div class="add-break-form-title">＋ Add New Break</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group"><label class="form-label">Break Start</label><input type="date" class="form-control form-control-sm" id="b-start"></div>
+          <div class="form-group"><label class="form-label">Break End</label><input type="date" class="form-control form-control-sm" id="b-end"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Reason</label>
+          <select class="form-control form-control-sm" id="b-reason"><option>Holiday</option><option>Training</option><option>Business Travel</option><option>Bench</option><option>Other</option></select></div>
+        <div class="form-group"><label class="form-label">Notes (Optional)</label>
+          <input type="text" class="form-control form-control-sm" id="b-notes" placeholder="e.g. Annual leave — booked"></div>
+        <button class="btn btn-primary btn-sm" onclick="addBreak()" style="align-self:flex-start">Add Break</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('breakModal')">Close</button>
+      <button class="btn btn-primary" onclick="saveBreaks()">Save &amp; Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════════════════
+   CONSTANTS
+══════════════════════════════════════════════════ */
+const PROB = 70;
+const ALL_PHASES  = ['Discovery','Design','Build','UAT','Go Live','Hypercare'];
+const ALL_NAMES   = ['','Consultant 1','Consultant 2','Isaac Thompson','Gemma Clarke','Priya Mehta','David Osei','Lydia Benson','Rahul Desai'];
+const STATUS_C = {Open:'#6b7280',Proposed:'#7c3aed',Tentative:'#d97706',Confirmed:'#059669'};
+const STATUS_B = {Open:'#f3f4f6',Proposed:'#ede9fe',Tentative:'#fff3dc',Confirmed:'#d1fae5'};
+const REASON_C = {Holiday:'#854d0e',Training:'#1e40af','Business Travel':'#5b21b6',Bench:'#475569',Other:'#475569'};
+const REASON_B = {Holiday:'#fef9c3',Training:'#dbeafe','Business Travel':'#ede9fe',Bench:'#f1f5f9',Other:'#f1f5f9'};
+const REASON_ICON = {Holiday:'🏖',Training:'📚','Business Travel':'✈',Bench:'💺',Other:'⏸'};
+const PHASE_CLS = {Discovery:'ph-Discovery',Design:'ph-Design',Build:'ph-Build',UAT:'ph-UAT','Go Live':'ph-GoLive',Hypercare:'ph-Hypercare'};
+
+/* 52-week grid from 2026-01-05 */
+const WEEK_STARTS  = [];
+const MONTH_GROUPS = [];
+const MONTH_BDRY   = new Set();
+(function(){
+  const base=new Date('2026-01-05');
+  const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let lm=-1,cur=null;
+  for(let w=0;w<52;w++){
+    const d=new Date(base); d.setDate(d.getDate()+w*7);
+    WEEK_STARTS.push(new Date(d));
+    const m=d.getMonth();
+    if(m!==lm){ if(cur)MONTH_GROUPS.push(cur); cur={label:MO[m]+' '+d.getFullYear(),span:0}; lm=m; MONTH_BDRY.add(w); }
+    cur.span++;
+  }
+  if(cur) MONTH_GROUPS.push(cur);
+})();
+
+/* Capacity board — Jan through Aug (32 weeks = 8 months) for better scrolling demo */
+const CAP_WK_LABELS=[];
+const CAP_MONTHS_DEF=[];
+(function(){
+  const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug'];
+  MO.forEach(m=>{ CAP_MONTHS_DEF.push({label:m,span:4}); for(let i=0;i<4;i++) CAP_WK_LABELS.push('W'+(i+1)); });
+})();
+const N_CAP=32;
+
+/* ══════════════════════════════════════════════════
+   TEMPLATES
+══════════════════════════════════════════════════ */
+const TEMPLATES = {
+  sap:[
+    {phase:'Discovery',role:'Program Manager',       name:'',              start:'2026-01-05',end:'2026-08-28',dpw:5,rate:1100,disc:10,status:'Tentative',breaks:[],weekOverrides:{}},
+    {phase:'Discovery',role:'Project Manager',       name:'',              start:'2026-01-05',end:'2026-09-25',dpw:5,rate:950, disc:0, status:'Tentative',breaks:[{start:'2026-08-03',end:'2026-08-28',reason:'Holiday',notes:'Summer break — pre-approved'}],weekOverrides:{}},
+    {phase:'Discovery',role:'Solution Architect',    name:'',              start:'2026-01-05',end:'2026-02-13',dpw:4,rate:1050,disc:0, status:'Open',     breaks:[],weekOverrides:{}},
+    {phase:'Build',    role:'SAP FICO Consultant',   name:'Priya Mehta',   start:'2026-02-02',end:'2026-05-29',dpw:5,rate:850, disc:0, status:'Proposed', breaks:[],weekOverrides:{}},
+    {phase:'Build',    role:'SAP SD/MM Consultant',  name:'',              start:'2026-02-02',end:'2026-05-29',dpw:5,rate:850, disc:0, status:'Open',     breaks:[],weekOverrides:{}},
+    {phase:'Build',    role:'Integration Specialist',name:'',              start:'2026-03-02',end:'2026-05-29',dpw:5,rate:900, disc:0, status:'Open',     breaks:[{start:'2026-04-13',end:'2026-04-17',reason:'Training',notes:'AWS certification week'}],weekOverrides:{}},
+    {phase:'Build',    role:'Business Analyst',      name:'Isaac Thompson',start:'2026-01-05',end:'2026-06-26',dpw:5,rate:700, disc:0, status:'Confirmed',breaks:[],weekOverrides:{}},
+    {phase:'UAT',      role:'Test Manager',          name:'',              start:'2026-05-04',end:'2026-06-26',dpw:5,rate:800, disc:0, status:'Open',     breaks:[],weekOverrides:{}},
+    {phase:'UAT',      role:'Change Manager',        name:'Gemma Clarke',  start:'2026-04-06',end:'2026-06-26',dpw:3,rate:750, disc:5, status:'Tentative',breaks:[],weekOverrides:{}},
+  ],
+  oracle:[
+    {phase:'Discovery',role:'Program Manager',   name:'',start:'2026-01-05',end:'2026-02-27',dpw:5,rate:1100,disc:10,status:'Open',breaks:[],weekOverrides:{}},
+    {phase:'Discovery',role:'Solution Architect',name:'',start:'2026-01-05',end:'2026-02-27',dpw:5,rate:1050,disc:0, status:'Open',breaks:[],weekOverrides:{}},
+    {phase:'Build',    role:'Oracle Financials', name:'',start:'2026-02-02',end:'2026-05-29',dpw:5,rate:900, disc:0, status:'Open',breaks:[],weekOverrides:{}},
+    {phase:'Build',    role:'Developer',         name:'',start:'2026-02-02',end:'2026-05-01',dpw:5,rate:750, disc:0, status:'Open',breaks:[],weekOverrides:{}},
+    {phase:'UAT',      role:'Test Manager',      name:'',start:'2026-05-04',end:'2026-06-12',dpw:5,rate:800, disc:0, status:'Open',breaks:[],weekOverrides:{}},
+  ],
+  microsoft:[
+    {phase:'Discovery',role:'Program Manager',   name:'',start:'2026-01-05',end:'2026-02-13',dpw:5,rate:1000,disc:10,status:'Open',breaks:[],weekOverrides:{}},
+    {phase:'Build',    role:'D365 Consultant',   name:'',start:'2026-02-02',end:'2026-05-01',dpw:5,rate:850, disc:0, status:'Open',breaks:[],weekOverrides:{}},
+    {phase:'Build',    role:'Power Platform Dev',name:'',start:'2026-02-16',end:'2026-05-01',dpw:5,rate:750, disc:0, status:'Open',breaks:[],weekOverrides:{}},
+    {phase:'UAT',      role:'Test Manager',      name:'',start:'2026-05-04',end:'2026-06-12',dpw:5,rate:800, disc:0, status:'Open',breaks:[],weekOverrides:{}},
+  ],
+  crm:[
+    {phase:'Discovery',role:'CRM Architect',   name:'',start:'2026-01-05',end:'2026-01-30',dpw:5,rate:1000,disc:0,status:'Open',breaks:[],weekOverrides:{}},
+    {phase:'Build',    role:'CRM Developer',   name:'',start:'2026-02-02',end:'2026-04-17',dpw:5,rate:750, disc:0,status:'Open',breaks:[],weekOverrides:{}},
+    {phase:'Build',    role:'Business Analyst',name:'',start:'2026-01-19',end:'2026-04-17',dpw:4,rate:700, disc:0,status:'Open',breaks:[],weekOverrides:{}},
+    {phase:'Go Live',  role:'Change Manager',  name:'',start:'2026-04-06',end:'2026-05-15',dpw:3,rate:750, disc:0,status:'Open',breaks:[],weekOverrides:{}},
+  ],
+  custom:[],
+};
+
+/* ══════════════════════════════════════════════════
+   CAPACITY DATA — extended to 32 weeks (8 months)
+   breaks array mirrors the resource plan breaks
+   and is reflected in the capacity board
+══════════════════════════════════════════════════ */
+const CAP_DATA = [
+  { name:'Priya Mehta',     role:'SAP FICO Consultant',    color:'#1a7a4a',
+    // [confirmed%, tentative%] per week. Weeks 24-27 = Aug holiday
+    total: buildTotal([
+      {conf:100,tent:0,wks:[0,1,2,3]},{conf:100,tent:0,wks:[4,5,6,7]},{conf:80,tent:20,wks:[8,9,10,11]},
+      {conf:60,tent:30,wks:[12,13,14,15]},{conf:40,tent:60,wks:[16,17,18,19]},{conf:20,tent:70,wks:[20,21,22,23]},
+      {conf:0,tent:80,wks:[24,25,26,27]},{conf:0,tent:60,wks:[28,29,30,31]},
+    ]),
+    breaks:[],  // no booked leave
+    projects:[
+      {name:'Project X',    type:'SAP',   color:'#1a7a4a',alloc:'confirmed',w:buildW([{v:100,wks:[0,3]},{v:80,wks:[4,7]},{v:60,wks:[8,11]},{v:40,wks:[12,15]},{v:20,wks:[16,19]},{v:0,wks:[20,31]}])},
+      {name:'Project Alpha',type:'Oracle',color:'#d97706',alloc:'tentative',w:buildW([{v:0,wks:[0,7]},{v:20,wks:[8,11]},{v:30,wks:[12,15]},{v:60,wks:[16,23]},{v:80,wks:[24,27]},{v:60,wks:[28,31]}])},
+    ]},
+  { name:'Isaac Thompson',  role:'Business Analyst',       color:'#2563eb',
+    total: buildTotal([
+      {conf:100,tent:0,wks:[0,7]},{conf:100,tent:0,wks:[8,11]},{conf:80,tent:10,wks:[12,15]},
+      {conf:0,tent:80,wks:[16,23]},{conf:0,tent:50,wks:[24,27]},{conf:0,tent:0,wks:[28,31]},
+    ]),
+    breaks:[],
+    projects:[
+      {name:'Project X',   type:'SAP',color:'#1a7a4a',alloc:'confirmed',w:buildW([{v:100,wks:[0,15]},{v:80,wks:[16,19]},{v:0,wks:[20,31]}])},
+      {name:'Project Beta',type:'CRM',color:'#7c3aed',alloc:'tentative',w:buildW([{v:0,wks:[0,15]},{v:10,wks:[16,19]},{v:80,wks:[20,27]},{v:0,wks:[28,31]}])},
+    ]},
+  { name:'Gemma Clarke',    role:'Change Manager',         color:'#7c3aed',
+    total: buildTotal([
+      {conf:60,tent:30,wks:[0,11]},{conf:60,tent:40,wks:[12,19]},{conf:40,tent:50,wks:[20,23]},{conf:0,tent:0,wks:[24,31]},
+    ]),
+    breaks:[],
+    projects:[
+      {name:'Project X',    type:'SAP',    color:'#1a7a4a',alloc:'confirmed',w:buildW([{v:60,wks:[0,23]},{v:40,wks:[24,27]},{v:0,wks:[28,31]}])},
+      {name:'Project Gamma',type:'MS D365',color:'#0078d4',alloc:'tentative',w:buildW([{v:30,wks:[0,11]},{v:40,wks:[12,19]},{v:50,wks:[20,27]},{v:0,wks:[28,31]}])},
+    ]},
+  { name:'David Osei',      role:'Integration Specialist', color:'#b45309',
+    // Weeks 8-11 = training break
+    total: buildTotal([
+      {conf:0,tent:0,wks:[0,7]},{conf:0,tent:0,wks:[8,11]},{conf:0,tent:30,wks:[12,15]},
+      {conf:0,tent:80,wks:[16,23]},{conf:0,tent:60,wks:[24,27]},{conf:0,tent:40,wks:[28,31]},
+    ]),
+    breaks:[{start:'2026-03-09',end:'2026-03-27',reason:'Training',notes:'AWS certification'}],
+    projects:[
+      {name:'Project X',type:'SAP',color:'#1a7a4a',alloc:'tentative',w:buildW([{v:0,wks:[0,11]},{v:30,wks:[12,15]},{v:80,wks:[16,23]},{v:60,wks:[24,27]},{v:40,wks:[28,31]}])},
+    ]},
+  { name:'Consultant 1',    role:'Program Manager',        color:'#0e7490',
+    // Over-allocated in weeks 4-7 (120% — two projects clash)
+    total: buildTotal([
+      {conf:100,tent:0,wks:[0,3]},{conf:120,tent:0,wks:[4,7]},{conf:100,tent:0,wks:[8,11]},
+      {conf:100,tent:0,wks:[12,15]},{conf:100,tent:0,wks:[16,19]},{conf:80,tent:20,wks:[20,23]},
+      {conf:80,tent:20,wks:[24,27]},{conf:0,tent:0,wks:[28,31]},
+    ]),
+    breaks:[],
+    projects:[
+      {name:'Project Y',type:'Oracle',color:'#f5a623',alloc:'confirmed',w:buildW([{v:100,wks:[0,27]},{v:0,wks:[28,31]}])},
+      {name:'Project X',type:'SAP',  color:'#1a7a4a',alloc:'confirmed',w:buildW([{v:0,wks:[0,3]},{v:20,wks:[4,7]},{v:0,wks:[8,19]},{v:20,wks:[20,27]},{v:0,wks:[28,31]}])},
+    ]},
+  { name:'Consultant 2',    role:'Project Manager',        color:'#be185d',
+    total: buildTotal([
+      {conf:40,tent:50,wks:[0,19]},{conf:20,tent:70,wks:[20,23]},{conf:0,tent:0,wks:[24,31]},
+    ]),
+    breaks:[],
+    projects:[
+      {name:'Project Y',    type:'Oracle',color:'#f5a623',alloc:'confirmed',w:buildW([{v:40,wks:[0,23]},{v:20,wks:[24,27]},{v:0,wks:[28,31]}])},
+      {name:'Project Delta',type:'CRM',  color:'#7c3aed',alloc:'tentative',w:buildW([{v:50,wks:[0,23]},{v:70,wks:[24,27]},{v:0,wks:[28,31]}])},
+    ]},
+  { name:'Lydia Benson',    role:'Solution Architect',     color:'#047857',
+    total: buildTotal([
+      {conf:0,tent:40,wks:[0,3]},{conf:0,tent:60,wks:[4,7]},{conf:0,tent:80,wks:[8,15]},
+      {conf:0,tent:60,wks:[16,23]},{conf:0,tent:40,wks:[24,27]},{conf:0,tent:20,wks:[28,31]},
+    ]),
+    breaks:[],
+    projects:[
+      {name:'Project X',type:'SAP',color:'#1a7a4a',alloc:'tentative',w:buildW([{v:40,wks:[0,3]},{v:60,wks:[4,7]},{v:80,wks:[8,15]},{v:60,wks:[16,23]},{v:40,wks:[24,27]},{v:20,wks:[28,31]}])},
+    ]},
+  { name:'Rahul Desai',     role:'Technical Lead',         color:'#6d28d9',
+    total: buildTotal([
+      {conf:20,tent:20,wks:[0,7]},{conf:20,tent:40,wks:[8,11]},{conf:20,tent:60,wks:[12,23]},{conf:0,tent:0,wks:[24,31]},
+    ]),
+    breaks:[],
+    projects:[
+      {name:'Project Z',type:'MS D365',color:'#0078d4',alloc:'confirmed',w:buildW([{v:20,wks:[0,23]},{v:0,wks:[24,31]}])},
+      {name:'Project X',type:'SAP',   color:'#1a7a4a',alloc:'tentative',w:buildW([{v:20,wks:[0,7]},{v:40,wks:[8,11]},{v:60,wks:[12,23]},{v:0,wks:[24,31]}])},
+    ]},
+];
+
+/* helpers to build arrays cleanly */
+function buildW(segs){ const a=new Array(N_CAP).fill(0); segs.forEach(s=>{ for(let i=s.wks[0];i<=s.wks[1];i++) a[i]=s.v; }); return a; }
+function buildTotal(segs){ const a=new Array(N_CAP).fill(null).map(()=>[0,0]); segs.forEach(s=>{ for(let i=s.wks[0];i<=s.wks[1];i++) a[i]=[s.conf||0,s.tent||0]; }); return a; }
+
+/* ══════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════ */
+let rows=[], planView='table', capView='pct';
+let expanded=new Set(), allExp=false;
+let breakRowIdx=-1;
+// Option 4 popover state
+let popoverRowIdx=-1, popoverWkKey='', popoverDefaultDpw=5;
+
+/* ══════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════ */
+function wksBetween(s,e){ return Math.max(0,Math.round((new Date(e)-new Date(s))/(7*86400000))); }
+function calcBreakDays(r){
+  let lost=0;
+  (r.breaks||[]).forEach(b=>{
+    const bs=new Date(b.start),be=new Date(b.end),rs=new Date(r.start),re=new Date(r.end);
+    const os=bs<rs?rs:bs, oe=be>re?re:be;
+    if(os<=oe) lost+=wksBetween(os.toISOString().slice(0,10),oe.toISOString().slice(0,10))*r.dpw;
+  });
+  Object.entries(r.weekOverrides||{}).forEach(([,v])=>{ if(v===0) lost+=r.dpw; });
+  return Math.round(lost);
+}
+function calcDays(r){ return Math.max(0,Math.round(wksBetween(r.start,r.end)*r.dpw)-calcBreakDays(r)); }
+function calcCost(r){ return Math.round(calcDays(r)*r.rate*(1-(r.disc||0)/100)); }
+function isInBreak(r,ws){
+  const we=new Date(ws); we.setDate(we.getDate()+6);
+  return (r.breaks||[]).some(b=>{ const bs=new Date(b.start),be=new Date(b.end); return ws<=be&&we>=bs; });
+}
+function getBreakForWeek(r,ws){
+  const we=new Date(ws); we.setDate(we.getDate()+6);
+  return (r.breaks||[]).find(b=>{ const bs=new Date(b.start),be=new Date(b.end); return ws<=be&&we>=bs; });
+}
+function fmtGBP(n){ return n==null?'—':'£'+n.toLocaleString('en-GB'); }
+function fmtD(d){ return new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
+function ssel(el,v){ el.style.color=STATUS_C[v]||'#333';el.style.background=STATUS_B[v]||'#fff';el.style.fontWeight='700';el.style.border='1px solid '+(STATUS_C[v]||'#ccc');el.style.borderRadius='20px';el.style.padding='3px 8px';el.style.fontSize='11px'; }
+function phCls(p){ return PHASE_CLS[p]||'ph-Default'; }
+
+/* ══════════════════════════════════════════════════
+   PANEL SWITCH
+══════════════════════════════════════════════════ */
+function switchPanel(id){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tabPlan').classList.toggle('active',id==='plan');
+  document.getElementById('tabCap').classList.toggle('active',id==='capacity');
+  document.getElementById('panel-'+id).classList.add('active');
+  if(id==='capacity'){ buildCapHeader(); buildCapBody(); }
+}
+
+/* ══════════════════════════════════════════════════
+   TEMPLATE LOAD
+══════════════════════════════════════════════════ */
+function loadTemplate(key,el){
+  document.querySelectorAll('.template-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  rows=TEMPLATES[key]?JSON.parse(JSON.stringify(TEMPLATES[key])):[];
+  renderTable();
+  if(planView==='timeline') renderTimeline();
+  showToast('✅ Template loaded: '+el.textContent.trim());
+}
+
+/* ══════════════════════════════════════════════════
+   TABLE RENDER
+══════════════════════════════════════════════════ */
+function renderTable(){
+  const tbody=document.getElementById('resourceRows');
+  tbody.innerHTML='';
+  rows.forEach((r,i)=>{
+    const days=calcDays(r), cost=calcCost(r);
+    const bc=(r.breaks||[]).length, lost=calcBreakDays(r);
+    const tr=document.createElement('tr'); tr.className='main-row';
+    tr.innerHTML=`
+      <td style="color:var(--text-muted);font-weight:700;text-align:center;font-size:12px">${i+1}</td>
+      <td class="phase-cell"><select onchange="upd(${i},'phase',this.value)" style="font-weight:600;color:var(--brand-green-dark)">
+        ${ALL_PHASES.map(p=>`<option${p===r.phase?' selected':''}>${p}</option>`).join('')}</select></td>
+      <td><input value="${r.role}" onchange="upd(${i},'role',this.value)" placeholder="Role / Skill"></td>
+      <td><select onchange="upd(${i},'name',this.value)">
+        ${ALL_NAMES.map(n=>`<option value="${n}"${n===r.name?' selected':''}>${n||'— TBA —'}</option>`).join('')}</select></td>
+      <td><input type="date" value="${r.start}" onchange="upd(${i},'start',this.value)"></td>
+      <td><input type="date" value="${r.end}" onchange="upd(${i},'end',this.value)"></td>
+      <td><input type="number" value="${r.dpw}" min="0.5" max="5" step="0.5" onchange="upd(${i},'dpw',+this.value)" style="text-align:center"></td>
+      <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:600">${days}${lost>0?`<div style="font-size:10px;color:var(--red);font-weight:500">−${lost}d</div>`:''}
+      </td>
+      <td><input type="number" value="${r.rate}" onchange="upd(${i},'rate',+this.value)" style="text-align:right"></td>
+      <td><input type="number" value="${r.disc||0}" min="0" max="100" onchange="upd(${i},'disc',+this.value)" style="text-align:center"></td>
+      <td class="cost-cell">${fmtGBP(cost)}</td>
+      <td><select onchange="upd(${i},'status',this.value);ssel(this,this.value)" style="color:${STATUS_C[r.status]};background:${STATUS_B[r.status]};font-weight:700;border:1px solid ${STATUS_C[r.status]};border-radius:20px;padding:3px 8px;font-size:11px">
+        ${['Open','Proposed','Tentative','Confirmed'].map(s=>`<option${s===r.status?' selected':''}>${s}</option>`).join('')}</select></td>
+      <td><span class="break-indicator${bc>0?' has-breaks':''}" onclick="openBreakModal(${i})">
+        ${bc>0?`✂ ${bc} break${bc>1?'s':''}·${lost}d`:'＋ Break'}</span></td>
+      <td><button class="btn btn-danger btn-sm" onclick="delRow(${i})" title="Remove">✕</button></td>`;
+    tbody.appendChild(tr);
+  });
+  updateTotals();
+}
+
+function upd(i,f,v){ rows[i][f]=v; renderTable(); if(planView==='timeline') renderTimeline(); }
+function delRow(i){ rows.splice(i,1); renderTable(); if(planView==='timeline') renderTimeline(); showToast('Row removed'); }
+function clearRows(){ rows=[]; renderTable(); if(planView==='timeline') renderTimeline(); showToast('Rows cleared'); }
+
+function updateTotals(){
+  let td=0,tc=0,conf=0;
+  rows.forEach(r=>{ td+=calcDays(r); tc+=calcCost(r); if(r.status==='Confirmed')conf++; });
+  document.getElementById('totalDays').textContent=td;
+  document.getElementById('totalCost').textContent=fmtGBP(tc);
+  document.getElementById('sumResources').textContent=rows.length;
+  document.getElementById('sumDays').textContent=td;
+  document.getElementById('sumCost').textContent=fmtGBP(tc);
+  document.getElementById('sumWeighted').textContent=fmtGBP(Math.round(tc*PROB/100));
+  document.getElementById('sumConfirmed').textContent=conf+' / '+rows.length;
+}
+
+/* ══════════════════════════════════════════════════
+   PLAN VIEW TOGGLE
+══════════════════════════════════════════════════ */
+function setPlanView(mode){
+  planView=mode;
+  document.getElementById('btnTable').classList.toggle('active',mode==='table');
+  document.getElementById('btnTimeline').classList.toggle('active',mode==='timeline');
+  document.getElementById('tableView').style.display    = mode==='table'    ?'block':'none';
+  document.getElementById('timelineView').style.display = mode==='timeline' ?'block':'none';
+  document.getElementById('tlHint').style.display       = mode==='timeline' ?'inline':'none';
+  document.getElementById('phaseLegend').style.display  = mode==='timeline' ?'flex':'none';
+  closePopover();
+  if(mode==='timeline') renderTimeline();
+}
+
+/* ══════════════════════════════════════════════════
+   TIMELINE RENDER
+══════════════════════════════════════════════════ */
+function renderTimeline(){
+  const thead=document.getElementById('tlHead');
+  const tbody=document.getElementById('tlBody');
+  thead.innerHTML=''; tbody.innerHTML='';
+
+  // Row 1 — month headers
+  const r1=document.createElement('tr');
+  const h0=document.createElement('th'); h0.className='tl-info-th'; h0.textContent='Resource / Role'; r1.appendChild(h0);
+  MONTH_GROUPS.forEach((mg,mi)=>{
+    const th=document.createElement('th'); th.colSpan=mg.span; th.className='tl-month-th';
+    if(mi>0) th.style.borderLeft='2px solid var(--brand-green)';
+    th.textContent=mg.label; r1.appendChild(th);
+  });
+  thead.appendChild(r1);
+
+  // Row 2 — week date headers
+  const r2=document.createElement('tr');
+  const h0b=document.createElement('th'); h0b.className='tl-info-th'; h0b.textContent=''; r2.appendChild(h0b);
+  WEEK_STARTS.forEach((ws,wi)=>{
+    const th=document.createElement('th'); th.style.minWidth='50px'; th.style.width='50px';
+    th.innerHTML=`<span style="font-size:9px">${ws.toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit'})}</span>`;
+    if(MONTH_BDRY.has(wi)) th.style.borderLeft='2px solid var(--border)';
+    r2.appendChild(th);
+  });
+  thead.appendChild(r2);
+
+  if(rows.length===0){
+    const tr=document.createElement('tr'); const td=document.createElement('td');
+    td.colSpan=WEEK_STARTS.length+1;
+    td.style.cssText='text-align:center;padding:32px;color:var(--text-muted);font-size:13px';
+    td.textContent='No resource requirements yet. Load a template or add a row.';
+    tr.appendChild(td); tbody.appendChild(tr); return;
+  }
+
+  rows.forEach((r,ri)=>{
+    const tr=document.createElement('tr');
+    const rStart=new Date(r.start), rEnd=new Date(r.end);
+    const pCls=phCls(r.phase);
+    const bc=(r.breaks||[]).length;
+
+    // Info cell — FIX: padding:10px 14px 10px 20px applied via CSS class
+    const tdInfo=document.createElement('td'); tdInfo.className='tl-info-td';
+    tdInfo.innerHTML=`
+      <div class="tl-res-name">${r.role}</div>
+      <div class="tl-res-sub">
+        <span>${r.name||'— TBA —'}</span>
+        <span class="tl-phase-pill ${pCls}">${r.phase}</span>
+        ${bc>0?`<span onclick="openBreakModal(${ri})" style="cursor:pointer;font-size:10px;padding:1px 6px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#b45309;font-weight:700">✂ ${bc} break${bc>1?'s':''}</span>`:''}
+      </div>`;
+    tr.appendChild(tdInfo);
+
+    WEEK_STARTS.forEach((ws,wi)=>{
+      const we=new Date(ws); we.setDate(we.getDate()+6);
+      const td=document.createElement('td');
+      td.className='tl-week-td'+(MONTH_BDRY.has(wi)?' month-start':'');
+      const activeInRow = ws<=rEnd && we>=rStart;
+      const inBreak     = activeInRow && isInBreak(r,ws);
+      const wkKey       = ws.toISOString().slice(0,10);
+      const override    = r.weekOverrides&&r.weekOverrides[wkKey]!==undefined ? r.weekOverrides[wkKey] : null;
+
+      if(activeInRow && inBreak){
+        const b=getBreakForWeek(r,ws);
+        const icon=REASON_ICON[b?.reason]||'⏸';
+        const tip=b?`${b.reason}${b.notes?' — '+b.notes:''}`:' Break';
+        const div=document.createElement('div'); div.className='tl-block-break';
+        div.setAttribute('data-tip',tip); div.innerHTML=icon;
+        td.appendChild(div);
+      } else if(activeInRow){
+        const daysVal = override!==null ? override : r.dpw;
+        const div=document.createElement('div');
+        div.className=`tl-block ${pCls} editable${override!==null?' week-override':''}${daysVal===0?' week-zero':''}`;
+        const tipText=`${r.role} · ${r.phase} · ${daysVal}d/wk${override!==null?' (edited — click to change)':' (click to edit)'}`;
+        div.setAttribute('data-tip',tipText);
+        div.textContent=daysVal===0?'off':daysVal+'d';
+        div.onclick=(e)=>{ e.stopPropagation(); openWeekPopover(ri,wkKey,daysVal,r.dpw,div); };
+        td.appendChild(div);
+      } else {
+        const div=document.createElement('div'); div.className='tl-empty'; td.appendChild(div);
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+
+  // Totals row
+  const totTr=document.createElement('tr');
+  const totInfo=document.createElement('td'); totInfo.className='tl-info-td tl-total-info';
+  totInfo.textContent='TOTAL DAYS / WEEK'; totTr.appendChild(totInfo);
+  WEEK_STARTS.forEach((ws,wi)=>{
+    const we=new Date(ws); we.setDate(we.getDate()+6);
+    let tot=0;
+    rows.forEach(r=>{
+      if(ws<=new Date(r.end)&&we>=new Date(r.start)&&!isInBreak(r,ws)){
+        const wkKey=ws.toISOString().slice(0,10);
+        const ov=r.weekOverrides&&r.weekOverrides[wkKey]!==undefined?r.weekOverrides[wkKey]:r.dpw;
+        tot+=ov;
+      }
+    });
+    const td=document.createElement('td');
+    td.className='tl-week-td tl-total-td'+(MONTH_BDRY.has(wi)?' month-start':'');
+    if(tot>0) td.innerHTML=`<div class="tl-total-val" style="text-align:center">${tot}</div>`;
+    totTr.appendChild(td);
+  });
+  tbody.appendChild(totTr);
+}
+
+/* ══════════════════════════════════════════════════
+   OPTION 4 — INLINE WEEK EDIT POPOVER
+══════════════════════════════════════════════════ */
+function openWeekPopover(rowIdx, wkKey, currentVal, defaultDpw, anchorEl){
+  popoverRowIdx    = rowIdx;
+  popoverWkKey     = wkKey;
+  popoverDefaultDpw = defaultDpw;
+  const pop = document.getElementById('weekPopover');
+  const wkDisplay = new Date(wkKey).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  document.getElementById('wpTitle').textContent = `Edit: w/c ${wkDisplay}`;
+  document.getElementById('wpDays').value = currentVal;
+
+  // Position popover near clicked block
+  const rect = anchorEl.getBoundingClientRect();
+  let left = rect.left + window.scrollX;
+  let top  = rect.bottom + window.scrollY + 8;
+  // keep on screen
+  if(left + 220 > window.innerWidth) left = window.innerWidth - 228;
+  pop.style.left = left+'px';
+  pop.style.top  = top+'px';
+  pop.classList.add('open');
+}
+
+function closePopover(){
+  document.getElementById('weekPopover').classList.remove('open');
+  popoverRowIdx=-1; popoverWkKey='';
+}
+
+function applyWeekEdit(){
+  if(popoverRowIdx<0) return;
+  const val = parseFloat(document.getElementById('wpDays').value);
+  if(isNaN(val)||val<0||val>5){ showToast('⚠ Days must be between 0 and 5'); return; }
+  if(!rows[popoverRowIdx].weekOverrides) rows[popoverRowIdx].weekOverrides={};
+  rows[popoverRowIdx].weekOverrides[popoverWkKey] = val;
+  closePopover();
+  renderTable();
+  renderTimeline();
+  showToast(`✅ Week override saved — ${val===0?'marked as off':val+'d/wk'}`);
+}
+
+function resetWeekOverride(){
+  if(popoverRowIdx<0) return;
+  if(rows[popoverRowIdx].weekOverrides) delete rows[popoverRowIdx].weekOverrides[popoverWkKey];
+  closePopover();
+  renderTable();
+  renderTimeline();
+  showToast('↩ Week reset to default days');
+}
+
+function openBreakFromPopover(){
+  const ri=popoverRowIdx;
+  closePopover();
+  openBreakModal(ri);
+}
+
+// Close popover on outside click
+document.addEventListener('click',function(e){
+  const pop=document.getElementById('weekPopover');
+  if(pop.classList.contains('open') && !pop.contains(e.target) && !e.target.classList.contains('tl-block')){
+    closePopover();
+  }
+});
+
+/* ══════════════════════════════════════════════════
+   BREAK MODAL
+══════════════════════════════════════════════════ */
+function openBreakModal(i){
+  breakRowIdx=i;
+  const r=rows[i];
+  document.getElementById('breakModalTitle').textContent=`Breaks — ${r.role}${r.name?' ('+r.name+')':''}`;
+  document.getElementById('b-start').value=r.start;
+  document.getElementById('b-end').value=r.end;
+  renderBreakList();
+  document.getElementById('breakModal').classList.add('open');
+}
+
+function renderBreakList(){
+  const r=rows[breakRowIdx];
+  const list=document.getElementById('breakModalList');
+  const none=document.getElementById('noBreaksMsg');
+  list.innerHTML='';
+  if(!r.breaks||r.breaks.length===0){ none.style.display='block'; return; }
+  none.style.display='none';
+  r.breaks.forEach((b,bi)=>{
+    const lostD=Math.round(wksBetween(b.start,b.end)*rows[breakRowIdx].dpw);
+    const div=document.createElement('div'); div.className='break-modal-item';
+    div.innerHTML=`<span class="bm-reason" style="background:${REASON_B[b.reason]||'#f1f5f9'};color:${REASON_C[b.reason]||'#475569'}">${REASON_ICON[b.reason]||'⏸'} ${b.reason}</span>
+      <span class="bm-dates">${fmtD(b.start)} → ${fmtD(b.end)}</span>
+      ${b.notes?`<span style="font-size:11px;color:var(--text-muted);flex:1">${b.notes}</span>`:'<span style="flex:1"></span>'}
+      <span class="bm-days">−${lostD}d</span>
+      <button class="btn btn-danger btn-xs" onclick="deleteBreak(${bi})">✕</button>`;
+    list.appendChild(div);
+  });
+}
+
+function addBreak(){
+  const r=rows[breakRowIdx];
+  const bs=document.getElementById('b-start').value;
+  const be=document.getElementById('b-end').value;
+  const br=document.getElementById('b-reason').value;
+  const bn=document.getElementById('b-notes').value;
+  if(!bs||!be){ showToast('⚠ Please enter break start and end dates'); return; }
+  if(new Date(bs)>new Date(be)){ showToast('⚠ Break start must be before end'); return; }
+  if(new Date(bs)<new Date(r.start)||new Date(be)>new Date(r.end)){ showToast('⚠ Break must be within assignment dates'); return; }
+  if(!r.breaks) r.breaks=[];
+  r.breaks.push({start:bs,end:be,reason:br,notes:bn});
+  renderBreakList();
+  document.getElementById('b-notes').value='';
+  showToast(`✅ Break added: ${br} (${fmtD(bs)} – ${fmtD(be)})`);
+}
+
+function deleteBreak(bi){ rows[breakRowIdx].breaks.splice(bi,1); renderBreakList(); showToast('Break removed'); }
+
+function saveBreaks(){
+  closeModal('breakModal');
+  renderTable();
+  if(planView==='timeline') renderTimeline();
+  showToast('✅ Breaks saved — cost and timeline updated');
+}
+
+/* ══════════════════════════════════════════════════
+   CAPACITY BOARD
+══════════════════════════════════════════════════ */
+function buildCapHeader(){
+  const head=document.getElementById('capHead'); head.innerHTML='';
+  const r1=document.createElement('tr');
+  const th0=document.createElement('th'); th0.className='res-col'; th0.textContent='Resource'; r1.appendChild(th0);
+  CAP_MONTHS_DEF.forEach((m,mi)=>{
+    const th=document.createElement('th'); th.colSpan=m.span; th.className='month-th';
+    if(mi>0) th.style.borderLeft='2px solid var(--brand-green)';
+    th.textContent=m.label; r1.appendChild(th);
+  });
+  head.appendChild(r1);
+  const r2=document.createElement('tr');
+  const th0b=document.createElement('th'); th0b.className='res-col'; r2.appendChild(th0b);
+  CAP_WK_LABELS.forEach((w,wi)=>{
+    const th=document.createElement('th'); th.textContent=w;
+    if(wi>0&&wi%4===0) th.style.borderLeft='2px solid var(--brand-green)';
+    r2.appendChild(th);
+  });
+  head.appendChild(r2);
+}
+
+function buildCapBody(){
+  const tbody=document.getElementById('capBody'); tbody.innerHTML='';
+  CAP_DATA.forEach((res,ri)=>{
+    const isOpen=expanded.has(ri);
+
+    // Determine which weeks have breaks from the resource plan
+    // (linking breaks entered in Panel 1 back to the capacity board)
+    const breakWeeks=new Set();
+    rows.forEach(r=>{ if(r.name===res.name&&r.name!==''){
+      WEEK_STARTS.slice(0,N_CAP).forEach((ws,wi)=>{
+        if(isInBreak(r,ws)) breakWeeks.add(wi);
+      });
+    }});
+    // Also incorporate capacity data's own breaks
+    if(res.breaks&&res.breaks.length>0){
+      WEEK_STARTS.slice(0,N_CAP).forEach((ws,wi)=>{
+        const we=new Date(ws); we.setDate(we.getDate()+6);
+        res.breaks.forEach(b=>{
+          if(ws<=new Date(b.end)&&we>=new Date(b.start)) breakWeeks.add(wi);
+        });
+      });
+    }
+
+    // Parent row
+    const ptr=document.createElement('tr'); ptr.className='parent-row'; ptr.onclick=()=>toggleExpand(ri);
+    const tdI=document.createElement('td');
+    const initials=res.name.split(' ').map(n=>n[0]).join('');
+    tdI.innerHTML=`<div class="res-info">
+      <div class="res-avatar" style="background:${res.color}">${initials}</div>
+      <div style="flex:1"><div class="res-name">${res.name}</div><div class="res-role">${res.role}</div></div>
+      <div class="expand-icon${isOpen?' open':''}" title="${isOpen?'Collapse':'Expand'} projects">▶</div>
+    </div>`;
+    ptr.appendChild(tdI);
+
+    res.total.forEach(([conf,tent],wi)=>{
+      const td=document.createElement('td');
+      td.className='cap-cell'+(wi>0&&wi%4===0?' mb':'');
+      td.appendChild(makeCapCell(conf,tent,breakWeeks.has(wi)));
+      ptr.appendChild(td);
+    });
+    tbody.appendChild(ptr);
+
+    // Break sub-row (if any breaks)
+    if(res.breaks&&res.breaks.length>0||breakWeeks.size>0){
+      const btr=document.createElement('tr'); btr.className='break-sub-row'+(isOpen?' visible':'');
+      const btdI=document.createElement('td');
+      const allBreaks=[...res.breaks,...(()=>{
+        const plan=[];
+        rows.forEach(r=>{ if(r.name===res.name&&r.name!=='') plan.push(...(r.breaks||[])); });
+        return plan;
+      })()];
+      if(allBreaks.length>0){
+        const tips=allBreaks.map(b=>`${REASON_ICON[b.reason]||'⏸'} ${b.reason}${b.notes?' — '+b.notes:''}`).join(' · ');
+        btdI.innerHTML=`<div class="break-proj-info">
+          <div class="proj-dot" style="background:repeating-linear-gradient(45deg,#cbd5e1,#cbd5e1 2px,#e2e8f0 2px,#e2e8f0 4px);border:1px solid #cbd5e1"></div>
+          <div><span class="proj-name" style="color:var(--break-text)">${tips}</span></div>
+        </div>`;
+      } else { btdI.innerHTML='<div class="break-proj-info"><span class="proj-name" style="color:var(--break-text)">Leave / breaks</span></div>'; }
+      btr.appendChild(btdI);
+      for(let wi=0;wi<N_CAP;wi++){
+        const td=document.createElement('td'); td.className='sub-cap-cell'+(wi>0&&wi%4===0?' mb':'');
+        if(breakWeeks.has(wi)){
+          td.innerHTML=`<div style="font-size:13px;text-align:center;line-height:28px">⬚</div>`;
+        }
+        btr.appendChild(td);
+      }
+      tbody.appendChild(btr);
+    }
+
+    // Project sub-rows
+    res.projects.forEach(proj=>{
+      const str=document.createElement('tr'); str.className='sub-row'+(isOpen?' visible':'');
+      const tdP=document.createElement('td');
+      const ac=proj.alloc==='confirmed'?'#059669':'#d97706';
+      const ab=proj.alloc==='confirmed'?'#d1fae5':'#fff3dc';
+      tdP.innerHTML=`<div class="proj-info"><div class="proj-dot" style="background:${proj.color}"></div>
+        <div><span class="proj-name">${proj.name}</span>
+        <span class="proj-badge" style="background:${ab};color:${ac}">${proj.type}</span>
+        <span class="proj-badge" style="background:${ab};color:${ac}">${proj.alloc}</span></div></div>`;
+      str.appendChild(tdP);
+      proj.w.forEach((pct,wi)=>{
+        const td=document.createElement('td'); td.className='sub-cap-cell'+(wi>0&&wi%4===0?' mb':'');
+        if(pct>0){
+          const dv=capView==='pct'?pct+'%':(pct/20).toFixed(1)+'d';
+          const op=proj.alloc==='confirmed'?1:0.65;
+          td.innerHTML=`<div class="sub-mini-bar"><div class="sub-mini-fill" style="width:${Math.min(pct,100)}%;background:${proj.color};opacity:${op}"></div></div><div class="sub-val">${dv}</div>`;
+        }
+        str.appendChild(td);
+      });
+      tbody.appendChild(str);
+    });
+  });
+}
+
+function makeCapCell(conf,tent,isBreak){
+  const weighted=conf+Math.round(tent*PROB/100);
+  const isOver=conf>100||weighted>100;
+  let val,cls;
+  if(capView==='pct'){
+    val=weighted+'%';
+    cls=isOver?'over':weighted>85?'high':weighted>50?'med':weighted>10?'ok':'low';
+  } else {
+    const free=Math.max(0,5-Math.round(weighted/20));
+    val=free+'d free';
+    cls=isOver?'over':free===0?'high':free<=1?'med':free>=4?'low':'ok';
+  }
+  const w=document.createElement('div'); w.className='cap-bar-wrap';
+  const confW=Math.min(conf,100);
+  const tentW=Math.min(tent,100-Math.min(conf,100));
+  const breakW=isBreak?Math.max(0,100-confW-tentW):0;
+  const overFlag=conf>100?`<div style="height:100%;background:#7f1d1d;width:${Math.min(conf-100,20)}%"></div>`:'';
+  w.innerHTML=`<div class="cap-bar-outer">
+    <div class="bar-conf" style="width:${confW}%"></div>
+    <div class="bar-tent" style="width:${tentW}%"></div>
+    ${isBreak&&breakW>0?`<div class="bar-break" style="width:${breakW}%"></div>`:''}
+    ${overFlag}
+  </div>
+  <span class="cap-val ${cls}">${val}</span>`;
+  return w;
+}
+
+function toggleExpand(ri){
+  if(expanded.has(ri)) expanded.delete(ri); else expanded.add(ri);
+  buildCapBody();
+}
+function toggleExpandAll(){
+  allExp=!allExp; expanded.clear();
+  if(allExp) CAP_DATA.forEach((_,i)=>expanded.add(i));
+  document.getElementById('expandAllBtn').textContent=allExp?'⊟ Collapse All':'⊞ Expand All';
+  buildCapBody();
+}
+function setCapView(mode,btn){
+  capView=mode;
+  document.getElementById('capPctBtn').classList.toggle('active',mode==='pct');
+  document.getElementById('capDaysBtn').classList.toggle('active',mode==='days');
+  buildCapBody();
+}
+function singleFilter(el){
+  document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active'); showToast('Filter: '+el.textContent);
+}
+
+/* ══════════════════════════════════════════════════
+   MODALS
+══════════════════════════════════════════════════ */
+function openAddRowModal(){ document.getElementById('addRowModal').classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+function confirmAddRow(){
+  rows.push({
+    phase:document.getElementById('m-phase').value,
+    role: document.getElementById('m-role').value,
+    name: document.getElementById('m-name').value,
+    start:document.getElementById('m-start').value,
+    end:  document.getElementById('m-end').value,
+    dpw: +document.getElementById('m-dpw').value,
+    rate:+document.getElementById('m-rate').value,
+    disc:+document.getElementById('m-disc').value,
+    status:document.getElementById('m-status').value,
+    breaks:[],
+    weekOverrides:{},
+  });
+  renderTable();
+  if(planView==='timeline') renderTimeline();
+  closeModal('addRowModal');
+  showToast('✅ Resource requirement added');
+}
+
+/* ══════════════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════════════ */
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+/* ══════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════ */
+loadTemplate('sap',document.querySelector('.template-chip.active'));
+buildCapHeader();
+buildCapBody();
+</script>
+</body>
+</html>

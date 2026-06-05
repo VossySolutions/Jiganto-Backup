@@ -1,0 +1,21 @@
+Code,Title,Status,Priority,Category,Owner,Workstream,Escalated,Description
+A-0001,Business SMEs available 2 days per week for UAT,Validated,12,Resource,A. Turner,PMO,No,Assumed capacity secured from Finance leadership.
+A-0002,Legacy data quality ³ 95% accuracy,At Risk,15,Data,J. Morris,Data Migration,Yes,Profiling indicates potential exception rates >10%.
+A-0003,Integration vendor delivers APIs by end of Sprint 5,Open,14,Vendor,S. Patel,Technical,Yes,Critical for SIT start.
+A-0004,Regulatory framework unchanged during project,Validated,8,Compliance,R. Blake,Governance,No,No anticipated regulatory updates.
+A-0005,Infrastructure capacity sufficient for go-live load,At Risk,16,Infrastructure,M. Walsh,Technical,Yes,Load testing not yet executed.
+A-0006,No major scope changes after design freeze,Open,13,Scope,D. Khan,PMO,No,Change control process active.
+A-0007,Funding approved for full project lifecycle,Validated,18,Financial,L. Chen,Steering Cmte,No,CFO approval secured.
+A-0008,Vendor resources remain consistent through go-live,At Risk,17,Vendor,J. Morris,Data Migration,Yes,Contract extension under negotiation.
+A-0009,All business units adopt new process model,Open,9,Change,A. Turner,Change,No,Change readiness survey pending.
+A-0010,Data privacy controls compliant with GDPR,Validated,12,Compliance,R. Blake,Security,No,DPIA completed.
+A-0011,Parallel run limited to one month,Open,10,Operations,D. Khan,O2C,No,Assumes reconciliation issues minimal.
+A-0012,Test environments stable during UAT,At Risk,14,Technical,M. Walsh,Technical,Yes,Recent outages observed.
+A-0013,Bank connectivity approved without delay,Open,11,External,L. Chen,O2C,No,Awaiting formal confirmation.
+A-0014,Data archiving solution procured in time,Open,7,Procurement,S. Patel,Technical,No,Vendor selection ongoing.
+A-0015,Project team attrition < 5%,At Risk,13,Resource,A. Turner,PMO,Yes,Market competition high.
+A-0016,Cutover executed over weekend window,Validated,9,Planning,S. Patel,PMO,No,Business sign-off obtained.
+A-0017,Reporting requirements stable post design,Open,6,Reporting,M. Walsh,Reporting,No,Finance reviewing KPI list.
+A-0018,Third-party audit available pre go-live,Open,8,Governance,R. Blake,Compliance,No,Auditor engagement pending.
+A-0019,No cybersecurity incidents during deployment,Open,15,Security,M. Walsh,Security,Yes,Heightened monitoring required.
+A-0020,Training completion rate ³ 90% before go-live,Open,10,Change,A. Turner,Change,No,Training rollout begins next month.

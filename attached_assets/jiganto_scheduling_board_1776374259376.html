@@ -1,0 +1,377 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);background:transparent;font-size:13px;color:var(--color-text-primary)}
+.board{display:flex;flex-direction:column;gap:0;padding:1rem 0}
+.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.toolbar-left{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+.toolbar-right{display:flex;align-items:center;gap:8px}
+.view-btn{padding:4px 12px;border-radius:999px;border:0.5px solid var(--color-border-secondary);font-size:12px;cursor:pointer;color:var(--color-text-secondary);background:transparent;transition:all .15s}
+.view-btn.active{background:var(--color-text-primary);color:var(--color-background-primary);border-color:transparent}
+.date-nav{display:flex;align-items:center;gap:6px}
+.nav-btn{width:28px;height:28px;border-radius:6px;border:0.5px solid var(--color-border-secondary);background:transparent;cursor:pointer;color:var(--color-text-secondary);font-size:14px;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.nav-btn:hover{background:var(--color-background-secondary)}
+.date-label{font-size:13px;font-weight:500;min-width:160px;text-align:center}
+.filter-pill{padding:3px 10px;border-radius:999px;border:0.5px solid var(--color-border-secondary);font-size:11px;cursor:pointer;color:var(--color-text-secondary);background:transparent}
+.filter-pill.on{background:var(--color-background-info);color:var(--color-text-info);border-color:var(--color-border-info)}
+.main{display:flex;gap:0;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden}
+.queue{width:200px;min-width:200px;border-right:0.5px solid var(--color-border-tertiary);display:flex;flex-direction:column}
+.queue-header{padding:10px 12px;border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:center;justify-content:space-between}
+.queue-title{font-size:12px;font-weight:500}
+.badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:999px;font-size:11px;font-weight:500;padding:0 5px}
+.badge.warn{background:var(--color-background-warning);color:var(--color-text-warning)}
+.badge.info{background:var(--color-background-info);color:var(--color-text-info)}
+.queue-body{flex:1;padding:8px;display:flex;flex-direction:column;gap:6px;overflow-y:auto}
+.job-card{border-radius:8px;padding:8px 10px;cursor:grab;border:0.5px solid var(--color-border-secondary);transition:all .15s;user-select:none}
+.job-card:active{cursor:grabbing;opacity:.7}
+.job-card.urgent{border-left:3px solid #E24B4A;border-radius:0 8px 8px 0}
+.job-card.normal{border-left:3px solid #378ADD;border-radius:0 8px 8px 0}
+.job-card.low{border-left:3px solid #888780;border-radius:0 8px 8px 0}
+.job-card.dragging{opacity:.4}
+.jc-title{font-size:12px;font-weight:500;margin-bottom:3px}
+.jc-meta{font-size:11px;color:var(--color-text-secondary)}
+.jc-skills{display:flex;gap:3px;flex-wrap:wrap;margin-top:4px}
+.skill-tag{font-size:10px;padding:1px 5px;border-radius:4px;background:var(--color-background-secondary);color:var(--color-text-secondary);border:0.5px solid var(--color-border-tertiary)}
+.grid-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.day-header{display:grid;border-bottom:0.5px solid var(--color-border-tertiary)}
+.day-cell{padding:8px 0;text-align:center;border-right:0.5px solid var(--color-border-tertiary);font-size:11px;color:var(--color-text-secondary)}
+.day-cell:last-child{border-right:none}
+.day-cell.today .day-num{background:var(--color-text-primary);color:var(--color-background-primary);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;margin:0 auto 1px}
+.day-num{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:1px}
+.day-name{font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+.resource-rows{flex:1;overflow-y:auto}
+.resource-row{display:flex;border-bottom:0.5px solid var(--color-border-tertiary)}
+.resource-row:last-child{border-bottom:none}
+.res-label{width:0;display:none}
+.res-cells{flex:1;display:grid}
+.res-cell{min-height:60px;border-right:0.5px solid var(--color-border-tertiary);padding:4px;position:relative;transition:background .15s}
+.res-cell:last-child{border-right:none}
+.res-cell.today-col{background:rgba(55,138,221,0.04)}
+.res-cell.drop-target{background:var(--color-background-info)}
+.alloc-block{border-radius:6px;padding:4px 6px;font-size:11px;cursor:pointer;margin-bottom:2px;transition:opacity .15s;position:relative}
+.alloc-block:hover{opacity:.85}
+.ab-title{font-weight:500;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ab-time{font-size:10px;opacity:.8}
+.ab-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:4px}
+.ab.assigned{background:#E6F1FB;border:0.5px solid #85B7EB;color:#0C447C}
+.ab.inprogress{background:#EAF3DE;border:0.5px solid #97C459;color:#27500A}
+.ab.completed{background:#F1EFE8;border:0.5px solid #B4B2A9;color:#444441}
+.res-info{padding:8px 12px;display:flex;align-items:center;gap:8px;min-width:0}
+.avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.res-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res-util{font-size:10px;color:var(--color-text-secondary)}
+.util-bar{width:48px;height:3px;border-radius:2px;background:var(--color-border-tertiary);margin-top:2px;overflow:hidden}
+.util-fill{height:100%;border-radius:2px;background:#378ADD}
+.util-fill.high{background:#E24B4A}
+.split-left{width:180px;min-width:180px;border-right:0.5px solid var(--color-border-tertiary);flex-shrink:0}
+.tooltip-panel{border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:12px;background:var(--color-background-primary);margin-top:12px;display:none}
+.tooltip-panel.show{display:block}
+.tp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.tp-title{font-size:13px;font-weight:500}
+.status-pill{font-size:11px;padding:2px 8px;border-radius:999px}
+.sp-assigned{background:#E6F1FB;color:#0C447C}
+.sp-inprogress{background:#EAF3DE;color:#27500A}
+.sp-completed{background:#F1EFE8;color:#444441}
+.tp-row{display:flex;gap:8px;margin-bottom:4px;font-size:12px}
+.tp-label{color:var(--color-text-secondary);min-width:60px}
+.legend-row{display:flex;gap:12px;margin-top:10px;flex-wrap:wrap}
+.leg{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-secondary)}
+.leg-swatch{width:10px;height:10px;border-radius:2px}
+.conflict-banner{background:var(--color-background-warning);border:0.5px solid var(--color-border-warning);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--color-text-warning)}
+</style>
+
+<div class="board">
+  <h2 class="sr-only">Jiganto scheduling board — interactive mockup showing resource allocation across a week view</h2>
+
+  <div class="conflict-banner">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><path d="M8 2L14.5 13H1.5L8 2Z" stroke="#BA7517" stroke-width="1.2" stroke-linejoin="round"/><line x1="8" y1="7" x2="8" y2="10" stroke="#BA7517" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="12" r=".6" fill="#BA7517"/></svg>
+    <span>2 conflicts detected — Sarah Chen is double-booked on Wednesday. <span style="font-weight:500;cursor:pointer;text-decoration:underline" onclick="showConflict()">Review</span></span>
+  </div>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <div class="date-nav">
+        <button class="nav-btn" onclick="changeWeek(-1)">&#8249;</button>
+        <span class="date-label" id="date-label">14 – 20 Apr 2026</span>
+        <button class="nav-btn" onclick="changeWeek(1)">&#8250;</button>
+      </div>
+      <button class="view-btn active">Week</button>
+      <button class="view-btn">Day</button>
+      <button class="view-btn">Month</button>
+    </div>
+    <div class="toolbar-right">
+      <button class="filter-pill on" onclick="toggleFilter(this)">Day shift</button>
+      <button class="filter-pill" onclick="toggleFilter(this)">Night shift</button>
+      <button class="filter-pill" onclick="toggleFilter(this)">CCTV</button>
+      <button class="filter-pill" onclick="toggleFilter(this)">Electrical</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="queue">
+      <div class="queue-header">
+        <span class="queue-title">Unassigned jobs</span>
+        <span class="badge warn" id="queue-count">4</span>
+      </div>
+      <div class="queue-body" id="job-queue">
+        <div class="job-card urgent" draggable="true" data-id="j1" ondragstart="dragStart(event,'j1')" onclick="selectJob('j1')">
+          <div class="jc-title">CCTV Install — Canary Wharf</div>
+          <div class="jc-meta">6 hrs · Day · High</div>
+          <div class="jc-skills"><span class="skill-tag">CCTV</span><span class="skill-tag">Networking</span></div>
+        </div>
+        <div class="job-card normal" draggable="true" data-id="j2" ondragstart="dragStart(event,'j2')" onclick="selectJob('j2')">
+          <div class="jc-title">Panel Upgrade — Shoreditch</div>
+          <div class="jc-meta">4 hrs · Day · Medium</div>
+          <div class="jc-skills"><span class="skill-tag">Electrical</span></div>
+        </div>
+        <div class="job-card normal" draggable="true" data-id="j3" ondragstart="dragStart(event,'j3')" onclick="selectJob('j3')">
+          <div class="jc-title">Network Run — Wembley</div>
+          <div class="jc-meta">3 hrs · Day · Medium</div>
+          <div class="jc-skills"><span class="skill-tag">Networking</span></div>
+        </div>
+        <div class="job-card low" draggable="true" data-id="j4" ondragstart="dragStart(event,'j4')" onclick="selectJob('j4')">
+          <div class="jc-title">Alarm Check — Croydon</div>
+          <div class="jc-meta">2 hrs · Night · Low</div>
+          <div class="jc-skills"><span class="skill-tag">CCTV</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-area">
+      <div style="display:flex;border-bottom:0.5px solid var(--color-border-tertiary)">
+        <div style="width:180px;min-width:180px;padding:8px 12px;font-size:11px;color:var(--color-text-tertiary);border-right:0.5px solid var(--color-border-tertiary)">Resource</div>
+        <div class="day-header" id="day-header" style="flex:1;display:grid;grid-template-columns:repeat(7,1fr)">
+          <div class="day-cell"><div class="day-name">Mon</div><div class="day-num">14</div></div>
+          <div class="day-cell"><div class="day-name">Tue</div><div class="day-num">15</div></div>
+          <div class="day-cell today"><div class="day-name">Wed</div><div class="day-num">16</div></div>
+          <div class="day-cell"><div class="day-name">Thu</div><div class="day-num">17</div></div>
+          <div class="day-cell"><div class="day-name">Fri</div><div class="day-num">18</div></div>
+          <div class="day-cell" style="opacity:.4"><div class="day-name">Sat</div><div class="day-num">19</div></div>
+          <div class="day-cell" style="opacity:.4"><div class="day-name">Sun</div><div class="day-num">20</div></div>
+        </div>
+      </div>
+
+      <div class="resource-rows" id="resource-rows">
+
+        <div class="resource-row">
+          <div class="split-left">
+            <div class="res-info">
+              <div class="avatar" style="background:#EEEDFE;color:#534AB7">JM</div>
+              <div style="min-width:0">
+                <div class="res-name">James Mitchell</div>
+                <div class="res-util">75% utilised</div>
+                <div class="util-bar"><div class="util-fill" style="width:75%"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="res-cells" style="display:grid;grid-template-columns:repeat(7,1fr)">
+            <div class="res-cell" ondragover="allowDrop(event)" ondrop="dropJob(event,'james',0)">
+              <div class="alloc-block ab assigned" onclick="showDetail('CCTV Survey','James Mitchell','Mon 14 Apr','09:00–15:00','Assigned')">
+                <div class="ab-title">CCTV Survey</div>
+                <div class="ab-time">09:00–15:00</div>
+              </div>
+            </div>
+            <div class="res-cell" ondragover="allowDrop(event)" ondrop="dropJob(event,'james',1)">
+              <div class="alloc-block ab assigned" onclick="showDetail('Camera Config','James Mitchell','Tue 15 Apr','10:00–14:00','Assigned')">
+                <div class="ab-title">Camera Config</div>
+                <div class="ab-time">10:00–14:00</div>
+              </div>
+            </div>
+            <div class="res-cell today-col" ondragover="allowDrop(event)" ondrop="dropJob(event,'james',2)">
+              <div class="alloc-block ab inprogress" onclick="showDetail('DVR Install','James Mitchell','Wed 16 Apr','08:00–14:00','In progress')">
+                <div class="ab-title">DVR Install</div>
+                <div class="ab-time">08:00–14:00</div>
+              </div>
+            </div>
+            <div class="res-cell" ondragover="allowDrop(event)" ondrop="dropJob(event,'james',3)" id="james-thu"></div>
+            <div class="res-cell" ondragover="allowDrop(event)" ondrop="dropJob(event,'james',4)"></div>
+            <div class="res-cell" style="background:var(--color-background-secondary);opacity:.5"></div>
+            <div class="res-cell" style="background:var(--color-background-secondary);opacity:.5"></div>
+          </div>
+        </div>
+
+        <div class="resource-row">
+          <div class="split-left">
+            <div class="res-info">
+              <div class="avatar" style="background:#FAECE7;color:#993C1D">SC</div>
+              <div style="min-width:0">
+                <div class="res-name">Sarah Chen</div>
+                <div class="res-util" style="color:var(--color-text-warning)">100% — conflict</div>
+                <div class="util-bar"><div class="util-fill high" style="width:100%"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="res-cells" style="display:grid;grid-template-columns:repeat(7,1fr)">
+            <div class="res-cell" ondragover="allowDrop(event)" ondrop="dropJob(event,'sarah',0)">
+              <div class="alloc-block ab assigned" onclick="showDetail('Panel Rewire','Sarah Chen','Mon 14 Apr','08:00–16:00','Assigned')">
+                <div class="ab-title">Panel Rewire</div>
+                <div class="ab-time">08:00–16:00</div>
+              </div>
+            </div>
+            <div class="res-cell" ondragover="allowDrop(event)" ondrop="dropJob(event,'sarah',1)">
+              <div class="alloc-block ab completed" onclick="showDetail('Site Survey','Sarah Chen','Tue 15 Apr','09:00–11:00','Completed')">
+                <div class="ab-title">Site Survey</div>
+                <div class="ab-time">09:00–11:00</div>
+              </div>
+            </div>
+            <div class="res-cell today-col" style="border:1.5px solid #E24B4A" ondragover="allowDrop(event)" ondrop="dropJob(event,'sarah',2)">
+              <div class="alloc-block ab assigned" onclick="showDetail('Alarm Install','Sarah Chen','Wed 16 Apr','08:00–13:00','Assigned')">
+                <div class="ab-title">Alarm Install</div>
+                <div class="ab-time">08:00–13:00</div>
+              </div>
+              <div class="alloc-block ab assigned" onclick="showDetail('Panel Check','Sarah Chen','Wed 16 Apr','11:00–15:00','Assigned')">
+                <div class="ab-title" style="color:#A32D2D">Panel Check</div>
+                <div class="ab-time" style="color:#A32D2D">11:00–15:00</div>
+              </div>
+            </div>
+            <div class="res-cell" ondragover="allowDrop(event)" ondrop="dropJob(event,'sarah',3)"></div>
+            <div class="res-cell" ondragover="allowDrop(event)" ondrop="dropJob(event,'sarah',4)"></div>
+            <div class="res-cell" style="background:var(--color-background-secondary);opacity:.5"></div>
+            <div class="res-cell" style="background:var(--color-background-secondary);opacity:.5"></div>
+          </div>
+        </div>
+
+        <div class="resource-row">
+          <div class="split-left">
+            <div class="res-info">
+              <div class="avatar" style="background:#E1F5EE;color:#0F6E56">RP</div>
+              <div style="min-width:0">
+                <div class="res-name">Raj Patel</div>
+                <div class="res-util">40% utilised</div>
+                <div class="util-bar"><div class="util-fill" style="width:40%"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="res-cells" style="display:grid;grid-template-columns:repeat(7,1fr)">
+            <div class="res-cell" ondragover="allowDrop(event)" ondrop="dropJob(event,'raj',0)"></div>
+            <div class="res-cell" ondragover="allowDrop(event)" ondrop="dropJob(event,'raj',1)">
+              <div class="alloc-block ab assigned" onclick="showDetail('Network Run','Raj Patel','Tue 15 Apr','13:00–17:00','Assigned')">
+                <div class="ab-title">Network Run</div>
+                <div class="ab-time">13:00–17:00</div>
+              </div>
+            </div>
+            <div class="res-cell today-col" ondragover="allowDrop(event)" ondrop="dropJob(event,'raj',2)"></div>
+            <div class="res-cell" ondragover="allowDrop(event)" ondrop="dropJob(event,'raj',3)"></div>
+            <div class="res-cell" ondragover="allowDrop(event)" ondrop="dropJob(event,'raj',4)"></div>
+            <div class="res-cell" style="background:var(--color-background-secondary);opacity:.5"></div>
+            <div class="res-cell" style="background:var(--color-background-secondary);opacity:.5"></div>
+          </div>
+        </div>
+
+        <div class="resource-row">
+          <div class="split-left">
+            <div class="res-info">
+              <div class="avatar" style="background:#FAEEDA;color:#854F0B">LO</div>
+              <div style="min-width:0">
+                <div class="res-name">Lisa O'Brien</div>
+                <div class="res-util" style="color:var(--color-text-tertiary)">Off — annual leave</div>
+                <div class="util-bar"><div class="util-fill" style="width:0%"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="res-cells" style="display:grid;grid-template-columns:repeat(7,1fr)">
+            <div class="res-cell" style="background:repeating-linear-gradient(45deg,var(--color-background-secondary),var(--color-background-secondary) 4px,transparent 4px,transparent 10px)"></div>
+            <div class="res-cell" style="background:repeating-linear-gradient(45deg,var(--color-background-secondary),var(--color-background-secondary) 4px,transparent 4px,transparent 10px)"></div>
+            <div class="res-cell today-col" style="background:repeating-linear-gradient(45deg,var(--color-background-secondary),var(--color-background-secondary) 4px,transparent 4px,transparent 10px)"></div>
+            <div class="res-cell" style="background:repeating-linear-gradient(45deg,var(--color-background-secondary),var(--color-background-secondary) 4px,transparent 4px,transparent 10px)"></div>
+            <div class="res-cell" style="background:repeating-linear-gradient(45deg,var(--color-background-secondary),var(--color-background-secondary) 4px,transparent 4px,transparent 10px)"></div>
+            <div class="res-cell" style="background:var(--color-background-secondary);opacity:.5"></div>
+            <div class="res-cell" style="background:var(--color-background-secondary);opacity:.5"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="legend-row" style="margin-top:8px">
+    <div class="leg"><div class="leg-swatch" style="background:#E6F1FB;border:0.5px solid #85B7EB"></div>Assigned</div>
+    <div class="leg"><div class="leg-swatch" style="background:#EAF3DE;border:0.5px solid #97C459"></div>In progress</div>
+    <div class="leg"><div class="leg-swatch" style="background:#F1EFE8;border:0.5px solid #B4B2A9"></div>Completed</div>
+    <div class="leg"><div class="leg-swatch" style="background:repeating-linear-gradient(45deg,var(--color-background-secondary),var(--color-background-secondary) 4px,transparent 4px,transparent 10px);border:0.5px solid var(--color-border-tertiary)"></div>Unavailable</div>
+    <div class="leg"><div style="width:10px;height:10px;border-left:3px solid #E24B4A"></div>High priority</div>
+    <div class="leg"><div style="width:10px;height:10px;border-left:3px solid #378ADD"></div>Medium priority</div>
+    <div class="leg"><div style="width:10px;height:10px;border-left:3px solid #888780"></div>Low priority</div>
+  </div>
+
+  <div class="tooltip-panel" id="detail-panel">
+    <div class="tp-header">
+      <span class="tp-title" id="tp-title">—</span>
+      <span class="status-pill" id="tp-status">—</span>
+    </div>
+    <div class="tp-row"><span class="tp-label">Resource</span><span id="tp-resource">—</span></div>
+    <div class="tp-row"><span class="tp-label">Date</span><span id="tp-date">—</span></div>
+    <div class="tp-row"><span class="tp-label">Time</span><span id="tp-time">—</span></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button onclick="sendPrompt('What resources could we move to free up Sarah Chen on Wednesday?')" style="font-size:12px;padding:4px 10px">Resolve conflict ↗</button>
+      <button onclick="sendPrompt('Show me full details for this job')" style="font-size:12px;padding:4px 10px">View job ↗</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let draggedId = null;
+
+function dragStart(e, id) {
+  draggedId = id;
+  e.target.classList.add('dragging');
+  setTimeout(()=>e.target.classList.remove('dragging'),0);
+}
+
+function allowDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add('drop-target');
+  e.currentTarget.addEventListener('dragleave', ()=>e.currentTarget.classList.remove('drop-target'), {once:true});
+}
+
+function dropJob(e, resource, dayIdx) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drop-target');
+  if (!draggedId) return;
+  const card = document.querySelector(`[data-id="${draggedId}"]`);
+  if (!card) return;
+  const title = card.querySelector('.jc-title').textContent;
+  const time = card.querySelector('.jc-meta').textContent;
+  const block = document.createElement('div');
+  block.className = 'alloc-block ab assigned';
+  block.innerHTML = `<div class="ab-title">${title.split('—')[0].trim()}</div><div class="ab-time">Drag-assigned</div>`;
+  block.onclick = () => showDetail(title, resource, 'Newly assigned', 'TBD', 'Assigned');
+  e.currentTarget.appendChild(block);
+  card.remove();
+  const count = document.querySelectorAll('#job-queue .job-card').length;
+  document.getElementById('queue-count').textContent = count;
+  draggedId = null;
+}
+
+function showDetail(title, resource, date, time, status) {
+  document.getElementById('tp-title').textContent = title;
+  document.getElementById('tp-resource').textContent = resource;
+  document.getElementById('tp-date').textContent = date;
+  document.getElementById('tp-time').textContent = time;
+  const sp = document.getElementById('tp-status');
+  sp.textContent = status;
+  sp.className = 'status-pill sp-' + status.toLowerCase().replace(' ','');
+  document.getElementById('detail-panel').classList.add('show');
+}
+
+function selectJob(id) {
+  document.querySelectorAll('.job-card').forEach(c=>c.style.outline='none');
+  const c = document.querySelector(`[data-id="${id}"]`);
+  if(c) c.style.outline = '2px solid var(--color-border-info)';
+}
+
+function toggleFilter(el) { el.classList.toggle('on'); }
+
+function showConflict() {
+  showDetail('Panel Check (conflict)', 'Sarah Chen', 'Wed 16 Apr', '11:00–15:00 overlaps 08:00–13:00', 'Assigned');
+}
+
+function changeWeek(dir) {
+  const label = document.getElementById('date-label');
+  const weeks = ['7 – 13 Apr 2026','14 – 20 Apr 2026','21 – 27 Apr 2026','28 Apr – 4 May 2026'];
+  let i = weeks.indexOf(label.textContent);
+  i = Math.max(0, Math.min(weeks.length-1, i + dir));
+  label.textContent = weeks[i];
+}
+</script>

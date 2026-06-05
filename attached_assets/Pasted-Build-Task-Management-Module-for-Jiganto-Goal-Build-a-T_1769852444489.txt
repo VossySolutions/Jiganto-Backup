@@ -1,0 +1,145 @@
+Build Task Management Module for Jiganto
+Goal
+
+Build a Task Management module for Jiganto that allows users to track, manage, and prioritize tasks originating from personal actions, meetings, projects, initiatives, and emails. The module should include customizable dashboards, consolidated views, notifications, and cross-module integration.
+
+High-Level Requirements
+1. Task Sources
+
+Tasks should be able to originate from multiple sources:
+
+Personal To-Do’s: Tasks the user creates for themselves
+
+Department / Company Meetings: Actions assigned during meetings
+
+Customer Meetings / Projects: Tasks linked to projects or customer initiatives
+
+Business Initiatives: Tasks originating from strategic initiatives or OKRs
+
+Emails: Tasks converted from flagged emails or assigned via integrations
+
+2. Dashboards
+
+Customizable Dashboard Views: Users can configure their dashboard to display tasks by:
+
+Personal To-Do
+
+Department tasks
+
+Project tasks
+
+Customer tasks
+
+Initiatives tasks
+
+Consolidated View:
+
+Single view that merges all tasks across sources
+
+Option to filter, sort, and group by:
+
+Due date
+
+Priority
+
+Source (project, meeting, initiative)
+
+Status (To Do, In Progress, Done)
+
+Widgets / Tiles: Optional dashboard tiles showing metrics like:
+
+Total overdue tasks
+
+Upcoming deadlines
+
+Tasks by source or category
+
+3. Task Features
+
+Task Fields:
+
+Title, Description, Priority (Low / Medium / High / Critical)
+
+Status (To Do / In Progress / Done / Blocked)
+
+Assigned To (single or multiple users)
+
+Linked Object (Project, Initiative, Meeting, Email, Customer)
+
+Due Date & Reminder Notifications
+
+Tags / Labels for categorization
+
+Recurring tasks
+
+Subtasks / checklist items
+
+Attachments / Links (Documents, Emails, Jira / CRM references)
+
+4. Integration with Other Modules
+
+Projects: Link tasks to project phases, milestones, or specific initiatives
+
+Meetings: Convert meeting actions into tasks with assigned owners and deadlines
+
+CRM / Customers: Create tasks from customer meetings, calls, or follow-ups
+
+Business Initiatives / OKRs: Tasks connected to strategic initiatives or OKRs
+
+Emails / Communication: Create tasks from flagged emails or automated reminders
+
+5. User Interaction & Views
+
+Task List View: Standard table/list of tasks with sorting, filtering, and grouping
+
+Kanban / Board View: Drag-and-drop boards for visual workflow tracking
+
+Calendar View: Tasks displayed by due date for planning
+
+Notifications:
+
+Alerts when a task is assigned, updated, or approaching due date
+
+Dashboard icon / bell notifications for pending or updated tasks
+
+Customizable Filters:
+
+Filter tasks by source, status, priority, assigned users, or tags
+
+Save custom views for quick access
+
+6. AI Features (Optional / Future)
+
+Task auto-prioritization based on urgency, dependencies, or workload
+
+Suggested deadlines and reminders based on user behavior
+
+Auto-summarize meeting notes and extract tasks
+
+7. Permissions & Access Control
+
+Tasks inherit permissions from their linked object (project, initiative, or board)
+
+Users can see tasks they are assigned to, plus tasks visible to their department or role
+
+Admins can manage task visibility across teams, projects, and initiatives
+
+8. Data Model (Suggested)
+
+Task: id, title, description, priority, status, assigned_to, due_date, source, linked_object_id, tags, attachments, created_by, created_at, updated_at
+
+TaskView: user_id, filters, sort_order, view_type (list/kanban/calendar), saved_view_name
+
+Notification: task_id, user_id, type (assigned/updated/overdue), read_status, timestamp
+
+Success Criteria
+
+Users can easily track tasks from all sources in a single module
+
+Dashboards are fully customizable, including consolidated views
+
+Tasks are linked to the correct module/object and permissions are respected
+
+Notifications and reminders are visible and actionable
+
+UI supports multiple views: list, kanban, calendar, and consolidated

@@ -1,0 +1,15 @@
+1. Jiganto is modular
+2. AI-native (not AI-bolted-on)
+3. Fully integrated across modules
+4. Fast to deploy, easy to customize - All modules should have the ability to upload CSV or Excel files for fast data entry
+5. Where Boards are used (for tracking and data entry), users can have 8 Different Ways to View their Data =  Columns > Table > Calendar > Gantt > List > Form > Document > Chart (Like Smart Infinity Software)
+6. Enterprise Menu will be standard but configurable based on roles and user requirements (User option to set main 4 menu areas and the rest is under "other" or an appropriate menu name)
+7. Companies, when creating an account (Tenant), must be able to choose where to host Data - i.e. which country
+8. Architecture must allow for Multiple Languages. English will be default language. 
+9. Workflow enabled modules where users can define trigger points and outcomes, e.g. If task a is delayed by 2 days, sent notification to Project Manager and PMO Lead
+10. When users create Boards for tracking or data entry, they can add Custom Attributes (Full list below under header Customer Attributes)
+11. Chat facility for Talking with Customers for Support Calls and messages
+12. Storage Options for Customers - e.g. if they utilise their space allowance, they can pay for more storage space
+13. Export and Import as standard from all Modules - e.g. Upload Excel or CSV files to update tables / boards / entry forms, etc. and ability to export to Excel / CSV / PDF, etc.
+14. All Modules to have Analytics section and Templates (Accelerators) section - i.e. Standard Reporting per modules + Templates to be created by users as accelerators
+Users can export Jiganto Data from one Tenant to another - e.g. if a System implementor / integrator manages a Project Delivery on Jiganto and the Customer for Audit reasons wants to keep a copy of the plan and all documentation, there needs to be the facility to export / copy the data from one tenant to another Customer Tenant, so they can get access to the Project Data. The Master owner, must be able to select what gets copies across.

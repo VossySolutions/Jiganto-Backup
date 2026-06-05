@@ -1,0 +1,698 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Outfit', sans-serif;
+
+  /* Jiganto Brand Palette — Primary #1E88C8 from logo */
+  --background: 216 45% 98%;
+  --foreground: 221 39% 11%;
+  
+  --primary: 203 74% 45%;
+  --primary-foreground: 0 0% 100%;
+  
+  --secondary: 216 33% 95%;
+  --secondary-foreground: 221 39% 11%;
+  
+  --muted: 216 33% 95%;
+  --muted-foreground: 220 9% 46%;
+  
+  --accent: 203 70% 93%;
+  --accent-foreground: 221 39% 11%;
+  
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 203 74% 45%;
+  --button-outline: hsl(220 13% 80% / 0.3);
+  
+  --popover: 0 0% 100%;
+  --popover-foreground: 221 39% 11%;
+  --popover-border: 220 13% 91%;
+  
+  --card: 0 0% 100%;
+  --card-foreground: 221 39% 11%;
+  --card-border: 220 13% 91%;
+  
+  --primary-border: hsl(203 74% 40%);
+  --secondary-border: hsl(220 13% 88%);
+  --muted-border: hsl(220 13% 88%);
+  --accent-border: hsl(203 60% 85%);
+  --destructive-border: hsl(0 84% 55%);
+
+  /* Sidebar Colors */
+  --sidebar: 216 33% 97%;
+  --sidebar-foreground: 221 39% 11%;
+  --sidebar-border: 220 13% 91%;
+  --sidebar-ring: 203 74% 45%;
+  --sidebar-primary: 203 74% 45%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-primary-border: hsl(203 74% 40%);
+  --sidebar-accent: 203 60% 92%;
+  --sidebar-accent-foreground: 203 74% 35%;
+  --sidebar-accent-border: hsl(203 50% 85%);
+  
+  /* Jiganto Status System Colors */
+  --status-green: 142 69% 90%;
+  --status-green-foreground: 142 60% 30%;
+  --status-amber: 38 92% 88%;
+  --status-amber-foreground: 38 70% 30%;
+  --status-red: 0 86% 90%;
+  --status-red-foreground: 0 70% 35%;
+  --status-blue: 203 70% 90%;
+  --status-blue-foreground: 203 65% 35%;
+  --status-purple: 262 83% 90%;
+  --status-purple-foreground: 262 65% 40%;
+  
+  /* AI Identity Colors — AI Indigo #6366F1 */
+  --ai-primary: 239 84% 67%;
+  --ai-glow: 185 95% 52%;
+  
+  /* Energy Accent Colors from palette */
+  --accent-green: 142 71% 45%;
+  --accent-purple: 262 83% 58%;
+  --accent-orange: 38 92% 50%;
+  --accent-pink: 330 81% 60%;
+  
+  /* Chart Colors — mapped to Jiganto brand */
+  --chart-1: 203 74% 45%;
+  --chart-2: 142 71% 45%;
+  --chart-3: 262 83% 58%;
+  --chart-4: 38 92% 50%;
+  --chart-5: 330 81% 60%;
+  
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 222 47% 11%;
+  --foreground: 210 40% 98%;
+  
+  --primary: 203 74% 50%;
+  --primary-foreground: 0 0% 100%;
+  
+  --secondary: 217 19% 27%;
+  --secondary-foreground: 210 40% 98%;
+  
+  --muted: 217 19% 27%;
+  --muted-foreground: 215 20% 65%;
+  
+  --accent: 203 40% 22%;
+  --accent-foreground: 210 40% 98%;
+  
+  --destructive: 0 62% 30%;
+  --destructive-foreground: 210 40% 98%;
+  
+  --border: 217 19% 27%;
+  --input: 217 19% 27%;
+  --ring: 203 74% 50%;
+  --button-outline: hsl(217 19% 50% / 0.3);
+  
+  --popover: 217 19% 18%;
+  --popover-foreground: 210 40% 98%;
+  --popover-border: 217 19% 27%;
+  
+  --card: 217 19% 18%;
+  --card-foreground: 210 40% 98%;
+  --card-border: 217 19% 27%;
+  
+  --primary-border: hsl(203 74% 55%);
+  --secondary-border: hsl(217 19% 32%);
+  --muted-border: hsl(217 19% 32%);
+  --accent-border: hsl(203 40% 28%);
+  --destructive-border: hsl(0 62% 35%);
+
+  /* Sidebar Colors - Dark Mode */
+  --sidebar: 222 47% 13%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-border: 217 19% 27%;
+  --sidebar-ring: 203 74% 50%;
+  --sidebar-primary: 203 74% 50%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-primary-border: hsl(203 74% 55%);
+  --sidebar-accent: 203 40% 22%;
+  --sidebar-accent-foreground: 203 70% 80%;
+  --sidebar-accent-border: hsl(203 40% 28%);
+  
+  /* Jiganto Status System Colors - Dark Mode */
+  --status-green: 142 50% 22%;
+  --status-green-foreground: 142 60% 75%;
+  --status-amber: 38 60% 22%;
+  --status-amber-foreground: 38 70% 75%;
+  --status-red: 0 50% 22%;
+  --status-red-foreground: 0 60% 80%;
+  --status-blue: 203 50% 22%;
+  --status-blue-foreground: 203 70% 80%;
+  --status-purple: 262 50% 25%;
+  --status-purple-foreground: 262 60% 80%;
+  
+  /* AI Identity Colors - Dark Mode */
+  --ai-primary: 239 84% 72%;
+  --ai-glow: 185 95% 55%;
+  
+  /* Energy Accent Colors - Dark Mode */
+  --accent-green: 142 71% 50%;
+  --accent-purple: 262 83% 65%;
+  --accent-orange: 38 92% 55%;
+  --accent-pink: 330 81% 65%;
+  
+  /* Chart Colors - Dark Mode */
+  --chart-1: 203 74% 50%;
+  --chart-2: 142 71% 50%;
+  --chart-3: 262 83% 65%;
+  --chart-4: 38 92% 55%;
+  --chart-5: 330 81% 65%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-xl;
+  }
+  .dark .glass-panel {
+    @apply bg-black/40 border-white/10;
+  }
+  
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-primary/20;
+  }
+}
+
+/* Custom scrollbar for sidebar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 20px;
+}
+
+/* Frappe Gantt Base Styles */
+:root {
+  --g-arrow-color: #1f2937;
+  --g-bar-color: #fff;
+  --g-bar-border: #fff;
+  --g-tick-color-thick: #ededed;
+  --g-tick-color: #f3f3f3;
+  --g-actions-background: #f3f3f3;
+  --g-border-color: #ebeff2;
+  --g-text-muted: #7c7c7c;
+  --g-text-light: #fff;
+  --g-text-dark: #171717;
+  --g-progress-color: #dbdbdb;
+  --g-handle-color: #37352f;
+  --g-weekend-label-color: #dcdce4;
+  --g-expected-progress: #c4c4e9;
+  --g-header-background: #fff;
+  --g-row-color: #fdfdfd;
+  --g-row-border-color: #c7c7c7;
+  --g-today-highlight: #37352f;
+  --g-popup-actions: #ebeff2;
+  --g-weekend-highlight-color: #f7f7f7;
+}
+
+.dark {
+  --g-arrow-color: #e5e7eb;
+  --g-bar-color: #374151;
+  --g-bar-border: #4b5563;
+  --g-tick-color-thick: #374151;
+  --g-tick-color: #1f2937;
+  --g-actions-background: #374151;
+  --g-border-color: #4b5563;
+  --g-text-muted: #9ca3af;
+  --g-text-light: #f9fafb;
+  --g-text-dark: #f9fafb;
+  --g-progress-color: #4b5563;
+  --g-handle-color: #9ca3af;
+  --g-weekend-label-color: #374151;
+  --g-expected-progress: #6366f1;
+  --g-header-background: #111827;
+  --g-row-color: #0f172a;
+  --g-row-border-color: #374151;
+  --g-today-highlight: #f9fafb;
+  --g-popup-actions: #374151;
+  --g-weekend-highlight-color: #1f2937;
+}
+
+.gantt-container {
+  line-height: 14.5px;
+  position: relative;
+  overflow: auto;
+  font-size: 12px;
+  width: 100%;
+  border-radius: 8px;
+}
+
+.gantt-container .popup-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: hsl(var(--popover));
+  box-shadow: 0 10px 24px -3px rgba(0,0,0,0.2);
+  padding: 10px;
+  border-radius: 5px;
+  width: max-content;
+  z-index: 1000;
+}
+
+.gantt-container .popup-wrapper .title {
+  margin-bottom: 2px;
+  color: hsl(var(--foreground));
+  font-size: .85rem;
+  font-weight: 650;
+  line-height: 15px;
+}
+
+.gantt-container .popup-wrapper .subtitle {
+  color: hsl(var(--foreground));
+  font-size: .8rem;
+  margin-bottom: 5px;
+}
+
+.gantt-container .popup-wrapper .details {
+  color: hsl(var(--muted-foreground));
+  font-size: .7rem;
+}
+
+.gantt-container .grid-header {
+  background-color: var(--g-header-background);
+  position: sticky;
+  top: 0;
+  left: 0;
+  border-bottom: 1px solid var(--g-row-border-color);
+  z-index: 1000;
+}
+
+.gantt-container .lower-text,
+.gantt-container .upper-text {
+  text-anchor: middle;
+}
+
+.gantt-container .lower-text {
+  font-size: 12px;
+  color: var(--g-text-muted);
+}
+
+.gantt-container .upper-text {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--g-text-dark);
+}
+
+.gantt-container .side-header {
+  position: sticky;
+  top: 0;
+  right: 0;
+  float: right;
+  z-index: 1000;
+  line-height: 20px;
+  font-weight: 400;
+  width: max-content;
+  margin-left: auto;
+  padding-right: 10px;
+  padding-top: 10px;
+  background: var(--g-header-background);
+  display: flex;
+}
+
+.gantt-container .side-header * {
+  background-color: var(--g-actions-background);
+  border-radius: 0.5rem;
+  border: none;
+  padding: 5px 8px;
+  color: var(--g-text-dark);
+  font-size: 14px;
+  font-weight: 420;
+  margin-right: 5px;
+}
+
+.gantt-container .current-highlight {
+  position: absolute;
+  background: var(--g-today-highlight);
+  width: 1px;
+  z-index: 999;
+}
+
+.gantt-container .current-ball-highlight {
+  position: absolute;
+  background: var(--g-today-highlight);
+  z-index: 1001;
+  border-radius: 50%;
+}
+
+.gantt {
+  user-select: none;
+  -webkit-user-select: none;
+  display: block;
+}
+
+.gantt .grid-background {
+  fill: none;
+}
+
+.gantt .grid-row {
+  fill: var(--g-row-color);
+}
+
+.gantt .row-line {
+  stroke: var(--g-border-color);
+}
+
+.gantt .tick {
+  stroke: var(--g-tick-color);
+  stroke-width: 0.4;
+}
+
+.gantt .tick.thick {
+  stroke: var(--g-tick-color-thick);
+  stroke-width: 0.7;
+}
+
+.gantt .arrow {
+  fill: none;
+  stroke: var(--g-arrow-color);
+  stroke-width: 1.5;
+}
+
+.gantt .bar-wrapper .bar {
+  fill: var(--g-bar-color);
+  stroke: var(--g-bar-border);
+  stroke-width: 0;
+  transition: stroke-width 0.3s ease;
+}
+
+.gantt .bar-progress {
+  fill: var(--g-progress-color);
+  border-radius: 4px;
+}
+
+.gantt .bar-expected-progress {
+  fill: var(--g-expected-progress);
+}
+
+.gantt .bar-label {
+  fill: var(--g-text-dark);
+  dominant-baseline: central;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.gantt .handle {
+  fill: var(--g-handle-color);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.gantt .handle.active,
+.gantt .handle.visible {
+  cursor: ew-resize;
+  opacity: 1;
+}
+
+/* ─── TipTap table column-resize ─────────────────────────────────────────── */
+.ProseMirror td,
+.ProseMirror th {
+  position: relative;
+}
+
+.column-resize-handle {
+  background-color: hsl(var(--primary) / 0.7);
+  bottom: 0;
+  pointer-events: none;
+  position: absolute;
+  right: -2px;
+  top: 0;
+  width: 4px;
+  border-radius: 2px;
+  z-index: 20;
+}
+
+.resize-cursor,
+.resize-cursor * {
+  cursor: col-resize !important;
+}
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+.gantt .bar-wrapper {
+  cursor: pointer;
+}
+
+.gantt .bar-wrapper .bar {
+  outline: 1px solid var(--g-row-border-color);
+  border-radius: 3px;
+}
+
+.gantt .bar-wrapper:hover .bar {
+  transition: transform 0.3s ease;
+}
+
+/* Frappe Gantt Chart Custom Styles */
+.gantt-container {
+  min-height: 400px;
+  height: auto;
+  background: hsl(var(--background));
+  display: block;
+  position: relative;
+}
+
+.gantt-container svg.gantt {
+  display: block;
+  width: auto;
+  min-width: 100%;
+  height: auto;
+  min-height: 400px;
+}
+
+.gantt .bar-wrapper:hover .bar {
+  filter: brightness(0.95);
+}
+
+.gantt .bar-label {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.gantt .bar-progress {
+  opacity: 0.6;
+}
+
+/* Gantt Bar Colors - Hierarchy Types */
+.gantt .bar-project .bar {
+  fill: hsl(221 83% 53%);
+}
+.gantt .bar-project .bar-progress {
+  fill: hsl(221 83% 40%);
+}
+
+.gantt .bar-phase .bar {
+  fill: hsl(262 83% 58%);
+}
+.gantt .bar-phase .bar-progress {
+  fill: hsl(262 83% 45%);
+}
+
+.gantt .bar-workstream .bar {
+  fill: hsl(199 89% 48%);
+}
+.gantt .bar-workstream .bar-progress {
+  fill: hsl(199 89% 35%);
+}
+
+.gantt .bar-activity .bar {
+  fill: hsl(152 69% 45%);
+}
+.gantt .bar-activity .bar-progress {
+  fill: hsl(152 69% 32%);
+}
+
+.gantt .bar-subactivity .bar {
+  fill: hsl(152 55% 55%);
+}
+.gantt .bar-subactivity .bar-progress {
+  fill: hsl(152 55% 42%);
+}
+
+.gantt .bar-task .bar {
+  fill: hsl(38 92% 50%);
+}
+.gantt .bar-task .bar-progress {
+  fill: hsl(38 92% 37%);
+}
+
+.gantt .bar-subtask .bar {
+  fill: hsl(38 72% 60%);
+}
+.gantt .bar-subtask .bar-progress {
+  fill: hsl(38 72% 47%);
+}
+
+.gantt .bar-milestone .bar {
+  fill: hsl(0 84% 60%);
+}
+.gantt .bar-milestone .bar-progress {
+  fill: hsl(0 84% 47%);
+}
+
+/* Status Modifiers */
+.gantt .bar-completed .bar {
+  fill: hsl(152 69% 45%);
+}
+.gantt .bar-completed .bar-progress {
+  fill: hsl(152 69% 32%);
+}
+
+.gantt .bar-blocked .bar {
+  fill: hsl(0 84% 60%);
+}
+.gantt .bar-blocked .bar-progress {
+  fill: hsl(0 84% 47%);
+}
+
+/* Gantt Popup */
+.gantt-popup {
+  padding: 12px 16px;
+  background: hsl(var(--popover));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+}
+
+.gantt-popup-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0 0 4px;
+}
+
+.gantt-popup-type {
+  font-size: 11px;
+  color: hsl(var(--primary));
+  font-weight: 500;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+}
+
+.gantt-popup-dates,
+.gantt-popup-progress {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  margin: 4px 0;
+}
+
+.gantt-popup-hint {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+  margin: 8px 0 0;
+}
+
+/* Dark mode Gantt styles */
+.dark .gantt-container {
+  background: hsl(var(--background));
+}
+
+.dark .gantt .grid-header,
+.dark .gantt .lower-text,
+.dark .gantt .upper-text {
+  fill: hsl(var(--foreground));
+}
+
+.dark .gantt .grid-row {
+  fill: hsl(var(--background));
+}
+
+.dark .gantt .grid-row:nth-child(even) {
+  fill: hsl(var(--muted) / 0.3);
+}
+
+.dark .gantt .row-line,
+.dark .gantt .tick {
+  stroke: hsl(var(--border));
+}
+
+.dark .gantt .today-highlight {
+  fill: hsl(var(--primary) / 0.1);
+}
+
+.dark .gantt-popup {
+  background: hsl(var(--popover));
+  border-color: hsl(var(--border));
+}
+
+.react-flow__handle {
+  pointer-events: none !important;
+}
+.react-flow__node:hover .react-flow__handle {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+.react-flow__node.selected .react-flow__handle {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: hsl(var(--primary)) !important;
+  stroke-width: 3px !important;
+}
+.react-flow__edge.selected .react-flow__edge-interaction {
+  stroke-width: 20px;
+}
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: hsl(var(--primary) / 0.6) !important;
+  stroke-width: 2.5px !important;
+}
+
+.search-result {
+  background-color: rgba(250, 176, 5, 0.35);
+  border-radius: 2px;
+}
+.search-result-active {
+  background-color: rgba(250, 176, 5, 0.7);
+  border-radius: 2px;
+  outline: 2px solid rgba(250, 176, 5, 0.9);
+  outline-offset: -1px;
+}
+
+/* @Mention chip styles in TipTap editor */
+.mention-chip {
+  display: inline-flex;
+  align-items: center;
+  background-color: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+  border-radius: 4px;
+  padding: 0 5px;
+  font-weight: 500;
+  font-size: 0.875em;
+  cursor: default;
+  user-select: all;
+  white-space: nowrap;
+}
+.dark .mention-chip {
+  background-color: hsl(var(--primary) / 0.2);
+}

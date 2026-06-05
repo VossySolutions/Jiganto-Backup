@@ -1,0 +1,113 @@
+WBS ID,Type,Name,Start,Finish,Duration,Resource,Dependency
+1,Release,S/4HANA Implementation,2026-03-01,2026-12-31,210,Project Manager,
+1.1,Phase,Discovery,2026-03-01,2026-03-31,22,Project Manager,
+1.1.1,Workstream,Requirements Gathering,2026-03-01,2026-03-15,11,Business Analyst,
+1.1.1.1,Activity,Stakeholder Interviews,2026-03-01,2026-03-05,5,BA,
+1.1.1.1.1,Task,Schedule Interviews,2026-03-01,2026-03-01,1,PM,
+1.1.1.1.2,Task,Conduct Interviews,2026-03-02,2026-03-05,4,BA,1.1.1.1.1
+1.1.1.2,Activity,Process Mapping,2026-03-06,2026-03-12,5,BA,
+1.1.1.2.1,Task,Map Current Processes,2026-03-06,2026-03-08,3,BA,
+1.1.1.2.2,Task,Validate with Stakeholders,2026-03-09,2026-03-12,4,BA,1.1.1.2.1
+1.1.1.3,Activity,Requirement Documentation,2026-03-13,2026-03-15,3,BA,
+1.1.1.3.1,Task,Draft Requirements,2026-03-13,2026-03-14,2,BA,
+1.1.1.3.2,Task,Review & Finalize,2026-03-15,2026-03-15,1,PM,1.1.1.3.1
+1.1.2,Workstream,Technical Assessment,2026-03-01,2026-03-20,14,Tech Lead,
+1.1.2.1,Activity,System Landscape Review,2026-03-01,2026-03-07,5,Tech Lead,
+1.1.2.1.1,Task,Identify Current Systems,2026-03-01,2026-03-03,3,Tech Lead,
+1.1.2.1.2,Task,Document Interfaces,2026-03-04,2026-03-07,4,Tech Lead,1.1.2.1.1
+1.1.2.2,Activity,Integration Points,2026-03-08,2026-03-14,5,Tech Lead,
+1.1.2.2.1,Task,List Integration Dependencies,2026-03-08,2026-03-10,3,Tech Lead,
+1.1.2.2.2,Task,Validate with IT,2026-03-11,2026-03-14,4,IT Team,1.1.2.2.1
+1.1.2.3,Activity,Technical Feasibility Report,2026-03-15,2026-03-20,4,Tech Lead,
+1.1.2.3.1,Task,Draft Report,2026-03-15,2026-03-18,4,Tech Lead,
+1.1.2.3.2,Task,Review & Approve,2026-03-19,2026-03-20,2,PM,1.1.2.3.1
+1.2,Phase,Prepare,2026-04-01,2026-05-15,33,Project Manager,
+1.2.1,Workstream,Project Planning,2026-04-01,2026-04-10,8,PM,
+1.2.1.1,Activity,Resource Allocation,2026-04-01,2026-04-03,3,PM,
+1.2.1.1.1,Task,Assign Team Members,2026-04-01,2026-04-01,1,PM,
+1.2.1.1.2,Task,Confirm Availability,2026-04-02,2026-04-03,2,PM,1.2.1.1.1
+1.2.1.2,Activity,Project Schedule,2026-04-04,2026-04-07,4,PM,
+1.2.1.2.1,Task,Draft Schedule,2026-04-04,2026-04-05,2,PM,
+1.2.1.2.2,Task,Review & Approve,2026-04-06,2026-04-07,2,PM,1.2.1.2.1
+1.2.2,Workstream,System Setup,2026-04-05,2026-04-25,15,IT Team,
+1.2.2.1,Activity,Hardware Provisioning,2026-04-05,2026-04-12,6,IT Team,
+1.2.2.1.1,Task,Order Servers & Network,2026-04-05,2026-04-07,3,IT Team,
+1.2.2.1.2,Task,Setup Hardware,2026-04-08,2026-04-12,5,IT Team,1.2.2.1.1
+1.2.2.2,Activity,Software Installation,2026-04-13,2026-04-20,6,IT Team,
+1.2.2.2.1,Task,Install OS & DB,2026-04-13,2026-04-16,4,IT Team,
+1.2.2.2.2,Task,Install SAP Components,2026-04-17,2026-04-20,4,IT Team,1.2.2.2.1
+1.2.2.3,Activity,Environment Validation,2026-04-21,2026-04-25,5,IT Team,
+1.2.2.3.1,Task,Validate Dev & Test,2026-04-21,2026-04-23,3,IT Team,
+1.2.2.3.2,Task,Validate Prod,2026-04-24,2026-04-25,2,IT Team,1.2.2.3.1
+1.3,Phase,Design,2026-05-16,2026-06-30,33,Solution Architect,
+1.3.1,Workstream,Solution Design,2026-05-16,2026-06-05,15,Solution Architect,
+1.3.1.1,Activity,Process Blueprint,2026-05-16,2026-05-25,8,Solution Architect,
+1.3.1.1.1,Task,Draft Blueprint,2026-05-16,2026-05-20,5,Solution Architect,
+1.3.1.1.2,Task,Review Blueprint,2026-05-21,2026-05-25,5,PM,1.3.1.1.1
+1.3.1.2,Activity,Integration Design,2026-05-26,2026-06-05,9,Solution Architect,
+1.3.1.2.1,Task,Define Interfaces,2026-05-26,2026-05-30,5,Tech Lead,
+1.3.1.2.2,Task,Validate with IT,2026-06-01,2026-06-05,5,Tech Lead,1.3.1.2.1
+1.3.2,Workstream,Security & Compliance,2026-05-20,2026-06-15,20,Security Lead,
+1.3.2.1,Activity,Access Controls,2026-05-20,2026-05-30,9,Security Lead,
+1.3.2.1.1,Task,Define Roles,2026-05-20,2026-05-25,4,Security Lead,
+1.3.2.1.2,Task,Assign Permissions,2026-05-26,2026-05-30,5,Security Lead,1.3.2.1.1
+1.3.2.2,Activity,Compliance Review,2026-06-01,2026-06-10,8,Security Lead,
+1.3.2.2.1,Task,Internal Review,2026-06-01,2026-06-05,5,Security Lead,
+1.3.2.2.2,Task,Approval,2026-06-06,2026-06-10,5,PM,1.3.2.2.1
+1.3.2.3,Activity,Risk Assessment,2026-06-11,2026-06-15,5,Security Lead,
+1.3.2.3.1,Task,Identify Risks,2026-06-11,2026-06-13,3,Security Lead,
+1.3.2.3.2,Task,Mitigation Plan,2026-06-14,2026-06-15,2,PM,1.3.2.3.1
+1.4,Phase,Build,2026-07-01,2026-09-15,55,Technical Lead,
+1.4.1,Workstream,Configuration,2026-07-01,2026-08-15,35,Tech Lead,
+1.4.1.1,Activity,Module Configuration,2026-07-01,2026-07-20,15,Tech Lead,
+1.4.1.1.1,Task,Finance Config,2026-07-01,2026-07-05,5,Finance Lead,
+1.4.1.1.2,Task,Procurement Config,2026-07-06,2026-07-10,5,Procurement Lead,1.4.1.1.1
+1.4.1.1.3,Task,Supply Chain Config,2026-07-11,2026-07-15,5,SC Lead,1.4.1.1.2
+1.4.1.2,Activity,Custom Development,2026-07-21,2026-08-05,12,Dev Team,
+1.4.1.2.1,Task,Develop Reports,2026-07-21,2026-07-27,5,Dev Team,
+1.4.1.2.2,Task,Develop Interfaces,2026-07-28,2026-08-05,7,Dev Team,1.4.1.2.1
+1.4.1.3,Activity,Unit Testing,2026-08-06,2026-08-15,8,QA Team,
+1.4.1.3.1,Task,Test Config Modules,2026-08-06,2026-08-10,5,QA Team,
+1.4.1.3.2,Task,Test Custom Dev,2026-08-11,2026-08-15,5,QA Team,1.4.1.3.1
+1.4.2,Workstream,Data Migration,2026-07-05,2026-08-30,35,Data Team,
+1.4.2.1,Activity,Data Mapping,2026-07-05,2026-07-20,12,Data Team,
+1.4.2.1.1,Task,Extract Legacy Data,2026-07-05,2026-07-10,4,Data Team,
+1.4.2.1.2,Task,Transform & Map,2026-07-11,2026-07-20,8,Data Team,1.4.2.1.1
+1.4.2.2,Activity,Data Load,2026-07-21,2026-08-10,15,Data Team,
+1.4.2.2.1,Task,Load to Dev,2026-07-21,2026-07-30,8,Data Team,
+1.4.2.2.2,Task,Load to Test,2026-08-01,2026-08-10,8,Data Team,1.4.2.2.1
+1.4.2.3,Activity,Data Validation,2026-08-11,2026-08-30,14,QA Team,
+1.4.2.3.1,Task,Validate Dev Data,2026-08-11,2026-08-20,8,QA Team,
+1.4.2.3.2,Task,Validate Test Data,2026-08-21,2026-08-30,8,QA Team,1.4.2.3.1
+1.5,Phase,Test,2026-09-16,2026-10-31,33,QA Lead,
+1.5.1,Workstream,Unit Testing,2026-09-16,2026-09-25,8,QA Team,
+1.5.1.1,Activity,Module Testing,2026-09-16,2026-09-20,5,QA Team,
+1.5.1.1.1,Task,Finance Module,2026-09-16,2026-09-18,3,QA Team,
+1.5.1.1.2,Task,Procurement Module,2026-09-19,2026-09-20,2,QA Team,1.5.1.1.1
+1.5.1.2,Activity,Custom Development Testing,2026-09-21,2026-09-25,5,QA Team,
+1.5.1.2.1,Task,Test Reports,2026-09-21,2026-09-23,3,QA Team,
+1.5.1.2.2,Task,Test Interfaces,2026-09-24,2026-09-25,2,QA Team,1.5.1.2.1
+1.5.2,Workstream,Integration Testing,2026-09-26,2026-10-10,11,QA Team,
+1.5.2.1,Activity,End-to-End Scenarios,2026-09-26,2026-10-05,8,QA Team,
+1.5.2.1.1,Task,Finance Procure Flow,2026-09-26,2026-09-30,5,QA Team,
+1.5.2.1.2,Task,Supply Chain Flow,2026-10-01,2026-10-05,5,QA Team,1.5.2.1.1
+1.5.2.2,Activity,Integration Validation,2026-10-06,2026-10-10,5,QA Team,
+1.5.2.2.1,Task,Validate Reports,2026-10-06,2026-10-08,3,QA Team,
+1.5.2.2.2,Task,Validate Interfaces,2026-10-09,2026-10-10,2,QA Team,1.5.2.2.1
+1.5.3,Workstream,UAT,2026-10-11,2026-10-31,15,Business Users,
+1.5.3.1,Activity,UAT Planning,2026-10-11,2026-10-15,5,Business Users,
+1.5.3.1.1,Task,Define UAT Scenarios,2026-10-11,2026-10-13,3,Business Users,
+1.5.3.1.2,Task,Assign Testers,2026-10-14,2026-10-15,2,PM,1.5.3.1.1
+1.5.3.2,Activity,UAT Execution,2026-10-16,2026-10-25,8,Business Users,
+1.5.3.2.1,Task,Execute Test Cases,2026-10-16,2026-10-22,5,Business Users,
+1.5.3.2.2,Task,Log Defects,2026-10-23,2026-10-25,3,QA Team,1.5.3.2.1
+1.5.3.3,Activity,UAT Sign-Off,2026-10-26,2026-10-31,4,PM,
+1.5.3.3.1,Task,Resolve Defects,2026-10-26,2026-10-29,4,QA Team,
+1.5.3.3.2,Task,Sign-Off UAT,2026-10-30,2026-10-31,2,PM,1.5.3.3.1
+1.6,Phase,Deploy,2026-11-01,2026-11-30,22,Project Manager,
+1.6.1,Workstream,Cutover Planning,2026-11-01,2026-11-10,8,PM,
+1.6.1.1,Activity,Cutover Schedule,2026-11-01,2026-11-05,5,PM,
+1.6.1.1.1,Task,Draft Schedule,2026-11-01,2026-11-03,3,PM,
+1.6.1.1.2,Task,Approve Schedule,2026-11-04,2026-11-05,2,PM,1.6.1.1.1
+1.6.1.2,Activity,Go-Live Prep,2026-11-06,2026-11-10,5,PM,
+1.6.1.2.1,Task,Prepare Teams,2026-11-06,2026-11-08,

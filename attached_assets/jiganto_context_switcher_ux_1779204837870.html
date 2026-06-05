@@ -1,0 +1,281 @@
+
+<style>
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
+.root{font-size:13px;color:var(--color-text-primary);}
+.topbar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg) var(--border-radius-lg) 0 0;}
+.tb-logo{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#2563eb,#0fbcb0);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:500;}
+.tb-title{font-size:14px;font-weight:500;color:var(--color-text-primary);}
+.tb-sub{font-size:11px;color:var(--color-text-tertiary);}
+.ctx-pill{display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:var(--color-background-secondary);cursor:pointer;transition:border-color .13s;user-select:none;}
+.ctx-pill:hover{border-color:var(--color-border-primary);}
+.ctx-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.ctx-name{font-size:12px;font-weight:500;color:var(--color-text-primary);}
+.ctx-chevron{font-size:11px;color:var(--color-text-tertiary);}
+.ctx-role{font-size:10px;color:var(--color-text-tertiary);padding:2px 7px;border-radius:20px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+.switcher-panel{position:relative;}
+.sw-dropdown{background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:8px;display:none;margin-top:4px;width:320px;}
+.sw-dropdown.open{display:block;}
+.sw-section-label{font-size:10px;font-weight:500;letter-spacing:0.05em;text-transform:uppercase;color:var(--color-text-tertiary);padding:4px 8px 6px;}
+.sw-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--border-radius-md);cursor:pointer;transition:background .1s;}
+.sw-item:hover{background:var(--color-background-secondary);}
+.sw-item.active{background:#EEEDFE;}
+.sw-logo{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:#fff;flex-shrink:0;}
+.sw-item-name{font-size:13px;font-weight:500;color:var(--color-text-primary);flex:1;}
+.sw-item.active .sw-item-name{color:#3C3489;}
+.sw-item-meta{font-size:11px;color:var(--color-text-tertiary);}
+.sw-check{font-size:14px;color:#534AB7;}
+.sw-divider{height:0.5px;background:var(--color-border-tertiary);margin:6px 0;}
+
+.content-area{border:0.5px solid var(--color-border-tertiary);border-top:none;border-radius:0 0 var(--border-radius-lg) var(--border-radius-lg);overflow:hidden;}
+.ctx-banner{padding:8px 14px;display:flex;align-items:center;gap:10px;font-size:12px;}
+.ctx-banner.master{background:var(--color-background-secondary);border-bottom:0.5px solid var(--color-border-tertiary);}
+.ctx-banner.client{border-bottom:0.5px solid var(--color-border-tertiary);}
+.banner-dot{width:8px;height:8px;border-radius:50%;}
+.banner-name{font-weight:500;}
+.banner-role{font-size:11px;color:var(--color-text-tertiary);}
+.exit-btn{margin-left:auto;font-size:11px;padding:3px 9px;border-radius:20px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-secondary);cursor:pointer;}
+.exit-btn:hover{border-color:var(--color-border-primary);}
+
+.proj-row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);}
+.proj-row:last-child{border-bottom:none;}
+.proj-dot{width:9px;height:9px;border-radius:3px;flex-shrink:0;}
+.proj-name{font-size:13px;font-weight:500;color:var(--color-text-primary);flex:1;}
+.proj-cust{font-size:11px;color:var(--color-text-tertiary);}
+.prog-track{width:80px;height:4px;background:var(--color-background-secondary);border-radius:2px;overflow:hidden;border:0.5px solid var(--color-border-tertiary);}
+.prog-fill{height:100%;border-radius:2px;}
+.health-badge{font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;}
+.hb-ok{background:#EAF3DE;color:#27500A;}
+.hb-risk{background:#FAEEDA;color:#633806;}
+.hb-behind{background:#FCEBEB;color:#791F1F;}
+.dt{font-size:11px;color:var(--color-text-tertiary);font-family:var(--font-mono);width:70px;text-align:right;}
+
+.kpi-strip{display:flex;border-bottom:0.5px solid var(--color-border-tertiary);}
+.kpi-box{flex:1;padding:10px 14px;border-right:0.5px solid var(--color-border-tertiary);}
+.kpi-box:last-child{border-right:none;}
+.kpi-val{font-size:20px;font-weight:500;color:var(--color-text-primary);}
+.kpi-lbl{font-size:11px;color:var(--color-text-tertiary);margin-top:2px;}
+
+.state-label{font-size:11px;font-weight:500;padding:4px 10px;border-radius:20px;display:inline-block;margin-bottom:10px;}
+.sl-all{background:var(--color-background-secondary);color:var(--color-text-secondary);border:0.5px solid var(--color-border-tertiary);}
+.sl-client{background:#EEEDFE;color:#3C3489;border:0.5px solid #AFA9EC;}
+
+.view-section{display:none;}
+.view-section.on{display:block;}
+</style>
+
+<h2 class="sr-only">Interactive demonstration of Jiganto's context switcher — showing how an SI consultant switches between master portfolio view and a specific customer workspace.</h2>
+
+<div class="root">
+<div style="font-size:11px;font-weight:500;color:var(--color-text-tertiary);letter-spacing:0.05em;text-transform:uppercase;padding:0 0 8px;">Context switcher — interactive demo</div>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="tb-logo">Ji</div>
+  <div><div class="tb-title">Jiganto</div><div class="tb-sub">Projects</div></div>
+
+  <div class="switcher-panel" style="margin-left:14px;">
+    <div class="ctx-pill" onclick="toggleDropdown()" id="ctxPill">
+      <div class="ctx-dot" id="ctxDot" style="background:#534AB7;"></div>
+      <div class="ctx-name" id="ctxName">Apex Solutions Group</div>
+      <span class="ctx-role" id="ctxRole">Master org</span>
+      <span class="ctx-chevron" id="ctxChev">⌄</span>
+    </div>
+    <div class="sw-dropdown" id="swDropdown">
+      <div class="sw-section-label">Your organisation</div>
+      <div class="sw-item active" id="sw-master" onclick="switchCtx('master')">
+        <div class="sw-logo" style="background:#534AB7;">AS</div>
+        <div style="flex:1;">
+          <div class="sw-item-name">Apex Solutions Group</div>
+          <div class="sw-item-meta">Master org · All projects · PMO view</div>
+        </div>
+        <span class="sw-check" id="chk-master">✓</span>
+      </div>
+      <div class="sw-divider"></div>
+      <div class="sw-section-label">Customer workspaces</div>
+      <div class="sw-item" id="sw-acme" onclick="switchCtx('acme')">
+        <div class="sw-logo" style="background:#185FA5;">AC</div>
+        <div style="flex:1;">
+          <div class="sw-item-name">Acme Corp</div>
+          <div class="sw-item-meta">3 active projects · 8 client users</div>
+        </div>
+        <span class="sw-check" id="chk-acme" style="display:none;">✓</span>
+      </div>
+      <div class="sw-item" id="sw-globex" onclick="switchCtx('globex')">
+        <div class="sw-logo" style="background:#0F6E56;">GL</div>
+        <div style="flex:1;">
+          <div class="sw-item-name">Globex Industries</div>
+          <div class="sw-item-meta">2 active projects · 5 client users</div>
+        </div>
+        <span class="sw-check" id="chk-globex" style="display:none;">✓</span>
+      </div>
+      <div class="sw-item" id="sw-medgroup" onclick="switchCtx('medgroup')">
+        <div class="sw-logo" style="background:#993C1D;">MG</div>
+        <div style="flex:1;">
+          <div class="sw-item-name">MedGroup NHS Trust</div>
+          <div class="sw-item-meta">4 active projects · 12 client users</div>
+        </div>
+        <span class="sw-check" id="chk-medgroup" style="display:none;">✓</span>
+      </div>
+      <div class="sw-item" id="sw-retailco" onclick="switchCtx('retailco')">
+        <div class="sw-logo" style="background:#854F0B;">RC</div>
+        <div style="flex:1;">
+          <div class="sw-item-name">RetailCo Group</div>
+          <div class="sw-item-meta">1 active project · 3 client users</div>
+        </div>
+        <span class="sw-check" id="chk-retailco" style="display:none;">✓</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tb-right">
+    <div style="font-size:11px;color:var(--color-text-tertiary);">Peter Voss · SI Consultant</div>
+    <div style="width:26px;height:26px;border-radius:50%;background:#EEEDFE;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;color:#3C3489;">PV</div>
+  </div>
+</div>
+
+<!-- Content area -->
+<div class="content-area">
+
+  <!-- MASTER VIEW -->
+  <div class="view-section on" id="view-master">
+    <div class="ctx-banner master">
+      <div class="banner-dot" style="background:#534AB7;"></div>
+      <span class="banner-name">Apex Solutions Group — master portfolio</span>
+      <span class="banner-role">· You see all customers and all projects</span>
+    </div>
+    <div class="kpi-strip">
+      <div class="kpi-box"><div class="kpi-val">14</div><div class="kpi-lbl">Active projects</div></div>
+      <div class="kpi-box"><div class="kpi-val">5</div><div class="kpi-lbl">Customers</div></div>
+      <div class="kpi-box"><div class="kpi-val" style="color:#BA7517;">3</div><div class="kpi-lbl">At risk</div></div>
+      <div class="kpi-box"><div class="kpi-val">£6.8M</div><div class="kpi-lbl">Portfolio value</div></div>
+    </div>
+    <div class="proj-row"><div class="proj-dot" style="background:#185FA5;"></div><div><div class="proj-name">Acme Corp SAP S/4HANA Implementation</div><div class="proj-cust">Acme Corp · Peter Voss</div></div><div class="prog-track"><div class="prog-fill" style="width:62%;background:#639922;"></div></div><span class="health-badge hb-ok">On Track</span><div class="dt">Dec 2025</div></div>
+    <div class="proj-row"><div class="proj-dot" style="background:#0F6E56;"></div><div><div class="proj-name">Globex Oracle Fusion ERP Migration</div><div class="proj-cust">Globex Industries · Nina Okafor</div></div><div class="prog-track"><div class="prog-fill" style="width:28%;background:#E24B4A;"></div></div><span class="health-badge hb-behind">Behind</span><div class="dt">Jun 2025</div></div>
+    <div class="proj-row"><div class="proj-dot" style="background:#993C1D;"></div><div><div class="proj-name">MedGroup Oracle Cloud Infrastructure</div><div class="proj-cust">MedGroup NHS Trust · Priya Mehta</div></div><div class="prog-track"><div class="prog-fill" style="width:31%;background:#BA7517;"></div></div><span class="health-badge hb-risk">At Risk</span><div class="dt">Sep 2025</div></div>
+    <div class="proj-row"><div class="proj-dot" style="background:#854F0B;"></div><div><div class="proj-name">RetailCo SAP S/4HANA Finance & Procurement</div><div class="proj-cust">RetailCo Group · Peter Voss</div></div><div class="prog-track"><div class="prog-fill" style="width:44%;background:#BA7517;"></div></div><span class="health-badge hb-risk">At Risk</span><div class="dt">Mar 2026</div></div>
+    <div style="padding:9px 14px;font-size:11px;color:var(--color-text-tertiary);background:var(--color-background-secondary);">Showing 4 of 14 projects · Click the org switcher above to focus on a specific customer</div>
+  </div>
+
+  <!-- ACME VIEW -->
+  <div class="view-section" id="view-acme">
+    <div class="ctx-banner client" style="background:#E6F1FB;border-bottom-color:#85B7EB;">
+      <div class="banner-dot" style="background:#185FA5;"></div>
+      <span class="banner-name" style="color:#0C447C;">Acme Corp workspace</span>
+      <span class="banner-role">· Showing only Acme Corp projects and data</span>
+      <button class="exit-btn" onclick="switchCtx('master')">Exit workspace</button>
+    </div>
+    <div class="kpi-strip">
+      <div class="kpi-box"><div class="kpi-val">3</div><div class="kpi-lbl">Active projects</div></div>
+      <div class="kpi-box"><div class="kpi-val">8</div><div class="kpi-lbl">Client users</div></div>
+      <div class="kpi-box"><div class="kpi-val" style="color:#639922;">2</div><div class="kpi-lbl">On track</div></div>
+      <div class="kpi-box"><div class="kpi-val">£730K</div><div class="kpi-lbl">Contract value</div></div>
+    </div>
+    <div class="proj-row"><div class="proj-dot" style="background:#185FA5;"></div><div><div class="proj-name">SAP S/4HANA Core Implementation</div><div class="proj-cust">Acme Corp · Peter Voss</div></div><div class="prog-track"><div class="prog-fill" style="width:62%;background:#639922;"></div></div><span class="health-badge hb-ok">On Track</span><div class="dt">Dec 2025</div></div>
+    <div class="proj-row"><div class="proj-dot" style="background:#185FA5;"></div><div><div class="proj-name">Acme SAP SuccessFactors HR</div><div class="proj-cust">Acme Corp · Laura Simmons</div></div><div class="prog-track"><div class="prog-fill" style="width:41%;background:#639922;"></div></div><span class="health-badge hb-ok">On Track</span><div class="dt">Jun 2026</div></div>
+    <div class="proj-row"><div class="proj-dot" style="background:#185FA5;"></div><div><div class="proj-name">Acme Managed Services (SAP Basis)</div><div class="proj-cust">Acme Corp · Callum Reid</div></div><div class="prog-track"><div class="prog-fill" style="width:85%;background:#BA7517;"></div></div><span class="health-badge hb-risk">At Risk</span><div class="dt">Ongoing</div></div>
+    <div style="padding:9px 14px;font-size:11px;color:#0C447C;background:#E6F1FB;">Acme Corp users who log in will see exactly this view — no other customer data is accessible</div>
+  </div>
+
+  <!-- GLOBEX VIEW -->
+  <div class="view-section" id="view-globex">
+    <div class="ctx-banner client" style="background:#E1F5EE;border-bottom-color:#5DCAA5;">
+      <div class="banner-dot" style="background:#0F6E56;"></div>
+      <span class="banner-name" style="color:#085041;">Globex Industries workspace</span>
+      <span class="banner-role">· Showing only Globex Industries data</span>
+      <button class="exit-btn" onclick="switchCtx('master')">Exit workspace</button>
+    </div>
+    <div class="kpi-strip">
+      <div class="kpi-box"><div class="kpi-val">2</div><div class="kpi-lbl">Active projects</div></div>
+      <div class="kpi-box"><div class="kpi-val">5</div><div class="kpi-lbl">Client users</div></div>
+      <div class="kpi-box"><div class="kpi-val" style="color:#A32D2D;">1</div><div class="kpi-lbl">Behind</div></div>
+      <div class="kpi-box"><div class="kpi-val">£510K</div><div class="kpi-lbl">Contract value</div></div>
+    </div>
+    <div class="proj-row"><div class="proj-dot" style="background:#0F6E56;"></div><div><div class="proj-name">Oracle Fusion ERP Migration</div><div class="proj-cust">Globex Industries · Nina Okafor</div></div><div class="prog-track"><div class="prog-fill" style="width:28%;background:#E24B4A;"></div></div><span class="health-badge hb-behind">Behind</span><div class="dt">Jun 2025</div></div>
+    <div class="proj-row"><div class="proj-dot" style="background:#0F6E56;"></div><div><div class="proj-name">Globex Cloud Infrastructure POC</div><div class="proj-cust">Globex Industries · Priya Mehta</div></div><div class="prog-track"><div class="prog-fill" style="width:72%;background:#639922;"></div></div><span class="health-badge hb-ok">On Track</span><div class="dt">Apr 2025</div></div>
+    <div style="padding:9px 14px;font-size:11px;color:#085041;background:#E1F5EE;">Globex client users see only these 2 projects — the Oracle migration risk is visible to them too, prompting shared accountability</div>
+  </div>
+
+  <!-- MEDGROUP VIEW -->
+  <div class="view-section" id="view-medgroup">
+    <div class="ctx-banner client" style="background:#FAECE7;border-bottom-color:#F0997B;">
+      <div class="banner-dot" style="background:#993C1D;"></div>
+      <span class="banner-name" style="color:#712B13;">MedGroup NHS Trust workspace</span>
+      <span class="banner-role">· Showing only MedGroup data</span>
+      <button class="exit-btn" onclick="switchCtx('master')">Exit workspace</button>
+    </div>
+    <div class="kpi-strip">
+      <div class="kpi-box"><div class="kpi-val">4</div><div class="kpi-lbl">Active projects</div></div>
+      <div class="kpi-box"><div class="kpi-val">12</div><div class="kpi-lbl">Client users</div></div>
+      <div class="kpi-box"><div class="kpi-val" style="color:#BA7517;">2</div><div class="kpi-lbl">At risk</div></div>
+      <div class="kpi-box"><div class="kpi-val">£1.1M</div><div class="kpi-lbl">Contract value</div></div>
+    </div>
+    <div class="proj-row"><div class="proj-dot" style="background:#993C1D;"></div><div><div class="proj-name">Oracle Cloud Infrastructure Migration</div><div class="proj-cust">MedGroup NHS Trust · Priya Mehta</div></div><div class="prog-track"><div class="prog-fill" style="width:31%;background:#BA7517;"></div></div><span class="health-badge hb-risk">At Risk</span><div class="dt">Sep 2025</div></div>
+    <div class="proj-row"><div class="proj-dot" style="background:#993C1D;"></div><div><div class="proj-name">NHS Shared Services SAP Payroll</div><div class="proj-cust">MedGroup NHS Trust · Laura Simmons</div></div><div class="prog-track"><div class="prog-fill" style="width:38%;background:#639922;"></div></div><span class="health-badge hb-ok">On Track</span><div class="dt">Dec 2026</div></div>
+    <div style="padding:9px 14px;font-size:11px;color:#712B13;background:#FAECE7;">NHS Information Governance rules require strict data separation — workspace isolation meets IG requirements</div>
+  </div>
+
+  <!-- RETAILCO VIEW -->
+  <div class="view-section" id="view-retailco">
+    <div class="ctx-banner client" style="background:#FAEEDA;border-bottom-color:#EF9F27;">
+      <div class="banner-dot" style="background:#854F0B;"></div>
+      <span class="banner-name" style="color:#633806;">RetailCo Group workspace</span>
+      <span class="banner-role">· Showing only RetailCo data</span>
+      <button class="exit-btn" onclick="switchCtx('master')">Exit workspace</button>
+    </div>
+    <div class="kpi-strip">
+      <div class="kpi-box"><div class="kpi-val">1</div><div class="kpi-lbl">Active project</div></div>
+      <div class="kpi-box"><div class="kpi-val">3</div><div class="kpi-lbl">Client users</div></div>
+      <div class="kpi-box"><div class="kpi-val" style="color:#BA7517;">1</div><div class="kpi-lbl">At risk</div></div>
+      <div class="kpi-box"><div class="kpi-val">£680K</div><div class="kpi-lbl">Contract value</div></div>
+    </div>
+    <div class="proj-row"><div class="proj-dot" style="background:#854F0B;"></div><div><div class="proj-name">SAP S/4HANA Finance & Procurement</div><div class="proj-cust">RetailCo Group · Peter Voss</div></div><div class="prog-track"><div class="prog-fill" style="width:44%;background:#BA7517;"></div></div><span class="health-badge hb-risk">At Risk</span><div class="dt">Mar 2026</div></div>
+    <div style="padding:9px 14px;font-size:11px;color:#633806;background:#FAEEDA;">RetailCo's procurement team logs in here — they can track delivery status without calling the SI</div>
+  </div>
+
+</div>
+
+<div style="padding:12px 0 4px;font-size:12px;color:var(--color-text-tertiary);">
+  Try switching context above. Click <strong style="color:var(--color-text-primary);">Apex Solutions Group</strong> in the pill to open the workspace switcher, then select any customer workspace.
+</div>
+</div>
+
+<script>
+let open=false, current='master';
+const dotColors={master:'#534AB7',acme:'#185FA5',globex:'#0F6E56',medgroup:'#993C1D',retailco:'#854F0B'};
+const ctxNames={master:'Apex Solutions Group',acme:'Acme Corp',globex:'Globex Industries',medgroup:'MedGroup NHS Trust',retailco:'RetailCo Group'};
+const ctxRoles={master:'Master org',acme:'Customer workspace',globex:'Customer workspace',medgroup:'Customer workspace',retailco:'Customer workspace'};
+
+function toggleDropdown(){
+  open=!open;
+  document.getElementById('swDropdown').classList.toggle('open',open);
+  document.getElementById('ctxChev').textContent=open?'⌃':'⌄';
+}
+
+function switchCtx(ctx){
+  current=ctx;
+  open=false;
+  document.getElementById('swDropdown').classList.remove('open');
+  document.getElementById('ctxChev').textContent='⌄';
+  document.getElementById('ctxDot').style.background=dotColors[ctx];
+  document.getElementById('ctxName').textContent=ctxNames[ctx];
+  document.getElementById('ctxRole').textContent=ctxRoles[ctx];
+  ['master','acme','globex','medgroup','retailco'].forEach(k=>{
+    const swEl=document.getElementById('sw-'+k);
+    const chkEl=document.getElementById('chk-'+k);
+    if(swEl) swEl.classList.toggle('active',k===ctx);
+    if(chkEl) chkEl.style.display=k===ctx?'':'none';
+  });
+  document.querySelectorAll('.view-section').forEach(v=>v.classList.remove('on'));
+  document.getElementById('view-'+ctx).classList.add('on');
+}
+
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.switcher-panel')&&open){
+    open=false;
+    document.getElementById('swDropdown').classList.remove('open');
+    document.getElementById('ctxChev').textContent='⌄';
+  }
+});
+</script>

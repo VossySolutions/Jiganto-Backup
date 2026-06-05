@@ -1,0 +1,4018 @@
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { useShellLayout } from "@/hooks/use-shell-layout";
+import { cn } from "@/lib/utils";
+import { Sidebar } from "@/components/Sidebar";
+import { ModuleHeader } from "@/components/ModuleHeader";
+import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { 
+  FileText, Folder, FolderPlus, FilePlus, Search, Star, Clock, ChevronRight, ChevronDown,
+  MoreHorizontal, Edit, Trash2, Share2, MessageSquare, ArrowLeft, Plus,
+  FolderOpen, Home, Hash, Sparkles, Upload, Download, Link2, 
+  LayoutGrid, List, Pencil, ExternalLink, PanelLeftClose, PanelLeft,
+  GripVertical, FolderInput, Save, X, FileUp,
+  File, FileImage, FileSpreadsheet, FileArchive, Paperclip,
+  Mail, Copy, Check, BookCopy, Globe, Building2, Layers, Palette, Users,
+  FileSignature, Bell, XCircle, Eye
+} from "lucide-react";
+import {
+  DocAllIcon,
+  DocMyDocsIcon,
+  DocBusinessIcon,
+  DocCustomerIcon,
+  DocProjectIcon,
+  DocFinanceIcon,
+  DocTestingIcon,
+  DocBPMIcon,
+} from "@/components/icons/ModuleIcons";
+import { TipTapEditor, type MentionUser } from "@/components/TipTapEditor";
+import type { Document, DocumentFolder, DocumentVersion, DocumentComment, DocumentFile, DocumentTemplate } from "@shared/schema";
+import * as pdfjsLib from "pdfjs-dist";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.mjs",
+  import.meta.url,
+).toString();
+
+function PdfCanvasViewer({ fileId }: { fileId: number }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pageCount, setPageCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    (async () => {
+      try {
+        const response = await fetch(`/api/document-files/${fileId}/download?inline=true`);
+        if (!response.ok) throw new Error("Failed to fetch PDF");
+        const arrayBuffer = await response.arrayBuffer();
+        if (cancelled) return;
+
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        if (cancelled) return;
+        setPageCount(pdf.numPages);
+
+        const container = containerRef.current;
+        if (!container) return;
+        container.innerHTML = "";
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          if (cancelled) return;
+          const containerWidth = container.clientWidth || 800;
+          const scale = Math.min((containerWidth - 48) / page.getViewport({ scale: 1 }).width, 2);
+          const viewport = page.getViewport({ scale });
+
+          const canvas = window.document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          canvas.className = "mx-auto shadow-sm rounded-sm border mb-4";
+          canvas.style.maxWidth = "100%";
+          canvas.setAttribute("data-testid", `pdf-page-${i}`);
+          container.appendChild(canvas);
+
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+          }
+        }
+        setLoading(false);
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err.message || "Failed to render PDF");
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [fileId]);
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4" data-testid="file-preview-pdf-error">
+        <div className="h-20 w-20 rounded-xl bg-muted flex items-center justify-center">
+          <FileText className="h-10 w-10 text-muted-foreground" />
+        </div>
+        <p className="text-sm text-muted-foreground">Unable to render PDF preview.</p>
+        <Button variant="outline" onClick={() => window.open(`/api/document-files/${fileId}/download`, '_blank')} data-testid="button-download-pdf-fallback">
+          <Download className="h-4 w-4 mr-1.5" /> Download PDF
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col" data-testid="file-preview-pdf">
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-pulse text-muted-foreground">Rendering PDF...</div>
+        </div>
+      )}
+      {!loading && pageCount > 0 && (
+        <div className="px-6 py-2 text-xs text-muted-foreground shrink-0">
+          {pageCount} page{pageCount !== 1 ? "s" : ""}
+        </div>
+      )}
+      <div ref={containerRef} className="flex-1 overflow-auto px-6 pb-6" />
+    </div>
+  );
+}
+
+interface FolderTreeItem extends DocumentFolder {
+  children?: FolderTreeItem[];
+  docs?: Document[];
+  files?: DocumentFile[];
+}
+
+type ViewMode = "tile" | "list";
+
+export default function DocumentManagementPage() {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const { mainOffset, mobileTopOffset } = useShellLayout();
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [highlightedDocument, setHighlightedDocument] = useState<Document | null>(null);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isNewFolderOpen, setIsNewFolderOpen] = useState(false);
+  const [isNewDocOpen, setIsNewDocOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderParentId, setNewFolderParentId] = useState<number | null | "root">(null);
+  const [newDocTitle, setNewDocTitle] = useState("");
+  const [newDocType, setNewDocType] = useState("document");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContentState] = useState("");
+  const editContentRef = useRef("");
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAutoSavedContent = useRef<string>("");
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const selectedDocumentRef = useRef<Document | null>(null);
+  const isEditingRef = useRef(false);
+
+  const doSave = useCallback(async (docId: number, contentStr: string) => {
+    setAutoSaveStatus("saving");
+    try {
+      const formData = new FormData();
+      formData.append("content", new Blob([contentStr], { type: "text/html" }), "content.html");
+      const res = await fetch(`/api/documents/${docId}/content`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (res.ok) {
+        lastAutoSavedContent.current = contentStr;
+        setAutoSaveStatus("saved");
+        setTimeout(() => setAutoSaveStatus("idle"), 2500);
+      } else {
+        setAutoSaveStatus("idle");
+      }
+    } catch {
+      setAutoSaveStatus("idle");
+    }
+  }, []);
+
+  const flushPendingSave = useCallback((overrideDocId?: number) => {
+    if (!autoSaveTimer.current) return;
+    clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = null;
+    const docId = overrideDocId ?? selectedDocumentRef.current?.id;
+    if (!docId) return;
+    const contentStr = editContentRef.current;
+    if (contentStr === lastAutoSavedContent.current) return;
+    lastAutoSavedContent.current = contentStr;
+    const formData = new FormData();
+    formData.append("content", new Blob([contentStr], { type: "text/html" }), "content.html");
+    fetch(`/api/documents/${docId}/content`, {
+      method: "POST",
+      body: formData,
+      credentials: "include",
+      keepalive: true,
+    }).catch(() => {});
+  }, []);
+
+  const setEditContent = useCallback((val: string) => {
+    editContentRef.current = val;
+    setEditContentState(val);
+
+    if (!isEditingRef.current || !selectedDocumentRef.current) return;
+    if (val === lastAutoSavedContent.current) return;
+
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(async () => {
+      const docId = selectedDocumentRef.current?.id;
+      if (!docId || !isEditingRef.current) return;
+      if (editContentRef.current === lastAutoSavedContent.current) return;
+      await doSave(docId, editContentRef.current);
+    }, 1500);
+  }, [doSave]);
+  const [activeTab, setActiveTab] = useState<"content" | "comments" | "versions" | "properties" | "signoff">("content");
+  const [, setLocation] = useLocation();
+  const [selectedTagColor, setSelectedTagColor] = useState("#3B82F6");
+  const [showSearch, setShowSearch] = useState(false);
+  const [folderViewMode, setFolderViewMode] = useState<ViewMode>("tile");
+  const [renamingFolder, setRenamingFolder] = useState<DocumentFolder | null>(null);
+  const [renamingDocument, setRenamingDocument] = useState<Document | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [isFolderPanelOpen, setIsFolderPanelOpen] = useState(true);
+  const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
+  const [dragOverFolderId, setDragOverFolderId] = useState<number | null | "root">(null);
+  const [draggingFolderId, setDraggingFolderId] = useState<number | null>(null);
+  const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
+  const [saveAsTitle, setSaveAsTitle] = useState("");
+  const [saveAsFolderId, setSaveAsFolderId] = useState<number | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importTitle, setImportTitle] = useState("");
+  const [importFolderId, setImportFolderId] = useState<number | null>(null);
+  const [importContent, setImportContent] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareDialogUrl, setShareDialogUrl] = useState("");
+  const [shareDialogName, setShareDialogName] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [templateFilter, setTemplateFilter] = useState<string>("all");
+  const [isCreateTemplateOpen, setIsCreateTemplateOpen] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState("");
+  const [newTemplateDesc, setNewTemplateDesc] = useState("");
+  const [newTemplateScope, setNewTemplateScope] = useState("global");
+  const [newTemplateDepartment, setNewTemplateDepartment] = useState("");
+  const [newTemplateCategory, setNewTemplateCategory] = useState("");
+  const [documentCategory, setDocumentCategory] = useState<string>("all");
+  const [explorerSearch, setExplorerSearch] = useState("");
+  const [activeChip, setActiveChip] = useState<"recent" | "starred">("recent");
+  const [isMoveToFolderOpen, setIsMoveToFolderOpen] = useState(false);
+  const [moveToFolderId, setMoveToFolderId] = useState<number | null>(null);
+  const [isMoveFolderOpen, setIsMoveFolderOpen] = useState(false);
+  const [movingFolder, setMovingFolder] = useState<any>(null);
+  const [moveFolderTargetId, setMoveFolderTargetId] = useState<number | null>(null);
+  const docClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const docxInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = (format: "pdf" | "html" | "markdown") => {
+    if (!selectedDocument) return;
+    
+    let content = editContent || selectedDocument.content || "";
+    let filename = selectedDocument.title.replace(/[^a-z0-9]/gi, '_');
+    let mimeType = "text/plain";
+    let extension = "txt";
+    
+    const htmlStyles = `
+      body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+      h1, h2, h3, h4, h5, h6 { margin-top: 1.5em; margin-bottom: 0.5em; }
+      table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+      th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+      th { background-color: #f5f5f5; font-weight: 600; }
+      ul, ol { padding-left: 1.5em; }
+      blockquote { border-left: 4px solid #ddd; margin: 1em 0; padding-left: 1em; font-style: italic; }
+      code { background-color: #f5f5f5; padding: 0.2em 0.4em; border-radius: 3px; font-family: monospace; }
+      pre { background-color: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; }
+      pre code { background-color: transparent; padding: 0; }
+      img { max-width: 100%; height: auto; }
+      mark { background-color: #fff3a3; }
+    `;
+    
+    if (format === "html") {
+      content = `<!DOCTYPE html>
+<html>
+<head>
+  <title>${selectedDocument.title}</title>
+  <style>${htmlStyles}</style>
+</head>
+<body>
+  <h1>${selectedDocument.title}</h1>
+  <div class="content">${content}</div>
+</body>
+</html>`;
+      mimeType = "text/html";
+      extension = "html";
+    } else if (format === "markdown") {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = content;
+      const textContent = tempDiv.textContent || tempDiv.innerText || '';
+      content = `# ${selectedDocument.title}\n\n${textContent}`;
+      mimeType = "text/markdown";
+      extension = "md";
+    } else if (format === "pdf") {
+      toast({
+        title: "Export to PDF",
+        description: "PDF export will open a print dialog. Use 'Save as PDF' option.",
+      });
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>${selectedDocument.title}</title>
+            <style>${htmlStyles}</style>
+          </head>
+          <body>
+            <h1>${selectedDocument.title}</h1>
+            <div class="content">${content}</div>
+          </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+      return;
+    }
+    
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}.${extension}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Document Exported",
+      description: `${selectedDocument.title} exported as ${format.toUpperCase()}`,
+    });
+  };
+
+  const { data: folders = [], isLoading: foldersLoading } = useQuery<DocumentFolder[]>({
+    queryKey: ["/api/documents/folders"],
+  });
+
+  const { data: documents = [], isLoading: docsLoading } = useQuery<(Document & { ownerName: string | null })[]>({
+    queryKey: ["/api/documents", selectedFolderId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedFolderId !== null) {
+        params.append("folderId", String(selectedFolderId));
+      } else {
+        params.append("folderId", "null");
+      }
+      const res = await fetch(`/api/documents?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch documents");
+      return res.json();
+    },
+    placeholderData: (prev) => prev,
+    staleTime: 30_000,
+  });
+
+  const { data: allDocuments = [] } = useQuery<(Document & { ownerName: string | null })[]>({
+    queryKey: ["/api/documents/all"],
+    queryFn: async () => {
+      const res = await fetch(`/api/documents`);
+      if (!res.ok) throw new Error("Failed to fetch all documents");
+      return res.json();
+    },
+  });
+
+  const { data: searchResults = [] } = useQuery<(Document & { ownerName: string | null })[]>({
+    queryKey: ["/api/documents/search", searchQuery],
+    enabled: searchQuery.length > 2,
+    queryFn: async () => {
+      const res = await fetch(`/api/documents/search?q=${encodeURIComponent(searchQuery)}`);
+      if (!res.ok) throw new Error("Failed to search");
+      return res.json();
+    },
+  });
+
+  const { data: versions = [] } = useQuery<DocumentVersion[]>({
+    queryKey: ["/api/documents", selectedDocument?.id, "versions"],
+    enabled: !!selectedDocument,
+    queryFn: async () => {
+      const res = await fetch(`/api/documents/${selectedDocument!.id}/versions`);
+      if (!res.ok) throw new Error("Failed to fetch versions");
+      return res.json();
+    },
+  });
+
+  const { data: comments = [] } = useQuery<(DocumentComment & { author: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]>({
+    queryKey: ["/api/documents", selectedDocument?.id, "comments"],
+    enabled: !!selectedDocument,
+    queryFn: async () => {
+      const res = await fetch(`/api/documents/${selectedDocument!.id}/comments`);
+      if (!res.ok) throw new Error("Failed to fetch comments");
+      return res.json();
+    },
+  });
+
+  const { data: recentDocs = [] } = useQuery<Document[]>({
+    queryKey: ["/api/documents/recent"],
+  });
+
+  const { data: favoriteDocs = [] } = useQuery<Document[]>({
+    queryKey: ["/api/documents/favorites"],
+    queryFn: async () => {
+      const res = await fetch("/api/documents/favorites");
+      if (!res.ok) throw new Error("Failed to fetch favorites");
+      return res.json();
+    },
+  });
+
+  const [selectedFile, setSelectedFile] = useState<DocumentFile | null>(null);
+
+  const { data: folderFiles = [] } = useQuery<DocumentFile[]>({
+    queryKey: ["/api/document-files", selectedFolderId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedFolderId !== null) {
+        params.append("folderId", String(selectedFolderId));
+      } else {
+        params.append("folderId", "null");
+      }
+      const res = await fetch(`/api/document-files?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch files");
+      return res.json();
+    },
+  });
+
+  const { data: allFiles = [] } = useQuery<DocumentFile[]>({
+    queryKey: ["/api/document-files/all"],
+  });
+
+  const { data: templates = [] } = useQuery<DocumentTemplate[]>({
+    queryKey: ["/api/documents/templates"],
+  });
+
+  const { data: allSignoffRequests = [] } = useQuery<any[]>({
+    queryKey: ["/api/signoff"],
+    enabled: !!selectedDocument,
+  });
+  const docSignoffRequests = allSignoffRequests
+    .filter((r: any) => r.sourceDocumentId === selectedDocument?.id)
+    .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const signoffRemindMutation = useMutation({
+    mutationFn: (requestId: number) => apiRequest("POST", `/api/signoff/${requestId}/remind`, {}),
+    onSuccess: () => toast({ title: "Reminder sent", description: "Pending signers have been notified." }),
+    onError: () => toast({ title: "Failed to send reminder", variant: "destructive" }),
+  });
+
+  const createTemplateMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/documents/templates", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/templates"] });
+      setIsCreateTemplateOpen(false);
+      setNewTemplateName("");
+      setNewTemplateDesc("");
+      setNewTemplateScope("global");
+      setNewTemplateDepartment("");
+      setNewTemplateCategory("");
+      toast({ title: "Template created", description: "Your template has been saved." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create template.", variant: "destructive" });
+    },
+  });
+
+  const deleteTemplateMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/documents/templates/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/templates"] });
+      toast({ title: "Template deleted" });
+    },
+  });
+
+  const toggleFolderExpanded = (folderId: number) => {
+    setExpandedFolders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(folderId)) {
+        newSet.delete(folderId);
+      } else {
+        newSet.add(folderId);
+      }
+      return newSet;
+    });
+  };
+
+  const createFolderMutation = useMutation({
+    mutationFn: async (data: { name: string; parentId: number | null }) => 
+      apiRequest("POST", "/api/documents/folders", { ...data, tenantId: 1 }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/folders"] });
+      setIsNewFolderOpen(false);
+      setNewFolderName("");
+      toast({ title: "Folder created" });
+    },
+  });
+
+  const renameFolderMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) =>
+      apiRequest("PUT", `/api/documents/folders/${id}`, { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/folders"] });
+      setRenamingFolder(null);
+      setRenameValue("");
+      toast({ title: "Folder renamed" });
+    },
+  });
+
+  const moveFolderMutation = useMutation({
+    mutationFn: async ({ id, parentId }: { id: number; parentId: number | null }) =>
+      apiRequest("PUT", `/api/documents/folders/${id}`, { parentId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/folders"] });
+      toast({ title: "Folder moved" });
+    },
+    onError: () => {
+      toast({ title: "Failed to move folder", variant: "destructive" });
+    },
+  });
+
+  const createDocMutation = useMutation({
+    mutationFn: async (data: { title: string; type: string; folderId: number | null; content?: string; openAfterCreate?: boolean }) => {
+      const res = await apiRequest("POST", "/api/documents", { ...data, tenantId: 1, content: data.content || "", status: "draft" });
+      return res.json() as Promise<Document & { openAfterCreate?: boolean }>;
+    },
+    onSuccess: (doc: Document & { openAfterCreate?: boolean }, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedFolderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/recent"] });
+      if (variables.folderId !== null && variables.folderId !== selectedFolderId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/documents", variables.folderId] });
+      }
+      setIsNewDocOpen(false);
+      setNewDocTitle("");
+      if (variables.openAfterCreate !== false) {
+        setSelectedDocument(doc);
+        setIsEditing(true);
+        setIsPreviewMode(false);
+        setEditContent(variables.content || "");
+        setActiveTab("content");
+        setSelectedFile(null);
+        toast({ title: "Document created" });
+      }
+    },
+  });
+
+  const updateDocMutation = useMutation({
+    mutationFn: async ({ id, updates, silent }: { id: number; updates: Partial<Document>; silent?: boolean }) => {
+      let lastError: Error | null = null;
+      const hasContent = "content" in updates && updates.content !== undefined;
+      const hasOtherUpdates = Object.keys(updates).some(k => k !== "content");
+      const maxAttempts = 6;
+      const delays = [500, 1000, 1500, 2500, 4000, 6000];
+
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          if (attempt > 0) {
+            try {
+              await fetch("/api/auth/user", { credentials: "include", signal: AbortSignal.timeout(5000) });
+            } catch {
+              await new Promise(r => setTimeout(r, delays[attempt] || 2000));
+              continue;
+            }
+          }
+
+          let contentDoc: Document | null = null;
+          
+          if (hasContent) {
+            const contentStr = updates.content || "";
+            const formData = new FormData();
+            let useCompression = false;
+            try {
+              if (typeof CompressionStream !== "undefined" && contentStr.length > 1024) {
+                const rawBlob = new Blob([contentStr], { type: "text/html" });
+                const cs = new CompressionStream("gzip");
+                const compressedStream = rawBlob.stream().pipeThrough(cs);
+                const compressedBlob = await new Response(compressedStream).blob();
+                formData.append("content", compressedBlob, "content.html.gz");
+                useCompression = true;
+              }
+            } catch {}
+            if (!useCompression) {
+              formData.append("content", new Blob([contentStr], { type: "text/html" }), "content.html");
+            }
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
+            try {
+              const contentRes = await fetch(`/api/documents/${id}/content`, {
+                method: "POST",
+                body: formData,
+                credentials: "include",
+                signal: controller.signal,
+              });
+              clearTimeout(timeoutId);
+              if (!contentRes.ok) {
+                const text = (await contentRes.text()) || contentRes.statusText;
+                throw new Error(`${contentRes.status}: ${text}`);
+              }
+              contentDoc = await contentRes.json();
+            } catch (err) {
+              clearTimeout(timeoutId);
+              throw err;
+            }
+          }
+
+          if (hasOtherUpdates) {
+            const metaUpdates = { ...updates };
+            delete metaUpdates.content;
+            const res = await apiRequest("PUT", `/api/documents/${id}`, metaUpdates);
+            return res.json() as Promise<Document>;
+          }
+
+          return contentDoc as Document;
+        } catch (err) {
+          lastError = err as Error;
+          const msg = lastError.message || "";
+          const isRetryable = msg.includes("Failed to fetch") || 
+            msg.includes("aborted") || 
+            lastError.name === "AbortError" ||
+            msg.includes("network") ||
+            msg.includes("ECONNRESET") ||
+            msg.includes("TypeError");
+          if (attempt < maxAttempts - 1 && isRetryable) {
+            await new Promise(r => setTimeout(r, delays[attempt] || 2000));
+            continue;
+          }
+          throw lastError;
+        }
+      }
+      throw lastError;
+    },
+    retry: false,
+    onSuccess: (updatedDoc: Document, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedFolderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedDocument?.id, "versions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/recent"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/favorites"] });
+      if (variables.silent) {
+        if (highlightedDocument?.id === updatedDoc.id) {
+          setHighlightedDocument(updatedDoc);
+        }
+        if (selectedDocument?.id === updatedDoc.id) {
+          setSelectedDocument(updatedDoc);
+        }
+      } else {
+        setSelectedDocument(updatedDoc);
+        setEditContent(updatedDoc.content || "");
+        setIsEditing(false);
+        setIsPreviewMode(true);
+      }
+      setRenamingDocument(null);
+      setRenameValue("");
+      if (!variables.silent) {
+        toast({ title: "Document saved" });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const uploadFileMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("tenantId", "1");
+      if (selectedFolderId !== null) {
+        formData.append("folderId", String(selectedFolderId));
+      }
+      const res = await fetch("/api/document-files/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/document-files", selectedFolderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/document-files/all"] });
+      toast({ title: "File uploaded successfully" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteFileMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/document-files/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/document-files", selectedFolderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/document-files/all"] });
+      setSelectedFile(null);
+      toast({ title: "File deleted" });
+    },
+  });
+
+  const handleDocxUpload = useCallback(async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      toast({ title: "Invalid file type", description: "Please select a .docx Word document", variant: "destructive" });
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Maximum file size is 25MB", variant: "destructive" });
+      return;
+    }
+    setIsImporting(true);
+    setImportWarnings([]);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      if (typeof globalThis.Buffer === "undefined") {
+        const { Buffer } = await import("buffer");
+        (globalThis as any).Buffer = Buffer;
+      }
+      const mammothModule = await import("mammoth");
+      const mammoth = mammothModule.default || mammothModule;
+      const pendingImages: Array<{ placeholder: string; buffer: any; contentType: string }> = [];
+      let imgIndex = 0;
+      const result = await mammoth.convertToHtml(
+        { arrayBuffer },
+        {
+          styleMap: [
+            "p[style-name='Heading 1'] => h1:fresh",
+            "p[style-name='Heading 2'] => h2:fresh",
+            "p[style-name='Heading 3'] => h3:fresh",
+            "p[style-name='Heading 4'] => h4:fresh",
+            "b => strong",
+            "i => em",
+            "u => u",
+            "strike => s",
+          ],
+          convertImage: mammoth.images.imgElement(async (image: any) => {
+            try {
+              const imageBuffer = await image.read();
+              let contentType = image.contentType || "image/png";
+              const extMap: Record<string, string> = { "image/x-emf": "png", "image/x-wmf": "png", "image/emf": "png", "image/wmf": "png" };
+              if (extMap[contentType]) { contentType = "image/png"; }
+              const placeholder = `__DOCX_IMG_${imgIndex++}__`;
+              pendingImages.push({ placeholder, buffer: imageBuffer, contentType });
+              return { src: placeholder };
+            } catch (imgErr: any) {
+              console.warn("Image extraction error:", imgErr?.message || imgErr);
+              return { src: "" };
+            }
+          }),
+        }
+      );
+      let html = result.value || "";
+      html = html.replace(/<img[^>]*src=["'](?:\s*)["'][^>]*\/?>/gi, '');
+      let imageFailCount = 0;
+      for (const img of pendingImages) {
+        try {
+          const ext = img.contentType.split("/")[1]?.replace(/\+.*/, '') || "png";
+          const blob = new globalThis.Blob([img.buffer], { type: img.contentType });
+          const imageFile = new globalThis.File([blob], `docx-image-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`, { type: img.contentType });
+          const formData = new FormData();
+          formData.append("image", imageFile);
+          let uploadUrl = "";
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const uploadRes = await fetch("/api/documents/upload-image", {
+                method: "POST",
+                body: formData,
+                credentials: "include",
+              });
+              if (uploadRes.ok) {
+                const data = await uploadRes.json();
+                uploadUrl = data.url;
+                break;
+              }
+            } catch {
+              if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+            }
+          }
+          if (uploadUrl) {
+            html = html.replace(img.placeholder, uploadUrl);
+          } else {
+            html = html.replace(new RegExp(`<img[^>]*src=["']${img.placeholder}["'][^>]*/?>`, 'gi'), '');
+            imageFailCount++;
+          }
+        } catch (uploadErr: any) {
+          console.warn("Image upload error:", uploadErr?.message || uploadErr);
+          html = html.replace(new RegExp(`<img[^>]*src=["']${img.placeholder}["'][^>]*/?>`, 'gi'), '');
+          imageFailCount++;
+        }
+      }
+      if (imageFailCount > 0) {
+        setImportWarnings(prev => [...prev, `${imageFailCount} image(s) could not be imported`]);
+      }
+      const title = file.name.replace(/\.docx$/i, '');
+      setImportTitle(title || "Imported Document");
+      setImportContent(html);
+      setImportFolderId(selectedFolderId);
+      const warnings = result.messages
+        .filter((m: any) => m.type === 'warning')
+        .map((m: any) => m.message);
+      if (warnings.length > 0) {
+        setImportWarnings(warnings);
+      }
+      setIsImportOpen(true);
+    } catch (err: any) {
+      toast({ title: "Import failed", description: err.message || "Failed to convert document", variant: "destructive" });
+    } finally {
+      setIsImporting(false);
+      if (docxInputRef.current) docxInputRef.current.value = "";
+    }
+  }, [selectedFolderId, toast]);
+
+  const deleteDocMutation = useMutation({
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/documents/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedFolderId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/all"] });
+      setSelectedDocument(null);
+      setHighlightedDocument(null);
+      setIsPreviewMode(false);
+      toast({ title: "Document deleted" });
+    },
+  });
+
+  const deleteFolderMutation = useMutation({
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/documents/folders/${id}`),
+    onSuccess: (_data, deletedId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/folders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/all"] });
+      if (selectedFolderId === deletedId) setSelectedFolderId(null);
+      toast({ title: "Folder deleted" });
+    },
+  });
+
+  const addCommentMutation = useMutation({
+    mutationFn: async ({ documentId, content }: { documentId: number; content: string }) =>
+      apiRequest("POST", `/api/documents/${documentId}/comments`, { content }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedDocument?.id, "comments"] });
+      toast({ title: "Comment added" });
+    },
+  });
+
+  const toggleFavorite = async (doc: Document, silent?: boolean) => {
+    await updateDocMutation.mutateAsync({ id: doc.id, updates: { isFavorite: !doc.isFavorite }, silent });
+    queryClient.invalidateQueries({ queryKey: ["/api/documents/favorites"] });
+  };
+
+  const handleShareLink = (type: "folder" | "document", id: number, name: string) => {
+    const url = `${window.location.origin}/modules/documents?${type}=${id}`;
+    setShareDialogUrl(url);
+    setShareDialogName(name);
+    setLinkCopied(false);
+    setShareDialogOpen(true);
+  };
+
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareDialogUrl);
+      setLinkCopied(true);
+      toast({ title: "Link copied", description: `Link to "${shareDialogName}" copied to clipboard` });
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      toast({ title: "Copy failed", description: "Could not copy to clipboard. Please copy the link manually.", variant: "destructive" });
+    }
+  };
+
+  const shareViaEmail = () => {
+    const subject = encodeURIComponent(`Shared: ${shareDialogName}`);
+    const body = encodeURIComponent(`I'd like to share "${shareDialogName}" with you:\n\n${shareDialogUrl}`);
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+  };
+
+  const handleDownloadDocument = (doc: Document) => {
+    const content = doc.content || "";
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${doc.title}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Download started", description: `Downloading "${doc.title}"` });
+  };
+
+  const handleDownloadFolder = (folder: DocumentFolder) => {
+    toast({ title: "Download started", description: `Preparing "${folder.name}" for download` });
+  };
+
+  const handleUploadFile = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.onchange = (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (files) {
+        Array.from(files).forEach(file => {
+          if (file.size > 50 * 1024 * 1024) {
+            toast({ title: "File too large", description: `${file.name} exceeds 50MB limit`, variant: "destructive" });
+            return;
+          }
+          uploadFileMutation.mutate(file);
+        });
+      }
+    };
+    input.click();
+  };
+
+  const isDescendantOf = (folderId: number, potentialParentId: number): boolean => {
+    let current = folders.find(f => f.id === folderId);
+    while (current) {
+      if (current.parentId === potentialParentId) return true;
+      if (!current.parentId) return false;
+      current = folders.find(f => f.id === current!.parentId);
+    }
+    return false;
+  };
+
+  const handleFolderDragStart = (e: React.DragEvent, folderId: number) => {
+    e.dataTransfer.setData("text/plain", String(folderId));
+    e.dataTransfer.setData("application/x-folder-id", String(folderId));
+    e.dataTransfer.effectAllowed = "move";
+    setDraggingFolderId(folderId);
+  };
+
+  const handleFolderDragOver = (e: React.DragEvent, targetFolderId: number | null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.dataTransfer.types.includes("application/x-folder-id")) return;
+    if (draggingFolderId === targetFolderId) return;
+    if (targetFolderId !== null && draggingFolderId !== null && isDescendantOf(targetFolderId, draggingFolderId)) return;
+    const draggedFolder = draggingFolderId !== null ? folders.find(f => f.id === draggingFolderId) : null;
+    if (draggedFolder && draggedFolder.parentId === targetFolderId) return;
+    e.dataTransfer.dropEffect = "move";
+    setDragOverFolderId(targetFolderId === null ? "root" : targetFolderId);
+  };
+
+  const handleFolderDrop = (e: React.DragEvent, targetParentId: number | null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const folderIdStr = e.dataTransfer.getData("application/x-folder-id");
+    if (!folderIdStr) return;
+    const folderId = Number(folderIdStr);
+    if (folderId === targetParentId) return;
+    if (targetParentId !== null && isDescendantOf(targetParentId, folderId)) {
+      toast({ title: "Cannot move folder into its own subfolder", variant: "destructive" });
+      return;
+    }
+    const folder = folders.find(f => f.id === folderId);
+    if (folder && folder.parentId === targetParentId) return;
+    moveFolderMutation.mutate({ id: folderId, parentId: targetParentId });
+    setDragOverFolderId(null);
+    setDraggingFolderId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragOverFolderId(null);
+    setDraggingFolderId(null);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    const related = e.relatedTarget as HTMLElement;
+    if (related && e.currentTarget.contains(related)) return;
+    setDragOverFolderId(null);
+  };
+
+  const openNewFolderDialog = (parentId: number | null) => {
+    setNewFolderParentId(parentId);
+    setNewFolderName("");
+    setIsNewFolderOpen(true);
+  };
+
+  const buildFolderTree = (parentId: number | null = null): FolderTreeItem[] => {
+    return folders
+      .filter(f => f.parentId === parentId)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+      .map(f => ({
+        ...f,
+        children: buildFolderTree(f.id),
+        docs: allDocuments.filter(d => d.folderId === f.id),
+        files: allFiles.filter(file => file.folderId === f.id),
+      }));
+  };
+
+  const folderTree = buildFolderTree();
+
+  // Keep refs in sync with state for use inside autosave closure
+  useEffect(() => {
+    // Flush any pending save for the PREVIOUS document before switching
+    const prevDocId = selectedDocumentRef.current?.id;
+    if (prevDocId && selectedDocument?.id !== prevDocId) {
+      flushPendingSave(prevDocId);
+    } else if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = null;
+    }
+    selectedDocumentRef.current = selectedDocument;
+    lastAutoSavedContent.current = selectedDocument?.content ?? "";
+    setAutoSaveStatus("idle");
+  }, [selectedDocument?.id, flushPendingSave]);
+
+  useEffect(() => {
+    isEditingRef.current = isEditing;
+    if (!isEditing) {
+      flushPendingSave();
+      setAutoSaveStatus("idle");
+    }
+  }, [isEditing, flushPendingSave]);
+
+  // Save when the browser tab is hidden or closed
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flushPendingSave();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [flushPendingSave]);
+
+  // Fetch users for @mention suggestions
+  const { data: settingsUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/settings/users"],
+    staleTime: 60_000,
+  });
+  const mentionUsers: MentionUser[] = settingsUsers
+    .map((u: any) => ({
+      id: String(u.id),
+      name: ([u.firstName, u.lastName].filter(Boolean).join(" ").trim()) || u.email || String(u.id),
+      email: u.email,
+    }))
+    .filter((u: MentionUser) => typeof u.name === 'string' && u.name.length > 0);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const docId = params.get("document");
+    const folderId = params.get("folder");
+    if (docId && allDocuments.length > 0) {
+      const doc = allDocuments.find(d => d.id === Number(docId));
+      if (doc) {
+        setSelectedDocument(doc);
+        setSelectedFolderId(doc.folderId);
+        setEditContent(doc.content || "");
+        if (doc.folderId) {
+          setExpandedFolders(prev => { const next = new Set(Array.from(prev)); next.add(doc.folderId!); return next; });
+        }
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    } else if (folderId && folders.length > 0) {
+      const fId = Number(folderId);
+      setSelectedFolderId(fId);
+      setExpandedFolders(prev => { const next = new Set(Array.from(prev)); next.add(fId); return next; });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [allDocuments.length, folders.length]);
+
+  const getCurrentFolder = (): DocumentFolder | null => {
+    if (selectedFolderId === null) return null;
+    return folders.find(f => f.id === selectedFolderId) || null;
+  };
+
+  const getBreadcrumbs = (): { id: number | null; name: string }[] => {
+    const crumbs: { id: number | null; name: string }[] = [{ id: null, name: "Documents" }];
+    if (selectedFolderId) {
+      const findPath = (folderId: number, path: { id: number; name: string }[] = []): { id: number; name: string }[] => {
+        const folder = folders.find(f => f.id === folderId);
+        if (!folder) return path;
+        const newPath = [{ id: folder.id, name: folder.name }, ...path];
+        if (folder.parentId) return findPath(folder.parentId, newPath);
+        return newPath;
+      };
+      crumbs.push(...findPath(selectedFolderId));
+    }
+    return crumbs;
+  };
+
+  const getDocTypeIcon = (type: string) => {
+    const iconClass = "h-5 w-5";
+    switch (type) {
+      case "wiki": return <FileText className={`${iconClass} text-primary`} />;
+      case "template": return <Hash className={`${iconClass} text-brand-purple`} />;
+      case "sop": return <FileText className={`${iconClass} text-brand-green`} />;
+      case "policy": return <FileText className={`${iconClass} text-brand-orange`} />;
+      case "contract": return <FileText className={`${iconClass} text-destructive`} />;
+      default: return <FileText className={`${iconClass} text-muted-foreground`} />;
+    }
+  };
+
+  const getSmallDocTypeIcon = (type: string) => {
+    const iconClass = "h-3.5 w-3.5";
+    switch (type) {
+      case "wiki": return <FileText className={`${iconClass} text-primary`} />;
+      case "template": return <Hash className={`${iconClass} text-brand-purple`} />;
+      case "sop": return <FileText className={`${iconClass} text-brand-green`} />;
+      case "policy": return <FileText className={`${iconClass} text-brand-orange`} />;
+      case "contract": return <FileText className={`${iconClass} text-destructive`} />;
+      default: return <FileText className={`${iconClass} text-muted-foreground`} />;
+    }
+  };
+
+  const getDocBadgeColor = (type: string): string => {
+    switch (type) {
+      case "wiki": return "bg-primary/10";
+      case "template": return "bg-purple-100 dark:bg-purple-950/30";
+      case "sop": return "bg-green-100 dark:bg-green-950/30";
+      case "policy": return "bg-orange-100 dark:bg-orange-950/30";
+      case "contract": return "bg-red-100 dark:bg-red-950/30";
+      default: return "bg-muted";
+    }
+  };
+
+  const getFolderColor = (name: string): string => {
+    const n = name.toLowerCase();
+    if (/business|management|strategy|enterprise|initiative/.test(n)) return "text-blue-500";
+    if (/customer|client|crm|sales|account|contact/.test(n)) return "text-green-500";
+    if (/project|delivery|implementation|deployment|sprint/.test(n)) return "text-purple-500";
+    if (/finance|budget|invoice|cost|billing|accounting|financial/.test(n)) return "text-amber-500";
+    if (/test|qa|quality|validation/.test(n)) return "text-rose-500";
+    if (/bpm|process|workflow|procedure|sop/.test(n)) return "text-indigo-500";
+    return "text-brand-orange";
+  };
+
+  const getRelativeTime = (date: string | Date): string => {
+    const d = typeof date === "string" ? new Date(date) : date;
+    const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (diff < 60) return "just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 172800) return "yesterday";
+    if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  const getFileIcon = (mimeType: string, size?: "sm" | "md") => {
+    const cls = size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
+    if (mimeType.startsWith("image/")) return <FileImage className={`${cls} text-brand-green`} />;
+    if (mimeType === "application/pdf") return <FileText className={`${cls} text-destructive`} />;
+    if (mimeType.includes("spreadsheet") || mimeType.includes("excel") || mimeType === "text/csv") return <FileSpreadsheet className={`${cls} text-brand-green`} />;
+    if (mimeType.includes("zip") || mimeType.includes("archive") || mimeType.includes("compressed")) return <FileArchive className={`${cls} text-brand-orange`} />;
+    if (mimeType.includes("word") || mimeType.includes("document")) return <FileText className={`${cls} text-primary`} />;
+    if (mimeType.includes("presentation") || mimeType.includes("powerpoint")) return <FileText className={`${cls} text-brand-orange`} />;
+    return <File className={`${cls} text-muted-foreground`} />;
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const handleFileClick = (file: DocumentFile) => {
+    setSelectedFile(file);
+    setSelectedDocument(null);
+    setHighlightedDocument(null);
+  };
+
+  const getSubfolders = () => folders.filter(f => f.parentId === selectedFolderId);
+
+  const getCategoryFilteredDocs = (docs: typeof documents) => {
+    if (documentCategory === "all") return docs;
+    if (documentCategory === "my") return docs.filter(d => d.ownerId === user?.id);
+    const folderNameMap = new Map(folders.map(f => [f.id, f.name.toLowerCase()]));
+    const categoryKeywords: Record<string, string[]> = {
+      business: ["business", "strategy", "management", "initiative", "enterprise"],
+      customer: ["customer", "client", "crm", "sales", "account"],
+      project: ["project", "delivery", "implementation", "deployment"],
+      finance: ["finance", "budget", "invoice", "cost", "billing", "accounting"],
+      testing: ["test", "qa", "quality", "validation", "uат"],
+      bpm: ["bpm", "process", "workflow", "procedure", "sop"],
+    };
+    const keywords = categoryKeywords[documentCategory] || [];
+    return docs.filter(d => {
+      const title = (d.title || "").toLowerCase();
+      const folderName = d.folderId ? (folderNameMap.get(d.folderId) || "") : "";
+      return keywords.some(kw => title.includes(kw) || folderName.includes(kw));
+    });
+  };
+
+  const displayedDocs = getCategoryFilteredDocs(searchQuery.length > 2 ? searchResults : documents);
+  const rootDocs = allDocuments.filter(d => d.folderId === null);
+
+  const renderFolderTreeItem = (folder: FolderTreeItem, depth: number = 0): React.ReactNode => {
+    const hasChildren = (folder.children && folder.children.length > 0) || (folder.docs && folder.docs.length > 0) || (folder.files && folder.files.length > 0);
+    const isExpanded = expandedFolders.has(folder.id);
+    const isSelected = selectedFolderId === folder.id && !selectedDocument;
+    const isDragOver = dragOverFolderId === folder.id;
+    const isDragging = draggingFolderId === folder.id;
+
+    return (
+      <div key={folder.id} className={isDragging ? "opacity-40" : ""}>
+        <div
+          className={cn(
+            "flex items-center gap-1 py-0.5 px-2 rounded-md cursor-pointer group transition-colors",
+            isSelected ? "bg-primary/10 text-primary" : "hover:bg-muted",
+            isDragOver && "bg-primary/20 ring-1 ring-primary/40"
+          )}
+          style={{ paddingLeft: `${depth * 12 + 8}px` }}
+          onClick={() => { setSelectedFolderId(folder.id); setSelectedDocument(null); setHighlightedDocument(null); }}
+          draggable
+          onDragStart={(e) => handleFolderDragStart(e, folder.id)}
+          onDragOver={(e) => handleFolderDragOver(e, folder.id)}
+          onDrop={(e) => handleFolderDrop(e, folder.id)}
+          onDragEnd={handleDragEnd}
+          onDragLeave={handleDragLeave}
+          data-testid={`tree-folder-${folder.id}`}
+        >
+          {hasChildren ? (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); toggleFolderExpanded(folder.id); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleFolderExpanded(folder.id); }}}
+              className="p-0.5 hover:bg-muted-foreground/10 rounded cursor-pointer"
+              data-testid={`tree-toggle-${folder.id}`}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+            </span>
+          ) : (
+            <span className="w-4" />
+          )}
+          {isExpanded ? (
+            <FolderOpen className={cn("h-4 w-4 shrink-0", getFolderColor(folder.name))} />
+          ) : (
+            <Folder className={cn("h-4 w-4 shrink-0", getFolderColor(folder.name))} />
+          )}
+          <span className="text-sm truncate flex-1">{folder.name}</span>
+          {!isExpanded && ((folder.docs?.length || 0) + (folder.files?.length || 0)) > 0 && (
+            <span className="text-[10px] text-muted-foreground tabular-nums">{(folder.docs?.length || 0) + (folder.files?.length || 0)}</span>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openNewFolderDialog(folder.id); }}>
+                <FolderPlus className="h-4 w-4 mr-2" /> New Subfolder
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openNewFolderDialog(folder.parentId); }}>
+                <FolderPlus className="h-4 w-4 mr-2" /> New Sibling Folder
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolder(folder); setRenameValue(folder.name); }}>
+                <Pencil className="h-4 w-4 mr-2" /> Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("folder", folder.id, folder.name); }}>
+                <Share2 className="h-4 w-4 mr-2" /> Share Link
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMovingFolder(folder); setMoveFolderTargetId(folder.parentId ?? null); setIsMoveFolderOpen(true); }} data-testid={`tree-folder-move-${folder.id}`}>
+                <FolderInput className="h-4 w-4 mr-2" /> Move Folder
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={(e) => { e.stopPropagation(); deleteFolderMutation.mutate(folder.id); }}
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        {isExpanded && (
+          <div>
+            {folder.children && folder.children.map(child => renderFolderTreeItem(child, depth + 1))}
+            {folder.docs && folder.docs.map(doc => (
+              <div
+                key={`doc-${doc.id}`}
+                className={cn(
+                  "flex items-center gap-1.5 py-0.5 px-2 rounded-md cursor-pointer transition-colors group",
+                  (selectedDocument?.id === doc.id || highlightedDocument?.id === doc.id) ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                )}
+                style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}
+                onClick={() => {
+                  if (docClickTimer.current) { clearTimeout(docClickTimer.current); docClickTimer.current = null; return; }
+                  docClickTimer.current = setTimeout(() => { docClickTimer.current = null; setSelectedDocument(doc); setIsPreviewMode(true); setEditContent(doc.content || ""); setActiveTab("content"); setIsEditing(false); setSelectedFile(null); setHighlightedDocument(null); }, 250);
+                }}
+                onDoubleClick={(e) => { e.stopPropagation(); if (docClickTimer.current) { clearTimeout(docClickTimer.current); docClickTimer.current = null; } setSelectedDocument(doc); setIsPreviewMode(false); setIsEditing(true); setEditContent(doc.content || ""); setActiveTab("content"); setSelectedFile(null); setHighlightedDocument(null); }}
+                data-testid={`tree-doc-${doc.id}`}
+              >
+                <span className="w-4" />
+                {getSmallDocTypeIcon(doc.type)}
+                <span className="text-xs truncate flex-1">{doc.title}</span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      data-testid={`tree-doc-menu-${doc.id}`}
+                    >
+                      <MoreHorizontal className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingDocument(doc); setRenameValue(doc.title); }}>
+                      <Pencil className="h-4 w-4 mr-2" /> Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("document", doc.id, doc.title); }}>
+                      <Share2 className="h-4 w-4 mr-2" /> Share Link
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownloadDocument(doc); }}>
+                      <Download className="h-4 w-4 mr-2" /> Download
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedDocument(doc); setMoveToFolderId(doc.folderId ?? null); setIsMoveToFolderOpen(true); }} data-testid={`tree-doc-move-${doc.id}`}>
+                      <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem 
+                      className="text-destructive"
+                      onClick={(e) => { e.stopPropagation(); deleteDocMutation.mutate(doc.id); }}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ))}
+            {folder.files && folder.files.map(file => (
+              <div
+                key={`file-${file.id}`}
+                className={cn(
+                  "flex items-center gap-1.5 py-0.5 px-2 rounded-md cursor-pointer transition-colors group",
+                  selectedFile?.id === file.id ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                )}
+                style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}
+                onClick={() => handleFileClick(file)}
+                data-testid={`tree-file-${file.id}`}
+              >
+                <span className="w-4" />
+                {getFileIcon(file.mimeType, "sm")}
+                <span className="text-xs truncate flex-1">{file.originalName}</span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      data-testid={`tree-file-menu-${file.id}`}
+                    >
+                      <MoreHorizontal className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); window.open(`/api/document-files/${file.id}/download`, '_blank'); }}>
+                      <Download className="h-4 w-4 mr-2" /> Download
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("document", file.id, file.originalName); }}>
+                      <Share2 className="h-4 w-4 mr-2" /> Share Link
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem 
+                      className="text-destructive"
+                      onClick={(e) => { e.stopPropagation(); deleteFileMutation.mutate(file.id); }}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderExplorerPanel = () => {
+    const baseChipDocs = activeChip === "starred" ? favoriteDocs : recentDocs;
+    const displayChipDocs = explorerSearch.length > 0
+      ? allDocuments.filter(d => d.title.toLowerCase().includes(explorerSearch.toLowerCase())).slice(0, 7)
+      : (baseChipDocs as any[]).slice(0, 5);
+
+    const statusBadgeColors: Record<string, string> = {
+      draft: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+      published: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+      archived: "bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400",
+    };
+
+    const openDoc = (doc: Document) => {
+      setSelectedDocument(doc as any);
+      setIsPreviewMode(true);
+      setEditContent(doc.content || "");
+      setActiveTab("content");
+      setIsEditing(false);
+      setSelectedFile(null);
+      setHighlightedDocument(null);
+    };
+
+    const editDoc = (doc: Document) => {
+      setSelectedDocument(doc as any);
+      setIsPreviewMode(false);
+      setIsEditing(true);
+      setEditContent(doc.content || "");
+      setActiveTab("content");
+      setSelectedFile(null);
+      setHighlightedDocument(null);
+    };
+
+    return (
+      <div className="h-full flex flex-col">
+        {/* Header */}
+        <div className="px-3 py-2 border-b flex items-center justify-between shrink-0">
+          <span className="text-sm font-semibold">Explorer</span>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsFolderPanelOpen(false)} data-testid="button-close-folder-panel">
+            <PanelLeftClose className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Search */}
+        <div className="px-2 pt-2 pb-1 shrink-0">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              placeholder="Search documents..."
+              value={explorerSearch}
+              onChange={e => setExplorerSearch(e.target.value)}
+              className="w-full pl-8 pr-7 h-8 text-xs rounded-md border border-input bg-background px-3 py-1 shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
+              data-testid="input-explorer-search"
+            />
+            {explorerSearch && (
+              <button onClick={() => setExplorerSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Quick-access chips */}
+        {!explorerSearch && (
+          <div className="px-2 pb-2 flex items-center gap-1 shrink-0 flex-wrap">
+            {([
+              { key: "recent", label: "Recent", icon: Clock },
+              { key: "starred", label: "Starred", icon: Star },
+              { key: "shared", label: "Shared with me", icon: Users, disabled: true },
+            ] as const).map(({ key, label, icon: Icon, disabled }) => (
+              <button
+                key={key}
+                disabled={disabled}
+                onClick={() => !disabled && setActiveChip(key as "recent" | "starred")}
+                title={disabled ? "Coming soon — document sharing model" : undefined}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+                  disabled
+                    ? "opacity-40 cursor-not-allowed border-border text-muted-foreground"
+                    : activeChip === key
+                    ? "bg-primary/10 text-primary border-primary/30"
+                    : "border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                )}
+                data-testid={`chip-${key}`}
+              >
+                <Icon className="h-3 w-3" />
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="px-2 pb-2 space-y-3">
+
+            {/* Recent / Starred / Search results */}
+            {displayChipDocs.length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                  {explorerSearch ? "Matching Documents" : activeChip === "starred" ? "Starred Docs" : "Recent Docs"}
+                </p>
+                <div className="space-y-0.5">
+                  {displayChipDocs.map(doc => {
+                    const isActive = selectedDocument?.id === doc.id || highlightedDocument?.id === doc.id;
+                    const status = (doc as any).status as string | undefined;
+                    return (
+                      <ContextMenu key={doc.id}>
+                        <ContextMenuTrigger asChild>
+                          <div
+                            className={cn(
+                              "flex items-start gap-2 p-1.5 rounded-md cursor-pointer transition-colors",
+                              isActive ? "bg-primary/10" : "hover:bg-muted"
+                            )}
+                            onClick={() => openDoc(doc as any)}
+                            onDoubleClick={() => editDoc(doc as any)}
+                            data-testid={`explorer-doc-${doc.id}`}
+                          >
+                            <div className={cn("h-7 w-7 shrink-0 rounded-md flex items-center justify-center mt-0.5", getDocBadgeColor(doc.type))}>
+                              {getSmallDocTypeIcon(doc.type)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={cn("text-xs font-medium leading-tight", isActive && "text-primary", "truncate")}>{doc.title}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {doc.updatedAt ? `edited ${getRelativeTime(doc.updatedAt)}` : ""}
+                              </p>
+                            </div>
+                            {status && statusBadgeColors[status] && (
+                              <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 mt-0.5", statusBadgeColors[status])}>
+                                {status.charAt(0).toUpperCase() + status.slice(1)}
+                              </span>
+                            )}
+                          </div>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent className="w-48">
+                          <ContextMenuItem onClick={() => { setRenamingDocument(doc as any); setRenameValue(doc.title); }}>
+                            <Pencil className="h-4 w-4 mr-2" /> Rename
+                          </ContextMenuItem>
+                          <ContextMenuItem onClick={() => handleShareLink("document", doc.id, doc.title)}>
+                            <Share2 className="h-4 w-4 mr-2" /> Share Link
+                          </ContextMenuItem>
+                          <ContextMenuItem onClick={() => handleDownloadDocument(doc as any)}>
+                            <Download className="h-4 w-4 mr-2" /> Download
+                          </ContextMenuItem>
+                          <ContextMenuItem onClick={() => { setSelectedDocument(doc as any); setMoveToFolderId((doc as any).folderId ?? null); setIsMoveToFolderOpen(true); }}>
+                            <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
+                          </ContextMenuItem>
+                          <ContextMenuSeparator />
+                          <ContextMenuItem className="text-destructive" onClick={() => deleteDocMutation.mutate(doc.id)}>
+                            <Trash2 className="h-4 w-4 mr-2" /> Delete
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Folders section */}
+            {!explorerSearch && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5 group/fh">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Folders <span className="font-normal text-muted-foreground/60">· {folders.length}</span>
+                  </p>
+                  <button
+                    onClick={() => openNewFolderDialog(null)}
+                    className="opacity-0 group-hover/fh:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                    title="New root folder"
+                    data-testid="tree-add-root-folder-inline"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </div>
+                <div
+                  className="space-y-0.5"
+                  onDragOver={(e) => handleFolderDragOver(e, null)}
+                  onDrop={(e) => handleFolderDrop(e, null)}
+                  onDragLeave={handleDragLeave}
+                >
+                  {folderTree.length > 0 ? (
+                    folderTree.map(folder => renderFolderTreeItem(folder, 0))
+                  ) : (
+                    <p className="text-xs text-muted-foreground px-1 py-2">No folders yet</p>
+                  )}
+                </div>
+
+                {/* Uncategorised docs (was "Unfiled Documents") */}
+                {rootDocs.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Uncategorised</p>
+                    <div className="space-y-0.5">
+                      {rootDocs.map(doc => {
+                        const isActive = selectedDocument?.id === doc.id || highlightedDocument?.id === doc.id;
+                        return (
+                          <ContextMenu key={doc.id}>
+                            <ContextMenuTrigger asChild>
+                              <div
+                                className={cn(
+                                  "flex items-center gap-1.5 py-1 px-1.5 rounded-md cursor-pointer transition-colors",
+                                  isActive ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                                )}
+                                onClick={() => {
+                                  if (docClickTimer.current) { clearTimeout(docClickTimer.current); docClickTimer.current = null; return; }
+                                  docClickTimer.current = setTimeout(() => { docClickTimer.current = null; openDoc(doc as any); }, 250);
+                                }}
+                                onDoubleClick={(e) => { e.stopPropagation(); if (docClickTimer.current) { clearTimeout(docClickTimer.current); docClickTimer.current = null; } editDoc(doc as any); }}
+                                data-testid={`tree-root-doc-${doc.id}`}
+                              >
+                                {getSmallDocTypeIcon(doc.type)}
+                                <span className="text-xs truncate flex-1">{doc.title}</span>
+                              </div>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent className="w-48">
+                              <ContextMenuItem onClick={() => { setRenamingDocument(doc as any); setRenameValue(doc.title); }}>
+                                <Pencil className="h-4 w-4 mr-2" /> Rename
+                              </ContextMenuItem>
+                              <ContextMenuItem onClick={() => handleShareLink("document", doc.id, doc.title)}>
+                                <Share2 className="h-4 w-4 mr-2" /> Share Link
+                              </ContextMenuItem>
+                              <ContextMenuItem onClick={() => handleDownloadDocument(doc as any)}>
+                                <Download className="h-4 w-4 mr-2" /> Download
+                              </ContextMenuItem>
+                              <ContextMenuItem onClick={() => { setSelectedDocument(doc as any); setMoveToFolderId((doc as any).folderId ?? null); setIsMoveToFolderOpen(true); }}>
+                                <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
+                              </ContextMenuItem>
+                              <ContextMenuSeparator />
+                              <ContextMenuItem className="text-destructive" onClick={() => deleteDocMutation.mutate(doc.id)}>
+                                <Trash2 className="h-4 w-4 mr-2" /> Delete
+                              </ContextMenuItem>
+                            </ContextMenuContent>
+                          </ContextMenu>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Unfiled Files */}
+                {allFiles.filter(f => f.folderId === null).length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Unfiled Files</p>
+                    <div className="space-y-0.5">
+                      {allFiles.filter(f => f.folderId === null).map(file => (
+                        <div
+                          key={file.id}
+                          className={cn("flex items-center gap-1.5 py-1 px-1.5 rounded-md cursor-pointer hover:bg-muted", selectedFile?.id === file.id && "bg-primary/10")}
+                          onClick={() => handleFileClick(file)}
+                          data-testid={`tree-root-file-${file.id}`}
+                        >
+                          {getFileIcon(file.mimeType, "sm")}
+                          <span className="text-xs truncate flex-1">{file.originalName}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Search: matching folders */}
+            {explorerSearch && folderTree.filter(f => f.name.toLowerCase().includes(explorerSearch.toLowerCase())).length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Matching Folders</p>
+                <div className="space-y-0.5">
+                  {folderTree
+                    .filter(f => f.name.toLowerCase().includes(explorerSearch.toLowerCase()))
+                    .map(folder => renderFolderTreeItem(folder, 0))}
+                </div>
+              </div>
+            )}
+
+            {/* Empty search state */}
+            {explorerSearch && displayChipDocs.length === 0 && folderTree.filter(f => f.name.toLowerCase().includes(explorerSearch.toLowerCase())).length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-6">No results for "{explorerSearch}"</p>
+            )}
+
+          </div>
+        </ScrollArea>
+
+        {/* Footer action bar */}
+        <div className="px-2 py-2 border-t flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 gap-1.5 text-xs h-8"
+            onClick={() => openNewFolderDialog(selectedFolderId)}
+            data-testid="tree-new-folder"
+          >
+            <FolderPlus className="h-3.5 w-3.5" /> New folder
+          </Button>
+          <Button
+            size="sm"
+            className="flex-1 gap-1.5 text-xs h-8 bg-indigo-600 hover:bg-indigo-700 text-white"
+            onClick={() => setIsNewDocOpen(true)}
+            data-testid="tree-new-doc"
+          >
+            <FilePlus className="h-3.5 w-3.5" /> New doc
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDocumentView = () => {
+    if (!selectedDocument) return null;
+    const docTags = ((selectedDocument.metadata as any)?.tags || []) as Array<{name: string; color: string}>;
+    const folderName = folders.find(f => f.id === selectedDocument.folderId)?.name || "Root";
+    const statusColors: Record<string, string> = {
+      draft: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+      published: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+      archived: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400",
+    };
+
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <div className="border-b px-4 py-2 flex items-center justify-between bg-card sticky top-0 z-10 shrink-0 gap-2">
+          <div className="flex items-center gap-2 min-w-0 shrink">
+            {!isFolderPanelOpen && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsFolderPanelOpen(true)}
+                data-testid="button-open-folder-panel-detail"
+              >
+                <PanelLeft className="h-4 w-4" />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => { setSelectedDocument(null); setIsEditing(false); setIsPreviewMode(false); setIsFolderPanelOpen(true); }}
+              data-testid="button-back-to-list"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div className="h-4 w-px bg-border shrink-0" />
+            <span className="text-sm font-medium truncate min-w-0" data-testid="text-document-title-bar">
+              {selectedDocument.title}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {isEditing ? (
+              <>
+                {autoSaveStatus === "saving" && (
+                  <span className="text-xs text-muted-foreground mr-1 flex items-center gap-1" data-testid="text-autosave-saving">
+                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse inline-block" />
+                    Saving…
+                  </span>
+                )}
+                {autoSaveStatus === "saved" && (
+                  <span className="text-xs text-green-600 dark:text-green-400 mr-1 flex items-center gap-1" data-testid="text-autosave-saved">
+                    <Check className="h-3 w-3" />
+                    Autosaved
+                  </span>
+                )}
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    lastAutoSavedContent.current = editContentRef.current;
+                    updateDocMutation.mutate({ id: selectedDocument.id, updates: { content: editContentRef.current } });
+                  }}
+                  disabled={updateDocMutation.isPending}
+                  className="gap-1.5"
+                  data-testid="button-save-document"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  {updateDocMutation.isPending ? "Saving..." : "Save"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSaveAsTitle(selectedDocument.title + " (Copy)");
+                    setSaveAsFolderId(selectedDocument.folderId ?? selectedFolderId);
+                    setIsSaveAsOpen(true);
+                  }}
+                  className="gap-1.5"
+                  data-testid="button-save-as"
+                >
+                  <FilePlus className="h-3.5 w-3.5" /> Save As
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setIsEditing(false); setIsPreviewMode(true); setEditContent(selectedDocument.content || ""); }}
+                  className="gap-1.5"
+                  data-testid="button-cancel-edit"
+                >
+                  <X className="h-3.5 w-3.5" /> Cancel
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => { setIsEditing(true); setIsPreviewMode(false); setEditContent(selectedDocument.content || ""); }}
+                className="gap-1.5"
+                data-testid="button-edit-document"
+              >
+                <Edit className="h-3.5 w-3.5" /> Edit Document
+              </Button>
+            )}
+            <div className="h-4 w-px bg-border mx-1" />
+            {docTags.length > 0 && (
+              <div className="flex items-center gap-1 mr-1">
+                {docTags.slice(0, 3).map((tag, i) => (
+                  <Badge
+                    key={i}
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0"
+                    style={{ borderColor: tag.color, color: tag.color }}
+                    data-testid={`header-tag-${i}`}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full mr-1" style={{ backgroundColor: tag.color }} />
+                    {tag.name}
+                  </Badge>
+                ))}
+                {docTags.length > 3 && (
+                  <span className="text-[10px] text-muted-foreground">+{docTags.length - 3}</span>
+                )}
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => handleDownloadDocument(selectedDocument)}
+              data-testid="button-download-document"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => handleShareLink("document", selectedDocument.id, selectedDocument.title)}
+              data-testid="button-share-document"
+            >
+              <Share2 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => toggleFavorite(selectedDocument, true)}
+              data-testid="button-toggle-favorite"
+            >
+              <Star className={`h-4 w-4 ${selectedDocument.isFavorite ? "fill-brand-orange text-brand-orange" : ""}`} />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" data-testid="button-document-menu">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => { setRenamingDocument(selectedDocument); setRenameValue(selectedDocument.title); }}>
+                  <Pencil className="h-4 w-4 mr-2" /> Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleShareLink("document", selectedDocument.id, selectedDocument.title)}>
+                  <Link2 className="h-4 w-4 mr-2" /> Share Link
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownloadDocument(selectedDocument)}>
+                  <Download className="h-4 w-4 mr-2" /> Download
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  setMoveToFolderId(selectedDocument.folderId ?? null);
+                  setIsMoveToFolderOpen(true);
+                }} data-testid="button-move-to-folder">
+                  <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  className="text-destructive"
+                  onClick={() => { deleteDocMutation.mutate(selectedDocument.id); }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" /> Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        <ScrollArea className="flex-1">
+          <div className="max-w-4xl mx-auto px-8 py-6">
+            <div className="mb-4">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                  {getDocTypeIcon(selectedDocument.type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  {renamingDocument?.id === selectedDocument.id ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && renameValue.trim()) {
+                            updateDocMutation.mutate({ id: selectedDocument.id, updates: { title: renameValue } });
+                          } else if (e.key === "Escape") {
+                            setRenamingDocument(null);
+                            setRenameValue("");
+                          }
+                        }}
+                        autoFocus
+                        className="text-xl font-bold"
+                        data-testid="input-inline-rename-document"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => renameValue.trim() && updateDocMutation.mutate({ id: selectedDocument.id, updates: { title: renameValue } })}
+                        disabled={!renameValue.trim()}
+                        data-testid="button-inline-rename-save"
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setRenamingDocument(null); setRenameValue(""); }}
+                        data-testid="button-inline-rename-cancel"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <h1
+                      className="text-xl font-bold tracking-tight cursor-pointer hover:bg-muted/50 rounded-md px-1 -mx-1 transition-colors truncate"
+                      onClick={() => { setRenamingDocument(selectedDocument); setRenameValue(selectedDocument.title); }}
+                      title="Click to rename"
+                      data-testid="document-title-clickable"
+                    >
+                      {selectedDocument.title}
+                    </h1>
+                  )}
+                </div>
+                <Badge variant="secondary" className="text-xs uppercase tracking-wide shrink-0">
+                  {selectedDocument.type.replace(/_/g, " ")}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground ml-12 mb-4">
+                <span>v{selectedDocument.currentVersion}</span>
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {new Date(selectedDocument.updatedAt!).toLocaleDateString()}
+                </span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold cursor-pointer hover:opacity-75 transition-opacity select-none focus:outline-none", statusColors[selectedDocument.status] || statusColors.draft)}
+                      data-testid="text-doc-status-badge"
+                    >
+                      {selectedDocument.status.charAt(0).toUpperCase() + selectedDocument.status.slice(1)}
+                      <ChevronDown className="h-2.5 w-2.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {[
+                      { value: "draft", label: "Draft" },
+                      { value: "published", label: "Published" },
+                      { value: "archived", label: "Archived" },
+                    ].map((opt) => (
+                      <DropdownMenuItem
+                        key={opt.value}
+                        onClick={() => updateDocMutation.mutate({ id: selectedDocument.id, updates: { status: opt.value as any } })}
+                        className="flex items-center justify-between gap-3"
+                        data-testid={`doc-status-option-${opt.value}`}
+                      >
+                        <span>{opt.label}</span>
+                        {selectedDocument.status === opt.value && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+              <TabsList className="mb-4 bg-muted">
+                <TabsTrigger value="content" data-testid="tab-content">
+                  <FileText className="h-4 w-4 mr-1.5" /> Content
+                </TabsTrigger>
+                <TabsTrigger value="comments" data-testid="tab-comments">
+                  <MessageSquare className="h-4 w-4 mr-1.5" /> Comments ({comments.length})
+                </TabsTrigger>
+                <TabsTrigger value="versions" data-testid="tab-versions">
+                  <Clock className="h-4 w-4 mr-1.5" /> History
+                </TabsTrigger>
+                <TabsTrigger value="properties" data-testid="tab-properties">
+                  <Hash className="h-4 w-4 mr-1.5" /> Properties
+                </TabsTrigger>
+                <TabsTrigger value="signoff" data-testid="tab-signoff">
+                  <FileSignature className="h-4 w-4 mr-1.5" />
+                  Sign-off
+                  {docSignoffRequests.length > 0 && (
+                    <span className={cn(
+                      "ml-1.5 inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                      docSignoffRequests.some((r: any) => r.status === "sent") 
+                        ? "bg-amber-100 text-amber-700" 
+                        : docSignoffRequests.some((r: any) => r.status === "completed")
+                        ? "bg-green-100 text-green-700"
+                        : "bg-muted text-muted-foreground"
+                    )}>
+                      {docSignoffRequests.length}
+                    </span>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+
+              <div className="flex items-center justify-end gap-2 mb-3 pb-3 border-b" data-testid="inline-tags-section">
+                <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide shrink-0">Tags</span>
+                  <div className="h-3 w-px bg-border mx-0.5" />
+                  {docTags.length > 0 ? (
+                    docTags.map((tag, i) => (
+                      <Badge
+                        key={i}
+                        variant="outline"
+                        className="gap-1 text-xs"
+                        style={{ borderColor: tag.color, color: tag.color }}
+                        data-testid={`inline-tag-${i}`}
+                      >
+                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                        {tag.name}
+                        {isEditing && (
+                          <button
+                            className="ml-0.5 hover:opacity-70"
+                            onClick={() => {
+                              const newTags = docTags.filter((_, idx) => idx !== i);
+                              const newMetadata = { ...(selectedDocument.metadata as any || {}), tags: newTags };
+                              updateDocMutation.mutate({ id: selectedDocument.id, updates: { metadata: newMetadata }, silent: true });
+                            }}
+                            data-testid={`button-remove-inline-tag-${i}`}
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        )}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic">No tags</span>
+                  )}
+                </div>
+                {isEditing && (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Input
+                      placeholder="Add tag..."
+                      className="h-7 text-xs w-32"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const input = e.currentTarget;
+                          const tagName = input.value.trim();
+                          if (!tagName) return;
+                          const newTags = [...docTags, { name: tagName, color: selectedTagColor }];
+                          const newMetadata = { ...(selectedDocument.metadata as any || {}), tags: newTags };
+                          updateDocMutation.mutate({ id: selectedDocument.id, updates: { metadata: newMetadata }, silent: true });
+                          input.value = "";
+                        }
+                      }}
+                      data-testid="input-inline-add-tag"
+                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-7 gap-1 px-2" data-testid="button-inline-tag-color">
+                          <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: selectedTagColor }} />
+                          <Palette className="h-3 w-3" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-2" align="end">
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {TAG_COLORS.map((color) => (
+                            <button
+                              key={color.value}
+                              className={cn(
+                                "h-6 w-6 rounded-full transition-all ring-offset-background",
+                                selectedTagColor === color.value ? "ring-2 ring-ring ring-offset-1" : "hover:scale-110"
+                              )}
+                              style={{ backgroundColor: color.value }}
+                              onClick={() => setSelectedTagColor(color.value)}
+                              title={color.name}
+                              data-testid={`inline-tag-color-${color.name.toLowerCase()}`}
+                            />
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
+              </div>
+
+              <TabsContent value="content" className="mt-0">
+                <TipTapEditor
+                  content={editContent}
+                  onChange={setEditContent}
+                  onExport={handleExport}
+                  editable={isEditing}
+                  placeholder="Start writing your document..."
+                  users={mentionUsers}
+                  documentId={selectedDocument?.id}
+                  documentTitle={selectedDocument?.title}
+                />
+              </TabsContent>
+
+              <TabsContent value="comments" className="mt-0">
+                <div className="space-y-4">
+                  {comments.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">No comments yet</p>
+                  ) : (
+                    comments.map((comment) => (
+                      <div key={comment.id} className="flex gap-3 p-4 rounded-lg bg-muted/30">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-xs">
+                            {comment.author?.firstName?.[0]}{comment.author?.lastName?.[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="font-medium text-sm">
+                              {comment.author?.firstName} {comment.author?.lastName}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(comment.createdAt!).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-sm">{comment.content}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div className="pt-4 border-t">
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const form = e.target as HTMLFormElement;
+                        const input = form.elements.namedItem("comment") as HTMLInputElement;
+                        if (input.value.trim()) {
+                          addCommentMutation.mutate({ documentId: selectedDocument.id, content: input.value });
+                          input.value = "";
+                        }
+                      }}
+                      className="flex gap-2"
+                    >
+                      <Input
+                        name="comment"
+                        placeholder="Add a comment..."
+                        className="flex-1"
+                        data-testid="input-add-comment"
+                      />
+                      <Button type="submit" size="sm" data-testid="button-add-comment">
+                        Comment
+                      </Button>
+                    </form>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="versions" className="mt-0">
+                <div className="space-y-2">
+                  {versions.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">No version history</p>
+                  ) : (
+                    versions.map((version) => (
+                      <div
+                        key={version.id}
+                        className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium">
+                            v{version.version}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{version.changeDescription || "Content updated"}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(version.createdAt!).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="properties" className="mt-0">
+                <div className="space-y-6 max-w-lg">
+                  <div>
+                    <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Details</h3>
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Status</span>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold cursor-pointer hover:opacity-75 transition-opacity select-none focus:outline-none", statusColors[selectedDocument.status] || statusColors.draft)}
+                              data-testid="text-doc-status"
+                            >
+                              {selectedDocument.status.charAt(0).toUpperCase() + selectedDocument.status.slice(1)}
+                              <ChevronDown className="h-2.5 w-2.5" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
+                            {[
+                              { value: "draft", label: "Draft" },
+                              { value: "published", label: "Published" },
+                              { value: "archived", label: "Archived" },
+                            ].map((opt) => (
+                              <DropdownMenuItem
+                                key={opt.value}
+                                onClick={() => updateDocMutation.mutate({ id: selectedDocument.id, updates: { status: opt.value as any } })}
+                                className="flex items-center justify-between gap-3"
+                                data-testid={`doc-status-option-details-${opt.value}`}
+                              >
+                                <span>{opt.label}</span>
+                                {selectedDocument.status === opt.value && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Created By</span>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-5 w-5">
+                            <AvatarFallback className="text-[10px]">{((selectedDocument as any).ownerName || "U").charAt(0).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <span className="text-sm" data-testid="text-doc-owner">{(selectedDocument as any).ownerName || "Unknown"}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Created</span>
+                        <span className="text-sm" data-testid="text-doc-created">
+                          {selectedDocument.createdAt ? new Date(selectedDocument.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Unknown"}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Last Modified</span>
+                        <span className="text-sm" data-testid="text-doc-modified">
+                          {selectedDocument.updatedAt ? new Date(selectedDocument.updatedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Unknown"}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Version</span>
+                        <span className="text-sm" data-testid="text-doc-version">v{selectedDocument.currentVersion}</span>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Location</span>
+                        <div className="flex items-center gap-1.5 text-sm">
+                          <Folder className="h-3.5 w-3.5 text-brand-orange" />
+                          <span data-testid="text-doc-folder">{folderName}</span>
+                        </div>
+                      </div>
+                      {selectedDocument.viewCount !== undefined && selectedDocument.viewCount !== null && (
+                        <div className="flex items-start gap-3">
+                          <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Views</span>
+                          <span className="text-sm" data-testid="text-doc-views">{selectedDocument.viewCount}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {selectedDocument.description && (
+                    <div className="border-t pt-4">
+                      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Description</h3>
+                      <p className="text-sm text-muted-foreground" data-testid="text-doc-description">{selectedDocument.description}</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="signoff" className="mt-0">
+                {docSignoffRequests.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-14 text-center">
+                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                      <FileSignature className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                    <h3 className="font-medium text-sm mb-1">No sign-off requests</h3>
+                    <p className="text-xs text-muted-foreground mb-5 max-w-xs">
+                      This document has not been submitted for sign-off. Start a request to collect approvals from your designated signers.
+                    </p>
+                    <Button
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => {
+                        const params = new URLSearchParams({ compose: "1", jigantoDocId: String(selectedDocument.id), jigantoDocTitle: selectedDocument.title });
+                        setLocation(`/modules/e-sign?${params.toString()}`);
+                      }}
+                      data-testid="button-start-signoff-empty"
+                    >
+                      <FileSignature className="h-4 w-4" />
+                      Start Sign-off Request
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {docSignoffRequests.map((req: any) => {
+                      const reqStatusCfg: Record<string, { label: string; cls: string }> = {
+                        draft:     { label: "Draft",     cls: "bg-muted text-muted-foreground border-border" },
+                        sent:      { label: "Pending",   cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800" },
+                        completed: { label: "Completed", cls: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800" },
+                        cancelled: { label: "Cancelled", cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:text-red-400 dark:border-red-800" },
+                      };
+                      const signerStatusCfg: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+                        pending:  { label: "Pending",  cls: "bg-muted text-muted-foreground border-border",                                          icon: <Clock className="h-3 w-3" /> },
+                        viewed:   { label: "Viewed",   cls: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300",          icon: <Eye className="h-3 w-3" /> },
+                        signed:   { label: "Signed",   cls: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300",     icon: <Check className="h-3 w-3" /> },
+                        declined: { label: "Declined", cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:text-red-400",               icon: <XCircle className="h-3 w-3" /> },
+                      };
+                      const rc = reqStatusCfg[req.status] || reqStatusCfg.draft;
+                      const canRemind = req.status === "sent";
+                      return (
+                        <div key={req.id} className="border border-border rounded-xl overflow-hidden" data-testid={`signoff-request-${req.id}`}>
+                          {/* Request header */}
+                          <div className="flex items-start justify-between gap-3 px-4 py-3 bg-muted/40 border-b border-border">
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <FileSignature className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="font-medium text-sm truncate">{req.title}</p>
+                                <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                                  <span className="text-xs text-muted-foreground">
+                                    Created {new Date(req.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                  </span>
+                                  {req.sentAt && (
+                                    <>
+                                      <span className="text-muted-foreground/40 text-xs">·</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        Sent {new Date(req.sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                      </span>
+                                    </>
+                                  )}
+                                  {req.deadline && (
+                                    <>
+                                      <span className="text-muted-foreground/40 text-xs">·</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        Due {new Date(req.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <span className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold shrink-0 mt-0.5", rc.cls)}>
+                              {rc.label}
+                            </span>
+                          </div>
+
+                          {/* Signer rows */}
+                          {req.signers && req.signers.length > 0 ? (
+                            <div className="divide-y divide-border">
+                              {[...req.signers]
+                                .sort((a: any, b: any) => a.signerOrder - b.signerOrder)
+                                .map((signer: any) => {
+                                  const ss = signerStatusCfg[signer.status] || signerStatusCfg.pending;
+                                  const ts = signer.signedAt || signer.declinedAt || signer.viewedAt;
+                                  return (
+                                    <div key={signer.id} className="flex items-center gap-3 px-4 py-3" data-testid={`signoff-signer-${signer.id}`}>
+                                      <Avatar className="h-8 w-8 shrink-0">
+                                        <AvatarFallback className="text-xs">{signer.name.charAt(0).toUpperCase()}</AvatarFallback>
+                                      </Avatar>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium leading-tight truncate">{signer.name}</p>
+                                        <p className="text-xs text-muted-foreground truncate">{signer.email}</p>
+                                        {signer.declineReason && (
+                                          <p className="text-xs text-destructive mt-0.5 italic">"{signer.declineReason}"</p>
+                                        )}
+                                        {ts && (
+                                          <p className="text-xs text-muted-foreground/70 mt-0.5">
+                                            {signer.signedAt ? "Signed" : signer.declinedAt ? "Declined" : "Viewed"}{" "}
+                                            {new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <span className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold", ss.cls)}>
+                                          {ss.icon}{ss.label}
+                                        </span>
+                                        {canRemind && (signer.status === "pending" || signer.status === "viewed") && (
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-7 gap-1 px-2 text-xs"
+                                            onClick={() => signoffRemindMutation.mutate(req.id)}
+                                            disabled={signoffRemindMutation.isPending}
+                                            data-testid={`button-remind-${signer.id}`}
+                                          >
+                                            <Bell className="h-3 w-3" />
+                                            Remind
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          ) : (
+                            <div className="px-4 py-3 text-xs text-muted-foreground italic">No signers assigned</div>
+                          )}
+
+                          {/* Request footer */}
+                          <div className="px-4 py-2 border-t border-border bg-muted/20 flex items-center justify-between gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {req.createdByName ? `Requested by ${req.createdByName}` : ""}
+                            </span>
+                            {req.status === "completed" && req.completedAt && (
+                              <span className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
+                                <Check className="h-3 w-3" />
+                                Completed {new Date(req.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-xs"
+                      onClick={() => {
+                        const params = new URLSearchParams({ compose: "1", jigantoDocId: String(selectedDocument.id), jigantoDocTitle: selectedDocument.title });
+                        setLocation(`/modules/e-sign?${params.toString()}`);
+                      }}
+                      data-testid="button-new-signoff-request"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      New sign-off request
+                    </Button>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+        </ScrollArea>
+      </div>
+    );
+  };
+
+  const [filePreviewData, setFilePreviewData] = useState<any>(null);
+  const [filePreviewLoading, setFilePreviewLoading] = useState(false);
+  const [activeSheetIndex, setActiveSheetIndex] = useState(0);
+
+  useEffect(() => {
+    if (!selectedFile) { setFilePreviewData(null); return; }
+    const isNativePreview = selectedFile.mimeType.startsWith("image/") || selectedFile.mimeType === "application/pdf";
+    if (isNativePreview) { setFilePreviewData(null); return; }
+    setFilePreviewLoading(true);
+    setActiveSheetIndex(0);
+    fetch(`/api/document-files/${selectedFile.id}/preview`)
+      .then(r => r.json())
+      .then(data => setFilePreviewData(data))
+      .catch(() => setFilePreviewData({ type: "unsupported" }))
+      .finally(() => setFilePreviewLoading(false));
+  }, [selectedFile?.id]);
+
+  const renderFilePreview = () => {
+    if (!selectedFile) return null;
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <div className="border-b px-6 py-3 flex items-center justify-between bg-card sticky top-0 z-10 shrink-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedFile(null)}
+              className="gap-1.5"
+              data-testid="button-back-from-file"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back
+            </Button>
+            <div className="h-4 w-px bg-border" />
+            <div className="flex items-center gap-2">
+              {getFileIcon(selectedFile.mimeType)}
+              <span className="font-medium">{selectedFile.originalName}</span>
+              <Badge variant="secondary" className="text-xs">{formatFileSize(selectedFile.size)}</Badge>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => window.open(`/api/document-files/${selectedFile.id}/download`, '_blank')}
+              data-testid="button-download-preview-file"
+            >
+              <Download className="h-4 w-4" /> Download
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-destructive"
+              onClick={() => deleteFileMutation.mutate(selectedFile.id)}
+              data-testid="button-delete-preview-file"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto p-6 bg-muted/30">
+          {selectedFile.mimeType.startsWith("image/") ? (
+            <div className="flex items-center justify-center h-full">
+              <img
+                src={`/api/document-files/${selectedFile.id}/download?inline=true`}
+                alt={selectedFile.originalName}
+                className="max-w-full max-h-full object-contain rounded-lg shadow-sm"
+                data-testid="file-preview-image"
+              />
+            </div>
+          ) : selectedFile.mimeType === "application/pdf" ? (
+            <PdfCanvasViewer fileId={selectedFile.id} />
+
+          ) : filePreviewLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="animate-pulse text-muted-foreground">Loading preview...</div>
+            </div>
+          ) : filePreviewData?.type === "html" ? (
+            filePreviewData.content && filePreviewData.content.trim().length > 0 ? (
+              <div className="max-w-4xl mx-auto bg-background rounded-lg border shadow-sm p-8" data-testid="file-preview-docx">
+                <div
+                  className="prose prose-sm dark:prose-invert max-w-none"
+                  dangerouslySetInnerHTML={{ __html: filePreviewData.content }}
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full gap-4" data-testid="file-preview-docx-empty">
+                <div className="h-20 w-20 rounded-xl bg-muted flex items-center justify-center">
+                  <FileText className="h-10 w-10 text-muted-foreground" />
+                </div>
+                <h3 className="font-semibold text-lg">{selectedFile.originalName}</h3>
+                <p className="text-sm text-muted-foreground">This document appears to be empty or contains formatting only.</p>
+                <Button variant="outline" onClick={() => window.open(`/api/document-files/${selectedFile.id}/download`, '_blank')} data-testid="button-download-empty-docx">
+                  <Download className="h-4 w-4 mr-1.5" /> Download to view in Word
+                </Button>
+              </div>
+            )
+          ) : filePreviewData?.type === "spreadsheet" ? (
+            <div className="w-full" data-testid="file-preview-xlsx">
+              {filePreviewData.sheets.length > 1 && (
+                <div className="flex items-center gap-1 mb-3 flex-wrap">
+                  {filePreviewData.sheets.map((sheet: any, i: number) => (
+                    <Button
+                      key={i}
+                      variant={activeSheetIndex === i ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setActiveSheetIndex(i)}
+                      data-testid={`sheet-tab-${i}`}
+                    >
+                      {sheet.name}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              <div className="bg-background rounded-lg border shadow-sm overflow-auto">
+                <table className="w-full text-sm border-collapse">
+                  <tbody>
+                    {(filePreviewData.sheets[activeSheetIndex]?.data || []).map((row: any[], ri: number) => (
+                      <tr key={ri} className={ri === 0 ? "bg-muted/70 font-medium" : "border-t border-border"}>
+                        {row.map((cell: any, ci: number) => (
+                          <td key={ci} className="px-3 py-1.5 border-r border-border whitespace-nowrap">
+                            {cell != null ? String(cell) : ""}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : filePreviewData?.type === "presentation" ? (
+            <div className="max-w-4xl mx-auto space-y-4" data-testid="file-preview-pptx">
+              <div className="flex items-center gap-2 mb-2">
+                <Badge variant="secondary" className="text-xs">{filePreviewData.totalSlides} slide{filePreviewData.totalSlides !== 1 ? "s" : ""}</Badge>
+              </div>
+              {(filePreviewData.slides || []).map((slide: any, i: number) => (
+                <Card key={i} className="overflow-hidden" data-testid={`slide-card-${i}`}>
+                  <div className="bg-muted/50 px-4 py-2 border-b flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs font-mono">Slide {slide.index}</Badge>
+                    <span className="font-medium text-sm truncate">{slide.title}</span>
+                  </div>
+                  <CardContent className="p-4">
+                    <pre className="text-sm whitespace-pre-wrap break-words leading-relaxed font-sans">{slide.content}</pre>
+                  </CardContent>
+                </Card>
+              ))}
+              {filePreviewData.totalSlides === 0 && (
+                <div className="text-center py-12 text-muted-foreground">
+                  <p>No text content found in this presentation.</p>
+                  <Button
+                    variant="outline"
+                    className="mt-3"
+                    onClick={() => window.open(`/api/document-files/${selectedFile.id}/download`, '_blank')}
+                    data-testid="button-download-empty-pptx"
+                  >
+                    <Download className="h-4 w-4 mr-1.5" /> Download to view
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : filePreviewData?.type === "text" ? (
+            <div className="max-w-4xl mx-auto bg-background rounded-lg border shadow-sm overflow-auto" data-testid="file-preview-text">
+              <pre className="p-6 text-sm font-mono whitespace-pre-wrap break-words leading-relaxed">{filePreviewData.content}</pre>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="h-20 w-20 rounded-xl bg-muted flex items-center justify-center mx-auto mb-4">
+                  {getFileIcon(selectedFile.mimeType)}
+                </div>
+                <h3 className="font-semibold text-lg mb-1">{selectedFile.originalName}</h3>
+                <p className="text-sm text-muted-foreground mb-4">{formatFileSize(selectedFile.size)}</p>
+                <Button onClick={() => window.open(`/api/document-files/${selectedFile.id}/download`, '_blank')} data-testid="button-download-non-preview">
+                  <Download className="h-4 w-4 mr-1.5" /> Download File
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const TAG_COLORS = [
+    { name: "Blue", value: "#3B82F6" },
+    { name: "Green", value: "#22C55E" },
+    { name: "Red", value: "#EF4444" },
+    { name: "Orange", value: "#F59E0B" },
+    { name: "Purple", value: "#7C3AED" },
+    { name: "Pink", value: "#EC4899" },
+    { name: "Teal", value: "#14B8A6" },
+    { name: "Indigo", value: "#6366F1" },
+  ];
+
+
+  const renderWelcomeState = () => (
+    <div className="h-full flex items-center justify-center">
+      <div className="text-center max-w-md px-6">
+        <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+          <FileText className="h-8 w-8 text-primary" />
+        </div>
+        <h3 className="font-semibold text-lg mb-1" data-testid="text-welcome-title">Document Management</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Click a document to preview it, or double-click to start editing right away.
+        </p>
+        <div className="flex items-center justify-center gap-3 flex-wrap">
+          <Button size="sm" onClick={() => setIsNewDocOpen(true)} data-testid="button-create-doc-welcome">
+            <Plus className="h-4 w-4 mr-1.5" /> New Document
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => openNewFolderDialog(selectedFolderId)} data-testid="button-create-folder-welcome">
+            <FolderPlus className="h-4 w-4 mr-1.5" /> New Folder
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderFolderListView = () => (
+    <ScrollArea className="h-full">
+      <div className="p-6">
+        {selectedFolderId === null && recentDocs.length > 0 && !searchQuery && (
+          <div className="mb-8">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+              <Clock className="h-4 w-4" /> Recently Viewed
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {recentDocs.slice(0, 3).map((doc) => (
+                <button
+                  key={doc.id}
+                  onClick={() => { setSelectedDocument(doc); setEditContent(doc.content || ""); }}
+                  className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors text-left group"
+                  data-testid={`recent-doc-${doc.id}`}
+                >
+                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    {getDocTypeIcon(doc.type)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">{doc.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(doc.updatedAt!).toLocaleDateString()}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {getSubfolders().length > 0 && !searchQuery && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                <Folder className="h-4 w-4" /> Folders
+              </h2>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 gap-1.5"
+                  onClick={() => openNewFolderDialog(selectedFolderId)}
+                  data-testid="quick-create-folder"
+                >
+                  <FolderPlus className="h-3.5 w-3.5" /> Create Folder
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 gap-1.5"
+                  onClick={handleUploadFile}
+                  data-testid="quick-upload-file"
+                >
+                  <Upload className="h-3.5 w-3.5" /> Upload
+                </Button>
+                <div className="h-4 w-px bg-border mx-1" />
+                <div className="flex items-center border rounded-md">
+                  <Button
+                    variant={folderViewMode === "tile" ? "secondary" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8 rounded-r-none"
+                    onClick={() => setFolderViewMode("tile")}
+                    data-testid="button-view-tile"
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={folderViewMode === "list" ? "secondary" : "ghost"}
+                    size="icon"
+                    className="h-8 w-8 rounded-l-none"
+                    onClick={() => setFolderViewMode("list")}
+                    data-testid="button-view-list"
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {folderViewMode === "tile" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {getSubfolders().map((folder) => (
+                  <button
+                    key={folder.id}
+                    onClick={() => setSelectedFolderId(folder.id)}
+                    className="flex items-center gap-3 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors text-left group"
+                    data-testid={`folder-item-${folder.id}`}
+                  >
+                    <div className="h-10 w-10 rounded-lg bg-brand-orange/10 flex items-center justify-center shrink-0">
+                      <Folder className="h-5 w-5 text-brand-orange" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">{folder.name}</p>
+                      <p className="text-xs text-muted-foreground">Folder</p>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        asChild
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                          data-testid={`folder-menu-${folder.id}`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openNewFolderDialog(folder.id); }}>
+                          <FolderPlus className="h-4 w-4 mr-2" /> Create Subfolder
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleUploadFile(); }}>
+                          <Upload className="h-4 w-4 mr-2" /> Upload File
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownloadFolder(folder); }}>
+                          <Download className="h-4 w-4 mr-2" /> Download Folder
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolder(folder); setRenameValue(folder.name); }}>
+                          <Pencil className="h-4 w-4 mr-2" /> Rename Folder
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("folder", folder.id, folder.name); }}>
+                          <Link2 className="h-4 w-4 mr-2" /> Share Link
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMovingFolder(folder); setMoveFolderTargetId(folder.parentId ?? null); setIsMoveFolderOpen(true); }} data-testid={`card-folder-move-${folder.id}`}>
+                          <FolderInput className="h-4 w-4 mr-2" /> Move Folder
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={(e) => { e.stopPropagation(); deleteFolderMutation.mutate(folder.id); }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="w-[50%]">Name</TableHead>
+                      <TableHead className="w-[20%]">Type</TableHead>
+                      <TableHead className="w-[20%]">Modified</TableHead>
+                      <TableHead className="w-[10%] text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {getSubfolders().map((folder) => (
+                      <TableRow 
+                        key={folder.id} 
+                        className="cursor-pointer hover:bg-muted/30"
+                        onClick={() => setSelectedFolderId(folder.id)}
+                        data-testid={`folder-row-${folder.id}`}
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-lg bg-brand-orange/10 flex items-center justify-center shrink-0">
+                              <Folder className="h-4 w-4 text-brand-orange" />
+                            </div>
+                            <span className="font-medium">{folder.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">Folder</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {new Date(folder.createdAt!).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`folder-list-menu-${folder.id}`}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openNewFolderDialog(folder.id); }}>
+                                <FolderPlus className="h-4 w-4 mr-2" /> Create Subfolder
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleUploadFile(); }}>
+                                <Upload className="h-4 w-4 mr-2" /> Upload File
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownloadFolder(folder); }}>
+                                <Download className="h-4 w-4 mr-2" /> Download Folder
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolder(folder); setRenameValue(folder.name); }}>
+                                <Pencil className="h-4 w-4 mr-2" /> Rename Folder
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("folder", folder.id, folder.name); }}>
+                                <Link2 className="h-4 w-4 mr-2" /> Share Link
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMovingFolder(folder); setMoveFolderTargetId(folder.parentId ?? null); setIsMoveFolderOpen(true); }} data-testid={`list-folder-move-${folder.id}`}>
+                                <FolderInput className="h-4 w-4 mr-2" /> Move Folder
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={(e) => { e.stopPropagation(); deleteFolderMutation.mutate(folder.id); }}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {getSubfolders().length === 0 && !searchQuery && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                <Folder className="h-4 w-4" /> Folders
+              </h2>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 gap-1.5"
+                  onClick={() => openNewFolderDialog(selectedFolderId)}
+                  data-testid="quick-create-folder-empty"
+                >
+                  <FolderPlus className="h-3.5 w-3.5" /> Create Folder
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 gap-1.5"
+                  onClick={handleUploadFile}
+                  data-testid="quick-upload-file-empty"
+                >
+                  <Upload className="h-3.5 w-3.5" /> Upload
+                </Button>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">No folders here yet.</p>
+          </div>
+        )}
+
+        <div>
+          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+            <FileText className="h-4 w-4" /> 
+            {searchQuery ? `Search Results` : "Documents"}
+            {displayedDocs.length > 0 && <span className="text-xs">({displayedDocs.length})</span>}
+          </h2>
+          
+          {displayedDocs.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                  {searchQuery ? (
+                    <Search className="h-8 w-8 text-muted-foreground" />
+                  ) : (
+                    <Sparkles className="h-8 w-8 text-muted-foreground" />
+                  )}
+                </div>
+                <h3 className="font-semibold text-lg mb-1">
+                  {searchQuery ? "No documents found" : "No documents yet"}
+                </h3>
+                <p className="text-muted-foreground text-sm mb-4">
+                  {searchQuery
+                    ? "Try a different search term"
+                    : "Create your first document to get started"}
+                </p>
+                {!searchQuery && (
+                  <Button onClick={() => setIsNewDocOpen(true)} data-testid="button-create-first-doc">
+                    <Plus className="h-4 w-4 mr-1.5" /> Create Document
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="border rounded-md overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-12 text-center">#</TableHead>
+                    <TableHead>Document Name</TableHead>
+                    <TableHead className="w-20 text-center">Version</TableHead>
+                    <TableHead className="w-32">Created</TableHead>
+                    <TableHead className="w-32">Edited</TableHead>
+                    <TableHead className="w-40">Author</TableHead>
+                    <TableHead className="w-20 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {displayedDocs.map((doc, index) => (
+                    <TableRow 
+                      key={doc.id}
+                      className="cursor-pointer hover:bg-accent/50 transition-colors group"
+                      onClick={() => { setSelectedDocument(doc); setEditContent(doc.content || ""); }}
+                      data-testid={`document-row-${doc.id}`}
+                    >
+                      <TableCell className="text-center text-muted-foreground text-sm py-2">{index + 1}</TableCell>
+                      <TableCell className="py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 w-6 rounded bg-primary/10 flex items-center justify-center shrink-0">
+                            {getDocTypeIcon(doc.type)}
+                          </div>
+                          <span className="font-medium truncate">{doc.title}</span>
+                          {doc.isFavorite && (
+                            <Star className="h-3 w-3 fill-brand-orange text-brand-orange shrink-0" />
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center text-sm py-2">v{doc.currentVersion}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground py-2">
+                        {new Date(doc.createdAt!).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground py-2">
+                        {new Date(doc.updatedAt!).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground py-2 truncate">
+                        {doc.ownerName || "Unknown"}
+                      </TableCell>
+                      <TableCell className="text-right py-2">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={(e) => { e.stopPropagation(); toggleFavorite(doc); }}
+                            data-testid={`button-favorite-${doc.id}`}
+                          >
+                            <Star className={`h-3.5 w-3.5 ${doc.isFavorite ? "fill-brand-orange text-brand-orange" : ""}`} />
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`document-menu-${doc.id}`}>
+                                <MoreHorizontal className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownloadDocument(doc); }}>
+                                <Download className="h-4 w-4 mr-2" /> Download File
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingDocument(doc); setRenameValue(doc.title); }}>
+                                <Pencil className="h-4 w-4 mr-2" /> Rename File
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("document", doc.id, doc.title); }}>
+                                <Link2 className="h-4 w-4 mr-2" /> Share Link
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedDocument(doc); setMoveToFolderId(doc.folderId ?? null); setIsMoveToFolderOpen(true); }} data-testid={`doc-list-move-${doc.id}`}>
+                                <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={(e) => { e.stopPropagation(); deleteDocMutation.mutate(doc.id); }}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+        {folderFiles.length > 0 && !searchQuery && (
+          <div className="mt-8">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+              <Paperclip className="h-4 w-4" /> Uploaded Files
+              <span className="text-xs">({folderFiles.length})</span>
+            </h2>
+            <div className="border rounded-md overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-12 text-center">#</TableHead>
+                    <TableHead>File Name</TableHead>
+                    <TableHead className="w-28">Type</TableHead>
+                    <TableHead className="w-24 text-right">Size</TableHead>
+                    <TableHead className="w-32">Uploaded</TableHead>
+                    <TableHead className="w-20 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {folderFiles.map((file, index) => (
+                    <TableRow
+                      key={file.id}
+                      className="cursor-pointer hover:bg-accent/50 transition-colors group"
+                      onClick={() => handleFileClick(file)}
+                      data-testid={`file-row-${file.id}`}
+                    >
+                      <TableCell className="text-center text-muted-foreground text-sm py-2">{index + 1}</TableCell>
+                      <TableCell className="py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 w-6 rounded bg-muted flex items-center justify-center shrink-0">
+                            {getFileIcon(file.mimeType)}
+                          </div>
+                          <span className="font-medium truncate">{file.originalName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground py-2">
+                        {file.mimeType.split('/').pop()?.toUpperCase() || 'FILE'}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground py-2 text-right">
+                        {formatFileSize(file.size)}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground py-2">
+                        {new Date(file.createdAt!).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right py-2">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={(e) => { e.stopPropagation(); window.open(`/api/document-files/${file.id}/download`, '_blank'); }}
+                            data-testid={`button-download-file-${file.id}`}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive"
+                            onClick={(e) => { e.stopPropagation(); deleteFileMutation.mutate(file.id); }}
+                            data-testid={`button-delete-file-${file.id}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+        </div>
+      </div>
+    </ScrollArea>
+  );
+
+  if (foldersLoading || docsLoading) {
+    return (
+      <div className="min-h-screen bg-background" data-testid="documents-page">
+        <Sidebar />
+        <main className={cn("transition-all duration-300 h-screen flex items-center justify-center", mainOffset, mobileTopOffset)}>
+          <div className="animate-pulse text-muted-foreground">Loading...</div>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background" data-testid="documents-page">
+      <Sidebar />
+      <main className={cn("transition-all duration-300 h-screen flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
+        <div className="px-4 pt-4">
+          <ModuleWelcomeBanner moduleKey="documents" features={["Rich text editing", "Version control", "Folder hierarchy", "Access control"]} />
+        </div>
+        <header className="border-b border-border/30 bg-card backdrop-blur-sm sticky top-0 z-10 shrink-0">
+          <ModuleHeader
+            icon={FileText}
+            title="Documents"
+            subtitle="Create, organize and collaborate on documents"
+            searchPlaceholder="Search documents..."
+            searchValue={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchTestId="input-search-documents"
+            titleTestId="documents-title"
+            actions={
+              <>
+                {!isFolderPanelOpen && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsFolderPanelOpen(true)}
+                    data-testid="button-open-folder-panel-header"
+                  >
+                    <PanelLeft className="h-4 w-4" />
+                  </Button>
+                )}
+              </>
+            }
+          />
+          <div className="flex items-center justify-between px-6 pb-3 flex-wrap gap-2">
+            <nav className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap">
+              {getBreadcrumbs().map((crumb, idx, arr) => (
+                <span key={crumb.id ?? "root"} className="flex items-center gap-1">
+                  {idx > 0 && <ChevronRight className="h-3 w-3" />}
+                  <button
+                    onClick={() => { setSelectedFolderId(crumb.id); setSelectedDocument(null); }}
+                    className={`hover:text-foreground transition-colors ${
+                      (crumb.id === selectedFolderId) || (crumb.id === null && selectedFolderId === null)
+                        ? "text-foreground font-medium"
+                        : ""
+                    }`}
+                  >
+                    {crumb.name}
+                  </button>
+                </span>
+              ))}
+            </nav>
+            <div className="flex items-center gap-2">
+              
+              <Dialog open={isNewFolderOpen} onOpenChange={setIsNewFolderOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setNewFolderParentId(selectedFolderId)} data-testid="button-new-folder">
+                    <FolderPlus className="h-4 w-4" /> Folder
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create New Folder</DialogTitle>
+                    <DialogDescription>
+                      {newFolderParentId === null 
+                        ? "This folder will be created at the root level." 
+                        : `This folder will be created inside "${folders.find(f => f.id === newFolderParentId)?.name || "selected folder"}".`}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Folder Name</Label>
+                      <Input
+                        value={newFolderName}
+                        onChange={(e) => setNewFolderName(e.target.value)}
+                        placeholder="Enter folder name"
+                        data-testid="input-folder-name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Location</Label>
+                      <Select 
+                        value={newFolderParentId === null ? "root" : String(newFolderParentId)} 
+                        onValueChange={(v) => setNewFolderParentId(v === "root" ? null : Number(v))}
+                      >
+                        <SelectTrigger data-testid="select-folder-location">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="root">Root (top level)</SelectItem>
+                          {folders.map(f => (
+                            <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsNewFolderOpen(false)}>Cancel</Button>
+                    <Button 
+                      onClick={() => createFolderMutation.mutate({ name: newFolderName, parentId: newFolderParentId === "root" ? null : newFolderParentId as number | null })}
+                      disabled={!newFolderName.trim() || createFolderMutation.isPending}
+                      data-testid="button-create-folder"
+                    >
+                      Create Folder
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isNewDocOpen} onOpenChange={(open) => { setIsNewDocOpen(open); if (!open) setSelectedTemplateId(null); }}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-1.5" data-testid="button-new-document">
+                    <Plus className="h-4 w-4" /> New Page
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Create New Document</DialogTitle>
+                    <DialogDescription>Start blank or choose a template</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Document Title</Label>
+                        <Input
+                          value={newDocTitle}
+                          onChange={(e) => setNewDocTitle(e.target.value)}
+                          placeholder="Untitled"
+                          data-testid="input-document-title"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Type</Label>
+                        <Select value={newDocType} onValueChange={setNewDocType}>
+                          <SelectTrigger data-testid="select-document-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="document">Document</SelectItem>
+                            <SelectItem value="wiki">Wiki Page</SelectItem>
+                            <SelectItem value="sop">SOP</SelectItem>
+                            <SelectItem value="policy">Policy</SelectItem>
+                            <SelectItem value="contract">Contract</SelectItem>
+                            <SelectItem value="template">Template</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {templates.length > 0 && (
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2">
+                          <BookCopy className="h-4 w-4" />
+                          Start from Template (optional)
+                        </Label>
+                        <div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-y-auto p-1">
+                          <button
+                            className={cn(
+                              "flex flex-col items-center gap-1 p-3 rounded-md border text-sm cursor-pointer transition-colors",
+                              !selectedTemplateId ? "border-primary bg-primary/5" : "border-border"
+                            )}
+                            onClick={() => setSelectedTemplateId(null)}
+                            data-testid="template-blank"
+                          >
+                            <FileText className="h-8 w-8 text-muted-foreground" />
+                            <span className="font-medium">Blank Document</span>
+                          </button>
+                          {templates.map((t) => (
+                            <button
+                              key={t.id}
+                              className={cn(
+                                "flex flex-col items-center gap-1 p-3 rounded-md border text-sm cursor-pointer transition-colors text-left",
+                                selectedTemplateId === t.id ? "border-primary bg-primary/5" : "border-border"
+                              )}
+                              onClick={() => setSelectedTemplateId(t.id)}
+                              data-testid={`template-option-${t.id}`}
+                            >
+                              <FileText className="h-8 w-8 text-primary/60" />
+                              <span className="font-medium text-center truncate w-full">{t.name}</span>
+                              {t.scope !== "global" && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  {t.department || t.scope}
+                                </Badge>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsNewDocOpen(false)}>Cancel</Button>
+                    <Button
+                      onClick={() => {
+                        const templateContent = selectedTemplateId 
+                          ? templates.find(t => t.id === selectedTemplateId)?.content || ""
+                          : "";
+                        createDocMutation.mutate({ 
+                          title: newDocTitle || "Untitled", 
+                          type: newDocType, 
+                          folderId: selectedFolderId,
+                          content: templateContent,
+                        });
+                        setSelectedTemplateId(null);
+                      }}
+                      disabled={createDocMutation.isPending}
+                      data-testid="button-create-document"
+                    >
+                      Create
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="gap-1.5" 
+                onClick={() => setIsTemplateManagerOpen(true)}
+                data-testid="button-manage-templates"
+              >
+                <BookCopy className="h-4 w-4" /> Templates
+              </Button>
+
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => docxInputRef.current?.click()}
+                disabled={isImporting}
+                data-testid="button-import-word"
+              >
+                <FileUp className="h-4 w-4" /> {isImporting ? "Converting..." : "Import Word"}
+              </Button>
+              <input
+                ref={docxInputRef}
+                type="file"
+                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleDocxUpload(file);
+                }}
+                data-testid="input-import-docx"
+              />
+            </div>
+          </div>
+        </header>
+
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          {!isFolderPanelOpen && (
+            <div className="w-10 shrink-0 border-r bg-muted/30 flex flex-col items-center pt-2 gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                title="Show Explorer"
+                onClick={() => setIsFolderPanelOpen(true)}
+                data-testid="button-open-explorer-strip"
+              >
+                <PanelLeft className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          <ResizablePanelGroup direction="horizontal" className="flex-1">
+            {isFolderPanelOpen && (
+              <>
+                <ResizablePanel id="explorer-panel" order={1} defaultSize={22} minSize={15} maxSize={35} className="bg-muted/30">
+                  {renderExplorerPanel()}
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+              </>
+            )}
+
+            <ResizablePanel id="content-panel" order={2} defaultSize={78}>
+              {selectedFile ? renderFilePreview() : selectedDocument ? renderDocumentView() : renderWelcomeState()}
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </div>
+      </main>
+
+      <Dialog open={!!renamingFolder} onOpenChange={(open) => !open && setRenamingFolder(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Folder</DialogTitle>
+            <DialogDescription>Enter a new name for this folder.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder="Folder name"
+              data-testid="input-rename-folder"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenamingFolder(null)}>Cancel</Button>
+            <Button
+              onClick={() => renamingFolder && renameFolderMutation.mutate({ id: renamingFolder.id, name: renameValue })}
+              disabled={!renameValue.trim() || renameFolderMutation.isPending}
+              data-testid="button-confirm-rename-folder"
+            >
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!renamingDocument} onOpenChange={(open) => !open && setRenamingDocument(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Document</DialogTitle>
+            <DialogDescription>Enter a new name for this document.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder="Document name"
+              data-testid="input-rename-document"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenamingDocument(null)}>Cancel</Button>
+            <Button
+              onClick={() => renamingDocument && updateDocMutation.mutate({ id: renamingDocument.id, updates: { title: renameValue } })}
+              disabled={!renameValue.trim()}
+              data-testid="button-confirm-rename-document"
+            >
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSaveAsOpen} onOpenChange={setIsSaveAsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save As New Document</DialogTitle>
+            <DialogDescription>Create a copy of this document with a new name and choose a destination folder</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>New Document Title</Label>
+              <Input
+                value={saveAsTitle}
+                onChange={(e) => setSaveAsTitle(e.target.value)}
+                placeholder="Enter new title"
+                data-testid="input-save-as-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Save to Folder</Label>
+              <Select
+                value={saveAsFolderId === null ? "__root__" : String(saveAsFolderId)}
+                onValueChange={(val) => setSaveAsFolderId(val === "__root__" ? null : Number(val))}
+              >
+                <SelectTrigger data-testid="select-save-as-folder">
+                  <SelectValue placeholder="Choose folder" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  <SelectItem value="__root__" data-testid="save-as-folder-root">
+                    <span className="flex items-center gap-1.5">
+                      <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                      Documents (Root)
+                    </span>
+                  </SelectItem>
+                  {(() => {
+                    const flatFolders: { id: number; name: string; depth: number }[] = [];
+                    const flatten = (items: FolderTreeItem[], depth: number) => {
+                      for (const item of items) {
+                        flatFolders.push({ id: item.id, name: item.name, depth });
+                        if (item.children && item.children.length > 0) flatten(item.children, depth + 1);
+                      }
+                    };
+                    flatten(folderTree, 0);
+                    return flatFolders.map((f) => (
+                      <SelectItem key={f.id} value={String(f.id)} data-testid={`save-as-folder-${f.id}`}>
+                        <span className="flex items-center gap-1.5" style={{ paddingLeft: `${f.depth * 16}px` }}>
+                          <Folder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          {f.name}
+                        </span>
+                      </SelectItem>
+                    ));
+                  })()}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsSaveAsOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (selectedDocument && saveAsTitle.trim()) {
+                  const targetFolderName = saveAsFolderId 
+                    ? folders.find(f => f.id === saveAsFolderId)?.name || "selected folder"
+                    : "Root";
+                  createDocMutation.mutate({
+                    title: saveAsTitle.trim(),
+                    type: selectedDocument.type || "document",
+                    folderId: saveAsFolderId,
+                    content: editContent || selectedDocument.content || "",
+                    openAfterCreate: false,
+                  });
+                  setIsSaveAsOpen(false);
+                  toast({ title: "Copy saved", description: `"${saveAsTitle.trim()}" saved to ${targetFolderName}` });
+                }
+              }}
+              disabled={!saveAsTitle.trim() || createDocMutation.isPending}
+              data-testid="button-confirm-save-as"
+            >
+              {createDocMutation.isPending ? "Saving..." : "Save As"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isMoveToFolderOpen} onOpenChange={setIsMoveToFolderOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move Document</DialogTitle>
+            <DialogDescription>
+              Move "{selectedDocument?.title}" to a different folder
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Destination Folder</Label>
+              <Select
+                value={moveToFolderId === null ? "__root__" : String(moveToFolderId)}
+                onValueChange={(val) => setMoveToFolderId(val === "__root__" ? null : Number(val))}
+              >
+                <SelectTrigger data-testid="select-move-to-folder">
+                  <SelectValue placeholder="Choose folder" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  <SelectItem value="__root__" data-testid="move-to-folder-root">
+                    <span className="flex items-center gap-1.5">
+                      <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                      Documents (Root)
+                    </span>
+                  </SelectItem>
+                  {(() => {
+                    const flatFolders: { id: number; name: string; depth: number }[] = [];
+                    const flatten = (items: FolderTreeItem[], depth: number) => {
+                      for (const item of items) {
+                        flatFolders.push({ id: item.id, name: item.name, depth });
+                        if (item.children && item.children.length > 0) flatten(item.children, depth + 1);
+                      }
+                    };
+                    flatten(folderTree, 0);
+                    return flatFolders.map((f) => (
+                      <SelectItem key={f.id} value={String(f.id)} data-testid={`move-to-folder-${f.id}`}>
+                        <span className="flex items-center gap-1.5" style={{ paddingLeft: `${f.depth * 16}px` }}>
+                          <Folder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          {f.name}
+                        </span>
+                      </SelectItem>
+                    ));
+                  })()}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsMoveToFolderOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (selectedDocument) {
+                  updateDocMutation.mutate({
+                    id: selectedDocument.id,
+                    updates: { folderId: moveToFolderId },
+                  });
+                  setIsMoveToFolderOpen(false);
+                }
+              }}
+              disabled={updateDocMutation.isPending}
+              data-testid="button-confirm-move"
+            >
+              {updateDocMutation.isPending ? "Moving..." : "Move"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isMoveFolderOpen} onOpenChange={setIsMoveFolderOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move Folder</DialogTitle>
+            <DialogDescription>
+              Move "{movingFolder?.name}" to a different location
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Destination</Label>
+              <Select
+                value={moveFolderTargetId === null ? "__root__" : String(moveFolderTargetId)}
+                onValueChange={(val) => setMoveFolderTargetId(val === "__root__" ? null : Number(val))}
+              >
+                <SelectTrigger data-testid="select-move-folder-target">
+                  <SelectValue placeholder="Choose destination" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  <SelectItem value="__root__" data-testid="move-folder-root">
+                    <span className="flex items-center gap-1.5">
+                      <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                      Root (Top Level)
+                    </span>
+                  </SelectItem>
+                  {(() => {
+                    const flatFolders: { id: number; name: string; depth: number }[] = [];
+                    const flatten = (items: FolderTreeItem[], depth: number) => {
+                      for (const item of items) {
+                        if (movingFolder && (item.id === movingFolder.id || isDescendantOf(item.id, movingFolder.id))) continue;
+                        flatFolders.push({ id: item.id, name: item.name, depth });
+                        if (item.children && item.children.length > 0) flatten(item.children, depth + 1);
+                      }
+                    };
+                    flatten(folderTree, 0);
+                    return flatFolders.map((f) => (
+                      <SelectItem key={f.id} value={String(f.id)} data-testid={`move-folder-target-${f.id}`}>
+                        <span className="flex items-center gap-1.5" style={{ paddingLeft: `${f.depth * 16}px` }}>
+                          <Folder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          {f.name}
+                        </span>
+                      </SelectItem>
+                    ));
+                  })()}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsMoveFolderOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (movingFolder) {
+                  moveFolderMutation.mutate({ id: movingFolder.id, parentId: moveFolderTargetId });
+                  setIsMoveFolderOpen(false);
+                  setMovingFolder(null);
+                }
+              }}
+              disabled={moveFolderMutation.isPending}
+              data-testid="button-confirm-move-folder"
+            >
+              {moveFolderMutation.isPending ? "Moving..." : "Move"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Import Word Document</DialogTitle>
+            <DialogDescription>Your document has been converted. Review the title and choose a destination folder.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Document Title</Label>
+              <Input
+                value={importTitle}
+                onChange={(e) => setImportTitle(e.target.value)}
+                placeholder="Enter document title"
+                data-testid="input-import-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Save to Folder</Label>
+              <Select
+                value={importFolderId === null ? "__root__" : String(importFolderId)}
+                onValueChange={(val) => setImportFolderId(val === "__root__" ? null : Number(val))}
+              >
+                <SelectTrigger data-testid="select-import-folder">
+                  <SelectValue placeholder="Choose folder" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  <SelectItem value="__root__" data-testid="import-folder-root">
+                    <span className="flex items-center gap-1.5">
+                      <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                      Documents (Root)
+                    </span>
+                  </SelectItem>
+                  {(() => {
+                    const flatFolders: { id: number; name: string; depth: number }[] = [];
+                    const flatten = (items: FolderTreeItem[], depth: number) => {
+                      for (const item of items) {
+                        flatFolders.push({ id: item.id, name: item.name, depth });
+                        if (item.children && item.children.length > 0) flatten(item.children, depth + 1);
+                      }
+                    };
+                    flatten(folderTree, 0);
+                    return flatFolders.map((f) => (
+                      <SelectItem key={f.id} value={String(f.id)} data-testid={`import-folder-${f.id}`}>
+                        <span className="flex items-center gap-1.5" style={{ paddingLeft: `${f.depth * 16}px` }}>
+                          <Folder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          {f.name}
+                        </span>
+                      </SelectItem>
+                    ));
+                  })()}
+                </SelectContent>
+              </Select>
+            </div>
+            {importWarnings.length > 0 && (
+              <div className="rounded-md bg-yellow-50 dark:bg-yellow-900/20 p-3 text-sm">
+                <p className="font-medium text-yellow-800 dark:text-yellow-200 mb-1">Conversion Notes</p>
+                <ul className="list-disc pl-4 text-yellow-700 dark:text-yellow-300 space-y-0.5">
+                  {importWarnings.slice(0, 5).map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                  {importWarnings.length > 5 && (
+                    <li>...and {importWarnings.length - 5} more</li>
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsImportOpen(false)}>Cancel</Button>
+            <Button
+              onClick={async () => {
+                if (!importTitle.trim() || !importContent) return;
+                setIsImporting(true);
+                try {
+                  const createRes = await apiRequest("POST", "/api/documents", {
+                    title: importTitle.trim(),
+                    type: "document",
+                    folderId: importFolderId,
+                    content: "",
+                    tenantId: 1,
+                    status: "draft",
+                  });
+                  const newDoc = await createRes.json();
+                  let contentRes: Response | null = null;
+                  for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                      const contentBlob = new Blob([importContent], { type: "text/html" });
+                      const formData = new FormData();
+                      formData.append("content", contentBlob, "content.html");
+                      contentRes = await fetch(`/api/documents/${newDoc.id}/content`, {
+                        method: "POST",
+                        body: formData,
+                        credentials: "include",
+                      });
+                      if (contentRes.ok) break;
+                    } catch {
+                      if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                    }
+                  }
+                  if (!contentRes || !contentRes.ok) throw new Error("Failed to save content");
+                  queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedFolderId] });
+                  queryClient.invalidateQueries({ queryKey: ["/api/documents/all"] });
+                  queryClient.invalidateQueries({ queryKey: ["/api/documents/recent"] });
+                  if (importFolderId !== null && importFolderId !== selectedFolderId) {
+                    queryClient.invalidateQueries({ queryKey: ["/api/documents", importFolderId] });
+                  }
+                  const savedDoc = await contentRes.json();
+                  setSelectedDocument(savedDoc);
+                  setIsEditing(true);
+                  setIsPreviewMode(false);
+                  setEditContent(importContent);
+                  setActiveTab("content");
+                  setSelectedFile(null);
+                  toast({ title: "Document imported successfully" });
+                  setIsImportOpen(false);
+                  setImportContent("");
+                  setImportTitle("");
+                  setImportWarnings([]);
+                } catch (err: any) {
+                  toast({ title: "Import failed", description: err.message || "Failed to save document", variant: "destructive" });
+                } finally {
+                  setIsImporting(false);
+                }
+              }}
+              disabled={!importTitle.trim() || !importContent || isImporting}
+              data-testid="button-confirm-import"
+            >
+              {isImporting ? "Importing..." : "Import"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Share "{shareDialogName}"</DialogTitle>
+            <DialogDescription>Share this item with others via link or email.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex items-center gap-2">
+              <Input
+                value={shareDialogUrl}
+                readOnly
+                className="flex-1 text-xs"
+                data-testid="input-share-url"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={copyShareLink}
+                data-testid="button-copy-share-link"
+              >
+                {linkCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={shareViaEmail}
+                data-testid="button-share-email"
+              >
+                <Mail className="h-4 w-4" />
+                Share via Email
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={() => {
+                  window.open(shareDialogUrl, '_blank');
+                  setShareDialogOpen(false);
+                }}
+                data-testid="button-open-in-new-tab"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Open in New Tab
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isTemplateManagerOpen} onOpenChange={setIsTemplateManagerOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BookCopy className="h-5 w-5" /> Template Manager
+            </DialogTitle>
+            <DialogDescription>Create, manage, and organize document templates by scope and department.</DialogDescription>
+          </DialogHeader>
+          <Tabs defaultValue="browse" className="mt-2">
+            <TabsList>
+              <TabsTrigger value="browse" data-testid="tab-browse-templates">Browse</TabsTrigger>
+              <TabsTrigger value="create" data-testid="tab-create-template">Create New</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="browse" className="mt-4">
+              {templates.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <BookCopy className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="font-medium">No templates yet</p>
+                  <p className="text-sm mt-1">Create your first template to get started.</p>
+                </div>
+              ) : (
+                <ScrollArea className="h-[400px]">
+                  <div className="space-y-2 pr-4">
+                    {templates.map((t) => (
+                      <div 
+                        key={t.id} 
+                        className="flex items-center justify-between p-3 rounded-md border"
+                        data-testid={`template-item-${t.id}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <FileText className="h-5 w-5 text-primary/60 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{t.name}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <Badge variant="outline" className="text-[10px]">
+                                {t.scope === "global" && <Globe className="h-3 w-3 mr-1" />}
+                                {t.scope === "department" && <Building2 className="h-3 w-3 mr-1" />}
+                                {t.scope === "module" && <Layers className="h-3 w-3 mr-1" />}
+                                {t.scope}
+                              </Badge>
+                              {t.department && (
+                                <Badge variant="secondary" className="text-[10px]">{t.department}</Badge>
+                              )}
+                              {t.category && (
+                                <Badge variant="secondary" className="text-[10px]">{t.category}</Badge>
+                              )}
+                            </div>
+                            {t.description && (
+                              <p className="text-xs text-muted-foreground mt-1 truncate">{t.description}</p>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => deleteTemplateMutation.mutate(t.id)}
+                          data-testid={`button-delete-template-${t.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </TabsContent>
+
+            <TabsContent value="create" className="mt-4">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Template Name</Label>
+                    <Input
+                      value={newTemplateName}
+                      onChange={(e) => setNewTemplateName(e.target.value)}
+                      placeholder="e.g. Project Charter"
+                      data-testid="input-template-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Scope</Label>
+                    <Select value={newTemplateScope} onValueChange={setNewTemplateScope}>
+                      <SelectTrigger data-testid="select-template-scope">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="global">Global</SelectItem>
+                        <SelectItem value="department">Department</SelectItem>
+                        <SelectItem value="module">Module</SelectItem>
+                        <SelectItem value="personal">Personal</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Input
+                    value={newTemplateDesc}
+                    onChange={(e) => setNewTemplateDesc(e.target.value)}
+                    placeholder="Brief description of this template"
+                    data-testid="input-template-description"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Department (optional)</Label>
+                    <Select value={newTemplateDepartment} onValueChange={setNewTemplateDepartment}>
+                      <SelectTrigger data-testid="select-template-department">
+                        <SelectValue placeholder="All departments" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Departments</SelectItem>
+                        <SelectItem value="HR">HR</SelectItem>
+                        <SelectItem value="Projects">Projects</SelectItem>
+                        <SelectItem value="Testing">Testing</SelectItem>
+                        <SelectItem value="Finance">Finance</SelectItem>
+                        <SelectItem value="Legal">Legal</SelectItem>
+                        <SelectItem value="Marketing">Marketing</SelectItem>
+                        <SelectItem value="Engineering">Engineering</SelectItem>
+                        <SelectItem value="Operations">Operations</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Category (optional)</Label>
+                    <Input
+                      value={newTemplateCategory}
+                      onChange={(e) => setNewTemplateCategory(e.target.value)}
+                      placeholder="e.g. Charter, SOP, Policy"
+                      data-testid="input-template-category"
+                    />
+                  </div>
+                </div>
+                {selectedDocument && (
+                  <div className="rounded-md bg-muted/50 p-3 text-sm">
+                    <p className="text-muted-foreground">
+                      Content will be copied from: <span className="font-medium text-foreground">{selectedDocument.title}</span>
+                    </p>
+                  </div>
+                )}
+                <Button
+                  className="w-full"
+                  disabled={!newTemplateName.trim() || createTemplateMutation.isPending}
+                  onClick={() => {
+                    createTemplateMutation.mutate({
+                      name: newTemplateName.trim(),
+                      description: newTemplateDesc || null,
+                      scope: newTemplateScope,
+                      department: newTemplateDepartment === "all" ? null : newTemplateDepartment || null,
+                      category: newTemplateCategory || null,
+                      content: selectedDocument?.content || "<p></p>",
+                      type: "document",
+                    });
+                  }}
+                  data-testid="button-save-template"
+                >
+                  {createTemplateMutation.isPending ? "Saving..." : "Save Template"}
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

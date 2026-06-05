@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jiganto – Navigation Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Syne:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+
+/* ═══════════════════════════════════════════════
+   DESIGN TOKENS — LIGHT + DARK
+═══════════════════════════════════════════════ */
+:root {
+  /* Brand */
+  --brand-blue:       #2563eb;
+  --brand-blue-hover: #1d4ed8;
+  --brand-blue-light: #eff6ff;
+  --brand-blue-mid:   #bfdbfe;
+  --brand-teal:       #0891b2;
+  --brand-teal-light: #ecfeff;
+
+  /* Radius */
+  --r4:  4px;
+  --r6:  6px;
+  --r8:  8px;
+  --r10: 10px;
+  --r12: 12px;
+
+  /* Font */
+  --font:  'Outfit', sans-serif;
+  --disp:  'Syne', sans-serif;
+  --mono:  'JetBrains Mono', monospace;
+
+  /* Sidebar width states */
+  --sw-open:     232px;
+  --sw-collapsed: 56px;
+  --topbar-h:    54px;
+}
+
+/* ── LIGHT THEME ── */
+[data-theme="light"] {
+  --bg-app:       #f4f7fb;
+  --bg-sidebar:   #ffffff;
+  --bg-topbar:    #ffffff;
+  --bg-card:      #ffffff;
+  --bg-raised:    #f8fafc;
+  --bg-hover:     #f0f5ff;
+  --bg-active:    #eff6ff;
+  --bg-overlay:   #e8f0fe;
+
+  --border:       #e2e8f0;
+  --border-mid:   #cbd5e1;
+
+  --txt-primary:   #0f172a;
+  --txt-secondary: #475569;
+  --txt-muted:     #94a3b8;
+  --txt-accent:    #2563eb;
+
+  --nav-label:    #94a3b8;
+  --nav-item-txt: #475569;
+  --nav-active-bg:#eff6ff;
+  --nav-active-c: #2563eb;
+  --nav-active-bd:#2563eb;
+
+  --shadow-sm:  0 1px 3px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04);
+  --shadow-md:  0 4px 16px rgba(15,23,42,.08);
+  --shadow-lg:  0 12px 40px rgba(15,23,42,.12);
+
+  --toggle-track: #e2e8f0;
+  --toggle-thumb: #fff;
+  --toggle-on:    #2563eb;
+
+  --badge-blue-bg:   #dbeafe;
+  --badge-blue-c:    #1d4ed8;
+  --badge-amber-bg:  #fef3c7;
+  --badge-amber-c:   #d97706;
+  --badge-rose-bg:   #fee2e2;
+  --badge-rose-c:    #dc2626;
+  --badge-green-bg:  #dcfce7;
+  --badge-green-c:   #16a34a;
+  --badge-teal-bg:   #cffafe;
+  --badge-teal-c:    #0e7490;
+}
+
+/* ── DARK THEME ── */
+[data-theme="dark"] {
+  --bg-app:       #070d1a;
+  --bg-sidebar:   #0c1526;
+  --bg-topbar:    #0c1526;
+  --bg-card:      #0d1525;
+  --bg-raised:    #101e35;
+  --bg-hover:     #1a2d50;
+  --bg-active:    rgba(59,130,246,.12);
+  --bg-overlay:   #152440;
+
+  --border:       rgba(99,132,196,.12);
+  --border-mid:   rgba(99,132,196,.22);
+
+  --txt-primary:   #dde8f5;
+  --txt-secondary: #7fa2cc;
+  --txt-muted:     #3d5a7a;
+  --txt-accent:    #82bcff;
+
+  --nav-label:    #3d5a7a;
+  --nav-item-txt: #7fa2cc;
+  --nav-active-bg:rgba(59,130,246,.12);
+  --nav-active-c: #82bcff;
+  --nav-active-bd:#3b82f6;
+
+  --shadow-sm:  0 1px 3px rgba(0,0,0,.3);
+  --shadow-md:  0 4px 20px rgba(0,0,0,.4);
+  --shadow-lg:  0 12px 48px rgba(0,0,0,.55);
+
+  --toggle-track: #1e3a5f;
+  --toggle-thumb: #3b82f6;
+  --toggle-on:    #3b82f6;
+
+  --badge-blue-bg:   rgba(59,130,246,.18);
+  --badge-blue-c:    #82bcff;
+  --badge-amber-bg:  rgba(245,158,11,.18);
+  --badge-amber-c:   #fcd34d;
+  --badge-rose-bg:   rgba(244,63,94,.18);
+  --badge-rose-c:    #fda4af;
+  --badge-green-bg:  rgba(16,185,129,.18);
+  --badge-green-c:   #6ee7b7;
+  --badge-teal-bg:   rgba(20,184,166,.18);
+  --badge-teal-c:    #5eead4;
+}
+
+/* ═══════════════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--font);
+  background: var(--bg-app);
+  color: var(--txt-primary);
+  font-size: 13.5px;
+  line-height: 1.5;
+  display: flex;
+  transition: background .25s, color .25s;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--txt-muted); }
+
+/* ═══════════════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════════════ */
+.sidebar {
+  width: var(--sw-open);
+  min-width: var(--sw-open);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 50;
+  transition: width .22s cubic-bezier(.4,0,.2,1), min-width .22s cubic-bezier(.4,0,.2,1), box-shadow .25s;
+  overflow: hidden;
+}
+.sidebar.collapsed {
+  width: var(--sw-collapsed);
+  min-width: var(--sw-collapsed);
+  box-shadow: var(--shadow-md);
+}
+
+/* ── Logo ── */
+.sb-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--topbar-h);
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.logo-mark {
+  width: 30px;
+  height: 30px;
+  background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--disp);
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(37,99,235,.3);
+  transition: box-shadow .2s;
+}
+.logo-mark:hover { box-shadow: 0 4px 16px rgba(37,99,235,.4); }
+.logo-text-wrap {
+  overflow: hidden;
+  white-space: nowrap;
+  transition: opacity .18s, width .22s;
+}
+.sidebar.collapsed .logo-text-wrap { opacity: 0; width: 0; }
+.logo-name {
+  font-family: var(--disp);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--txt-primary);
+  letter-spacing: -.4px;
+  line-height: 1.1;
+}
+.logo-tagline {
+  font-size: 9px;
+  color: var(--txt-muted);
+  text-transform: uppercase;
+  letter-spacing: .9px;
+  font-weight: 500;
+}
+
+/* ── Workspace Pill ── */
+.sb-workspace {
+  margin: 8px 10px 4px;
+  padding: 8px 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r8);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+  overflow: hidden;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.sb-workspace:hover { background: var(--bg-hover); border-color: var(--border-mid); }
+.ws-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #2563eb, #0891b2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+.ws-info { min-width: 0; flex: 1; }
+.ws-name { font-size: 12px; font-weight: 600; color: var(--txt-primary); }
+.ws-plan { font-size: 9.5px; color: var(--txt-muted); }
+.ws-caret { font-size: 9px; color: var(--txt-muted); flex-shrink: 0; }
+.sidebar.collapsed .ws-info,
+.sidebar.collapsed .ws-caret { display: none; }
+.sidebar.collapsed .sb-workspace { justify-content: center; padding: 8px; margin: 8px 7px 4px; }
+
+/* ── Home/Dashboard Pinned ── */
+.sb-pinned {
+  padding: 4px 8px 2px;
+  flex-shrink: 0;
+}
+.pinned-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: var(--r8);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nav-item-txt);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+  white-space: nowrap;
+  overflow: hidden;
+  position: relative;
+}
+.pinned-item:hover { background: var(--bg-hover); color: var(--txt-accent); }
+.pinned-item.active {
+  background: var(--nav-active-bg);
+  color: var(--nav-active-c);
+}
+.pinned-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 6px; bottom: 6px;
+  width: 3px;
+  background: var(--nav-active-bd);
+  border-radius: 0 3px 3px 0;
+}
+.pi-icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.pi-label {
+  transition: opacity .18s;
+  flex: 1;
+}
+.sidebar.collapsed .pi-label { opacity: 0; width: 0; overflow: hidden; }
+
+/* ── Nav Scroll ── */
+.nav-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 8px 8px;
+}
+
+/* ── Nav Group ── */
+.nav-group { margin-bottom: 2px; }
+.nav-group-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--nav-label);
+  padding: 10px 10px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity .18s;
+}
+.sidebar.collapsed .nav-group-label { opacity: 0; height: 8px; padding: 0; }
+
+/* ── Nav Item ── */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: var(--r8);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--nav-item-txt);
+  cursor: pointer;
+  transition: background .1s, color .1s;
+  white-space: nowrap;
+  overflow: hidden;
+  position: relative;
+  user-select: none;
+}
+.nav-item:hover { background: var(--bg-hover); color: var(--txt-primary); }
+.nav-item.active {
+  background: var(--nav-active-bg);
+  color: var(--nav-active-c);
+  font-weight: 600;
+}
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 6px; bottom: 6px;
+  width: 3px;
+  background: var(--nav-active-bd);
+  border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 6px rgba(37,99,235,.3);
+}
+.ni-icon {
+  font-size: 15px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+  transition: transform .15s;
+}
+.nav-item:hover .ni-icon { transform: scale(1.1); }
+.ni-label {
+  flex: 1;
+  transition: opacity .18s;
+  white-space: nowrap;
+}
+.sidebar.collapsed .ni-label { opacity: 0; width: 0; overflow: hidden; }
+
+/* Badge */
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 9.5px;
+  font-weight: 700;
+  font-family: var(--mono);
+  flex-shrink: 0;
+  transition: opacity .18s;
+}
+.nb-blue  { background: var(--badge-blue-bg);  color: var(--badge-blue-c);  }
+.nb-amber { background: var(--badge-amber-bg); color: var(--badge-amber-c); }
+.nb-rose  { background: var(--badge-rose-bg);  color: var(--badge-rose-c);  }
+.nb-green { background: var(--badge-green-bg); color: var(--badge-green-c); }
+.nb-teal  { background: var(--badge-teal-bg);  color: var(--badge-teal-c);  }
+.sidebar.collapsed .nav-badge { opacity: 0; width: 0; overflow: hidden; padding: 0; min-width: 0; }
+
+/* Tooltip for collapsed state */
+.nav-item { position: relative; }
+.nav-tooltip {
+  position: fixed;
+  left: calc(var(--sw-collapsed) + 6px);
+  background: var(--txt-primary);
+  color: var(--bg-sidebar);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: var(--r6);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 9999;
+  box-shadow: var(--shadow-md);
+  transition: opacity .12s;
+}
+.sidebar.collapsed .nav-item:hover .nav-tooltip { opacity: 1; }
+
+/* ── Divider ── */
+.sb-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 10px;
+  flex-shrink: 0;
+}
+
+/* ── Footer ── */
+.sb-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 10px 10px 12px;
+}
+
+/* User row */
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: var(--r8);
+  cursor: pointer;
+  transition: background .12s;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.user-row:hover { background: var(--bg-hover); }
+.user-av {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2563eb 0%, #8b5cf6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(37,99,235,.25);
+}
+.user-info {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity .18s, width .22s;
+}
+.sidebar.collapsed .user-info { opacity: 0; width: 0; }
+.user-name { font-size: 12.5px; font-weight: 700; color: var(--txt-primary); }
+.user-role { font-size: 10.5px; color: var(--txt-muted); }
+.user-more {
+  font-size: 12px;
+  color: var(--txt-muted);
+  flex-shrink: 0;
+  transition: opacity .18s;
+}
+.sidebar.collapsed .user-more { opacity: 0; width: 0; overflow: hidden; }
+
+/* ── Dark Mode Toggle ── */
+.theme-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 8px;
+  overflow: hidden;
+}
+.theme-toggle-labels {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  transition: opacity .18s;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.sidebar.collapsed .theme-toggle-labels { opacity: 0; width: 0; }
+.tl-icon { font-size: 13px; }
+.tl-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--txt-muted);
+  transition: color .2s;
+}
+
+/* The toggle switch itself */
+.toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--toggle-track);
+  border-radius: 20px;
+  transition: background .25s;
+  cursor: pointer;
+  border: 1px solid var(--border);
+}
+[data-theme="dark"] .toggle-track { background: var(--toggle-on); border-color: transparent; }
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--toggle-thumb);
+  box-shadow: 0 1px 4px rgba(0,0,0,.2);
+  transition: transform .25s cubic-bezier(.4,0,.2,1), background .25s;
+}
+[data-theme="dark"] .toggle-thumb {
+  transform: translateX(16px);
+  background: #fff;
+}
+/* collapsed — show icon only */
+.toggle-icon-only {
+  display: none;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--r6);
+  transition: background .12s;
+  color: var(--txt-muted);
+}
+.sidebar.collapsed .toggle-icon-only { display: flex; align-items: center; justify-content: center; }
+.sidebar.collapsed .toggle-icon-only:hover { background: var(--bg-hover); }
+.sidebar.collapsed .theme-toggle-row { justify-content: center; }
+
+/* ── Collapse Toggle Button ── */
+.sb-collapse-btn {
+  position: absolute;
+  top: 50%;
+  right: -12px;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--txt-secondary);
+  box-shadow: var(--shadow-sm);
+  transition: background .12s, color .12s, box-shadow .12s;
+  z-index: 51;
+}
+.sb-collapse-btn:hover {
+  background: var(--brand-blue);
+  color: #fff;
+  border-color: var(--brand-blue);
+  box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.sb-collapse-btn .arrow {
+  transition: transform .22s;
+  line-height: 1;
+}
+.sidebar.collapsed .sb-collapse-btn .arrow { transform: rotate(180deg); }
+
+/* ═══════════════════════════════════════════════
+   MAIN AREA
+═══════════════════════════════════════════════ */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  transition: background .25s;
+}
+
+/* ── Topbar ── */
+.topbar {
+  height: var(--topbar-h);
+  background: var(--bg-topbar);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 10px;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+.breadcrumb { display: flex; align-items: center; gap: 6px; flex: 1; }
+.bc-item {
+  font-size: 13px;
+  color: var(--txt-muted);
+  cursor: pointer;
+  transition: color .12s;
+  white-space: nowrap;
+}
+.bc-item:hover { color: var(--txt-accent); }
+.bc-item.current { color: var(--txt-primary); font-weight: 600; cursor: default; }
+.bc-sep { color: var(--border-mid); font-size: 14px; }
+.tb-actions { display: flex; align-items: center; gap: 8px; }
+.tb-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: var(--r8);
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--txt-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all .12s;
+  position: relative;
+}
+.tb-btn:hover { background: var(--bg-hover); border-color: var(--border-mid); color: var(--txt-primary); }
+.notif-badge {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--badge-amber-c);
+  border: 1.5px solid var(--bg-topbar);
+}
+.btn-primary {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--r8);
+  background: var(--brand-blue);
+  color: #fff;
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: background .15s, box-shadow .15s, transform .15s;
+  box-shadow: 0 2px 10px rgba(37,99,235,.25);
+}
+.btn-primary:hover {
+  background: var(--brand-blue-hover);
+  box-shadow: 0 4px 16px rgba(37,99,235,.38);
+  transform: translateY(-1px);
+}
+
+/* ── Content ── */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  background: var(--bg-app);
+  transition: background .25s;
+}
+
+/* ── Page Header ── */
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+  gap: 12px;
+  animation: fadeUp .35s ease-out both;
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ph-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--brand-teal);
+  margin-bottom: 4px;
+  font-family: var(--mono);
+}
+.ph-title {
+  font-family: var(--disp);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--txt-primary);
+  letter-spacing: -.4px;
+  line-height: 1.1;
+}
+.ph-sub {
+  font-size: 12.5px;
+  color: var(--txt-muted);
+  margin-top: 4px;
+}
+
+/* ── Demo Cards ── */
+.demo-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  animation: fadeUp .35s ease-out .08s both;
+}
+.demo-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r12);
+  padding: 18px;
+  cursor: pointer;
+  transition: box-shadow .15s, transform .15s, border-color .15s;
+}
+.demo-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  border-color: var(--border-mid);
+}
+.dc-icon { font-size: 24px; margin-bottom: 10px; }
+.dc-title { font-size: 13.5px; font-weight: 700; color: var(--txt-primary); margin-bottom: 3px; }
+.dc-sub { font-size: 11.5px; color: var(--txt-muted); }
+.dc-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+.dc-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+/* Active module indicator */
+.active-module-banner {
+  background: var(--bg-active);
+  border: 1px solid var(--brand-blue-mid);
+  border-radius: var(--r10);
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: fadeUp .3s ease-out both;
+}
+[data-theme="dark"] .active-module-banner {
+  background: rgba(59,130,246,.08);
+  border-color: rgba(59,130,246,.2);
+}
+.amb-icon { font-size: 22px; }
+.amb-title { font-size: 14px; font-weight: 700; color: var(--txt-accent); }
+.amb-sub { font-size: 12px; color: var(--txt-muted); margin-top: 1px; }
+.amb-badge {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--brand-blue);
+  color: #fff;
+}
+
+/* ── Nav demo notice ── */
+.nav-demo-notice {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  animation: fadeUp .3s ease-out .04s both;
+}
+.ndn-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--txt-primary);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.ndn-body { font-size: 12.5px; color: var(--txt-secondary); line-height: 1.7; }
+.ndn-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ndn-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all .12s;
+}
+.ndn-tag:hover { opacity: .85; transform: translateY(-1px); }
+
+/* ── Section row ── */
+.section-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 10px;
+  animation: fadeUp .35s ease-out .12s both;
+}
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .7px;
+  color: var(--txt-muted);
+}
+.section-line { flex: 1; height: 1px; background: var(--border); }
+
+/* ── Stat chips ── */
+.stat-chips {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  animation: fadeUp .35s ease-out .06s both;
+}
+.stat-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  padding: 10px 14px;
+  flex: 1;
+  min-width: 130px;
+  transition: box-shadow .15s, transform .15s;
+  cursor: default;
+}
+.stat-chip:hover { box-shadow: var(--shadow-sm); transform: translateY(-1px); }
+.sc-icon { font-size: 20px; }
+.sc-val {
+  font-family: var(--disp);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--txt-primary);
+  line-height: 1;
+}
+.sc-lbl { font-size: 11px; color: var(--txt-muted); margin-top: 1px; }
+
+/* ═══════════════════════════════════════════════
+   THEME TRANSITION
+═══════════════════════════════════════════════ */
+.sidebar,
+.main,
+.topbar,
+.content,
+.demo-card,
+.nav-demo-notice,
+.active-module-banner,
+.stat-chip,
+.sb-workspace,
+.user-row,
+.nav-item,
+.pinned-item {
+  transition: background .25s, color .25s, border-color .25s, box-shadow .25s;
+}
+
+/* ═══════════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════════ */
+@media (max-width: 700px) {
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; box-shadow: var(--shadow-lg); }
+  .main { margin-left: var(--sw-collapsed); }
+  .stat-chips { flex-direction: column; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════ -->
+<aside class="sidebar" id="sidebar">
+
+  <!-- Collapse toggle button -->
+  <button class="sb-collapse-btn" id="collapseBtn" onclick="toggleCollapse()" title="Collapse / expand sidebar">
+    <span class="arrow">◀</span>
+  </button>
+
+  <!-- Logo -->
+  <div class="sb-logo">
+    <div class="logo-mark">J</div>
+    <div class="logo-text-wrap">
+      <div class="logo-name">Jiganto</div>
+      <div class="logo-tagline">Enterprise Suite</div>
+    </div>
+  </div>
+
+  <!-- Workspace -->
+  <div class="sb-workspace" title="Meridian Partners — switch workspace">
+    <div class="ws-avatar">MP</div>
+    <div class="ws-info">
+      <div class="ws-name">Meridian Partners</div>
+      <div class="ws-plan">Enterprise Plan</div>
+    </div>
+    <span class="ws-caret">▾</span>
+  </div>
+
+  <!-- ── HOME (Pinned, above all groups) ── -->
+  <div class="sb-pinned">
+    <div class="pinned-item" onclick="navigate(this,'Dashboard','🏠','Home / Dashboard','Your daily overview — recent activity, key metrics and quick actions')" id="nav-dashboard">
+      <span class="pi-icon">🏠</span>
+      <span class="pi-label">Dashboard</span>
+      <span class="nav-tooltip">Dashboard</span>
+    </div>
+  </div>
+
+  <div class="sb-divider"></div>
+
+  <!-- ── NAV GROUPS ── -->
+  <nav class="nav-scroll">
+
+    <!-- COLLABORATION -->
+    <div class="nav-group">
+      <div class="nav-group-label">Collaboration</div>
+      <div class="nav-item" onclick="navigate(this,'Chat','💬','Chat','Real-time team messaging, channels and direct messages')" id="nav-chat">
+        <span class="ni-icon">💬</span>
+        <span class="ni-label">Chat</span>
+        <span class="nav-badge nb-teal">6</span>
+        <span class="nav-tooltip">Chat (6)</span>
+      </div>
+      <div class="nav-item" onclick="navigate(this,'Documents','📄','Documents','Shared documents, file management and knowledge base')" id="nav-docs">
+        <span class="ni-icon">📄</span>
+        <span class="ni-label">Documents</span>
+        <span class="nav-tooltip">Documents</span>
+      </div>
+    </div>
+
+    <!-- PORTFOLIO -->
+    <div class="nav-group">
+      <div class="nav-group-label">Portfolio</div>
+      <div class="nav-item active" onclick="navigate(this,'Portfolio','🏛️','Portfolio','Strategic portfolio overview — all programmes, projects and initiatives')" id="nav-portfolio">
+        <span class="ni-icon">🏛️</span>
+        <span class="ni-label">Portfolio</span>
+        <span class="nav-badge nb-blue">14</span>
+        <span class="nav-tooltip">Portfolio (14)</span>
+      </div>
+      <div class="nav-item" onclick="navigate(this,'Projects','🗂️','Projects','Manage all projects, programmes and work items')" id="nav-projects">
+        <span class="ni-icon">🗂️</span>
+        <span class="ni-label">Projects</span>
+        <span class="nav-badge nb-amber">3</span>
+        <span class="nav-tooltip">Projects (3)</span>
+      </div>
+      <div class="nav-item" onclick="navigate(this,'Workspaces','📌','Workspaces','Personal and team task boards — lightweight task tracking')" id="nav-workspaces">
+        <span class="ni-icon">📌</span>
+        <span class="ni-label">Workspaces</span>
+        <span class="nav-tooltip">Workspaces</span>
+      </div>
+    </div>
+
+    <!-- MANAGEMENT -->
+    <div class="nav-group">
+      <div class="nav-group-label">Management</div>
+      <div class="nav-item" onclick="navigate(this,'Business','🏢','Business Management','Company structure, accounts, contracts and business operations')" id="nav-business">
+        <span class="ni-icon">🏢</span>
+        <span class="ni-label">Business</span>
+        <span class="nav-tooltip">Business</span>
+      </div>
+      <div class="nav-item" onclick="navigate(this,'CRM','👥','CRM','Customer relationships, pipelines, contacts and accounts')" id="nav-crm">
+        <span class="ni-icon">👥</span>
+        <span class="ni-label">CRM</span>
+        <span class="nav-tooltip">CRM</span>
+      </div>
+      <div class="nav-item" onclick="navigate(this,'Finance','💰','Finance','Budgets, actuals, invoicing and financial reporting')" id="nav-finance">
+        <span class="ni-icon">💰</span>
+        <span class="ni-label">Finance</span>
+        <span class="nav-tooltip">Finance</span>
+      </div>
+      <div class="nav-item" onclick="navigate(this,'Resources','👤','Resources','Team capacity, allocation, skills and utilisation')" id="nav-resources">
+        <span class="ni-icon">👤</span>
+        <span class="ni-label">Resources</span>
+        <span class="nav-badge nb-rose">2</span>
+        <span class="nav-tooltip">Resources (2)</span>
+      </div>
+    </div>
+
+    <!-- SERVICE & SUPPORT -->
+    <div class="nav-group">
+      <div class="nav-group-label">Service &amp; Support</div>
+      <div class="nav-item" onclick="navigate(this,'Service Desk','🎧','Service Desk','Internal IT and operations service management')" id="nav-servicedesk">
+        <span class="ni-icon">🎧</span>
+        <span class="ni-label">Service Desk</span>
+        <span class="nav-badge nb-rose">4</span>
+        <span class="nav-tooltip">Service Desk (4)</span>
+      </div>
+      <div class="nav-item" onclick="navigate(this,'Help Desk','🙋','Help Desk','Customer-facing support tickets and SLA management')" id="nav-helpdesk">
+        <span class="ni-icon">🙋</span>
+        <span class="ni-label">Help Desk</span>
+        <span class="nav-badge nb-amber">9</span>
+        <span class="nav-tooltip">Help Desk (9)</span>
+      </div>
+    </div>
+
+    <!-- UTILITIES -->
+    <div class="nav-group">
+      <div class="nav-group-label">Utilities</div>
+      <div class="nav-item" onclick="navigate(this,'Test Management','🧪','Test Management','Test plans, cases, runs, defects and QA reporting')" id="nav-testing">
+        <span class="ni-icon">🧪</span>
+        <span class="ni-label">Test Management</span>
+        <span class="nav-tooltip">Test Management</span>
+      </div>
+      <div class="nav-item" onclick="navigate(this,'BPM Processes','⚙️','BPM Processes','Business process modelling, workflows and automation')" id="nav-bpm">
+        <span class="ni-icon">⚙️</span>
+        <span class="ni-label">BPM Processes</span>
+        <span class="nav-tooltip">BPM Processes</span>
+      </div>
+      <div class="nav-item" onclick="navigate(this,'Surveys','📊','Surveys','Build and distribute surveys, analyse responses')" id="nav-surveys">
+        <span class="ni-icon">📊</span>
+        <span class="ni-label">Surveys</span>
+        <span class="nav-tooltip">Surveys</span>
+      </div>
+      <div class="nav-item" onclick="navigate(this,'Digital Signing','✍️','Digital Signing','Secure document signing and approval workflows')" id="nav-esign">
+        <span class="ni-icon">✍️</span>
+        <span class="ni-label">Digital Signing</span>
+        <span class="nav-tooltip">Digital Signing</span>
+      </div>
+      <div class="nav-item" onclick="navigate(this,'Whiteboard','🎨','Whiteboard','Visual collaboration, diagramming and brainstorming')" id="nav-whiteboard">
+        <span class="ni-icon">🎨</span>
+        <span class="ni-label">Whiteboard</span>
+        <span class="nav-tooltip">Whiteboard</span>
+      </div>
+      <div class="nav-item" onclick="navigate(this,'Templates','📋','Templates','Project templates, document templates and starter kits')" id="nav-templates">
+        <span class="ni-icon">📋</span>
+        <span class="ni-label">Templates</span>
+        <span class="nav-tooltip">Templates</span>
+      </div>
+    </div>
+
+  </nav><!-- /nav-scroll -->
+
+  <!-- ── FOOTER ── -->
+  <div class="sb-footer">
+
+    <!-- User row -->
+    <div class="user-row" title="Account settings">
+      <div class="user-av">SA</div>
+      <div class="user-info">
+        <div class="user-name">Sarah Ahmed</div>
+        <div class="user-role">Portfolio Director</div>
+      </div>
+      <span class="user-more">⋯</span>
+    </div>
+
+    <!-- Dark mode toggle -->
+    <div class="theme-toggle-row">
+      <!-- Expanded state: label + switch -->
+      <div class="theme-toggle-labels">
+        <span class="tl-icon" id="themeIcon">🌤️</span>
+        <span class="tl-text" id="themeLabel">Light Mode</span>
+      </div>
+      <label class="toggle-switch" title="Toggle dark / light mode">
+        <input type="checkbox" id="themeToggle" onchange="toggleTheme()">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+      <!-- Collapsed state: icon only -->
+      <div class="toggle-icon-only" onclick="toggleTheme()" title="Toggle dark / light mode" id="themeIconOnly">🌤️</div>
+    </div>
+
+  </div><!-- /sb-footer -->
+</aside>
+
+
+<!-- ══════════════════════════════════════════
+     MAIN
+══════════════════════════════════════════ -->
+<div class="main">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="breadcrumb" id="breadcrumb">
+      <span class="bc-item current" id="bc-current">Portfolio</span>
+    </div>
+    <div class="tb-actions">
+      <div class="tb-btn" title="Search (⌘K)">🔍</div>
+      <div class="tb-btn" title="Notifications">
+        🔔
+        <span class="notif-badge"></span>
+      </div>
+      <div class="tb-btn" title="Help">❓</div>
+      <div class="tb-btn" title="Settings">⚙️</div>
+      <button class="btn-primary" onclick="alert('New Work Item → opens 3-step wizard')">＋ New Work Item</button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content" id="mainContent">
+
+    <!-- Active module banner -->
+    <div class="active-module-banner" id="moduleBanner">
+      <div class="amb-icon" id="moduleIcon">🏛️</div>
+      <div>
+        <div class="amb-title" id="moduleTitle">Portfolio Command Centre</div>
+        <div class="amb-sub" id="moduleSub">Strategic portfolio overview — all programmes, projects and initiatives</div>
+      </div>
+      <div class="amb-badge" id="moduleBadge">Active Module</div>
+    </div>
+
+    <!-- Page header -->
+    <div class="page-header" id="pageHeader">
+      <div>
+        <div class="ph-eyebrow" id="phEyebrow">Portfolio View</div>
+        <div class="ph-title" id="phTitle">Portfolio Command Centre</div>
+        <div class="ph-sub" id="phSub">Meridian Partners · 14 active work items · Last updated 2 minutes ago</div>
+      </div>
+    </div>
+
+    <!-- Navigation design note -->
+    <div class="nav-demo-notice">
+      <div class="ndn-title">
+        <span>🧭</span>
+        Navigation Prototype — Recommended Menu Structure
+      </div>
+      <div class="ndn-body">
+        This prototype demonstrates the <strong>recommended Jiganto navigation</strong> with 6 logical groups. 
+        Click any item in the left sidebar to navigate between modules. 
+        Use the <strong>◀ button</strong> on the sidebar edge to collapse to icon-only mode — hover any icon to see its tooltip.
+        The <strong>dark/light mode toggle</strong> sits at the bottom of the sidebar, just below your name.
+      </div>
+      <div class="ndn-tags" id="groupTags"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stat-chips">
+      <div class="stat-chip">
+        <div class="sc-icon">🚀</div>
+        <div>
+          <div class="sc-val" style="color:var(--badge-green-c)">14</div>
+          <div class="sc-lbl">Active Items</div>
+        </div>
+      </div>
+      <div class="stat-chip">
+        <div class="sc-icon">⚠️</div>
+        <div>
+          <div class="sc-val" style="color:var(--badge-amber-c)">4</div>
+          <div class="sc-lbl">At Risk</div>
+        </div>
+      </div>
+      <div class="stat-chip">
+        <div class="sc-icon">🔴</div>
+        <div>
+          <div class="sc-val" style="color:var(--badge-rose-c)">2</div>
+          <div class="sc-lbl">Critical</div>
+        </div>
+      </div>
+      <div class="stat-chip">
+        <div class="sc-icon">💰</div>
+        <div>
+          <div class="sc-val">£4.2M</div>
+          <div class="sc-lbl">Portfolio Budget</div>
+        </div>
+      </div>
+      <div class="stat-chip">
+        <div class="sc-icon">👥</div>
+        <div>
+          <div class="sc-val">23</div>
+          <div class="sc-lbl">Team Members</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Menu Groups -->
+    <div class="section-row">
+      <span class="section-title">All Modules</span>
+      <div class="section-line"></div>
+    </div>
+
+    <!-- Module cards -->
+    <div class="demo-cards" id="moduleCards"></div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+
+<script>
+/* ══════════════════════════════════════
+   MODULE DATA
+══════════════════════════════════════ */
+const MODULES = [
+  { id:'dashboard',    icon:'🏠', label:'Dashboard',       group:'Pinned',            desc:'Your daily overview and quick actions',              badge:null,         badgeClass:'',         navId:'nav-dashboard'  },
+  { id:'chat',         icon:'💬', label:'Chat',            group:'Collaboration',     desc:'Real-time team messaging and channels',              badge:'6 unread',   badgeClass:'nb-teal',  navId:'nav-chat'       },
+  { id:'docs',         icon:'📄', label:'Documents',       group:'Collaboration',     desc:'Shared documents and knowledge base',                badge:null,         badgeClass:'',         navId:'nav-docs'       },
+  { id:'portfolio',    icon:'🏛️', label:'Portfolio',       group:'Portfolio',         desc:'Strategic overview of all active work',              badge:'14 active',  badgeClass:'nb-blue',  navId:'nav-portfolio'  },
+  { id:'projects',     icon:'🗂️', label:'Projects',        group:'Portfolio',         desc:'Projects, programmes and work items',                badge:'3 at risk',  badgeClass:'nb-amber', navId:'nav-projects'   },
+  { id:'workspaces',   icon:'📌', label:'Workspaces',      group:'Portfolio',         desc:'Personal task boards and lightweight tracking',      badge:null,         badgeClass:'',         navId:'nav-workspaces' },
+  { id:'business',     icon:'🏢', label:'Business',        group:'Management',        desc:'Company structure, accounts and operations',         badge:null,         badgeClass:'',         navId:'nav-business'   },
+  { id:'crm',          icon:'👥', label:'CRM',             group:'Management',        desc:'Customer relationships and pipeline',                 badge:null,         badgeClass:'',         navId:'nav-crm'        },
+  { id:'finance',      icon:'💰', label:'Finance',         group:'Management',        desc:'Budgets, actuals, invoicing and reporting',           badge:null,         badgeClass:'',         navId:'nav-finance'    },
+  { id:'resources',    icon:'👤', label:'Resources',       group:'Management',        desc:'Team capacity and resource allocation',               badge:'2 alerts',   badgeClass:'nb-rose',  navId:'nav-resources'  },
+  { id:'servicedesk',  icon:'🎧', label:'Service Desk',    group:'Service & Support', desc:'Internal IT and operations service management',       badge:'4 open',     badgeClass:'nb-rose',  navId:'nav-servicedesk'},
+  { id:'helpdesk',     icon:'🙋', label:'Help Desk',       group:'Service & Support', desc:'Customer-facing support and SLA management',          badge:'9 tickets',  badgeClass:'nb-amber', navId:'nav-helpdesk'   },
+  { id:'testing',      icon:'🧪', label:'Test Management', group:'Utilities',         desc:'Test plans, cases, defect tracking and QA reports',  badge:null,         badgeClass:'',         navId:'nav-testing'    },
+  { id:'bpm',          icon:'⚙️', label:'BPM Processes',   group:'Utilities',         desc:'Business process modelling and workflow automation',  badge:null,         badgeClass:'',         navId:'nav-bpm'        },
+  { id:'surveys',      icon:'📊', label:'Surveys',         group:'Utilities',         desc:'Build surveys and analyse responses',                 badge:null,         badgeClass:'',         navId:'nav-surveys'    },
+  { id:'esign',        icon:'✍️', label:'Digital Signing', group:'Utilities',         desc:'Secure document signing and approval workflows',      badge:null,         badgeClass:'',         navId:'nav-esign'      },
+  { id:'whiteboard',   icon:'🎨', label:'Whiteboard',      group:'Utilities',         desc:'Visual collaboration and diagramming',                badge:null,         badgeClass:'',         navId:'nav-whiteboard' },
+  { id:'templates',    icon:'📋', label:'Templates',       group:'Utilities',         desc:'Project and document templates and starter kits',    badge:null,         badgeClass:'',         navId:'nav-templates'  },
+];
+
+const GROUP_COLORS = {
+  'Pinned':            { bg:'var(--badge-blue-bg)',   c:'var(--badge-blue-c)',  border:'var(--brand-blue)' },
+  'Collaboration':     { bg:'var(--badge-teal-bg)',   c:'var(--badge-teal-c)',  border:'var(--brand-teal)' },
+  'Portfolio':         { bg:'var(--badge-blue-bg)',   c:'var(--badge-blue-c)',  border:'var(--brand-blue)' },
+  'Management':        { bg:'var(--badge-green-bg)',  c:'var(--badge-green-c)', border:'#16a34a' },
+  'Service & Support': { bg:'var(--badge-rose-bg)',   c:'var(--badge-rose-c)',  border:'#dc2626' },
+  'Utilities':         { bg:'var(--badge-amber-bg)',  c:'var(--badge-amber-c)', border:'#d97706' },
+};
+
+/* ── Render group tags ── */
+function renderGroupTags() {
+  const groups = [...new Set(MODULES.map(m => m.group))].filter(g => g !== 'Pinned');
+  const el = document.getElementById('groupTags');
+  if(!el) return;
+  el.innerHTML = groups.map(g => {
+    const gc = GROUP_COLORS[g] || {};
+    return `<span class="ndn-tag" style="background:${gc.bg};color:${gc.c}" onclick="highlightGroup('${g}')">${g}</span>`;
+  }).join('');
+}
+
+/* ── Render module cards ── */
+function renderModuleCards() {
+  const el = document.getElementById('moduleCards');
+  if(!el) return;
+  el.innerHTML = MODULES.filter(m => m.id !== 'dashboard').map(m => {
+    const gc = GROUP_COLORS[m.group] || {};
+    return `<div class="demo-card" onclick="navigate(document.getElementById('${m.navId}'),'${m.label}','${m.icon}','${m.label}','${m.desc}')">
+      <div class="dc-icon">${m.icon}</div>
+      <div class="dc-title">${m.label}</div>
+      <div class="dc-sub">${m.desc}</div>
+      <div class="dc-meta">
+        <span class="dc-badge" style="background:${gc.bg};color:${gc.c};font-size:10px;font-weight:700;padding:2px 7px">${m.group}</span>
+        ${m.badge ? `<span class="dc-badge ${m.badgeClass}" style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px">${m.badge}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function highlightGroup(group) {
+  // Flash the nav group labels
+  document.querySelectorAll('.nav-group-label').forEach(el => {
+    if(el.textContent.trim() === group) {
+      el.style.color = 'var(--txt-accent)';
+      el.style.transition = 'color .1s';
+      setTimeout(() => { el.style.color = ''; }, 1200);
+    }
+  });
+}
+
+/* ══════════════════════════════════════
+   NAVIGATION
+══════════════════════════════════════ */
+function navigate(el, name, icon, title, desc) {
+  // Deactivate all nav items
+  document.querySelectorAll('.nav-item, .pinned-item').forEach(i => i.classList.remove('active'));
+  // Activate clicked
+  if(el) el.classList.add('active');
+
+  // Update breadcrumb
+  const bc = document.getElementById('bc-current');
+  if(bc) bc.textContent = name;
+
+  // Update banner
+  document.getElementById('moduleIcon').textContent = icon;
+  document.getElementById('moduleTitle').textContent = title;
+  document.getElementById('moduleSub').textContent = desc;
+
+  // Update page header
+  document.getElementById('phEyebrow').textContent = (MODULES.find(m=>m.label===name)||{}).group || 'Module';
+  document.getElementById('phTitle').textContent = title;
+  document.getElementById('phSub').textContent = desc;
+
+  // Re-trigger animation
+  const banner = document.getElementById('moduleBanner');
+  const header = document.getElementById('pageHeader');
+  [banner, header].forEach(el => {
+    if(el) { el.style.animation='none'; void el.offsetWidth; el.style.animation=''; }
+  });
+}
+
+/* ══════════════════════════════════════
+   SIDEBAR COLLAPSE
+══════════════════════════════════════ */
+let sidebarCollapsed = false;
+
+function toggleCollapse() {
+  sidebarCollapsed = !sidebarCollapsed;
+  const sb = document.getElementById('sidebar');
+  if(sidebarCollapsed) {
+    sb.classList.add('collapsed');
+  } else {
+    sb.classList.remove('collapsed');
+  }
+  // Save state
+  localStorage.setItem('jigantoSidebarCollapsed', sidebarCollapsed);
+}
+
+/* ══════════════════════════════════════
+   THEME TOGGLE
+══════════════════════════════════════ */
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  const newTheme = isDark ? 'light' : 'dark';
+  html.setAttribute('data-theme', newTheme);
+
+  // Update toggle checkbox state
+  const toggle = document.getElementById('themeToggle');
+  if(toggle) toggle.checked = !isDark;
+
+  // Update labels
+  const icon  = document.getElementById('themeIcon');
+  const label = document.getElementById('themeLabel');
+  const iconOnly = document.getElementById('themeIconOnly');
+  if(newTheme === 'dark') {
+    if(icon)  icon.textContent  = '🌙';
+    if(label) label.textContent = 'Dark Mode';
+    if(iconOnly) iconOnly.textContent = '🌙';
+  } else {
+    if(icon)  icon.textContent  = '🌤️';
+    if(label) label.textContent = 'Light Mode';
+    if(iconOnly) iconOnly.textContent = '🌤️';
+  }
+
+  localStorage.setItem('jigantoTheme', newTheme);
+}
+
+// Clicking the collapsed icon also triggers the toggle
+document.getElementById('themeIconOnly')?.addEventListener('click', toggleTheme);
+
+/* ══════════════════════════════════════
+   INIT
+══════════════════════════════════════ */
+renderGroupTags();
+renderModuleCards();
+
+// Restore sidebar state
+const savedCollapsed = localStorage.getItem('jigantoSidebarCollapsed');
+if(savedCollapsed === 'true') toggleCollapse();
+
+// Restore theme
+const savedTheme = localStorage.getItem('jigantoTheme');
+if(savedTheme === 'dark') {
+  document.documentElement.setAttribute('data-theme', 'dark');
+  const toggle = document.getElementById('themeToggle');
+  if(toggle) toggle.checked = true;
+  const icon  = document.getElementById('themeIcon');
+  const label = document.getElementById('themeLabel');
+  const iconOnly = document.getElementById('themeIconOnly');
+  if(icon)  icon.textContent  = '🌙';
+  if(label) label.textContent = 'Dark Mode';
+  if(iconOnly) iconOnly.textContent = '🌙';
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,211 @@
+Replit AI Prompt: Build Strategy → Execution Map (Business Management Module)
+Objective
+
+Build a Strategy → Execution Map in the Jiganto Business Management module that provides executives with a single consolidated, interactive view showing how company strategy translates into execution.
+
+The Strategy Map must visually and logically link:
+Strategy → Goals → Objectives → Initiatives → OKRs → KPIs → Execution (Projects / Tasks)
+
+Core Requirements
+1️⃣ Strategy Map Table (Primary View)
+
+Create a table-based strategy map where each column represents a linked strategic entity:
+
+Column Order (Left → Right):
+
+Strategy Theme
+
+Strategic Goal
+
+Objective
+
+Initiative
+
+OKR
+
+KPI
+
+Execution (Projects / Tasks / Boards)
+
+Each row represents a strategy execution chain.
+
+2️⃣ Entity Behavior
+
+Each cell in the table:
+
+Represents a real object, not static text
+
+Is clickable
+
+Opens a right-hand side detail panel (not a new page)
+
+Detail panel must show:
+
+Name & description
+
+Owner
+
+Timeframe (quarter / year)
+
+Status (RAG)
+
+Progress %
+
+Linked documents
+
+Linked risks, issues, dependencies
+
+Linked boards or tasks
+
+3️⃣ Status, Progress & RAG Indicators
+
+Each entity supports:
+
+RAG status
+
+Progress percentage
+
+Trend (Improving / Stable / Deteriorating)
+
+If an upstream item is Red, downstream items display a warning indicator
+
+Hover tooltip explains dependency impact
+
+4️⃣ Grouping & Filtering
+
+Users can:
+
+Group rows by:
+
+Strategy theme
+
+Department
+
+Owner
+
+Quarter / Year
+
+Filter by:
+
+Status
+
+Owner
+
+Strategic priority
+
+Save personal and shared views
+
+5️⃣ Board Integration (Critical)
+
+The Strategy Map must reuse the existing Jiganto board/table system
+
+Column definitions are dynamic
+
+Strategy, Goals, OKRs, etc. must be manageable via boards
+
+Changes made in boards automatically reflect in the Strategy Map
+
+6️⃣ Drill-Down & Navigation
+
+Clicking an Execution item opens:
+
+Project view
+
+Task board
+
+Initiative board
+
+Navigation must stay within Jiganto (no page reloads)
+
+7️⃣ Permissions & Access
+
+Strategy Map respects Jiganto access control
+
+Executives can see full map
+
+Managers see relevant sections
+
+Contributors see execution items only
+
+8️⃣ UX / Design Requirements
+
+Use Monday.com-style table design
+
+No heavy grid lines
+
+Inline editing where appropriate
+
+Sticky column headers
+
+Horizontal scrolling for wide strategy maps
+
+RAG colors and icons clearly visible
+
+9️⃣ Data Model Relationships
+
+Define and enforce these relationships:
+
+Strategy
+  → Goals
+    → Objectives
+      → Initiatives
+        → OKRs
+          → KPIs
+            → Projects / Tasks
+
+
+Each entity supports:
+
+Owner
+
+Status
+
+Progress
+
+Timeframe
+
+Linked documents
+
+Linked risks
+
+10️⃣ Export & Reporting
+
+Export Strategy Map to:
+
+PDF (Exec report)
+
+PowerPoint (Board pack)
+
+Include RAG and commentary in exports
+
+11️⃣ Future-Ready (Do Not Build Now, Design For)
+
+Visual dependency lines between columns
+
+Quarterly planning overlay
+
+AI insights:
+
+Identify misaligned initiatives
+
+Highlight KPIs without execution
+
+Flag strategy risks
+
+Success Criteria
+
+Executives can see how strategy becomes execution in one view
+
+Dependencies and risks are immediately visible
+
+Strategy discussions are data-driven, not anecdotal
+
+The Strategy Map becomes the single source of truth for company execution
+
+Explicit Constraints
+
+Do NOT build this as static documentation
+
+Do NOT duplicate data across modules
+
+Do NOT require navigation away from the map to understand execution status

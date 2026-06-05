@@ -1,0 +1,20 @@
+1. Indent jumps to bottom of page
+indent-task was being called with no mode parameter. From the SVAR bundle source, mode is evaluated as mode === "add" — undefined becomes false, so SVAR was running an outdent (which triggered an internal scroll to the moved item). Fixed: { id, mode: true } for indent.
+
+2. +New Task defaults to bottom
+add-task was passing target but not mode. SVAR ignores a bare target without mode: "after" and falls back to appending. Fixed: now passes both target and mode: "after" when a row is selected.
+
+3. Collapse/Expand icons don't work
+The update payload used { $open: true } — the $ prefix is SVAR's internal computed namespace. The actual editable field is open. Also added skipUndo: true so bulk expand/collapse doesn't flood the undo stack. Now reads live task list from api.getState().tasks rather than the stale ref.
+
+4. Gantt bars disappeared
+start={new Date(...)} and end={new Date(...)} were computed inline on every render, producing new Date objects each time. SVAR detected the prop change and reinitialised the timeline on every render, wiping the bars. Fixed: moved both to module-level constants (GANTT_START / GANTT_END) — created exactly once.
+
+5 & 6. Scrolling broken / zoom headers disappear
+Two issues: the CSS injection targeted .wx-material-theme but we use <Willow> which renders .wx-willow-theme — so the flex height rule never applied and SVAR had no room to render. Also the inner wrapper had overflow: hidden which clipped SVAR's scroll containers and scale headers. Both removed.
+
+7. Inline editing doesn't work
+We were listening to open-task but SVAR fires show-editor for grid-cell editing (confirmed from the bundle). Switched to api.intercept("show-editor", ...) — intercept (vs on) also lets us return false to cancel SVAR's built-in editor popup before our dialog opens.
+
+8. Indent doesn't persist + WBS numbering
+Added an indent-task event listener that runs 50ms after the action (so SVAR's state is settled), reads the task's updated parent, maps it back to a real DB parentTaskId, and saves it via PUT /api/pm/tasks/:id. After saving it calls invalidateQueries so React Query refetches and the WBS codes in ganttTasks are recalculated from the new parent tree automatically.

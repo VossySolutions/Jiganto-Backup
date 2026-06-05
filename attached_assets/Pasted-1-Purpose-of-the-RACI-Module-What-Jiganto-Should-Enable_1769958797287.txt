@@ -1,0 +1,155 @@
+1️⃣ Purpose of the RACI Module (What Jiganto Should Enable)
+The RACI module must allow users to:
+	• Define who is involved in a project by role
+	• Define what activities/deliverables exist
+	• Assign RACI responsibility types per activity
+	• Support multiple project types (ERP, IT, Change)
+	• Be configurable, auditable, and reusable
+
+2️⃣ Core Design Principles (High-Level Requirements)
+	• Role-based, not person-based (people change, roles don’t)
+	• Configurable RACI types (R/A/C/I default, extensible)
+	• Reusable templates (program, project, workstream)
+	• Audit-ready (who changed what, when)
+	• Simple first, powerful later (MVP → Enterprise)
+
+3️⃣ High-Level Functional Requirements
+A. Role Management
+Purpose: Define who can appear in the RACI
+Requirements
+	• Create and manage roles (e.g. Business Lead, SAP FI Consultant)
+	• Categorize roles:
+		○ Business
+		○ IT
+		○ Vendor
+		○ Change / PMO
+	• Support role hierarchies (optional future)
+	• Map roles to:
+		○ Workstreams
+		○ Modules (SAP FI, MM, Oracle SCM)
+		○ Locations (optional)
+Key Attributes
+	• Role ID
+	• Role Name
+	• Role Category
+	• Default RACI permissions (optional)
+
+B. Activity / Deliverable Definition
+Purpose: Define what the RACI applies to
+Requirements
+	• Define activities or deliverables
+	• Group activities by:
+		○ Phase
+		○ Workstream
+		○ Process
+	• Support different levels:
+		○ Phase-level
+		○ Activity-level
+		○ Deliverable-level
+	• Reuse activities across templates
+Key Attributes
+	• Activity ID
+	• Name
+	• Type (Phase / Task / Deliverable)
+	• Associated phase
+
+C. RACI Type Configuration
+Purpose: Define how responsibility is expressed
+Requirements
+	• Default support for:
+		○ Responsible (R)
+		○ Accountable (A)
+		○ Consulted (C)
+		○ Informed (I)
+	• Allow custom types (e.g. S = Support, V = Validate)
+	• Define validation rules (e.g. only one A allowed)
+Key Attributes
+	• RACI Code
+	• Description
+	• Validation rules
+
+D. RACI Matrix Assignment
+Purpose: Assign responsibility clearly and consistently
+Requirements
+	• Assign one or more roles to an activity
+	• Assign RACI type per role per activity
+	• Visual matrix view (rows = activities, columns = roles)
+	• Bulk edit / copy functionality
+	• Highlight conflicts:
+		○ No Accountable
+		○ Too many Accountables
+		○ No Responsible
+Key Attributes
+	• Activity ID
+	• Role ID
+	• RACI Type
+
+E. Templates & Reusability
+Purpose: Avoid rebuilding RACI matrices every time
+Requirements
+	• Create RACI templates by:
+		○ Project type (ERP, IT, Change)
+		○ Methodology (SAP Activate, Oracle OUM)
+	• Clone templates into projects
+	• Allow local project overrides
+	• Version control templates
+Key Attributes
+	• Template ID
+	• Template Type
+	• Version
+	• Status (Draft / Approved)
+
+F. Governance & Approval
+Purpose: Ensure accountability is agreed and controlled
+Requirements
+	• Approval workflow for RACI matrices
+	• Status lifecycle:Draft → Reviewed → Approved → Active → Archived
+	• Lock RACI after approval (optional)
+	• Capture approval evidence
+
+G. Integration Touchpoints
+Purpose: Make RACI actionable, not static
+Requirements
+	• Link RACI activities to:
+		○ Project tasks (Gantt)
+		○ Change activities
+		○ Test cases
+	• Use RACI to:
+		○ Auto-assign task owners
+		○ Drive notifications
+	• Export to Excel / PDF
+
+H. Reporting & Insights
+Purpose: Make responsibility gaps visible
+Requirements
+	• Role responsibility summary
+	• Activity ownership gaps
+	• Overloaded roles
+	• Approval status dashboard
+
+4️⃣ Non-Functional Requirements
+Area	Requirement
+Usability	Spreadsheet-like interaction
+Performance	Handle large matrices (100+ activities × 30+ roles)
+Security	Role-based access control
+Audit	Full change history
+Extensibility	Add new RACI types, roles, templates
+
+5️⃣ MVP vs Future Scope (Important for Replit)
+MVP
+✔ Role management
+✔ Activity definition
+✔ Standard RACI (R/A/C/I)
+✔ Matrix assignment
+✔ Template cloning
+✔ Export
+Future
+	• Role hierarchies
+	• Multi-project RACI
+	• AI-assisted role suggestions
+	• Cross-project responsibility analysis
+	• Integration with HR systems
+
+6️⃣ Suggested Tab Structure for Jiganto
+
+RACI Management├── Roles├── Activities├── RACI Types├── RACI Matrix├── Templates├── Approvals└── Reports

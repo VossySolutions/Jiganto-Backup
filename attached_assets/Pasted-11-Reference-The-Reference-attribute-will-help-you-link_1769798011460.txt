@@ -1,0 +1,11 @@
+11. Reference - The Reference attribute will help you link related items to one another within a board This is especially useful if you need to connect tasks to projects in different folders	
+12. Members - If you want to assign different team members to items in your boards, then the Members attribute is the way to go You can add several people to a single item, too
+13. Vote - By adding the Vote attribute to your items, you give your team members a chance to upvote new ideas, features, or upcoming projects within your folders/boards
+14. Progress - Add a progress bar to all of your items and track how your projects or tasks are progressing in a visual way Moving the progress bar is as easy as clicking on it
+15. Rating - In case you need to rate ideas or your work, the Rating attribute will come in handy Choose your rating symbol, pick a color, and a maximum value from 1 to 10
+16. Email - When working with large databases, having emails of your contacts in a single place is a must Easily add, copy, edit, and send emails from Infinity, in just a few clicks
+17. Phone - Whether you’re creating a client database or a list of your employees, you’ll need their phone numbers Easily copy, edit, call, and send text messages straight from Infinity
+18. Formula - Calculate anything from yearly budgets to estimated costs using the Formula attribute Make simple or advanced calculations between attributes within the same item
+19. Updated At - If you want to keep track of the exact date and time someone edited a certain item in your folder/board, then you’re going to find the Updated At pretty useful for sure	20. Created At - The Created At attribute automatically adds a timestamp to all your items as you or your team members create them The date and time are displayed and can’t be changed	21. Created By - If you want to know who created each item in your folder/board, then the Created By attribute will come in handy Automatically adds the icon and initials of a team member
+22. Button - The Button attribute adds interactive buttons to your items, which can trigger specific actions or automations, enhancing efficiency within your boards
+23. Custom - The Custom ID attribute lets you assign a unique identifier (your own ID) to each item within your board/folder, making it easier to track and reference specific tasks or projects

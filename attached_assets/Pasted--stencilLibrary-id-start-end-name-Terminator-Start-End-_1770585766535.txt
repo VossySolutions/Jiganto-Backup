@@ -1,0 +1,253 @@
+{
+  "stencilLibrary": [
+    {
+      "id": "start_end",
+      "name": "Terminator (Start/End)",
+      "type": "start_end",
+      "shape": "oval",
+      "defaultProperties": {
+        "title": "Start/End",
+        "description": "Represents the start or end of a process",
+        "cost": 0,
+        "duration": 0,
+        "resources": []
+      },
+      "connectable": true,
+      "draggable": true,
+      "resizable": true
+    },
+    {
+      "id": "process_task",
+      "name": "Process / Task",
+      "type": "process",
+      "shape": "rectangle",
+      "defaultProperties": {
+        "title": "Task",
+        "description": "A single activity or process step",
+        "cost": 0,
+        "duration": 0,
+        "resources": [],
+        "automationPercent": 0
+      },
+      "connectable": true,
+      "draggable": true,
+      "resizable": true
+    },
+    {
+      "id": "sub_process",
+      "name": "Sub-Process",
+      "type": "process",
+      "shape": "rectangle-double-lines",
+      "defaultProperties": {
+        "title": "Sub-Process",
+        "description": "A process that can be drilled down into another diagram",
+        "cost": 0,
+        "duration": 0,
+        "resources": [],
+        "automationPercent": 0
+      },
+      "connectable": true,
+      "draggable": true,
+      "resizable": true
+    },
+    {
+      "id": "manual_process",
+      "name": "Manual Process",
+      "type": "process",
+      "shape": "rectangle-slanted-top",
+      "defaultProperties": {
+        "title": "Manual Task",
+        "description": "Task performed manually",
+        "cost": 0,
+        "duration": 0,
+        "resources": [],
+        "automationPercent": 0
+      },
+      "connectable": true,
+      "draggable": true,
+      "resizable": true
+    },
+    {
+      "id": "automated_process",
+      "name": "Automated Process",
+      "type": "process",
+      "shape": "rectangle-gear-icon",
+      "defaultProperties": {
+        "title": "Automated Task",
+        "description": "Task performed automatically by a system",
+        "cost": 0,
+        "duration": 0,
+        "resources": [],
+        "automationPercent": 100
+      },
+      "connectable": true,
+      "draggable": true,
+      "resizable": true
+    },
+    {
+      "id": "decision",
+      "name": "Decision",
+      "type": "decision",
+      "shape": "diamond",
+      "defaultProperties": {
+        "title": "Decision",
+        "description": "Conditional branch (Yes/No or multiple outputs)",
+        "cost": 0,
+        "duration": 0,
+        "resources": [],
+        "outputs": ["Yes", "No"]
+      },
+      "connectable": true,
+      "draggable": true,
+      "resizable": true
+    },
+    {
+      "id": "data_input_output",
+      "name": "Data / Document",
+      "type": "input_output",
+      "shape": "parallelogram",
+      "defaultProperties": {
+        "title": "Data / Document",
+        "description": "Represents input or output data",
+        "cost": 0,
+        "duration": 0,
+        "resources": [],
+        "dataObject": ""
+      },
+      "connectable": true,
+      "draggable": true,
+      "resizable": true
+    },
+    {
+      "id": "database",
+      "name": "Database / Data Storage",
+      "type": "input_output",
+      "shape": "cylinder",
+      "defaultProperties": {
+        "title": "Database",
+        "description": "Stored information in database",
+        "cost": 0,
+        "duration": 0,
+        "resources": [],
+        "dataObject": ""
+      },
+      "connectable": true,
+      "draggable": true,
+      "resizable": true
+    },
+    {
+      "id": "manual_input",
+      "name": "Manual Input",
+      "type": "input_output",
+      "shape": "parallelogram-slanted",
+      "defaultProperties": {
+        "title": "Manual Input",
+        "description": "User-entered data",
+        "cost": 0,
+        "duration": 0,
+        "resources": [],
+        "dataObject": ""
+      },
+      "connectable": true,
+      "draggable": true,
+      "resizable": true
+    },
+    {
+      "id": "connector",
+      "name": "Connector / Flow Line",
+      "type": "flow",
+      "shape": "arrow",
+      "defaultProperties": {
+        "title": "Flow Connector",
+        "description": "Shows sequence or flow between steps",
+        "cost": 0,
+        "duration": 0,
+        "resources": []
+      },
+      "connectable": true,
+      "draggable": false,
+      "resizable": false
+    },
+    {
+      "id": "annotation",
+      "name": "Annotation / Comment",
+      "type": "annotation",
+      "shape": "bracket",
+      "defaultProperties": {
+        "title": "Annotation",
+        "description": "Notes or instructions for process",
+        "cost": 0,
+        "duration": 0,
+        "resources": []
+      },
+      "connectable": false,
+      "draggable": true,
+      "resizable": true
+    },
+    {
+      "id": "cloud_system",
+      "name": "External System / Cloud",
+      "type": "system",
+      "shape": "cloud",
+      "defaultProperties": {
+        "title": "External System",
+        "description": "Represents system outside organization",
+        "cost": 0,
+        "duration": 0,
+        "resources": [],
+        "systemName": ""
+      },
+      "connectable": true,
+      "draggable": true,
+      "resizable": true
+    },
+    {
+      "id": "loop",
+      "name": "Loop / Iteration",
+      "type": "control",
+      "shape": "rectangle-curved-arrow",
+      "defaultProperties": {
+        "title": "Loop",
+        "description": "Repeated activity or iteration",
+        "cost": 0,
+        "duration": 0,
+        "resources": []
+      },
+      "connectable": true,
+      "draggable": true,
+      "resizable": true
+    },
+    {
+      "id": "swimlane_pool",
+      "name": "Pool / Swimlane",
+      "type": "swimlane",
+      "shape": "rectangle-swimlane",
+      "defaultProperties": {
+        "title": "Pool / Department",
+        "description": "Represents a department or function",
+        "cost": 0,
+        "duration": 0,
+        "resources": []
+      },
+      "connectable": false,
+      "draggable": true,
+      "resizable": true
+    },
+    {
+      "id": "swimlane_lane",
+      "name": "Lane",
+      "type": "swimlane",
+      "shape": "lane",
+      "defaultProperties": {
+        "title": "Lane / Role",
+        "description": "Subdivision within pool, representing role or team",
+        "cost": 0,
+        "duration": 0,
+        "resources": []
+      },
+      "connectable": false,
+      "draggable": true,
+      "resizable": true
+    }
+  ]
+}

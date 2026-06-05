@@ -1,0 +1,125 @@
+Jiganto Document Editor – Feature Specification
+(Confluence-like Rich Text Editor)
+1. Core Text Editing
+Plain text input
+Undo / Redo
+Cut / Copy / Paste
+Select all
+Find & Replace
+Keyboard shortcuts (Cmd/Ctrl based)
+Cursor positioning & multi-cursor selection (optional advanced)
+2. Text Formatting
+Bold
+Italic
+Underline
+Strikethrough
+Inline code (code)
+Subscript
+Superscript
+Text color
+Background highlight color
+Clear formatting
+3. Headings & Structure
+Heading 1 (H1)
+Heading 2 (H2)
+Heading 3 (H3)
+Heading 4 (H4)
+Heading 5 (H5)
+Heading 6 (H6)
+Paragraph
+Blockquote
+Horizontal divider / rule
+4. Lists
+Bulleted list
+Numbered list
+Checklist / task list (with checkboxes)
+Nested lists (multi-level)
+Indent / Outdent list items
+5. Tables
+Insert table (rows x columns)
+Add / delete rows
+Add / delete columns
+Merge cells
+Split cells
+Table header row
+Cell background color
+Cell text alignment
+Resize columns
+Sort table rows (optional)
+6. Links & References
+Insert hyperlink
+Edit / remove link
+Open link in new tab
+Anchor links within document
+Mention users (@username)
+Mention pages (@PageName)
+7. Media Embeds
+Insert image (upload or URL)
+Resize image
+Align image (left, center, right)
+Caption for images
+Embed video (YouTube, Vimeo, etc.)
+Embed iframe content
+Embed files (PDF, DOC, XLS)
+Drag & drop media support
+8. Code & Technical Content
+Code block
+Syntax highlighting
+Inline code
+Copy code button
+Expand / collapse code block
+Language selector for code block
+9. Advanced Formatting Blocks (Confluence-style)
+Info panel
+Warning panel
+Error panel
+Success panel
+Callout / note block
+Expandable / collapsible section (accordion)
+Quote block
+10. Layout & Page Structure
+Multi-column layout (2, 3 columns)
+Section containers
+Content alignment (left, center, right, justify)
+Page width toggle (fixed / full width)
+11. Collaboration Features
+Real-time multi-user editing
+Cursor presence indicators
+Live typing indicators
+Inline comments
+Resolve / reopen comments
+Version history
+Change tracking
+Restore previous versions
+12. Document Management
+Auto-save
+Manual save
+Draft / published states
+Document templates
+Duplicate document
+Export (PDF, HTML, Markdown)
+Import (Markdown, HTML, DOCX)
+Page hierarchy (parent / child pages)
+13. Permissions & Access
+View permissions
+Edit permissions
+Comment-only access
+Admin / owner role
+Page locking
+14. Search & Navigation
+Full-document search
+Highlight search results
+Table of contents (auto-generated from headings)
+Collapsible TOC sidebar
+15. Accessibility
+Keyboard-only navigation
+Screen reader support
+ARIA labels
+High-contrast mode
+Font size adjustment
+16. Performance & UX
+Fast rendering for large documents
+Lazy loading of media
+Offline editing (sync on reconnect)
+Mobile-friendly editing
+Touch support

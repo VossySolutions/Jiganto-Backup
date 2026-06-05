@@ -1,0 +1,19 @@
+Here's a complete walkthrough of what's been redesigned and why every decision was made.
+
+What's fundamentally different
+The core problem you identified — "I want to click a strategy and see only its sub-components" — is now solved through three interconnected mechanisms:
+1. Strategy Focus View (the new centrepiece)
+The left panel lists all five strategies. Click any one and the right panel instantly shows the complete cascade for that strategy only — Goals → Objectives → Initiatives → OKRs → KPIs → Execution — all linked to that single strategy. Each layer shows its own RAG summary, can be collapsed, and every row shows owner, progress bar, date and RAG dot in a clean scannable line. This is the view you'll use most in operational reviews.
+2. Cascade View (improved existing view)
+The existing cascade now has a "View full cascade →" link on every strategy card that jumps you straight into Strategy Focus view for that item. The cascade also respects both the strategy filter and the RAG filter simultaneously, so you can ask "show me everything At Risk across all layers linked to Platform Vision 2026" in two clicks.
+3. Flow View (improved existing view)
+The horizontal column layout now properly filters by both strategy and RAG status. Clicking any item in any column jumps to Strategy Focus for its parent strategy.
+
+The layer strip at the top
+The seven count pills (Strategy · Goals · Objectives · Initiatives · OKRs · KPIs · Execution) now dynamically update when you're in strategy-focus mode — so the numbers reflect only what belongs to the selected strategy, not the whole portfolio. The RAG dots inside each pill give an instant health pulse per layer.
+
+RAG filtering
+The toolbar chips (All · On Track · At Risk · Behind) work globally across all three views. Combined with strategy focus, this answers questions like "show me everything Behind on the Platform Vision strategy" — which is exactly the information a board review or steering committee needs.
+
+Design improvements over the original
+The original had three problems beyond the cascade-linking issue. First, all strategy cards looked identical regardless of layer — the layer identity was only communicated by a small text header. The redesign gives each layer a consistent colour identity with a coloured left border on every card, making the layer instantly obvious even when scrolling. Second, owner information was displayed inconsistently — sometimes an avatar, sometimes just a name percentage, no dates visible at all. Every item now shows avatar, full name, target date, progress bar with percentage, and RAG badge in a consistent layout. Third, the Flow view columns had no visual hierarchy — items looked like a flat list without connection to strategy. The left border colouring and the "click to focus" interaction create the visual and behavioural connection.

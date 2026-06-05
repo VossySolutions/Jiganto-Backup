@@ -1,0 +1,213 @@
+Replit AI Build Prompt: Jiganto Document Management Module
+Goal
+
+Build a full-featured Document Management System (DMS) for Jiganto, similar to Confluence, that allows teams to create, organize, share, and collaborate on documents. The system must integrate:
+
+Folder & tag-based storage
+
+Version control
+
+Module linking
+
+Collaboration & knowledge sharing
+
+Access control & sharing permissions
+
+Notifications
+
+AI-powered search and insights
+
+Future workflow and e-signature features
+
+Core Module Requirements
+1. Storage & Organization
+
+User-defined hierarchical folders
+
+Tags for classification and search
+
+Drag-and-drop document organization
+
+Favorites / pinned documents
+
+Breadcrumb navigation for folder hierarchy
+
+2. Document Version Control
+
+Full version history
+
+Compare versions (highlight changes)
+
+Rollback to previous versions
+
+Track version ownership and timestamps
+
+3. Access Control & Sharing
+
+Role-based permissions: Read, Write, Share, Admin
+
+Share documents with individuals, teams, or external collaborators
+
+Track who has access and when
+
+Apply access control globally and per document/folder
+
+Integration with Jiganto notification system to alert users on changes
+
+4. Module Integration
+
+Link documents to any module:
+
+Projects
+
+CRM
+
+Business Management
+
+Boards
+
+Workflows
+
+Automatically update linked objects when documents change
+
+5. Collaboration & Knowledge Sharing
+
+Inline comments and discussion threads
+
+Real-time activity feed of document updates
+
+Support collaborative editing (future real-time multi-user editing)
+
+Templates for standard documents (SOPs, policies, contracts)
+
+Wiki-style knowledge base linking documents together
+
+6. Import & Export
+
+Import from Word, PDF, and other common formats
+
+Export to PDF, Word, or supported formats
+
+Bulk import/export support
+
+7. Search & Discovery
+
+Full-text search
+
+Tag-based filtering
+
+Semantic search powered by AI
+
+AI recommendations for related documents
+
+AI Features
+
+Document summarization
+
+Auto-tagging for metadata classification
+
+Semantic search across all documents
+
+Contract/Policy insights (identify clauses, risks, expiry)
+
+AI-powered search suggestions and recommendations
+
+Future Scope
+
+Workflow-Based Document Approvals
+
+Multi-step internal or external approval workflows
+
+Trigger notifications for approvals or pending tasks
+
+eSignature Integration
+
+Support for DocuSign, Adobe Sign, or native e-signatures
+
+OCR & Text Recognition
+
+Scan PDFs/images to extract searchable text
+
+Enable semantic search on scanned documents
+
+Compliance & Expiry Tracking
+
+Document retention policies
+
+Automatic expiry notifications
+
+Compliance audit logs
+
+Real-Time Collaboration
+
+Multiple users editing simultaneously
+
+Track changes per user
+
+Comment threads live-sync
+
+Role-Based Document Access
+
+Restrict documents/folders by roles
+
+Track activity by role
+
+Audit & Activity Tracking
+
+Complete audit logs of edits, shares, and approvals
+
+Track historical access and interactions
+
+Templates & Knowledge Base
+
+Predefined templates for common documents
+
+Interlink documents to create wiki-style knowledge base
+
+Optional Advanced Features
+
+Embed documents in Boards or Workflows
+
+AI-assisted document categorization
+
+Cloud storage integrations (Google Drive, OneDrive)
+
+Automated retention, archiving, and analytics
+
+UI / UX Considerations
+
+Document Folder Explorer on the left for navigation
+
+Notification icon for document updates or approvals
+
+Workflow icon on each document page to trigger approvals or automations
+
+Clear version history UI
+
+Inline comments and collaborative editing panel
+
+Data Model (Suggested)
+
+Document: id, name, type, owner, tags, linked_objects, version_history
+
+Folder: id, name, parent_folder_id, owner
+
+Workflow: id, document_id, trigger, condition, actions
+
+Access Control: document_id, user_id, role (Read/Write/Share/Admin)
+
+AuditLog: document_id, user_id, action, timestamp
+
+Templates: id, name, type, default_fields
+
+Success Criteria
+
+Users can create, organize, link, and share documents easily
+
+Permissions and sharing are fully controlled per document/folder
+
+Boards, workflows, and notifications integrate seamlessly with documents
+
+AI features enhance document search, insights, and tagging
+
+System is modular and scalable for future features like e-signatures and OCR

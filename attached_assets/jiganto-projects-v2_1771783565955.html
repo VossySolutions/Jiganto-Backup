@@ -1,0 +1,2269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jiganto – Projects</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --blue: #2563eb;
+  --blue-light: #dbeafe;
+  --blue-mid: #3b82f6;
+  --teal: #0891b2;
+  --green: #16a34a;
+  --green-light: #dcfce7;
+  --orange: #ea580c;
+  --orange-light: #ffedd5;
+  --purple: #7c3aed;
+  --purple-light: #ede9fe;
+  --red: #dc2626;
+  --red-light: #fee2e2;
+  --yellow: #ca8a04;
+  --yellow-light: #fef9c3;
+  --cyan: #0891b2;
+  --gray-50: #f8fafc;
+  --gray-100: #f1f5f9;
+  --gray-150: #edf2f7;
+  --gray-200: #e2e8f0;
+  --gray-300: #cbd5e1;
+  --gray-400: #94a3b8;
+  --gray-500: #64748b;
+  --gray-600: #475569;
+  --gray-700: #334155;
+  --gray-800: #1e293b;
+  --gray-900: #0f172a;
+  --sidebar-w: 220px;
+  --header-h: 54px;
+  --font: 'Outfit', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.07);
+  --shadow: 0 4px 16px rgba(0,0,0,.08);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,.14);
+  --accent: var(--blue);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html,body { height: 100%; }
+body { font-family: var(--font); background: var(--gray-50); color: var(--gray-800); font-size: 14px; display: flex; overflow: hidden; }
+
+/* ══ SIDEBAR ══ */
+.sidebar {
+  width: var(--sidebar-w);
+  background: #fff;
+  border-right: 1px solid var(--gray-200);
+  display: flex; flex-direction: column;
+  flex-shrink: 0; z-index: 20;
+  transition: width .2s;
+}
+.sidebar-logo {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 16px;
+  height: var(--header-h);
+  border-bottom: 1px solid var(--gray-100);
+  flex-shrink: 0;
+}
+.logo-icon {
+  width: 30px; height: 30px;
+  background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 800; font-size: 13px; letter-spacing: -1px;
+  flex-shrink: 0;
+}
+.logo-text { font-weight: 700; font-size: 16px; color: var(--gray-900); letter-spacing: -.5px; }
+.logo-tag { font-size: 9px; color: var(--gray-400); font-weight: 400; letter-spacing: .5px; text-transform: uppercase; }
+
+.org-pill {
+  margin: 8px 10px;
+  padding: 6px 10px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  font-size: 12px; font-weight: 500; color: var(--gray-600);
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  transition: background .12s;
+}
+.org-pill:hover { background: var(--gray-100); }
+.org-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+.org-caret { margin-left: auto; color: var(--gray-400); font-size: 10px; }
+
+.nav-scroll { overflow-y: auto; flex: 1; padding-bottom: 8px; }
+.nav-section { padding: 10px 0 4px; }
+.nav-label {
+  font-size: 9.5px; font-weight: 700; color: var(--gray-400);
+  letter-spacing: .8px; text-transform: uppercase;
+  padding: 0 14px 5px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 14px;
+  font-size: 13px; font-weight: 400; color: var(--gray-600);
+  cursor: pointer; border-radius: 0;
+  transition: background .1s, color .1s;
+  position: relative; user-select: none;
+}
+.nav-item:hover { background: var(--gray-50); color: var(--gray-800); }
+.nav-item.active { background: var(--blue-light); color: var(--blue); font-weight: 600; }
+.nav-item.active::before {
+  content: ''; position: absolute; left: 0; top: 5px; bottom: 5px;
+  width: 3px; background: var(--blue); border-radius: 0 3px 3px 0;
+}
+.nav-icon { width: 17px; text-align: center; font-size: 14px; flex-shrink: 0; opacity: .8; }
+.nav-item.active .nav-icon { opacity: 1; }
+.nav-badge {
+  margin-left: auto; background: var(--blue); color: #fff;
+  font-size: 10px; font-weight: 700; padding: 1px 6px;
+  border-radius: 20px; min-width: 18px; text-align: center;
+}
+.nav-badge.orange { background: var(--orange); }
+.nav-badge.green { background: var(--green); }
+
+.sidebar-bottom { flex-shrink: 0; border-top: 1px solid var(--gray-100); padding: 8px 10px; }
+.user-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 6px; border-radius: 7px; cursor: pointer;
+  transition: background .12s;
+}
+.user-row:hover { background: var(--gray-50); }
+.user-av {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--blue) 0%, var(--purple) 100%);
+  color: #fff; font-weight: 700; font-size: 11px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.user-name { font-size: 12px; font-weight: 600; color: var(--gray-700); }
+.user-role { font-size: 10px; color: var(--gray-400); }
+
+/* ══ MAIN ══ */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+/* ══ TOP BAR ══ */
+.topbar {
+  height: var(--header-h);
+  background: #fff;
+  border-bottom: 1px solid var(--gray-200);
+  display: flex; align-items: center;
+  padding: 0 20px; gap: 10px;
+  flex-shrink: 0; z-index: 10;
+}
+.breadcrumb { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; }
+.bc-item { font-size: 13px; color: var(--gray-500); cursor: pointer; white-space: nowrap; transition: color .1s; }
+.bc-item:hover { color: var(--blue); }
+.bc-item.current { color: var(--gray-900); font-weight: 600; cursor: default; }
+.bc-sep { color: var(--gray-300); font-size: 14px; }
+.topbar-actions { display: flex; gap: 7px; align-items: center; flex-shrink: 0; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 7px;
+  font-family: var(--font); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .15s; border: none; white-space: nowrap;
+}
+.btn-primary { background: var(--blue); color: #fff; }
+.btn-primary:hover { background: #1d53d4; box-shadow: 0 4px 12px rgba(37,99,235,.35); }
+.btn-ghost { background: transparent; color: var(--gray-600); border: 1px solid var(--gray-200); }
+.btn-ghost:hover { background: var(--gray-50); border-color: var(--gray-300); }
+.btn-icon {
+  width: 32px; height: 32px; padding: 0; justify-content: center;
+  border-radius: 7px; background: transparent; border: 1px solid var(--gray-200);
+  color: var(--gray-500); cursor: pointer; display: inline-flex; align-items: center;
+  font-size: 14px; transition: all .12s; font-family: var(--font);
+}
+.btn-icon:hover { background: var(--gray-50); color: var(--gray-700); }
+.search-box {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--gray-50); border: 1px solid var(--gray-200);
+  border-radius: 7px; padding: 6px 12px;
+  font-size: 13px; color: var(--gray-500); cursor: text; min-width: 180px;
+}
+.search-box input {
+  border: none; background: transparent; outline: none;
+  font-family: var(--font); font-size: 13px; color: var(--gray-700);
+  width: 100%;
+}
+.search-box input::placeholder { color: var(--gray-400); }
+
+/* ══ CONTENT ══ */
+.content { flex: 1; overflow: hidden; position: relative; }
+.view { position: absolute; inset: 0; overflow-y: auto; padding: 24px; display: none; }
+.view.active { display: block; }
+.view-noscroll { padding: 0; overflow: hidden; display: none; }
+.view-noscroll.active { display: flex; flex-direction: column; }
+
+/* ══ DASHBOARD VIEW ══ */
+.dash-stats {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px;
+  margin-bottom: 22px;
+}
+.stat-card {
+  background: #fff; border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg); padding: 16px 18px;
+  position: relative; overflow: hidden; cursor: pointer;
+  transition: box-shadow .15s, transform .15s;
+}
+.stat-card:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+.stat-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px; background: var(--c, var(--blue));
+}
+.stat-val { font-size: 26px; font-weight: 800; color: var(--gray-900); letter-spacing: -1px; }
+.stat-lbl { font-size: 11px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+.stat-sub { font-size: 11px; color: var(--gray-400); margin-top: 4px; }
+.stat-icon { position: absolute; right: 14px; top: 14px; font-size: 20px; opacity: .25; }
+
+/* filter bar */
+.filter-bar {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 16px; flex-wrap: wrap;
+}
+.filter-label { font-size: 12px; font-weight: 600; color: var(--gray-500); white-space: nowrap; }
+.filter-chip {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 6px;
+  font-size: 12px; font-weight: 500; color: var(--gray-600);
+  background: #fff; border: 1px solid var(--gray-200);
+  cursor: pointer; transition: all .12s; white-space: nowrap;
+}
+.filter-chip:hover { background: var(--gray-50); border-color: var(--gray-300); }
+.filter-chip.active { background: var(--blue-light); color: var(--blue); border-color: #93c5fd; }
+select.filter-select {
+  padding: 5px 28px 5px 10px;
+  border-radius: 6px; font-family: var(--font); font-size: 12px;
+  font-weight: 500; color: var(--gray-700);
+  background: #fff; border: 1px solid var(--gray-200);
+  cursor: pointer; outline: none; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 9px center;
+  min-width: 130px;
+}
+.filter-sep { flex: 1; }
+.view-toggle { display: flex; background: var(--gray-100); border-radius: 7px; padding: 3px; gap: 2px; }
+.view-btn {
+  padding: 4px 10px; border-radius: 5px; font-size: 12px; font-weight: 600;
+  color: var(--gray-500); cursor: pointer; transition: all .12s; border: none;
+  background: transparent; font-family: var(--font);
+}
+.view-btn.active { background: #fff; color: var(--gray-800); box-shadow: var(--shadow-sm); }
+
+/* project table */
+.proj-table-wrap {
+  background: #fff; border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+.proj-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.proj-table thead tr { background: var(--gray-50); }
+.proj-table th {
+  padding: 10px 14px; text-align: left;
+  font-size: 11px; font-weight: 700; color: var(--gray-500);
+  text-transform: uppercase; letter-spacing: .5px;
+  border-bottom: 1px solid var(--gray-200);
+  white-space: nowrap; cursor: pointer; user-select: none;
+}
+.proj-table th:hover { color: var(--gray-700); }
+.proj-table th .sort-icon { opacity: .4; margin-left: 3px; }
+.proj-table td {
+  padding: 10px 14px; border-bottom: 1px solid var(--gray-100);
+  vertical-align: middle;
+}
+.proj-table tr:last-child td { border-bottom: none; }
+.proj-table tbody tr { transition: background .1s; cursor: pointer; }
+.proj-table tbody tr:hover { background: var(--gray-50); }
+.proj-name-cell { display: flex; align-items: center; gap: 9px; }
+.proj-color-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.proj-name { font-weight: 600; color: var(--gray-800); }
+.proj-name:hover { color: var(--blue); }
+.proj-desc { font-size: 11px; color: var(--gray-400); margin-top: 1px; }
+
+.type-badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 8px; border-radius: 20px;
+  font-size: 11px; font-weight: 600;
+  white-space: nowrap;
+}
+.status-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 20px;
+  font-size: 11px; font-weight: 600;
+  white-space: nowrap;
+}
+.status-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+.progress-cell { min-width: 100px; }
+.progress-bar-wrap { background: var(--gray-100); border-radius: 4px; height: 6px; }
+.progress-bar-fill { height: 100%; border-radius: 4px; background: var(--blue); transition: width .3s; }
+
+.av-stack { display: flex; }
+.av-item {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; color: #fff;
+  border: 2px solid #fff; margin-left: -7px; flex-shrink: 0;
+}
+.av-item:first-child { margin-left: 0; }
+.av-more {
+  background: var(--gray-200); color: var(--gray-600); font-size: 8px;
+}
+
+.tool-pills { display: flex; gap: 4px; flex-wrap: wrap; }
+.tool-pill {
+  padding: 2px 7px; background: var(--gray-100);
+  border-radius: 4px; font-size: 10px; font-weight: 600;
+  color: var(--gray-500); white-space: nowrap;
+}
+
+/* table pagination / show-all */
+.table-footer {
+  padding: 12px 14px; border-top: 1px solid var(--gray-200);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--gray-50);
+}
+.table-info { font-size: 12px; color: var(--gray-500); }
+.pagination { display: flex; gap: 4px; align-items: center; }
+.page-btn {
+  width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--gray-200);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  background: #fff; color: var(--gray-600); transition: all .12s;
+  font-family: var(--font);
+}
+.page-btn:hover { background: var(--gray-50); }
+.page-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+/* card grid view */
+.proj-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.proj-card {
+  background: #fff; border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg); padding: 18px;
+  cursor: pointer; transition: box-shadow .15s, transform .15s;
+  position: relative; overflow: hidden;
+}
+.proj-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+.proj-card-top {
+  display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px;
+}
+.proj-card-name { font-size: 14px; font-weight: 700; color: var(--gray-800); margin-bottom: 3px; }
+.proj-card-meta { font-size: 11px; color: var(--gray-400); }
+.proj-card-progress { margin: 12px 0 10px; }
+.proj-card-progress-lbl { display: flex; justify-content: space-between; font-size: 11px; color: var(--gray-500); margin-bottom: 5px; }
+.proj-card-footer { display: flex; align-items: center; justify-content: space-between; }
+
+/* ══ NEW PROJECT WIZARD ══ */
+.wizard-wrap { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.wizard-sidebar {
+  width: 260px; background: #fff; border-right: 1px solid var(--gray-200);
+  padding: 28px 20px; flex-shrink: 0;
+}
+.wizard-title { font-size: 15px; font-weight: 800; color: var(--gray-900); margin-bottom: 6px; }
+.wizard-sub { font-size: 12px; color: var(--gray-500); line-height: 1.6; margin-bottom: 28px; }
+.steps { display: flex; flex-direction: column; gap: 0; }
+.step-row { display: flex; align-items: flex-start; gap: 12px; padding: 0 0 24px; position: relative; }
+.step-row:not(:last-child)::after {
+  content: ''; position: absolute;
+  left: 15px; top: 32px; bottom: 0; width: 2px;
+  background: var(--gray-200);
+}
+.step-row.done::after { background: var(--blue); }
+.step-num {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; border: 2px solid var(--gray-300);
+  color: var(--gray-500); background: #fff; position: relative; z-index: 1;
+  transition: all .2s;
+}
+.step-row.active .step-num { border-color: var(--blue); color: var(--blue); background: var(--blue-light); }
+.step-row.done .step-num { border-color: var(--blue); color: #fff; background: var(--blue); }
+.step-info {}
+.step-label { font-size: 13px; font-weight: 700; color: var(--gray-700); }
+.step-row.active .step-label { color: var(--blue); }
+.step-desc { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+
+.wizard-body {
+  flex: 1; overflow-y: auto; padding: 28px 32px;
+  background: var(--gray-50);
+}
+.wizard-panel { display: none; }
+.wizard-panel.active { display: block; }
+
+.panel-title { font-size: 18px; font-weight: 800; color: var(--gray-900); margin-bottom: 4px; }
+.panel-sub { font-size: 13px; color: var(--gray-500); margin-bottom: 24px; }
+
+/* Type cards */
+.type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.type-card {
+  background: #fff; border: 2px solid var(--gray-200);
+  border-radius: var(--radius-lg); padding: 18px 14px;
+  cursor: pointer; transition: all .15s; text-align: center;
+}
+.type-card:hover { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.08); }
+.type-card.selected { border-color: var(--blue); background: var(--blue-light); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+.type-icon { font-size: 26px; margin-bottom: 8px; }
+.type-name { font-size: 13px; font-weight: 700; color: var(--gray-700); }
+.type-card.selected .type-name { color: var(--blue); }
+.type-desc { font-size: 10px; color: var(--gray-400); margin-top: 3px; line-height: 1.4; }
+
+.more-types-toggle {
+  font-size: 12px; font-weight: 600; color: var(--blue);
+  cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+  margin-bottom: 20px; background: none; border: none;
+  font-family: var(--font); padding: 4px 0;
+}
+.more-types-toggle:hover { text-decoration: underline; }
+
+/* Details form */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 20px; margin-bottom: 20px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group.full { grid-column: 1 / -1; }
+.form-label { font-size: 12px; font-weight: 700; color: var(--gray-600); text-transform: uppercase; letter-spacing: .4px; }
+.form-input, .form-select, .form-textarea {
+  padding: 8px 12px; border-radius: 7px;
+  border: 1.5px solid var(--gray-200); background: #fff;
+  font-family: var(--font); font-size: 13px; color: var(--gray-800);
+  outline: none; transition: border-color .15s;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+}
+.form-textarea { resize: vertical; min-height: 80px; }
+.form-select { appearance: none; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+  padding-right: 28px;
+}
+
+/* Tools grid */
+.tools-section { margin-bottom: 22px; }
+.tools-section-title {
+  font-size: 11px; font-weight: 700; color: var(--gray-500);
+  text-transform: uppercase; letter-spacing: .6px;
+  margin-bottom: 10px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--gray-200);
+}
+.tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.tool-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px;
+  background: #fff; border: 1.5px solid var(--gray-200);
+  cursor: pointer; transition: all .15s;
+}
+.tool-card:hover { border-color: var(--gray-300); background: var(--gray-50); }
+.tool-card.selected { border-color: var(--blue); background: var(--blue-light); }
+.tool-card-icon { font-size: 18px; flex-shrink: 0; }
+.tool-card-info {}
+.tool-card-name { font-size: 12px; font-weight: 700; color: var(--gray-700); }
+.tool-card.selected .tool-card-name { color: var(--blue); }
+.tool-card-hint { font-size: 10px; color: var(--gray-400); }
+.tool-check {
+  margin-left: auto; width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--gray-300); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: transparent; transition: all .15s;
+}
+.tool-card.selected .tool-check { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+.wizard-footer {
+  margin-top: 28px; padding-top: 20px;
+  border-top: 1px solid var(--gray-200);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.wizard-footer-left { font-size: 12px; color: var(--gray-400); }
+.wizard-footer-right { display: flex; gap: 10px; }
+
+/* ══ PROJECT VIEW ══ */
+.proj-view-header {
+  background: #fff; border-bottom: 1px solid var(--gray-200);
+  padding: 14px 20px; flex-shrink: 0;
+}
+.proj-view-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.proj-view-name { font-size: 18px; font-weight: 800; color: var(--gray-900); letter-spacing: -.3px; }
+.proj-view-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.proj-meta-item { font-size: 12px; color: var(--gray-500); display: flex; align-items: center; gap: 4px; }
+.proj-meta-item strong { color: var(--gray-700); }
+
+/* health badges */
+.health-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 700;
+}
+.health-green { background: var(--green-light); color: var(--green); }
+.health-amber { background: var(--orange-light); color: var(--orange); }
+.health-red { background: var(--red-light); color: var(--red); }
+.health-blue { background: var(--blue-light); color: var(--blue); }
+
+/* tool tabs */
+.tool-tabs-bar {
+  background: #fff; border-bottom: 1px solid var(--gray-200);
+  display: flex; align-items: center;
+  padding: 0 20px; gap: 0; flex-shrink: 0; overflow-x: auto;
+  scrollbar-width: none; position: relative;
+}
+.tool-tabs-bar::-webkit-scrollbar { display: none; }
+.tool-tab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 11px 14px; font-size: 13px; font-weight: 500;
+  color: var(--gray-500); cursor: pointer; white-space: nowrap;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color .12s, border-color .12s;
+  user-select: none;
+}
+.tool-tab:hover { color: var(--gray-700); }
+.tool-tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 700; }
+.tool-tab-icon { font-size: 14px; }
+.tool-tab-badge { font-size: 9px; background: var(--gray-200); color: var(--gray-600); padding: 1px 5px; border-radius: 10px; font-weight: 700; }
+.tool-tab.active .tool-tab-badge { background: var(--blue-light); color: var(--blue); }
+.tabs-expand-btn {
+  margin-left: auto; font-size: 12px; font-weight: 600; color: var(--blue);
+  cursor: pointer; white-space: nowrap; padding: 11px 0 11px 14px;
+  border-left: 1px solid var(--gray-200); flex-shrink: 0;
+  background: none; border-top: none; border-right: none; border-bottom: none;
+  font-family: var(--font);
+}
+.tabs-expand-btn:hover { text-decoration: underline; }
+.expand-page-btn {
+  padding: 4px 10px; font-size: 11px; font-weight: 600;
+  color: var(--gray-500); background: var(--gray-100);
+  border: 1px solid var(--gray-200); border-radius: 5px;
+  cursor: pointer; margin-left: 8px; transition: all .12s;
+  font-family: var(--font); white-space: nowrap;
+}
+.expand-page-btn:hover { background: var(--gray-200); color: var(--gray-700); }
+
+/* tool content area */
+.tool-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.tab-pane { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+.tab-pane.active { display: flex; }
+.tab-pane-scroll { flex: 1; overflow-y: auto; padding: 20px; }
+
+/* Gantt */
+.gantt-wrap { overflow-x: auto; }
+.gantt-header {
+  display: flex; background: var(--gray-50); border-bottom: 1px solid var(--gray-200);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.gantt-tasks-col { width: 260px; flex-shrink: 0; padding: 8px 12px; font-size: 11px; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; }
+.gantt-timeline { flex: 1; display: flex; }
+.gantt-month { flex: 1; text-align: center; font-size: 11px; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: .4px; padding: 8px 4px; border-left: 1px solid var(--gray-200); }
+.gantt-row {
+  display: flex; border-bottom: 1px solid var(--gray-100); align-items: center;
+  min-height: 40px;
+}
+.gantt-row:last-child { border-bottom: none; }
+.gantt-row:hover { background: var(--gray-50); }
+.gantt-task-info { width: 260px; flex-shrink: 0; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.gantt-task-name { font-size: 12px; font-weight: 600; color: var(--gray-700); }
+.gantt-task-meta { font-size: 10px; color: var(--gray-400); }
+.gantt-bars { flex: 1; position: relative; height: 40px; }
+.gantt-bar {
+  position: absolute; height: 22px; top: 9px;
+  border-radius: 4px; display: flex; align-items: center;
+  padding: 0 8px; font-size: 10px; font-weight: 600; color: rgba(255,255,255,.9);
+  white-space: nowrap; overflow: hidden;
+}
+
+/* Scrum Board */
+.board-wrap { display: flex; gap: 14px; padding: 20px; overflow-x: auto; min-height: 0; align-items: flex-start; }
+.board-col { min-width: 240px; max-width: 280px; flex-shrink: 0; }
+.board-col-header {
+  padding: 9px 12px; border-radius: 8px 8px 0 0;
+  font-size: 12px; font-weight: 700; color: var(--gray-700);
+  display: flex; align-items: center; gap: 7px;
+  border: 1px solid var(--gray-200); border-bottom: none;
+}
+.board-count { margin-left: auto; background: rgba(0,0,0,.1); padding: 1px 7px; border-radius: 10px; font-size: 10px; }
+.board-cards { border: 1px solid var(--gray-200); border-top: none; border-radius: 0 0 8px 8px; min-height: 80px; }
+.board-card {
+  background: #fff; border-bottom: 1px solid var(--gray-100);
+  padding: 10px 12px; cursor: pointer; transition: background .1s;
+}
+.board-card:last-child { border-bottom: none; border-radius: 0 0 8px 8px; }
+.board-card:hover { background: var(--gray-50); }
+.card-title { font-size: 12px; font-weight: 600; color: var(--gray-700); margin-bottom: 6px; line-height: 1.4; }
+.card-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+.tag { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; }
+.card-footer { display: flex; align-items: center; justify-content: space-between; }
+.card-date { font-size: 10px; color: var(--gray-400); font-family: var(--mono); }
+.card-date.overdue { color: var(--red); }
+
+/* RAID logs */
+.log-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.log-table th { padding: 9px 12px; text-align: left; font-size: 11px; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: .4px; border-bottom: 2px solid var(--gray-200); background: var(--gray-50); }
+.log-table td { padding: 10px 12px; border-bottom: 1px solid var(--gray-100); vertical-align: top; }
+.log-table tr:hover td { background: var(--gray-50); }
+.severity-badge { display: inline-flex; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+
+/* Finance */
+.finance-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+
+/* Dashboard panel */
+.health-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+.health-card { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 16px; text-align: center; }
+.health-score { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+.health-label { font-size: 11px; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; margin-top: 4px; }
+
+/* ══ FULL SCREEN MODE ══ */
+.fullscreen-overlay {
+  position: fixed; inset: 0; background: #fff; z-index: 1000;
+  display: none; flex-direction: column;
+}
+.fullscreen-overlay.active { display: flex; }
+.fullscreen-header {
+  height: 52px; background: var(--gray-900);
+  display: flex; align-items: center; padding: 0 20px; gap: 14px;
+  flex-shrink: 0;
+}
+.fullscreen-title { font-size: 14px; font-weight: 700; color: #fff; flex: 1; }
+.fullscreen-badge { font-size: 11px; font-weight: 600; background: rgba(255,255,255,.15); color: rgba(255,255,255,.8); padding: 3px 10px; border-radius: 20px; }
+.fullscreen-close {
+  width: 30px; height: 30px; border-radius: 6px; background: rgba(255,255,255,.1);
+  border: none; color: rgba(255,255,255,.7); font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s; font-family: var(--font);
+}
+.fullscreen-close:hover { background: rgba(255,255,255,.2); color: #fff; }
+.fullscreen-body { flex: 1; overflow: auto; padding: 24px; background: var(--gray-50); }
+
+/* ══ MODAL ══ */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(15,23,42,.5);
+  display: none; align-items: center; justify-content: center;
+  z-index: 900; backdrop-filter: blur(2px);
+}
+.modal-backdrop.active { display: flex; }
+.modal {
+  background: #fff; border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg); width: 500px; max-width: 90vw;
+  max-height: 85vh; overflow-y: auto;
+  animation: modalIn .15s ease-out;
+}
+@keyframes modalIn { from { transform: scale(.96) translateY(-8px); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal-header {
+  padding: 18px 20px 14px; border-bottom: 1px solid var(--gray-100);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-header h3 { font-size: 15px; font-weight: 800; color: var(--gray-900); }
+.modal-close { background: none; border: none; font-size: 20px; color: var(--gray-400); cursor: pointer; line-height: 1; padding: 2px 6px; border-radius: 4px; }
+.modal-close:hover { background: var(--gray-100); color: var(--gray-600); }
+.modal-body { padding: 18px 20px 20px; }
+
+/* ══ ALL PROJECTS FULL VIEW ══ */
+#view-all-projects { background: var(--gray-50); }
+.all-projects-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: gap; gap: 12px; }
+.section-title { font-size: 17px; font-weight: 800; color: var(--gray-900); }
+.section-sub { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+
+/* tools drawer (hidden tabs) */
+.tools-drawer-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.3); z-index: 800;
+  display: none;
+}
+.tools-drawer-backdrop.active { display: block; }
+.tools-drawer {
+  position: fixed; top: 0; right: -360px; bottom: 0; width: 360px;
+  background: #fff; z-index: 850; box-shadow: -8px 0 32px rgba(0,0,0,.15);
+  display: flex; flex-direction: column; transition: right .25s cubic-bezier(.4,0,.2,1);
+}
+.tools-drawer.open { right: 0; }
+.tools-drawer-header { padding: 16px 18px; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: space-between; }
+.tools-drawer-title { font-size: 14px; font-weight: 800; color: var(--gray-900); }
+.tools-drawer-body { padding: 14px; overflow-y: auto; flex: 1; }
+.drawer-tool-btn {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px;
+  font-size: 13px; font-weight: 500; color: var(--gray-700);
+  cursor: pointer; transition: background .1s; border: none; background: none;
+  width: 100%; font-family: var(--font); text-align: left; margin-bottom: 4px;
+}
+.drawer-tool-btn:hover { background: var(--gray-50); }
+.drawer-tool-btn.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.drawer-tool-icon { font-size: 16px; width: 24px; text-align: center; flex-shrink: 0; }
+
+/* ══ EMPTY STATE ══ */
+.empty-state { padding: 60px 40px; text-align: center; color: var(--gray-400); }
+.empty-icon { font-size: 48px; margin-bottom: 14px; opacity: .5; }
+.empty-title { font-size: 16px; font-weight: 700; color: var(--gray-600); margin-bottom: 6px; }
+.empty-sub { font-size: 13px; line-height: 1.6; max-width: 300px; margin: 0 auto 18px; }
+
+/* ══ ANIMATIONS ══ */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { animation: fadeIn .2s ease-out; }
+
+/* ══ SCROLLBAR ══ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
+
+/* ══ RESPONSIVE ══ */
+@media (max-width: 900px) {
+  .sidebar { width: 52px; }
+  .logo-text, .logo-tag, .nav-item span, .org-pill span, .user-name, .user-role, .nav-label, .nav-badge { display: none; }
+  .logo-icon { margin: 0 auto; }
+  .nav-item { justify-content: center; padding: 10px; }
+  .nav-icon { width: auto; }
+  .sidebar-logo { justify-content: center; padding: 0; }
+  .user-row { justify-content: center; }
+  .org-pill { justify-content: center; }
+  .dash-stats { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 700px) {
+  .dash-stats { grid-template-columns: 1fr 1fr; }
+  .form-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">J</div>
+    <div>
+      <div class="logo-text">Jiganto</div>
+      <div class="logo-tag">Enterprise Suite</div>
+    </div>
+  </div>
+
+  <div class="org-pill" title="Switch workspace">
+    <div class="org-dot"></div>
+    <span>Acme Corp</span>
+    <span class="org-caret">▾</span>
+  </div>
+
+  <div class="nav-scroll">
+    <div class="nav-section">
+      <div class="nav-label">Workspace</div>
+      <div class="nav-item" onclick="alert('Navigate to Chat')">
+        <span class="nav-icon">💬</span>
+        <span>Chat</span>
+        <span class="nav-badge orange">4</span>
+      </div>
+      <div class="nav-item" onclick="alert('Navigate to CRM')">
+        <span class="nav-icon">👥</span>
+        <span>CRM</span>
+      </div>
+      <div class="nav-item" onclick="alert('Navigate to Workspaces')">
+        <span class="nav-icon">📌</span>
+        <span>Workspaces</span>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Management</div>
+      <div class="nav-item active" onclick="switchView('dashboard')">
+        <span class="nav-icon">🗂️</span>
+        <span>Projects</span>
+        <span class="nav-badge">12</span>
+      </div>
+      <div class="nav-item" onclick="alert('Navigate to Business Mgmt')">
+        <span class="nav-icon">🏢</span>
+        <span>Business Mgmt</span>
+      </div>
+      <div class="nav-item" onclick="alert('Navigate to Finance')">
+        <span class="nav-icon">💰</span>
+        <span>Finance</span>
+      </div>
+      <div class="nav-item" onclick="alert('Navigate to Resources')">
+        <span class="nav-icon">👤</span>
+        <span>Resources</span>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Tools</div>
+      <div class="nav-item" onclick="alert('Navigate to Documents')">
+        <span class="nav-icon">📄</span>
+        <span>Documents</span>
+      </div>
+      <div class="nav-item" onclick="alert('Navigate to Help Desk')">
+        <span class="nav-icon">🎧</span>
+        <span>Help Desk</span>
+        <span class="nav-badge green">2</span>
+      </div>
+      <div class="nav-item" onclick="alert('Navigate to Test Mgmt')">
+        <span class="nav-icon">🧪</span>
+        <span>Test Mgmt</span>
+      </div>
+      <div class="nav-item" onclick="alert('Navigate to BPM')">
+        <span class="nav-icon">⚙️</span>
+        <span>Process Models</span>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Utilities</div>
+      <div class="nav-item" onclick="alert('Surveys')"><span class="nav-icon">📊</span><span>Surveys</span></div>
+      <div class="nav-item" onclick="alert('Workflow')"><span class="nav-icon">🔄</span><span>Workflow</span></div>
+      <div class="nav-item" onclick="alert('Digital Signing')"><span class="nav-icon">✍️</span><span>Digital Signing</span></div>
+      <div class="nav-item" onclick="alert('Whiteboard')"><span class="nav-icon">🎨</span><span>Whiteboard</span></div>
+    </div>
+  </div>
+
+  <div class="sidebar-bottom">
+    <div class="user-row">
+      <div class="user-av">SA</div>
+      <div>
+        <div class="user-name">Sarah Ahmed</div>
+        <div class="user-role">Programme Manager</div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ══ MAIN ══ -->
+<div class="main">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="breadcrumb" id="breadcrumb">
+      <span class="bc-item current">Projects</span>
+    </div>
+    <div class="topbar-actions">
+      <div class="search-box" style="min-width:160px">
+        <span style="color:var(--gray-400)">🔍</span>
+        <input type="text" placeholder="Search projects…" id="globalSearch" oninput="filterProjects()">
+      </div>
+      <button class="btn-icon" title="Notifications">🔔</button>
+      <button class="btn-icon" title="Settings">⚙️</button>
+      <button class="btn btn-primary" onclick="switchView('new')">
+        <span>＋</span> New Work Item
+      </button>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- ════════════════ DASHBOARD VIEW ════════════════ -->
+    <div id="view-dashboard" class="view active fade-in">
+
+      <!-- Stats row -->
+      <div class="dash-stats">
+        <div class="stat-card" style="--c:var(--blue)" onclick="filterByStatus('Active')">
+          <div class="stat-icon">🚀</div>
+          <div class="stat-val">12</div>
+          <div class="stat-lbl">Active</div>
+          <div class="stat-sub">3 due this week</div>
+        </div>
+        <div class="stat-card" style="--c:var(--yellow)" onclick="filterByStatus('Planning')">
+          <div class="stat-icon">📐</div>
+          <div class="stat-val">5</div>
+          <div class="stat-lbl">Planning</div>
+          <div class="stat-sub">Awaiting kick-off</div>
+        </div>
+        <div class="stat-card" style="--c:var(--orange)" onclick="filterByStatus('On Hold')">
+          <div class="stat-icon">⏸️</div>
+          <div class="stat-val">3</div>
+          <div class="stat-lbl">On Hold</div>
+          <div class="stat-sub">Action required</div>
+        </div>
+        <div class="stat-card" style="--c:var(--green)" onclick="filterByStatus('Completed')">
+          <div class="stat-icon">✅</div>
+          <div class="stat-val">28</div>
+          <div class="stat-lbl">Completed</div>
+          <div class="stat-sub">This year</div>
+        </div>
+        <div class="stat-card" style="--c:var(--gray-400)" onclick="filterByStatus('Draft')">
+          <div class="stat-icon">📝</div>
+          <div class="stat-val">7</div>
+          <div class="stat-lbl">Draft</div>
+          <div class="stat-sub">Not yet started</div>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <span class="filter-label">Filter:</span>
+        <div class="filter-chip active" id="chip-all" onclick="filterChip(this,'all')">All</div>
+        <div class="filter-chip" id="chip-mine" onclick="filterChip(this,'mine')">My Work Items</div>
+
+        <select class="filter-select" onchange="filterProjects()" id="typeFilter" title="Work Type">
+          <option value="">All Types</option>
+          <option>Project</option>
+          <option>Programme</option>
+          <option>Initiative</option>
+          <option>Campaign</option>
+          <option>POC</option>
+          <option>Sprint</option>
+          <option>Change Request</option>
+          <option>Pilot</option>
+        </select>
+
+        <select class="filter-select" onchange="filterProjects()" id="statusFilter" title="Status">
+          <option value="">All Status</option>
+          <option>Active</option>
+          <option>Planning</option>
+          <option>Draft</option>
+          <option>On Hold</option>
+          <option>Completed</option>
+          <option>Cancelled</option>
+        </select>
+
+        <select class="filter-select" onchange="filterProjects()" id="customerFilter" title="Customer">
+          <option value="">All Customers</option>
+          <option>Internal</option>
+          <option>Acme Corp</option>
+          <option>TechStart Ltd</option>
+          <option>Global Finance</option>
+          <option>BlueSky Media</option>
+        </select>
+
+        <select class="filter-select" onchange="filterProjects()" id="leadFilter" title="Lead">
+          <option value="">All Leads</option>
+          <option>Sarah Ahmed</option>
+          <option>Dan Kowalski</option>
+          <option>Priya Venkat</option>
+          <option>Marcus Lee</option>
+        </select>
+
+        <div class="filter-sep"></div>
+        <div class="view-toggle">
+          <button class="view-btn active" id="vbtn-table" onclick="setViewMode('table',this)">☰ Table</button>
+          <button class="view-btn" id="vbtn-cards" onclick="setViewMode('cards',this)">⊞ Cards</button>
+        </div>
+        <button class="btn-ghost btn" style="font-size:12px" onclick="switchView('all-projects')">View All →</button>
+      </div>
+
+      <!-- TABLE view -->
+      <div id="proj-table-view">
+        <div class="proj-table-wrap">
+          <table class="proj-table" id="projectsTable">
+            <thead>
+              <tr>
+                <th onclick="sortTable(0)">Name <span class="sort-icon">↕</span></th>
+                <th onclick="sortTable(1)">Type <span class="sort-icon">↕</span></th>
+                <th onclick="sortTable(2)">Status <span class="sort-icon">↕</span></th>
+                <th onclick="sortTable(3)">Customer <span class="sort-icon">↕</span></th>
+                <th onclick="sortTable(4)">Lead <span class="sort-icon">↕</span></th>
+                <th>Progress</th>
+                <th>Health</th>
+                <th>Tools</th>
+                <th>Due</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="projectsBody">
+              <!-- populated by JS -->
+            </tbody>
+          </table>
+          <div class="table-footer" id="tableFooter">
+            <span class="table-info" id="tableInfo"></span>
+            <div style="display:flex;align-items:center;gap:12px">
+              <button class="btn-ghost btn" style="font-size:12px;padding:5px 12px" onclick="switchView('all-projects')">See all projects →</button>
+              <div class="pagination" id="pagination"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARDS view -->
+      <div id="proj-cards-view" style="display:none">
+        <div class="proj-cards" id="projectsCards">
+          <!-- populated by JS -->
+        </div>
+        <div style="margin-top:16px;text-align:center">
+          <button class="btn btn-ghost" onclick="switchView('all-projects')">View all 55 projects →</button>
+        </div>
+      </div>
+
+    </div><!-- /view-dashboard -->
+
+    <!-- ════════════════ ALL PROJECTS VIEW ════════════════ -->
+    <div id="view-all-projects" class="view fade-in">
+      <div class="all-projects-header">
+        <div>
+          <div class="section-title">All Work Items</div>
+          <div class="section-sub">55 total work items across all types and statuses</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select class="filter-select">
+            <option>All Types</option>
+            <option>Project</option><option>Programme</option><option>Initiative</option>
+            <option>Campaign</option><option>POC</option><option>Sprint</option>
+          </select>
+          <select class="filter-select">
+            <option>All Status</option>
+            <option>Active</option><option>Planning</option><option>Draft</option>
+            <option>On Hold</option><option>Completed</option>
+          </select>
+          <button class="btn btn-primary" onclick="switchView('new')">＋ New Work Item</button>
+        </div>
+      </div>
+      <div class="proj-table-wrap">
+        <table class="proj-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Type</th><th>Status</th><th>Customer</th>
+              <th>Lead</th><th>Progress</th><th>Health</th><th>Due</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr onclick="openProject('Digital Transformation','Programme')">
+              <td><div class="proj-name-cell"><div class="proj-color-dot" style="background:#2563eb"></div><div><div class="proj-name">Digital Transformation</div><div class="proj-desc">Core systems modernisation</div></div></div></td>
+              <td><span class="type-badge" style="background:#dbeafe;color:#1d4ed8">Programme</span></td>
+              <td><span class="status-badge" style="background:#dcfce7;color:#16a34a"><span class="status-dot" style="background:#16a34a"></span>Active</span></td>
+              <td>Internal</td><td>Sarah Ahmed</td>
+              <td><div class="progress-cell"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:68%;background:#2563eb"></div></div><small style="color:var(--gray-400);font-size:10px">68%</small></div></td>
+              <td><span class="health-pill health-green">🟢 On Track</span></td>
+              <td style="font-size:12px;color:var(--gray-500);font-family:var(--mono)">Dec 2025</td>
+              <td><button class="btn-ghost btn" style="font-size:11px;padding:4px 8px" onclick="event.stopPropagation();openProject('Digital Transformation','Programme')">Open →</button></td>
+            </tr>
+            <tr onclick="openProject('CRM Phase 2','Project')">
+              <td><div class="proj-name-cell"><div class="proj-color-dot" style="background:#7c3aed"></div><div><div class="proj-name">CRM Phase 2</div><div class="proj-desc">Acme Corp - Salesforce migration</div></div></div></td>
+              <td><span class="type-badge" style="background:#ede9fe;color:#7c3aed">Project</span></td>
+              <td><span class="status-badge" style="background:#dcfce7;color:#16a34a"><span class="status-dot" style="background:#16a34a"></span>Active</span></td>
+              <td>Acme Corp</td><td>Dan Kowalski</td>
+              <td><div class="progress-cell"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:42%;background:#7c3aed"></div></div><small style="color:var(--gray-400);font-size:10px">42%</small></div></td>
+              <td><span class="health-pill health-amber">🟡 At Risk</span></td>
+              <td style="font-size:12px;color:var(--gray-500);font-family:var(--mono)">Mar 2025</td>
+              <td><button class="btn-ghost btn" style="font-size:11px;padding:4px 8px" onclick="event.stopPropagation();openProject('CRM Phase 2','Project')">Open →</button></td>
+            </tr>
+            <tr onclick="openProject('Mobile App POC','POC')">
+              <td><div class="proj-name-cell"><div class="proj-color-dot" style="background:#0891b2"></div><div><div class="proj-name">Mobile App POC</div><div class="proj-desc">Feasibility study</div></div></div></td>
+              <td><span class="type-badge" style="background:#cffafe;color:#0e7490">POC</span></td>
+              <td><span class="status-badge" style="background:#fef9c3;color:#ca8a04"><span class="status-dot" style="background:#ca8a04"></span>Planning</span></td>
+              <td>TechStart Ltd</td><td>Priya Venkat</td>
+              <td><div class="progress-cell"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:15%;background:#0891b2"></div></div><small style="color:var(--gray-400);font-size:10px">15%</small></div></td>
+              <td><span class="health-pill health-blue">⚪ Early</span></td>
+              <td style="font-size:12px;color:var(--gray-500);font-family:var(--mono)">Feb 2025</td>
+              <td><button class="btn-ghost btn" style="font-size:11px;padding:4px 8px" onclick="event.stopPropagation();openProject('Mobile App POC','POC')">Open →</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="table-footer">
+          <span class="table-info">Showing 3 of 55 work items</span>
+          <div class="pagination">
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">3</button>
+            <span style="color:var(--gray-400);font-size:12px;padding:0 6px">…</span>
+            <button class="page-btn">6</button>
+          </div>
+        </div>
+      </div>
+    </div><!-- /view-all-projects -->
+
+    <!-- ════════════════ NEW WORK ITEM WIZARD ════════════════ -->
+    <div id="view-new" class="view-noscroll fade-in">
+      <div class="wizard-wrap">
+        <!-- Wizard Sidebar -->
+        <div class="wizard-sidebar">
+          <div class="wizard-title">New Work Item</div>
+          <div class="wizard-sub">Set up your project, programme or work item in 3 steps.</div>
+
+          <div class="steps">
+            <div class="step-row active" id="step1">
+              <div class="step-num">1</div>
+              <div class="step-info">
+                <div class="step-label">Select Work Type</div>
+                <div class="step-desc">Define what kind of work this is</div>
+              </div>
+            </div>
+            <div class="step-row" id="step2">
+              <div class="step-num">2</div>
+              <div class="step-info">
+                <div class="step-label">Project Details</div>
+                <div class="step-desc">Name, dates, team and description</div>
+              </div>
+            </div>
+            <div class="step-row" id="step3">
+              <div class="step-num">3</div>
+              <div class="step-info">
+                <div class="step-label">Choose Execution Tools</div>
+                <div class="step-desc">Select planning and tracking tools</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:auto;padding-top:30px;font-size:11px;color:var(--gray-400);line-height:1.7">
+            💡 <strong style="color:var(--gray-500)">Tip:</strong> Tools can be added or removed at any time from the project settings.
+          </div>
+        </div>
+
+        <!-- Wizard Body -->
+        <div class="wizard-body">
+
+          <!-- STEP 1: Type -->
+          <div class="wizard-panel active" id="panel-type">
+            <div class="panel-title">What type of work is this?</div>
+            <div class="panel-sub">Choose the work type that best matches your initiative. This influences default tools and templates.</div>
+
+            <div class="type-grid" id="mainTypesGrid">
+              <div class="type-card" onclick="selectType(this,'Project')">
+                <div class="type-icon">🗂️</div>
+                <div class="type-name">Project</div>
+                <div class="type-desc">Defined scope, budget & timeline</div>
+              </div>
+              <div class="type-card" onclick="selectType(this,'Programme')">
+                <div class="type-icon">📦</div>
+                <div class="type-name">Programme</div>
+                <div class="type-desc">Group of related projects</div>
+              </div>
+              <div class="type-card" onclick="selectType(this,'Initiative')">
+                <div class="type-icon">🚀</div>
+                <div class="type-name">Initiative</div>
+                <div class="type-desc">Strategic business objective</div>
+              </div>
+              <div class="type-card" onclick="selectType(this,'Campaign')">
+                <div class="type-icon">📢</div>
+                <div class="type-name">Campaign</div>
+                <div class="type-desc">Marketing or comms drive</div>
+              </div>
+              <div class="type-card" onclick="selectType(this,'POC')">
+                <div class="type-icon">🔬</div>
+                <div class="type-name">POC</div>
+                <div class="type-desc">Proof of concept / feasibility</div>
+              </div>
+              <div class="type-card" onclick="selectType(this,'User Defined')">
+                <div class="type-icon">✏️</div>
+                <div class="type-name">User Defined</div>
+                <div class="type-desc">Custom work type</div>
+              </div>
+            </div>
+
+            <button class="more-types-toggle" onclick="toggleMoreTypes()" id="moreTypesBtn">
+              ＋ Show all work types (12 more)
+            </button>
+
+            <div id="moreTypes" style="display:none">
+              <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Extended Types</div>
+              <div class="type-grid">
+                <div class="type-card" onclick="selectType(this,'Portfolio')"><div class="type-icon">🏛️</div><div class="type-name">Portfolio</div><div class="type-desc">Collection of programmes</div></div>
+                <div class="type-card" onclick="selectType(this,'Sub-Project')"><div class="type-icon">🔗</div><div class="type-name">Sub-Project</div><div class="type-desc">Child project</div></div>
+                <div class="type-card" onclick="selectType(this,'Program Increment')"><div class="type-icon">🔁</div><div class="type-name">Program Increment</div><div class="type-desc">SAFe PI planning</div></div>
+                <div class="type-card" onclick="selectType(this,'Workstream')"><div class="type-icon">🌊</div><div class="type-name">Workstream</div><div class="type-desc">Parallel work track</div></div>
+                <div class="type-card" onclick="selectType(this,'Task Force')"><div class="type-icon">⚡</div><div class="type-name">Task Force</div><div class="type-desc">Urgent response team</div></div>
+                <div class="type-card" onclick="selectType(this,'Change Request')"><div class="type-icon">🔄</div><div class="type-name">Change Request</div><div class="type-desc">Formal scope change</div></div>
+                <div class="type-card" onclick="selectType(this,'Enhancement')"><div class="type-icon">⬆️</div><div class="type-name">Enhancement</div><div class="type-desc">Feature improvement</div></div>
+                <div class="type-card" onclick="selectType(this,'Experiment')"><div class="type-icon">🧪</div><div class="type-name">Experiment</div><div class="type-desc">Hypothesis testing</div></div>
+                <div class="type-card" onclick="selectType(this,'Pilot')"><div class="type-icon">✈️</div><div class="type-name">Pilot</div><div class="type-desc">Limited rollout test</div></div>
+                <div class="type-card" onclick="selectType(this,'Prototype')"><div class="type-icon">🛠️</div><div class="type-name">Prototype</div><div class="type-desc">Working model / MVP</div></div>
+                <div class="type-card" onclick="selectType(this,'Sprint')"><div class="type-icon">⏱️</div><div class="type-name">Sprint / Iteration</div><div class="type-desc">Agile time-box</div></div>
+                <div class="type-card" onclick="selectType(this,'Improvement')"><div class="type-icon">📈</div><div class="type-name">Improvement</div><div class="type-desc">Process improvement</div></div>
+              </div>
+            </div>
+
+            <div class="wizard-footer">
+              <span class="wizard-footer-left">Step 1 of 3</span>
+              <div class="wizard-footer-right">
+                <button class="btn btn-ghost" onclick="switchView('dashboard')">Cancel</button>
+                <button class="btn btn-primary" onclick="showStep(2)">Next: Details →</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 2: Details -->
+          <div class="wizard-panel" id="panel-details">
+            <div class="panel-title">Project Details</div>
+            <div class="panel-sub">Tell us about the work item — key details will appear on the project landing page.</div>
+
+            <div class="form-grid">
+              <div class="form-group full">
+                <label class="form-label">Work Item Name *</label>
+                <input class="form-input" type="text" placeholder="e.g. Digital Transformation Programme Q1">
+              </div>
+              <div class="form-group full">
+                <label class="form-label">Description</label>
+                <textarea class="form-textarea" placeholder="Briefly describe the objective and scope of this work item…"></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Customer / Account</label>
+                <select class="form-select">
+                  <option value="">— Internal —</option>
+                  <option>Acme Corp</option>
+                  <option>TechStart Ltd</option>
+                  <option>Global Finance</option>
+                  <option>BlueSky Media</option>
+                  <option>+ Add new customer</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Project Lead *</label>
+                <select class="form-select">
+                  <option>Sarah Ahmed</option>
+                  <option>Dan Kowalski</option>
+                  <option>Priya Venkat</option>
+                  <option>Marcus Lee</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Start Date</label>
+                <input class="form-input" type="date">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Target End Date</label>
+                <input class="form-input" type="date">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Budget (optional)</label>
+                <input class="form-input" type="text" placeholder="e.g. £250,000">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Priority</label>
+                <select class="form-select">
+                  <option>High</option>
+                  <option>Medium</option>
+                  <option>Low</option>
+                  <option>Critical</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Status</label>
+                <select class="form-select">
+                  <option>Draft</option>
+                  <option>Planning</option>
+                  <option>Active</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Project Framework</label>
+                <select class="form-select">
+                  <option value="">— None —</option>
+                  <option>PRINCE2</option>
+                  <option>SAP Activate</option>
+                  <option>Agile / Scrum</option>
+                  <option>SAFe</option>
+                  <option>Waterfall</option>
+                  <option>PMBOK</option>
+                  <option>Lean</option>
+                </select>
+              </div>
+              <div class="form-group full">
+                <label class="form-label">Team Members</label>
+                <input class="form-input" type="text" placeholder="Type names to add team members…">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Parent Programme / Portfolio</label>
+                <select class="form-select">
+                  <option value="">— None (Standalone) —</option>
+                  <option>Digital Transformation</option>
+                  <option>Customer Success Initiative</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Tags</label>
+                <input class="form-input" type="text" placeholder="e.g. Q1, Internal, Critical">
+              </div>
+            </div>
+
+            <div class="wizard-footer">
+              <span class="wizard-footer-left">Step 2 of 3</span>
+              <div class="wizard-footer-right">
+                <button class="btn btn-ghost" onclick="showStep(1)">← Back</button>
+                <button class="btn btn-primary" onclick="showStep(3)">Next: Choose Tools →</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 3: Tools -->
+          <div class="wizard-panel" id="panel-tools">
+            <div class="panel-title">Choose Execution Tools</div>
+            <div class="panel-sub">Select the tools you'll use to plan and track this work item. You can add or remove tools later.</div>
+
+            <div id="recommendedToolsNote" style="background:var(--blue-light);border:1px solid #93c5fd;border-radius:8px;padding:12px 14px;margin-bottom:20px;font-size:12px;color:#1e40af;display:flex;align-items:center;gap:8px">
+              <span style="font-size:16px">✨</span>
+              <span><strong>Recommended for a Project:</strong> Gantt Chart, Scrum Board, Risk Log, Issues Log, Status Reporting and Project Dashboard have been pre-selected based on your work type.</span>
+            </div>
+
+            <div class="tools-section">
+              <div class="tools-section-title">📅 Planning & Scheduling</div>
+              <div class="tools-grid">
+                <div class="tool-card selected" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">📊</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Gantt Chart</div>
+                    <div class="tool-card-hint">Timeline planning</div>
+                  </div>
+                  <div class="tool-check">✓</div>
+                </div>
+                <div class="tool-card selected" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">🗃️</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Scrum Board</div>
+                    <div class="tool-card-hint">Agile sprint tracking</div>
+                  </div>
+                  <div class="tool-check">✓</div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">🔀</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Hybrid Plan</div>
+                    <div class="tool-card-hint">Gantt + Agile boards</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">🏁</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Milestone Plan</div>
+                    <div class="tool-card-hint">Key project milestones</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">📖</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Epics & Stories</div>
+                    <div class="tool-card-hint">Backlog management</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">🏛️</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Project Framework</div>
+                    <div class="tool-card-hint">SAP Activate, PRINCE2…</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tools-section">
+              <div class="tools-section-title">📈 Reporting & Dashboards</div>
+              <div class="tools-grid">
+                <div class="tool-card selected" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">📋</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Status Reporting</div>
+                    <div class="tool-card-hint">Weekly/monthly reports</div>
+                  </div>
+                  <div class="tool-check">✓</div>
+                </div>
+                <div class="tool-card selected" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">📊</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Project Dashboard</div>
+                    <div class="tool-card-hint">KPIs & health overview</div>
+                  </div>
+                  <div class="tool-check">✓</div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">🔭</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">360° Report</div>
+                    <div class="tool-card-hint">Full project health view</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tools-section">
+              <div class="tools-section-title">🔴 RAID & Governance</div>
+              <div class="tools-grid">
+                <div class="tool-card selected" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">⚠️</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Risk Log</div>
+                    <div class="tool-card-hint">Risk register & mitigation</div>
+                  </div>
+                  <div class="tool-check">✓</div>
+                </div>
+                <div class="tool-card selected" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">🔥</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Issues Log</div>
+                    <div class="tool-card-hint">Open issues & actions</div>
+                  </div>
+                  <div class="tool-check">✓</div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">💡</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Assumptions Log</div>
+                    <div class="tool-card-hint">Document assumptions</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">🔗</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Dependencies Log</div>
+                    <div class="tool-card-hint">Track dependencies</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">🧭</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Decisions Log</div>
+                    <div class="tool-card-hint">Key decision records</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">📝</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Change Log</div>
+                    <div class="tool-card-hint">Scope change tracking</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">👥</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">RACI Model</div>
+                    <div class="tool-card-hint">Responsibility matrix</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tools-section">
+              <div class="tools-section-title">💰 Resources & Finance</div>
+              <div class="tools-grid">
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">👤</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Resource Tracker</div>
+                    <div class="tool-card-hint">Allocation & capacity</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">⏰</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Timesheets</div>
+                    <div class="tool-card-hint">Time logging</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">💷</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Finance Tracker</div>
+                    <div class="tool-card-hint">Budget vs actuals</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">📃</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">SoW Tracker</div>
+                    <div class="tool-card-hint">Statement of work</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tools-section">
+              <div class="tools-section-title">🗂️ Documentation & Delivery</div>
+              <div class="tools-grid">
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">📄</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Documentation</div>
+                    <div class="tool-card-hint">Project docs & specs</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">✅</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Deliverables Tracker</div>
+                    <div class="tool-card-hint">Track project outputs</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">🧪</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Test Tracker</div>
+                    <div class="tool-card-hint">QA test management</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tools-section">
+              <div class="tools-section-title">🗺️ People & Organisation</div>
+              <div class="tools-grid">
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">🏢</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Org Chart</div>
+                    <div class="tool-card-hint">Team structure</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">🗺️</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Stakeholder Map</div>
+                    <div class="tool-card-hint">Stakeholder engagement</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+                <div class="tool-card" onclick="toggleTool(this)">
+                  <div class="tool-card-icon">⚙️</div>
+                  <div class="tool-card-info">
+                    <div class="tool-card-name">Business Process Model</div>
+                    <div class="tool-card-hint">Process flows & BPM</div>
+                  </div>
+                  <div class="tool-check"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="wizard-footer">
+              <span class="wizard-footer-left" id="selectedToolCount">6 tools selected</span>
+              <div class="wizard-footer-right">
+                <button class="btn btn-ghost" onclick="showStep(2)">← Back</button>
+                <button class="btn btn-primary" onclick="createProject()">🚀 Create Work Item</button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /wizard-body -->
+      </div><!-- /wizard-wrap -->
+    </div><!-- /view-new -->
+
+    <!-- ════════════════ PROJECT DETAIL VIEW ════════════════ -->
+    <div id="view-project" class="view-noscroll fade-in">
+      <!-- Project Header -->
+      <div class="proj-view-header">
+        <div class="proj-view-top">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+              <span id="proj-type-badge" class="type-badge" style="background:#dbeafe;color:#1d4ed8">Project</span>
+              <span class="health-pill health-green" id="proj-health">🟢 On Track</span>
+              <span class="status-badge" style="background:#dcfce7;color:#16a34a"><span class="status-dot" style="background:#16a34a"></span>Active</span>
+            </div>
+            <div class="proj-view-name" id="proj-title">Digital Transformation</div>
+          </div>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-ghost" style="font-size:12px" onclick="openFullscreen('project')">⛶ Full Screen</button>
+            <button class="btn btn-ghost" style="font-size:12px">⚙️ Settings</button>
+            <button class="btn btn-ghost" style="font-size:12px">＋ Add Tool</button>
+            <button class="btn btn-primary" style="font-size:12px">📤 Share</button>
+          </div>
+        </div>
+        <div class="proj-view-meta">
+          <span class="proj-meta-item">📅 <strong>Jun 2024</strong> → Dec 2025</span>
+          <span class="proj-meta-item">👤 Lead: <strong>Sarah Ahmed</strong></span>
+          <span class="proj-meta-item">🏢 Client: <strong>Internal</strong></span>
+          <span class="proj-meta-item">👥 <strong>8</strong> team members</span>
+          <span class="proj-meta-item">💰 Budget: <strong>£480k</strong></span>
+          <span class="proj-meta-item">📊 <strong>68%</strong> complete</span>
+        </div>
+      </div>
+
+      <!-- Tool Tabs Bar -->
+      <div class="tool-tabs-bar" id="toolTabsBar">
+        <div class="tool-tab active" onclick="switchTab(this,'gantt')" id="tab-btn-gantt">
+          <span class="tool-tab-icon">📊</span> Gantt Chart
+        </div>
+        <div class="tool-tab" onclick="switchTab(this,'board')" id="tab-btn-board">
+          <span class="tool-tab-icon">🗃️</span> Scrum Board
+        </div>
+        <div class="tool-tab" onclick="switchTab(this,'dashboard')" id="tab-btn-dashboard">
+          <span class="tool-tab-icon">📊</span> Dashboard
+        </div>
+        <div class="tool-tab" onclick="switchTab(this,'raid')" id="tab-btn-raid">
+          <span class="tool-tab-icon">⚠️</span> RAID Log <span class="tool-tab-badge">7</span>
+        </div>
+        <div class="tool-tab" onclick="switchTab(this,'finance')" id="tab-btn-finance">
+          <span class="tool-tab-icon">💰</span> Finance
+        </div>
+        <div class="tool-tab" onclick="switchTab(this,'docs')" id="tab-btn-docs">
+          <span class="tool-tab-icon">📄</span> Documents
+        </div>
+        <div class="tool-tab" onclick="switchTab(this,'status')" id="tab-btn-status">
+          <span class="tool-tab-icon">📋</span> Status Reports
+        </div>
+        <button class="tabs-expand-btn" onclick="openToolsDrawer()">More tools ▾</button>
+      </div>
+
+      <!-- Tool Content -->
+      <div class="tool-content">
+
+        <!-- GANTT TAB -->
+        <div class="tab-pane active" id="tab-gantt">
+          <div style="padding:12px 16px;background:#fff;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;gap:10px;flex-shrink:0">
+            <span style="font-size:13px;font-weight:700;color:var(--gray-700)">Gantt Chart</span>
+            <select class="filter-select" style="min-width:100px"><option>All Tasks</option><option>My Tasks</option><option>Critical Path</option></select>
+            <select class="filter-select" style="min-width:100px"><option>Month View</option><option>Quarter View</option><option>Week View</option></select>
+            <div style="flex:1"></div>
+            <button class="expand-page-btn" onclick="openFullscreen('gantt')">⛶ Full Screen</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px">＋ Add Task</button>
+          </div>
+          <div class="tab-pane-scroll">
+            <div class="gantt-wrap">
+              <div style="min-width:800px;background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden">
+                <div class="gantt-header">
+                  <div class="gantt-tasks-col">TASK</div>
+                  <div class="gantt-timeline">
+                    <div class="gantt-month">JAN</div>
+                    <div class="gantt-month">FEB</div>
+                    <div class="gantt-month">MAR</div>
+                    <div class="gantt-month">APR</div>
+                    <div class="gantt-month">MAY</div>
+                    <div class="gantt-month">JUN</div>
+                    <div class="gantt-month">JUL</div>
+                    <div class="gantt-month">AUG</div>
+                  </div>
+                </div>
+                <!-- Group row -->
+                <div class="gantt-row" style="background:var(--gray-50)">
+                  <div class="gantt-task-info"><div class="gantt-task-name" style="color:var(--gray-500);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">▼ Discovery Phase</div></div>
+                  <div class="gantt-bars"></div>
+                </div>
+                <div class="gantt-row">
+                  <div class="gantt-task-info">
+                    <div class="gantt-task-name">Stakeholder interviews</div>
+                    <div class="gantt-task-meta">Sarah Ahmed · Done</div>
+                  </div>
+                  <div class="gantt-bars">
+                    <div class="gantt-bar" style="left:1%;width:18%;background:var(--green)">Stakeholder</div>
+                  </div>
+                </div>
+                <div class="gantt-row">
+                  <div class="gantt-task-info">
+                    <div class="gantt-task-name">Current state analysis</div>
+                    <div class="gantt-task-meta">Dan Kowalski · Done</div>
+                  </div>
+                  <div class="gantt-bars">
+                    <div class="gantt-bar" style="left:12%;width:22%;background:var(--green)">Current State</div>
+                  </div>
+                </div>
+                <div class="gantt-row" style="background:var(--gray-50)">
+                  <div class="gantt-task-info"><div class="gantt-task-name" style="color:var(--gray-500);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">▼ Design Phase</div></div>
+                  <div class="gantt-bars"></div>
+                </div>
+                <div class="gantt-row">
+                  <div class="gantt-task-info">
+                    <div class="gantt-task-name">Architecture design</div>
+                    <div class="gantt-task-meta">Priya Venkat · In Progress</div>
+                  </div>
+                  <div class="gantt-bars">
+                    <div class="gantt-bar" style="left:30%;width:25%;background:var(--blue)">Architecture</div>
+                  </div>
+                </div>
+                <div class="gantt-row">
+                  <div class="gantt-task-info">
+                    <div class="gantt-task-name">API specification</div>
+                    <div class="gantt-task-meta">Marcus Lee · In Progress</div>
+                  </div>
+                  <div class="gantt-bars">
+                    <div class="gantt-bar" style="left:35%;width:20%;background:var(--blue)">API Spec</div>
+                  </div>
+                </div>
+                <div class="gantt-row">
+                  <div class="gantt-task-info">
+                    <div class="gantt-task-name">UI/UX prototyping</div>
+                    <div class="gantt-task-meta">Design Team · Planned</div>
+                  </div>
+                  <div class="gantt-bars">
+                    <div class="gantt-bar" style="left:52%;width:22%;background:var(--purple)">UI/UX</div>
+                  </div>
+                </div>
+                <div class="gantt-row" style="background:var(--gray-50)">
+                  <div class="gantt-task-info"><div class="gantt-task-name" style="color:var(--gray-500);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px">▼ Build Phase</div></div>
+                  <div class="gantt-bars"></div>
+                </div>
+                <div class="gantt-row">
+                  <div class="gantt-task-info">
+                    <div class="gantt-task-name">Sprint 1 – Core modules</div>
+                    <div class="gantt-task-meta">Engineering Team · Planned</div>
+                  </div>
+                  <div class="gantt-bars">
+                    <div class="gantt-bar" style="left:64%;width:15%;background:var(--orange)">Sprint 1</div>
+                  </div>
+                </div>
+                <div class="gantt-row">
+                  <div class="gantt-task-info">
+                    <div class="gantt-task-name">Sprint 2 – Integration</div>
+                    <div class="gantt-task-meta">Engineering Team · Planned</div>
+                  </div>
+                  <div class="gantt-bars">
+                    <div class="gantt-bar" style="left:78%;width:18%;background:var(--orange)">Sprint 2</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /tab-gantt -->
+
+        <!-- SCRUM BOARD TAB -->
+        <div class="tab-pane" id="tab-board">
+          <div style="padding:12px 16px;background:#fff;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;gap:10px;flex-shrink:0">
+            <span style="font-size:13px;font-weight:700;color:var(--gray-700)">Scrum Board</span>
+            <select class="filter-select" style="min-width:120px"><option>Sprint 2 (Active)</option><option>Sprint 1</option><option>Backlog</option></select>
+            <div style="flex:1"></div>
+            <button class="expand-page-btn" onclick="openFullscreen('board')">⛶ Full Screen</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px">＋ Add Story</button>
+          </div>
+          <div class="board-wrap">
+            <div class="board-col">
+              <div class="board-col-header" style="background:#f1f5f9">Backlog <span class="board-count">8</span></div>
+              <div class="board-cards">
+                <div class="board-card"><div class="card-title">Define API schema for user service</div><div class="card-tags"><span class="tag" style="background:#dbeafe;color:#1d4ed8">Backend</span></div><div class="card-footer"><span class="card-date">—</span><div class="av-item" style="background:#7c3aed;width:20px;height:20px;font-size:9px">ML</div></div></div>
+                <div class="board-card"><div class="card-title">Set up CI/CD pipeline</div><div class="card-tags"><span class="tag" style="background:#fce7f3;color:#9d174d">DevOps</span></div><div class="card-footer"><span class="card-date">—</span><div class="av-item" style="background:#0891b2;width:20px;height:20px;font-size:9px">PV</div></div></div>
+              </div>
+            </div>
+            <div class="board-col">
+              <div class="board-col-header" style="background:#fef9c3">To Do <span class="board-count">4</span></div>
+              <div class="board-cards">
+                <div class="board-card"><div class="card-title">Design login & auth flow</div><div class="card-tags"><span class="tag" style="background:#dbeafe;color:#1d4ed8">Frontend</span></div><div class="card-footer"><span class="card-date">Mar 22</span><div class="av-item" style="background:#2563eb;width:20px;height:20px;font-size:9px">SA</div></div></div>
+                <div class="board-card"><div class="card-title">Write unit tests for utils</div><div class="card-tags"><span class="tag" style="background:#dcfce7;color:#16a34a">QA</span></div><div class="card-footer"><span class="card-date">Mar 20</span><div class="av-item" style="background:#ea580c;width:20px;height:20px;font-size:9px">DK</div></div></div>
+              </div>
+            </div>
+            <div class="board-col">
+              <div class="board-col-header" style="background:#dbeafe">In Progress <span class="board-count">3</span></div>
+              <div class="board-cards">
+                <div class="board-card" style="border-left:3px solid var(--blue)"><div class="card-title">Build dashboard page component</div><div class="card-tags"><span class="tag" style="background:#dbeafe;color:#1d4ed8">Frontend</span><span class="tag" style="background:#fef9c3;color:#a16207">Design</span></div><div class="card-footer"><span class="card-date">Mar 18</span><div class="av-item" style="background:#3b82f6;width:20px;height:20px;font-size:9px">SA</div></div></div>
+                <div class="board-card" style="border-left:3px solid var(--blue)"><div class="card-title">Integrate authentication service</div><div class="card-tags"><span class="tag" style="background:#dbeafe;color:#1d4ed8">Backend</span></div><div class="card-footer"><span class="card-date overdue">Mar 12 ⚠️</span><div class="av-item" style="background:#6366f1;width:20px;height:20px;font-size:9px">DK</div></div></div>
+              </div>
+            </div>
+            <div class="board-col">
+              <div class="board-col-header" style="background:#fce7f3">Review <span class="board-count">2</span></div>
+              <div class="board-cards">
+                <div class="board-card"><div class="card-title">API documentation draft</div><div class="card-tags"><span class="tag" style="background:#fef3c7;color:#92400e">Docs</span></div><div class="card-footer"><span class="card-date">Mar 15</span><div class="av-item" style="background:#7c3aed;width:20px;height:20px;font-size:9px">PV</div></div></div>
+              </div>
+            </div>
+            <div class="board-col">
+              <div class="board-col-header" style="background:#dcfce7">Done <span class="board-count">11</span></div>
+              <div class="board-cards">
+                <div class="board-card" style="opacity:.7"><div class="card-title" style="text-decoration:line-through;color:var(--gray-400)">User research synthesis</div><div class="card-footer"><span class="card-date">Feb 28</span><div class="av-item" style="background:#10b981;width:20px;height:20px;font-size:9px">SA</div></div></div>
+                <div class="board-card" style="opacity:.7"><div class="card-title" style="text-decoration:line-through;color:var(--gray-400)">Competitor benchmarking</div><div class="card-footer"><span class="card-date">Mar 01</span><div class="av-item" style="background:#3b82f6;width:20px;height:20px;font-size:9px">PV</div></div></div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /tab-board -->
+
+        <!-- DASHBOARD TAB -->
+        <div class="tab-pane" id="tab-dashboard">
+          <div style="padding:12px 16px;background:#fff;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;gap:10px;flex-shrink:0">
+            <span style="font-size:13px;font-weight:700;color:var(--gray-700)">Project Dashboard</span>
+            <div style="flex:1"></div>
+            <button class="expand-page-btn" onclick="openFullscreen('dashboard')">⛶ Full Screen</button>
+          </div>
+          <div class="tab-pane-scroll">
+            <div class="health-grid">
+              <div class="health-card"><div class="health-score" style="color:var(--blue)">68%</div><div class="health-label">Overall Progress</div></div>
+              <div class="health-card"><div class="health-score" style="color:var(--green)">🟢</div><div class="health-label">Schedule Health</div></div>
+              <div class="health-card"><div class="health-score" style="color:var(--orange)">🟡</div><div class="health-label">Budget Health</div></div>
+              <div class="health-card"><div class="health-score" style="color:var(--blue)">14</div><div class="health-label">Days to Milestone</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+              <div style="background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:16px">
+                <div style="font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">Budget Overview</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--gray-500)">Total Budget</span><span style="font-weight:700">£480,000</span></div></div>
+                  <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--gray-500)">Spent to Date</span><span style="font-weight:700;color:var(--blue)">£312,000</span></div><div style="height:6px;background:var(--gray-100);border-radius:3px"><div style="width:65%;height:100%;background:var(--blue);border-radius:3px"></div></div></div>
+                  <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--gray-500)">Forecast at Completion</span><span style="font-weight:700;color:var(--orange)">£495,000</span></div><div style="height:6px;background:var(--gray-100);border-radius:3px"><div style="width:103%;height:100%;background:var(--orange);border-radius:3px"></div></div></div>
+                </div>
+              </div>
+              <div style="background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:16px">
+                <div style="font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">Open RAID Items</div>
+                <div style="display:flex;flex-direction:column;gap:7px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;padding:7px;background:var(--red-light);border-radius:6px"><span style="font-size:12px;font-weight:600;color:var(--red)">⚠️ Risks</span><span style="font-size:14px;font-weight:800;color:var(--red)">3</span></div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;padding:7px;background:var(--orange-light);border-radius:6px"><span style="font-size:12px;font-weight:600;color:var(--orange)">🔥 Issues</span><span style="font-size:14px;font-weight:800;color:var(--orange)">2</span></div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;padding:7px;background:var(--blue-light);border-radius:6px"><span style="font-size:12px;font-weight:600;color:var(--blue)">🔗 Dependencies</span><span style="font-size:14px;font-weight:800;color:var(--blue)">2</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /tab-dashboard -->
+
+        <!-- RAID TAB -->
+        <div class="tab-pane" id="tab-raid">
+          <div style="padding:10px 16px;background:#fff;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;gap:10px;flex-shrink:0">
+            <div style="display:flex;gap:0;background:var(--gray-100);border-radius:7px;padding:3px">
+              <button class="view-btn active" onclick="this.parentElement.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Risks</button>
+              <button class="view-btn" onclick="this.parentElement.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Issues</button>
+              <button class="view-btn" onclick="this.parentElement.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Actions</button>
+              <button class="view-btn" onclick="this.parentElement.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Decisions</button>
+              <button class="view-btn" onclick="this.parentElement.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Dependencies</button>
+            </div>
+            <div style="flex:1"></div>
+            <button class="expand-page-btn" onclick="openFullscreen('raid')">⛶ Full Screen</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px">＋ Add Risk</button>
+          </div>
+          <div class="tab-pane-scroll">
+            <div style="background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden">
+              <table class="log-table">
+                <thead>
+                  <tr><th>#</th><th>Risk Description</th><th>Category</th><th>Likelihood</th><th>Impact</th><th>Severity</th><th>Owner</th><th>Mitigation</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style="font-family:var(--mono);font-size:11px;color:var(--gray-400)">R-001</td>
+                    <td><strong>Key vendor delays delivery</strong><br><span style="font-size:11px;color:var(--gray-400)">Integration partner may not meet agreed API deadlines</span></td>
+                    <td><span class="tag" style="background:#fee2e2;color:#dc2626;font-size:10px">Technical</span></td>
+                    <td>High</td><td>High</td>
+                    <td><span class="severity-badge" style="background:#fee2e2;color:#dc2626">Critical</span></td>
+                    <td>Dan Kowalski</td>
+                    <td style="font-size:12px;color:var(--gray-600)">Escalate to vendor PM; weekly check-ins</td>
+                    <td><span class="status-badge" style="background:#fee2e2;color:#dc2626"><span class="status-dot" style="background:#dc2626"></span>Open</span></td>
+                  </tr>
+                  <tr>
+                    <td style="font-family:var(--mono);font-size:11px;color:var(--gray-400)">R-002</td>
+                    <td><strong>Budget overrun on cloud costs</strong><br><span style="font-size:11px;color:var(--gray-400)">Higher than expected infrastructure usage</span></td>
+                    <td><span class="tag" style="background:#fef3c7;color:#92400e;font-size:10px">Financial</span></td>
+                    <td>Medium</td><td>Medium</td>
+                    <td><span class="severity-badge" style="background:#fef9c3;color:#ca8a04">Medium</span></td>
+                    <td>Sarah Ahmed</td>
+                    <td style="font-size:12px;color:var(--gray-600)">Monthly cost reviews; auto-scaling policies</td>
+                    <td><span class="status-badge" style="background:#fef9c3;color:#ca8a04"><span class="status-dot" style="background:#ca8a04"></span>Monitoring</span></td>
+                  </tr>
+                  <tr>
+                    <td style="font-family:var(--mono);font-size:11px;color:var(--gray-400)">R-003</td>
+                    <td><strong>Resource availability in Q2</strong><br><span style="font-size:11px;color:var(--gray-400)">Two senior engineers may be reassigned</span></td>
+                    <td><span class="tag" style="background:#ede9fe;color:#7c3aed;font-size:10px">Resource</span></td>
+                    <td>Low</td><td>High</td>
+                    <td><span class="severity-badge" style="background:#fef9c3;color:#ca8a04">Medium</span></td>
+                    <td>Sarah Ahmed</td>
+                    <td style="font-size:12px;color:var(--gray-600)">Identify backup resources now</td>
+                    <td><span class="status-badge" style="background:#dcfce7;color:#16a34a"><span class="status-dot" style="background:#16a34a"></span>Mitigated</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div><!-- /tab-raid -->
+
+        <!-- FINANCE TAB -->
+        <div class="tab-pane" id="tab-finance">
+          <div style="padding:12px 16px;background:#fff;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;gap:10px;flex-shrink:0">
+            <span style="font-size:13px;font-weight:700;color:var(--gray-700)">Finance Tracker</span>
+            <div style="flex:1"></div>
+            <button class="expand-page-btn" onclick="openFullscreen('finance')">⛶ Full Screen</button>
+          </div>
+          <div class="tab-pane-scroll">
+            <div class="finance-stats">
+              <div class="stat-card" style="--c:var(--blue)"><div class="stat-val">£480k</div><div class="stat-lbl">Total Budget</div></div>
+              <div class="stat-card" style="--c:var(--green)"><div class="stat-val">£312k</div><div class="stat-lbl">Spent to Date</div></div>
+              <div class="stat-card" style="--c:var(--orange)"><div class="stat-val">£168k</div><div class="stat-lbl">Remaining</div></div>
+              <div class="stat-card" style="--c:var(--red)"><div class="stat-val">+£15k</div><div class="stat-lbl">Forecast Variance</div></div>
+            </div>
+            <div style="background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden">
+              <table class="log-table">
+                <thead><tr><th>Line Item</th><th>Budget</th><th>Actual</th><th>Forecast</th><th>Variance</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td>Personnel / Staffing</td><td>£280,000</td><td>£195,000</td><td>£285,000</td><td style="color:var(--orange)">+£5,000</td><td><span class="severity-badge" style="background:#fef9c3;color:#ca8a04">Over</span></td></tr>
+                  <tr><td>Software Licences</td><td>£45,000</td><td>£43,000</td><td>£45,000</td><td style="color:var(--green)">On Budget</td><td><span class="severity-badge" style="background:#dcfce7;color:#16a34a">OK</span></td></tr>
+                  <tr><td>Infrastructure / Cloud</td><td>£60,000</td><td>£42,000</td><td>£68,000</td><td style="color:var(--red)">+£8,000</td><td><span class="severity-badge" style="background:#fee2e2;color:#dc2626">Over</span></td></tr>
+                  <tr><td>External Consultancy</td><td>£95,000</td><td>£32,000</td><td>£97,000</td><td style="color:var(--orange)">+£2,000</td><td><span class="severity-badge" style="background:#fef9c3;color:#ca8a04">Watch</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div><!-- /tab-finance -->
+
+        <!-- DOCUMENTS TAB -->
+        <div class="tab-pane" id="tab-docs">
+          <div style="padding:12px 16px;background:#fff;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;gap:10px;flex-shrink:0">
+            <span style="font-size:13px;font-weight:700;color:var(--gray-700)">Project Documents</span>
+            <div style="flex:1"></div>
+            <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px">📤 Upload</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px">＋ New Doc</button>
+          </div>
+          <div class="tab-pane-scroll">
+            <div style="background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden">
+              <table class="log-table">
+                <thead><tr><th>Document</th><th>Type</th><th>Owner</th><th>Last Updated</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td><div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">📄</span><div><div style="font-weight:600">Project Charter</div><div style="font-size:11px;color:var(--gray-400)">Scope, objectives and constraints</div></div></div></td><td><span class="tag" style="background:#dbeafe;color:#1d4ed8">Charter</span></td><td>Sarah Ahmed</td><td style="font-family:var(--mono);font-size:11px">Jan 15, 2025</td><td><span class="severity-badge" style="background:#dcfce7;color:#16a34a">Approved</span></td><td><button class="btn-ghost btn" style="font-size:11px;padding:3px 8px">View</button></td></tr>
+                  <tr><td><div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">📊</span><div><div style="font-weight:600">Business Case</div><div style="font-size:11px;color:var(--gray-400)">Financial justification and ROI</div></div></div></td><td><span class="tag" style="background:#ede9fe;color:#7c3aed">Business</span></td><td>Dan Kowalski</td><td style="font-family:var(--mono);font-size:11px">Feb 02, 2025</td><td><span class="severity-badge" style="background:#dcfce7;color:#16a34a">Approved</span></td><td><button class="btn-ghost btn" style="font-size:11px;padding:3px 8px">View</button></td></tr>
+                  <tr><td><div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">🏗️</span><div><div style="font-weight:600">Technical Architecture Document</div><div style="font-size:11px;color:var(--gray-400)">System design and integration specs</div></div></div></td><td><span class="tag" style="background:#cffafe;color:#0e7490">Technical</span></td><td>Priya Venkat</td><td style="font-family:var(--mono);font-size:11px">Mar 10, 2025</td><td><span class="severity-badge" style="background:#fef9c3;color:#ca8a04">Draft</span></td><td><button class="btn-ghost btn" style="font-size:11px;padding:3px 8px">View</button></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div><!-- /tab-docs -->
+
+        <!-- STATUS REPORTS TAB -->
+        <div class="tab-pane" id="tab-status">
+          <div style="padding:12px 16px;background:#fff;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;gap:10px;flex-shrink:0">
+            <span style="font-size:13px;font-weight:700;color:var(--gray-700)">Status Reports</span>
+            <div style="flex:1"></div>
+            <button class="expand-page-btn" onclick="openFullscreen('status')">⛶ Full Screen</button>
+            <button class="btn btn-primary" style="font-size:12px;padding:5px 12px">＋ New Status Report</button>
+          </div>
+          <div class="tab-pane-scroll">
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div style="background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:18px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+                  <div><div style="font-size:14px;font-weight:700">Week 10 Status Report</div><div style="font-size:11px;color:var(--gray-400);margin-top:2px">Reported by Sarah Ahmed · Mar 10, 2025</div></div>
+                  <div style="display:flex;gap:8px">
+                    <span class="health-pill health-green">🟢 Overall: On Track</span>
+                    <button class="btn-ghost btn" style="font-size:11px;padding:4px 8px">View Full</button>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+                  <div style="padding:10px;background:var(--gray-50);border-radius:7px"><div style="font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Schedule</div><span class="health-pill health-green" style="font-size:11px">🟢 On Track</span></div>
+                  <div style="padding:10px;background:var(--gray-50);border-radius:7px"><div style="font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Budget</div><span class="health-pill health-amber" style="font-size:11px">🟡 At Risk</span></div>
+                  <div style="padding:10px;background:var(--gray-50);border-radius:7px"><div style="font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Resources</div><span class="health-pill health-green" style="font-size:11px">🟢 On Track</span></div>
+                </div>
+                <div style="font-size:12px;color:var(--gray-600);line-height:1.7"><strong>This Week:</strong> Completed architecture design review. API specification 80% complete. Sprint 1 planning session held.<br><strong>Next Week:</strong> Finalise API spec. Begin UI/UX prototyping. Vendor escalation meeting for integration delays.</div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /tab-status -->
+
+      </div><!-- /tool-content -->
+    </div><!-- /view-project -->
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ══ FULLSCREEN OVERLAY ══ -->
+<div class="fullscreen-overlay" id="fullscreenOverlay">
+  <div class="fullscreen-header">
+    <div class="fullscreen-title" id="fsTitle">Gantt Chart</div>
+    <span class="fullscreen-badge" id="fsProject">Digital Transformation</span>
+    <button class="fullscreen-close" onclick="closeFullscreen()" title="Exit Full Screen (Esc)">✕</button>
+  </div>
+  <div class="fullscreen-body" id="fsBody">
+    <!-- content injected dynamically -->
+  </div>
+</div>
+
+<!-- ══ TOOLS DRAWER ══ -->
+<div class="tools-drawer-backdrop" id="drawerBackdrop" onclick="closeToolsDrawer()"></div>
+<div class="tools-drawer" id="toolsDrawer">
+  <div class="tools-drawer-header">
+    <div class="tools-drawer-title">All Project Tools</div>
+    <button class="modal-close" onclick="closeToolsDrawer()">×</button>
+  </div>
+  <div class="tools-drawer-body">
+    <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding:0 4px">Active Tools</div>
+    <button class="drawer-tool-btn active" onclick="closeToolsDrawer();switchTab(document.getElementById('tab-btn-gantt'),'gantt')"><span class="drawer-tool-icon">📊</span> Gantt Chart</button>
+    <button class="drawer-tool-btn" onclick="closeToolsDrawer();switchTab(document.getElementById('tab-btn-board'),'board')"><span class="drawer-tool-icon">🗃️</span> Scrum Board</button>
+    <button class="drawer-tool-btn" onclick="closeToolsDrawer();switchTab(document.getElementById('tab-btn-dashboard'),'dashboard')"><span class="drawer-tool-icon">📊</span> Project Dashboard</button>
+    <button class="drawer-tool-btn" onclick="closeToolsDrawer();switchTab(document.getElementById('tab-btn-raid'),'raid')"><span class="drawer-tool-icon">⚠️</span> RAID Log</button>
+    <button class="drawer-tool-btn" onclick="closeToolsDrawer();switchTab(document.getElementById('tab-btn-finance'),'finance')"><span class="drawer-tool-icon">💰</span> Finance Tracker</button>
+    <button class="drawer-tool-btn" onclick="closeToolsDrawer();switchTab(document.getElementById('tab-btn-docs'),'docs')"><span class="drawer-tool-icon">📄</span> Documents</button>
+    <button class="drawer-tool-btn" onclick="closeToolsDrawer();switchTab(document.getElementById('tab-btn-status'),'status')"><span class="drawer-tool-icon">📋</span> Status Reports</button>
+
+    <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px;padding:0 4px;border-top:1px solid var(--gray-200);padding-top:14px">Not Yet Enabled</div>
+    <button class="drawer-tool-btn" style="opacity:.6" onclick="alert('Add Milestone Plan to this project?')"><span class="drawer-tool-icon">🏁</span> Milestone Plan <span style="margin-left:auto;font-size:10px;background:var(--gray-100);padding:2px 7px;border-radius:10px;color:var(--gray-500)">+ Add</span></button>
+    <button class="drawer-tool-btn" style="opacity:.6" onclick="alert('Add Epics & Stories?')"><span class="drawer-tool-icon">📖</span> Epics & Stories <span style="margin-left:auto;font-size:10px;background:var(--gray-100);padding:2px 7px;border-radius:10px;color:var(--gray-500)">+ Add</span></button>
+    <button class="drawer-tool-btn" style="opacity:.6" onclick="alert('Add Resource Tracker?')"><span class="drawer-tool-icon">👤</span> Resource Tracker <span style="margin-left:auto;font-size:10px;background:var(--gray-100);padding:2px 7px;border-radius:10px;color:var(--gray-500)">+ Add</span></button>
+    <button class="drawer-tool-btn" style="opacity:.6" onclick="alert('Add Timesheets?')"><span class="drawer-tool-icon">⏰</span> Timesheets <span style="margin-left:auto;font-size:10px;background:var(--gray-100);padding:2px 7px;border-radius:10px;color:var(--gray-500)">+ Add</span></button>
+    <button class="drawer-tool-btn" style="opacity:.6" onclick="alert('Add Stakeholder Map?')"><span class="drawer-tool-icon">🗺️</span> Stakeholder Map <span style="margin-left:auto;font-size:10px;background:var(--gray-100);padding:2px 7px;border-radius:10px;color:var(--gray-500)">+ Add</span></button>
+    <button class="drawer-tool-btn" style="opacity:.6" onclick="alert('Add Org Chart?')"><span class="drawer-tool-icon">🏢</span> Org Chart <span style="margin-left:auto;font-size:10px;background:var(--gray-100);padding:2px 7px;border-radius:10px;color:var(--gray-500)">+ Add</span></button>
+    <button class="drawer-tool-btn" style="opacity:.6" onclick="alert('Add RACI Model?')"><span class="drawer-tool-icon">👥</span> RACI Model <span style="margin-left:auto;font-size:10px;background:var(--gray-100);padding:2px 7px;border-radius:10px;color:var(--gray-500)">+ Add</span></button>
+    <button class="drawer-tool-btn" style="opacity:.6" onclick="alert('Add Business Process Model?')"><span class="drawer-tool-icon">⚙️</span> Business Process Model <span style="margin-left:auto;font-size:10px;background:var(--gray-100);padding:2px 7px;border-radius:10px;color:var(--gray-500)">+ Add</span></button>
+  </div>
+</div>
+
+<script>
+// ── DATA ──
+const PROJECTS = [
+  { name: 'Digital Transformation', desc: 'Core systems modernisation', type: 'Programme', status: 'Active', customer: 'Internal', lead: 'Sarah Ahmed', progress: 68, health: '🟢 On Track', healthClass: 'health-green', tools: ['Gantt','Board','RAID'], due: 'Dec 2025', color: '#2563eb' },
+  { name: 'CRM Phase 2', desc: 'Salesforce migration', type: 'Project', status: 'Active', customer: 'Acme Corp', lead: 'Dan Kowalski', progress: 42, health: '🟡 At Risk', healthClass: 'health-amber', tools: ['Gantt','Board'], due: 'Mar 2025', color: '#7c3aed' },
+  { name: 'Mobile App POC', desc: 'Feasibility study', type: 'POC', status: 'Planning', customer: 'TechStart Ltd', lead: 'Priya Venkat', progress: 15, health: '⚪ Early', healthClass: 'health-blue', tools: ['Board','Dashboard'], due: 'Feb 2025', color: '#0891b2' },
+  { name: 'Brand Refresh Campaign', desc: 'Q2 marketing initiative', type: 'Campaign', status: 'Active', customer: 'BlueSky Media', lead: 'Marcus Lee', progress: 55, health: '🟢 On Track', healthClass: 'health-green', tools: ['Milestone','Docs'], due: 'Apr 2025', color: '#ea580c' },
+  { name: 'ERP Pilot Programme', desc: 'SAP rollout pilot', type: 'Pilot', status: 'Planning', customer: 'Global Finance', lead: 'Sarah Ahmed', progress: 8, health: '⚪ Early', healthClass: 'health-blue', tools: ['Gantt'], due: 'Jun 2025', color: '#16a34a' },
+  { name: 'DevOps Transformation', desc: 'CI/CD and cloud migration', type: 'Initiative', status: 'Active', customer: 'Internal', lead: 'Dan Kowalski', progress: 73, health: '🟢 On Track', healthClass: 'health-green', tools: ['Gantt','Board','Finance'], due: 'Aug 2025', color: '#6366f1' },
+  { name: 'Customer Portal v2', desc: 'Self-service portal redesign', type: 'Project', status: 'On Hold', customer: 'Acme Corp', lead: 'Priya Venkat', progress: 30, health: '🔴 Blocked', healthClass: 'health-red', tools: ['Board','Docs'], due: 'Jul 2025', color: '#dc2626' },
+  { name: 'Data Warehouse Sprint 4', desc: 'Analytics pipeline', type: 'Sprint', status: 'Active', customer: 'Internal', lead: 'Marcus Lee', progress: 89, health: '🟢 On Track', healthClass: 'health-green', tools: ['Board'], due: 'Mar 2025', color: '#0891b2' },
+  { name: 'Compliance Framework', desc: 'ISO 27001 certification', type: 'Project', status: 'Draft', customer: 'Internal', lead: 'Sarah Ahmed', progress: 0, health: '⚪ Not Started', healthClass: 'health-blue', tools: [], due: 'Sep 2025', color: '#94a3b8' },
+  { name: 'Partner API Integration', desc: 'Third-party API connectors', type: 'Change Request', status: 'Active', customer: 'TechStart Ltd', lead: 'Dan Kowalski', progress: 61, health: '🟡 At Risk', healthClass: 'health-amber', tools: ['Gantt','RAID'], due: 'May 2025', color: '#7c3aed' },
+];
+
+const TYPE_COLORS = {
+  'Programme': {bg:'#dbeafe',c:'#1d4ed8'},
+  'Project': {bg:'#ede9fe',c:'#7c3aed'},
+  'POC': {bg:'#cffafe',c:'#0e7490'},
+  'Campaign': {bg:'#ffedd5',c:'#c2410c'},
+  'Pilot': {bg:'#dcfce7',c:'#16a34a'},
+  'Initiative': {bg:'#e0e7ff',c:'#4338ca'},
+  'Sprint': {bg:'#dbeafe',c:'#2563eb'},
+  'Change Request': {bg:'#fce7f3',c:'#9d174d'},
+};
+
+const STATUS_COLORS = {
+  'Active':     {bg:'#dcfce7',c:'#16a34a'},
+  'Planning':   {bg:'#fef9c3',c:'#ca8a04'},
+  'Draft':      {bg:'#f1f5f9',c:'#64748b'},
+  'On Hold':    {bg:'#ffedd5',c:'#c2410c'},
+  'Completed':  {bg:'#dcfce7',c:'#16a34a'},
+  'Cancelled':  {bg:'#fee2e2',c:'#dc2626'},
+};
+
+// ── PAGINATION ──
+const PAGE_SIZE = 10;
+let currentPage = 1;
+
+function getFiltered() {
+  const q = document.getElementById('globalSearch')?.value.toLowerCase() || '';
+  const tf = document.getElementById('typeFilter')?.value;
+  const sf = document.getElementById('statusFilter')?.value;
+  const cf = document.getElementById('customerFilter')?.value;
+  const lf = document.getElementById('leadFilter')?.value;
+  return PROJECTS.filter(p => {
+    if(q && !p.name.toLowerCase().includes(q) && !p.desc.toLowerCase().includes(q)) return false;
+    if(tf && p.type !== tf) return false;
+    if(sf && p.status !== sf) return false;
+    if(cf && p.customer !== cf) return false;
+    if(lf && p.lead !== lf) return false;
+    return true;
+  });
+}
+
+function renderTable() {
+  const filtered = getFiltered();
+  const body = document.getElementById('projectsBody');
+  if(!body) return;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const slice = filtered.slice(start, start + PAGE_SIZE);
+  const total = filtered.length;
+
+  body.innerHTML = slice.map(p => {
+    const tc = TYPE_COLORS[p.type] || {bg:'#f1f5f9',c:'#475569'};
+    const sc = STATUS_COLORS[p.status] || {bg:'#f1f5f9',c:'#475569'};
+    const toolStr = p.tools.length ? p.tools.map(t=>`<span class="tool-pill">${t}</span>`).join('') : '<span style="color:var(--gray-400);font-size:11px">—</span>';
+    return `<tr onclick="openProject('${p.name}','${p.type}')">
+      <td><div class="proj-name-cell"><div class="proj-color-dot" style="background:${p.color}"></div><div><div class="proj-name">${p.name}</div><div class="proj-desc">${p.desc}</div></div></div></td>
+      <td><span class="type-badge" style="background:${tc.bg};color:${tc.c}">${p.type}</span></td>
+      <td><span class="status-badge" style="background:${sc.bg};color:${sc.c}"><span class="status-dot" style="background:${sc.c}"></span>${p.status}</span></td>
+      <td style="font-size:13px">${p.customer}</td>
+      <td style="font-size:13px">${p.lead}</td>
+      <td class="progress-cell"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${p.progress}%;background:${p.color}"></div></div><small style="color:var(--gray-400);font-size:10px">${p.progress}%</small></td>
+      <td><span class="health-pill ${p.healthClass}" style="font-size:11px">${p.health}</span></td>
+      <td><div class="tool-pills">${toolStr}</div></td>
+      <td style="font-size:12px;color:var(--gray-500);font-family:var(--mono);white-space:nowrap">${p.due}</td>
+      <td><button class="btn-ghost btn" style="font-size:11px;padding:4px 9px" onclick="event.stopPropagation();openProject('${p.name}','${p.type}')">Open →</button></td>
+    </tr>`;
+  }).join('');
+
+  const info = document.getElementById('tableInfo');
+  if(info) info.textContent = `Showing ${Math.min(start+1,total)}–${Math.min(start+PAGE_SIZE,total)} of ${total} work items`;
+
+  renderPagination(total);
+}
+
+function renderPagination(total) {
+  const el = document.getElementById('pagination');
+  if(!el) return;
+  const pages = Math.ceil(total / PAGE_SIZE);
+  if(pages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  for(let i=1;i<=pages;i++) {
+    if(i===1 || i===pages || Math.abs(i-currentPage)<=1) {
+      html += `<button class="page-btn${i===currentPage?' active':''}" onclick="goPage(${i})">${i}</button>`;
+    } else if(Math.abs(i-currentPage)===2) {
+      html += `<span style="color:var(--gray-400);font-size:12px;padding:0 4px">…</span>`;
+    }
+  }
+  el.innerHTML = html;
+}
+
+function goPage(p) { currentPage = p; renderTable(); }
+
+function renderCards() {
+  const filtered = getFiltered();
+  const el = document.getElementById('projectsCards');
+  if(!el) return;
+  const tc_map = TYPE_COLORS;
+  const sc_map = STATUS_COLORS;
+  el.innerHTML = filtered.slice(0,12).map(p => {
+    const tc = tc_map[p.type] || {bg:'#f1f5f9',c:'#475569'};
+    const sc = sc_map[p.status] || {bg:'#f1f5f9',c:'#475569'};
+    return `<div class="proj-card" onclick="openProject('${p.name}','${p.type}')">
+      <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${p.color};border-radius:var(--radius-lg) 0 0 var(--radius-lg)"></div>
+      <div class="proj-card-top">
+        <div>
+          <div class="proj-card-name">${p.name}</div>
+          <div class="proj-card-meta">${p.desc}</div>
+        </div>
+        <span class="status-badge" style="background:${sc.bg};color:${sc.c};flex-shrink:0;margin-left:8px"><span class="status-dot" style="background:${sc.c}"></span>${p.status}</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <span class="type-badge" style="background:${tc.bg};color:${tc.c};font-size:10px">${p.type}</span>
+        <span class="health-pill ${p.healthClass}" style="font-size:10px">${p.health}</span>
+      </div>
+      <div class="proj-card-progress">
+        <div class="proj-card-progress-lbl"><span>Progress</span><span style="font-weight:700">${p.progress}%</span></div>
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${p.progress}%;background:${p.color}"></div></div>
+      </div>
+      <div class="proj-card-footer">
+        <div style="font-size:11px;color:var(--gray-500)">👤 ${p.lead}</div>
+        <div style="font-size:11px;color:var(--gray-400);font-family:var(--mono)">${p.due}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── VIEW SWITCHING ──
+function switchView(view) {
+  document.querySelectorAll('.view, .view-noscroll').forEach(d => {
+    d.classList.remove('active');
+    d.style.display = '';
+  });
+  const el = document.getElementById('view-' + view);
+  if(!el) return;
+  el.classList.add('active');
+
+  const bc = document.getElementById('breadcrumb');
+  if(view === 'dashboard') {
+    bc.innerHTML = '<span class="bc-item current">Projects</span>';
+    renderTable(); renderCards();
+  } else if(view === 'new') {
+    bc.innerHTML = '<span class="bc-item" onclick="switchView(\'dashboard\')">Projects</span><span class="bc-sep">›</span><span class="bc-item current">New Work Item</span>';
+    showStep(1);
+  } else if(view === 'all-projects') {
+    bc.innerHTML = '<span class="bc-item" onclick="switchView(\'dashboard\')">Projects</span><span class="bc-sep">›</span><span class="bc-item current">All Work Items</span>';
+  }
+}
+
+function openProject(name, type) {
+  document.querySelectorAll('.view, .view-noscroll').forEach(d => {
+    d.classList.remove('active');
+    d.style.display = '';
+  });
+  const el = document.getElementById('view-project');
+  el.classList.add('active');
+  document.getElementById('proj-title').textContent = name;
+  const tc = TYPE_COLORS[type] || {bg:'#f1f5f9',c:'#475569'};
+  const badge = document.getElementById('proj-type-badge');
+  badge.textContent = type;
+  badge.style.background = tc.bg;
+  badge.style.color = tc.c;
+
+  const bc = document.getElementById('breadcrumb');
+  bc.innerHTML = `<span class="bc-item" onclick="switchView('dashboard')">Projects</span><span class="bc-sep">›</span><span class="bc-item current">${name}</span>`;
+
+  // Reset to gantt tab
+  switchTab(document.getElementById('tab-btn-gantt'), 'gantt');
+}
+
+// ── TABS ──
+function switchTab(tabEl, tab) {
+  document.querySelectorAll('.tool-tab').forEach(t => t.classList.remove('active'));
+  if(tabEl) tabEl.classList.add('active');
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  const pane = document.getElementById('tab-' + tab);
+  if(pane) pane.classList.add('active');
+}
+
+// ── WIZARD ──
+let selectedType = '';
+function showStep(step) {
+  document.querySelectorAll('.wizard-panel').forEach(p => p.classList.remove('active'));
+  const panelMap = {1:'panel-type', 2:'panel-details', 3:'panel-tools'};
+  document.getElementById(panelMap[step])?.classList.add('active');
+  document.querySelectorAll('.step-row').forEach((r, i) => {
+    r.classList.remove('active','done');
+    const num = r.querySelector('.step-num');
+    if(i + 1 < step) { r.classList.add('done'); num.textContent = '✓'; }
+    else if(i + 1 === step) { r.classList.add('active'); num.textContent = i + 1; }
+    else { num.textContent = i + 1; }
+  });
+  updateToolCount();
+}
+
+function selectType(el, type) {
+  document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedType = type;
+  document.getElementById('recommendedToolsNote').innerHTML =
+    `<span style="font-size:16px">✨</span><span><strong>Recommended for ${type}:</strong> Tools have been pre-selected based on your work type.</span>`;
+}
+
+function toggleMoreTypes() {
+  const el = document.getElementById('moreTypes');
+  const btn = document.getElementById('moreTypesBtn');
+  const hidden = el.style.display === 'none';
+  el.style.display = hidden ? 'block' : 'none';
+  btn.textContent = hidden ? '− Hide extended types' : '＋ Show all work types (12 more)';
+}
+
+function toggleTool(el) {
+  el.classList.toggle('selected');
+  const check = el.querySelector('.tool-check');
+  if(check) check.textContent = el.classList.contains('selected') ? '✓' : '';
+  updateToolCount();
+}
+
+function updateToolCount() {
+  const count = document.querySelectorAll('#panel-tools .tool-card.selected').length;
+  const el = document.getElementById('selectedToolCount');
+  if(el) el.textContent = `${count} tool${count !== 1 ? 's' : ''} selected`;
+}
+
+function createProject() {
+  openProject(selectedType || 'New Project', selectedType || 'Project');
+}
+
+// ── FILTERS ──
+function filterChip(el, filter) {
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  filterProjects();
+}
+
+function filterByStatus(status) {
+  const sf = document.getElementById('statusFilter');
+  if(sf) sf.value = status;
+  filterProjects();
+}
+
+function filterProjects() {
+  currentPage = 1;
+  renderTable();
+  renderCards();
+}
+
+function setViewMode(mode, btn) {
+  document.querySelectorAll('.view-btn').forEach(b => {
+    if(b.id && b.id.startsWith('vbtn-')) b.classList.remove('active');
+  });
+  btn.classList.add('active');
+  document.getElementById('proj-table-view').style.display = mode === 'table' ? 'block' : 'none';
+  document.getElementById('proj-cards-view').style.display = mode === 'cards' ? 'block' : 'none';
+}
+
+// ── FULL SCREEN ──
+function openFullscreen(tool) {
+  const names = { gantt:'Gantt Chart', board:'Scrum Board', dashboard:'Project Dashboard', raid:'RAID Log', finance:'Finance Tracker', docs:'Documents', status:'Status Reports', project:'Project View' };
+  document.getElementById('fsTitle').textContent = names[tool] || tool;
+  document.getElementById('fsProject').textContent = document.getElementById('proj-title')?.textContent || 'Project';
+  const overlay = document.getElementById('fullscreenOverlay');
+  const body = document.getElementById('fsBody');
+  body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:16px;color:var(--gray-500)">
+    <div style="font-size:56px;opacity:.3">⛶</div>
+    <div style="font-size:16px;font-weight:700;color:var(--gray-600)">${names[tool] || tool} — Full Screen Mode</div>
+    <div style="font-size:13px;text-align:center;max-width:380px;line-height:1.7">
+      In the full build, this view expands to use all available screen space, providing maximum visibility for large datasets such as complex Gantt charts with hundreds of tasks, or boards with multiple swim lanes.<br><br>
+      Press <kbd style="background:var(--gray-200);padding:2px 8px;border-radius:4px;font-family:var(--mono);font-size:12px">Esc</kbd> or click × to exit.
+    </div>
+  </div>`;
+  overlay.classList.add('active');
+}
+
+function closeFullscreen() {
+  document.getElementById('fullscreenOverlay').classList.remove('active');
+}
+
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape') {
+    closeFullscreen();
+    closeToolsDrawer();
+  }
+});
+
+// ── TOOLS DRAWER ──
+function openToolsDrawer() {
+  document.getElementById('toolsDrawer').classList.add('open');
+  document.getElementById('drawerBackdrop').classList.add('active');
+}
+function closeToolsDrawer() {
+  document.getElementById('toolsDrawer').classList.remove('open');
+  document.getElementById('drawerBackdrop').classList.remove('active');
+}
+
+// ── INIT ──
+renderTable();
+renderCards();
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+I now want to create the solution for the agile boards or what I'm calling delivery boards which also includes all the classical elements needed, like Sprint board, backlog, Epics, stories sprints Defects, Road Map and Sprint dashboard. I have used Claude to help me with the designs and I'm now ready to showcase to you to see if we can incorporate those designs in our project module.
+
+so the thinking is, when a create his own work type and chooses agile or hybrid they will need to add the various tools to the project panel. A suggestion would be if they choose Edge All, they automatically get all the components needed, e.g.
+
+	1. Sprint Board 
+	2. Backlog
+	3. Epics
+	4. Stories
+	5. Sprints
+	6. Defects
+	7. Road Map
+	8. Sprint dashboard
+
+I have got Claude to create a summary of what is best practise when it comes to setting up a Sprint board with all the elements which can act as a user guide to users when setting up Jiganto's Sprint Board.
+
+what I like about the current design is that it blends all nicely into each other So you know how they all have their own interdependencies.
+
+Below is the hierarchy which represents the design we've now got and this shows you how each element is dependent on the previous element.
+
+The hierarchy which has been created, shows how the data will flow And this will hopefully make it easier for users to understand. I would like to incorporate these designs into the Jiganto Solution And the assumption is that when a user chooses the tools and they choose the agile components Then they will get this design automatically included which also includes the ability to have work streams If you're working on an ERP work stream you might have OTC and PTP and RTR and HTR, etc . 
+
+it also has the necessary drop downs or philtres for each of the tab areas But also the ability to expand certain windows where needed . Please can you copy this exact design but also let me know if there's any changes you would propose based on best practise
+
+Agile Data Flow Hierarch
+Strategic Objective / OKR 	Build already in place
+   ↓	
+Initiative  	Build already in place
+   ↓	
+Epic	New Design
+   ↓	
+Feature	New Design
+   ↓	
+User Story (PBI)	New Design
+   ↓	
+Tasks / Subtasks	New Design
+   ↓	
+Defects	New Design

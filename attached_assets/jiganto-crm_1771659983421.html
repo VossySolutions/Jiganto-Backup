@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jiganto – CRM</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Fraunces:ital,wght@0,300;0,400;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --blue:#1e6af0;--blue-l:#e8f0fe;--blue-m:#4f87f5;
+  --teal:#0fbcb0;--teal-l:#e0f7f6;
+  --green:#22c55e;--green-l:#dcfce7;
+  --orange:#f97316;--orange-l:#fff7ed;
+  --red:#ef4444;--red-l:#fee2e2;
+  --purple:#8b5cf6;--purple-l:#ede9fe;
+  --pink:#ec4899;--pink-l:#fce7f3;
+  --yellow:#eab308;--yellow-l:#fef9c3;
+  --indigo:#6366f1;--indigo-l:#e0e7ff;
+  --crm:#0ea5e9; /* CRM primary - sky blue */
+  --crm-l:#e0f2fe;--crm-d:#0369a1;
+  --g50:#f8fafc;--g100:#f1f5f9;--g200:#e2e8f0;--g300:#cbd5e1;
+  --g400:#94a3b8;--g500:#64748b;--g600:#475569;--g700:#334155;
+  --g800:#1e293b;--g900:#0f172a;
+  --sidebar:210px;
+  --font:'DM Sans',sans-serif;--display:'Fraunces',serif;--mono:'DM Mono',monospace;
+  --r:8px;--shadow:0 4px 16px rgba(0,0,0,.1);--shadow-sm:0 1px 4px rgba(0,0,0,.07);--shadow-lg:0 8px 32px rgba(0,0,0,.15);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--g50);color:var(--g800);font-size:13px;display:flex;height:100vh;overflow:hidden;}
+
+/* ─── SIDEBAR ─── */
+.sb{width:var(--sidebar);background:#fff;border-right:1px solid var(--g200);display:flex;flex-direction:column;flex-shrink:0;}
+.sb-logo{display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--g100);}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--blue),var(--teal));border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;}
+.logo-text{font-weight:700;font-size:15px;color:var(--g900);letter-spacing:-.3px;}
+.logo-sub{font-size:10px;color:var(--g400);}
+.org-pill{margin:10px 12px;padding:7px 10px;background:var(--g50);border:1px solid var(--g200);border-radius:6px;font-size:12px;font-weight:500;color:var(--g600);display:flex;align-items:center;gap:6px;cursor:pointer;}
+.org-dot{width:7px;height:7px;border-radius:50%;background:var(--green);}
+.nav-section{padding:4px 0;flex:1;overflow-y:auto;}
+.nav-label{font-size:10px;font-weight:600;color:var(--g400);letter-spacing:.7px;text-transform:uppercase;padding:6px 16px 3px;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 14px;font-size:13px;color:var(--g600);cursor:pointer;position:relative;transition:background .1s,color .1s;}
+.nav-item:hover{background:var(--g50);color:var(--g800);}
+.nav-item.active{background:var(--crm-l);color:var(--crm);font-weight:500;}
+.nav-item.active::before{content:'';position:absolute;left:0;top:5px;bottom:5px;width:3px;background:var(--crm);border-radius:0 3px 3px 0;}
+.nav-icon-wrap{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.ic-db{background:#dbeafe;}.ic-chat{background:#dcfce7;}.ic-biz{background:#fff7ed;}
+.ic-crm{background:#e0f2fe;}.ic-ws{background:#ede9fe;}.ic-docs{background:#fef9c3;}
+.ic-tasks{background:#e0e7ff;}.ic-proj{background:#e0f7f6;}.ic-fin{background:#dcfce7;}
+.ic-res{background:#fee2e2;}.ic-test{background:#fef3c7;}.ic-bpm{background:#e0e7ff;}
+.ic-help{background:#fce7f3;}.ic-util{background:#f1f5f9;}
+.nb{margin-left:auto;background:var(--crm);color:#fff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:20px;}
+.sb-bottom{border-top:1px solid var(--g100);padding:10px;}
+.user-row{display:flex;align-items:center;gap:9px;padding:6px;border-radius:6px;cursor:pointer;}
+.user-row:hover{background:var(--g50);}
+.uav{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;font-weight:600;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+
+/* ─── MAIN ─── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+
+/* ─── TOPBAR ─── */
+.topbar{height:52px;background:#fff;border-bottom:1px solid var(--g200);display:flex;align-items:center;padding:0 20px;gap:10px;flex-shrink:0;}
+.page-icon-wrap{width:32px;height:32px;border-radius:8px;background:var(--crm-l);display:flex;align-items:center;justify-content:center;font-size:16px;}
+.page-title{font-size:16px;font-weight:700;color:var(--g900);}
+.page-sub{font-size:11px;color:var(--g400);}
+.tb-right{display:flex;align-items:center;gap:8px;margin-left:auto;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer;border:none;transition:all .13s;}
+.btn-primary{background:var(--crm);color:#fff;}
+.btn-primary:hover{background:var(--crm-d);}
+.btn-ghost{background:transparent;color:var(--g600);border:1px solid var(--g200);}
+.btn-ghost:hover{background:var(--g50);}
+.btn-crm{background:linear-gradient(135deg,var(--crm),var(--blue));color:#fff;}
+.btn-crm:hover{opacity:.9;}
+.btn-icon{width:30px;height:30px;border-radius:6px;background:transparent;border:1px solid var(--g200);color:var(--g500);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;}
+.btn-icon:hover{background:var(--g50);}
+
+/* ─── MAIN TABS ─── */
+.main-tabs{background:#fff;border-bottom:1px solid var(--g200);padding:0 20px;display:flex;align-items:flex-end;gap:2px;flex-shrink:0;overflow-x:auto;}
+.m-tab{display:flex;align-items:center;gap:6px;padding:10px 14px;font-size:12px;font-weight:500;color:var(--g500);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .13s;}
+.m-tab:hover{color:var(--g800);}
+.m-tab.active{color:var(--crm);border-bottom-color:var(--crm);font-weight:600;}
+.m-tab-icon{width:18px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;}
+.m-tab-count{font-size:10px;font-weight:700;padding:1px 5px;border-radius:20px;background:var(--g100);color:var(--g600);}
+.m-tab.active .m-tab-count{background:var(--crm-l);color:var(--crm);}
+
+/* ─── CONTENT ─── */
+.crm-content{flex:1;overflow:hidden;position:relative;}
+.crm-view{position:absolute;inset:0;overflow-y:auto;display:none;}
+.crm-view.active{display:block;}
+
+/* ─── SHARED COMPONENTS ─── */
+.page-toolbar{display:flex;align-items:center;gap:8px;padding:12px 20px;background:#fff;border-bottom:1px solid var(--g200);flex-shrink:0;position:sticky;top:0;z-index:10;}
+.chip{display:flex;align-items:center;gap:5px;padding:5px 10px;background:#fff;border:1px solid var(--g200);border-radius:6px;font-size:12px;font-weight:500;color:var(--g600);cursor:pointer;transition:all .13s;}
+.chip:hover{border-color:var(--crm);color:var(--crm);}
+.chip.on{background:var(--crm-l);border-color:var(--crm);color:var(--crm);}
+.sep{width:1px;height:16px;background:var(--g200);margin:0 2px;}
+.srch{display:flex;align-items:center;gap:7px;background:var(--g50);border:1px solid var(--g200);border-radius:6px;padding:6px 11px;width:220px;}
+.srch input{border:none;outline:none;background:transparent;font-family:var(--font);font-size:12px;color:var(--g700);width:100%;}
+
+/* Table */
+.data-table{width:100%;border-collapse:collapse;background:#fff;table-layout:fixed;}
+.data-table th{padding:9px 12px;font-size:11px;font-weight:600;color:var(--g500);letter-spacing:.4px;text-transform:uppercase;text-align:left;white-space:nowrap;background:var(--g50);border-bottom:1px solid var(--g200);cursor:pointer;}
+.data-table th:hover{background:var(--g100);}
+.data-table th:first-child{width:32px;}
+.data-table td{padding:10px 12px;border-bottom:1px solid var(--g100);vertical-align:middle;}
+.data-table tbody tr{cursor:pointer;transition:background .1s;}
+.data-table tbody tr:hover{background:#f0f9ff;}
+.data-table tbody tr:hover .ra{opacity:1;}
+
+/* Pills / badges */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;}
+.badge .bd{width:5px;height:5px;border-radius:50%;}
+.b-new{background:#f0fdf4;color:#15803d;}.b-new .bd{background:var(--green);}
+.b-qual{background:#e0f2fe;color:#0369a1;}.b-qual .bd{background:var(--crm);}
+.b-prop{background:var(--yellow-l);color:#a16207;}.b-prop .bd{background:var(--yellow);}
+.b-neg{background:var(--orange-l);color:#c2410c;}.b-neg .bd{background:var(--orange);}
+.b-won{background:var(--green-l);color:#15803d;}.b-won .bd{background:var(--green);}
+.b-lost{background:var(--red-l);color:#b91c1c;}.b-lost .bd{background:var(--red);}
+.b-hot{background:var(--red-l);color:#b91c1c;}.b-hot .bd{background:var(--red);}
+.b-warm{background:var(--orange-l);color:#c2410c;}.b-warm .bd{background:var(--orange);}
+.b-cold{background:#f1f5f9;color:#475569;}.b-cold .bd{background:#94a3b8;}
+.b-active{background:var(--green-l);color:#15803d;}
+.b-inactive{background:#f1f5f9;color:#475569;}
+.b-prospect{background:var(--crm-l);color:var(--crm-d);}
+/* stage badges for pipeline */
+.b-disco{background:#e0e7ff;color:#4338ca;}
+.b-demo{background:var(--purple-l);color:#6d28d9;}
+.b-trial{background:var(--teal-l);color:#0f766e;}
+.b-close{background:var(--orange-l);color:#c2410c;}
+
+/* av */
+.av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0;}
+.av-sm{width:20px;height:20px;font-size:8px;}
+
+/* money */
+.money{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--g800);}
+.money.green{color:var(--green);}
+.money.orange{color:var(--orange);}
+
+/* row actions */
+.ra{display:flex;gap:3px;opacity:0;transition:opacity .13s;}
+.ra button{width:22px;height:22px;border-radius:4px;background:var(--g100);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--g600);}
+.ra button:hover{background:var(--g200);}
+
+/* date */
+.dt{font-family:var(--mono);font-size:11px;color:var(--g500);}
+.dt.over{color:var(--red);}
+
+/* company logo placeholder */
+.co-logo{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;}
+
+/* ═══ DASHBOARD ═══ */
+.dash-wrap{padding:20px;}
+
+/* KPI Cards */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.kpi-card{background:#fff;border:1px solid var(--g200);border-radius:12px;padding:18px;position:relative;overflow:hidden;transition:box-shadow .15s;}
+.kpi-card:hover{box-shadow:var(--shadow-sm);}
+.kpi-card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0;}
+.kpi-card.blue::after{background:linear-gradient(90deg,var(--crm),var(--blue));}
+.kpi-card.green::after{background:linear-gradient(90deg,var(--green),var(--teal));}
+.kpi-card.orange::after{background:linear-gradient(90deg,var(--orange),var(--yellow));}
+.kpi-card.purple::after{background:linear-gradient(90deg,var(--purple),var(--pink));}
+.kpi-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:12px;}
+.kpi-val{font-size:28px;font-weight:700;color:var(--g900);font-family:var(--mono);letter-spacing:-1px;margin-bottom:2px;}
+.kpi-label{font-size:12px;color:var(--g500);}
+.kpi-trend{font-size:11px;font-weight:600;margin-top:6px;}
+.kpi-trend.up{color:var(--green);}
+.kpi-trend.down{color:var(--red);}
+.kpi-trend.neutral{color:var(--g400);}
+
+/* Dashboard grid */
+.dash-grid{display:grid;grid-template-columns:1fr 1fr 340px;gap:14px;margin-bottom:14px;}
+.dash-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.dash-card{background:#fff;border:1px solid var(--g200);border-radius:12px;padding:18px;}
+.dash-card-title{font-size:13px;font-weight:700;color:var(--g900);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+.dash-card-title .see-all{font-size:11px;font-weight:400;color:var(--crm);cursor:pointer;}
+
+/* Pipeline funnel */
+.funnel-row{display:flex;flex-direction:column;gap:6px;}
+.funnel-stage{display:flex;align-items:center;gap:10px;}
+.funnel-label{font-size:11px;font-weight:600;color:var(--g600);width:90px;flex-shrink:0;}
+.funnel-bar-wrap{flex:1;height:22px;background:var(--g100);border-radius:4px;overflow:hidden;position:relative;}
+.funnel-bar{height:100%;border-radius:4px;display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:700;color:#fff;transition:width .6s ease;}
+.funnel-val{font-size:11px;font-weight:600;color:var(--g600);font-family:var(--mono);width:60px;text-align:right;flex-shrink:0;}
+
+/* Donut chart */
+.donut-wrap{display:flex;align-items:center;gap:16px;}
+.donut-legend{display:flex;flex-direction:column;gap:7px;}
+.leg-item{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--g600);}
+.leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.leg-val{margin-left:auto;font-weight:600;color:var(--g800);font-family:var(--mono);}
+
+/* Activity list */
+.act-list{display:flex;flex-direction:column;gap:0;}
+.act-item{display:flex;gap:9px;padding:9px 0;border-bottom:1px solid var(--g100);}
+.act-item:last-child{border-bottom:none;}
+.act-av{width:28px;height:28px;border-radius:50%;font-size:10px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.act-body{flex:1;}
+.act-text{font-size:12px;color:var(--g600);line-height:1.5;}
+.act-text strong{color:var(--g800);}
+.act-time{font-size:10px;color:var(--g400);margin-top:2px;}
+
+/* Top customers */
+.top-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--g100);cursor:pointer;}
+.top-row:last-child{border-bottom:none;}
+.top-row:hover .top-name{color:var(--crm);}
+.top-rank{font-size:11px;font-weight:700;color:var(--g300);width:18px;flex-shrink:0;}
+.top-name{font-size:12px;font-weight:600;color:var(--g800);}
+.top-val{font-size:12px;font-weight:600;color:var(--g800);font-family:var(--mono);margin-left:auto;}
+.top-badge{margin-left:8px;}
+
+/* Win/Loss bar */
+.wl-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;margin:8px 0;}
+.wl-won{background:var(--green);border-radius:4px 0 0 4px;}
+.wl-lost{background:var(--red);border-radius:0 4px 4px 0;}
+.wl-labels{display:flex;justify-content:space-between;font-size:11px;}
+
+/* ═══ PIPELINE ═══ */
+.pipeline-wrap{padding:0;}
+.pipe-cols{display:flex;gap:0;overflow-x:auto;height:100%;padding:16px 20px;gap:14px;}
+.pipe-col{width:280px;flex-shrink:0;display:flex;flex-direction:column;}
+.pipe-col-head{padding:10px 12px;border-radius:var(--r) var(--r) 0 0;border:1px solid var(--g200);border-bottom:none;display:flex;align-items:center;justify-content:space-between;}
+.pipe-col-title{font-size:12px;font-weight:700;}
+.pipe-col-meta{font-size:11px;color:var(--g400);}
+.pipe-col-count{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;}
+.pipe-cards{flex:1;border:1px solid var(--g200);border-top:none;border-radius:0 0 var(--r) var(--r);background:var(--g50);padding:8px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;min-height:200px;}
+.pipe-card{background:#fff;border:1px solid var(--g200);border-radius:8px;padding:12px;cursor:pointer;transition:all .15s;border-left:3px solid transparent;}
+.pipe-card:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px);}
+.pc-company{font-size:11px;font-weight:600;color:var(--g500);margin-bottom:3px;}
+.pc-name{font-size:13px;font-weight:600;color:var(--g800);margin-bottom:8px;}
+.pc-amount{font-size:15px;font-weight:700;font-family:var(--mono);color:var(--g900);margin-bottom:8px;}
+.pc-tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;}
+.pc-footer{display:flex;align-items:center;justify-content:space-between;}
+.pc-prob{font-size:10px;color:var(--g400);}
+.pc-due{font-size:10px;font-family:var(--mono);color:var(--g400);}
+.pipe-add{display:flex;align-items:center;gap:5px;padding:7px;color:var(--g400);cursor:pointer;font-size:12px;border-radius:5px;transition:all .13s;}
+.pipe-add:hover{background:var(--g100);color:var(--crm);}
+.col-total{font-size:11px;font-family:var(--mono);color:var(--g500);}
+
+/* Progress bar inline */
+.prob-bar{height:3px;background:var(--g200);border-radius:2px;margin-top:6px;}
+.prob-fill{height:100%;border-radius:2px;}
+
+/* ═══ 360 VIEW ═══ */
+.view360-wrap{display:flex;height:100%;overflow:hidden;}
+
+/* Customer list panel */
+.cust-list-panel{width:280px;background:#fff;border-right:1px solid var(--g200);display:flex;flex-direction:column;flex-shrink:0;}
+.clp-header{padding:12px 14px;border-bottom:1px solid var(--g100);}
+.clp-title{font-size:13px;font-weight:700;color:var(--g900);margin-bottom:8px;}
+.clp-search{display:flex;align-items:center;gap:6px;background:var(--g50);border:1px solid var(--g200);border-radius:6px;padding:6px 9px;}
+.clp-search input{border:none;outline:none;background:transparent;font-family:var(--font);font-size:12px;color:var(--g700);width:100%;}
+.cust-list{flex:1;overflow-y:auto;}
+.cust-list-item{display:flex;align-items:center;gap:9px;padding:10px 14px;cursor:pointer;transition:background .1s;border-bottom:1px solid var(--g100);}
+.cust-list-item:hover{background:var(--g50);}
+.cust-list-item.active{background:var(--crm-l);}
+.cli-logo{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;}
+.cli-name{font-size:12px;font-weight:600;color:var(--g800);}.cust-list-item.active .cli-name{color:var(--crm-d);}
+.cli-type{font-size:10px;color:var(--g400);}
+.cli-val{font-size:11px;font-weight:600;font-family:var(--mono);color:var(--g700);margin-left:auto;}
+
+/* 360 main panel */
+.view360-main{flex:1;overflow-y:auto;background:var(--g50);}
+
+/* Customer hero */
+.cust-hero{background:#fff;border-bottom:1px solid var(--g200);padding:24px 28px;display:flex;gap:20px;align-items:flex-start;position:relative;overflow:hidden;}
+.cust-hero::before{content:'';position:absolute;top:0;right:0;width:300px;height:100%;background:linear-gradient(135deg,transparent,var(--crm-l) 80%);opacity:.5;}
+.ch-logo{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0;position:relative;z-index:1;}
+.ch-info{flex:1;position:relative;z-index:1;}
+.ch-name{font-family:var(--display);font-size:22px;font-weight:600;color:var(--g900);margin-bottom:4px;}
+.ch-meta{display:flex;align-items:center;gap:12px;font-size:12px;color:var(--g500);flex-wrap:wrap;}
+.ch-meta-item{display:flex;align-items:center;gap:5px;}
+.ch-actions{display:flex;gap:8px;align-items:flex-start;position:relative;z-index:1;}
+.ch-kpis{display:flex;gap:24px;margin-top:14px;}
+.ch-kpi{text-align:center;}
+.ch-kpi-val{font-size:20px;font-weight:700;font-family:var(--mono);color:var(--g900);}
+.ch-kpi-label{font-size:10px;color:var(--g500);margin-top:2px;}
+.ch-health{display:flex;align-items:center;gap:6px;margin-top:8px;}
+.health-bar{display:flex;gap:2px;}
+.h-seg{width:18px;height:6px;border-radius:2px;}
+.health-label{font-size:11px;font-weight:600;}
+
+/* 360 inner tabs */
+.i360-tabs{background:#fff;border-bottom:1px solid var(--g200);padding:0 28px;display:flex;gap:2px;overflow-x:auto;}
+.i360-tab{display:flex;align-items:center;gap:5px;padding:10px 12px;font-size:12px;font-weight:500;color:var(--g500);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .13s;}
+.i360-tab:hover{color:var(--g800);}
+.i360-tab.active{color:var(--crm);border-bottom-color:var(--crm);font-weight:600;}
+
+/* 360 content */
+.i360-content{padding:20px 28px;}
+.i360-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+.i360-card{background:#fff;border:1px solid var(--g200);border-radius:10px;padding:16px;}
+.i360-card-full{background:#fff;border:1px solid var(--g200);border-radius:10px;padding:16px;margin-bottom:14px;}
+.i360-card-title{font-size:12px;font-weight:700;color:var(--g900);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;}
+.i360-card-title .add-btn{font-size:11px;color:var(--crm);cursor:pointer;font-weight:500;}
+
+/* Timeline/notes */
+.note-item{display:flex;gap:9px;padding:10px 0;border-bottom:1px solid var(--g100);}
+.note-item:last-child{border-bottom:none;}
+.note-av{width:26px;height:26px;border-radius:50%;font-size:9px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.note-body{flex:1;}
+.note-author{font-size:12px;font-weight:600;color:var(--g800);}
+.note-date{font-size:10px;color:var(--g400);margin-left:6px;}
+.note-text{font-size:12px;color:var(--g600);line-height:1.5;margin-top:3px;}
+.note-tag{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:500;margin-top:5px;}
+
+/* Opp row */
+.opp-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--g100);}
+.opp-row:last-child{border-bottom:none;}
+.opp-name{font-size:12px;font-weight:600;color:var(--g800);flex:1;}
+.opp-amount{font-size:12px;font-weight:700;font-family:var(--mono);}
+
+/* Contact card */
+.contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.contact-card{border:1px solid var(--g200);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:9px;cursor:pointer;transition:all .13s;}
+.contact-card:hover{border-color:var(--crm);background:var(--crm-l);}
+.contact-av{width:32px;height:32px;border-radius:50%;font-size:11px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.contact-name{font-size:12px;font-weight:600;color:var(--g800);}
+.contact-role{font-size:10px;color:var(--g400);}
+
+/* Forecast bar */
+.forecast-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--g100);}
+.forecast-row:last-child{border-bottom:none;}
+.fc-stage{font-size:11px;font-weight:600;color:var(--g600);width:90px;flex-shrink:0;}
+.fc-bar-wrap{flex:1;height:8px;background:var(--g100);border-radius:4px;overflow:hidden;}
+.fc-bar{height:100%;border-radius:4px;}
+.fc-val{font-size:11px;font-family:var(--mono);font-weight:600;color:var(--g800);width:70px;text-align:right;}
+
+/* ═══ FORECASTING ═══ */
+.forecast-wrap{padding:20px;}
+.fc-hero{background:linear-gradient(135deg,var(--crm-d),var(--blue));border-radius:12px;padding:24px;color:#fff;margin-bottom:20px;position:relative;overflow:hidden;}
+.fc-hero::before{content:'◈';position:absolute;right:20px;top:-10px;font-size:120px;opacity:.06;}
+.fc-hero h2{font-family:var(--display);font-size:22px;font-weight:600;margin-bottom:6px;}
+.fc-hero p{font-size:13px;opacity:.8;margin-bottom:16px;}
+.fc-hero-kpis{display:flex;gap:28px;}
+.fc-hero-kpi-val{font-size:24px;font-weight:700;font-family:var(--mono);}
+.fc-hero-kpi-label{font-size:11px;opacity:.7;margin-top:2px;}
+.fc-grid{display:grid;grid-template-columns:1fr 1fr 300px;gap:14px;margin-bottom:14px;}
+.fc-card{background:#fff;border:1px solid var(--g200);border-radius:12px;padding:18px;}
+.fc-card-title{font-size:13px;font-weight:700;color:var(--g900);margin-bottom:14px;}
+.fc-stages{display:flex;flex-direction:column;gap:10px;}
+.fc-stage-row{display:flex;align-items:center;gap:10px;}
+.fc-s-label{font-size:12px;font-weight:600;color:var(--g700);width:100px;flex-shrink:0;}
+.fc-s-bar-wrap{flex:1;height:28px;background:var(--g100);border-radius:6px;overflow:hidden;position:relative;}
+.fc-s-bar{height:100%;border-radius:6px;display:flex;align-items:center;padding:0 10px;}
+.fc-s-bar-label{font-size:10px;font-weight:700;color:#fff;}
+.fc-s-val{font-size:12px;font-family:var(--mono);font-weight:600;color:var(--g800);width:75px;text-align:right;flex-shrink:0;}
+.fc-s-prob{font-size:10px;color:var(--g400);width:30px;flex-shrink:0;}
+
+/* Quarter pills */
+.q-pills{display:flex;gap:6px;margin-bottom:14px;}
+.q-pill{padding:5px 12px;border-radius:20px;border:1px solid var(--g200);font-size:12px;font-weight:500;cursor:pointer;transition:all .13s;}
+.q-pill.active{background:var(--crm);color:#fff;border-color:var(--crm);}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--g200);border-radius:3px;}
+
+/* Modal */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;backdrop-filter:blur(3px);align-items:center;justify-content:center;}
+.modal-backdrop.open{display:flex;}
+.modal{background:#fff;border-radius:14px;box-shadow:var(--shadow-lg);animation:mIn .18s ease;}
+@keyframes mIn{from{transform:translateY(12px) scale(.97);opacity:0}to{transform:none;opacity:1}}
+.mhd{padding:18px 22px 14px;border-bottom:1px solid var(--g100);display:flex;justify-content:space-between;align-items:center;}
+.mhd h3{font-size:15px;font-weight:700;}
+.mc{background:none;border:none;font-size:18px;color:var(--g400);cursor:pointer;}
+.mbody{padding:18px 22px;}
+.mfoot{padding:14px 22px 18px;border-top:1px solid var(--g100);display:flex;justify-content:flex-end;gap:8px;}
+.form-label{font-size:12px;font-weight:600;color:var(--g700);display:block;margin-bottom:5px;}
+.form-input{width:100%;padding:8px 11px;border:1px solid var(--g200);border-radius:6px;font-family:var(--font);font-size:13px;color:var(--g800);outline:none;transition:border-color .13s;}
+.form-input:focus{border-color:var(--crm);}
+.fg{margin-bottom:14px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+</style>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside class="sb">
+  <div class="sb-logo">
+    <div class="logo-icon">Ji</div>
+    <div><div class="logo-text">Jiganto</div><div class="logo-sub">Enterprise AI</div></div>
+  </div>
+  <div class="org-pill"><div class="org-dot"></div>Demo Org<span style="margin-left:auto;color:var(--g300);">⌄</span></div>
+  <div class="nav-section">
+    <div class="nav-label">Modules</div>
+    <div class="nav-item"><div class="nav-icon-wrap ic-db">📊</div>Dashboard</div>
+    <div class="nav-item"><div class="nav-icon-wrap ic-chat">💬</div>Chat<span class="nb">3</span></div>
+    <div class="nav-item"><div class="nav-icon-wrap ic-biz">📈</div>Business Mgmt</div>
+    <div class="nav-item active"><div class="nav-icon-wrap ic-crm">👥</div>CRM</div>
+    <div class="nav-item"><div class="nav-icon-wrap ic-ws">✦</div>Workspaces</div>
+    <div class="nav-item"><div class="nav-icon-wrap ic-docs">📄</div>Documents</div>
+    <div class="nav-item"><div class="nav-icon-wrap ic-tasks">☑</div>Tasks</div>
+    <div class="nav-item"><div class="nav-icon-wrap ic-proj">🗂</div>Projects</div>
+    <div class="nav-item"><div class="nav-icon-wrap ic-fin">💰</div>Finance</div>
+    <div class="nav-item"><div class="nav-icon-wrap ic-res">👤</div>Resources</div>
+    <div class="nav-item"><div class="nav-icon-wrap ic-test">🧪</div>Testing</div>
+    <div class="nav-item"><div class="nav-icon-wrap ic-bpm">⚙</div>BPM</div>
+    <div class="nav-item"><div class="nav-icon-wrap ic-help">🎧</div>Help Desk</div>
+    <div class="nav-item"><div class="nav-icon-wrap ic-util">🔧</div>Utilities</div>
+  </div>
+  <div class="sb-bottom">
+    <div class="user-row">
+      <div class="uav">PV</div>
+      <div><div style="font-size:12px;font-weight:600;color:var(--g700);">Peter Voss</div><div style="font-size:10px;color:var(--g400);">peter.voss@vossys.com</div></div>
+    </div>
+  </div>
+</aside>
+
+<!-- ═══ MAIN ═══ -->
+<div class="main">
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="page-icon-wrap">👥</div>
+    <div><div class="page-title">CRM</div><div class="page-sub">Customer Relationship Management</div></div>
+    <div class="tb-right">
+      <div class="srch"><span style="color:var(--g400);font-size:12px;">🔍</span><input type="text" placeholder="Search CRM..."></div>
+      <button class="btn-icon">🔔</button>
+      <button class="btn-icon">⚡</button>
+      <button class="btn btn-crm" onclick="openNewDeal()">＋ New Deal</button>
+    </div>
+  </header>
+
+  <!-- MAIN TABS -->
+  <div class="main-tabs">
+    <div class="m-tab active" onclick="switchTab(this,'dashboard')"><div class="m-tab-icon" style="background:var(--crm-l);">📊</div>Dashboard</div>
+    <div class="m-tab" onclick="switchTab(this,'leads')"><div class="m-tab-icon" style="background:var(--green-l);">⚡</div>Leads<span class="m-tab-count">24</span></div>
+    <div class="m-tab" onclick="switchTab(this,'opportunities')"><div class="m-tab-icon" style="background:var(--yellow-l);">🎯</div>Opportunities<span class="m-tab-count">18</span></div>
+    <div class="m-tab" onclick="switchTab(this,'pipeline')"><div class="m-tab-icon" style="background:var(--purple-l);">🔀</div>Pipeline</div>
+    <div class="m-tab" onclick="switchTab(this,'customers')"><div class="m-tab-icon" style="background:var(--teal-l);">🏢</div>Customers<span class="m-tab-count">42</span></div>
+    <div class="m-tab" onclick="switchTab(this,'contracts')"><div class="m-tab-icon" style="background:var(--orange-l);">📋</div>Contracts<span class="m-tab-count">31</span></div>
+    <div class="m-tab" onclick="switchTab(this,'forecasting')"><div class="m-tab-icon" style="background:var(--indigo-l);">📈</div>Forecasting</div>
+    <div class="m-tab" onclick="switchTab(this,'view360')"><div class="m-tab-icon" style="background:var(--pink-l);">🔮</div>360° View</div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="crm-content">
+
+    <!-- ═══ DASHBOARD ═══ -->
+    <div id="view-dashboard" class="crm-view active">
+      <div class="dash-wrap">
+        <!-- KPI Row -->
+        <div class="kpi-row">
+          <div class="kpi-card blue">
+            <div class="kpi-icon" style="background:var(--crm-l);">💰</div>
+            <div class="kpi-val">£4.2M</div>
+            <div class="kpi-label">Pipeline Value</div>
+            <div class="kpi-trend up">↑ 18% vs last quarter</div>
+          </div>
+          <div class="kpi-card green">
+            <div class="kpi-icon" style="background:var(--green-l);">✅</div>
+            <div class="kpi-val">£1.8M</div>
+            <div class="kpi-label">Revenue Won (YTD)</div>
+            <div class="kpi-trend up">↑ 24% vs last year</div>
+          </div>
+          <div class="kpi-card orange">
+            <div class="kpi-icon" style="background:var(--orange-l);">🎯</div>
+            <div class="kpi-val">68%</div>
+            <div class="kpi-label">Win Rate</div>
+            <div class="kpi-trend up">↑ 5pts this quarter</div>
+          </div>
+          <div class="kpi-card purple">
+            <div class="kpi-icon" style="background:var(--purple-l);">⏱</div>
+            <div class="kpi-val">34d</div>
+            <div class="kpi-label">Avg. Sales Cycle</div>
+            <div class="kpi-trend down">↓ 6 days faster</div>
+          </div>
+        </div>
+
+        <!-- Main dashboard grid -->
+        <div class="dash-grid">
+          <!-- Pipeline funnel -->
+          <div class="dash-card">
+            <div class="dash-card-title">Pipeline by Stage <span class="see-all" onclick="switchTab(document.querySelector('[onclick*=pipeline]'),'pipeline')">View pipeline →</span></div>
+            <div class="funnel-row">
+              <div class="funnel-stage">
+                <div class="funnel-label">Discovery</div>
+                <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:90%;background:linear-gradient(90deg,#6366f1,#818cf8);">8 deals</div></div>
+                <div class="funnel-val">£920K</div>
+              </div>
+              <div class="funnel-stage">
+                <div class="funnel-label">Demo</div>
+                <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:72%;background:linear-gradient(90deg,var(--purple),#a78bfa);">6 deals</div></div>
+                <div class="funnel-val">£740K</div>
+              </div>
+              <div class="funnel-stage">
+                <div class="funnel-label">Proposal</div>
+                <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:55%;background:linear-gradient(90deg,var(--crm),var(--blue-m));">5 deals</div></div>
+                <div class="funnel-val">£580K</div>
+              </div>
+              <div class="funnel-stage">
+                <div class="funnel-label">Trial/POC</div>
+                <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:40%;background:linear-gradient(90deg,var(--teal),#34d399);">3 deals</div></div>
+                <div class="funnel-val">£420K</div>
+              </div>
+              <div class="funnel-stage">
+                <div class="funnel-label">Negotiation</div>
+                <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:28%;background:linear-gradient(90deg,var(--orange),#fb923c);">2 deals</div></div>
+                <div class="funnel-val">£290K</div>
+              </div>
+              <div class="funnel-stage">
+                <div class="funnel-label">Closing</div>
+                <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:18%;background:linear-gradient(90deg,var(--green),#4ade80);">1 deal</div></div>
+                <div class="funnel-val">£180K</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Win/Loss + Activity -->
+          <div class="dash-card">
+            <div class="dash-card-title">Win / Loss Rate</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <span style="font-size:28px;font-weight:700;font-family:var(--mono);color:var(--green);">68%</span>
+              <div style="text-align:right;font-size:11px;color:var(--g500);">32 Won · 15 Lost<br>Q1 2025</div>
+            </div>
+            <div class="wl-bar">
+              <div class="wl-won" style="width:68%;"></div>
+              <div class="wl-lost" style="flex:1;"></div>
+            </div>
+            <div class="wl-labels">
+              <span style="color:var(--green);font-weight:600;">Won 68%</span>
+              <span style="color:var(--red);font-weight:600;">Lost 32%</span>
+            </div>
+            <div style="height:1px;background:var(--g100);margin:14px 0;"></div>
+            <div class="dash-card-title" style="margin-bottom:10px;">Monthly Revenue</div>
+            <div style="display:flex;align-items:flex-end;gap:6px;height:60px;">
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;"><div style="width:100%;background:var(--crm-l);border-radius:3px 3px 0 0;height:35px;"></div><div style="font-size:9px;color:var(--g400);">Oct</div></div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;"><div style="width:100%;background:var(--crm);border-radius:3px 3px 0 0;height:55px;"></div><div style="font-size:9px;color:var(--g400);">Nov</div></div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;"><div style="width:100%;background:var(--crm-l);border-radius:3px 3px 0 0;height:42px;"></div><div style="font-size:9px;color:var(--g400);">Dec</div></div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;"><div style="width:100%;background:var(--crm);border-radius:3px 3px 0 0;height:50px;"></div><div style="font-size:9px;color:var(--g400);">Jan</div></div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;"><div style="width:100%;background:var(--crm-l);border-radius:3px 3px 0 0;height:38px;"></div><div style="font-size:9px;color:var(--g400);">Feb</div></div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;"><div style="width:100%;background:linear-gradient(180deg,var(--green),var(--crm));border-radius:3px 3px 0 0;height:60px;border:2px solid var(--green);"></div><div style="font-size:9px;color:var(--green);font-weight:600;">Mar</div></div>
+            </div>
+          </div>
+
+          <!-- Top accounts + Activity -->
+          <div style="display:flex;flex-direction:column;gap:14px;">
+            <div class="dash-card" style="flex:1;">
+              <div class="dash-card-title">Top Accounts <span class="see-all" onclick="switchTab(document.querySelector('[onclick*=view360]'),'view360')">360° View →</span></div>
+              <div class="top-row" onclick="open360('acme')">
+                <div class="top-rank">1</div>
+                <div class="co-logo" style="background:#3b82f6;">AC</div>
+                <div><div class="top-name">Acme Corp</div><div style="font-size:10px;color:var(--g400);">Enterprise · Active</div></div>
+                <div class="top-val">£680K</div>
+              </div>
+              <div class="top-row" onclick="open360('globex')">
+                <div class="top-rank">2</div>
+                <div class="co-logo" style="background:#8b5cf6;">GL</div>
+                <div><div class="top-name">Globex Industries</div><div style="font-size:10px;color:var(--g400);">Enterprise · Active</div></div>
+                <div class="top-val">£520K</div>
+              </div>
+              <div class="top-row" onclick="open360('novus')">
+                <div class="top-rank">3</div>
+                <div class="co-logo" style="background:#f97316;">NV</div>
+                <div><div class="top-name">Novus Digital</div><div style="font-size:10px;color:var(--g400);">Mid-Market · Active</div></div>
+                <div class="top-val">£310K</div>
+              </div>
+              <div class="top-row">
+                <div class="top-rank">4</div>
+                <div class="co-logo" style="background:#10b981;">TH</div>
+                <div><div class="top-name">TechHive Ltd</div><div style="font-size:10px;color:var(--g400);">SMB · At Risk</div></div>
+                <div class="top-val">£180K</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent activity -->
+        <div class="dash-card" style="margin-top:0;">
+          <div class="dash-card-title">Recent Activity <span class="see-all">See all</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;">
+            <div class="act-item"><div class="act-av" style="background:#3b82f6;">PV</div><div class="act-body"><div class="act-text"><strong>Peter Voss</strong> moved <strong>Acme Corp – ERP Deal</strong> to Negotiation</div><div class="act-time">1 hour ago</div></div></div>
+            <div class="act-item" style="padding-left:20px;border-left:1px solid var(--g100);"><div class="act-av" style="background:#10b981;">SA</div><div class="act-body"><div class="act-text"><strong>Sarah A.</strong> added a note to <strong>Globex Industries</strong></div><div class="act-time">2 hours ago</div></div></div>
+            <div class="act-item" style="padding-left:20px;border-left:1px solid var(--g100);"><div class="act-av" style="background:#f97316;">AL</div><div class="act-body"><div class="act-text"><strong>Anna L.</strong> qualified new lead <strong>Meridian Health</strong></div><div class="act-time">3 hours ago</div></div></div>
+            <div class="act-item"><div class="act-av" style="background:#8b5cf6;">JM</div><div class="act-body"><div class="act-text"><strong>James M.</strong> closed deal <strong>TechHive – SaaS Plan</strong> — Won 🎉</div><div class="act-time">Yesterday</div></div></div>
+            <div class="act-item" style="padding-left:20px;border-left:1px solid var(--g100);"><div class="act-av" style="background:#ec4899;">MR</div><div class="act-body"><div class="act-text"><strong>Maria R.</strong> sent proposal to <strong>Novus Digital</strong></div><div class="act-time">Yesterday</div></div></div>
+            <div class="act-item" style="padding-left:20px;border-left:1px solid var(--g100);"><div class="act-av" style="background:#3b82f6;">PV</div><div class="act-body"><div class="act-text"><strong>Peter Voss</strong> booked demo with <strong>BlueWave Systems</strong></div><div class="act-time">2 days ago</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ LEADS ═══ -->
+    <div id="view-leads" class="crm-view">
+      <div class="page-toolbar">
+        <div class="chip on">🔥 Hot (6)</div>
+        <div class="chip">🌡 Warm (11)</div>
+        <div class="chip">❄ Cold (7)</div>
+        <div class="sep"></div>
+        <div class="chip">🔽 Filter</div>
+        <div class="chip on">↕ Sort: Date</div>
+        <div class="srch" style="margin-left:auto;"><span style="color:var(--g400);">🔍</span><input type="text" placeholder="Search leads..."></div>
+        <button class="btn btn-crm" onclick="openNewDeal()">＋ New Lead</button>
+      </div>
+      <table class="data-table">
+        <thead><tr>
+          <th><input type="checkbox" style="width:12px;height:12px;cursor:pointer;"></th>
+          <th style="width:220px;">Company</th><th style="width:180px;">Contact</th>
+          <th style="width:90px;">Status</th><th style="width:85px;">Score</th>
+          <th style="width:100px;">Source</th><th style="width:100px;">Owner</th>
+          <th style="width:95px;">Created</th><th style="width:60px;"></th>
+        </tr></thead>
+        <tbody id="leads-body"></tbody>
+      </table>
+    </div>
+
+    <!-- ═══ OPPORTUNITIES ═══ -->
+    <div id="view-opportunities" class="crm-view">
+      <div class="page-toolbar">
+        <div class="chip on">All Stages</div><div class="chip">My Deals</div><div class="chip">Closing This Month</div>
+        <div class="sep"></div>
+        <div class="chip">🔽 Filter</div><div class="chip">⊞ Group</div><div class="chip">↕ Sort</div>
+        <div class="srch" style="margin-left:auto;"><span style="color:var(--g400);">🔍</span><input type="text" placeholder="Search opportunities..."></div>
+        <button class="btn btn-crm" onclick="openNewDeal()">＋ New Opportunity</button>
+      </div>
+      <table class="data-table">
+        <thead><tr>
+          <th><input type="checkbox" style="width:12px;height:12px;cursor:pointer;"></th>
+          <th style="width:200px;">Opportunity</th><th style="width:160px;">Account</th>
+          <th style="width:100px;">Stage</th><th style="width:100px;">Value</th>
+          <th style="width:80px;">Prob %</th><th style="width:90px;">Close Date</th>
+          <th style="width:90px;">Owner</th><th style="width:60px;"></th>
+        </tr></thead>
+        <tbody id="opps-body"></tbody>
+      </table>
+    </div>
+
+    <!-- ═══ PIPELINE ═══ -->
+    <div id="view-pipeline" class="crm-view">
+      <div class="page-toolbar" style="position:sticky;top:0;z-index:10;">
+        <div class="chip on">All Owners</div><div class="chip">My Pipeline</div>
+        <div class="sep"></div>
+        <div class="chip">🔽 Filter</div>
+        <div style="margin-left:auto;display:flex;gap:6px;">
+          <span style="font-size:12px;color:var(--g500);display:flex;align-items:center;gap:4px;">Total Pipeline: <strong style="color:var(--g900);font-family:var(--mono);margin-left:3px;">£4.2M</strong></span>
+          <button class="btn btn-crm" onclick="openNewDeal()">＋ Add Deal</button>
+        </div>
+      </div>
+      <div style="padding:16px 20px;overflow-x:auto;display:flex;gap:14px;" id="pipeline-board"></div>
+    </div>
+
+    <!-- ═══ CUSTOMERS ═══ -->
+    <div id="view-customers" class="crm-view">
+      <div class="page-toolbar">
+        <div class="chip on">All</div><div class="chip">Enterprise</div><div class="chip">Mid-Market</div><div class="chip">SMB</div>
+        <div class="sep"></div>
+        <div class="chip">🔽 Filter</div><div class="chip">↕ Sort</div>
+        <div class="srch" style="margin-left:auto;"><span style="color:var(--g400);">🔍</span><input type="text" placeholder="Search customers..."></div>
+        <button class="btn btn-crm">＋ New Customer</button>
+      </div>
+      <table class="data-table">
+        <thead><tr>
+          <th><input type="checkbox" style="width:12px;height:12px;cursor:pointer;"></th>
+          <th style="width:200px;">Account</th><th style="width:100px;">Segment</th>
+          <th style="width:90px;">Status</th><th style="width:110px;">Total Revenue</th>
+          <th style="width:100px;">Open Deals</th><th style="width:90px;">Contacts</th>
+          <th style="width:90px;">Since</th><th style="width:60px;"></th>
+        </tr></thead>
+        <tbody id="customers-body"></tbody>
+      </table>
+    </div>
+
+    <!-- ═══ CONTRACTS ═══ -->
+    <div id="view-contracts" class="crm-view">
+      <div class="page-toolbar">
+        <div class="chip on">Active</div><div class="chip">Expiring Soon</div><div class="chip">Expired</div><div class="chip">Draft</div>
+        <div class="sep"></div>
+        <div class="chip">🔽 Filter</div><div class="chip">↕ Sort</div>
+        <div class="srch" style="margin-left:auto;"><span style="color:var(--g400);">🔍</span><input type="text" placeholder="Search contracts..."></div>
+        <button class="btn btn-crm">＋ New Contract</button>
+      </div>
+      <table class="data-table">
+        <thead><tr>
+          <th><input type="checkbox" style="width:12px;height:12px;cursor:pointer;"></th>
+          <th style="width:200px;">Contract</th><th style="width:160px;">Account</th>
+          <th style="width:90px;">Status</th><th style="width:100px;">Value</th>
+          <th style="width:90px;">Start Date</th><th style="width:90px;">End Date</th>
+          <th style="width:80px;">Owner</th><th style="width:60px;"></th>
+        </tr></thead>
+        <tbody id="contracts-body"></tbody>
+      </table>
+    </div>
+
+    <!-- ═══ FORECASTING ═══ -->
+    <div id="view-forecasting" class="crm-view">
+      <div class="forecast-wrap">
+        <!-- Hero -->
+        <div class="fc-hero">
+          <h2>Revenue Forecast — Q2 2025</h2>
+          <p>AI-weighted pipeline forecast based on deal stage, probability and historical win rates</p>
+          <div class="fc-hero-kpis">
+            <div><div class="fc-hero-kpi-val">£2.4M</div><div class="fc-hero-kpi-label">Weighted Forecast</div></div>
+            <div><div class="fc-hero-kpi-val">£4.2M</div><div class="fc-hero-kpi-label">Total Pipeline</div></div>
+            <div><div class="fc-hero-kpi-val">£1.1M</div><div class="fc-hero-kpi-label">Committed (High Prob)</div></div>
+            <div><div class="fc-hero-kpi-val">68%</div><div class="fc-hero-kpi-label">Avg Win Rate</div></div>
+          </div>
+        </div>
+
+        <!-- Quarter selector -->
+        <div class="q-pills">
+          <div class="q-pill">Q4 2024</div>
+          <div class="q-pill">Q1 2025</div>
+          <div class="q-pill active">Q2 2025</div>
+          <div class="q-pill">Q3 2025</div>
+          <div class="q-pill">FY 2025</div>
+        </div>
+
+        <!-- Forecast grid -->
+        <div class="fc-grid">
+          <!-- By Stage -->
+          <div class="fc-card" style="grid-column:span 2;">
+            <div class="fc-card-title">Pipeline by Stage — Weighted Value</div>
+            <div class="fc-stages">
+              <div class="fc-stage-row">
+                <div class="fc-s-label">Discovery</div>
+                <div class="fc-s-bar-wrap"><div class="fc-s-bar" style="width:75%;background:linear-gradient(90deg,#6366f1,#818cf8);"><span class="fc-s-bar-label">8 deals · 15% prob</span></div></div>
+                <div class="fc-s-val">£138K</div>
+                <div class="fc-s-prob">15%</div>
+              </div>
+              <div class="fc-stage-row">
+                <div class="fc-s-label">Demo</div>
+                <div class="fc-s-bar-wrap"><div class="fc-s-bar" style="width:65%;background:linear-gradient(90deg,var(--purple),#a78bfa);"><span class="fc-s-bar-label">6 deals · 30% prob</span></div></div>
+                <div class="fc-s-val">£222K</div>
+                <div class="fc-s-prob">30%</div>
+              </div>
+              <div class="fc-stage-row">
+                <div class="fc-s-label">Proposal</div>
+                <div class="fc-s-bar-wrap"><div class="fc-s-bar" style="width:55%;background:linear-gradient(90deg,var(--crm),var(--blue-m));"><span class="fc-s-bar-label">5 deals · 50% prob</span></div></div>
+                <div class="fc-s-val">£290K</div>
+                <div class="fc-s-prob">50%</div>
+              </div>
+              <div class="fc-stage-row">
+                <div class="fc-s-label">Trial / POC</div>
+                <div class="fc-s-bar-wrap"><div class="fc-s-bar" style="width:45%;background:linear-gradient(90deg,var(--teal),#34d399);"><span class="fc-s-bar-label">3 deals · 65% prob</span></div></div>
+                <div class="fc-s-val">£273K</div>
+                <div class="fc-s-prob">65%</div>
+              </div>
+              <div class="fc-stage-row">
+                <div class="fc-s-label">Negotiation</div>
+                <div class="fc-s-bar-wrap"><div class="fc-s-bar" style="width:35%;background:linear-gradient(90deg,var(--orange),#fb923c);"><span class="fc-s-bar-label">2 deals · 80% prob</span></div></div>
+                <div class="fc-s-val">£232K</div>
+                <div class="fc-s-prob">80%</div>
+              </div>
+              <div class="fc-stage-row">
+                <div class="fc-s-label">Closing</div>
+                <div class="fc-s-bar-wrap"><div class="fc-s-bar" style="width:20%;background:linear-gradient(90deg,var(--green),#4ade80);"><span class="fc-s-bar-label">1 deal · 95%</span></div></div>
+                <div class="fc-s-val">£171K</div>
+                <div class="fc-s-prob">95%</div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--g100);">
+              <div style="font-size:12px;color:var(--g500);">Total Weighted Forecast: <span style="font-size:18px;font-weight:700;font-family:var(--mono);color:var(--crm);margin-left:6px;">£1,326K</span></div>
+            </div>
+          </div>
+
+          <!-- By Rep -->
+          <div class="fc-card">
+            <div class="fc-card-title">Forecast by Rep</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="av" style="background:#3b82f6;">PV</div>
+                <div style="flex:1;"><div style="font-size:12px;font-weight:600;color:var(--g800);">Peter Voss</div>
+                  <div class="prob-bar"><div class="prob-fill" style="width:70%;background:var(--crm);"></div></div></div>
+                <div style="font-size:11px;font-family:var(--mono);font-weight:600;color:var(--g800);">£580K</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="av" style="background:#10b981;">SA</div>
+                <div style="flex:1;"><div style="font-size:12px;font-weight:600;color:var(--g800);">Sarah A.</div>
+                  <div class="prob-bar"><div class="prob-fill" style="width:55%;background:var(--green);"></div></div></div>
+                <div style="font-size:11px;font-family:var(--mono);font-weight:600;color:var(--g800);">£440K</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="av" style="background:#f97316;">AL</div>
+                <div style="flex:1;"><div style="font-size:12px;font-weight:600;color:var(--g800);">Anna L.</div>
+                  <div class="prob-bar"><div class="prob-fill" style="width:40%;background:var(--orange);"></div></div></div>
+                <div style="font-size:11px;font-family:var(--mono);font-weight:600;color:var(--g800);">£320K</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div class="av" style="background:#8b5cf6;">JM</div>
+                <div style="flex:1;"><div style="font-size:12px;font-weight:600;color:var(--g800);">James M.</div>
+                  <div class="prob-bar"><div class="prob-fill" style="width:30%;background:var(--purple);"></div></div></div>
+                <div style="font-size:11px;font-family:var(--mono);font-weight:600;color:var(--g800);">£240K</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 360° VIEW ═══ -->
+    <div id="view-view360" class="crm-view" style="overflow:hidden;">
+      <div class="view360-wrap" style="height:100%;">
+        <!-- Customer list -->
+        <div class="cust-list-panel">
+          <div class="clp-header">
+            <div class="clp-title">All Customers</div>
+            <div class="clp-search"><span style="color:var(--g400);font-size:11px;">🔍</span><input type="text" placeholder="Search..."></div>
+          </div>
+          <div class="cust-list" id="cust360-list"></div>
+        </div>
+        <!-- 360 main -->
+        <div class="view360-main" id="view360-main"></div>
+      </div>
+    </div>
+
+  </div><!-- /crm-content -->
+</div><!-- /main -->
+
+<!-- NEW DEAL MODAL -->
+<div class="modal-backdrop" id="modal-deal">
+  <div class="modal" style="width:520px;">
+    <div class="mhd"><h3>New Deal / Opportunity</h3><button class="mc" onclick="closeModal('modal-deal')">×</button></div>
+    <div class="mbody">
+      <div class="fg"><label class="form-label">Deal Name *</label><input type="text" class="form-input" placeholder="e.g. Acme Corp – Enterprise SaaS Q2"></div>
+      <div class="form-row">
+        <div class="fg" style="margin-bottom:0;"><label class="form-label">Account</label><input type="text" class="form-input" placeholder="Account name"></div>
+        <div class="fg" style="margin-bottom:0;"><label class="form-label">Stage</label>
+          <select class="form-input" style="appearance:none;background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\");background-repeat:no-repeat;background-position:right 10px center;padding-right:26px;">
+            <option>Discovery</option><option>Demo</option><option>Proposal</option><option>Trial / POC</option><option>Negotiation</option><option>Closing</option>
+          </select>
+        </div>
+      </div>
+      <div style="height:14px;"></div>
+      <div class="form-row">
+        <div class="fg" style="margin-bottom:0;"><label class="form-label">Value (£)</label><input type="number" class="form-input" placeholder="0"></div>
+        <div class="fg" style="margin-bottom:0;"><label class="form-label">Probability %</label><input type="number" class="form-input" placeholder="50"></div>
+      </div>
+      <div style="height:14px;"></div>
+      <div class="form-row">
+        <div class="fg" style="margin-bottom:0;"><label class="form-label">Close Date</label><input type="date" class="form-input"></div>
+        <div class="fg" style="margin-bottom:0;"><label class="form-label">Owner</label>
+          <select class="form-input" style="appearance:none;background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\");background-repeat:no-repeat;background-position:right 10px center;padding-right:26px;">
+            <option>Peter Voss</option><option>Sarah A.</option><option>Anna L.</option><option>James M.</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-deal')">Cancel</button>
+      <button class="btn btn-crm">Create Deal</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ───
+const avColors={PV:'#3b82f6',SA:'#10b981',AL:'#f97316',JM:'#8b5cf6',MR:'#ec4899',DK:'#6366f1'};
+
+const leads=[
+  {co:'Meridian Health',contact:'Jane Foster',score:92,temp:'hot',status:'qual',source:'Inbound',owner:'AL',created:'Mar 10'},
+  {co:'BlueWave Systems',contact:'Tom Richards',score:78,temp:'hot',status:'new',source:'Referral',owner:'PV',created:'Mar 12'},
+  {co:'Pinnacle Group',contact:'David Shaw',score:65,temp:'warm',status:'qual',source:'LinkedIn',owner:'SA',created:'Mar 8'},
+  {co:'Apex Solutions',contact:'Laura Kim',score:58,temp:'warm',status:'new',source:'Web',owner:'JM',created:'Mar 14'},
+  {co:'Sunrise Tech',contact:'Mark Owen',score:42,temp:'warm',status:'new',source:'Event',owner:'PV',created:'Mar 6'},
+  {co:'ClearPath Ltd',contact:'Sophia Bell',score:35,temp:'cold',status:'new',source:'Cold Email',owner:'AL',created:'Feb 28'},
+  {co:'Vertex Analytics',contact:'Chris Lane',score:28,temp:'cold',status:'new',source:'LinkedIn',owner:'SA',created:'Feb 25'},
+];
+
+const opps=[
+  {name:'Enterprise SaaS Suite',account:'Acme Corp',stage:'neg',value:'£240,000',prob:80,close:'Apr 30',owner:'PV'},
+  {name:'Data Platform Migration',account:'Globex Industries',stage:'proposal',value:'£180,000',prob:50,close:'May 15',owner:'SA'},
+  {name:'Cloud Security Package',account:'Novus Digital',stage:'demo',value:'£95,000',prob:30,close:'May 28',owner:'AL'},
+  {name:'ERP Integration',account:'TechHive Ltd',stage:'trial',value:'£320,000',prob:65,close:'Jun 10',owner:'JM'},
+  {name:'HR Automation Suite',account:'Meridian Health',stage:'disco',value:'£75,000',prob:15,close:'Jul 1',owner:'PV'},
+  {name:'Analytics Dashboard',account:'BlueWave Systems',stage:'proposal',value:'£58,000',prob:50,close:'May 20',owner:'MR'},
+];
+
+const customers=[
+  {name:'Acme Corp',logo:'AC',color:'#3b82f6',seg:'Enterprise',status:'active',revenue:'£680K',deals:2,contacts:8,since:'2021'},
+  {name:'Globex Industries',logo:'GL',color:'#8b5cf6',seg:'Enterprise',status:'active',revenue:'£520K',deals:1,contacts:5,since:'2020'},
+  {name:'Novus Digital',logo:'NV',color:'#f97316',seg:'Mid-Market',status:'active',revenue:'£310K',deals:3,contacts:4,since:'2022'},
+  {name:'TechHive Ltd',logo:'TH',color:'#10b981',seg:'SMB',status:'active',revenue:'£180K',deals:1,contacts:3,since:'2023'},
+  {name:'Meridian Health',logo:'MH',color:'#ec4899',seg:'Enterprise',status:'prospect',revenue:'—',deals:1,contacts:2,since:'2025'},
+  {name:'BlueWave Systems',logo:'BW',color:'#0ea5e9',seg:'Mid-Market',status:'prospect',revenue:'—',deals:1,contacts:2,since:'2025'},
+  {name:'Pinnacle Group',logo:'PG',color:'#eab308',seg:'SMB',status:'inactive',revenue:'£45K',deals:0,contacts:1,since:'2022'},
+];
+
+const contracts=[
+  {name:'Enterprise Platform Licence',account:'Acme Corp',status:'active',value:'£240K/yr',start:'Jan 2024',end:'Dec 2025',owner:'PV'},
+  {name:'Data Services Agreement',account:'Globex Industries',status:'active',value:'£180K/yr',start:'Mar 2023',end:'Feb 2026',owner:'SA'},
+  {name:'Cloud Hosting SLA',account:'Novus Digital',status:'active',value:'£60K/yr',start:'Jun 2024',end:'May 2025',owner:'AL'},
+  {name:'Support & Maintenance',account:'TechHive Ltd',status:'expiring',value:'£24K/yr',start:'Apr 2023',end:'Mar 2025',owner:'JM'},
+  {name:'Pilot Agreement',account:'Meridian Health',status:'draft',value:'£15K',start:'—',end:'—',owner:'PV'},
+];
+
+const pipelineStages=[
+  {key:'disco',label:'Discovery',color:'#6366f1',bg:'#e0e7ff',total:'£920K',deals:[
+    {co:'Meridian Health',name:'HR Automation Suite',amount:'£75,000',prob:15,due:'Jul 1',owner:'PV',c:'#3b82f6'},
+    {co:'Sunrise Tech',name:'Cloud Migration',amount:'£120,000',prob:20,due:'Jun 15',owner:'SA',c:'#10b981'},
+    {co:'Vertex Analytics',name:'BI Platform',amount:'£85,000',prob:10,due:'Aug 1',owner:'AL',c:'#f97316'},
+  ]},
+  {key:'demo',label:'Demo',color:'#8b5cf6',bg:'#ede9fe',total:'£740K',deals:[
+    {co:'Novus Digital',name:'Cloud Security Package',amount:'£95,000',prob:30,due:'May 28',owner:'AL',c:'#f97316'},
+    {co:'BlueWave Systems',name:'Analytics Dashboard',amount:'£58,000',prob:30,due:'May 20',owner:'MR',c:'#ec4899'},
+  ]},
+  {key:'proposal',label:'Proposal',color:'#0ea5e9',bg:'#e0f2fe',total:'£580K',deals:[
+    {co:'Globex Industries',name:'Data Platform Migration',amount:'£180,000',prob:50,due:'May 15',owner:'SA',c:'#8b5cf6'},
+    {co:'Apex Solutions',name:'ERP Connector',amount:'£65,000',prob:45,due:'May 30',owner:'JM',c:'#8b5cf6'},
+  ]},
+  {key:'trial',label:'Trial / POC',color:'#0fbcb0',bg:'#e0f7f6',total:'£420K',deals:[
+    {co:'TechHive Ltd',name:'ERP Integration',amount:'£320,000',prob:65,due:'Jun 10',owner:'JM',c:'#10b981'},
+  ]},
+  {key:'neg',label:'Negotiation',color:'#f97316',bg:'#fff7ed',total:'£290K',deals:[
+    {co:'Acme Corp',name:'Enterprise SaaS Suite',amount:'£240,000',prob:80,due:'Apr 30',owner:'PV',c:'#3b82f6'},
+  ]},
+  {key:'closing',label:'Closing',color:'#22c55e',bg:'#dcfce7',total:'£180K',deals:[
+    {co:'Pinnacle Group',name:'Starter Plan Renewal',amount:'£45,000',prob:95,due:'Mar 28',owner:'AL',c:'#f97316'},
+  ]},
+];
+
+// ─── RENDER FUNCTIONS ───
+function renderLeads(){
+  const body=document.getElementById('leads-body');
+  body.innerHTML=leads.map(l=>{
+    const tBadge=l.temp==='hot'?'b-hot':l.temp==='warm'?'b-warm':'b-cold';
+    const tLabel=l.temp==='hot'?'🔥 Hot':l.temp==='warm'?'🌡 Warm':'❄ Cold';
+    const sBadge=l.status==='qual'?'b-qual':'b-new';
+    const sLabel=l.status==='qual'?'Qualified':'New';
+    return`<tr>
+      <td><input type="checkbox" style="width:12px;height:12px;cursor:pointer;"></td>
+      <td><div style="display:flex;align-items:center;gap:8px;">
+        <div class="co-logo" style="background:${avColors[l.owner]||'#64748b'};">${l.co.substring(0,2).toUpperCase()}</div>
+        <div><div style="font-size:13px;font-weight:600;color:var(--g800);">${l.co}</div><div style="font-size:11px;color:var(--g400);">Lead</div></div>
+      </div></td>
+      <td style="font-size:12px;color:var(--g700);">${l.contact}</td>
+      <td><span class="badge ${sBadge}"><span class="bd"></span>${sLabel}</span></td>
+      <td><div style="display:flex;align-items:center;gap:6px;"><span style="font-size:13px;font-weight:700;font-family:var(--mono);color:${l.score>=70?'var(--green)':l.score>=50?'var(--orange)':'var(--g400)'};">${l.score}</span><span class="badge ${tBadge}" style="padding:2px 6px;">${tLabel}</span></div></td>
+      <td style="font-size:12px;color:var(--g600);">${l.source}</td>
+      <td><div style="display:flex;align-items:center;gap:6px;"><div class="av av-sm" style="background:${avColors[l.owner]||'#64748b'};">${l.owner}</div><span style="font-size:11px;color:var(--g600);">${l.owner}</span></div></td>
+      <td class="dt">${l.created}</td>
+      <td><div class="ra"><button title="View">→</button><button title="More">⋯</button></div></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderOpps(){
+  const body=document.getElementById('opps-body');
+  const stageMap={disco:{label:'Discovery',cls:'b-disco'},demo:{label:'Demo',cls:'b-demo'},proposal:{label:'Proposal',cls:'b-prop'},trial:{label:'Trial/POC',cls:'b-trial'},neg:{label:'Negotiation',cls:'b-neg'},closing:{label:'Closing',cls:'b-won'}};
+  body.innerHTML=opps.map(o=>{
+    const s=stageMap[o.stage]||{label:o.stage,cls:'b-qual'};
+    return`<tr>
+      <td><input type="checkbox" style="width:12px;height:12px;cursor:pointer;"></td>
+      <td style="font-size:13px;font-weight:600;color:var(--g800);">${o.name}</td>
+      <td style="font-size:12px;color:var(--g600);">${o.account}</td>
+      <td><span class="badge ${s.cls}"><span class="bd"></span>${s.label}</span></td>
+      <td class="money">${o.value}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <div style="flex:1;height:4px;background:var(--g200);border-radius:2px;overflow:hidden;"><div style="width:${o.prob}%;height:100%;background:${o.prob>=70?'var(--green)':o.prob>=40?'var(--orange)':'var(--red)'};border-radius:2px;"></div></div>
+          <span style="font-size:11px;font-weight:600;color:var(--g700);font-family:var(--mono);">${o.prob}%</span>
+        </div>
+      </td>
+      <td class="dt">${o.close}</td>
+      <td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:${avColors[o.owner]||'#64748b'};">${o.owner}</div><span style="font-size:11px;color:var(--g600);">${o.owner}</span></div></td>
+      <td><div class="ra"><button>→</button><button>⋯</button></div></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPipeline(){
+  const board=document.getElementById('pipeline-board');
+  board.innerHTML=pipelineStages.map(stage=>`
+    <div style="width:260px;flex-shrink:0;display:flex;flex-direction:column;">
+      <div style="padding:10px 12px;border-radius:8px 8px 0 0;border:1px solid var(--g200);border-bottom:none;background:#fff;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:${stage.color};">${stage.label}</div>
+          <div style="font-size:10px;color:var(--g400);font-family:var(--mono);">${stage.total} · ${stage.deals.length} deal${stage.deals.length!==1?'s':''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <div style="width:8px;height:8px;border-radius:50%;background:${stage.color};opacity:.4;"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background:${stage.color};opacity:.7;"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background:${stage.color};"></div>
+        </div>
+      </div>
+      <div style="flex:1;border:1px solid var(--g200);border-top:3px solid ${stage.color};border-radius:0 0 8px 8px;background:${stage.bg}22;padding:8px;display:flex;flex-direction:column;gap:8px;min-height:180px;">
+        ${stage.deals.map(d=>`
+          <div style="background:#fff;border:1px solid var(--g200);border-radius:8px;padding:12px;cursor:pointer;transition:all .15s;border-left:3px solid ${d.c};" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.1)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='';this.style.transform=''">
+            <div style="font-size:10px;font-weight:600;color:var(--g500);margin-bottom:2px;">${d.co}</div>
+            <div style="font-size:13px;font-weight:600;color:var(--g900);margin-bottom:8px;">${d.name}</div>
+            <div style="font-size:16px;font-weight:700;font-family:var(--mono);color:var(--g900);margin-bottom:8px;">${d.amount}</div>
+            <div style="height:3px;background:var(--g200);border-radius:2px;margin-bottom:8px;"><div style="width:${d.prob}%;height:100%;background:${stage.color};border-radius:2px;"></div></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:${avColors[d.owner]||'#64748b'};">${d.owner}</div><span style="font-size:10px;color:var(--g500);">${d.prob}% · ${d.due}</span></div>
+            </div>
+          </div>
+        `).join('')}
+        <div style="display:flex;align-items:center;gap:5px;padding:7px;color:var(--g400);cursor:pointer;font-size:12px;border-radius:5px;border:1.5px dashed var(--g200);" onmouseover="this.style.borderColor='${stage.color}';this.style.color='${stage.color}'" onmouseout="this.style.borderColor='var(--g200)';this.style.color='var(--g400)'">
+          ＋ Add deal
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderCustomers(){
+  const body=document.getElementById('customers-body');
+  body.innerHTML=customers.map(c=>{
+    const sBadge=c.status==='active'?'b-active':c.status==='prospect'?'b-prospect':'b-inactive';
+    return`<tr onclick="open360('${c.name}')">
+      <td><input type="checkbox" style="width:12px;height:12px;cursor:pointer;" onclick="event.stopPropagation()"></td>
+      <td><div style="display:flex;align-items:center;gap:9px;">
+        <div class="co-logo" style="background:${c.color};">${c.logo}</div>
+        <div><div style="font-size:13px;font-weight:600;color:var(--g800);">${c.name}</div></div>
+      </div></td>
+      <td style="font-size:12px;color:var(--g600);">${c.seg}</td>
+      <td><span class="badge ${sBadge}">${c.status.charAt(0).toUpperCase()+c.status.slice(1)}</span></td>
+      <td class="money green">${c.revenue}</td>
+      <td style="font-size:12px;color:var(--g700);">${c.deals} open</td>
+      <td style="font-size:12px;color:var(--g700);">${c.contacts} contacts</td>
+      <td class="dt">${c.since}</td>
+      <td><div class="ra"><button onclick="event.stopPropagation();open360('${c.name}')">🔮</button><button onclick="event.stopPropagation();">⋯</button></div></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderContracts(){
+  const body=document.getElementById('contracts-body');
+  body.innerHTML=contracts.map(c=>{
+    const sBadge=c.status==='active'?'b-won':c.status==='expiring'?'b-neg':c.status==='draft'?'b-cold':'b-lost';
+    const sLabel=c.status.charAt(0).toUpperCase()+c.status.slice(1);
+    return`<tr>
+      <td><input type="checkbox" style="width:12px;height:12px;cursor:pointer;"></td>
+      <td style="font-size:13px;font-weight:600;color:var(--g800);">${c.name}</td>
+      <td style="font-size:12px;color:var(--g600);">${c.account}</td>
+      <td><span class="badge ${sBadge}"><span class="bd"></span>${sLabel}</span></td>
+      <td class="money">${c.value}</td>
+      <td class="dt">${c.start}</td>
+      <td class="dt ${c.status==='expiring'?'over':''}">${c.end}</td>
+      <td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:${avColors[c.owner]||'#64748b'};">${c.owner}</div></div></td>
+      <td><div class="ra"><button>→</button><button>⋯</button></div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── 360° VIEW ───
+function render360List(){
+  const list=document.getElementById('cust360-list');
+  list.innerHTML=customers.map((c,i)=>`
+    <div class="cust-list-item ${i===0?'active':''}" onclick="open360('${c.name}',this)">
+      <div class="cli-logo" style="background:${c.color};">${c.logo}</div>
+      <div>
+        <div class="cli-name">${c.name}</div>
+        <div class="cli-type">${c.seg} · ${c.status}</div>
+      </div>
+      <div class="cli-val">${c.revenue}</div>
+    </div>
+  `).join('');
+}
+
+function open360(name, listEl){
+  // Mark active in list
+  document.querySelectorAll('.cust-list-item').forEach(i=>i.classList.remove('active'));
+  if(listEl) listEl.classList.add('active');
+
+  const c=customers.find(x=>x.name===name)||customers[0];
+  const main=document.getElementById('view360-main');
+  main.innerHTML=`
+    <!-- Hero -->
+    <div class="cust-hero">
+      <div class="ch-logo" style="background:${c.color};">${c.logo}</div>
+      <div class="ch-info">
+        <div class="ch-name">${c.name}</div>
+        <div class="ch-meta">
+          <div class="ch-meta-item">🏢 ${c.seg}</div>
+          <div class="ch-meta-item">🌐 www.${c.name.toLowerCase().replace(/\s/g,'')}.com</div>
+          <div class="ch-meta-item">📍 London, UK</div>
+          <div class="ch-meta-item">👥 ${c.contacts} contacts</div>
+          <span class="badge ${c.status==='active'?'b-active':c.status==='prospect'?'b-prospect':'b-inactive'}" style="font-size:11px;">${c.status.charAt(0).toUpperCase()+c.status.slice(1)}</span>
+        </div>
+        <div class="ch-kpis">
+          <div class="ch-kpi"><div class="ch-kpi-val">${c.revenue}</div><div class="ch-kpi-label">Total Revenue</div></div>
+          <div class="ch-kpi"><div class="ch-kpi-val">${c.deals}</div><div class="ch-kpi-label">Open Deals</div></div>
+          <div class="ch-kpi"><div class="ch-kpi-val">${c.contacts}</div><div class="ch-kpi-label">Contacts</div></div>
+          <div class="ch-kpi"><div class="ch-kpi-val">Since ${c.since}</div><div class="ch-kpi-label">Customer Since</div></div>
+        </div>
+        <div class="ch-health">
+          <span style="font-size:11px;color:var(--g500);">Health:</span>
+          <div class="health-bar">
+            ${[1,2,3,4,5].map(i=>`<div class="h-seg" style="background:${i<=4?'var(--green)':'var(--g200)'};"></div>`).join('')}
+          </div>
+          <span class="health-label" style="color:var(--green);">Strong</span>
+        </div>
+      </div>
+      <div class="ch-actions">
+        <button class="btn btn-ghost" style="font-size:11px;">✉ Email</button>
+        <button class="btn btn-ghost" style="font-size:11px;">📞 Call</button>
+        <button class="btn btn-crm" style="font-size:11px;">＋ Add Note</button>
+        <button class="btn-icon" style="font-size:12px;">⋯</button>
+      </div>
+    </div>
+
+    <!-- Inner tabs -->
+    <div class="i360-tabs">
+      <div class="i360-tab active" onclick="set360Tab(this,'overview')">📊 Overview</div>
+      <div class="i360-tab" onclick="set360Tab(this,'leads')">⚡ Leads</div>
+      <div class="i360-tab" onclick="set360Tab(this,'opps')">🎯 Opportunities</div>
+      <div class="i360-tab" onclick="set360Tab(this,'pipeline')">🔀 Pipeline</div>
+      <div class="i360-tab" onclick="set360Tab(this,'contracts')">📋 Contracts</div>
+      <div class="i360-tab" onclick="set360Tab(this,'contacts')">👤 Contacts</div>
+      <div class="i360-tab" onclick="set360Tab(this,'forecast')">📈 Forecast</div>
+      <div class="i360-tab" onclick="set360Tab(this,'notes')">📝 Notes</div>
+    </div>
+
+    <!-- Overview content -->
+    <div class="i360-content" id="i360-body">
+      <div class="i360-grid">
+        <!-- Open Opportunities -->
+        <div class="i360-card">
+          <div class="i360-card-title">Open Opportunities <span class="add-btn">＋ Add</span></div>
+          <div class="opp-row"><div class="opp-name">Enterprise SaaS Suite</div><span class="badge b-neg" style="font-size:10px;"><span class="bd"></span>Negotiation</span><div class="opp-amount" style="color:var(--orange);margin-left:8px;">£240K</div></div>
+          <div class="opp-row"><div class="opp-name">Support Renewal 2025</div><span class="badge b-prop" style="font-size:10px;"><span class="bd"></span>Proposal</span><div class="opp-amount" style="color:var(--crm);margin-left:8px;">£48K</div></div>
+          <div class="opp-row" style="border-bottom:none;"><div style="font-size:11px;color:var(--g400);">Total open: <strong style="color:var(--g800);font-family:var(--mono);">£288K</strong></div></div>
+        </div>
+
+        <!-- Contacts -->
+        <div class="i360-card">
+          <div class="i360-card-title">Key Contacts <span class="add-btn">＋ Add</span></div>
+          <div class="contact-grid">
+            <div class="contact-card"><div class="contact-av" style="background:#3b82f6;">JD</div><div><div class="contact-name">James Dodson</div><div class="contact-role">CEO · Decision Maker</div></div></div>
+            <div class="contact-card"><div class="contact-av" style="background:#10b981;">LH</div><div><div class="contact-name">Lucy Holt</div><div class="contact-role">CTO · Champion</div></div></div>
+            <div class="contact-card"><div class="contact-av" style="background:#f97316;">MN</div><div><div class="contact-name">Mike Nash</div><div class="contact-role">CFO · Influencer</div></div></div>
+            <div class="contact-card"><div class="contact-av" style="background:#8b5cf6;">RP</div><div><div class="contact-name">Rachel Park</div><div class="contact-role">Procurement</div></div></div>
+          </div>
+        </div>
+
+        <!-- Past Deals -->
+        <div class="i360-card">
+          <div class="i360-card-title">Past Deals</div>
+          <div class="opp-row"><div class="opp-name">Platform Launch 2024</div><span class="badge b-won" style="font-size:10px;">Won</span><div class="opp-amount" style="color:var(--green);margin-left:8px;">£320K</div></div>
+          <div class="opp-row"><div class="opp-name">Analytics Add-on</div><span class="badge b-won" style="font-size:10px;">Won</span><div class="opp-amount" style="color:var(--green);margin-left:8px;">£180K</div></div>
+          <div class="opp-row" style="border-bottom:none;"><div class="opp-name">Security Audit 2023</div><span class="badge b-lost" style="font-size:10px;">Lost</span><div class="opp-amount" style="color:var(--red);margin-left:8px;">£45K</div></div>
+        </div>
+
+        <!-- Forecast -->
+        <div class="i360-card">
+          <div class="i360-card-title">Revenue Forecast</div>
+          <div class="forecast-row"><div class="fc-stage">Q2 2025</div><div class="fc-bar-wrap"><div class="fc-bar" style="width:80%;background:var(--crm);"></div></div><div class="fc-val">£240K</div></div>
+          <div class="forecast-row"><div class="fc-stage">Q3 2025</div><div class="fc-bar-wrap"><div class="fc-bar" style="width:50%;background:var(--purple);"></div></div><div class="fc-val">£150K</div></div>
+          <div class="forecast-row"><div class="fc-stage">Q4 2025</div><div class="fc-bar-wrap"><div class="fc-bar" style="width:30%;background:var(--teal);"></div></div><div class="fc-val">£90K</div></div>
+        </div>
+      </div>
+
+      <!-- Notes timeline -->
+      <div class="i360-card-full">
+        <div class="i360-card-title">Notes & Activity <span class="add-btn">＋ Add Note</span></div>
+        <div class="note-item">
+          <div class="note-av" style="background:#3b82f6;">PV</div>
+          <div class="note-body">
+            <div><span class="note-author">Peter Voss</span><span class="note-date">Mar 15, 2025</span></div>
+            <div class="note-text">Met with James and Lucy for QBR. They are very happy with the platform performance but want to discuss the AI roadmap. James hinted at expanding the contract scope significantly if we can deliver the AI features by Q3.</div>
+            <div><span class="note-tag" style="background:var(--blue-l);color:var(--crm-d);">📅 QBR Meeting</span><span class="note-tag" style="background:var(--green-l);color:#15803d;margin-left:4px;">✅ Positive</span></div>
+          </div>
+        </div>
+        <div class="note-item">
+          <div class="note-av" style="background:#10b981;">SA</div>
+          <div class="note-body">
+            <div><span class="note-author">Sarah A.</span><span class="note-date">Mar 10, 2025</span></div>
+            <div class="note-text">Technical deep-dive call with Lucy (CTO). She confirmed they need SSO and advanced audit logs — both on our roadmap for Q2. Recommended we fast-track the proposal to capture this.</div>
+            <div><span class="note-tag" style="background:var(--purple-l);color:#6d28d9;">📞 Discovery Call</span></div>
+          </div>
+        </div>
+        <div class="note-item">
+          <div class="note-av" style="background:#f97316;">AL</div>
+          <div class="note-body">
+            <div><span class="note-author">Anna L.</span><span class="note-date">Feb 28, 2025</span></div>
+            <div class="note-text">Renewal discussion with Mike (CFO). He flagged budget pressure for FY2026 — we should consider multi-year pricing to lock in the deal and provide them pricing certainty.</div>
+            <div><span class="note-tag" style="background:var(--yellow-l);color:#a16207;">⚠ Watch</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function set360Tab(el,tab){
+  document.querySelectorAll('.i360-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  // Tab switching is cosmetic in this prototype — overview always shown
+}
+
+// ─── NAVIGATION ───
+function switchTab(el, view){
+  document.querySelectorAll('.m-tab').forEach(t=>t.classList.remove('active'));
+  if(el) el.classList.add('active');
+  document.querySelectorAll('.crm-view').forEach(v=>v.classList.remove('active'));
+  const target=document.getElementById('view-'+view);
+  if(target) target.classList.add('active');
+  // Lazy render
+  if(view==='pipeline') renderPipeline();
+  if(view==='view360'){ render360List(); setTimeout(()=>open360('Acme Corp', document.querySelector('.cust-list-item')),10); }
+}
+
+function open360FromTab(name){
+  switchTab(document.querySelectorAll('.m-tab')[7],'view360');
+  setTimeout(()=>open360(name),20);
+}
+
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function openNewDeal(){openModal('modal-deal');}
+document.querySelectorAll('.modal-backdrop').forEach(bd=>bd.addEventListener('click',e=>{if(e.target===bd)bd.classList.remove('open');}));
+
+// Row click → 360
+document.addEventListener('click',e=>{
+  const tr=e.target.closest('tr[onclick]');
+  // handled inline
+});
+
+// ─── INIT ───
+renderLeads();
+renderOpps();
+renderCustomers();
+renderContracts();
+</script>
+</body>
+</html>

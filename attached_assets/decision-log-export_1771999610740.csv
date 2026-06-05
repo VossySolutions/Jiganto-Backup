@@ -1,0 +1,21 @@
+Code,Title,Status,Priority,Category,Owner,Workstream,Escalated,Description
+DEC-0001,Approve phased go-live approach,Approved,18,Strategy,Steering Cmte,PMO,No,"Agreed to deploy GL first, then O2C/P2P."
+DEC-0002,Select middleware vendor X,Approved,16,Technical,S. Patel,Integration,No,Vendor selected after RFP evaluation.
+DEC-0003,Extend project timeline by 6 weeks,Approved,20,Governance,Steering Cmte,PMO,Yes,Required due to integration delays.
+DEC-0004,Adopt standard ERP best practice processes,Approved,15,Scope,D. Khan,P2P,No,Minimise customisations.
+DEC-0005,Outsource data cleansing activity,Approved,14,Data,J. Morris,Data Migration,No,Third-party engaged.
+DEC-0006,Implement enhanced SoD controls,Approved,17,Compliance,R. Blake,Security,Yes,Audit recommendation.
+DEC-0007,Freeze scope post design phase,Approved,13,Scope,S. Patel,PMO,No,Change requests require Steering approval.
+DEC-0008,Increase testing budget by £75k,Approved,12,Financial,L. Chen,PMO,Yes,Additional SIT cycle required.
+DEC-0009,Deploy additional cloud capacity,Approved,11,Infrastructure,M. Walsh,Technical,No,To support performance testing.
+DEC-0010,Proceed with weekend cutover,Approved,10,Planning,Steering Cmte,PMO,No,Reduce business disruption.
+DEC-0011,Replace legacy reporting tool,Rejected,9,Reporting,Steering Cmte,Reporting,No,Cost outweighs benefit.
+DEC-0012,Engage external audit partner,Approved,14,Governance,R. Blake,Compliance,No,Pre go-live assurance.
+DEC-0013,Delay DR test to Phase 2,Approved,8,Infrastructure,Steering Cmte,Technical,Yes,Risk accepted.
+DEC-0014,Consolidate two workstreams,Approved,7,Organisation,A. Turner,PMO,No,Improve coordination.
+DEC-0015,Adopt agile sprint cadence (2 weeks),Approved,12,Delivery,S. Patel,PMO,No,Improve velocity tracking.
+DEC-0016,Implement automated regression testing,Approved,15,Testing,M. Walsh,Technical,No,Reduce manual effort.
+DEC-0017,Retain legacy archive for 7 years,Approved,6,Compliance,R. Blake,Data,No,Align to retention policy.
+DEC-0018,Increase SME backfill budget,Approved,13,Resource,L. Chen,PMO,Yes,Address capacity constraints.
+DEC-0019,Move go-live to Q4,Approved,19,Governance,Steering Cmte,PMO,Yes,Align with fiscal calendar.
+DEC-0020,Mandate training completion before access granted,Approved,11,Change,A. Turner,Change,No,System access linked to LMS.

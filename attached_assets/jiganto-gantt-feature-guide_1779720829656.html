@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jiganto Gantt — Feature Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@400;500;700;800;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0a0a14;--ink2:#1e1e2e;--muted:#64748b;--border:#e2e8f0;--surface:#f8fafc;--white:#ffffff;
+  --p:#4338ca;--p-l:#eef2ff;--p-m:#818cf8;--p-d:#3730a3;
+  --teal:#0d9488;--teal-l:#ccfbf1;
+  --amber:#d97706;--amber-l:#fef3c7;
+  --red:#dc2626;--red-l:#fee2e2;
+  --green:#059669;--green-l:#d1fae5;
+  --violet:#7c3aed;--violet-l:#ede9fe;
+  --blue:#2563eb;--blue-l:#dbeafe;
+  --font:'Cabinet Grotesk',sans-serif;
+  --serif:'Instrument Serif',serif;
+  --mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{font-family:var(--font);background:var(--white);color:var(--ink);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;}
+
+.hero{background:var(--ink2);color:#fff;padding:56px 48px 52px;position:relative;overflow:hidden;}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 70% 80% at 80% 50%,#4338ca44,transparent),radial-gradient(ellipse 50% 60% at 20% 80%,#7c3aed22,transparent);pointer-events:none;}
+.hero-grid{display:grid;grid-template-columns:1fr auto;gap:40px;align-items:center;position:relative;z-index:1;}
+.hero-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--p-m);margin-bottom:16px;}
+.hero-eyebrow::before{content:'';width:24px;height:1.5px;background:var(--p-m);}
+.hero-title{font-family:var(--serif);font-size:52px;font-weight:400;line-height:1.1;letter-spacing:-.5px;margin-bottom:14px;}
+.hero-title em{font-style:italic;color:var(--p-m);}
+.hero-sub{font-size:16px;color:#94a3b8;max-width:480px;line-height:1.65;margin-bottom:24px;}
+.hero-pills{display:flex;gap:8px;flex-wrap:wrap;}
+.hero-pill{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:5px 12px;font-size:12px;font-weight:500;color:#cbd5e1;}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block;}
+.hero-stats{display:flex;flex-direction:column;gap:16px;flex-shrink:0;}
+.stat-card{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:18px 24px;text-align:center;min-width:120px;}
+.stat-val{font-family:var(--mono);font-size:32px;font-weight:500;color:#fff;line-height:1;}
+.stat-label{font-size:11px;color:#64748b;margin-top:5px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;}
+
+.section{padding:48px 48px 16px;}
+.section-label{display:inline-flex;align-items:center;gap:8px;font-size:10px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+.section-label::before{content:'';width:18px;height:1.5px;background:currentColor;}
+.section-title{font-family:var(--serif);font-size:34px;font-weight:400;line-height:1.15;letter-spacing:-.2px;margin-bottom:8px;}
+.section-title em{font-style:italic;color:var(--p);}
+.section-sub{font-size:15px;color:var(--muted);max-width:580px;line-height:1.65;margin-bottom:36px;}
+
+.cards-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:0 48px 48px;}
+.feat-card{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:22px;transition:box-shadow .2s,transform .2s;position:relative;overflow:hidden;}
+.feat-card:hover{box-shadow:0 8px 32px rgba(0,0,0,.09);transform:translateY(-2px);}
+.feat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0;}
+.feat-card.cp::before{background:linear-gradient(90deg,var(--p),var(--violet));}
+.feat-card.ct::before{background:linear-gradient(90deg,var(--teal),#34d399);}
+.feat-card.ca::before{background:linear-gradient(90deg,var(--amber),#fbbf24);}
+.feat-card.cb::before{background:linear-gradient(90deg,var(--blue),var(--p-m));}
+.feat-card.cg::before{background:linear-gradient(90deg,var(--green),var(--teal));}
+.feat-card.cv::before{background:linear-gradient(90deg,var(--violet),var(--p));}
+.feat-card.cr::before{background:linear-gradient(90deg,var(--red),var(--amber));}
+.feat-card.cs::before{background:linear-gradient(90deg,#334155,#64748b);}
+.feat-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:14px;}
+.ic-p{background:var(--p-l);}
+.ic-t{background:var(--teal-l);}
+.ic-a{background:var(--amber-l);}
+.ic-b{background:var(--blue-l);}
+.ic-g{background:var(--green-l);}
+.ic-v{background:var(--violet-l);}
+.ic-r{background:var(--red-l);}
+.ic-s{background:var(--surface);}
+.feat-title{font-size:14px;font-weight:800;color:var(--ink);margin-bottom:7px;}
+.feat-body{font-size:13px;color:var(--muted);line-height:1.6;}
+.feat-bullets{list-style:none;margin-top:10px;display:flex;flex-direction:column;gap:5px;}
+.feat-bullets li{display:flex;align-items:flex-start;gap:7px;font-size:12px;color:var(--muted);}
+.feat-bullets li::before{content:'›';color:var(--p);font-weight:700;flex-shrink:0;margin-top:1px;}
+
+.hierarchy-wrap{padding:0 48px 48px;}
+.hierarchy{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px 32px;display:flex;flex-direction:column;gap:10px;}
+.h-row{display:flex;align-items:center;gap:12px;}
+.h-badge{display:inline-flex;align-items:center;gap:7px;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:700;}
+.h-connector{width:2px;background:var(--border);height:10px;margin-left:28px;}
+.h-desc{font-size:13px;color:var(--muted);}
+
+.dep-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:0 48px 48px;}
+.dep-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:18px;}
+.dep-code{font-family:var(--mono);font-size:22px;font-weight:500;color:var(--p);margin-bottom:6px;}
+.dep-name{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:5px;}
+.dep-desc{font-size:12px;color:var(--muted);line-height:1.55;}
+.dep-example{margin-top:10px;background:var(--surface);border-radius:7px;padding:10px 12px;font-size:11px;color:var(--muted);font-family:var(--mono);}
+.dep-bar{height:8px;border-radius:4px;margin:3px 0;}
+
+.ie-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 48px 48px;}
+.ie-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:18px 20px;display:flex;align-items:flex-start;gap:14px;}
+.ie-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+.ie-title{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:3px;}
+.ie-body{font-size:12px;color:var(--muted);line-height:1.55;}
+.ie-trigger{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:500;background:var(--p-l);color:var(--p);padding:1px 6px;border-radius:4px;}
+
+.ie-flow{display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:0 48px 48px;position:relative;}
+.ie-flow::before{content:'';position:absolute;top:21px;left:calc(48px + 12.5%);right:calc(48px + 12.5%);height:1.5px;background:var(--border);z-index:0;}
+.flow-step{display:flex;flex-direction:column;align-items:center;gap:10px;padding:0 8px;position:relative;z-index:1;}
+.flow-num{width:42px;height:42px;border-radius:50%;background:var(--ink2);color:#fff;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;}
+.flow-title{font-size:12px;font-weight:700;color:var(--ink);text-align:center;}
+.flow-desc{font-size:11px;color:var(--muted);text-align:center;line-height:1.5;}
+
+.zoom-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:0 48px 48px;}
+.zoom-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
+.zoom-level{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--p);margin-bottom:6px;}
+.zoom-name{font-size:14px;font-weight:800;color:var(--ink);margin-bottom:5px;}
+.zoom-use{font-size:12px;color:var(--muted);line-height:1.5;}
+.zoom-demo{height:7px;border-radius:4px;margin-top:10px;background:linear-gradient(90deg,var(--p),var(--violet));}
+
+.rag-wrap{padding:0 48px 48px;}
+.rag-row{display:flex;gap:16px;}
+.rag-card{flex:1;border-radius:12px;padding:18px 20px;border:1px solid transparent;}
+.rag-card.g{background:var(--green-l);border-color:#86efac;}
+.rag-card.a{background:var(--amber-l);border-color:#fcd34d;}
+.rag-card.r{background:var(--red-l);border-color:#fca5a5;}
+.rag-title{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;margin-bottom:5px;}
+.rag-dot{width:12px;height:12px;border-radius:50%;}
+.rag-desc{font-size:12px;color:var(--muted);line-height:1.55;}
+
+.roles-wrap{padding:0 48px 48px;}
+.roles-table{width:100%;border-collapse:collapse;background:var(--white);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+.roles-table th{padding:10px 16px;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:var(--surface);text-align:left;border-bottom:1px solid var(--border);}
+.roles-table td{padding:11px 16px;font-size:13px;border-bottom:1px solid var(--border);}
+.roles-table tr:last-child td{border-bottom:none;}
+.roles-table tr:hover td{background:var(--surface);}
+.rb{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
+.rb-pm{background:var(--p-l);color:var(--p);}
+.rb-exec{background:var(--violet-l);color:var(--violet);}
+.rb-team{background:var(--teal-l);color:var(--teal);}
+.rb-client{background:var(--blue-l);color:var(--blue);}
+
+.qr-wrap{padding:0 48px 48px;}
+.qr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.qr-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;}
+.qr-key{font-family:var(--mono);font-size:11px;font-weight:500;background:var(--ink2);color:#e2e8f0;padding:3px 8px;border-radius:5px;flex-shrink:0;white-space:nowrap;}
+.qr-action{font-size:12px;color:var(--muted);}
+
+.footer{background:var(--surface);border-top:1px solid var(--border);padding:28px 48px;display:flex;align-items:center;justify-content:space-between;}
+.footer-logo{width:32px;height:32px;background:linear-gradient(135deg,#2563eb,#0fbcb0);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;}
+
+@media print{
+  body{font-size:11px;}
+  .hero{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-grid">
+    <div>
+      <div class="hero-eyebrow">Jiganto · Project Management</div>
+      <h1 class="hero-title">The Gantt Chart<br><em>built for the way</em><br>teams actually work</h1>
+      <p class="hero-sub">A fully interactive, enterprise-grade project planning chart built into Jiganto. No plugins, no imports, no complexity. Everything your team needs to plan, track and deliver projects right in the platform.</p>
+      <div class="hero-pills">
+        <div class="hero-pill"><span class="dot" style="background:#34d399;"></span>Zero setup required</div>
+        <div class="hero-pill"><span class="dot" style="background:#818cf8;"></span>All project types</div>
+        <div class="hero-pill"><span class="dot" style="background:#f59e0b;"></span>Real-time editing</div>
+        <div class="hero-pill"><span class="dot" style="background:#f87171;"></span>Excel import &amp; export</div>
+      </div>
+    </div>
+    <div class="hero-stats">
+      <div class="stat-card"><div class="stat-val">7</div><div class="stat-label">Hierarchy levels</div></div>
+      <div class="stat-card"><div class="stat-val">4</div><div class="stat-label">Zoom views</div></div>
+      <div class="stat-card"><div class="stat-val">25+</div><div class="stat-label">Features</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- CORE FEATURES -->
+<div class="section">
+  <div class="section-label">What it does</div>
+  <h2 class="section-title">Everything you need to<br><em>plan and track delivery</em></h2>
+  <p class="section-sub">The Jiganto Gantt is purpose-built for professional services firms, system integrators, software teams and enterprise project managers. Here is the complete feature set.</p>
+</div>
+
+<div class="cards-grid">
+  <div class="feat-card cp">
+    <div class="feat-icon ic-p">📅</div>
+    <div class="feat-title">Interactive Gantt Timeline</div>
+    <div class="feat-body">A fully visual project timeline where every bar is live and interactive — representing task duration, progress and health at a glance.</div>
+    <ul class="feat-bullets">
+      <li>Drag any bar left or right to move its dates</li>
+      <li>Grab the right edge to extend or shorten a task</li>
+      <li>Grab the left edge to move the start date independently</li>
+      <li>Progress fill shown directly inside each bar</li>
+      <li>All dates update in real time as you drag</li>
+    </ul>
+  </div>
+
+  <div class="feat-card cp">
+    <div class="feat-icon ic-p">📝</div>
+    <div class="feat-title">Inline Cell Editing</div>
+    <div class="feat-body">Update any task attribute directly in the row. No need to open a separate window for routine updates — everything edits in place.</div>
+    <ul class="feat-bullets">
+      <li>Name — double-click to edit in the row</li>
+      <li>Owner — single click opens a team dropdown</li>
+      <li>Start &amp; end dates — single click opens a date picker</li>
+      <li>Progress — single click opens an inline 0–100% slider</li>
+      <li>RAG status — single click cycles Green → Amber → Red</li>
+    </ul>
+  </div>
+
+  <div class="feat-card cb">
+    <div class="feat-icon ic-b">🔗</div>
+    <div class="feat-title">Task Dependencies</div>
+    <div class="feat-body">Link tasks to reflect real-world sequencing. Arrows connect precisely to the edges of bars with clear dep type labels.</div>
+    <ul class="feat-bullets">
+      <li>Three types: Finish-to-Start, Start-to-Start, End-to-End</li>
+      <li>Visual draw mode: click source bar then target bar</li>
+      <li>Arrows use elbow routing to avoid obscuring bars</li>
+      <li>Dep type badge shown on each arrow</li>
+      <li>Click any arrow to edit the linked task</li>
+    </ul>
+  </div>
+
+  <div class="feat-card cv">
+    <div class="feat-icon ic-v">⚡</div>
+    <div class="feat-title">Critical Path Highlighting</div>
+    <div class="feat-body">One click reveals the sequence of tasks that directly determines the project end date — showing exactly where schedule risk lies.</div>
+    <ul class="feat-bullets">
+      <li>Toggle on/off with the ⚡ Critical Path button</li>
+      <li>Critical task rows get a red left border</li>
+      <li>Critical bars outlined in red on the timeline</li>
+      <li>Critical dependency arrows turn solid red</li>
+      <li>Computed from the live dependency network</li>
+    </ul>
+  </div>
+
+  <div class="feat-card ct">
+    <div class="feat-icon ic-t">🔢</div>
+    <div class="feat-title">Auto-Calculated WBS Numbers</div>
+    <div class="feat-body">Work Breakdown Structure numbers are computed automatically from the task hierarchy — you never set them manually.</div>
+    <ul class="feat-bullets">
+      <li>Hierarchical numbering: 1, 1.1, 1.1.1 etc.</li>
+      <li>Updates instantly when tasks are moved or rearranged</li>
+      <li>Used as the reference ID in import and export files</li>
+      <li>Visible in a dedicated WBS column on the left panel</li>
+    </ul>
+  </div>
+
+  <div class="feat-card ct">
+    <div class="feat-icon ic-t">🔍</div>
+    <div class="feat-title">Four Zoom Levels</div>
+    <div class="feat-body">Switch the timeline scale to suit the planning horizon — from daily scheduling to multi-year programme oversight.</div>
+    <ul class="feat-bullets">
+      <li>Day — granular daily task scheduling</li>
+      <li>Week — standard project view (default)</li>
+      <li>Month — medium-term overview</li>
+      <li>Quarter — programme and long-range planning</li>
+    </ul>
+  </div>
+
+  <div class="feat-card ca">
+    <div class="feat-icon ic-a">◆</div>
+    <div class="feat-title">Milestones</div>
+    <div class="feat-body">Mark key delivery points, sign-offs and go-live dates as diamond markers on the timeline — visually distinct from task bars.</div>
+    <ul class="feat-bullets">
+      <li>Rendered as diamonds — immediately recognisable</li>
+      <li>Colour-coded by RAG status</li>
+      <li>Shown with ◆ icon in the left task panel</li>
+      <li>Click to view or edit milestone details</li>
+      <li>Common examples: Go-Live, UAT Sign-Off, Project Complete</li>
+    </ul>
+  </div>
+
+  <div class="feat-card ca">
+    <div class="feat-icon ic-a">🧮</div>
+    <div class="feat-title">Smart Filters</div>
+    <div class="feat-body">Focus the Gantt on exactly what matters in this moment. Filters work together and update the chart immediately.</div>
+    <ul class="feat-bullets">
+      <li>Filter by hierarchy level — show only Phases, Tasks etc.</li>
+      <li>Filter by owner — view one person's workload at a time</li>
+      <li>Filter by RAG — surface all At Risk or Behind items</li>
+      <li>Combine filters for precise targeted views</li>
+      <li>Dependency arrows update to match filtered rows</li>
+    </ul>
+  </div>
+
+  <div class="feat-card cg">
+    <div class="feat-icon ic-g">📊</div>
+    <div class="feat-title">RAG Status Tracking</div>
+    <div class="feat-body">Every task carries a Red / Amber / Green health indicator visible at a glance across the entire plan.</div>
+    <ul class="feat-bullets">
+      <li>Coloured dot in every row and reflected on bars</li>
+      <li>One-click cycling — fastest possible status update</li>
+      <li>Visible simultaneously in task panel and timeline</li>
+      <li>Exported to CSV for stakeholder reporting</li>
+    </ul>
+  </div>
+
+  <div class="feat-card cg">
+    <div class="feat-icon ic-g">↕</div>
+    <div class="feat-title">Collapse &amp; Expand</div>
+    <div class="feat-body">Manage visual complexity by folding and unfolding phases, workstreams or entire branches of the hierarchy.</div>
+    <ul class="feat-bullets">
+      <li>▶/▼ toggle on every parent row</li>
+      <li>Collapse All / Expand All buttons in the toolbar</li>
+      <li>Collapsed rows hide children across both panels</li>
+      <li>Useful for clean exec-level or client-facing views</li>
+    </ul>
+  </div>
+
+  <div class="feat-card cr">
+    <div class="feat-icon ic-r">📍</div>
+    <div class="feat-title">Today Line &amp; Navigation</div>
+    <div class="feat-body">Always know where you are in the project. A visible today marker keeps context as you scroll through long timelines.</div>
+    <ul class="feat-bullets">
+      <li>Purple vertical line marks today on the timeline</li>
+      <li>Today column highlighted in the day header row</li>
+      <li>📍 Jump to Today button scrolls to now instantly</li>
+      <li>Task panel and timeline scroll vertically in sync</li>
+      <li>Horizontal scroll is independent of the task panel</li>
+    </ul>
+  </div>
+
+  <div class="feat-card cs">
+    <div class="feat-icon ic-s">➕</div>
+    <div class="feat-title">Task Management</div>
+    <div class="feat-body">Add, edit and remove tasks at any level of the hierarchy directly from the Gantt — no separate screen needed.</div>
+    <ul class="feat-bullets">
+      <li>＋ Task, ＋ Phase, ◆ Milestone buttons in the footer</li>
+      <li>Full edit modal for comprehensive task configuration</li>
+      <li>Set parent, predecessor, type, owner, dates, progress, RAG, notes</li>
+      <li>Delete task and all its children with one-click confirmation</li>
+    </ul>
+  </div>
+
+  <div class="feat-card cs">
+    <div class="feat-icon ic-s">⊕</div>
+    <div class="feat-title">Custom Columns</div>
+    <div class="feat-body">Every project is different. Add your own columns to capture data that matters to your team or client — no configuration beyond a few clicks.</div>
+    <ul class="feat-bullets">
+      <li>Add unlimited custom columns per project</li>
+      <li>Column types: Text, Number, Dropdown (select list)</li>
+      <li>Define your own option lists for dropdowns</li>
+      <li>Edit values inline — no modal required</li>
+      <li>Custom columns included in CSV export</li>
+    </ul>
+  </div>
+
+  <div class="feat-card cp">
+    <div class="feat-icon ic-p">≡</div>
+    <div class="feat-title">List View</div>
+    <div class="feat-body">Switch from the visual timeline to a clean table for data entry, reporting or sharing with stakeholders who prefer a spreadsheet format.</div>
+    <ul class="feat-bullets">
+      <li>Toggle between Gantt and List in one click</li>
+      <li>Shows WBS, name, type, owner, dates, progress, RAG</li>
+      <li>Edit icon on each row opens the full edit modal</li>
+      <li>Respects all active filters</li>
+    </ul>
+  </div>
+
+  <div class="feat-card cg">
+    <div class="feat-icon ic-g">↓↑</div>
+    <div class="feat-title">Excel Import &amp; Export</div>
+    <div class="feat-body">Build your project plan offline in Excel, then import it into Jiganto — or export the live plan for reporting, backup or sharing.</div>
+    <ul class="feat-bullets">
+      <li>Download empty CSV template pre-formatted for Jiganto</li>
+      <li>Export the full live plan to CSV (opens in Excel)</li>
+      <li>Import with Append or Overwrite mode</li>
+      <li>Drag-and-drop file upload or browse to select</li>
+      <li>Parent and predecessor links preserved via WBS reference</li>
+    </ul>
+  </div>
+
+</div>
+
+<!-- HIERARCHY -->
+<div class="section">
+  <div class="section-label">Work structure</div>
+  <h2 class="section-title">Seven levels of<br><em>structured hierarchy</em></h2>
+  <p class="section-sub">Jiganto Gantt supports everything from a single small project to a complex multi-year programme — using one consistent structure that scales with you.</p>
+</div>
+<div class="hierarchy-wrap">
+  <div class="hierarchy">
+    <div class="h-row">
+      <div class="h-badge" style="background:#ede9fe;color:#3730a3;">🔷 Programme</div>
+      <div class="h-desc">The top-level container — a collection of related projects working toward a common strategic outcome. E.g. <em>Digital Transformation Programme 2025–2027</em></div>
+    </div>
+    <div class="h-connector"></div>
+    <div class="h-row" style="padding-left:20px;">
+      <div class="h-badge" style="background:#eef2ff;color:#4338ca;">📁 Project</div>
+      <div class="h-desc">A time-bound effort with defined scope and deliverables. E.g. <em>SAP S/4HANA Core ERP Implementation</em></div>
+    </div>
+    <div class="h-connector" style="margin-left:48px;"></div>
+    <div class="h-row" style="padding-left:40px;">
+      <div class="h-badge" style="background:#ecfeff;color:#0e7490;">📋 Phase</div>
+      <div class="h-desc">A defined stage of the project. E.g. <em>Discovery · Solution Design · Build · Testing · Go-Live</em></div>
+    </div>
+    <div class="h-connector" style="margin-left:68px;"></div>
+    <div class="h-row" style="padding-left:60px;">
+      <div class="h-badge" style="background:#d1fae5;color:#065f46;">🔀 Workstream</div>
+      <div class="h-desc">A parallel track within a phase. E.g. <em>Finance &amp; Controlling · Supply Chain · Integrations &amp; Data Migration</em></div>
+    </div>
+    <div class="h-connector" style="margin-left:88px;"></div>
+    <div class="h-row" style="padding-left:80px;">
+      <div class="h-badge" style="background:#fef3c7;color:#92400e;">⚡ Activity</div>
+      <div class="h-desc">A grouping of related tasks within a workstream. E.g. <em>GL / AP / AR Configuration · Asset Management Setup</em></div>
+    </div>
+    <div class="h-connector" style="margin-left:108px;"></div>
+    <div class="h-row" style="padding-left:100px;">
+      <div class="h-badge" style="background:#f1f5f9;color:#334155;">☑ Task / Sub-Task</div>
+      <div class="h-desc">The individual unit of work assigned to a person. E.g. <em>Configure chart of accounts · Set up payment terms</em></div>
+    </div>
+    <div class="h-connector" style="margin-left:128px;"></div>
+    <div class="h-row" style="padding-left:120px;">
+      <div class="h-badge" style="background:#fce7f3;color:#831843;">◆ Milestone</div>
+      <div class="h-desc">A key delivery moment shown as a diamond on the timeline. E.g. <em>Go-Live · UAT Sign-Off · Design Sign-Off · Project Complete</em></div>
+    </div>
+  </div>
+</div>
+
+<!-- DEPENDENCY TYPES -->
+<div class="section">
+  <div class="section-label">Dependencies</div>
+  <h2 class="section-title">Three dependency types<br><em>for any sequence</em></h2>
+  <p class="section-sub">Choose the right relationship when linking tasks. Arrows connect precisely to the correct edge of each bar and are labelled with the dependency type.</p>
+</div>
+<div class="dep-grid">
+  <div class="dep-card">
+    <div class="dep-code">FS</div>
+    <div class="dep-name">Finish to Start</div>
+    <div class="dep-desc">Task B cannot start until Task A has finished. The most common type — used for sequential activities where one must complete before the next begins.</div>
+    <div class="dep-example">
+      <div style="color:var(--p);font-weight:600;font-family:var(--font);margin-bottom:6px;font-size:11px;">Example: Testing cannot start until Build is complete</div>
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;"><div class="dep-bar" style="width:65%;background:var(--p-l);border:1.5px solid var(--p);"></div><span>Build</span></div>
+      <div style="display:flex;align-items:center;gap:5px;padding-left:65%;"><div class="dep-bar" style="width:50%;background:var(--teal-l);border:1.5px solid var(--teal);"></div><span>Test</span></div>
+    </div>
+  </div>
+  <div class="dep-card">
+    <div class="dep-code">SS</div>
+    <div class="dep-name">Start to Start</div>
+    <div class="dep-desc">Task B cannot start until Task A has started. Used for parallel activities that must begin together but can run at different lengths.</div>
+    <div class="dep-example">
+      <div style="color:var(--p);font-weight:600;font-family:var(--font);margin-bottom:6px;font-size:11px;">Example: Training can only start once Build has started</div>
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;"><div class="dep-bar" style="width:70%;background:var(--p-l);border:1.5px solid var(--p);"></div><span>Build</span></div>
+      <div style="display:flex;align-items:center;gap:5px;"><div class="dep-bar" style="width:40%;background:var(--teal-l);border:1.5px solid var(--teal);"></div><span>Training</span></div>
+    </div>
+  </div>
+  <div class="dep-card">
+    <div class="dep-code">EE</div>
+    <div class="dep-name">End to End</div>
+    <div class="dep-desc">Task B cannot end until Task A has ended. Applied to review gates, sign-offs and parallel workstreams that must complete together.</div>
+    <div class="dep-example">
+      <div style="color:var(--p);font-weight:600;font-family:var(--font);margin-bottom:6px;font-size:11px;">Example: Documentation must finish when UAT finishes</div>
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;"><div class="dep-bar" style="width:70%;background:var(--p-l);border:1.5px solid var(--p);"></div><span>UAT</span></div>
+      <div style="display:flex;align-items:center;gap:5px;padding-left:30%;"><div class="dep-bar" style="width:40%;background:var(--teal-l);border:1.5px solid var(--teal);"></div><span>Docs</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- INLINE EDITING -->
+<div class="section">
+  <div class="section-label">Inline editing</div>
+  <h2 class="section-title">Update anything<br><em>without leaving the row</em></h2>
+  <p class="section-sub">Every field in the task panel is editable in place. During a review meeting you can update the entire status of a project in seconds — no separate windows, no navigation.</p>
+</div>
+<div class="ie-grid">
+  <div class="ie-card">
+    <div class="ie-icon" style="background:var(--p-l);">✏</div>
+    <div><div class="ie-title">Task Name</div><div class="ie-body"><span class="ie-trigger">Double-click</span> the name to edit it in place. A blue border appears on the field. Press Enter to save or Escape to cancel.</div></div>
+  </div>
+  <div class="ie-card">
+    <div class="ie-icon" style="background:var(--teal-l);">👤</div>
+    <div><div class="ie-title">Owner</div><div class="ie-body"><span class="ie-trigger">Single click</span> the avatar to open an inline team member dropdown. Select a name and it saves immediately.</div></div>
+  </div>
+  <div class="ie-card">
+    <div class="ie-icon" style="background:var(--blue-l);">📅</div>
+    <div><div class="ie-title">Start &amp; End Dates</div><div class="ie-body"><span class="ie-trigger">Single click</span> either date column to open a date picker inline. The timeline bar updates when you commit the change.</div></div>
+  </div>
+  <div class="ie-card">
+    <div class="ie-icon" style="background:var(--amber-l);">📊</div>
+    <div><div class="ie-title">Progress Percentage</div><div class="ie-body"><span class="ie-trigger">Single click</span> the progress bar to open an inline slider from 0–100%. The bar fill and percentage readout update live as you drag.</div></div>
+  </div>
+  <div class="ie-card">
+    <div class="ie-icon" style="background:var(--green-l);">🔴</div>
+    <div><div class="ie-title">RAG Status</div><div class="ie-body"><span class="ie-trigger">Single click</span> the coloured dot to cycle it through Green → Amber → Red → Green. The fastest possible status update — one click, no menu.</div></div>
+  </div>
+  <div class="ie-card">
+    <div class="ie-icon" style="background:var(--violet-l);">⊕</div>
+    <div><div class="ie-title">Custom Column Values</div><div class="ie-body"><span class="ie-trigger">Single click</span> any custom column cell to edit it inline — text input or dropdown, depending on the column type you defined.</div></div>
+  </div>
+</div>
+
+<!-- IMPORT/EXPORT FLOW -->
+<div class="section">
+  <div class="section-label">Import &amp; Export</div>
+  <h2 class="section-title">Build offline, import<br><em>in seconds</em></h2>
+  <p class="section-sub">Plan your project in Excel, import it into Jiganto with a drag and drop, and all hierarchy, dependencies and dates come across automatically.</p>
+</div>
+<div class="ie-flow">
+  <div class="flow-step">
+    <div class="flow-num">1</div>
+    <div style="font-size:20px;margin:6px 0;">⬇</div>
+    <div class="flow-title">Download template</div>
+    <div class="flow-desc">Click Export → Download empty template. Opens a pre-formatted CSV ready for Excel.</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">2</div>
+    <div style="font-size:20px;margin:6px 0;">📋</div>
+    <div class="flow-title">Fill in Excel</div>
+    <div class="flow-desc">Add tasks, phases, dates, owners and RAG statuses offline. Use WBS numbers to link parents and predecessors.</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">3</div>
+    <div style="font-size:20px;margin:6px 0;">⬆</div>
+    <div class="flow-title">Import to Jiganto</div>
+    <div class="flow-desc">Click Import, choose Append (add) or Overwrite (replace), then drag-and-drop or browse for your CSV.</div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">4</div>
+    <div style="font-size:20px;margin:6px 0;">✅</div>
+    <div class="flow-title">Plan goes live</div>
+    <div class="flow-desc">All tasks appear instantly on the Gantt with bars, arrows, hierarchy and dates fully intact.</div>
+  </div>
+</div>
+
+<!-- ZOOM LEVELS -->
+<div class="section">
+  <div class="section-label">Timeline scale</div>
+  <h2 class="section-title">Four zoom levels for<br><em>every planning horizon</em></h2>
+  <p class="section-sub">Switch the timeline scale with one click. Headers, bar widths, cells and today line all rescale instantly.</p>
+</div>
+<div class="zoom-grid">
+  <div class="zoom-card">
+    <div class="zoom-level">ZOOM: DAY</div>
+    <div class="zoom-name">Day View</div>
+    <div class="zoom-use">Granular daily scheduling. Each column is one day. Best for sprint planning, cutover weekends and detailed task coordination.</div>
+    <div class="zoom-demo" style="opacity:.6;"></div>
+  </div>
+  <div class="zoom-card">
+    <div class="zoom-level">ZOOM: WEEK</div>
+    <div class="zoom-name">Week View <span style="font-size:10px;background:var(--p-l);color:var(--p);padding:1px 6px;border-radius:20px;font-weight:700;">Default</span></div>
+    <div class="zoom-use">Standard project view for most teams. The right balance of detail and visibility for a typical implementation project.</div>
+    <div class="zoom-demo"></div>
+  </div>
+  <div class="zoom-card">
+    <div class="zoom-level">ZOOM: MONTH</div>
+    <div class="zoom-name">Month View</div>
+    <div class="zoom-use">Medium-term overview with multiple months on screen. Ideal for steering committee presentations and customer progress reviews.</div>
+    <div class="zoom-demo" style="opacity:.7;"></div>
+  </div>
+  <div class="zoom-card">
+    <div class="zoom-level">ZOOM: QUARTER</div>
+    <div class="zoom-name">Quarter View</div>
+    <div class="zoom-use">Long-range programme planning. Entire quarters visible at once. Best for roadmaps, programme reviews and executive reporting.</div>
+    <div class="zoom-demo" style="opacity:.45;"></div>
+  </div>
+</div>
+
+<!-- RAG STATUS -->
+<div class="section">
+  <div class="section-label">Health tracking</div>
+  <h2 class="section-title">RAG status — <em>at every level</em></h2>
+  <p class="section-sub">Every task, phase, workstream, project and programme carries a health indicator. Set it with one click, see it everywhere instantly.</p>
+</div>
+<div class="rag-wrap">
+  <div class="rag-row">
+    <div class="rag-card g">
+      <div class="rag-title"><div class="rag-dot" style="background:var(--green);"></div>Green — On Track</div>
+      <div class="rag-desc">Work is progressing as planned. No action required. Visible as a green dot in the task row and reflected in the progress bar colour and bar styling.</div>
+    </div>
+    <div class="rag-card a">
+      <div class="rag-title"><div class="rag-dot" style="background:var(--amber);"></div>Amber — At Risk</div>
+      <div class="rag-desc">A concern has been identified that may impact delivery if not addressed. Action needed. Items should carry a note in the task notes field explaining the risk and the mitigation plan.</div>
+    </div>
+    <div class="rag-card r">
+      <div class="rag-title"><div class="rag-dot" style="background:var(--red);"></div>Red — Behind</div>
+      <div class="rag-desc">The task or phase is behind schedule or over budget. Immediate escalation and corrective action required. Red items surface automatically in project dashboards and portfolio-level alerts.</div>
+    </div>
+  </div>
+</div>
+
+<!-- WHO USES IT -->
+<div class="section">
+  <div class="section-label">Designed for</div>
+  <h2 class="section-title">The right view for<br><em>every stakeholder</em></h2>
+  <p class="section-sub">Different users need different things from the same plan. The Jiganto Gantt supports all of them without requiring separate tools or exports.</p>
+</div>
+<div class="roles-wrap">
+  <table class="roles-table">
+    <thead>
+      <tr>
+        <th>Role</th>
+        <th>What they use it for</th>
+        <th>Most useful features</th>
+        <th>Recommended view</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="rb rb-pm">Project Manager</span></td>
+        <td style="color:var(--muted);">Day-to-day delivery tracking, task assignment, status updates, risk management</td>
+        <td style="color:var(--muted);">Inline editing · Critical path · Dependencies · RAG cycling · Filters</td>
+        <td style="color:var(--muted);">Week zoom · Gantt view · All levels visible</td>
+      </tr>
+      <tr>
+        <td><span class="rb rb-exec">Programme / Exec Lead</span></td>
+        <td style="color:var(--muted);">Portfolio oversight, programme health, milestone tracking, steering decisions</td>
+        <td style="color:var(--muted);">Quarter zoom · Collapse to Phase · Critical path · Milestone view · RAG filter</td>
+        <td style="color:var(--muted);">Quarter zoom · Collapse all to Phase level</td>
+      </tr>
+      <tr>
+        <td><span class="rb rb-team">Delivery Team Member</span></td>
+        <td style="color:var(--muted);">Checking own tasks, updating progress and dates, reporting blockers</td>
+        <td style="color:var(--muted);">Owner filter (my tasks) · Inline progress slider · Task notes · Date editing</td>
+        <td style="color:var(--muted);">Week zoom · Owner filter applied · Task level</td>
+      </tr>
+      <tr>
+        <td><span class="rb rb-client">Client / Sponsor</span></td>
+        <td style="color:var(--muted);">Monitoring delivery progress, reviewing milestones, understanding project health</td>
+        <td style="color:var(--muted);">Month zoom · Milestone view · RAG summary · Export for offline review</td>
+        <td style="color:var(--muted);">Month zoom · Collapse to Phase · Client workspace</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- QUICK REFERENCE -->
+<div class="section">
+  <div class="section-label">Quick reference</div>
+  <h2 class="section-title">Common actions<br><em>at a glance</em></h2>
+  <p class="section-sub">Everything you need to know to use the Gantt from day one.</p>
+</div>
+<div class="qr-wrap">
+  <div class="qr-grid">
+    <div class="qr-item"><div class="qr-key">Double-click bar</div><div class="qr-action">Open full edit modal for a task</div></div>
+    <div class="qr-item"><div class="qr-key">Double-click name</div><div class="qr-action">Edit task name inline in the row</div></div>
+    <div class="qr-item"><div class="qr-key">Click avatar</div><div class="qr-action">Change task owner via dropdown</div></div>
+    <div class="qr-item"><div class="qr-key">Click date</div><div class="qr-action">Edit start or end date inline</div></div>
+    <div class="qr-item"><div class="qr-key">Click progress bar</div><div class="qr-action">Drag slider to update % complete</div></div>
+    <div class="qr-item"><div class="qr-key">Click RAG dot</div><div class="qr-action">Cycle status: Green → Amber → Red</div></div>
+    <div class="qr-item"><div class="qr-key">Drag bar</div><div class="qr-action">Move task dates on the timeline</div></div>
+    <div class="qr-item"><div class="qr-key">Drag bar edge</div><div class="qr-action">Extend or shorten task duration</div></div>
+    <div class="qr-item"><div class="qr-key">Click ▶ / ▼</div><div class="qr-action">Collapse or expand a phase / group</div></div>
+    <div class="qr-item"><div class="qr-key">🔗 Draw Dep</div><div class="qr-action">Click source bar → click target bar to link</div></div>
+    <div class="qr-item"><div class="qr-key">⚡ Critical Path</div><div class="qr-action">Highlight the longest delivery sequence</div></div>
+    <div class="qr-item"><div class="qr-key">📍 Today</div><div class="qr-action">Scroll timeline to current date instantly</div></div>
+    <div class="qr-item"><div class="qr-key">⊟ Collapse All</div><div class="qr-action">Fold all phases — show top-level only</div></div>
+    <div class="qr-item"><div class="qr-key">⊞ Expand All</div><div class="qr-action">Unfold all levels in the plan</div></div>
+    <div class="qr-item"><div class="qr-key">⬇ Export</div><div class="qr-action">Download live plan as CSV (Excel-ready)</div></div>
+    <div class="qr-item"><div class="qr-key">⬆ Import</div><div class="qr-action">Upload CSV to append or overwrite plan</div></div>
+    <div class="qr-item"><div class="qr-key">Filter: Level</div><div class="qr-action">Show only Phases, Tasks, Milestones etc.</div></div>
+    <div class="qr-item"><div class="qr-key">⊕ Custom Col</div><div class="qr-action">Add a bespoke column to your plan</div></div>
+  </div>
+</div>
+
+<div class="footer">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="footer-logo">Ji</div>
+    <div>
+      <div style="font-size:13px;font-weight:700;color:var(--ink);">Jiganto Enterprise AI</div>
+      <div style="font-size:12px;color:var(--muted);">Gantt Chart · Project &amp; Programme Management</div>
+    </div>
+  </div>
+  <div style="text-align:right;">
+    <div style="font-family:var(--mono);font-size:11px;color:var(--muted);">Gantt v4 · Feature Guide</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:3px;">For support, contact your Jiganto administrator</div>
+  </div>
+</div>
+
+</body>
+</html>

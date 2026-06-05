@@ -1,0 +1,21 @@
+Code,Title,Status,Priority,Category,Owner,Workstream,Escalated,Description
+D-0001,Completion of Chart of Accounts design,Open,18,Finance,R. Blake,GL,Yes,Required before data migration build.
+D-0002,Infrastructure environment provisioning,In Progress,17,Infrastructure,M. Walsh,Technical,Yes,Blocking integration testing.
+D-0003,Banking partner API certification,Open,16,External,L. Chen,O2C,Yes,Needed for payment processing.
+D-0004,Data cleansing completion,In Progress,15,Data,J. Morris,Data Migration,No,Required before final migration load.
+D-0005,HR system integration sign-off,Open,10,Integration,S. Patel,Technical,No,Required for payroll interface.
+D-0006,Procurement contract approval,Open,9,Procurement,D. Khan,P2P,No,Blocking vendor onboarding.
+D-0007,Security penetration test results,In Progress,19,Security,M. Walsh,Security,Yes,Must pass before go-live.
+D-0008,Regulatory approval confirmation,Open,20,Compliance,R. Blake,Governance,Yes,Mandatory prior to cutover.
+D-0009,Steering Committee funding release,Completed,12,Financial,L. Chen,Steering Cmte,No,Phase 2 funding approved.
+D-0010,Test data anonymisation,In Progress,14,Data,J. Morris,Data Migration,No,Required for UAT compliance.
+D-0011,Middleware upgrade,Open,13,Technical,S. Patel,Integration,No,Required for performance optimisation.
+D-0012,Business process sign-off,In Progress,15,Governance,D. Khan,PMO,No,Design documentation pending approval.
+D-0013,DR environment configuration,Open,18,Infrastructure,M. Walsh,Technical,Yes,Required for DR test cycle.
+D-0014,Vendor SLA agreement,Open,11,Vendor,J. Morris,Data Migration,No,SLA under review.
+D-0015,Reporting tool licence renewal,Completed,7,Procurement,L. Chen,Reporting,No,Licence secured for 12 months.
+D-0016,Finance policy update,Open,8,Governance,R. Blake,GL,No,Must align with new ERP process.
+D-0017,Cloud capacity scaling,In Progress,16,Infrastructure,M. Walsh,Technical,Yes,Needed for load testing.
+D-0018,Cutover rehearsal sign-off,Open,17,Planning,S. Patel,PMO,Yes,Required before final go-live approval.
+D-0019,Data retention policy approval,Open,10,Compliance,R. Blake,Security,No,Awaiting Legal review.
+D-0020,Change impact assessment completion,In Progress,9,Change,A. Turner,Change,No,Required before training rollout.

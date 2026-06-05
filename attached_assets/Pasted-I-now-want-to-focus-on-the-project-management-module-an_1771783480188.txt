@@ -1,0 +1,92 @@
+I now want to focus on the project management module and look at how we re-design this to make the user experience much better.
+
+I'm still debating how best to present the landing page for projects and one information with Show. I have created a design using Claude, which I can attach see you can see what the thought process is. On the landing page, the idea was to have key KPIs that would be relevant to the project manager and or PMO lead or even program managers and execs.
+
+The idea is, you can list all the projects, which may also belong to a program or a portfolio, and you can see the general status of each of the projects, i.e. are there active, do they belong to a customer or are they internal, who is leading it and what the progress is, i.e. a percentage progress on the health check and also the tools might be active within each project and when it's due
+
+And the idea is not to show the full list of projects as this could be a large list if you're in a big company, but you have a button to go and jump to the full list if required.
+
+The other thought process was to view the projects in a table format, or even in a card format.
+
+Having the ability to filter when you are different project types or work item types is important.
+
+For example, the different worktops could be project or program or initiative or campaign or POC for user defined. I have also a number of additional work types and we can incorporate that into the process when a user creates a new work type and I've used Claude to come up with a design. The idea is we have five main user types, but also the ability for the user to create the own user defined Work type and then there is an extended list of other work types which we can make available.
+
+The process of creating the word type should be a three step process, i.e.
+
+Step 1 - Choose 1 of 5 Work Types (or Create your own or Choose from 12 Extended Work Types)
+Step 2 - enter high-level project details, e.g.
+
+Project Details
+
+WORK ITEM NAME 			*
+DESCRIPTION				Optional
+CUSTOMER / ACCOUNT		* Its either internal or Customer specific	
+PROJECT LEAD 			*
+START DATE				*
+TARGET END DATE			*
+BUDGET 					Optional
+PRIORITY				Optional
+STATUS					* Draft, Planning, Live, Delayed, Completed.
+PROJECT FRAMEWORK		Optional
+TEAM MEMBERS			Optional
+PARENT PROGRAMME / PORTFOLIO - Optional
+TAGS 					Optional
+
+Next Step - Choose Tools
+
+Step 3 - Select Tools you want to use in your Project / Work Type
+
+📅 PLANNING & SCHEDULING
+📊 Gantt Chart - Timeline planning (multiple selection can apply)
+🗃️ Scrum Board - Agile sprint tracking (multiple selection can apply)
+🔀 Hybrid Plan - Gantt + Agile boards
+🏁 Milestone Plan - Key project milestones (multiple selection can apply)
+📖 Epics & Stories - Backlog management
+📖 Backlog - Backlog Requirements 
+🏛️ Project Framework - SAP Activate, PRINCE2…, Agile, PMBOK, Lean, Waterfall, User Defined, etc
+
+
+📈 REPORTING & DASHBOARDS
+📋 Status Reporting - Weekly/monthly reports
+📊 Project Dashboard - KPIs & health overview
+🔭 360° Report - Full project health view
+
+
+🔴 RAID & GOVERNANCE
+⚠️ Risk Log - Risk register & mitigation (multiple selection can apply)
+🔥 Issues Log - Open issues & actions (multiple selection can apply)
+💡 Assumptions Log - Document assumptions 
+🔗 Dependencies Log - Track dependencies
+🧭 Decisions Log - Key decision records
+📝 Change Log - Scope change tracking
+👥 RACI Model - Responsibility matrix
+
+💰 RESOURCES & FINANCE
+👤 Resource Tracker - Allocation & capacity
+⏰ Timesheets - Time logging
+💷 Finance Tracker - Budget vs actuals
+
+🗂️ DOCUMENTATION & DELIVERY
+📄 Documentation - Project docs & specs
+✅ Deliverables Tracker - Track project outputs
+📃 BMPL - Business Master Process List
+🧪 Test Tracker - QA test management
+📃 SoW Tracker - Statement of work
+
+
+🗺️ PEOPLE & ORGANISATION
+🏢 Org Chart - Team structure
+🗺️ Stakeholder Map - Stakeholder engagement
+⚙️ Business Process Model - Process flows & BPM
+
+
+
+The important thing is that users may start off with a small scope of tools and may want to add additional tools later on so the ability to do so is important. 
+Also projects may sometimes have more than one Gantt chart or kanban board or scrum Board and therefore the ability to add a tool in twice or more for different groups of people in the project is also important. Won't apply to every tool, but I've noted in brackets where multiple selection can apply
+
+Once the tools have been chosen, what I do like, is the list of all the tools directly underneath the event type name together with the tags. This makes it easy to use and navigate between all the different tools. What is also very important is the ability to maximise every single screen because the nature of Project Management is often we are dealing with a lot of information and therefore it is paramount that each screen can be maximised to the full screen to be worked on.
+
+Also, once the tools have been chosen, the user has the option to go back and add more tools at a later date if required.
+
+In summary, can you please look at the designs that I have created on Claude and see if this can be incorporated into our Jiganto design. What is also important is to create placeholder pages for the areas that we have not fully specked out yet so as and when we define those, we can update those designs. I have attached the HTML design for Claude, which you can reference. Please don't make any changes immediately, and let's first see if this will work in our Jiganto solution.

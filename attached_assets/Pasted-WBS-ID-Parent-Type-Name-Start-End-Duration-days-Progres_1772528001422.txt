@@ -1,0 +1,45 @@
+WBS,ID,Parent,Type,Name,Start,End,Duration (days),Progress %,Status,Priority,Resources,Dependencies,Color,Style
+1,1,,Project,SAP S/4HANA Global Transformation,01-Jan-2026,30-Jun-2027,546,3,In Progress,High,Programme Director,,#1F4E79,Bold
+1.1,2,1,Phase,Discover & Prepare,01-Jan-2026,31-Mar-2026,90,100,Completed,High,PMO,,#4F81BD,Normal
+1.1.1,3,2,Workstream,Project Management,01-Jan-2026,31-Mar-2026,90,100,Completed,High,Project Manager,,#9DC3E6,Normal
+1.1.1.1,4,3,Activity,Governance & Control,01-Jan-2026,31-Mar-2026,90,100,Completed,High,PMO,,#BDD7EE,Normal
+1.1.1.1.1,5,4,Task,Establish Steering Committee,01-Jan-2026,15-Jan-2026,15,100,Completed,High,Programme Director,,#BDD7EE,Normal
+1.1.1.1.2,6,4,Task,Weekly Status Reporting,15-Jan-2026,31-Mar-2026,76,75,In Progress,High,PMO,5,#BDD7EE,Normal
+1.1.1.2,7,3,Activity,Financial Control,01-Jan-2026,31-Mar-2026,90,60,In Progress,High,Finance Lead,,#BDD7EE,Normal
+1.1.1.2.1,8,7,Task,Budget Tracking,01-Jan-2026,31-Mar-2026,90,60,In Progress,High,Finance Team,,#BDD7EE,Normal
+1.1.1.2.2,9,7,Task,Forecast Updates,01-Feb-2026,31-Mar-2026,59,50,In Progress,Medium,Finance Team,8,#BDD7EE,Normal
+1.2,10,1,Phase,Explore (Design),01-Apr-2026,31-Jul-2026,122,60,In Progress,High,All Workstreams,,#4F81BD,Normal
+1.2.1,11,10,Workstream,Architecture,01-Apr-2026,31-Jul-2026,122,50,In Progress,High,Enterprise Architect,,#E2EFDA,Normal
+1.2.1.1,12,11,Activity,Solution Architecture Design,01-Apr-2026,30-Jun-2026,91,80,In Progress,High,Architecture Team,,#E2EFDA,Normal
+1.2.1.1.1,13,12,Task,Define Target Architecture,01-Apr-2026,30-Apr-2026,30,100,Completed,High,EA,,#E2EFDA,Normal
+1.2.1.1.2,14,12,Task,Integration Architecture Design,01-May-2026,31-May-2026,31,80,In Progress,High,Integration Architect,13,#E2EFDA,Normal
+1.2.1.1.3,15,12,Task,Environment Strategy,01-Jun-2026,30-Jun-2026,30,70,In Progress,Medium,Basis Lead,14,#E2EFDA,Normal
+1.2.1.2,16,11,Activity,Design Authority,01-Apr-2026,31-Jul-2026,122,60,In Progress,Medium,Architects,,#E2EFDA,Normal
+1.2.1.2.1,17,16,Task,Architecture Review Boards,01-Apr-2026,31-Jul-2026,122,60,In Progress,Medium,EA,,#E2EFDA,Normal
+1.2.2,18,10,Workstream,Functional,01-Apr-2026,31-Jul-2026,122,50,In Progress,High,Functional Leads,,#C6E0B4,Normal
+1.2.2.1,19,18,Activity,Fit-to-Standard Workshops,01-Apr-2026,31-May-2026,61,90,In Progress,High,Functional Team,,#C6E0B4,Normal
+1.2.2.1.1,20,19,Task,Finance Workshops,01-Apr-2026,20-Apr-2026,20,100,Completed,High,FILead,,#C6E0B4,Normal
+1.2.2.1.2,21,19,Task,Procurement Workshops,15-Apr-2026,10-May-2026,26,100,Completed,High,MMLLead,20,#C6E0B4,Normal
+1.2.2.1.3,22,19,Task,Sales Workshops,01-May-2026,31-May-2026,31,90,In Progress,High,SD Lead,21,#C6E0B4,Normal
+1.2.2.2,23,18,Activity,System Configuration,01-Aug-2026,30-Nov-2026,122,10,In Progress,High,Functional Team,19,22,#C6E0B4,Normal
+1.2.2.2.1,24,23,Task,Configure Finance,01-Aug-2026,31-Aug-2026,31,0,Not Started,High,FI Consultant,20,#C6E0B4,Normal
+1.2.2.2.2,25,23,Task,Configure Procurement,01-Sep-2026,30-Sep-2026,30,0,Not Started,High,MM Consultant,21,#C6E0B4,Normal
+1.2.2.2.3,26,23,Task,Configure Sales,01-Oct-2026,31-Oct-2026,31,0,Not Started,High,SD Consultant,22,#C6E0B4,Normal
+1.2.2.2.4,27,23,Task,RICEFW Development,01-Aug-2026,30-Nov-2026,122,5,In Progress,High,ABAP Team,19,23,#C6E0B4,Normal
+1.2.3,28,10,Workstream,Data Migration,01-May-2026,31-Mar-2027,335,25,In Progress,High,Data Lead,23,27,#F8CBAD,Normal
+1.2.3.1,29,28,Activity,Data Strategy,01-May-2026,30-Jun-2026,61,100,Completed,High,Data Architect,,#F8CBAD,Normal
+1.2.3.1.1,30,29,Task,Define Data Objects,01-May-2026,15-May-2026,15,100,Completed,High,Data Team,,#F8CBAD,Normal
+1.2.3.1.2,31,29,Task,Data Cleansing Plan,15-May-2026,30-Jun-2026,46,100,Completed,High,Business Data Owners,30,#F8CBAD,Normal
+1.2.3.2,32,28,Activity,Mock Migrations,01-Oct-2026,31-Jan-2027,123,0,Not Started,High,Data Team,31,#F8CBAD,Normal
+1.2.3.2.1,33,32,Task,Mock 1,01-Oct-2026,31-Oct-2026,31,0,Not Started,High,Data Team,,#F8CBAD,Normal
+1.2.3.2.2,34,32,Task,Mock 2,01-Dec-2026,31-Dec-2026,31,0,Not Started,High,Data Team,33,#F8CBAD,Normal
+1.2.3.2.3,35,32,Task,Mock 3,01-Jan-2027,31-Jan-2027,31,0,Not Started,High,Data Team,34,#F8CBAD,Normal
+1.2.4,36,10,Workstream,Integration,01-May-2026,31-Dec-2026,245,30,In Progress,High,Integration Lead,23,27,#D9E1F2,Normal
+1.2.4.1,37,36,Activity,Interface Design,01-May-2026,30-Jun-2026,61,100,Completed,High,Integration Architect,,#D9E1F2,Normal
+1.2.4.1.1,38,37,Task,Identify Interfaces,01-May-2026,20-May-2026,20,100,Completed,High,Integration Team,,#D9E1F2,Normal
+1.2.4.1.2,39,37,Task,Define Interface Specs,15-May-2026,30-Jun-2026,46,100,Completed,High,Integration Team,38,#D9E1F2,Normal
+1.2.4.2,40,36,Activity,Interface Build & Test,01-Aug-2026,30-Nov-2026,122,5,In Progress,High,Integration Dev Team,39,#D9E1F2,Normal
+1.2.4.2.1,41,40,Task,Develop Interfaces,01-Aug-2026,31-Oct-2026,92,10,In Progress,High,Developers,40,#D9E1F2,Normal
+1.2.4.2.2,42,40,Task,Interface SIT,01-Nov-2026,30-Nov-2026,30,0,Not Started,High,Test Team,41,#D9E1F2,Normal
+1.3,43,1,Phase,Build & Configure,01-Aug-2026,31-Jan-2027,184,15,In Progress,High,All Teams,,#4F81BD,Normal
+... (rest of 120 rows truncated for brevity)

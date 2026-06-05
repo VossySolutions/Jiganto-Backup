@@ -1,0 +1,18 @@
+| Name          | Title                   | Department         | Email                                                             | Phone           | Reports To              |
+| ------------- | ----------------------- | ------------------ | ----------------------------------------------------------------- | --------------- | ----------------------- |
+| Mark Reynolds | Project Manager         | Project Management | [mark.reynolds@projectco.com](mailto:mark.reynolds@projectco.com) | +44 7700 100001 | Steering Committee      |
+| Sarah Collins | PMO Lead                | PMO                | [sarah.collins@projectco.com](mailto:sarah.collins@projectco.com) | +44 7700 100002 | Project Manager         |
+| James Patel   | PMO Analyst             | PMO                | [james.patel@projectco.com](mailto:james.patel@projectco.com)     | +44 7700 100003 | PMO Lead                |
+| Laura Bennett | Solution Architect      | Architecture       | [laura.bennett@projectco.com](mailto:laura.bennett@projectco.com) | +44 7700 100004 | Project Manager         |
+| David Ng      | Enterprise Architect    | Architecture       | [david.ng@projectco.com](mailto:david.ng@projectco.com)           | +44 7700 100005 | Solution Architect      |
+| Tom Walker    | Technical Architect     | Architecture       | [tom.walker@projectco.com](mailto:tom.walker@projectco.com)       | +44 7700 100006 | Solution Architect      |
+| Priya Shah    | Integration Architect   | Architecture       | [priya.shah@projectco.com](mailto:priya.shah@projectco.com)       | +44 7700 100007 | Solution Architect      |
+| Robert King   | Security Architect      | Architecture       | [robert.king@projectco.com](mailto:robert.king@projectco.com)     | +44 7700 100008 | Solution Architect      |
+| Emma Hughes   | Finance Functional Lead | Finance            | [emma.hughes@projectco.com](mailto:emma.hughes@projectco.com)     | +44 7700 100009 | Solution Architect      |
+| Daniel Brooks | Finance Consultant      | Finance            | [daniel.brooks@projectco.com](mailto:daniel.brooks@projectco.com) | +44 7700 100010 | Finance Functional Lead |
+| Olivia Turner | Controlling Consultant  | Finance            | [olivia.turner@projectco.com](mailto:olivia.turner@projectco.com) | +44 7700 100011 | Finance Functional Lead |
+| Michael Green | Procurement Lead        | Procurement        | [michael.green@projectco.com](mailto:michael.green@projectco.com) | +44 7700 100012 | Solution Architect      |
+| Sophie Adams  | Procurement Consultant  | Procurement        | [sophie.adams@projectco.com](mailto:sophie.adams@projectco.com)   | +44 7700 100013 | Procurement Lead        |
+| Jack Wright   | Supply Chain Lead       | Supply Chain       | [jack.wright@projectco.com](mailto:jack.wright@projectco.com)     | +44 7700 100014 | Solution Architect      |
+| Chloe Baker   | Logistics Consultant    | Supply Chain       | [chloe.baker@projectco.com](mailto:chloe.baker@projectco.com)     | +44 7700 100015 | Supply Chain Lead       |
+| Ethan Scott   | Manufacturing Lead      | Operations         | [ethan.scott@projectco.com](mailto:ethan.scott@projectco.com)     | +44 7700 100016 | Solution                |

@@ -1,0 +1,8 @@
+{
+  "watch": ["server", "shared"],
+  "ext": "ts,js,json",
+  "exec": "tsx server/dev.ts",
+  "env": {
+    "NODE_ENV": "development"
+  }
+}

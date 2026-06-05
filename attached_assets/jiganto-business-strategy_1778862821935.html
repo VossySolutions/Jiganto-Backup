@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jiganto — Business Management</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --biz:#7c3aed; --biz-d:#5b21b6; --biz-l:#f5f3ff; --biz-m:#a78bfa;
+  --layer-strategy:#7c3aed; --layer-strategy-l:#f5f3ff; --layer-strategy-bg:#ede9fe;
+  --layer-goals:#2563eb;    --layer-goals-l:#eff6ff;    --layer-goals-bg:#dbeafe;
+  --layer-obj:#0891b2;      --layer-obj-l:#ecfeff;      --layer-obj-bg:#cffafe;
+  --layer-init:#059669;     --layer-init-l:#f0fdf4;     --layer-init-bg:#d1fae5;
+  --layer-okr:#d97706;      --layer-okr-l:#fffbeb;      --layer-okr-bg:#fde68a;
+  --layer-kpi:#e11d48;      --layer-kpi-l:#fff1f2;      --layer-kpi-bg:#fecdd3;
+  --layer-exec:#475569;     --layer-exec-l:#f8fafc;     --layer-exec-bg:#e2e8f0;
+  --rag-g:#16a34a; --rag-g-l:#dcfce7;
+  --rag-a:#d97706; --rag-a-l:#fef3c7;
+  --rag-r:#dc2626; --rag-r-l:#fee2e2;
+  --g50:#f8fafc;--g100:#f1f5f9;--g200:#e2e8f0;--g300:#cbd5e1;
+  --g400:#94a3b8;--g500:#64748b;--g600:#475569;--g700:#334155;
+  --g800:#1e293b;--g900:#0f172a;
+  --sidebar:210px;
+  --font:'DM Sans',sans-serif; --display:'Syne',sans-serif; --mono:'DM Mono',monospace;
+  --r:8px; --shadow:0 4px 20px rgba(0,0,0,.10); --shadow-lg:0 12px 40px rgba(0,0,0,.16);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--g50);color:var(--g800);font-size:13px;display:flex;height:100vh;overflow:hidden;}
+
+/* ── SIDEBAR ── */
+.sb{width:var(--sidebar);background:#fff;border-right:1px solid var(--g200);display:flex;flex-direction:column;flex-shrink:0;}
+.sb-logo{display:flex;align-items:center;gap:9px;padding:14px 16px;border-bottom:1px solid var(--g100);}
+.logo-ic{width:32px;height:32px;background:linear-gradient(135deg,#2563eb,#0fbcb0);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;}
+.org-pill{margin:10px 12px;padding:7px 10px;background:var(--g50);border:1px solid var(--g200);border-radius:6px;font-size:12px;font-weight:500;color:var(--g600);display:flex;align-items:center;gap:6px;cursor:pointer;}
+.org-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;}
+.nav-s{padding:4px 0;flex:1;overflow-y:auto;}
+.nav-lbl{font-size:10px;font-weight:600;color:var(--g400);letter-spacing:.7px;text-transform:uppercase;padding:6px 16px 3px;}
+.ni{display:flex;align-items:center;gap:9px;padding:7px 14px;font-size:13px;color:var(--g600);cursor:pointer;position:relative;transition:background .1s,color .1s;}
+.ni:hover{background:var(--g50);color:var(--g800);}
+.ni.active{background:var(--biz-l);color:var(--biz);font-weight:500;}
+.ni.active::before{content:'';position:absolute;left:0;top:5px;bottom:5px;width:3px;background:var(--biz);border-radius:0 3px 3px 0;}
+.nic{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.sb-bot{border-top:1px solid var(--g100);padding:10px;}
+.uav{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+
+/* ── TOPBAR ── */
+.topbar{height:52px;background:#fff;border-bottom:1px solid var(--g200);display:flex;align-items:center;padding:0 20px;gap:10px;flex-shrink:0;}
+.page-ic{width:32px;height:32px;border-radius:8px;background:var(--biz-l);display:flex;align-items:center;justify-content:center;font-size:16px;}
+.page-title{font-family:var(--display);font-size:16px;font-weight:700;color:var(--g900);}
+.page-sub{font-size:11px;color:var(--g400);}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer;border:none;transition:all .13s;}
+.btn-biz{background:var(--biz);color:#fff;}
+.btn-biz:hover{background:var(--biz-d);}
+.btn-ghost{background:transparent;color:var(--g600);border:1px solid var(--g200);}
+.btn-ghost:hover{background:var(--g50);}
+.btn-ic{width:30px;height:30px;border-radius:6px;background:transparent;border:1px solid var(--g200);color:var(--g500);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;}
+
+/* ── MODULE TABS ── */
+.mod-tabs{background:#fff;border-bottom:1px solid var(--g200);padding:0 20px;display:flex;align-items:flex-end;gap:2px;flex-shrink:0;}
+.mt{display:flex;align-items:center;gap:6px;padding:10px 14px;font-size:12px;font-weight:500;color:var(--g500);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .13s;}
+.mt:hover{color:var(--g800);}
+.mt.active{color:var(--biz);border-bottom-color:var(--biz);font-weight:600;}
+
+/* ── CONTENT AREA ── */
+.content{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+
+/* ── LAYER SUMMARY STRIP ── */
+.layer-strip{display:flex;background:#fff;border-bottom:1px solid var(--g200);flex-shrink:0;overflow-x:auto;}
+.ls-item{flex:1;min-width:100px;padding:12px 14px;border-right:1px solid var(--g100);cursor:pointer;transition:background .15s;position:relative;}
+.ls-item:last-child{border-right:none;}
+.ls-item:hover{background:var(--g50);}
+.ls-item.filtered{background:var(--biz-l);}
+.ls-lbl{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:5px;}
+.ls-num{font-family:var(--display);font-size:22px;font-weight:700;color:var(--g900);line-height:1;}
+.ls-sub{font-size:10px;color:var(--g400);margin-top:2px;}
+.ls-rag{display:flex;gap:3px;margin-top:5px;}
+.ls-rag-dot{width:6px;height:6px;border-radius:50%;}
+
+/* ── TOOLBAR ── */
+.toolbar{display:flex;align-items:center;gap:8px;padding:10px 20px;background:#fff;border-bottom:1px solid var(--g200);flex-shrink:0;}
+.chip{display:flex;align-items:center;gap:5px;padding:5px 10px;background:#fff;border:1px solid var(--g200);border-radius:6px;font-size:12px;font-weight:500;color:var(--g600);cursor:pointer;transition:all .13s;white-space:nowrap;}
+.chip:hover{border-color:var(--biz);color:var(--biz);}
+.chip.on{background:var(--biz-l);border-color:var(--biz);color:var(--biz);}
+.sep{width:1px;height:16px;background:var(--g200);}
+.srch{display:flex;align-items:center;gap:7px;background:var(--g50);border:1px solid var(--g200);border-radius:6px;padding:6px 11px;width:200px;}
+.srch input{border:none;outline:none;background:transparent;font-family:var(--font);font-size:12px;color:var(--g700);width:100%;}
+.view-toggle{display:flex;border:1px solid var(--g200);border-radius:6px;overflow:hidden;margin-left:auto;}
+.vt{padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;background:#fff;color:var(--g500);transition:all .13s;display:flex;align-items:center;gap:5px;}
+.vt:not(:last-child){border-right:1px solid var(--g200);}
+.vt.on{background:var(--biz);color:#fff;}
+
+/* ── STRATEGY FOCUS BANNER ── */
+.focus-banner{display:none;align-items:center;gap:10px;padding:8px 20px;background:linear-gradient(90deg,var(--biz-l),#fff);border-bottom:1px solid var(--g200);flex-shrink:0;}
+.focus-banner.show{display:flex;}
+.fb-icon{width:28px;height:28px;border-radius:7px;background:var(--biz);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;}
+.fb-name{font-family:var(--display);font-size:13px;font-weight:700;color:var(--biz-d);}
+.fb-meta{font-size:11px;color:var(--g500);}
+.fb-clear{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--biz);cursor:pointer;padding:4px 10px;border:1px solid var(--biz);border-radius:20px;transition:all .13s;}
+.fb-clear:hover{background:var(--biz);color:#fff;}
+
+/* ── VIEW PANELS ── */
+.view-area{flex:1;overflow:hidden;position:relative;}
+.view-panel{position:absolute;inset:0;overflow:auto;display:none;}
+.view-panel.active{display:block;}
+
+/* ═══ CASCADE VIEW ═══ */
+.cascade-wrap{padding:16px 20px 24px;}
+.layer-section{margin-bottom:16px;}
+.layer-header{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.layer-dot{width:10px;height:10px;border-radius:50%;}
+.layer-name{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
+.layer-count{font-size:10px;color:var(--g400);margin-left:auto;}
+.layer-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;}
+.item-card{background:#fff;border:1px solid var(--g200);border-radius:10px;padding:13px 14px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden;}
+.item-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:10px 0 0 10px;}
+.item-card:hover{transform:translateY(-2px);box-shadow:var(--shadow);}
+.item-card.selected{box-shadow:0 0 0 2px var(--biz);}
+.ic-top{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;}
+.ic-title{font-size:13px;font-weight:600;color:var(--g900);flex:1;line-height:1.35;}
+.ic-body{display:flex;align-items:center;gap:8px;}
+.ic-av{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0;}
+.ic-owner{font-size:11px;color:var(--g500);}
+.ic-date{font-size:11px;font-family:var(--mono);color:var(--g400);margin-left:auto;}
+.ic-prog-wrap{margin-top:8px;}
+.ic-prog-bar{height:4px;background:var(--g200);border-radius:2px;overflow:hidden;margin-bottom:3px;}
+.ic-prog-fill{height:100%;border-radius:2px;}
+.ic-prog-pct{font-size:10px;font-family:var(--mono);font-weight:600;color:var(--g600);}
+.rag{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px;}
+.rag-g{background:var(--rag-g);}
+.rag-a{background:var(--rag-a);}
+.rag-r{background:var(--rag-r);}
+.rag-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;}
+.rag-badge.g{background:var(--rag-g-l);color:var(--rag-g);}
+.rag-badge.a{background:var(--rag-a-l);color:var(--rag-a);}
+.rag-badge.r{background:var(--rag-r-l);color:var(--rag-r);}
+.layer-connector{display:flex;align-items:center;gap:6px;padding:4px 0 4px 8px;font-size:11px;color:var(--g400);margin-bottom:8px;}
+.lc-line{flex:1;height:1px;background:var(--g200);}
+
+/* ═══ FOCUS VIEW — Strategy detail drill-down ═══ */
+.focus-layout{display:flex;height:100%;}
+.focus-strategy-list{width:240px;flex-shrink:0;background:#fff;border-right:1px solid var(--g200);overflow-y:auto;}
+.fsl-header{padding:12px 14px;border-bottom:1px solid var(--g100);font-size:11px;font-weight:700;color:var(--g500);letter-spacing:.4px;text-transform:uppercase;}
+.fsl-item{padding:11px 14px;border-bottom:1px solid var(--g100);cursor:pointer;transition:background .12s;position:relative;}
+.fsl-item:hover{background:var(--g50);}
+.fsl-item.active{background:var(--biz-l);}
+.fsl-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--biz);}
+.fsl-name{font-size:13px;font-weight:600;color:var(--g800);margin-bottom:4px;line-height:1.35;}
+.fsl-item.active .fsl-name{color:var(--biz-d);}
+.fsl-meta{display:flex;align-items:center;gap:6px;}
+.fsl-av{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff;}
+.fsl-owner{font-size:10px;color:var(--g500);}
+.fsl-prog{margin-top:5px;height:3px;background:var(--g200);border-radius:2px;overflow:hidden;}
+.fsl-prog-fill{height:100%;border-radius:2px;background:var(--biz);}
+
+/* Focus main area */
+.focus-main{flex:1;overflow-y:auto;padding:20px 24px;}
+.focus-strat-header{background:#fff;border:1px solid var(--g200);border-radius:12px;padding:18px 20px;margin-bottom:20px;display:flex;gap:16px;align-items:flex-start;}
+.fsh-left{flex:1;}
+.fsh-title{font-family:var(--display);font-size:20px;font-weight:700;color:var(--g900);margin-bottom:4px;}
+.fsh-meta{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+.fsh-meta-item{font-size:12px;color:var(--g500);display:flex;align-items:center;gap:5px;}
+.fsh-kpis{display:flex;gap:14px;}
+.fsh-kpi{background:var(--g50);border:1px solid var(--g200);border-radius:8px;padding:8px 12px;text-align:center;}
+.fsh-kpi-val{font-family:var(--display);font-size:18px;font-weight:700;color:var(--g900);}
+.fsh-kpi-lbl{font-size:10px;color:var(--g500);margin-top:2px;}
+.fsh-right{display:flex;flex-direction:column;gap:8px;align-items:flex-end;}
+
+/* Layer rows in focus view */
+.focus-layer{margin-bottom:16px;}
+.fl-header{display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;user-select:none;}
+.fl-toggle{font-size:12px;color:var(--g400);transition:transform .2s;}
+.fl-toggle.open{transform:rotate(90deg);}
+.fl-layer-name{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
+.fl-count{font-size:11px;color:var(--g400);}
+.fl-rag-summary{display:flex;gap:5px;margin-left:auto;}
+.fl-rag-chip{display:flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 6px;border-radius:10px;}
+.fl-body{display:flex;flex-direction:column;gap:8px;margin-left:18px;}
+.fl-item{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--g200);border-radius:8px;padding:10px 13px;transition:all .15s;cursor:pointer;}
+.fl-item:hover{box-shadow:var(--shadow);transform:translateX(2px);}
+.fl-item-left{width:3px;height:32px;border-radius:2px;flex-shrink:0;}
+.fl-item-name{font-size:13px;font-weight:500;color:var(--g800);flex:1;}
+.fl-item-av{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff;flex-shrink:0;}
+.fl-item-owner{font-size:11px;color:var(--g500);}
+.fl-item-date{font-size:11px;font-family:var(--mono);color:var(--g400);}
+.fl-item-prog{width:80px;flex-shrink:0;}
+.fl-item-bar{height:4px;background:var(--g200);border-radius:2px;overflow:hidden;margin-bottom:2px;}
+.fl-item-fill{height:100%;border-radius:2px;}
+.fl-item-pct{font-size:10px;font-family:var(--mono);color:var(--g600);}
+.fl-item-rag{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+/* ═══ FLOW VIEW ═══ */
+.flow-wrap{padding:16px 20px 24px;min-width:900px;}
+.flow-cols{display:flex;gap:12px;}
+.flow-col{flex:1;min-width:150px;display:flex;flex-direction:column;}
+.fc-head{border-radius:8px;padding:10px 12px;text-align:center;margin-bottom:10px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;}
+.fc-items{display:flex;flex-direction:column;gap:8px;}
+.fc-item{background:#fff;border:1px solid var(--g200);border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .15s;font-size:12px;font-weight:500;color:var(--g800);line-height:1.4;}
+.fc-item:hover{box-shadow:var(--shadow-sm,0 2px 8px rgba(0,0,0,.08));transform:translateY(-1px);}
+.fc-item-meta{display:flex;align-items:center;gap:5px;margin-top:6px;}
+.fc-item-av{width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:6px;font-weight:700;color:#fff;}
+.fc-item-name{font-size:10px;color:var(--g500);}
+.fc-item-rag{width:7px;height:7px;border-radius:50%;margin-left:auto;}
+.fc-add{display:flex;align-items:center;justify-content:center;gap:5px;border:1.5px dashed var(--g200);border-radius:8px;padding:8px;font-size:11px;color:var(--g400);cursor:pointer;transition:all .13s;margin-top:4px;}
+.fc-add:hover{border-color:var(--biz);color:var(--biz);}
+
+/* ── MODAL ── */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:200;backdrop-filter:blur(3px);align-items:center;justify-content:center;}
+.modal-backdrop.open{display:flex;}
+.modal{background:#fff;border-radius:14px;box-shadow:var(--shadow-lg);animation:mIn .18s ease;max-width:480px;width:100%;}
+@keyframes mIn{from{transform:translateY(12px) scale(.97);opacity:0}to{transform:none;opacity:1}}
+.mhd{padding:18px 22px 14px;border-bottom:1px solid var(--g100);display:flex;justify-content:space-between;align-items:center;}
+.mhd h3{font-family:var(--display);font-size:16px;font-weight:700;}
+.mc{background:none;border:none;font-size:18px;color:var(--g400);cursor:pointer;}
+.mbody{padding:18px 22px;}
+.mfoot{padding:14px 22px 18px;border-top:1px solid var(--g100);display:flex;justify-content:flex-end;gap:8px;}
+.fg{margin-bottom:14px;}
+.fl{font-size:12px;font-weight:600;color:var(--g700);display:block;margin-bottom:5px;}
+.fi{width:100%;padding:8px 11px;border:1px solid var(--g200);border-radius:6px;font-family:var(--font);font-size:13px;color:var(--g800);outline:none;transition:border-color .13s;}
+.fi:focus{border-color:var(--biz);}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-thumb{background:var(--g200);border-radius:3px;}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeIn .2s ease both;}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sb">
+  <div class="sb-logo">
+    <div class="logo-ic">Ji</div>
+    <div><div style="font-weight:700;font-size:15px;color:var(--g900);letter-spacing:-.3px;">Jiganto</div><div style="font-size:10px;color:var(--g400);">Enterprise AI</div></div>
+  </div>
+  <div class="org-pill"><div class="org-dot"></div>Demo Org<span style="margin-left:auto;color:var(--g300);">⌄</span></div>
+  <div class="nav-s">
+    <div class="nav-lbl">Menu</div>
+    <div class="ni"><div class="nic" style="background:#dbeafe;">📊</div>Dashboard</div>
+    <div class="nav-lbl">Collaboration</div>
+    <div class="ni"><div class="nic" style="background:#dcfce7;">💬</div>Chat</div>
+    <div class="ni"><div class="nic" style="background:#fef9c3;">📄</div>Documents</div>
+    <div class="nav-lbl">Management</div>
+    <div class="ni active"><div class="nic" style="background:#ede9fe;">📈</div>Business</div>
+    <div class="ni"><div class="nic" style="background:#e0f2fe;">👥</div>CRM</div>
+    <div class="ni"><div class="nic" style="background:#dcfce7;">💰</div>Finance</div>
+    <div class="ni"><div class="nic" style="background:#fee2e2;">👤</div>Resources</div>
+    <div class="nav-lbl">Portfolio</div>
+    <div class="ni"><div class="nic" style="background:#e0e7ff;">🗂</div>Projects</div>
+    <div class="ni"><div class="nic" style="background:#fce7f3;">☑</div>Tasks</div>
+    <div class="ni"><div class="nic" style="background:#ede9fe;">✦</div>Workspaces</div>
+    <div class="nav-lbl">Service & Support</div>
+    <div class="ni"><div class="nic" style="background:#d1fae5;">🎧</div>Help Desk</div>
+    <div class="nav-lbl">Utilities</div>
+    <div class="ni"><div class="nic" style="background:#f1f5f9;">⚙</div>BPM</div>
+    <div class="ni"><div class="nic" style="background:#fef3c7;">🧪</div>Testing</div>
+  </div>
+  <div class="sb-bot">
+    <div style="display:flex;align-items:center;gap:9px;padding:6px;border-radius:6px;cursor:pointer;">
+      <div class="uav">PV</div>
+      <div><div style="font-size:12px;font-weight:600;color:var(--g700);">Peter Voss</div><div style="font-size:10px;color:var(--g400);">peter@vossys.com</div></div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="page-ic">📈</div>
+    <div><div class="page-title">Business Management</div><div class="page-sub">Strategy · Goals · Objectives · Initiatives · OKRs · KPIs · Execution</div></div>
+    <div style="margin-left:auto;display:flex;gap:7px;align-items:center;">
+      <div class="srch"><span style="color:var(--g400);font-size:12px;">🔍</span><input type="text" placeholder="Search across all layers..."></div>
+      <button class="btn-ic">🔔</button>
+      <button class="btn btn-ghost" style="font-size:11px;">✨ AI Insights</button>
+      <button class="btn btn-biz" onclick="openModal()">＋ Add Item</button>
+    </div>
+  </header>
+
+  <!-- MODULE TABS -->
+  <div class="mod-tabs">
+    <div class="mt"><span style="font-size:14px;">📊</span>Dashboard</div>
+    <div class="mt active"><span style="font-size:14px;">🗺</span>Strategy Map</div>
+    <div class="mt"><span style="font-size:14px;">⚙</span>Manage ⌄</div>
+    <div class="mt"><span style="font-size:14px;">✅</span>Execution</div>
+    <div class="mt"><span style="font-size:14px;">📄</span>Documents</div>
+  </div>
+
+  <!-- LAYER SUMMARY STRIP -->
+  <div class="layer-strip" id="layerStrip"></div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="chip on" onclick="filterRAG(this,'all')">All Statuses</div>
+    <div class="chip" onclick="filterRAG(this,'g')" style="gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--rag-g);display:inline-block;"></span>On Track</div>
+    <div class="chip" onclick="filterRAG(this,'a')" style="gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--rag-a);display:inline-block;"></span>At Risk</div>
+    <div class="chip" onclick="filterRAG(this,'r')" style="gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--rag-r);display:inline-block;"></span>Behind</div>
+    <div class="sep"></div>
+    <div class="chip">All Owners ⌄</div>
+    <div class="chip">All Depts ⌄</div>
+    <div class="sep"></div>
+    <div class="chip" id="clearFocusChip" style="display:none;border-color:var(--biz);color:var(--biz);" onclick="clearFocus()">✕ Clear strategy filter</div>
+    <div class="view-toggle">
+      <div class="vt on" onclick="setView('cascade',this)">⊞ Cascade</div>
+      <div class="vt" onclick="setView('focus',this)">◎ Strategy Focus</div>
+      <div class="vt" onclick="setView('flow',this)">⇒ Flow</div>
+    </div>
+  </div>
+
+  <!-- FOCUS BANNER -->
+  <div class="focus-banner" id="focusBanner">
+    <div class="fb-icon">◎</div>
+    <div>
+      <div class="fb-name" id="focusBannerName"></div>
+      <div class="fb-meta" id="focusBannerMeta"></div>
+    </div>
+    <div class="fb-clear" onclick="clearFocus()">✕ Clear filter</div>
+  </div>
+
+  <!-- VIEW AREA -->
+  <div class="view-area">
+
+    <!-- ═══ CASCADE VIEW ═══ -->
+    <div class="view-panel active" id="view-cascade">
+      <div class="cascade-wrap" id="cascadeWrap"></div>
+    </div>
+
+    <!-- ═══ FOCUS VIEW ═══ -->
+    <div class="view-panel" id="view-focus">
+      <div class="focus-layout" style="height:100%;">
+        <div class="focus-strategy-list">
+          <div class="fsl-header">Strategies (5)</div>
+          <div id="fslBody"></div>
+        </div>
+        <div class="focus-main" id="focusMain">
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--g400);">
+            <div style="font-size:40px;">◎</div>
+            <div style="font-size:14px;font-weight:500;color:var(--g600);">Select a strategy to see its full cascade</div>
+            <div style="font-size:12px;">Click any strategy in the list to drill into its Goals → Objectives → Initiatives → OKRs → KPIs → Execution</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ FLOW VIEW ═══ -->
+    <div class="view-panel" id="view-flow">
+      <div class="flow-wrap" id="flowWrap"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ADD ITEM MODAL -->
+<div class="modal-backdrop" id="modal-add">
+  <div class="modal">
+    <div class="mhd"><h3>Add Strategy Item</h3><button class="mc" onclick="closeModal()">×</button></div>
+    <div class="mbody">
+      <div class="fg">
+        <label class="fl">Layer</label>
+        <select class="fi">
+          <option>Strategy</option><option>Goal</option><option>Objective</option>
+          <option>Initiative</option><option>OKR</option><option>KPI</option><option>Execution</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Title *</label><input type="text" class="fi" placeholder="e.g. Build AI-first enterprise platform"></div>
+      <div class="fr">
+        <div class="fg" style="margin-bottom:0;"><label class="fl">Owner</label>
+          <select class="fi"><option>Maria Cole</option><option>Olivia Grant</option><option>Noah Reed</option><option>Ethan Shaw</option><option>Lucas Green</option></select>
+        </div>
+        <div class="fg" style="margin-bottom:0;"><label class="fl">RAG Status</label>
+          <select class="fi"><option>🟢 On Track</option><option>🟡 At Risk</option><option>🔴 Behind</option></select>
+        </div>
+      </div>
+      <div style="height:14px;"></div>
+      <div class="fr">
+        <div class="fg" style="margin-bottom:0;"><label class="fl">Target Date</label><input type="date" class="fi"></div>
+        <div class="fg" style="margin-bottom:0;"><label class="fl">Department</label>
+          <select class="fi"><option>Product</option><option>Engineering</option><option>Sales</option><option>Finance</option><option>Operations</option></select>
+        </div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-biz">Create Item</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ───
+const avColors = {
+  'MC':'#7c3aed','OG':'#2563eb','NR':'#059669','ES':'#d97706','LG':'#e11d48',
+  'PV':'#0891b2','AB':'#9333ea','TK':'#15803d','SB':'#c2410c','RV':'#1d4ed8'
+};
+
+const strategies = [
+  { id:'s1', name:'Jiganto Strategic Risks', owner:'MC', ownerName:'Maria Cole', rag:'a', prog:60, dept:'Strategy', date:'Dec 2026',
+    desc:'Identify and mitigate key strategic risks to ensure platform resilience and market position.' },
+  { id:'s2', name:'Jiganto SWOT Analysis', owner:'OG', ownerName:'Olivia Grant', rag:'g', prog:90, dept:'Strategy', date:'Jun 2026',
+    desc:'Comprehensive strengths, weaknesses, opportunities and threats analysis to inform strategy.' },
+  { id:'s3', name:'Jiganto Platform Vision 2026', owner:'NR', ownerName:'Noah Reed', rag:'a', prog:35, dept:'Product', date:'Dec 2026',
+    desc:'Define the multi-year platform vision and architecture for Jiganto Enterprise AI.' },
+  { id:'s4', name:'Jiganto Target Market Analysis', owner:'NR', ownerName:'Noah Reed', rag:'g', prog:70, dept:'Sales', date:'Sep 2026',
+    desc:'Deep analysis of enterprise target markets and segmentation strategy.' },
+  { id:'s5', name:'Jiganto Competitive Landscape', owner:'ES', ownerName:'Ethan Shaw', rag:'g', prog:80, dept:'Strategy', date:'Mar 2027',
+    desc:'Map and monitor competitive landscape, identify differentiation opportunities.' }
+];
+
+const layers = [
+  { key:'goals', name:'Goals', color:'var(--layer-goals)', bg:'var(--layer-goals-bg)', icon:'🎯', items:[
+    {id:'g1',sid:'s3',name:'Build a modular AI-enabled enterprise platform',owner:'LG',ownerName:'Lucas Green',rag:'a',prog:40,date:'Dec 2026',dept:'Product'},
+    {id:'g2',sid:'s4',name:'Launch with early adopters & lighthouse clients',owner:'OG',ownerName:'Olivia Grant',rag:'a',prog:20,date:'Jun 2026',dept:'Sales'},
+    {id:'g3',sid:'s3',name:'AI-first + CUI-driven architecture',owner:'NR',ownerName:'Noah Reed',rag:'g',prog:30,date:'Dec 2026',dept:'Engineering'},
+    {id:'g4',sid:'s4',name:'Establish subscription + enterprise licensing',owner:'MC',ownerName:'Maria Cole',rag:'a',prog:15,date:'Sep 2026',dept:'Finance'},
+    {id:'g5',sid:'s2',name:'Build partner + integration marketplace',owner:'ES',ownerName:'Ethan Shaw',rag:'g',prog:10,date:'Mar 2027',dept:'Product'},
+    {id:'g6',sid:'s5',name:'Enterprise-grade security & governance',owner:'LG',ownerName:'Lucas Green',rag:'r',prog:15,date:'Dec 2026',dept:'Engineering'},
+  ]},
+  { key:'objectives', name:'Objectives', color:'var(--layer-obj)', bg:'var(--layer-obj-bg)', icon:'◎', items:[
+    {id:'o1',sid:'s3',name:'Complete product architecture blueprint',owner:'NR',ownerName:'Noah Reed',rag:'a',prog:45,date:'Sep 2026',dept:'Engineering'},
+    {id:'o2',sid:'s4',name:'Secure 25+ early adopter enterprise customers',owner:'OG',ownerName:'Olivia Grant',rag:'a',prog:20,date:'Jun 2026',dept:'Sales'},
+    {id:'o3',sid:'s3',name:'Build conversational AI layer across all modules',owner:'NR',ownerName:'Noah Reed',rag:'g',prog:30,date:'Dec 2026',dept:'Engineering'},
+    {id:'o4',sid:'s4',name:'Launch pricing model for Standard, Family, Enterprise',owner:'MC',ownerName:'Maria Cole',rag:'a',prog:15,date:'Sep 2026',dept:'Finance'},
+    {id:'o5',sid:'s5',name:'Enable integrations with 3rd-party enterprise apps',owner:'ES',ownerName:'Ethan Shaw',rag:'g',prog:10,date:'Mar 2027',dept:'Product'},
+    {id:'o6',sid:'s5',name:'Achieve key certifications (ISO, SOC2, GDPR)',owner:'LG',ownerName:'Lucas Green',rag:'r',prog:15,date:'Dec 2026',dept:'Operations'},
+  ]},
+  { key:'initiatives', name:'Initiatives', color:'var(--layer-init)', bg:'var(--layer-init-bg)', icon:'⚡', items:[
+    {id:'i1',sid:'s3',name:'Core Platform Services Initiative',owner:'NR',ownerName:'Noah Reed',rag:'g',prog:55,date:'Jun 2026',dept:'Engineering'},
+    {id:'i2',sid:'s4',name:'Early Adopter Programme',owner:'OG',ownerName:'Olivia Grant',rag:'a',prog:30,date:'Apr 2026',dept:'Sales'},
+    {id:'i3',sid:'s3',name:'LLM Integration Layer',owner:'ES',ownerName:'Ethan Shaw',rag:'g',prog:40,date:'Sep 2026',dept:'Engineering'},
+    {id:'i4',sid:'s4',name:'Subscription & Billing Initiative',owner:'MC',ownerName:'Maria Cole',rag:'a',prog:20,date:'Sep 2026',dept:'Finance'},
+    {id:'i5',sid:'s5',name:'Marketplace & Integration Initiative',owner:'LG',ownerName:'Lucas Green',rag:'g',prog:15,date:'Dec 2026',dept:'Product'},
+    {id:'i6',sid:'s5',name:'Security & Compliance Initiative',owner:'NR',ownerName:'Noah Reed',rag:'r',prog:10,date:'Jun 2026',dept:'Operations'},
+  ]},
+  { key:'okrs', name:'OKRs', color:'var(--layer-okr)', bg:'var(--layer-okr-bg)', icon:'📈', items:[
+    {id:'k1',sid:'s3',name:'Deliver production-ready MVP platform',owner:'NR',ownerName:'Noah Reed',rag:'g',prog:40,date:'Jun 2026',dept:'Engineering'},
+    {id:'k2',sid:'s4',name:'Build early adopter traction to 10 clients',owner:'OG',ownerName:'Olivia Grant',rag:'a',prog:25,date:'Jun 2026',dept:'Sales'},
+    {id:'k3',sid:'s3',name:'Enable CUI-driven operations platform-wide',owner:'ES',ownerName:'Ethan Shaw',rag:'g',prog:30,date:'Sep 2026',dept:'Product'},
+    {id:'k4',sid:'s4',name:'Enable revenue tracking at launch',owner:'MC',ownerName:'Maria Cole',rag:'a',prog:20,date:'Sep 2026',dept:'Finance'},
+    {id:'k5',sid:'s5',name:'Launch ecosystem for partners',owner:'LG',ownerName:'Lucas Green',rag:'g',prog:10,date:'Dec 2026',dept:'Product'},
+    {id:'k6',sid:'s5',name:'Ensure platform is audit-ready',owner:'NR',ownerName:'Noah Reed',rag:'r',prog:5,date:'Jun 2026',dept:'Operations'},
+  ]},
+  { key:'kpis', name:'KPIs', color:'var(--layer-kpi)', bg:'var(--layer-kpi-bg)', icon:'📊', items:[
+    {id:'p1',sid:'s3',name:'Platform uptime ≥ 99.9%',owner:'NR',ownerName:'Noah Reed',rag:'g',prog:95,date:'Ongoing',dept:'Engineering'},
+    {id:'p2',sid:'s4',name:'Monthly recurring revenue target',owner:'OG',ownerName:'Olivia Grant',rag:'a',prog:30,date:'Dec 2026',dept:'Finance'},
+    {id:'p3',sid:'s4',name:'Customer acquisition cost (CAC)',owner:'MC',ownerName:'Maria Cole',rag:'g',prog:60,date:'Ongoing',dept:'Sales'},
+    {id:'p4',sid:'s5',name:'Net promoter score (NPS) ≥ 50',owner:'ES',ownerName:'Ethan Shaw',rag:'g',prog:70,date:'Ongoing',dept:'Customer'},
+    {id:'p5',sid:'s3',name:'Feature velocity (stories/sprint)',owner:'NR',ownerName:'Noah Reed',rag:'a',prog:55,date:'Ongoing',dept:'Engineering'},
+  ]},
+  { key:'execution', name:'Execution', color:'var(--layer-exec)', bg:'var(--layer-exec-bg)', icon:'✅', items:[
+    {id:'e1',sid:'s3',name:'Implement document version API',owner:'NR',ownerName:'Noah Reed',rag:'g',prog:80,date:'Apr 2026',dept:'Engineering'},
+    {id:'e2',sid:'s3',name:'Build workspace permissions UI',owner:'ES',ownerName:'Ethan Shaw',rag:'g',prog:65,date:'Apr 2026',dept:'Engineering'},
+    {id:'e3',sid:'s3',name:'[Epic] Multi-tenant security model',owner:'NR',ownerName:'Noah Reed',rag:'a',prog:45,date:'Jun 2026',dept:'Engineering'},
+    {id:'e4',sid:'s3',name:'[Epic] Document versioning system',owner:'LG',ownerName:'Lucas Green',rag:'g',prog:70,date:'May 2026',dept:'Engineering'},
+    {id:'e5',sid:'s4',name:'Create onboarding wizard',owner:'OG',ownerName:'Olivia Grant',rag:'g',prog:55,date:'Apr 2026',dept:'Product'},
+    {id:'e6',sid:'s3',name:'[Epic] Workflow builder engine',owner:'ES',ownerName:'Ethan Shaw',rag:'a',prog:30,date:'Jun 2026',dept:'Engineering'},
+    {id:'e7',sid:'s4',name:'Build client dashboard',owner:'MC',ownerName:'Maria Cole',rag:'g',prog:90,date:'Mar 2026',dept:'Product'},
+    {id:'e8',sid:'s5',name:'Set up email notifications for pilots',owner:'LG',ownerName:'Lucas Green',rag:'g',prog:100,date:'Done',dept:'Operations'},
+    {id:'e9',sid:'s5',name:'[Epic] Pilot onboarding flow',owner:'OG',ownerName:'Olivia Grant',rag:'g',prog:75,date:'Apr 2026',dept:'Product'},
+    {id:'e10',sid:'s3',name:'[Epic] Feedback capture workflow',owner:'NR',ownerName:'Noah Reed',rag:'g',prog:60,date:'May 2026',dept:'Product'},
+  ]}
+];
+
+// Current state
+let currentView = 'cascade';
+let focusStrategyId = null;
+let ragFilter = 'all';
+
+// ─── UTILITIES ───
+function ragColor(r){ return r==='g'?'var(--rag-g)':r==='a'?'var(--rag-a)':'var(--rag-r)'; }
+function ragLabel(r){ return r==='g'?'On Track':r==='a'?'At Risk':'Behind'; }
+function ragBg(r){ return r==='g'?'var(--rag-g-l)':r==='a'?'var(--rag-a-l)':'var(--rag-r-l)'; }
+function progColor(p){ return p>=70?'var(--rag-g)':p>=40?'var(--rag-a)':'var(--rag-r)'; }
+function avInit(n){ return n.split(' ').map(w=>w[0]).join('').substring(0,2); }
+
+// ─── LAYER STRIP ───
+function renderLayerStrip(){
+  const strip = document.getElementById('layerStrip');
+  const allLayers = [
+    {name:'Strategy',color:'var(--layer-strategy)',items:strategies},
+    ...layers.map(l=>({name:l.name,color:l.color,items:l.items}))
+  ];
+  strip.innerHTML = allLayers.map(l=>{
+    const filtered = focusStrategyId && l.name!=='Strategy'
+      ? l.items.filter(i=>i.sid===focusStrategyId) : l.items;
+    const g=filtered.filter(i=>i.rag==='g').length;
+    const a=filtered.filter(i=>i.rag==='a').length;
+    const r=filtered.filter(i=>i.rag==='r').length;
+    return `<div class="ls-item">
+      <div class="ls-lbl" style="color:${l.color};">${l.name}</div>
+      <div class="ls-num">${filtered.length || (l.name==='Strategy'?strategies.length:filtered.length)}</div>
+      <div class="ls-sub">items</div>
+      <div class="ls-rag">
+        ${g?`<div class="ls-rag-dot" style="background:var(--rag-g);" title="${g} on track"></div>`:''}
+        ${a?`<div class="ls-rag-dot" style="background:var(--rag-a);" title="${a} at risk"></div>`:''}
+        ${r?`<div class="ls-rag-dot" style="background:var(--rag-r);" title="${r} behind"></div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── CASCADE VIEW ───
+function renderCascade(){
+  const wrap = document.getElementById('cascadeWrap');
+  const allLayers = [
+    { key:'strategies', name:'Strategy', color:'var(--layer-strategy)', bg:'var(--layer-strategy-bg)', icon:'◎',
+      items: strategies.filter(s=>ragFilter==='all'||s.rag===ragFilter) },
+    ...layers.map(l=>({
+      ...l,
+      items: l.items.filter(i=>{
+        const ragOk = ragFilter==='all'||i.rag===ragFilter;
+        const focusOk = !focusStrategyId || i.sid===focusStrategyId;
+        return ragOk && focusOk;
+      })
+    }))
+  ];
+
+  wrap.innerHTML = allLayers.map((layer,li)=>{
+    if(!layer.items.length) return '';
+    return `<div class="layer-section fade-in" style="animation-delay:${li*0.04}s">
+      ${li>0?`<div class="layer-connector">
+        <span style="font-size:11px;color:${layer.color};">↳</span>
+        <span style="font-size:10px;color:var(--g400);">supports</span>
+        <div class="lc-line"></div>
+      </div>`:''}
+      <div class="layer-header">
+        <div class="layer-dot" style="background:${layer.color};"></div>
+        <div class="layer-name" style="color:${layer.color};">${layer.name}</div>
+        <div class="layer-count">${layer.items.length} item${layer.items.length!==1?'s':''}</div>
+      </div>
+      <div class="layer-grid">
+        ${layer.items.map(item=>`
+          <div class="item-card" style="--card-color:${layer.color};" onclick="selectItemCard(this,'${item.id||item.sid}','${layer.key||'strategies'}')"
+            onmouseover="this.style.borderColor='${layer.color}'" onmouseout="this.style.borderColor=''">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:10px 0 0 10px;background:${layer.color};"></div>
+            <div class="ic-top">
+              <div class="ic-title">${item.name}</div>
+              <div class="rag rag-${item.rag}" style="background:${ragColor(item.rag)};"></div>
+            </div>
+            <div class="ic-body">
+              <div class="ic-av" style="background:${avColors[item.owner]||'#64748b'};">${item.owner}</div>
+              <div class="ic-owner">${item.ownerName||item.owner}</div>
+              ${item.date?`<div class="ic-date">${item.date}</div>`:''}
+            </div>
+            <div class="ic-prog-wrap">
+              <div class="ic-prog-bar"><div class="ic-prog-fill" style="width:${item.prog}%;background:${progColor(item.prog)};"></div></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <div class="ic-prog-pct">${item.prog}% complete</div>
+                <span class="rag-badge ${item.rag}">${ragLabel(item.rag)}</span>
+              </div>
+            </div>
+            ${layer.key==='strategies'||!layer.key?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--g100);">
+              <div style="font-size:11px;font-weight:600;color:${layer.color};cursor:pointer;" onclick="event.stopPropagation();focusOnStrategy('${item.id}')">View full cascade →</div>
+            </div>`:''}
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── FOCUS VIEW ───
+function renderFocusStrategyList(){
+  const body = document.getElementById('fslBody');
+  body.innerHTML = strategies.map(s=>`
+    <div class="fsl-item ${focusStrategyId===s.id?'active':''}" onclick="setFocusStrategy('${s.id}')">
+      <div class="fsl-name">${s.name}</div>
+      <div class="fsl-meta">
+        <div class="fsl-av" style="background:${avColors[s.owner]||'#64748b'};">${s.owner}</div>
+        <div class="fsl-owner">${s.ownerName}</div>
+        <span class="rag-badge ${s.rag}" style="margin-left:auto;font-size:9px;">${ragLabel(s.rag)}</span>
+      </div>
+      <div class="fsl-prog"><div class="fsl-prog-fill" style="width:${s.prog}%;background:${progColor(s.prog)};"></div></div>
+    </div>
+  `).join('');
+}
+
+function setFocusStrategy(sid){
+  focusStrategyId = sid;
+  renderFocusStrategyList();
+  renderFocusMain();
+  renderLayerStrip();
+  updateFocusBanner();
+  // Also update cascade if we switch back
+}
+
+function renderFocusMain(){
+  const main = document.getElementById('focusMain');
+  if(!focusStrategyId){ return; }
+  const s = strategies.find(x=>x.id===focusStrategyId);
+  if(!s) return;
+
+  // Count across all layers for this strategy
+  const totalItems = layers.reduce((acc,l)=>acc+l.items.filter(i=>i.sid===focusStrategyId).length,0);
+  const allRags = layers.flatMap(l=>l.items.filter(i=>i.sid===focusStrategyId).map(i=>i.rag));
+  const gCount = allRags.filter(r=>r==='g').length;
+  const aCount = allRags.filter(r=>r==='a').length;
+  const rCount = allRags.filter(r=>r==='r').length;
+
+  let html = `<div class="focus-strat-header fade-in">
+    <div class="fsh-left">
+      <div style="font-size:10px;font-weight:700;color:var(--layer-strategy);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px;">◎ Strategy</div>
+      <div class="fsh-title">${s.name}</div>
+      <div class="fsh-meta">
+        <div class="fsh-meta-item"><div class="ic-av" style="background:${avColors[s.owner]||'#64748b'};width:22px;height:22px;font-size:8px;">${s.owner}</div> ${s.ownerName}</div>
+        <div class="fsh-meta-item">🏢 ${s.dept}</div>
+        <div class="fsh-meta-item">📅 ${s.date}</div>
+        <span class="rag-badge ${s.rag}">${ragLabel(s.rag)}</span>
+      </div>
+      <div style="font-size:12px;color:var(--g500);line-height:1.6;max-width:500px;">${s.desc}</div>
+    </div>
+    <div class="fsh-right">
+      <div class="fsh-kpis">
+        <div class="fsh-kpi"><div class="fsh-kpi-val">${totalItems}</div><div class="fsh-kpi-lbl">Linked items</div></div>
+        <div class="fsh-kpi"><div class="fsh-kpi-val">${s.prog}%</div><div class="fsh-kpi-lbl">Progress</div></div>
+        <div class="fsh-kpi"><div class="fsh-kpi-val" style="color:var(--rag-g);">${gCount}</div><div class="fsh-kpi-lbl">On Track</div></div>
+        <div class="fsh-kpi"><div class="fsh-kpi-val" style="color:var(--rag-a);">${aCount}</div><div class="fsh-kpi-lbl">At Risk</div></div>
+        <div class="fsh-kpi"><div class="fsh-kpi-val" style="color:var(--rag-r);">${rCount}</div><div class="fsh-kpi-lbl">Behind</div></div>
+      </div>
+      <div style="width:100%;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--g400);margin-bottom:4px;"><span>Overall progress</span><span style="font-weight:600;color:var(--g700);">${s.prog}%</span></div>
+        <div style="height:6px;background:var(--g200);border-radius:3px;overflow:hidden;"><div style="width:${s.prog}%;height:100%;background:${progColor(s.prog)};border-radius:3px;"></div></div>
+      </div>
+    </div>
+  </div>`;
+
+  // Each layer
+  layers.forEach((layer,li)=>{
+    const items = layer.items.filter(i=>i.sid===focusStrategyId && (ragFilter==='all'||i.rag===ragFilter));
+    const gC=items.filter(i=>i.rag==='g').length;
+    const aC=items.filter(i=>i.rag==='a').length;
+    const rC=items.filter(i=>i.rag==='r').length;
+
+    html += `<div class="focus-layer fade-in" style="animation-delay:${(li+1)*0.05}s;">
+      <div class="fl-header" onclick="toggleLayer(this)">
+        <span class="fl-toggle open">▶</span>
+        <div style="width:8px;height:8px;border-radius:50%;background:${layer.color};flex-shrink:0;"></div>
+        <div class="fl-layer-name" style="color:${layer.color};">${layer.name}</div>
+        <div class="fl-count">${items.length} item${items.length!==1?'s':''}</div>
+        <div class="fl-rag-summary">
+          ${gC?`<div class="fl-rag-chip" style="background:var(--rag-g-l);color:var(--rag-g);">✓ ${gC}</div>`:''}
+          ${aC?`<div class="fl-rag-chip" style="background:var(--rag-a-l);color:var(--rag-a);">⚠ ${aC}</div>`:''}
+          ${rC?`<div class="fl-rag-chip" style="background:var(--rag-r-l);color:var(--rag-r);">✕ ${rC}</div>`:''}
+        </div>
+      </div>
+      <div class="fl-body">
+        ${items.length===0?`<div style="padding:8px 12px;font-size:12px;color:var(--g400);font-style:italic;">No items in this layer for this strategy</div>`:''}
+        ${items.map(item=>`
+          <div class="fl-item">
+            <div class="fl-item-left" style="background:${layer.color};"></div>
+            <div class="fl-item-name">${item.name}</div>
+            <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+              <div class="fl-item-av" style="background:${avColors[item.owner]||'#64748b'};">${item.owner}</div>
+              <div class="fl-item-owner">${item.ownerName}</div>
+            </div>
+            <div class="fl-item-date">${item.date}</div>
+            <div class="fl-item-prog">
+              <div class="fl-item-bar"><div class="fl-item-fill" style="width:${item.prog}%;background:${progColor(item.prog)};"></div></div>
+              <div class="fl-item-pct">${item.prog}%</div>
+            </div>
+            <div class="fl-item-rag" style="background:${ragColor(item.rag)};"></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+
+    // connector to next
+    if(li < layers.length-1){
+      html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 0 4px 20px;font-size:10px;color:var(--g300);">
+        <span>↓</span><span>feeds into</span><div style="flex:1;height:1px;background:var(--g100);"></div>
+      </div>`;
+    }
+  });
+
+  main.innerHTML = html;
+}
+
+function toggleLayer(header){
+  const body = header.nextElementSibling;
+  const toggle = header.querySelector('.fl-toggle');
+  if(body.style.display==='none'){
+    body.style.display='flex';
+    toggle.style.transform='rotate(90deg)';
+  } else {
+    body.style.display='none';
+    toggle.style.transform='rotate(0deg)';
+  }
+}
+
+// ─── FLOW VIEW ───
+function renderFlow(){
+  const wrap = document.getElementById('flowWrap');
+  const allLayers = [
+    {name:'Strategy',color:'var(--layer-strategy)',bg:'var(--layer-strategy-bg)',items:strategies},
+    ...layers
+  ];
+
+  wrap.innerHTML = `<div class="flow-cols">
+    ${allLayers.map(layer=>{
+      const items = layer.key
+        ? layer.items.filter(i=> (ragFilter==='all'||i.rag===ragFilter) && (!focusStrategyId||i.sid===focusStrategyId))
+        : layer.items.filter(i=> ragFilter==='all'||i.rag===ragFilter);
+      return `<div class="flow-col">
+        <div class="fc-head" style="background:${layer.bg||'var(--g100)'};color:${layer.color||'var(--g600)'};">
+          ${layer.icon||''} ${layer.name}
+          <div style="font-size:18px;font-weight:700;margin-top:2px;">${items.length}</div>
+        </div>
+        <div class="fc-items">
+          ${items.map(item=>`
+            <div class="fc-item" style="border-left:3px solid ${layer.color||'var(--g300)'};"
+              onclick="focusOnStrategy('${item.sid||item.id}')">
+              ${item.name}
+              <div class="fc-item-meta">
+                <div class="fc-item-av" style="background:${avColors[item.owner]||'#64748b'};">${item.owner}</div>
+                <div class="fc-item-name">${item.ownerName||item.owner}</div>
+                <div class="fc-item-rag" style="background:${ragColor(item.rag)};"></div>
+              </div>
+              ${item.date?`<div style="font-size:10px;font-family:var(--mono);color:var(--g400);margin-top:3px;">${item.date}</div>`:''}
+            </div>
+          `).join('')}
+          <div class="fc-add">＋ Add</div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ─── FOCUS BANNER ───
+function updateFocusBanner(){
+  const banner = document.getElementById('focusBanner');
+  const nameEl = document.getElementById('focusBannerName');
+  const metaEl = document.getElementById('focusBannerMeta');
+  const clearChip = document.getElementById('clearFocusChip');
+  if(focusStrategyId){
+    const s = strategies.find(x=>x.id===focusStrategyId);
+    if(s){
+      nameEl.textContent = s.name;
+      metaEl.textContent = `Showing all sub-components for this strategy · Owner: ${s.ownerName} · ${s.prog}% complete`;
+      banner.classList.add('show');
+      clearChip.style.display='flex';
+    }
+  } else {
+    banner.classList.remove('show');
+    clearChip.style.display='none';
+  }
+}
+
+// ─── NAVIGATION ───
+function setView(view, el){
+  document.querySelectorAll('.vt').forEach(v=>v.classList.remove('on'));
+  el.classList.add('on');
+  document.querySelectorAll('.view-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('view-'+view).classList.add('active');
+  currentView = view;
+  renderAll();
+}
+
+function focusOnStrategy(sid){
+  focusStrategyId = sid;
+  updateFocusBanner();
+  renderLayerStrip();
+  // Switch to strategy focus view
+  document.querySelectorAll('.vt').forEach(v=>v.classList.remove('on'));
+  document.querySelectorAll('.vt')[1].classList.add('on');
+  document.querySelectorAll('.view-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('view-focus').classList.add('active');
+  currentView='focus';
+  renderFocusStrategyList();
+  setFocusStrategy(sid);
+}
+
+function clearFocus(){
+  focusStrategyId = null;
+  updateFocusBanner();
+  renderLayerStrip();
+  renderAll();
+}
+
+function filterRAG(el, val){
+  document.querySelectorAll('.toolbar .chip').forEach(c=>{if(c.hasAttribute('onclick')&&c.getAttribute('onclick').includes('filterRAG'))c.classList.remove('on');});
+  el.classList.add('on');
+  ragFilter = val;
+  renderAll();
+  renderLayerStrip();
+}
+
+function selectItemCard(card, id, layerKey){
+  if(layerKey==='strategies') focusOnStrategy(id);
+}
+
+function renderAll(){
+  if(currentView==='cascade') renderCascade();
+  else if(currentView==='focus'){ renderFocusStrategyList(); if(focusStrategyId) renderFocusMain(); }
+  else if(currentView==='flow') renderFlow();
+}
+
+// ─── MODAL ───
+function openModal(){ document.getElementById('modal-add').classList.add('open'); }
+function closeModal(){ document.getElementById('modal-add').classList.remove('open'); }
+document.getElementById('modal-add').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
+
+// ─── INIT ───
+renderLayerStrip();
+renderCascade();
+</script>
+</body>
+</html>

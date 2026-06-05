@@ -1,0 +1,51 @@
+BPML_ID	Workstream	Level_1	Level_2	Level_3	Level_4	Level_5	Process_Name	ERP_Platform	Module	Process_Owner	Design_Status	Build_Status	Unit_Test_Status	SIT_Status	UAT_Status	SOX_Relevant	Role_Required	Demo_Flag
+OTC-001	OTC	Order to Cash	Order to Cash Group 1	Order to Cash Process 1	Subprocess 1	Task 1	Order to Cash Activity 1	SAP	SD	Owner 1	In Progress	In Progress	Passed	Passed	In Progress	No	No	Yes
+OTC-002	OTC	Order to Cash	Order to Cash Group 1	Order to Cash Process 2	Subprocess 2	Task 2	Order to Cash Activity 2	SAP	SD	Owner 2	Approved	Complete	Failed	Blocked	Signed Off	Yes	No	Yes
+OTC-003	OTC	Order to Cash	Order to Cash Group 1	Order to Cash Process 3	Subprocess 3	Task 3	Order to Cash Activity 3	SAP	SD	Owner 3	Not Started	Not Started	Not Started	Not Started	Planned	No	Yes	Yes
+OTC-004	OTC	Order to Cash	Order to Cash Group 1	Order to Cash Process 4	Subprocess 4	Task 4	Order to Cash Activity 4	SAP	SD	Owner 4	In Progress	In Progress	Passed	Passed	In Progress	Yes	No	Yes
+OTC-005	OTC	Order to Cash	Order to Cash Group 2	Order to Cash Process 5	Subprocess 5	Task 5	Order to Cash Activity 5	SAP	SD	Owner 5	Approved	Complete	Failed	Blocked	Signed Off	No	No	Yes
+OTC-006	OTC	Order to Cash	Order to Cash Group 2	Order to Cash Process 6	Subprocess 6	Task 6	Order to Cash Activity 6	SAP	SD	Owner 1	Not Started	Not Started	Not Started	Not Started	Planned	Yes	Yes	Yes
+OTC-007	OTC	Order to Cash	Order to Cash Group 2	Order to Cash Process 7	Subprocess 7	Task 7	Order to Cash Activity 7	SAP	SD	Owner 2	In Progress	In Progress	Passed	Passed	In Progress	No	No	Yes
+OTC-008	OTC	Order to Cash	Order to Cash Group 2	Order to Cash Process 8	Subprocess 8	Task 8	Order to Cash Activity 8	SAP	SD	Owner 3	Approved	Complete	Failed	Blocked	Signed Off	Yes	No	Yes
+OTC-009	OTC	Order to Cash	Order to Cash Group 3	Order to Cash Process 9	Subprocess 9	Task 9	Order to Cash Activity 9	SAP	SD	Owner 4	Not Started	Not Started	Not Started	Not Started	Planned	No	Yes	Yes
+OTC-010	OTC	Order to Cash	Order to Cash Group 3	Order to Cash Process 10	Subprocess 10	Task 10	Order to Cash Activity 10	SAP	SD	Owner 5	In Progress	In Progress	Passed	Passed	In Progress	Yes	No	Yes
+OTC-011	OTC	Order to Cash	Order to Cash Group 3	Order to Cash Process 11	Subprocess 11	Task 11	Order to Cash Activity 11	SAP	SD	Owner 1	Approved	Complete	Failed	Blocked	Signed Off	No	No	Yes
+OTC-012	OTC	Order to Cash	Order to Cash Group 3	Order to Cash Process 12	Subprocess 12	Task 12	Order to Cash Activity 12	SAP	SD	Owner 2	Not Started	Not Started	Not Started	Not Started	Planned	Yes	Yes	Yes
+OTC-013	OTC	Order to Cash	Order to Cash Group 4	Order to Cash Process 13	Subprocess 13	Task 13	Order to Cash Activity 13	SAP	SD	Owner 3	In Progress	In Progress	Passed	Passed	In Progress	No	No	Yes
+PTP-014	PTP	Procure to Pay	Procure to Pay Group 1	Procure to Pay Process 1	Subprocess 1	Task 1	Procure to Pay Activity 1	SAP	MM	Owner 1	In Progress	In Progress	Passed	Passed	In Progress	No	No	Yes
+PTP-015	PTP	Procure to Pay	Procure to Pay Group 1	Procure to Pay Process 2	Subprocess 2	Task 2	Procure to Pay Activity 2	SAP	MM	Owner 2	Approved	Complete	Failed	Blocked	Signed Off	Yes	No	Yes
+PTP-016	PTP	Procure to Pay	Procure to Pay Group 1	Procure to Pay Process 3	Subprocess 3	Task 3	Procure to Pay Activity 3	SAP	MM	Owner 3	Not Started	Not Started	Not Started	Not Started	Planned	No	Yes	Yes
+PTP-017	PTP	Procure to Pay	Procure to Pay Group 1	Procure to Pay Process 4	Subprocess 4	Task 4	Procure to Pay Activity 4	SAP	MM	Owner 4	In Progress	In Progress	Passed	Passed	In Progress	Yes	No	Yes
+PTP-018	PTP	Procure to Pay	Procure to Pay Group 2	Procure to Pay Process 5	Subprocess 5	Task 5	Procure to Pay Activity 5	SAP	MM	Owner 5	Approved	Complete	Failed	Blocked	Signed Off	No	No	Yes
+PTP-019	PTP	Procure to Pay	Procure to Pay Group 2	Procure to Pay Process 6	Subprocess 6	Task 6	Procure to Pay Activity 6	SAP	MM	Owner 1	Not Started	Not Started	Not Started	Not Started	Planned	Yes	Yes	Yes
+PTP-020	PTP	Procure to Pay	Procure to Pay Group 2	Procure to Pay Process 7	Subprocess 7	Task 7	Procure to Pay Activity 7	SAP	MM	Owner 2	In Progress	In Progress	Passed	Passed	In Progress	No	No	Yes
+PTP-021	PTP	Procure to Pay	Procure to Pay Group 2	Procure to Pay Process 8	Subprocess 8	Task 8	Procure to Pay Activity 8	SAP	MM	Owner 3	Approved	Complete	Failed	Blocked	Signed Off	Yes	No	Yes
+PTP-022	PTP	Procure to Pay	Procure to Pay Group 3	Procure to Pay Process 9	Subprocess 9	Task 9	Procure to Pay Activity 9	SAP	MM	Owner 4	Not Started	Not Started	Not Started	Not Started	Planned	No	Yes	Yes
+PTP-023	PTP	Procure to Pay	Procure to Pay Group 3	Procure to Pay Process 10	Subprocess 10	Task 10	Procure to Pay Activity 10	SAP	MM	Owner 5	In Progress	In Progress	Passed	Passed	In Progress	Yes	No	Yes
+PTP-024	PTP	Procure to Pay	Procure to Pay Group 3	Procure to Pay Process 11	Subprocess 11	Task 11	Procure to Pay Activity 11	SAP	MM	Owner 1	Approved	Complete	Failed	Blocked	Signed Off	No	No	Yes
+PTP-025	PTP	Procure to Pay	Procure to Pay Group 3	Procure to Pay Process 12	Subprocess 12	Task 12	Procure to Pay Activity 12	SAP	MM	Owner 2	Not Started	Not Started	Not Started	Not Started	Planned	Yes	Yes	Yes
+PTP-026	PTP	Procure to Pay	Procure to Pay Group 4	Procure to Pay Process 13	Subprocess 13	Task 13	Procure to Pay Activity 13	SAP	MM	Owner 3	In Progress	In Progress	Passed	Passed	In Progress	No	No	Yes
+RTR-027	RTR	Record to Report	Record to Report Group 1	Record to Report Process 1	Subprocess 1	Task 1	Record to Report Activity 1	SAP	FI	Owner 1	In Progress	In Progress	Passed	Passed	In Progress	No	No	Yes
+RTR-028	RTR	Record to Report	Record to Report Group 1	Record to Report Process 2	Subprocess 2	Task 2	Record to Report Activity 2	SAP	FI	Owner 2	Approved	Complete	Failed	Blocked	Signed Off	Yes	No	Yes
+RTR-029	RTR	Record to Report	Record to Report Group 1	Record to Report Process 3	Subprocess 3	Task 3	Record to Report Activity 3	SAP	FI	Owner 3	Not Started	Not Started	Not Started	Not Started	Planned	No	Yes	Yes
+RTR-030	RTR	Record to Report	Record to Report Group 1	Record to Report Process 4	Subprocess 4	Task 4	Record to Report Activity 4	SAP	FI	Owner 4	In Progress	In Progress	Passed	Passed	In Progress	Yes	No	Yes
+RTR-031	RTR	Record to Report	Record to Report Group 2	Record to Report Process 5	Subprocess 5	Task 5	Record to Report Activity 5	SAP	FI	Owner 5	Approved	Complete	Failed	Blocked	Signed Off	No	No	Yes
+RTR-032	RTR	Record to Report	Record to Report Group 2	Record to Report Process 6	Subprocess 6	Task 6	Record to Report Activity 6	SAP	FI	Owner 1	Not Started	Not Started	Not Started	Not Started	Planned	Yes	Yes	Yes
+RTR-033	RTR	Record to Report	Record to Report Group 2	Record to Report Process 7	Subprocess 7	Task 7	Record to Report Activity 7	SAP	FI	Owner 2	In Progress	In Progress	Passed	Passed	In Progress	No	No	Yes
+RTR-034	RTR	Record to Report	Record to Report Group 2	Record to Report Process 8	Subprocess 8	Task 8	Record to Report Activity 8	SAP	FI	Owner 3	Approved	Complete	Failed	Blocked	Signed Off	Yes	No	Yes
+RTR-035	RTR	Record to Report	Record to Report Group 3	Record to Report Process 9	Subprocess 9	Task 9	Record to Report Activity 9	SAP	FI	Owner 4	Not Started	Not Started	Not Started	Not Started	Planned	No	Yes	Yes
+RTR-036	RTR	Record to Report	Record to Report Group 3	Record to Report Process 10	Subprocess 10	Task 10	Record to Report Activity 10	SAP	FI	Owner 5	In Progress	In Progress	Passed	Passed	In Progress	Yes	No	Yes
+RTR-037	RTR	Record to Report	Record to Report Group 3	Record to Report Process 11	Subprocess 11	Task 11	Record to Report Activity 11	SAP	FI	Owner 1	Approved	Complete	Failed	Blocked	Signed Off	No	No	Yes
+RTR-038	RTR	Record to Report	Record to Report Group 3	Record to Report Process 12	Subprocess 12	Task 12	Record to Report Activity 12	SAP	FI	Owner 2	Not Started	Not Started	Not Started	Not Started	Planned	Yes	Yes	Yes
+RTR-039	RTR	Record to Report	Record to Report Group 4	Record to Report Process 13	Subprocess 13	Task 13	Record to Report Activity 13	SAP	FI	Owner 3	In Progress	In Progress	Passed	Passed	In Progress	No	No	Yes
+HTR-040	HTR	Hire to Retire	Hire to Retire Group 1	Hire to Retire Process 1	Subprocess 1	Task 1	Hire to Retire Activity 1	SAP	HCM	Owner 1	In Progress	In Progress	Passed	Passed	In Progress	No	No	Yes
+HTR-041	HTR	Hire to Retire	Hire to Retire Group 1	Hire to Retire Process 2	Subprocess 2	Task 2	Hire to Retire Activity 2	SAP	HCM	Owner 2	Approved	Complete	Failed	Blocked	Signed Off	Yes	No	Yes
+HTR-042	HTR	Hire to Retire	Hire to Retire Group 1	Hire to Retire Process 3	Subprocess 3	Task 3	Hire to Retire Activity 3	SAP	HCM	Owner 3	Not Started	Not Started	Not Started	Not Started	Planned	No	Yes	Yes
+HTR-043	HTR	Hire to Retire	Hire to Retire Group 1	Hire to Retire Process 4	Subprocess 4	Task 4	Hire to Retire Activity 4	SAP	HCM	Owner 4	In Progress	In Progress	Passed	Passed	In Progress	Yes	No	Yes
+HTR-044	HTR	Hire to Retire	Hire to Retire Group 2	Hire to Retire Process 5	Subprocess 5	Task 5	Hire to Retire Activity 5	SAP	HCM	Owner 5	Approved	Complete	Failed	Blocked	Signed Off	No	No	Yes
+HTR-045	HTR	Hire to Retire	Hire to Retire Group 2	Hire to Retire Process 6	Subprocess 6	Task 6	Hire to Retire Activity 6	SAP	HCM	Owner 1	Not Started	Not Started	Not Started	Not Started	Planned	Yes	Yes	Yes
+HTR-046	HTR	Hire to Retire	Hire to Retire Group 2	Hire to Retire Process 7	Subprocess 7	Task 7	Hire to Retire Activity 7	SAP	HCM	Owner 2	In Progress	In Progress	Passed	Passed	In Progress	No	No	Yes
+HTR-047	HTR	Hire to Retire	Hire to Retire Group 2	Hire to Retire Process 8	Subprocess 8	Task 8	Hire to Retire Activity 8	SAP	HCM	Owner 3	Approved	Complete	Failed	Blocked	Signed Off	Yes	No	Yes
+HTR-048	HTR	Hire to Retire	Hire to Retire Group 3	Hire to Retire Process 9	Subprocess 9	Task 9	Hire to Retire Activity 9	SAP	HCM	Owner 4	Not Started	Not Started	Not Started	Not Started	Planned	No	Yes	Yes
+HTR-049	HTR	Hire to Retire	Hire to Retire Group 3	Hire to Retire Process 10	Subprocess 10	Task 10	Hire to Retire Activity 10	SAP	HCM	Owner 5	In Progress	In Progress	Passed	Passed	In Progress	Yes	No	Yes
+HTR-050	HTR	Hire to Retire	Hire to Retire Group 3	Hire to Retire Process 11	Subprocess 11	Task 11	Hire to Retire Activity 11	SAP	HCM	Owner 1	Approved	Complete	Failed	Blocked	Signed Off	No	No	Yes

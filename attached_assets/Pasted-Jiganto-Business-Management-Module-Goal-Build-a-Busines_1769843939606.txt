@@ -1,0 +1,346 @@
+Jiganto Business Management Module
+Goal
+
+Build a Business Management module for an application called Jiganto that allows leadership teams to define company strategy and translate it into operational execution.
+
+The module must support strategy, operations, goals, actions, and documents, with strong traceability from strategic intent through to delivery.
+The system should be inspired by tools like StartInfinity, but be more flexible and execution-focused.
+
+Application Context
+
+Jiganto is a modular, multi-tenant platform with existing or planned modules for:
+
+Projects
+
+CRM
+
+Chat
+
+Documents
+
+Resourcing
+
+Global access control & notifications
+
+The Business Management module must integrate cleanly with these modules.
+
+Core Business Management Areas
+1. Strategy
+
+Used to define the company’s strategic direction.
+
+Predefined Strategy Templates
+
+Aspirations / Vision
+
+Target Market
+
+Competitor Analysis
+
+SWOT Analysis
+
+Strategic Risks & Assumptions
+
+Each strategy item must support:
+
+Owner
+
+Status (not started / on track / at risk / completed)
+
+Review cadence (monthly / quarterly)
+
+Last and next review date
+
+Notes and attachments
+
+Links to goals and initiatives
+
+2. Operations
+
+Used to define how the business operates to deliver strategy.
+
+Operations Templates
+
+Departments
+
+Stakeholders
+
+Processes
+
+Tools & Systems
+
+Operations must:
+
+Support ownership and documentation
+
+Link to Projects (via the Project module)
+
+Highlight dependencies and critical processes
+
+3. Goals & Performance
+
+Used to define measurable success.
+
+Goal Types
+
+OKRs
+
+Objectives
+
+Key Results
+
+KPIs
+
+Target vs actual
+
+Leading or lagging indicator
+
+Trend over time
+
+Goals must support:
+
+Ownership and contributors
+
+Status (on track / at risk / off track)
+
+Review cadence
+
+Links to:
+
+Strategy
+
+Initiatives
+
+Actions
+
+4. Actions & Execution
+
+Used to define what work must be done.
+
+Action Templates
+
+Initiatives
+
+Tasks
+
+Meetings
+
+Actions must:
+
+Be assignable to users
+
+Have due dates and priorities
+
+Link to:
+
+Goals
+
+Projects
+
+Documents
+
+5. Documents & Contracts
+
+Linked to the Document Management module.
+
+Document Types
+
+Strategy documents
+
+Financial documents
+
+Corporate documents
+
+Contracts
+
+Documents must:
+
+Be linkable to any Business Management object
+
+Use global access control and sharing
+
+Support versioning and audit history
+
+Template-Based Frameworks
+Predefined Templates (Out-of-the-Box)
+
+Strategy Framework
+
+Operating Model Overview
+
+OKR Framework
+
+KPI Tracking
+
+Initiative Portfolio
+
+Templates provide:
+
+Default data structure
+
+Suggested fields and statuses
+
+Default board views
+
+Users must be able to:
+
+Use templates as-is
+
+Clone and modify templates
+
+Extend templates with additional fields
+
+Board-Based Tracking (Key Requirement)
+Boards as a Core Interaction Model
+
+Each Business Management area must have at least one default board view
+
+Boards support:
+
+Status columns
+
+Drag-and-drop updates
+
+Filters and grouping
+
+Custom fields
+
+Custom Boards (User-Defined)
+
+Users can create additional boards beyond predefined templates
+
+Custom boards can be used for:
+
+Company-specific tracking
+
+Leadership priorities
+
+Internal initiatives
+
+Boards must:
+
+Reuse the same underlying data
+
+Not duplicate records
+
+Use global access control, sharing, and notifications
+
+Strategy-to-Execution Traceability
+
+The system must support linking:
+
+Strategy → Goals
+
+Goals → Initiatives
+
+Initiatives → Projects / Tasks
+
+Users must be able to clearly see:
+
+Which work supports which strategy
+
+Gaps where goals or initiatives lack ownership
+
+Dashboards & Reviews
+
+Provide leadership dashboards showing:
+
+Strategy progress
+
+Goal health
+
+Initiative status
+
+Provide review views for:
+
+Quarterly planning
+
+Monthly check-ins
+
+Access Control & Governance
+
+All Business Management objects must use:
+
+Global access control
+
+Central admin configuration
+
+In-context sharing
+
+Notifications on access changes
+
+Permissions must be enforced server-side
+
+Data Model Requirements
+
+At minimum, implement:
+
+StrategyItem
+
+Risk / Assumption
+
+Department
+
+Process
+
+Tool
+
+Goal
+
+OKR
+
+KPI
+
+Initiative
+
+Task
+
+Meeting
+
+Board
+
+BoardColumn
+
+BoardField
+
+DocumentLink
+
+Define relationships to Projects and Documents.
+
+Architecture & Technical Expectations
+
+Use a relational database (PostgreSQL preferred)
+
+Use an ORM if appropriate
+
+Modular service-based architecture
+
+Reuse shared services:
+
+Access control
+
+Notifications
+
+Boards
+
+UI can be minimal but must be consistent and extensible
+
+MVP Constraints
+
+Prioritize correctness, clarity, and traceability
+
+Deliver templates + boards first
+
+Avoid over-engineering advanced analytics initially
+
+Success Criteria
+
+Leadership can clearly define and communicate strategy
+
+Teams understand how their work supports goals
+
+Progress, risk, and accountability are visible
+
+Templates provide structure; boards provide flexibility
+
+System scales across companies and use cases

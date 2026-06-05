@@ -1,0 +1,24 @@
+Name,Phase,Type,Owners,Reviewers,Approvers,Due Date,Status,RAG,Progress %,Notes
+Business Case & Project Charter,Initiation,Document,Program Sponsor,Steering Committee,CFO,15-Mar-26,Completed,Blue,100,Approved funding and scope
+High-Level Scope Document,Initiation,Document,Program Manager,Enterprise Architect,CIO,20-Mar-26,Completed,Blue,100,In-scope/out-of-scope defined
+Stakeholder Register,Planning,Document,PMO Lead,Program Manager,Program Sponsor,25-Mar-26,Completed,Blue,100,RACI mapping included
+Project Management Plan,Planning,Plan,Project Manager,PMO,Steering Committee,30-Mar-26,In Progress,Green,85,Final RAID alignment pending
+Resource Plan,Planning,Plan,PMO Lead,Workstream Leads,Program Manager,02-Apr-26,Completed,Blue,100,Internal and SI resources
+Solution Architecture Document (SAD),Design,Design Doc,Solution Architect,Enterprise Architect,CIO,15-Apr-26,In Progress,Amber,70,Integration section under review
+Integration Strategy,Design,Strategy,Integration Lead,Technical Architect,CIO,18-Apr-26,Not Started,Green,0,Depends on middleware confirmation
+Data Migration Strategy,Design,Strategy,Data Lead,Business Data Owners,Program Manager,22-Apr-26,In Progress,Green,60,Mock migration scheduled
+Functional Design Documents (FDDs),Design,Design Doc,Functional Leads,Business SMEs,Business Owner,30-Apr-26,In Progress,Amber,65,Some workshops outstanding
+Technical Design Documents (TDDs),Design,Design Doc,Technical Lead,Solution Architect,CIO,05-May-26,Not Started,Green,0,Awaiting FDD completion
+Configuration & Build Completion,Build,Milestone,Functional Leads,Solution Architect,Program Manager,30-May-26,Not Started,Green,0,Realization phase gate
+Custom Development Objects,Build,Development,Technical Lead,QA Lead,Solution Architect,05-Jun-26,Not Started,Green,0,Includes RICEF objects
+Data Migration Mock Load 1,Build,Data,Data Lead,Business Data Owners,Program Manager,10-Jun-26,Not Started,Green,0,Trial conversion
+SIT Test Plan,Testing,Test Doc,Test Manager,Project Manager,Program Sponsor,15-Jun-26,Not Started,Green,0,Includes defect process
+System Integration Testing (SIT) Execution,Testing,Test Cycle,Test Manager,Workstream Leads,Program Manager,30-Jun-26,Not Started,Green,0,Entry criteria sign-off required
+UAT Test Scripts,Testing,Test Doc,Business SMEs,Test Manager,Business Owner,05-Jul-26,Not Started,Green,0,Derived from FDDs
+User Acceptance Testing (UAT) Completion,Testing,Milestone,Business Lead,Program Manager,Steering Committee,25-Jul-26,Not Started,Green,0,Exit criteria sign-off
+Cutover Strategy & Plan,Go Live,Plan,Cutover Manager,Technical & Functional Leads,Program Sponsor,01-Aug-26,Not Started,Green,0,Includes rollback plan
+Production Readiness Assessment,Go Live,Assessment,PMO,Steering Committee,CIO,10-Aug-26,Not Started,Green,0,Go/No-Go decision
+Go-Live,Go Live,Milestone,Program Manager,Steering Committee,Program Sponsor,15-Aug-26,Not Started,Green,0,Hypercare follows
+Hypercare Support Plan,Closure,Plan,Support Lead,Service Delivery Manager,CIO,20-Aug-26,Not Started,Green,0,4-week hypercare
+Knowledge Transfer to BAU,Closure,Handover,Workstream Leads,Support Team,Program Manager,30-Aug-26,Not Started,Green,0,Documentation repository included
+Post Implementation Review,Closure,Review,PMO,Steering Committee,Program Sponsor,30-Sep-26,Not Started,Green,0,Lessons learned workshop

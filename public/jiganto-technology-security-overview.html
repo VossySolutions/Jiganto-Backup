@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jiganto Platform - Technology & Security Overview</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    :root {
+      --primary: #1E88C8;
+      --primary-dark: #1565a0;
+      --accent-green: #22C55E;
+      --accent-purple: #7C3AED;
+      --text-primary: #111827;
+      --text-secondary: #4B5563;
+      --text-tertiary: #6B7280;
+      --bg-light: #F7F9FC;
+      --bg-white: #FFFFFF;
+      --border: #E5E7EB;
+      --border-light: #F3F4F6;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text-primary);
+      background: var(--bg-white);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .page { max-width: 900px; margin: 0 auto; padding: 60px 48px; }
+
+    .header {
+      text-align: center;
+      padding-bottom: 48px;
+      border-bottom: 2px solid var(--primary);
+      margin-bottom: 48px;
+    }
+
+    .logo-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      border-radius: 16px;
+      margin-bottom: 20px;
+    }
+
+    .logo-mark span {
+      color: white;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -1px;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+
+    .header .subtitle {
+      font-size: 18px;
+      color: var(--primary);
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+
+    .header .doc-meta {
+      font-size: 13px;
+      color: var(--text-tertiary);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 4px 4px;
+    }
+
+    .badge-blue { background: #EFF6FF; color: var(--primary); }
+    .badge-green { background: #F0FDF4; color: #16A34A; }
+    .badge-purple { background: #F5F3FF; color: var(--accent-purple); }
+
+    section { margin-bottom: 48px; }
+
+    section h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    section h2 .section-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      background: var(--primary);
+      color: white;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    h3 {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 24px 0 12px 0;
+    }
+
+    p { margin-bottom: 14px; color: var(--text-secondary); }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .info-card {
+      padding: 20px;
+      background: var(--bg-light);
+      border-radius: 10px;
+      border: 1px solid var(--border-light);
+    }
+
+    .info-card.full-width { grid-column: 1 / -1; }
+
+    .info-card h4 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-card h4 .icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .icon-blue { background: #DBEAFE; }
+    .icon-green { background: #DCFCE7; }
+    .icon-purple { background: #EDE9FE; }
+    .icon-amber { background: #FEF3C7; }
+    .icon-red { background: #FEE2E2; }
+
+    .info-card p { font-size: 14px; margin-bottom: 0; color: var(--text-tertiary); }
+
+    .cert-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .cert-card {
+      text-align: center;
+      padding: 24px 16px;
+      background: var(--bg-light);
+      border-radius: 10px;
+      border: 1px solid var(--border-light);
+    }
+
+    .cert-card .cert-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 12px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 20px;
+    }
+
+    .cert-card h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .cert-card p { font-size: 13px; color: var(--text-tertiary); margin: 0; }
+
+    .feature-list { list-style: none; padding: 0; margin: 16px 0; }
+
+    .feature-list li {
+      padding: 10px 0 10px 28px;
+      position: relative;
+      color: var(--text-secondary);
+      font-size: 14px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .feature-list li:last-child { border-bottom: none; }
+
+    .feature-list li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 14px;
+      width: 16px;
+      height: 16px;
+      background: var(--accent-green);
+      border-radius: 50%;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4.5 8L7 10.5L11.5 6' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    }
+
+    .feature-list li strong { color: var(--text-primary); }
+
+    .region-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+
+    .region-table th, .region-table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .region-table th {
+      background: var(--bg-light);
+      font-weight: 600;
+      color: var(--text-primary);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .region-table td { color: var(--text-secondary); }
+
+    .status-available {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #16A34A;
+      font-weight: 500;
+    }
+
+    .status-available::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: #22C55E;
+      border-radius: 50%;
+    }
+
+    .status-planned {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #D97706;
+      font-weight: 500;
+    }
+
+    .status-planned::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: #F59E0B;
+      border-radius: 50%;
+    }
+
+    .callout {
+      padding: 20px 24px;
+      background: #EFF6FF;
+      border-left: 4px solid var(--primary);
+      border-radius: 0 8px 8px 0;
+      margin: 24px 0;
+    }
+
+    .callout p { color: var(--text-secondary); margin: 0; font-size: 14px; }
+    .callout strong { color: var(--text-primary); }
+
+    .architecture-highlights {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .arch-item {
+      display: flex;
+      gap: 12px;
+      padding: 16px;
+      background: var(--bg-light);
+      border-radius: 10px;
+    }
+
+    .arch-item .arch-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .arch-item h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .arch-item p { font-size: 13px; color: var(--text-tertiary); margin: 0; }
+
+    .footer {
+      margin-top: 64px;
+      padding-top: 32px;
+      border-top: 2px solid var(--primary);
+      text-align: center;
+    }
+
+    .footer p {
+      font-size: 13px;
+      color: var(--text-tertiary);
+    }
+
+    .footer .company-name {
+      font-weight: 600;
+      color: var(--primary);
+      font-size: 15px;
+    }
+
+    @media print {
+      body { font-size: 13px; }
+      .page { padding: 32px; max-width: none; }
+      .info-card, .cert-card, .arch-item { break-inside: avoid; }
+      section { break-inside: avoid; }
+    }
+
+    @media (max-width: 640px) {
+      .page { padding: 32px 24px; }
+      .info-grid, .cert-grid, .architecture-highlights { grid-template-columns: 1fr; }
+      .header h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="logo-mark"><span>J</span></div>
+      <h1>Jiganto Enterprise AI Platform</h1>
+      <div class="subtitle">Technology, Security & Infrastructure Overview</div>
+      <div class="doc-meta">
+        <span class="badge badge-blue">Confidential</span>
+        <span class="badge badge-green">Customer Prospectus</span>
+        <br><br>
+        Document Version 1.0 &middot; February 2026
+      </div>
+    </div>
+
+    <section>
+      <h2><span class="section-number">1</span> Platform Overview</h2>
+      <p>
+        Jiganto is a modular, AI-native enterprise platform designed to streamline operations across professional services, system integrators, software developers, and a wide range of industries. The platform provides 12 fully integrated modules spanning project management, document management, CRM, finance, resource management, business process management, and more.
+      </p>
+      <p>
+        Built with modern, proven technologies and designed from the ground up for multi-tenancy, Jiganto delivers rapid deployment, intelligent automation, and deep cross-module integration that eliminates the need for multiple disconnected tools.
+      </p>
+
+      <div class="architecture-highlights">
+        <div class="arch-item">
+          <div class="arch-icon icon-blue">&#9881;</div>
+          <div>
+            <h4>12 Integrated Modules</h4>
+            <p>Projects, CRM, Documents, Tasks, Finance, Resources, BPM, Workspaces, and more</p>
+          </div>
+        </div>
+        <div class="arch-item">
+          <div class="arch-icon icon-purple">&#10038;</div>
+          <div>
+            <h4>AI-Native Architecture</h4>
+            <p>AI deeply embedded across the platform for intelligent automation and insights</p>
+          </div>
+        </div>
+        <div class="arch-item">
+          <div class="arch-icon icon-green">&#8644;</div>
+          <div>
+            <h4>Multi-Tenant by Design</h4>
+            <p>Complete data isolation between tenants with role-based access controls</p>
+          </div>
+        </div>
+        <div class="arch-item">
+          <div class="arch-icon icon-amber">&#9889;</div>
+          <div>
+            <h4>Rapid Deployment</h4>
+            <p>Get up and running quickly with pre-configured modules and templates</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="section-number">2</span> Technology Stack</h2>
+      <p>
+        Jiganto is built on a modern, enterprise-grade technology stack chosen for performance, scalability, and long-term maintainability.
+      </p>
+
+      <div class="info-grid">
+        <div class="info-card">
+          <h4><span class="icon icon-blue">&#9635;</span> Frontend</h4>
+          <p>React with TypeScript, Vite build system, TailwindCSS, and Shadcn UI component library. Supports 8 distinct data view types including Kanban, Gantt, Calendar, and more.</p>
+        </div>
+        <div class="info-card">
+          <h4><span class="icon icon-green">&#9881;</span> Backend</h4>
+          <p>Node.js with Express.js and TypeScript. RESTful API architecture with WebSocket support for real-time features such as chat and live collaboration.</p>
+        </div>
+        <div class="info-card">
+          <h4><span class="icon icon-purple">&#9731;</span> Database</h4>
+          <p>PostgreSQL relational database with Drizzle ORM for type-safe database operations, migrations, and schema management.</p>
+        </div>
+        <div class="info-card">
+          <h4><span class="icon icon-amber">&#10070;</span> AI Integration</h4>
+          <p>OpenAI GPT models integrated via secure API connections for template generation, intelligent assistance, and workflow automation.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <p><strong>Why this stack?</strong> TypeScript across the full stack ensures type safety and reduces bugs. PostgreSQL is the most trusted enterprise-grade open-source database. React provides a responsive, modern user experience. This combination is used by leading technology companies worldwide.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="section-number">3</span> Cloud Infrastructure</h2>
+      <p>
+        Jiganto is hosted on <strong>Google Cloud Platform (GCP)</strong>, one of the world's leading cloud infrastructure providers alongside AWS and Microsoft Azure. GCP provides enterprise-grade reliability, performance, and security.
+      </p>
+
+      <div class="info-grid">
+        <div class="info-card">
+          <h4><span class="icon icon-blue">&#9729;</span> Cloud Provider</h4>
+          <p>Google Cloud Platform (GCP) &mdash; trusted by enterprises globally for mission-critical workloads. Offers 99.95%+ uptime SLA.</p>
+        </div>
+        <div class="info-card">
+          <h4><span class="icon icon-green">&#9877;</span> Compute</h4>
+          <p>Dedicated virtual machine deployments with reserved compute resources for predictable performance and monthly costs.</p>
+        </div>
+        <div class="info-card">
+          <h4><span class="icon icon-purple">&#9733;</span> Database Hosting</h4>
+          <p>Google Cloud SQL for PostgreSQL with automated backups, point-in-time recovery, high availability, and encryption at rest.</p>
+        </div>
+        <div class="info-card">
+          <h4><span class="icon icon-amber">&#8645;</span> Network</h4>
+          <p>Load balancing for optimal performance, CDN for fast global content delivery, and Web Application Firewall (WAF) for traffic protection.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="section-number">4</span> Hosting & Deployment Options</h2>
+      <p>
+        Jiganto offers flexible hosting options to meet different organisational needs, from standard cloud hosting to dedicated deployments.
+      </p>
+
+      <h3>Current Hosting Options</h3>
+      <div class="info-grid">
+        <div class="info-card">
+          <h4><span class="icon icon-blue">&#9729;</span> Standard Cloud (SaaS)</h4>
+          <p>Multi-tenant cloud hosting on GCP with complete data isolation between tenants. Fastest time-to-value with managed infrastructure, automatic updates, and backups.</p>
+        </div>
+        <div class="info-card">
+          <h4><span class="icon icon-green">&#9877;</span> Dedicated Compute</h4>
+          <p>Reserved virtual machine deployments with dedicated computing resources. Predictable monthly costs and guaranteed performance for enterprise workloads.</p>
+        </div>
+      </div>
+
+      <h3>Future Hosting Options (Roadmap)</h3>
+      <div class="info-grid">
+        <div class="info-card">
+          <h4><span class="icon icon-purple">&#9878;</span> Private Cloud</h4>
+          <p>Dedicated single-tenant deployment on the customer's preferred cloud provider (GCP, AWS, or Azure). Full infrastructure isolation for organisations with strict compliance requirements.</p>
+        </div>
+        <div class="info-card">
+          <h4><span class="icon icon-amber">&#9670;</span> On-Premises</h4>
+          <p>Self-hosted deployment within the customer's own data centre or private infrastructure. For organisations where data must remain entirely within their controlled environment.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <p><strong>Architecture Advantage:</strong> Jiganto's modular, containerisable architecture is designed to be deployment-agnostic. The same codebase can be deployed across any major cloud provider or on-premises infrastructure, ensuring flexibility as your requirements evolve.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="section-number">5</span> Data Residency & Regional Compliance</h2>
+      <p>
+        We understand that data sovereignty is a critical concern for enterprises operating across multiple jurisdictions. Jiganto's architecture is built with data residency requirements in mind.
+      </p>
+
+      <h3>Regional Availability</h3>
+      <table class="region-table">
+        <thead>
+          <tr>
+            <th>Region</th>
+            <th>Status</th>
+            <th>Data Centre Location</th>
+            <th>Applicable Regulations</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>United States</strong></td>
+            <td><span class="status-available">Available</span></td>
+            <td>GCP US Data Centres</td>
+            <td>SOX, HIPAA, CCPA</td>
+          </tr>
+          <tr>
+            <td><strong>India</strong></td>
+            <td><span class="status-available">Available</span></td>
+            <td>GCP India Region</td>
+            <td>IT Act, DPDP Act 2023</td>
+          </tr>
+          <tr>
+            <td><strong>United Kingdom</strong></td>
+            <td><span class="status-planned">On Roadmap</span></td>
+            <td>GCP London / AWS UK</td>
+            <td>UK GDPR, Data Protection Act 2018</td>
+          </tr>
+          <tr>
+            <td><strong>European Union</strong></td>
+            <td><span class="status-planned">On Roadmap</span></td>
+            <td>GCP / AWS EU Regions</td>
+            <td>EU GDPR, ePrivacy Directive</td>
+          </tr>
+          <tr>
+            <td><strong>Middle East</strong></td>
+            <td><span class="status-planned">On Roadmap</span></td>
+            <td>GCP / AWS ME Regions</td>
+            <td>Regional data protection laws</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Data Residency Architecture</h3>
+      <ul class="feature-list">
+        <li><strong>Tenant-level data isolation</strong> &mdash; each customer's data is fully separated at the database level with no cross-tenant data leakage</li>
+        <li><strong>Regional tenant routing</strong> &mdash; the platform architecture supports assigning tenants to specific regional database clusters</li>
+        <li><strong>Data residency flags</strong> &mdash; tenant configuration includes data residency metadata to enforce where data is stored and processed</li>
+        <li><strong>Cross-region portability</strong> &mdash; when needed, data can be securely migrated between regions with full audit trails</li>
+      </ul>
+
+      <div class="callout">
+        <p><strong>Commitment:</strong> For customers with specific data residency requirements in regions not yet available, we offer dedicated deployment arrangements to ensure compliance with local data protection laws. Contact us to discuss your specific needs.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="section-number">6</span> Security & Compliance</h2>
+      <p>
+        Security is foundational to the Jiganto platform. We employ defence-in-depth security practices across every layer of the technology stack.
+      </p>
+
+      <h3>Compliance Certifications</h3>
+      <div class="cert-grid">
+        <div class="cert-card">
+          <div class="cert-icon">&#10003;</div>
+          <h4>SOC 2 Type 2</h4>
+          <p>Platform and infrastructure certified for security, availability, and confidentiality</p>
+        </div>
+        <div class="cert-card">
+          <div class="cert-icon">&#10003;</div>
+          <h4>ISO 27001</h4>
+          <p>Infrastructure provider certified for information security management systems</p>
+        </div>
+        <div class="cert-card">
+          <div class="cert-icon">&#10003;</div>
+          <h4>GDPR Ready</h4>
+          <p>Platform designed with data protection by design and by default principles</p>
+        </div>
+      </div>
+
+      <h3>Encryption & Data Protection</h3>
+      <ul class="feature-list">
+        <li><strong>Data in transit</strong> &mdash; all communications secured with industry-standard TLS 1.2+ encryption</li>
+        <li><strong>Data at rest</strong> &mdash; AES-256 server-side encryption for all stored data, managed by Google Cloud SQL</li>
+        <li><strong>Database encryption</strong> &mdash; automatic encryption and secure key management via Google Cloud Key Management Service</li>
+        <li><strong>Secret management</strong> &mdash; API keys, credentials, and sensitive configuration stored in encrypted vaults, never in source code</li>
+      </ul>
+
+      <h3>Infrastructure Security</h3>
+      <ul class="feature-list">
+        <li><strong>Private networking</strong> &mdash; all data-processing components operate within a private network in a secure cloud environment</li>
+        <li><strong>Web Application Firewall (WAF)</strong> &mdash; active protection against malicious traffic, SQL injection, XSS, and other common attacks</li>
+        <li><strong>Load balancing</strong> &mdash; automatic traffic distribution for high availability and DDoS protection</li>
+        <li><strong>Vendor security</strong> &mdash; rigorous due diligence on all subprocessors and third-party integrations</li>
+        <li><strong>Continuous monitoring</strong> &mdash; dedicated security teams monitoring infrastructure and application security around the clock</li>
+      </ul>
+
+      <h3>Application Security</h3>
+      <ul class="feature-list">
+        <li><strong>Authentication</strong> &mdash; enterprise-grade authentication with reCAPTCHA, fraud prevention, and multi-factor authentication (MFA) support</li>
+        <li><strong>SAML Single Sign-On</strong> &mdash; seamless integration with your existing Identity Provider (Okta, Azure AD, Google Workspace, etc.)</li>
+        <li><strong>SCIM provisioning</strong> &mdash; automated user provisioning and deprovisioning synced with your identity management system</li>
+        <li><strong>Role-based access control</strong> &mdash; granular permissions at module, feature, and data levels with custom role definitions</li>
+        <li><strong>Project-scoped access</strong> &mdash; customer and external users can be restricted to specific projects with defined access levels (view, contribute, manage)</li>
+        <li><strong>Security scanner</strong> &mdash; automated vulnerability detection including CVE scanning, dependency analysis, SBOM export, and static code analysis</li>
+        <li><strong>Audit logging</strong> &mdash; comprehensive audit trails for all data access, modifications, and administrative actions</li>
+      </ul>
+
+      <h3>Enterprise Security Controls</h3>
+      <div class="info-grid">
+        <div class="info-card">
+          <h4><span class="icon icon-blue">&#9881;</span> Security Centre</h4>
+          <p>Centralised dashboard for visibility into vulnerabilities across all applications, with CVE detection by severity and compliance reporting.</p>
+        </div>
+        <div class="info-card">
+          <h4><span class="icon icon-green">&#9899;</span> Privacy Controls</h4>
+          <p>Enforce private deployments, prevent public exposure of applications, and control data export capabilities at the organisation level.</p>
+        </div>
+        <div class="info-card">
+          <h4><span class="icon icon-purple">&#9878;</span> IP Protection</h4>
+          <p>Advanced settings to prevent code export, enforce access controls, and protect proprietary business logic and configurations.</p>
+        </div>
+        <div class="info-card">
+          <h4><span class="icon icon-amber">&#9888;</span> Backup & Recovery</h4>
+          <p>Automated database backups with point-in-time recovery, checkpoint-based rollback for code and data, and disaster recovery procedures.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="section-number">7</span> Multi-Tenancy & Data Isolation</h2>
+      <p>
+        Jiganto is designed from the ground up as a multi-tenant platform with strict data isolation guarantees.
+      </p>
+
+      <ul class="feature-list">
+        <li><strong>Database-level isolation</strong> &mdash; every customer (tenant) has their data logically separated; queries are always scoped to the authenticated tenant</li>
+        <li><strong>Authentication boundary</strong> &mdash; every API request is authenticated and authorised before accessing any data; cross-tenant access is architecturally impossible</li>
+        <li><strong>Configurable per tenant</strong> &mdash; each tenant can have independent settings for modules, branding, roles, permissions, and workflows</li>
+        <li><strong>Data portability</strong> &mdash; tenants can export their data in standard formats (CSV, Excel, PDF) at any time, supporting data portability requirements</li>
+        <li><strong>Tenant-specific user management</strong> &mdash; three user types (Employee, Contractor, Customer) with independent access controls and assignment management per tenant</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="section-number">8</span> Frequently Asked Questions</h2>
+
+      <h3>Is our data shared with other customers?</h3>
+      <p>No. While the application infrastructure is shared (standard SaaS model), every customer's data is fully isolated at the database level. There is no mechanism for one tenant's data to be accessed by another tenant.</p>
+
+      <h3>Can we use our existing SSO / identity provider?</h3>
+      <p>Yes. Jiganto supports SAML-based Single Sign-On and SCIM-based user provisioning, allowing seamless integration with identity providers such as Okta, Azure Active Directory, Google Workspace, and others.</p>
+
+      <h3>What happens to our data if we cancel our subscription?</h3>
+      <p>You can export all your data in standard formats (CSV, Excel) at any time. Upon cancellation, we provide a data retention period during which you can retrieve your data before it is securely deleted.</p>
+
+      <h3>Is the platform hosted on AWS, Azure, or Google Cloud?</h3>
+      <p>Jiganto is currently hosted on Google Cloud Platform (GCP). The platform architecture is cloud-agnostic, meaning it can be deployed on AWS, Azure, or GCP based on customer requirements for dedicated or private cloud arrangements.</p>
+
+      <h3>Can we have our data hosted in our own country?</h3>
+      <p>Currently, standard hosting is available in the United States and India. For customers requiring hosting in the UK, Europe, or other regions, we offer dedicated deployment arrangements. Our architecture fully supports regional data residency. Please contact us to discuss your specific requirements.</p>
+
+      <h3>How do you handle security vulnerabilities?</h3>
+      <p>We employ automated security scanning (CVE detection, dependency vulnerability analysis, static code analysis), dedicated security teams for continuous monitoring, and follow responsible disclosure practices. Enterprise customers have access to a Security Centre dashboard with full visibility into their security posture.</p>
+    </section>
+
+    <section>
+      <h2><span class="section-number">9</span> Summary</h2>
+
+      <div class="info-grid">
+        <div class="info-card full-width">
+          <table class="region-table" style="margin: 0;">
+            <tbody>
+              <tr>
+                <td style="width: 200px;"><strong>Cloud Provider</strong></td>
+                <td>Google Cloud Platform (GCP)</td>
+              </tr>
+              <tr>
+                <td><strong>Certifications</strong></td>
+                <td>SOC 2 Type 2, ISO 27001 (infrastructure)</td>
+              </tr>
+              <tr>
+                <td><strong>Encryption</strong></td>
+                <td>TLS 1.2+ (in transit), AES-256 (at rest)</td>
+              </tr>
+              <tr>
+                <td><strong>Authentication</strong></td>
+                <td>SAML SSO, SCIM, MFA, reCAPTCHA</td>
+              </tr>
+              <tr>
+                <td><strong>Data Regions</strong></td>
+                <td>US (available), India (available), UK/EU/ME (roadmap)</td>
+              </tr>
+              <tr>
+                <td><strong>Hosting Options</strong></td>
+                <td>Standard SaaS, Dedicated Compute, Private Cloud (roadmap)</td>
+              </tr>
+              <tr>
+                <td><strong>Data Isolation</strong></td>
+                <td>Full tenant-level isolation with role-based access controls</td>
+              </tr>
+              <tr>
+                <td><strong>Uptime</strong></td>
+                <td>99.95%+ SLA backed by Google Cloud Platform</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer">
+      <p class="company-name">Jiganto</p>
+      <p>Enterprise AI Platform</p>
+      <p style="margin-top: 12px;">This document is confidential and intended for prospective customers only.<br>
+      &copy; 2026 Jiganto. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,113 @@
+Level 1 Menu	Level 2 Area	Level 3 Process Groups
+Sales & Engagement	Opportunity Management	Pre-Sales Processes
+	Proposal & Contracting	Commercial Processes
+	Client Onboarding	Customer Setup
+Delivery & Implementation	Project Initiation	Project Setup
+	Project Planning	Planning & Design
+	Build & Configure	System Build
+	Testing	Quality Assurance
+	Deployment	Go-Live
+	Hypercare	Post Go-Live
+Change Management	Change Control	Change Request Processes
+	Approval Workflow	Governance
+	Change Execution	Change Delivery
+Service Management	Incident Management	Support Processes
+	Request Management	Service Requests
+	Problem Management	Root Cause
+	SLA Management	Service Levels
+Release Management	Release Planning	Release Governance
+	Release Deployment	Release Execution
+Support Operations	Help Desk	Support Intake
+	Escalation	Escalation Flow
+	Knowledge Base	Self Service
+Governance & Quality	Delivery Governance	Oversight
+	Risk Management	Risk Control
+	Quality Assurance	Quality Gates
+Security & Compliance	Security Operations	Security Processes
+	Compliance	Regulatory
+Architecture & Design	Solution Architecture	Architecture Control
+	Technical Standards	Design Controls
+Data & Migration	Data Migration	Migration Lifecycle
+	Data Governance	Data Controls
+Training & Adoption	Training Delivery	Training Processes
+	User Enablement	Adoption
+Finance & Commercial	Billing & Invoicing	Commercial Ops
+	Time & Expense	Cost Control
+Vendor & Partner Mgmt	Partner Engagement	Partner Processes
+	Vendor Control	Vendor Governance
+Continuous Improvement	Process Improvement	Optimisation
+	Lessons Learned	Knowledge Capture
+BPML - Order to Cash	Demand & Opportunity	Lead Management
+		Opportunity Qualification
+		Quotation & Pricing
+	Order Management	Customer Order Capture
+		Order Validation
+		Contract Management
+	Fulfilment	Service Delivery
+		Product Fulfilment
+		Delivery Confirmation
+	Billing	Invoice Creation
+		Invoice Validation
+		Invoice Dispatch
+	Receivables	Payment Processing
+		Cash Application
+		Collections Management
+		Dispute Management
+	Revenue Control	Revenue Recognition
+		Credit Management
+BPML - Purchase to Pay	Sourcing	Supplier Strategy
+		Supplier Selection
+		Contract Negotiation
+	Supplier Management	Supplier Onboarding
+		Supplier Master Data
+	Requisitioning	Purchase Requisition
+		Approval Workflow
+	Purchasing	Purchase Order Creation
+		Purchase Order Approval
+		PO Dispatch
+	Receiving	Goods Receipt
+		Service Entry
+	Invoice Processing	Invoice Receipt
+		Invoice Matching
+		Invoice Approval
+	Payments	Payment Run
+		Vendor Payment
+		Payment Reconciliation
+	Controls	Spend Compliance
+BPML - Record to Report	Financial Master Data	Chart of Accounts
+		Accounting Master Data
+	Transaction Recording	Journal Entry Posting
+		Subledger Integration
+	Period Close	Close Calendar Management
+		Month End Close
+		Year End Close
+	Reconciliation	Account Reconciliation
+		Intercompany Reconciliation
+	Fixed Assets	Asset Acquisition
+		Depreciation
+		Asset Retirement
+	Financial Control	Adjustments
+		Accruals & Provisions
+	Reporting	Financial Statements
+		Management Reporting
+	Compliance	Audit Support
+		Regulatory Reporting
+BPML - Hire to Retire	Workforce Planning	Headcount Planning
+		Job Requisition Planning
+	Recruitment	Candidate Sourcing
+		Interview & Selection
+		Offer Management
+	Hiring	Employee Onboarding
+		Contract Creation
+	Core HR	Employee Master Data
+		Position Management
+	Time & Attendance	Time Capture
+		Leave Management
+	Payroll	Payroll Processing
+		Payroll Validation
+	Performance	Performance Reviews
+	Learning	Training Management
+	Compensation	Salary Review
+	Employee Changes	Transfers & Promotions
+	Offboarding	Termination Processing
+		Exit Management

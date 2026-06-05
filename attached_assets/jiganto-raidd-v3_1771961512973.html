@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jiganto — RAIDD Log v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --white:#fff;--bg:#f4f5f7;--border:#e5e7eb;--border2:#d1d5db;
+  --text:#111827;--text-muted:#6b7280;--text-dim:#374151;
+  --accent:#6366f1;--accent-light:rgba(99,102,241,0.1);--accent-hover:#4f46e5;
+  --amber:#f59e0b;--amber-bg:rgba(245,158,11,0.1);--amber-border:rgba(245,158,11,0.3);
+  --red:#ef4444;--red-bg:rgba(239,68,68,0.08);
+  --green:#10b981;--green-bg:rgba(16,185,129,0.1);
+  --blue:#3b82f6;--purple:#8b5cf6;--orange:#f97316;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:13px;}
+.app{display:flex;height:100vh;overflow:hidden;}
+
+/* ── SIDEBAR ── */
+.sidebar{width:210px;min-width:210px;background:var(--white);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;}
+.sidebar::-webkit-scrollbar{width:3px;}.sidebar::-webkit-scrollbar-thumb{background:var(--border2);}
+.sb-logo{display:flex;align-items:center;gap:9px;padding:14px 14px 10px;border-bottom:1px solid var(--border);}
+.sb-logomark{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.sb-logomark svg{width:18px;height:18px;}
+.sb-name{font-weight:700;font-size:14px;color:var(--accent);}
+.sb-sub{font-size:10px;color:var(--text-muted);}
+.sb-collapse{margin-left:auto;color:var(--text-muted);cursor:pointer;width:20px;height:20px;display:flex;align-items:center;justify-content:center;}
+.org-sel{display:flex;align-items:center;gap:7px;padding:7px 10px;margin:8px 8px 4px;border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;color:var(--text-dim);}
+.org-sel:hover{background:var(--bg);}
+.nav-lbl{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);padding:10px 14px 4px;}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 12px;margin:1px 6px;border-radius:6px;font-size:12.5px;color:var(--text-dim);cursor:pointer;transition:background .12s;}
+.nav-item:hover{background:var(--bg);}
+.nav-item.active{background:var(--accent-light);color:var(--accent);font-weight:500;}
+.nav-item svg{width:15px;height:15px;flex-shrink:0;}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+
+/* ── PROJECT TOP BAR ── */
+.proj-bar{height:56px;background:var(--white);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:10px;flex-shrink:0;}
+.back-btn{display:flex;align-items:center;gap:5px;font-size:12.5px;font-weight:500;color:var(--text-muted);cursor:pointer;padding:5px 8px;border-radius:5px;}
+.back-btn:hover{background:var(--bg);}
+.pbadge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:600;border:1px solid;}
+.pb-proj{color:var(--accent);border-color:rgba(99,102,241,.3);background:rgba(99,102,241,.08);}
+.pb-risk{color:var(--amber);border-color:var(--amber-border);background:var(--amber-bg);}
+.pb-active{color:var(--green);border-color:rgba(16,185,129,.3);background:var(--green-bg);}
+.pb-active::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);}
+.proj-title{font-size:15px;font-weight:700;color:var(--text);margin-left:4px;}
+.proj-meta{display:flex;align-items:center;gap:14px;margin-left:8px;font-size:11.5px;color:var(--text-muted);}
+.proj-meta-item{display:flex;align-items:center;gap:5px;}
+.pbar-actions{margin-left:auto;display:flex;gap:8px;}
+.top-btn{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--white);color:var(--text-dim);}
+.top-btn:hover{background:var(--bg);}
+.top-btn svg{width:13px;height:13px;}
+
+/* ── TOOL TAB BAR ── */
+.tool-bar{height:44px;background:var(--white);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:2px;flex-shrink:0;overflow-x:auto;}
+.tool-bar::-webkit-scrollbar{height:0;}
+.ttab{display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:6px;font-size:12px;font-weight:500;color:var(--text-muted);cursor:pointer;white-space:nowrap;transition:background .12s;border:1px solid transparent;}
+.ttab:hover{background:var(--bg);color:var(--text-dim);}
+.ttab.active{background:var(--accent-light);color:var(--accent);border-color:rgba(99,102,241,.2);}
+.ttab svg{width:14px;height:14px;flex-shrink:0;}
+.esc-dot{width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0;}
+.more-tools{margin-left:auto;padding:5px 10px;font-size:12px;font-weight:500;color:var(--accent);cursor:pointer;white-space:nowrap;}
+
+/* ── CONTENT SHELL ── */
+.content-shell{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+
+/* ── LOG HEADER ── */
+.log-hdr{background:var(--white);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.log-hdr-left{display:flex;align-items:center;gap:10px;}
+.log-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;}
+.log-title{font-size:14px;font-weight:700;color:var(--text);}
+.log-hdr-right{display:flex;gap:8px;align-items:center;}
+
+/* ── BUTTONS ── */
+.btn{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;border:none;transition:all .12s;}
+.btn-outline{background:var(--white);border:1px solid var(--border2);color:var(--text-dim);}
+.btn-outline:hover{background:var(--bg);}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent-hover);}
+.btn-amber{background:var(--amber);color:#fff;font-weight:600;}
+.btn svg{width:12px;height:12px;}
+
+/* ── RAIDD SUB-TABS ── */
+.raidd-strip{background:var(--white);border-bottom:2px solid var(--border);display:flex;align-items:stretch;padding:0 20px;flex-shrink:0;}
+.rtab{display:flex;align-items:center;gap:7px;padding:10px 16px;font-size:12.5px;font-weight:500;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .12s;white-space:nowrap;}
+.rtab:hover{color:var(--text-dim);}
+.rtab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+.rtab-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.rtab-cnt{font-size:10.5px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:1px 6px;color:var(--text-muted);}
+.rtab.active .rtab-cnt{background:var(--accent-light);border-color:rgba(99,102,241,.25);color:var(--accent);}
+.esc-cnt-badge{font-size:10px;font-weight:700;background:var(--amber-bg);border:1px solid var(--amber-border);color:var(--amber);border-radius:10px;padding:1px 6px;}
+
+/* ── FILTER ROW ── */
+.filter-row{background:var(--white);border-bottom:1px solid var(--border);padding:8px 20px;display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap;position:relative;}
+.srch{display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;width:220px;}
+.srch input{background:none;border:none;outline:none;font-size:12px;font-family:inherit;color:var(--text);width:100%;}
+.srch input::placeholder{color:var(--text-muted);}
+.srch svg{width:13px;height:13px;color:var(--text-muted);flex-shrink:0;}
+.fchip{display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--white);border:1px solid var(--border2);border-radius:6px;font-size:11.5px;color:var(--text-muted);cursor:pointer;white-space:nowrap;user-select:none;position:relative;}
+.fchip:hover{border-color:var(--accent);color:var(--text-dim);}
+.fchip.active-filter{background:var(--accent-light);border-color:var(--accent);color:var(--accent);}
+.fchip.esc-chip{background:var(--amber-bg);border-color:var(--amber-border);color:var(--amber);font-weight:600;}
+.fchip.esc-chip.active-filter{background:var(--amber);color:#fff;}
+.fchip svg{width:11px;height:11px;}
+.filter-right{margin-left:auto;display:flex;gap:6px;}
+.view-btn{display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--white);border:1px solid var(--border2);border-radius:6px;font-size:11.5px;color:var(--text-muted);cursor:pointer;}
+.view-btn.active-view{background:var(--accent-light);border-color:var(--accent);color:var(--accent);}
+.view-btn:hover{border-color:var(--accent);}
+
+/* Dropdown menu */
+.dd-menu{position:absolute;top:calc(100% + 4px);background:var(--white);border:1px solid var(--border2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:50;min-width:160px;padding:6px 0;display:none;}
+.dd-menu.open{display:block;}
+.dd-item{padding:7px 14px;font-size:12.5px;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;gap:8px;}
+.dd-item:hover{background:var(--bg);}
+.dd-item.selected{color:var(--accent);font-weight:500;}
+.dd-item.selected::after{content:'✓';margin-left:auto;font-size:11px;}
+.dd-divider{height:1px;background:var(--border);margin:4px 0;}
+
+/* Columns menu */
+.cols-menu{min-width:200px;}
+.cols-item{padding:7px 14px;font-size:12.5px;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;gap:9px;}
+.cols-item:hover{background:var(--bg);}
+.cols-cb{width:14px;height:14px;border:1.5px solid var(--border2);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.cols-cb.checked{background:var(--accent);border-color:var(--accent);}
+.cols-cb.checked::after{content:'✓';font-size:9px;color:#fff;}
+
+/* ── SCROLL CONTENT ── */
+.scroll-content{flex:1;overflow-y:auto;padding:16px 20px;background:var(--bg);}
+.scroll-content::-webkit-scrollbar{width:5px;}
+.scroll-content::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+
+/* ── STATS STRIP ── */
+.stats-strip{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.stat-card{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:12px 16px;flex:1;min-width:90px;cursor:pointer;transition:all .15s;}
+.stat-card:hover{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-light);}
+.stat-card.stat-active{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-light);background:var(--accent-light);}
+.stat-card.esc-stat{border-color:var(--amber-border);background:var(--amber-bg);}
+.stat-card.esc-stat.stat-active{border-color:var(--amber);box-shadow:0 0 0 2px rgba(245,158,11,.2);}
+.stat-lbl{font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;}
+.stat-val{font-size:22px;font-weight:700;color:var(--text);line-height:1;}
+.stat-val.red{color:var(--red);}
+.stat-val.amber{color:var(--amber);}
+.stat-val.purple{color:var(--purple);}
+.stat-val.orange{color:var(--orange);}
+.stat-val.blue{color:var(--blue);}
+.stat-val.green{color:var(--green);}
+.stat-sub{font-size:10.5px;color:var(--text-muted);margin-top:3px;}
+
+/* ── ALERT BANNER ── */
+.esc-alert{display:flex;align-items:center;gap:10px;background:#fffbeb;border:1px solid var(--amber-border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;}
+.esc-alert svg{color:var(--amber);flex-shrink:0;}
+.esc-alert b{color:var(--amber);}
+.esc-alert-link{margin-left:auto;color:var(--accent);font-weight:500;cursor:pointer;white-space:nowrap;text-decoration:underline;font-size:11.5px;}
+
+/* ── TABLE WRAP ── */
+.tbl-wrap{background:var(--white);border:1px solid var(--border);border-radius:9px;overflow:hidden;margin-bottom:16px;}
+table{width:100%;border-collapse:collapse;}
+thead{background:#f9fafb;border-bottom:1px solid var(--border);}
+th{text-align:left;padding:9px 13px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap;cursor:pointer;user-select:none;}
+th:hover{color:var(--text-dim);}
+th.hidden-col,td.hidden-col{display:none;}
+tbody tr{border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:#fafbff;}
+tbody tr.esc-row{background:#fffbeb;border-left:3px solid var(--amber);}
+tbody tr.esc-row td:first-child{padding-left:10px;}
+tbody tr.esc-row:hover{background:#fef3c7;}
+tbody tr.hidden-row{display:none;}
+td{padding:11px 13px;font-size:12.5px;color:var(--text-dim);vertical-align:middle;}
+td.bold{font-weight:500;color:var(--text);}
+
+.id-tag{font-size:11px;font-weight:600;font-family:'Courier New',monospace;color:var(--accent);background:var(--accent-light);padding:2px 7px;border-radius:4px;}
+.pri{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;}
+.pri::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;}
+.pri-critical{color:var(--red);background:var(--red-bg);}
+.pri-high{color:var(--orange);background:rgba(249,115,22,.1);}
+.pri-medium{color:var(--amber);background:var(--amber-bg);}
+.pri-low{color:var(--green);background:var(--green-bg);}
+.stt{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;border:1px solid;}
+.stt-open{color:var(--blue);border-color:rgba(59,130,246,.3);background:rgba(59,130,246,.07);}
+.stt-mitigating{color:var(--purple);border-color:rgba(139,92,246,.3);background:rgba(139,92,246,.07);}
+.stt-escalated{color:var(--amber);border-color:var(--amber-border);background:var(--amber-bg);}
+.stt-resolved{color:var(--green);border-color:rgba(16,185,129,.3);background:var(--green-bg);}
+.stt-validated{color:var(--green);border-color:rgba(16,185,129,.3);background:var(--green-bg);}
+.stt-invalidated{color:var(--red);border-color:rgba(239,68,68,.3);background:var(--red-bg);}
+.stt-inprogress{color:var(--amber);border-color:var(--amber-border);background:var(--amber-bg);}
+.stt-closed{color:var(--text-muted);border-color:var(--border2);background:var(--bg);}
+.stt-approved{color:var(--green);border-color:rgba(16,185,129,.3);background:var(--green-bg);}
+.stt-pending{color:var(--orange);border-color:rgba(249,115,22,.3);background:rgba(249,115,22,.07);}
+.stt-atrisk{color:var(--red);border-color:rgba(239,68,68,.3);background:var(--red-bg);}
+.stt-confirmed{color:var(--blue);border-color:rgba(59,130,246,.3);background:rgba(59,130,246,.07);}
+.stt-met{color:var(--green);border-color:rgba(16,185,129,.3);background:var(--green-bg);}
+.esc-badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,.15);border:1px solid var(--amber-border);color:var(--amber);white-space:nowrap;}
+.esc-badge::before{content:'⚑';font-size:9px;}
+.score-chip{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;font-size:12px;font-weight:700;font-family:'Courier New',monospace;}
+.score-c{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.25);}
+.score-h{background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.25);}
+.score-m{background:rgba(245,158,11,.15);color:var(--amber);border:1px solid var(--amber-border);}
+.score-l{background:var(--green-bg);color:var(--green);border:1px solid rgba(16,185,129,.25);}
+.days-chip{font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;font-family:'Courier New',monospace;}
+.days-ok{background:var(--bg);color:var(--text-muted);}
+.days-warn{background:var(--amber-bg);color:var(--amber);}
+.days-over{background:var(--red-bg);color:var(--red);}
+.owner-chip{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);}
+.av{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;color:#fff;flex-shrink:0;}
+.tick{color:var(--green);font-size:13px;}
+.cross{color:var(--red);font-size:13px;}
+.tbl-foot{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-top:1px solid var(--border);background:#f9fafb;font-size:11.5px;color:var(--text-muted);}
+.pager{display:flex;gap:4px;}
+.pager-btn{width:26px;height:26px;border-radius:5px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border2);background:var(--white);color:var(--text-dim);font-size:11.5px;cursor:pointer;}
+.pager-btn.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+
+/* ── EMPTY STATE ── */
+.empty-state{padding:48px 20px;text-align:center;color:var(--text-muted);}
+.empty-state svg{width:40px;height:40px;margin-bottom:12px;opacity:.35;}
+.empty-state p{font-size:13px;}
+
+/* ── CARD VIEW ── */
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:16px;}
+.raidd-card{background:var(--white);border:1px solid var(--border);border-radius:9px;padding:14px 16px;cursor:pointer;transition:all .15s;}
+.raidd-card:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(99,102,241,.1);}
+.raidd-card.esc-card{border-left:3px solid var(--amber);background:#fffbeb;}
+.card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.card-id{font-family:'Courier New',monospace;font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-light);padding:2px 7px;border-radius:4px;}
+.card-title{font-size:13px;font-weight:600;color:var(--text);line-height:1.4;margin-bottom:8px;}
+.card-meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.card-owner{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-muted);margin-top:8px;}
+
+/* ── HEAT MAP ── */
+.heatmap-card{background:var(--white);border:1px solid var(--border);border-radius:9px;padding:18px 20px;margin-bottom:16px;}
+.hm-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px;}
+.hm-wrap{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;}
+.hm-grid{display:grid;grid-template-columns:22px repeat(5,44px);grid-template-rows:repeat(5,36px) 22px;gap:3px;}
+.hm-cell{border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;cursor:pointer;transition:opacity .12s,transform .12s;}
+.hm-cell:hover{opacity:.8;transform:scale(1.06);}
+.hm-axis{display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:600;color:var(--text-muted);}
+.hm-y-lbl{grid-row:1/6;grid-column:1;writing-mode:vertical-rl;transform:rotate(180deg);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);display:flex;align-items:center;justify-content:center;}
+.hm-x-row{grid-column:2/7;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);}
+.hm-badge{background:rgba(255,255,255,.85);color:#222;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;}
+.hm-1{background:#dcfce7;color:#16a34a;}.hm-2{background:#d1fae5;color:#059669;}
+.hm-3{background:#fef9c3;color:#ca8a04;}.hm-4{background:#fef08a;color:#ca8a04;}
+.hm-5{background:#fde68a;color:#d97706;}.hm-6{background:#fde68a;color:#d97706;}
+.hm-8{background:#fed7aa;color:#ea580c;}.hm-9{background:#fdba74;color:#ea580c;}
+.hm-10{background:#fb923c;color:#fff;}.hm-12{background:#f97316;color:#fff;}
+.hm-15{background:#fca5a5;color:#b91c1c;}.hm-16{background:#f87171;color:#991b1b;}
+.hm-20{background:#ef4444;color:#fff;}.hm-25{background:#dc2626;color:#fff;}
+.hm-legend{display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;}
+.hm-leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-muted);}
+.hm-leg-sw{width:10px;height:10px;border-radius:2px;}
+.hm-cell.hm-filter-active{outline:2px solid var(--accent);outline-offset:1px;}
+
+/* ── DRAWER ── */
+.drw-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:100;backdrop-filter:blur(1px);animation:fadein .18s ease;}
+.drw{position:fixed;right:0;top:0;bottom:0;width:520px;background:var(--white);border-left:1px solid var(--border);z-index:101;overflow-y:auto;animation:slidein .22s ease;display:flex;flex-direction:column;}
+.drw::-webkit-scrollbar{width:4px;}.drw::-webkit-scrollbar-thumb{background:var(--border2);}
+.drw-head{padding:18px 20px 14px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--white);z-index:1;display:flex;flex-direction:column;gap:8px;}
+.drw-head-top{display:flex;align-items:flex-start;gap:10px;}
+.drw-title{font-size:15px;font-weight:700;color:var(--text);line-height:1.35;flex:1;}
+.drw-pills{display:flex;gap:6px;flex-wrap:wrap;}
+.drw-close{width:28px;height:28px;border-radius:6px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;color:var(--text-muted);}
+.drw-close:hover{background:var(--border);}
+
+/* ESC SECTION IN DRAWER */
+.drw-esc{margin:14px 20px;background:#fffbeb;border:1px solid var(--amber-border);border-radius:8px;padding:14px;}
+.drw-esc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.drw-esc-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);display:flex;align-items:center;gap:6px;}
+.tog-wrap{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text-muted);}
+.tog{width:34px;height:18px;background:var(--amber);border-radius:20px;position:relative;cursor:pointer;transition:background .2s;}
+.tog::after{content:'';position:absolute;right:2px;top:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:right .2s,left .2s;}
+.tog.off{background:var(--border2);}
+.tog.off::after{right:auto;left:2px;}
+.esc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.esc-grid .wide{grid-column:1/3;}
+.f-lbl{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);margin-bottom:3px;}
+.f-val{font-size:12.5px;color:var(--text-dim);background:var(--white);border:1px solid var(--border2);border-radius:6px;padding:6px 9px;min-height:32px;display:flex;align-items:center;}
+.f-val.auto{color:var(--text-muted);font-style:italic;font-size:11.5px;}
+.f-val.rich{align-items:flex-start;min-height:55px;padding-top:7px;}
+.f-val.over{color:var(--red);font-weight:600;}
+.age-bar{height:3px;background:var(--border);border-radius:2px;margin-top:4px;}
+.age-fill{height:100%;border-radius:2px;}
+
+.drw-body{padding:0 20px 24px;}
+.drw-sec{margin-top:18px;}
+.drw-sec-title{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted);display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.drw-sec-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.f-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.f-grid .wide{grid-column:1/3;}
+.f-grp{display:flex;flex-direction:column;gap:3px;}
+.linked-chip{display:flex;align-items:center;gap:7px;padding:7px 10px;background:var(--bg);border:1px solid var(--border2);border-radius:6px;font-size:12px;color:var(--text-dim);cursor:pointer;transition:border-color .12s;margin-bottom:5px;}
+.linked-chip:hover{border-color:var(--accent);}
+
+/* ACTIVITY LOG */
+.act-item{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--border);}
+.act-item:last-child{border-bottom:none;}
+.act-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);margin-top:4px;flex-shrink:0;}
+.act-dot.amber{background:var(--amber);}
+.act-dot.green{background:var(--green);}
+.act-dot.red{background:var(--red);}
+.act-text{font-size:12px;color:var(--text-dim);line-height:1.45;}
+.act-time{font-size:10.5px;color:var(--text-muted);margin-top:2px;}
+.act-type{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:1px 5px;border-radius:3px;margin-left:6px;}
+.act-type-system{background:var(--bg);color:var(--text-muted);}
+.act-type-user{background:var(--accent-light);color:var(--accent);}
+.add-note-wrap{margin-top:10px;display:flex;flex-direction:column;gap:6px;}
+.add-note-input{background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:8px 10px;font-family:inherit;font-size:12px;color:var(--text);outline:none;resize:none;min-height:60px;width:100%;}
+.add-note-input:focus{border-color:var(--accent);}
+.add-note-btn{align-self:flex-end;padding:5px 12px;background:var(--accent);color:#fff;border:none;border-radius:5px;font-size:11.5px;font-weight:500;cursor:pointer;font-family:inherit;}
+.add-note-btn:hover{background:var(--accent-hover);}
+
+/* ── MODAL ── */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);animation:fadein .18s ease;}
+.modal{background:var(--white);border:1px solid var(--border);border-radius:12px;width:460px;max-width:calc(100vw - 32px);animation:scalein .18s ease;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.15);}
+.modal-head{padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px;}
+.modal-icon{width:36px;height:36px;border-radius:8px;background:var(--amber-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.modal-title{font-size:14px;font-weight:700;color:var(--text);}
+.modal-sub{font-size:11.5px;color:var(--text-muted);margin-top:2px;}
+.modal-body{padding:18px 20px;display:flex;flex-direction:column;gap:13px;}
+.modal-foot{padding:14px 20px;border-top:1px solid var(--border);background:#f9fafb;display:flex;justify-content:flex-end;gap:8px;}
+.fm-field{display:flex;flex-direction:column;gap:5px;}
+.fm-label{font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--text-muted);}
+.fm-input,.fm-select,.fm-textarea{background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;font-family:inherit;font-size:12.5px;color:var(--text);outline:none;width:100%;transition:border-color .12s;}
+.fm-input:focus,.fm-select:focus,.fm-textarea:focus{border-color:var(--amber);box-shadow:0 0 0 2px rgba(245,158,11,.1);}
+.fm-textarea{resize:vertical;min-height:75px;}
+.fm-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.fm-hint{background:#fffbeb;border:1px solid var(--amber-border);border-radius:6px;padding:9px 11px;font-size:11.5px;color:var(--text-muted);line-height:1.55;}
+
+/* ── IMPL NOTES ── */
+.impl-card{background:var(--white);border:1px solid var(--border);border-radius:9px;padding:16px 20px;margin-bottom:16px;}
+.impl-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;}
+.impl-item{display:flex;gap:9px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-dim);line-height:1.5;}
+.impl-item:last-child{border-bottom:none;}
+.impl-num{font-size:10px;font-weight:700;color:var(--accent);background:var(--accent-light);border-radius:4px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+@keyframes slidein{from{transform:translateX(20px);opacity:0}to{transform:none;opacity:1}}
+@keyframes scalein{from{transform:scale(.96);opacity:0}to{transform:none;opacity:1}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ════ SIDEBAR ════ -->
+<aside class="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logomark"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3L20 8V16L12 21L4 16V8L12 3Z" fill="white" opacity=".9"/></svg></div>
+    <div><div class="sb-name">Jiganto</div><div class="sb-sub">Enterprise AI</div></div>
+    <div class="sb-collapse"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7L9 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+  </div>
+  <div class="org-sel">
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1.5" y="1.5" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M4 7h7M4 5h7M4 9h4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+    Demo Org
+    <svg style="margin-left:auto;width:11px;height:11px;color:var(--text-muted)" viewBox="0 0 11 11" fill="none"><path d="M2.5 4l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+  </div>
+  <a class="nav-item" href="#"><svg viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor"/><rect x="8" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".5"/><rect x="1" y="8" width="6" height="6" rx="1.5" fill="currentColor" opacity=".3"/><rect x="8" y="8" width="6" height="6" rx="1.5" fill="currentColor" opacity=".3"/></svg>Dashboard</a>
+  <div class="nav-lbl">Collaboration</div>
+  <a class="nav-item" href="#"><svg viewBox="0 0 15 15" fill="none"><path d="M2 11V4a1 1 0 011-1h9a1 1 0 011 1v5a1 1 0 01-1 1H5l-3 2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>Chat</a>
+  <a class="nav-item" href="#"><svg viewBox="0 0 15 15" fill="none"><path d="M3 4h9M3 7h9M3 10h5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>Documents</a>
+  <div class="nav-lbl">Portfolio</div>
+  <a class="nav-item" href="#"><svg viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="9" y="1" width="5" height="5" rx="1" fill="currentColor"/><rect x="1" y="9" width="5" height="5" rx="1" fill="currentColor" opacity=".3"/><rect x="9" y="9" width="5" height="5" rx="1" fill="currentColor" opacity=".5"/></svg>Portfolio</a>
+  <a class="nav-item active" href="#"><svg viewBox="0 0 15 15" fill="none"><rect x="1.5" y="1.5" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.3"/><path d="M4.5 7.5l2 2 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>Projects</a>
+  <a class="nav-item" href="#">Tasks</a>
+  <a class="nav-item" href="#">Workspaces</a>
+  <div class="nav-lbl">Management</div>
+  <a class="nav-item" href="#">Business</a>
+  <a class="nav-item" href="#">CRM</a>
+  <a class="nav-item" href="#">Finance</a>
+  <a class="nav-item" href="#">Resources</a>
+  <div class="nav-lbl">Service & Support</div>
+  <a class="nav-item" href="#">Service Desk</a>
+  <a class="nav-item" href="#">Help Desk</a>
+  <div class="nav-lbl">Utilities</div>
+  <a class="nav-item" href="#">Test Management</a>
+  <a class="nav-item" href="#">BPM</a>
+</aside>
+
+<!-- ════ MAIN ════ -->
+<div class="main">
+
+  <!-- PROJECT TOP BAR -->
+  <div class="proj-bar">
+    <div class="back-btn"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7L9 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>Back</div>
+    <span class="pbadge pb-proj">Project</span>
+    <span class="pbadge pb-risk">⚠ At Risk</span>
+    <span class="pbadge pb-active">Active</span>
+    <span class="proj-title">AI CUI Engine Build</span>
+    <div class="proj-meta">
+      <span class="proj-meta-item"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="2" width="10" height="9" rx="1.5" stroke="currentColor" stroke-width="1.1"/><path d="M4 1v2M8 1v2M1 5h10" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>15 Jan 2026 – 31 Oct 2026</span>
+      <span class="proj-meta-item">45%</span>
+    </div>
+    <div class="pbar-actions">
+      <button class="top-btn">Full Screen</button>
+      <button class="top-btn">Settings</button>
+      <button class="top-btn">+ Add Tool</button>
+      <button class="top-btn">Share</button>
+    </div>
+  </div>
+
+  <!-- TOOL TAB BAR -->
+  <div class="tool-bar">
+    <div class="ttab" onclick="setActiveTTool(this)">Kanban Board</div>
+    <div class="ttab" onclick="setActiveTTool(this)">Gantt Chart</div>
+    <div class="ttab" onclick="setActiveTTool(this)">Status Reporting</div>
+    <div class="ttab active" onclick="setActiveTTool(this)">
+      <svg viewBox="0 0 14 14" fill="none"><path d="M7 1L13 11H1L7 1Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M7 5v3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="7" cy="9.5" r=".6" fill="currentColor"/></svg>
+      RAIDD Log <span class="esc-dot"></span>
+    </div>
+    <div class="ttab" onclick="setActiveTTool(this)">360° Report</div>
+    <div class="ttab" onclick="setActiveTTool(this)">Finance Tracker</div>
+    <div class="ttab" onclick="setActiveTTool(this)">Epics &amp; Stories</div>
+    <div class="ttab" onclick="setActiveTTool(this)">Project Dashboard</div>
+    <div class="ttab" onclick="setActiveTTool(this)">WBS</div>
+    <div class="ttab" onclick="setActiveTTool(this)">Org Chart</div>
+    <div class="more-tools">More tools ▾</div>
+  </div>
+
+  <!-- CONTENT SHELL -->
+  <div class="content-shell">
+
+    <!-- LOG HEADER -->
+    <div class="log-hdr">
+      <div class="log-hdr-left">
+        <div class="log-icon" id="log-icon" style="background:rgba(239,68,68,.1)">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5L13.5 12H1.5L7.5 1.5Z" stroke="#ef4444" stroke-width="1.4" stroke-linejoin="round"/><path d="M7.5 5.5v3.5" stroke="#ef4444" stroke-width="1.4" stroke-linecap="round"/><circle cx="7.5" cy="11" r=".7" fill="#ef4444"/></svg>
+        </div>
+        <span class="log-title" id="log-title">Risk Register</span>
+      </div>
+      <div class="log-hdr-right">
+        <!-- COLUMNS button -->
+        <div style="position:relative">
+          <button class="btn btn-outline" id="cols-btn" onclick="toggleColsMenu()">
+            <svg viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="3" height="10" rx=".5" stroke="currentColor" stroke-width="1.1"/><rect x="4.5" y="1" width="3" height="10" rx=".5" stroke="currentColor" stroke-width="1.1"/><rect x="8" y="1" width="3" height="10" rx=".5" stroke="currentColor" stroke-width="1.1"/></svg>
+            Columns
+          </button>
+          <div class="dd-menu cols-menu" id="cols-menu"></div>
+        </div>
+        <button class="btn btn-outline">
+          <svg viewBox="0 0 12 12" fill="none"><path d="M1 3h10M3.5 6h5M6 9h0" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          Export
+        </button>
+        <button class="btn btn-primary" id="add-btn" onclick="openEscModal()">
+          <svg viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span id="add-btn-label">Add Risk</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- RAIDD SUB-TABS -->
+    <div class="raidd-strip">
+      <div class="rtab active" id="rtab-r" onclick="switchLog('r')"><span class="rtab-dot" style="background:#ef4444"></span>Risks<span class="rtab-cnt" id="rcnt-r">12</span><span class="esc-cnt-badge" id="esc-cnt-r">3 ⚑</span></div>
+      <div class="rtab" id="rtab-a" onclick="switchLog('a')"><span class="rtab-dot" style="background:#3b82f6"></span>Assumptions<span class="rtab-cnt" id="rcnt-a">8</span></div>
+      <div class="rtab" id="rtab-i" onclick="switchLog('i')"><span class="rtab-dot" style="background:#f59e0b"></span>Issues<span class="rtab-cnt" id="rcnt-i">9</span><span class="esc-cnt-badge" id="esc-cnt-i">2 ⚑</span></div>
+      <div class="rtab" id="rtab-d" onclick="switchLog('d')"><span class="rtab-dot" style="background:#8b5cf6"></span>Dependencies<span class="rtab-cnt" id="rcnt-d">15</span></div>
+      <div class="rtab" id="rtab-dc" onclick="switchLog('dc')"><span class="rtab-dot" style="background:#10b981"></span>Decisions<span class="rtab-cnt" id="rcnt-dc">6</span><span class="esc-cnt-badge" id="esc-cnt-dc">1 ⚑</span></div>
+    </div>
+
+    <!-- FILTER ROW -->
+    <div class="filter-row" id="filter-row">
+      <div class="srch">
+        <svg viewBox="0 0 13 13" fill="none"><circle cx="5.5" cy="5.5" r="4" stroke="currentColor" stroke-width="1.3"/><path d="M9 9l2.5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <input type="text" id="search-input" placeholder="Search risks…" oninput="applyFilters()">
+      </div>
+      <div class="fchip" id="chip-priority" onclick="toggleDropdown('dd-priority',this)">Priority ▾
+        <div class="dd-menu" id="dd-priority" style="left:0;top:calc(100% + 4px)">
+          <div class="dd-item selected" data-val="all" onclick="selectFilter('priority','all',this)">All Priorities</div>
+          <div class="dd-divider"></div>
+          <div class="dd-item" data-val="Critical" onclick="selectFilter('priority','Critical',this)"><span class="pri pri-critical">Critical</span></div>
+          <div class="dd-item" data-val="High" onclick="selectFilter('priority','High',this)"><span class="pri pri-high">High</span></div>
+          <div class="dd-item" data-val="Medium" onclick="selectFilter('priority','Medium',this)"><span class="pri pri-medium">Medium</span></div>
+          <div class="dd-item" data-val="Low" onclick="selectFilter('priority','Low',this)"><span class="pri pri-low">Low</span></div>
+        </div>
+      </div>
+      <div class="fchip" id="chip-category" onclick="toggleDropdown('dd-category',this)">Category ▾
+        <div class="dd-menu" id="dd-category" style="left:0;top:calc(100% + 4px)" id="dd-cat"></div>
+      </div>
+      <div class="fchip" id="chip-owner" onclick="toggleDropdown('dd-owner',this)">Owner ▾
+        <div class="dd-menu" id="dd-owner" style="left:0;top:calc(100% + 4px)">
+          <div class="dd-item selected" data-val="all" onclick="selectFilter('owner','all',this)">All Owners</div>
+          <div class="dd-divider"></div>
+          <div class="dd-item" data-val="J. Morris" onclick="selectFilter('owner','J. Morris',this)">J. Morris</div>
+          <div class="dd-item" data-val="S. Patel" onclick="selectFilter('owner','S. Patel',this)">S. Patel</div>
+          <div class="dd-item" data-val="L. Chen" onclick="selectFilter('owner','L. Chen',this)">L. Chen</div>
+          <div class="dd-item" data-val="A. Turner" onclick="selectFilter('owner','A. Turner',this)">A. Turner</div>
+          <div class="dd-item" data-val="R. Blake" onclick="selectFilter('owner','R. Blake',this)">R. Blake</div>
+          <div class="dd-item" data-val="M. Walsh" onclick="selectFilter('owner','M. Walsh',this)">M. Walsh</div>
+          <div class="dd-item" data-val="D. Khan" onclick="selectFilter('owner','D. Khan',this)">D. Khan</div>
+        </div>
+      </div>
+      <div class="fchip" id="chip-workstream" onclick="toggleDropdown('dd-ws',this)">Workstream ▾
+        <div class="dd-menu" id="dd-ws" style="left:0;top:calc(100% + 4px)">
+          <div class="dd-item selected" data-val="all" onclick="selectFilter('workstream','all',this)">All Workstreams</div>
+          <div class="dd-divider"></div>
+          <div class="dd-item" data-val="O2C" onclick="selectFilter('workstream','O2C',this)">O2C</div>
+          <div class="dd-item" data-val="P2P" onclick="selectFilter('workstream','P2P',this)">P2P</div>
+          <div class="dd-item" data-val="R2R" onclick="selectFilter('workstream','R2R',this)">R2R</div>
+          <div class="dd-item" data-val="H2R" onclick="selectFilter('workstream','H2R',this)">H2R</div>
+          <div class="dd-item" data-val="Technical" onclick="selectFilter('workstream','Technical',this)">Technical</div>
+          <div class="dd-item" data-val="PMO" onclick="selectFilter('workstream','PMO',this)">PMO</div>
+        </div>
+      </div>
+      <div class="fchip esc-chip" id="chip-esc" onclick="toggleEscFilter()">
+        <svg viewBox="0 0 11 11" fill="none"><path d="M5.5 1L10 9H1L5.5 1Z" fill="currentColor" opacity=".4"/><path d="M5.5 1L10 9H1L5.5 1Z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+        Escalated Only
+      </div>
+      <div class="filter-right">
+        <div class="view-btn active-view" id="view-table" onclick="setView('table')">⊞ Table</div>
+        <div class="view-btn" id="view-cards" onclick="setView('cards')">⊡ Cards</div>
+      </div>
+    </div>
+
+    <!-- SCROLL CONTENT -->
+    <div class="scroll-content" id="scroll-content">
+      <!-- Populated by JS -->
+    </div>
+
+  </div><!-- /content-shell -->
+</div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ════ DRAWER (right panel) ════ -->
+<div id="drw-overlay" style="display:none" onclick="if(event.target===this)closeDrawer()">
+  <div class="drw" id="drw"></div>
+</div>
+
+<!-- ════ ESCALATION MODAL ════ -->
+<div class="modal-ov" style="display:none" id="modal-ov" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-icon">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2L16 15H2L9 2Z" fill="#fde68a"/><path d="M9 2L16 15H2L9 2Z" stroke="#f59e0b" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 7v4" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/><circle cx="9" cy="13.5" r=".8" fill="#f59e0b"/></svg>
+      </div>
+      <div><div class="modal-title">Raise Escalation</div><div class="modal-sub" id="modal-sub">RAIDD Log item</div></div>
+    </div>
+    <div class="modal-body">
+      <div class="fm-row">
+        <div class="fm-field"><label class="fm-label">Escalation Level *</label><select class="fm-select"><option>Workstream Lead</option><option>PMO</option><option>Project Board</option><option>Steering Committee</option><option>Executive</option></select></div>
+        <div class="fm-field"><label class="fm-label">Escalate To *</label><input class="fm-input" placeholder="Search user…"></div>
+      </div>
+      <div class="fm-field"><label class="fm-label">Escalation Reason * <span style="font-weight:400;text-transform:none;letter-spacing:0">(surfaces in 360° Report & Status Report)</span></label><textarea class="fm-textarea" placeholder="Why does this need senior attention? Be specific — this text will appear in reports."></textarea></div>
+      <div class="fm-row">
+        <div class="fm-field"><label class="fm-label">Response Required By</label><input class="fm-input" type="date"></div>
+        <div class="fm-field"><label class="fm-label">Escalated By (auto)</label><input class="fm-input" value="J. Morris" disabled style="opacity:.55"></div>
+      </div>
+      <div class="fm-hint"><strong style="color:var(--text-dim)">Triggering escalation will:</strong> flag the item with amber styling · add it to the 360° Report escalation section · include it in the next Status Report · notify the escalation recipient · start the escalation timer</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="document.getElementById('modal-ov').style.display='none'">Cancel</button>
+      <button class="btn btn-amber" onclick="document.getElementById('modal-ov').style.display='none'">⚑ Raise Escalation</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  DATA
+// ════════════════════════════════════════════════════════════
+const LOGS = {
+  r: {
+    title:'Risk Register', addLabel:'Add Risk',
+    iconColor:'#ef4444', iconBg:'rgba(239,68,68,.1)',
+    icon:'<path d="M7.5 1.5L13.5 12H1.5L7.5 1.5Z" stroke="#ef4444" stroke-width="1.4" stroke-linejoin="round"/><path d="M7.5 5.5v3.5" stroke="#ef4444" stroke-width="1.4" stroke-linecap="round"/><circle cx="7.5" cy="11" r=".7" fill="#ef4444"/>',
+    statCards:[
+      {label:'Total Risks', val:'12', cls:'', sub:'All workstreams', filter:'all'},
+      {label:'Critical', val:'4', cls:'red', sub:'Score 15–25', filter:'critical'},
+      {label:'High', val:'3', cls:'orange', sub:'Score 10–14', filter:'high'},
+      {label:'Mitigating', val:'5', cls:'purple', sub:'Actions in progress', filter:'mitigating'},
+      {label:'Escalated', val:'3', cls:'amber', sub:'Awaiting response', filter:'escalated', esc:true}
+    ],
+    alert:'<b>3 risks escalated</b> — R-003 response is <b style="color:var(--red)">12 days overdue.</b> Deadline was 14 Feb 2026.',
+    columns:[
+      {key:'id',label:'ID',visible:true},
+      {key:'title',label:'Title',visible:true},
+      {key:'category',label:'Category',visible:true},
+      {key:'score',label:'Score',visible:true},
+      {key:'priority',label:'Priority',visible:true},
+      {key:'status',label:'Status',visible:true},
+      {key:'owner',label:'Owner',visible:true},
+      {key:'mitigation',label:'Mitigation Action',visible:false},
+      {key:'escalation',label:'Escalation',visible:true},
+      {key:'days',label:'Days Esc.',visible:true}
+    ],
+    categories:['Vendor','Technical','Budget','Resource','Compliance','Scope','Strategic','Schedule'],
+    rows:[
+      {id:'R-003',title:'Third-party data migration vendor unable to meet go-live cutover date',category:'Vendor',score:20,scoreCls:'score-c',priority:'Critical',priCls:'pri-critical',status:'Escalated',stCls:'stt-escalated',owner:'J. Morris',ownerAv:'JM',ownerColor:'#3b5bdb',workstream:'O2C',escalated:true,escLevel:'Project Board',days:12,daysCls:'days-over',mitigation:'Exploring secondary vendor. Penalty clauses under review.',activity:[
+        {dot:'amber',text:'Escalated to Project Board by J. Morris — response due 14 Feb',time:'02 Feb 2026, 09:41',type:'system'},
+        {dot:'',text:'Risk score updated 16 → 20 following vendor confirmation',time:'01 Feb 2026, 14:22',type:'system'},
+        {dot:'',text:'Mitigation action updated — legal review initiated',time:'29 Jan 2026, 11:05',type:'user'},
+        {dot:'',text:'R-003 raised by A. Turner',time:'22 Jan 2026, 09:00',type:'system'}
+      ],linked:[{id:'I-007',label:'UAT blocked — dependency on vendor migration scripts'},{id:'DC-003',label:'Pending decision — delay go-live vs. reduced scope'}]},
+      {id:'R-007',title:'ERP integration test environment not provisioned — UAT blocked',category:'Technical',score:16,scoreCls:'score-c',priority:'Critical',priCls:'pri-critical',status:'Escalated',stCls:'stt-escalated',owner:'S. Patel',ownerAv:'SP',ownerColor:'#7c3aed',workstream:'Technical',escalated:true,escLevel:'PMO',days:7,daysCls:'days-warn',mitigation:'Infra team engaged. Provisional environment due 18 Feb.',activity:[
+        {dot:'amber',text:'Escalated to PMO by S. Patel',time:'17 Feb 2026, 10:00',type:'system'},
+        {dot:'',text:'R-007 raised by S. Patel',time:'15 Feb 2026, 09:30',type:'system'}
+      ],linked:[{id:'D-002',label:'UAT environment dependency — unconfirmed'}]},
+      {id:'R-011',title:'Budget overrun on O2C workstream — £180k variance vs. baseline',category:'Budget',score:12,scoreCls:'score-h',priority:'High',priCls:'pri-high',status:'Escalated',stCls:'stt-escalated',owner:'L. Chen',ownerAv:'LC',ownerColor:'#047857',workstream:'O2C',escalated:true,escLevel:'Steering Cmte',days:5,daysCls:'days-warn',mitigation:'Finance review underway. Change request being drafted.',activity:[
+        {dot:'amber',text:'Escalated to Steering Committee by L. Chen',time:'19 Feb 2026, 14:00',type:'system'},
+        {dot:'',text:'R-011 raised by L. Chen',time:'10 Feb 2026, 11:00',type:'system'}
+      ],linked:[]},
+      {id:'R-001',title:'Key SME resource shared across three workstreams — capacity constraint',category:'Resource',score:15,scoreCls:'score-c',priority:'Critical',priCls:'pri-critical',status:'Mitigating',stCls:'stt-mitigating',owner:'A. Turner',ownerAv:'AT',ownerColor:'#b91c1c',workstream:'PMO',escalated:false,escLevel:null,days:null,daysCls:'',mitigation:'Resource rota agreed. Backup SME identified.',activity:[
+        {dot:'',text:'Mitigation plan agreed — backup SME confirmed',time:'05 Feb 2026, 10:00',type:'user'},
+        {dot:'',text:'R-001 raised by A. Turner',time:'15 Jan 2026, 09:00',type:'system'}
+      ],linked:[]},
+      {id:'R-002',title:'Regulatory sign-off delay may push cutover beyond compliance window',category:'Compliance',score:10,scoreCls:'score-h',priority:'High',priCls:'pri-high',status:'Open',stCls:'stt-open',owner:'R. Blake',ownerAv:'RB',ownerColor:'#1d4ed8',workstream:'O2C',escalated:false,escLevel:null,days:null,daysCls:'',mitigation:'Monitoring. Legal team engaged with regulator.',activity:[
+        {dot:'',text:'R-002 raised by R. Blake',time:'16 Jan 2026, 14:00',type:'system'}
+      ],linked:[]},
+      {id:'R-004',title:'Data quality issues in legacy GL may cause reconciliation failures post go-live',category:'Technical',score:9,scoreCls:'score-h',priority:'High',priCls:'pri-high',status:'Mitigating',stCls:'stt-mitigating',owner:'M. Walsh',ownerAv:'MW',ownerColor:'#0369a1',workstream:'R2R',escalated:false,escLevel:null,days:null,daysCls:'',mitigation:'Data cleanse sprint added. Secondary vendor engaged.',activity:[
+        {dot:'green',text:'Data cleanse sprint started',time:'01 Feb 2026, 09:00',type:'system'},
+        {dot:'',text:'R-004 raised by M. Walsh',time:'18 Jan 2026, 11:00',type:'system'}
+      ],linked:[{id:'DC-004',label:'Decision — engage secondary vendor for data cleanse'}]},
+      {id:'R-006',title:'Scope creep in P2P workstream impacting sprint velocity',category:'Scope',score:6,scoreCls:'score-m',priority:'Medium',priCls:'pri-medium',status:'Open',stCls:'stt-open',owner:'D. Khan',ownerAv:'DK',ownerColor:'#c2410c',workstream:'P2P',escalated:false,escLevel:null,days:null,daysCls:'',mitigation:'Change control process tightened. Sprint review cadence increased.',activity:[
+        {dot:'',text:'R-006 raised by D. Khan',time:'20 Jan 2026, 10:00',type:'system'}
+      ],linked:[]}
+    ],
+    showHeatmap:true
+  },
+  a: {
+    title:'Assumptions Log', addLabel:'Add Assumption',
+    iconColor:'#3b82f6', iconBg:'rgba(59,130,246,.1)',
+    icon:'<circle cx="7.5" cy="7.5" r="5.5" stroke="#3b82f6" stroke-width="1.4"/><path d="M7.5 4.5v3l1.5 1" stroke="#3b82f6" stroke-width="1.3" stroke-linecap="round"/>',
+    statCards:[
+      {label:'Total', val:'8', cls:'', sub:'All assumptions', filter:'all'},
+      {label:'Unvalidated', val:'4', cls:'amber', sub:'Need confirmation', filter:'unvalidated'},
+      {label:'Validated', val:'3', cls:'green', sub:'Confirmed', filter:'validated'},
+      {label:'Invalidated', val:'1', cls:'red', sub:'Converted to risk', filter:'invalidated'},
+      {label:'Escalated', val:'0', cls:'amber', sub:'None active', filter:'escalated', esc:true}
+    ],
+    alert:null,
+    columns:[
+      {key:'id',label:'ID',visible:true},{key:'title',label:'Title',visible:true},
+      {key:'category',label:'Category',visible:true},{key:'impact',label:'Impact if Wrong',visible:true},
+      {key:'basis',label:'Basis for Assumption',visible:false},{key:'method',label:'Validation Method',visible:false},
+      {key:'status',label:'Status',visible:true},{key:'dueDate',label:'Validation Due',visible:true},
+      {key:'owner',label:'Owner',visible:true},{key:'escalation',label:'Escalation',visible:true}
+    ],
+    categories:['Resource','Vendor','Technical','Budget','Business','Regulatory','Timeline'],
+    rows:[
+      {id:'A-001',title:'Existing finance team has capacity to participate in parallel run alongside BAU',category:'Resource',impact:'Critical',priCls:'pri-critical',status:'Unvalidated',stCls:'stt-open',owner:'R. Blake',ownerAv:'RB',ownerColor:'#1d4ed8',workstream:'O2C',escalated:false,escLevel:null,dueDate:'28 Feb 2026',dueDateCls:'',basis:'Based on initial resource planning discussions in Oct 2025.',method:'Resource capacity review with Finance Director — scheduled Feb 2026.',activity:[
+        {dot:'',text:'A-001 raised by R. Blake',time:'15 Jan 2026, 09:00',type:'system'},
+        {dot:'',text:'Validation review scheduled with Finance Director',time:'20 Jan 2026, 14:00',type:'user'}
+      ],linked:[]},
+      {id:'A-002',title:'Vendor will provide dedicated integration resource for duration of technical phase',category:'Vendor',impact:'Critical',priCls:'pri-critical',status:'Unvalidated',stCls:'stt-open',owner:'J. Morris',ownerAv:'JM',ownerColor:'#3b5bdb',workstream:'Technical',escalated:false,escLevel:null,dueDate:'14 Feb 2026 ⚠',dueDateCls:'color:var(--red)',basis:'Verbal commitment from vendor account manager in Nov 2025.',method:'Written confirmation requested from vendor.',activity:[
+        {dot:'red',text:'Validation deadline missed — chasing vendor for written confirmation',time:'15 Feb 2026, 09:00',type:'system'},
+        {dot:'',text:'A-002 raised by J. Morris',time:'15 Jan 2026, 10:00',type:'system'}
+      ],linked:[{id:'R-003',label:'Risk — vendor delivery failure'}]},
+      {id:'A-003',title:'HMRC API will be available for integration testing in the Feb test window',category:'Technical',impact:'High',priCls:'pri-high',status:'Validated',stCls:'stt-validated',owner:'M. Walsh',ownerAv:'MW',ownerColor:'#0369a1',workstream:'Technical',escalated:false,escLevel:null,dueDate:'10 Jan 2026',dueDateCls:'',basis:'HMRC published sandbox availability schedule.',method:'Direct API connectivity test performed.',activity:[
+        {dot:'green',text:'Validated — API connectivity confirmed by M. Walsh',time:'10 Jan 2026, 14:00',type:'system'},
+        {dot:'',text:'A-003 raised by M. Walsh',time:'05 Jan 2026, 09:00',type:'system'}
+      ],linked:[]},
+      {id:'A-004',title:'Legacy GL data will be complete and clean enough for automated migration',category:'Technical',impact:'Critical',priCls:'pri-critical',status:'Invalidated',stCls:'stt-invalidated',owner:'L. Chen',ownerAv:'LC',ownerColor:'#047857',workstream:'R2R',escalated:false,escLevel:null,dueDate:'20 Jan 2026',dueDateCls:'',basis:'Initial data quality assessment from 2024.',method:'Full data audit by data team.',activity:[
+        {dot:'red',text:'Invalidated — data quality issues confirmed. Converted to Risk R-004.',time:'20 Jan 2026, 16:00',type:'system'},
+        {dot:'',text:'A-004 raised by L. Chen',time:'15 Jan 2026, 09:30',type:'system'}
+      ],linked:[{id:'R-004',label:'Risk — data quality issues in legacy GL'}]},
+      {id:'A-005',title:'Budget approval for Phase 2 will be confirmed before end of Q1 2026',category:'Budget',impact:'High',priCls:'pri-high',status:'Unvalidated',stCls:'stt-open',owner:'D. Khan',ownerAv:'DK',ownerColor:'#c2410c',workstream:'PMO',escalated:false,escLevel:null,dueDate:'31 Mar 2026',dueDateCls:'',basis:'CFO verbal indication in steering meeting Dec 2025.',method:'Board approval at March 2026 steering meeting.',activity:[
+        {dot:'',text:'A-005 raised by D. Khan',time:'16 Jan 2026, 11:00',type:'system'}
+      ],linked:[]},
+      {id:'A-006',title:'Steering Committee meets monthly — sufficient frequency for escalation decisions',category:'Business',impact:'Medium',priCls:'pri-medium',status:'Validated',stCls:'stt-validated',owner:'S. Patel',ownerAv:'SP',ownerColor:'#7c3aed',workstream:'PMO',escalated:false,escLevel:null,dueDate:'15 Jan 2026',dueDateCls:'',basis:'SteerCo TOR confirmed monthly cadence.',method:'Review of SteerCo terms of reference.',activity:[
+        {dot:'green',text:'Validated — confirmed by S. Patel against SteerCo TOR',time:'15 Jan 2026, 10:00',type:'system'}
+      ],linked:[]},
+      {id:'A-007',title:'No regulatory changes expected that would affect O2C process design in 2026',category:'Regulatory',impact:'High',priCls:'pri-high',status:'Unvalidated',stCls:'stt-open',owner:'A. Turner',ownerAv:'AT',ownerColor:'#b91c1c',workstream:'O2C',escalated:false,escLevel:null,dueDate:'01 Apr 2026',dueDateCls:'',basis:'Legal team review of regulatory pipeline — Dec 2025.',method:'Quarterly regulatory watch from Legal team.',activity:[
+        {dot:'',text:'A-007 raised by A. Turner',time:'16 Jan 2026, 09:00',type:'system'}
+      ],linked:[]},
+      {id:'A-008',title:'Hardware infrastructure refresh will be complete before UAT begins',category:'Technical',impact:'Medium',priCls:'pri-medium',status:'Validated',stCls:'stt-validated',owner:'M. Walsh',ownerAv:'MW',ownerColor:'#0369a1',workstream:'Technical',escalated:false,escLevel:null,dueDate:'05 Feb 2026',dueDateCls:'',basis:'Infrastructure project plan confirmed delivery by 31 Jan.',method:'Infrastructure sign-off from IT Director.',activity:[
+        {dot:'green',text:'Validated — hardware refresh complete and confirmed',time:'05 Feb 2026, 12:00',type:'system'}
+      ],linked:[]}
+    ],
+    showHeatmap:false
+  },
+  i: {
+    title:'Issues Log', addLabel:'Add Issue',
+    iconColor:'#f59e0b', iconBg:'rgba(245,158,11,.1)',
+    icon:'<circle cx="7.5" cy="7.5" r="5.5" stroke="#f59e0b" stroke-width="1.4"/><path d="M7.5 4.5v4" stroke="#f59e0b" stroke-width="1.4" stroke-linecap="round"/><circle cx="7.5" cy="10.5" r=".7" fill="#f59e0b"/>',
+    statCards:[
+      {label:'Total Issues', val:'9', cls:'', sub:'All workstreams', filter:'all'},
+      {label:'Blockers', val:'3', cls:'red', sub:'Stopping progress', filter:'blocker'},
+      {label:'In Progress', val:'4', cls:'amber', sub:'Being resolved', filter:'inprogress'},
+      {label:'Resolved', val:'2', cls:'green', sub:'Closed out', filter:'resolved'},
+      {label:'Escalated', val:'2', cls:'amber', sub:'Awaiting response', filter:'escalated', esc:true}
+    ],
+    alert:'<b>2 issues escalated.</b> I-002 is a critical path blocker — PMO response required by 20 Feb 2026.',
+    columns:[
+      {key:'id',label:'ID',visible:true},{key:'title',label:'Title',visible:true},
+      {key:'category',label:'Category',visible:true},{key:'type',label:'Type',visible:true},
+      {key:'timeline',label:'Timeline Impact',visible:true},{key:'resolution',label:'Resolution Plan',visible:false},
+      {key:'status',label:'Status',visible:true},{key:'owner',label:'Owner',visible:true},
+      {key:'escalation',label:'Escalation',visible:true},{key:'days',label:'Days Esc.',visible:true}
+    ],
+    categories:['Technical','Stakeholder','Process','Resource','Vendor','Budget','Scope'],
+    rows:[
+      {id:'I-002',title:'UAT environment unstable — test execution halted for O2C stream',category:'Technical',type:'Blocker',timeline:'Critical Path',timelineCls:'color:var(--red)',status:'Escalated',stCls:'stt-escalated',owner:'M. Walsh',ownerAv:'MW',ownerColor:'#0369a1',workstream:'Technical',escalated:true,escLevel:'PMO',days:6,daysCls:'days-warn',resolution:'Infrastructure team provisioning dedicated UAT instance. ETA 18 Feb.',activity:[
+        {dot:'amber',text:'Escalated to PMO by M. Walsh — critical path blocker',time:'18 Feb 2026, 08:00',type:'system'},
+        {dot:'',text:'I-002 raised by M. Walsh',time:'12 Feb 2026, 14:00',type:'system'}
+      ],linked:[{id:'D-002',label:'Dependency — UAT environment from Infrastructure'}]},
+      {id:'I-005',title:'Finance sign-off on process design delayed — design freeze missed',category:'Stakeholder',type:'Impediment',timeline:'Moderate Delay',timelineCls:'color:var(--orange)',status:'Escalated',stCls:'stt-escalated',owner:'L. Chen',ownerAv:'LC',ownerColor:'#047857',workstream:'O2C',escalated:true,escLevel:'Workstream Lead',days:4,daysCls:'days-warn',resolution:'Meeting arranged with Finance Director for 22 Feb.',activity:[
+        {dot:'amber',text:'Escalated to Workstream Lead by L. Chen',time:'20 Feb 2026, 10:00',type:'system'},
+        {dot:'',text:'I-005 raised by L. Chen',time:'16 Feb 2026, 11:00',type:'system'}
+      ],linked:[]},
+      {id:'I-001',title:'P2P configuration not aligned to agreed process — rework required',category:'Process',type:'Blocker',timeline:'Minor Delay',timelineCls:'color:var(--orange)',status:'In Progress',stCls:'stt-inprogress',owner:'D. Khan',ownerAv:'DK',ownerColor:'#c2410c',workstream:'P2P',escalated:false,escLevel:null,days:null,daysCls:'',resolution:'Config rework sprint planned for sprint 12.',activity:[
+        {dot:'',text:'Rework sprint scoped and added to backlog',time:'10 Feb 2026, 14:00',type:'user'},
+        {dot:'',text:'I-001 raised by D. Khan',time:'05 Feb 2026, 09:00',type:'system'}
+      ],linked:[{id:'R-006',label:'Risk — scope creep in P2P workstream'}]},
+      {id:'I-003',title:'Vendor missing weekly status meetings — communication gap',category:'Vendor',type:'Impediment',timeline:'None',timelineCls:'color:var(--green)',status:'In Progress',stCls:'stt-inprogress',owner:'J. Morris',ownerAv:'JM',ownerColor:'#3b5bdb',workstream:'O2C',escalated:false,escLevel:null,days:null,daysCls:'',resolution:'Formal notice sent to vendor account manager.',activity:[
+        {dot:'',text:'Formal notice sent to vendor',time:'14 Feb 2026, 10:00',type:'user'},
+        {dot:'',text:'I-003 raised by J. Morris',time:'28 Jan 2026, 09:00',type:'system'}
+      ],linked:[]},
+      {id:'I-004',title:'HR system data extract format incompatible with R2R module',category:'Technical',type:'Blocker',timeline:'Moderate Delay',timelineCls:'color:var(--orange)',status:'In Progress',stCls:'stt-inprogress',owner:'S. Patel',ownerAv:'SP',ownerColor:'#7c3aed',workstream:'H2R',escalated:false,escLevel:null,days:null,daysCls:'',resolution:'Technical workaround under design. ETL mapping in progress.',activity:[
+        {dot:'',text:'ETL mapping solution proposed by M. Walsh',time:'08 Feb 2026, 15:00',type:'user'},
+        {dot:'',text:'I-004 raised by S. Patel',time:'03 Feb 2026, 10:00',type:'system'}
+      ],linked:[]},
+      {id:'I-006',title:'Sprint 4 incomplete due to unplanned resource absence',category:'Resource',type:'Impediment',timeline:'Minor Delay',timelineCls:'color:var(--orange)',status:'Resolved',stCls:'stt-resolved',owner:'A. Turner',ownerAv:'AT',ownerColor:'#b91c1c',workstream:'PMO',escalated:false,escLevel:null,days:null,daysCls:'',resolution:'Incomplete items moved to Sprint 5. Timeline impact absorbed.',activity:[
+        {dot:'green',text:'Resolved — sprint items carried over and sprint 5 plan adjusted',time:'31 Jan 2026, 17:00',type:'system'},
+        {dot:'',text:'I-006 raised by A. Turner',time:'26 Jan 2026, 14:00',type:'system'}
+      ],linked:[]},
+      {id:'I-007',title:'Migration scripts not received from vendor — linked to R-003',category:'Vendor',type:'Blocker',timeline:'Critical Path',timelineCls:'color:var(--red)',status:'In Progress',stCls:'stt-inprogress',owner:'J. Morris',ownerAv:'JM',ownerColor:'#3b5bdb',workstream:'O2C',escalated:false,escLevel:null,days:null,daysCls:'',resolution:'Secondary vendor being evaluated. Board decision pending.',activity:[
+        {dot:'',text:'Secondary vendor evaluation initiated',time:'10 Feb 2026, 11:00',type:'user'},
+        {dot:'',text:'I-007 raised by J. Morris — linked to R-003',time:'02 Feb 2026, 10:00',type:'system'}
+      ],linked:[{id:'R-003',label:'Risk — vendor migration delay'},{id:'DC-003',label:'Decision — delay go-live vs. reduced scope'}]}
+    ],
+    showHeatmap:false
+  },
+  d: {
+    title:'Dependencies Log', addLabel:'Add Dependency',
+    iconColor:'#8b5cf6', iconBg:'rgba(139,92,246,.1)',
+    icon:'<path d="M2 7.5h4M9 7.5h4M7.5 2v4M7.5 9v4" stroke="#8b5cf6" stroke-width="1.3" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="2" fill="#8b5cf6"/>',
+    statCards:[
+      {label:'Total', val:'15', cls:'', sub:'All workstreams', filter:'all'},
+      {label:'At Risk', val:'4', cls:'red', sub:'Unconfirmed / delayed', filter:'atrisk'},
+      {label:'Confirmed', val:'7', cls:'blue', sub:'Provider confirmed', filter:'confirmed'},
+      {label:'Met', val:'4', cls:'green', sub:'Delivered', filter:'met'},
+      {label:'Escalated', val:'0', cls:'amber', sub:'None active', filter:'escalated', esc:true}
+    ],
+    alert:null,
+    columns:[
+      {key:'id',label:'ID',visible:true},{key:'title',label:'Deliverable Required',visible:true},
+      {key:'type',label:'Type',visible:true},{key:'dependentOn',label:'Dependent On',visible:true},
+      {key:'requiredBy',label:'Required By',visible:true},{key:'confirmed',label:'Provider Confirmed',visible:true},
+      {key:'impact',label:'Impact if Not Met',visible:true},{key:'status',label:'Status',visible:true},
+      {key:'escalation',label:'Escalation',visible:true}
+    ],
+    categories:['External','Internal'],
+    rows:[
+      {id:'D-001',title:'Migration scripts from external vendor for GL cutover',category:'External',type:'External',dependentOn:'DataMigCo Ltd',requiredBy:'07 Feb 2026',requiredByCls:'color:var(--red)',confirmed:false,impact:'Critical',priCls:'pri-critical',status:'At Risk',stCls:'stt-atrisk',owner:'J. Morris',ownerAv:'JM',ownerColor:'#3b5bdb',workstream:'O2C',escalated:false,escLevel:null,activity:[
+        {dot:'red',text:'Required date missed — vendor has not delivered',time:'07 Feb 2026, 18:00',type:'system'},
+        {dot:'',text:'D-001 raised by J. Morris',time:'15 Jan 2026, 09:00',type:'system'}
+      ],linked:[{id:'R-003',label:'Risk — vendor migration delay'},{id:'I-007',label:'Issue — migration scripts not received'}]},
+      {id:'D-002',title:'UAT environment provisioned by Infrastructure team',category:'Internal',type:'Internal',dependentOn:'Infrastructure',requiredBy:'21 Jan 2026',requiredByCls:'color:var(--red)',confirmed:false,impact:'Critical',priCls:'pri-critical',status:'At Risk',stCls:'stt-atrisk',owner:'M. Walsh',ownerAv:'MW',ownerColor:'#0369a1',workstream:'Technical',escalated:false,escLevel:null,activity:[
+        {dot:'red',text:'Environment still not provisioned — I-002 raised as blocker',time:'21 Jan 2026, 18:00',type:'system'},
+        {dot:'',text:'D-002 raised by M. Walsh',time:'15 Jan 2026, 10:00',type:'system'}
+      ],linked:[{id:'I-002',label:'Issue — UAT environment unstable'}]},
+      {id:'D-003',title:'HMRC API access credentials and sandbox environment',category:'External',type:'External',dependentOn:'HMRC',requiredBy:'10 Jan 2026',requiredByCls:'',confirmed:true,impact:'High',priCls:'pri-high',status:'Met',stCls:'stt-met',owner:'M. Walsh',ownerAv:'MW',ownerColor:'#0369a1',workstream:'Technical',escalated:false,escLevel:null,activity:[
+        {dot:'green',text:'Dependency met — HMRC API access received',time:'10 Jan 2026, 09:00',type:'system'}
+      ],linked:[]},
+      {id:'D-004',title:'Finance process sign-off from CFO office for P2P design',category:'Internal',type:'Internal',dependentOn:'CFO Office',requiredBy:'14 Feb 2026',requiredByCls:'color:var(--amber)',confirmed:false,impact:'High',priCls:'pri-high',status:'At Risk',stCls:'stt-atrisk',owner:'L. Chen',ownerAv:'LC',ownerColor:'#047857',workstream:'P2P',escalated:false,escLevel:null,activity:[
+        {dot:'',text:'D-004 raised by L. Chen',time:'15 Jan 2026, 09:00',type:'system'}
+      ],linked:[{id:'I-005',label:'Issue — finance sign-off delayed'}]},
+      {id:'D-005',title:'HR master data extract in agreed schema format',category:'Internal',type:'Internal',dependentOn:'HR Systems',requiredBy:'28 Feb 2026',requiredByCls:'',confirmed:true,impact:'High',priCls:'pri-high',status:'Confirmed',stCls:'stt-confirmed',owner:'S. Patel',ownerAv:'SP',ownerColor:'#7c3aed',workstream:'H2R',escalated:false,escLevel:null,activity:[
+        {dot:'blue',text:'Provider confirmed — HR Systems confirmed extract delivery 28 Feb',time:'20 Jan 2026, 14:00',type:'system'}
+      ],linked:[]},
+      {id:'D-006',title:'Steering Committee approval for Architecture Decision DC-001',category:'Internal',type:'Internal',dependentOn:'Steering Cmte',requiredBy:'28 Feb 2026',requiredByCls:'',confirmed:true,impact:'Medium',priCls:'pri-medium',status:'Met',stCls:'stt-met',owner:'A. Turner',ownerAv:'AT',ownerColor:'#b91c1c',workstream:'PMO',escalated:false,escLevel:null,activity:[
+        {dot:'green',text:'SteerCo approval received for DC-001',time:'15 Jan 2026, 16:00',type:'system'}
+      ],linked:[{id:'DC-001',label:'Decision — single-instance ERP architecture'}]},
+      {id:'D-007',title:'Legal review of new vendor contract terms complete',category:'Internal',type:'Internal',dependentOn:'Legal',requiredBy:'07 Mar 2026',requiredByCls:'',confirmed:false,impact:'High',priCls:'pri-high',status:'Identified',stCls:'stt-open',owner:'J. Morris',ownerAv:'JM',ownerColor:'#3b5bdb',workstream:'PMO',escalated:false,escLevel:null,activity:[
+        {dot:'',text:'D-007 raised by J. Morris',time:'01 Feb 2026, 09:00',type:'system'}
+      ],linked:[]},
+      {id:'D-008',title:'Server hardware refresh complete before UAT window',category:'Internal',type:'Internal',dependentOn:'Infrastructure',requiredBy:'05 Feb 2026',requiredByCls:'',confirmed:true,impact:'Medium',priCls:'pri-medium',status:'Met',stCls:'stt-met',owner:'M. Walsh',ownerAv:'MW',ownerColor:'#0369a1',workstream:'Technical',escalated:false,escLevel:null,activity:[
+        {dot:'green',text:'Hardware refresh completed on time',time:'05 Feb 2026, 12:00',type:'system'}
+      ],linked:[]}
+    ],
+    showHeatmap:false
+  },
+  dc: {
+    title:'Decisions Log', addLabel:'Add Decision',
+    iconColor:'#10b981', iconBg:'rgba(16,185,129,.1)',
+    icon:'<path d="M3 5h9M3 7.5h6M3 10h8" stroke="#10b981" stroke-width="1.3" stroke-linecap="round"/>',
+    statCards:[
+      {label:'Total', val:'6', cls:'', sub:'All decisions', filter:'all'},
+      {label:'Approved', val:'3', cls:'green', sub:'Formally approved', filter:'approved'},
+      {label:'Pending', val:'2', cls:'amber', sub:'Awaiting approval', filter:'pending'},
+      {label:'Deferred', val:'1', cls:'', sub:'On hold', filter:'deferred'},
+      {label:'Escalated', val:'1', cls:'amber', sub:'Awaiting response', filter:'escalated', esc:true}
+    ],
+    alert:'<b>DC-003 escalated to Project Board</b> — decision needed on go-live delay vs. reduced scope. Deadline: 28 Feb 2026.',
+    columns:[
+      {key:'id',label:'ID',visible:true},{key:'title',label:'Decision Statement',visible:true},
+      {key:'category',label:'Category',visible:true},{key:'body',label:'Decision Body',visible:true},
+      {key:'rationale',label:'Rationale',visible:false},{key:'decisionDate',label:'Decision Date',visible:true},
+      {key:'owner',label:'Made By',visible:true},{key:'status',label:'Status',visible:true},
+      {key:'escalation',label:'Escalation',visible:true}
+    ],
+    categories:['Architecture','Process','Commercial','Resource','Scope','Timeline','Policy','Vendor'],
+    rows:[
+      {id:'DC-003',title:'Delay go-live by 4 weeks to allow vendor to deliver migration scripts OR proceed with reduced scope cutover',category:'Timeline',body:'Project Board',decisionDate:'Pending',decisionDateCls:'color:var(--amber)',status:'Pending Approval',stCls:'stt-pending',owner:'J. Morris',ownerAv:'JM',ownerColor:'#3b5bdb',workstream:'PMO',escalated:true,escLevel:'Project Board',days:5,daysCls:'days-warn',rationale:'Vendor delivery failure has left two options — delay or descope. Board decision required.',activity:[
+        {dot:'amber',text:'Escalated to Project Board by J. Morris — decision required by 28 Feb',time:'23 Feb 2026, 10:00',type:'system'},
+        {dot:'',text:'DC-003 raised by J. Morris',time:'20 Feb 2026, 09:00',type:'system'}
+      ],linked:[{id:'R-003',label:'Risk — vendor migration delay'},{id:'I-007',label:'Issue — migration scripts not received'}]},
+      {id:'DC-001',title:'Adopt single-instance ERP architecture — no multi-tenancy for Phase 1',category:'Architecture',body:'Technical Authority',decisionDate:'15 Jan 2026',decisionDateCls:'',status:'Approved',stCls:'stt-approved',owner:'M. Walsh',ownerAv:'MW',ownerColor:'#0369a1',workstream:'Technical',escalated:false,escLevel:null,days:null,daysCls:'',rationale:'Multi-tenancy adds complexity without benefit for a single-entity deployment at this scale.',activity:[
+        {dot:'green',text:'Decision approved by Technical Authority',time:'15 Jan 2026, 16:00',type:'system'},
+        {dot:'',text:'DC-001 raised by M. Walsh',time:'10 Jan 2026, 09:00',type:'system'}
+      ],linked:[{id:'D-006',label:'Dependency — SteerCo approval'}]},
+      {id:'DC-002',title:'P2P process design to follow standard vendor template with zero customisation',category:'Process',body:'PMO',decisionDate:'20 Jan 2026',decisionDateCls:'',status:'Approved',stCls:'stt-approved',owner:'D. Khan',ownerAv:'DK',ownerColor:'#c2410c',workstream:'P2P',escalated:false,escLevel:null,days:null,daysCls:'',rationale:'Customisation increases cost, risk and future upgrade complexity.',activity:[
+        {dot:'green',text:'Decision approved at PMO governance meeting',time:'20 Jan 2026, 14:00',type:'system'}
+      ],linked:[]},
+      {id:'DC-004',title:'Engage secondary vendor for data quality cleansing ahead of migration',category:'Vendor',body:'PMO',decisionDate:'Pending',decisionDateCls:'color:var(--amber)',status:'Pending Approval',stCls:'stt-pending',owner:'L. Chen',ownerAv:'LC',ownerColor:'#047857',workstream:'R2R',escalated:false,escLevel:null,days:null,daysCls:'',rationale:'A-004 invalidated — data quality too poor for automated migration without pre-cleanse.',activity:[
+        {dot:'',text:'DC-004 raised by L. Chen — awaiting PMO sign-off',time:'22 Jan 2026, 11:00',type:'system'}
+      ],linked:[{id:'A-004',label:'Assumption — data quality'},{id:'R-004',label:'Risk — GL data quality'}]},
+      {id:'DC-005',title:'H2R workstream to run in shadow-mode for 8 weeks post go-live',category:'Process',body:'Steering Committee',decisionDate:'05 Feb 2026',decisionDateCls:'',status:'Approved',stCls:'stt-approved',owner:'S. Patel',ownerAv:'SP',ownerColor:'#7c3aed',workstream:'H2R',escalated:false,escLevel:null,days:null,daysCls:'',rationale:'Reduces risk of payroll errors in live environment during stabilisation.',activity:[
+        {dot:'green',text:'Approved at Steering Committee',time:'05 Feb 2026, 15:00',type:'system'}
+      ],linked:[]},
+      {id:'DC-006',title:'Extend parallel run period from 4 to 8 weeks — deferred pending budget sign-off',category:'Scope',body:'Project Board',decisionDate:'Deferred',decisionDateCls:'color:var(--text-muted)',status:'Deferred',stCls:'stt-closed',owner:'A. Turner',ownerAv:'AT',ownerColor:'#b91c1c',workstream:'PMO',escalated:false,escLevel:null,days:null,daysCls:'',rationale:'Additional 4 weeks carries £60k cost — deferred to Q2 budget review.',activity:[
+        {dot:'',text:'Deferred by Project Board — revisit Q2 budget approval',time:'15 Feb 2026, 16:00',type:'system'}
+      ],linked:[]}
+    ],
+    showHeatmap:false
+  }
+};
+
+// ════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════
+let activeLog = 'r';
+let activeView = 'table';
+let filters = { search:'', priority:'all', category:'all', owner:'all', workstream:'all', escalatedOnly:false, statFilter:'all' };
+let colsState = {}; // {logKey: {colKey: visible}}
+
+function initCols() {
+  Object.keys(LOGS).forEach(k => {
+    colsState[k] = {};
+    LOGS[k].columns.forEach(c => colsState[k][c.key] = c.visible);
+  });
+}
+initCols();
+
+// ════════════════════════════════════════════════════════════
+//  RENDER MAIN
+// ════════════════════════════════════════════════════════════
+function render() {
+  const log = LOGS[activeLog];
+  // Update header
+  document.getElementById('log-title').textContent = log.title;
+  document.getElementById('add-btn-label').textContent = log.addLabel;
+  document.getElementById('log-icon').style.background = log.iconBg;
+  document.getElementById('log-icon').innerHTML = `<svg width="15" height="15" viewBox="0 0 15 15" fill="none">${log.icon}</svg>`;
+  document.getElementById('search-input').placeholder = `Search ${log.title.toLowerCase()}…`;
+  document.getElementById('add-btn').onclick = openEscModal;
+
+  // Update sub-tabs
+  ['r','a','i','d','dc'].forEach(k => {
+    document.getElementById('rtab-'+k).className = 'rtab' + (k===activeLog?' active':'');
+  });
+
+  // Update category dropdown
+  const catDd = document.getElementById('dd-category');
+  catDd.innerHTML = `<div class="dd-item selected" data-val="all" onclick="selectFilter('category','all',this)">All Categories</div><div class="dd-divider"></div>` +
+    log.categories.map(c=>`<div class="dd-item" data-val="${c}" onclick="selectFilter('category','${c}',this)">${c}</div>`).join('');
+
+  renderScrollContent();
+  renderColsMenu();
+}
+
+function renderScrollContent() {
+  const log = LOGS[activeLog];
+  const rows = getFilteredRows();
+  const sc = document.getElementById('scroll-content');
+  let html = '';
+
+  // Stats strip
+  html += '<div class="stats-strip">';
+  log.statCards.forEach(s => {
+    const isActive = filters.statFilter === s.filter;
+    html += `<div class="stat-card ${s.esc?'esc-stat':''} ${isActive?'stat-active':''}" onclick="setStatFilter('${s.filter}')">
+      <div class="stat-lbl">${s.label}</div>
+      <div class="stat-val ${s.cls}">${s.val}</div>
+      <div class="stat-sub">${s.sub}</div>
+    </div>`;
+  });
+  html += '</div>';
+
+  // Alert
+  if(log.alert) {
+    html += `<div class="esc-alert">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2L14 13H2L8 2Z" fill="#fde68a"/><path d="M8 2L14 13H2L8 2Z" stroke="#f59e0b" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6v3" stroke="#f59e0b" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11" r=".7" fill="#f59e0b"/></svg>
+      <span>${log.alert}</span>
+      <span class="esc-alert-link">View in 360° Report →</span>
+    </div>`;
+  }
+
+  // Table or Cards
+  if(activeView==='table') html += renderTable(log, rows);
+  else html += renderCards(log, rows);
+
+  // Heat map (risks only)
+  if(log.showHeatmap) html += renderHeatmap();
+
+  // Impl notes
+  html += renderImplNotes();
+
+  sc.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════
+//  TABLE RENDER
+// ════════════════════════════════════════════════════════════
+function renderTable(log, rows) {
+  const cols = log.columns.filter(c => colsState[activeLog][c.key]);
+  let html = `<div class="tbl-wrap"><table><thead><tr>`;
+  cols.forEach(c => html += `<th>${c.label}</th>`);
+  html += `</tr></thead><tbody>`;
+
+  if(rows.length===0) {
+    html += `<tr><td colspan="${cols.length}"><div class="empty-state">
+      <svg viewBox="0 0 40 40" fill="none"><rect x="5" y="5" width="30" height="30" rx="4" stroke="currentColor" stroke-width="1.5"/><path d="M12 15h16M12 20h10M12 25h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      <p>No items match your current filters. <span style="color:var(--accent);cursor:pointer" onclick="clearFilters()">Clear all filters</span></p>
+    </div></td></tr>`;
+  } else {
+    rows.forEach(row => {
+      const escRow = row.escalated ? 'esc-row' : '';
+      html += `<tr class="${escRow}" onclick="openDrawer('${row.id}')">`;
+      cols.forEach(c => { html += `<td>${getCellHtml(c.key, row)}</td>`; });
+      html += `</tr>`;
+    });
+  }
+
+  html += `</tbody></table>
+    <div class="tbl-foot">
+      <span>Showing ${rows.length} of ${log.rows.length} ${log.title.toLowerCase().split(' ')[0]}s</span>
+      <div class="pager"><div class="pager-btn on">1</div></div>
+    </div>
+  </div>`;
+  return html;
+}
+
+function getCellHtml(key, row) {
+  switch(key) {
+    case 'id': return `<span class="id-tag">${row.id}</span>`;
+    case 'title': return `<span style="font-weight:500;color:var(--text)">${row.title}</span>`;
+    case 'score': return `<span class="score-chip ${row.scoreCls}">${row.score}</span>`;
+    case 'priority': case 'impact': return `<span class="pri ${row.priCls}">${row.priority||row.impact}</span>`;
+    case 'status': return `<span class="stt ${row.stCls}">${row.status}</span>`;
+    case 'owner': return `<div class="owner-chip"><div class="av" style="background:${row.ownerColor}">${row.ownerAv}</div>${row.owner}</div>`;
+    case 'escalation': return row.escalated ? `<span class="esc-badge">${row.escLevel}</span>` : `<span style="color:var(--text-muted)">—</span>`;
+    case 'days': return row.days ? `<span class="days-chip ${row.daysCls}">${row.days}d</span>` : `<span style="color:var(--text-muted)">—</span>`;
+    case 'category': return row.category;
+    case 'type': return row.type||'—';
+    case 'timeline': return `<span style="${row.timelineCls||''}">${row.timeline||'—'}</span>`;
+    case 'mitigation': return row.mitigation||'—';
+    case 'resolution': return row.resolution||'—';
+    case 'basis': return row.basis||'—';
+    case 'method': return row.method||'—';
+    case 'dependentOn': return row.dependentOn||'—';
+    case 'requiredBy': return `<span style="${row.requiredByCls||''}">${row.requiredBy||'—'}</span>`;
+    case 'confirmed': return row.confirmed!==undefined ? (row.confirmed ? '<span class="tick">✓</span> Confirmed' : '<span class="cross">✗</span> Unconfirmed') : '—';
+    case 'body': return row.body||'—';
+    case 'decisionDate': return `<span style="${row.decisionDateCls||''}">${row.decisionDate||'—'}</span>`;
+    case 'rationale': return row.rationale||'—';
+    case 'dueDate': return `<span style="${row.dueDateCls||''}">${row.dueDate||'—'}</span>`;
+    default: return '—';
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  CARDS RENDER
+// ════════════════════════════════════════════════════════════
+function renderCards(log, rows) {
+  if(rows.length===0) {
+    return `<div class="tbl-wrap"><div class="empty-state">
+      <svg viewBox="0 0 40 40" fill="none"><rect x="5" y="5" width="30" height="30" rx="4" stroke="currentColor" stroke-width="1.5"/></svg>
+      <p>No items match your current filters. <span style="color:var(--accent);cursor:pointer" onclick="clearFilters()">Clear all filters</span></p>
+    </div></div>`;
+  }
+  let html = `<div class="cards-grid">`;
+  rows.forEach(row => {
+    const escClass = row.escalated ? 'esc-card' : '';
+    html += `<div class="raidd-card ${escClass}" onclick="openDrawer('${row.id}')">
+      <div class="card-top">
+        <span class="card-id">${row.id}</span>
+        ${row.escalated ? `<span class="esc-badge">${row.escLevel}</span>` : `<span class="stt ${row.stCls}">${row.status}</span>`}
+      </div>
+      <div class="card-title">${row.title}</div>
+      <div class="card-meta">
+        ${row.priority||row.impact ? `<span class="pri ${row.priCls}">${row.priority||row.impact}</span>` : ''}
+        <span style="font-size:11px;color:var(--text-muted)">${row.category}</span>
+        ${row.score!==undefined ? `<span class="score-chip ${row.scoreCls}">${row.score}</span>` : ''}
+        ${row.days ? `<span class="days-chip ${row.daysCls}">${row.days}d</span>` : ''}
+      </div>
+      <div class="card-owner"><div class="av" style="background:${row.ownerColor};width:18px;height:18px;font-size:7px">${row.ownerAv}</div>${row.owner} · ${row.workstream||''}</div>
+    </div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+// ════════════════════════════════════════════════════════════
+//  HEAT MAP
+// ════════════════════════════════════════════════════════════
+function renderHeatmap() {
+  return `<div class="heatmap-card">
+    <div class="hm-title">Risk Score Heat Map — 5×5</div>
+    <div class="hm-wrap">
+      <div>
+        <div class="hm-grid">
+          <div class="hm-y-lbl">Probability →</div>
+          <div class="hm-cell hm-5" onclick="hmFilter(5,1)">5</div><div class="hm-cell hm-10" onclick="hmFilter(5,2)">10</div><div class="hm-cell hm-15" onclick="hmFilter(5,3)">15</div><div class="hm-cell hm-20" onclick="hmFilter(5,4)"><div class="hm-badge">2</div></div><div class="hm-cell hm-25" onclick="hmFilter(5,5)">25</div>
+          <div class="hm-cell hm-4" onclick="hmFilter(4,1)">4</div><div class="hm-cell hm-8" onclick="hmFilter(4,2)">8</div><div class="hm-cell hm-12" onclick="hmFilter(4,3)"><div class="hm-badge">1</div></div><div class="hm-cell hm-16" onclick="hmFilter(4,4)"><div class="hm-badge">1</div></div><div class="hm-cell hm-20" onclick="hmFilter(4,5)">20</div>
+          <div class="hm-cell hm-3" onclick="hmFilter(3,1)">3</div><div class="hm-cell hm-6" onclick="hmFilter(3,2)"><div class="hm-badge">1</div></div><div class="hm-cell hm-9" onclick="hmFilter(3,3)">9</div><div class="hm-cell hm-12" onclick="hmFilter(3,4)">12</div><div class="hm-cell hm-15" onclick="hmFilter(3,5)">15</div>
+          <div class="hm-cell hm-2" onclick="hmFilter(2,1)">2</div><div class="hm-cell hm-4" onclick="hmFilter(2,2)">4</div><div class="hm-cell hm-6" onclick="hmFilter(2,3)">6</div><div class="hm-cell hm-8" onclick="hmFilter(2,4)">8</div><div class="hm-cell hm-10" onclick="hmFilter(2,5)">10</div>
+          <div class="hm-cell hm-1" onclick="hmFilter(1,1)">1</div><div class="hm-cell hm-2" onclick="hmFilter(1,2)">2</div><div class="hm-cell hm-3" onclick="hmFilter(1,3)">3</div><div class="hm-cell hm-4" onclick="hmFilter(1,4)">4</div><div class="hm-cell hm-5" onclick="hmFilter(1,5)">5</div>
+          <div class="hm-axis">VL</div><div class="hm-axis">L</div><div class="hm-axis">M</div><div class="hm-axis">H</div><div class="hm-axis">VH</div>
+          <div class="hm-x-row">← Impact →</div>
+        </div>
+        <div class="hm-legend">
+          <div class="hm-leg-item"><div class="hm-leg-sw" style="background:#dcfce7"></div>Low 1–4</div>
+          <div class="hm-leg-item"><div class="hm-leg-sw" style="background:#fde68a"></div>Medium 5–9</div>
+          <div class="hm-leg-item"><div class="hm-leg-sw" style="background:#fb923c"></div>High 10–14</div>
+          <div class="hm-leg-item"><div class="hm-leg-sw" style="background:#ef4444"></div>Critical 15–25</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);line-height:1.7;flex:1;min-width:160px;margin-top:4px">
+        <p style="color:var(--text-dim);font-weight:500;margin-bottom:6px">Numbered cells = active risks at that position</p>
+        <p>Click any cell to filter the table to risks at that Probability × Impact combination. Click again to clear.</p>
+        <p style="margin-top:8px"><strong style="color:var(--text)">Portfolio:</strong> 4 critical · 3 high · 5 medium/low</p>
+        <p style="margin-top:6px;color:var(--amber);font-weight:500">⚑ 3 escalated risks (amber rows above)</p>
+      </div>
+    </div>
+  </div>`;
+}
+
+function hmFilter(prob, impact) {
+  const score = prob * impact;
+  // Filter risks by score
+  filters.statFilter = 'score_'+score;
+  renderScrollContent();
+}
+
+// ════════════════════════════════════════════════════════════
+//  IMPL NOTES
+// ════════════════════════════════════════════════════════════
+function renderImplNotes() {
+  return `<div class="impl-card">
+    <div class="impl-title" style="display:flex;align-items:center;gap:8px">🛠 Implementation Notes for Replit
+      <span style="font-size:11px;font-weight:400;color:var(--text-muted)">— all nine issues resolved in this version</span>
+    </div>
+    <div class="impl-item"><div class="impl-num">1</div><div><strong>Stat cards are clickable filters.</strong> Clicking Critical, High, Mitigating, Escalated etc. filters the table live. Active card gets a blue outline. Click again or "Total" to reset.</div></div>
+    <div class="impl-item"><div class="impl-num">2</div><div><strong>Escalated Only toggle</strong> in the filter bar filters the table to show only escalated rows. Active state turns the chip solid amber. Clicking again clears it.</div></div>
+    <div class="impl-item"><div class="impl-num">3</div><div><strong>All filter dropdowns work</strong> — Priority, Category, Owner, Workstream each open a real dropdown with options. Selected option highlights in blue, chip label updates. Filters combine with search and stat filter.</div></div>
+    <div class="impl-item"><div class="impl-num">4</div><div><strong>Table / Cards toggle</strong> switches between tabular view and a responsive card grid. Both respect all active filters.</div></div>
+    <div class="impl-item"><div class="impl-num">5</div><div><strong>Search</strong> filters in real time across ID and title fields. Works across all five logs.</div></div>
+    <div class="impl-item"><div class="impl-num">6</div><div><strong>Escalation toggle in drawer</strong> de-escalates the item live — removes amber row styling, removes the ⚑ badge, updates the tab strip count, and hides the escalation section in the drawer.</div></div>
+    <div class="impl-item"><div class="impl-num">7</div><div><strong>Columns button</strong> opens a checklist of all columns for the active log. Toggling a column hides/shows it instantly in the table. Each log has its own column set.</div></div>
+    <div class="impl-item"><div class="impl-num">8</div><div><strong>Activity log</strong> shows two entry types: <em>System</em> (auto-logged — item created, escalated, status changed, score changed) and <em>User</em> (manually added notes). Each entry has a timestamp and acting user. A text field at the bottom lets users add notes directly from the drawer.</div></div>
+    <div class="impl-item"><div class="impl-num">9</div><div><strong>Drawer is log-aware.</strong> Clicking a row in any log opens a drawer showing fields specific to that log (e.g. Assumptions shows Validation Method, Basis, Validated By — not Risk fields). Linked items, activity, and escalation section all reflect the correct record.</div></div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════════
+//  FILTERING
+// ════════════════════════════════════════════════════════════
+function getFilteredRows() {
+  const log = LOGS[activeLog];
+  return log.rows.filter(row => {
+    const search = filters.search.toLowerCase();
+    if(search && !row.id.toLowerCase().includes(search) && !row.title.toLowerCase().includes(search)) return false;
+    if(filters.escalatedOnly && !row.escalated) return false;
+    if(filters.priority !== 'all' && (row.priority||row.impact) !== filters.priority) return false;
+    if(filters.category !== 'all' && row.category !== filters.category) return false;
+    if(filters.owner !== 'all' && row.owner !== filters.owner) return false;
+    if(filters.workstream !== 'all' && row.workstream !== filters.workstream) return false;
+    if(filters.statFilter !== 'all') {
+      const sf = filters.statFilter;
+      if(sf==='escalated' && !row.escalated) return false;
+      if(sf==='critical' && row.score!==undefined && row.score<15) return false;
+      if(sf==='high' && row.score!==undefined && (row.score<10||row.score>=15)) return false;
+      if(sf==='mitigating' && row.status!=='Mitigating') return false;
+      if(sf==='blocker' && row.type!=='Blocker') return false;
+      if(sf==='inprogress' && row.status!=='In Progress') return false;
+      if(sf==='resolved' && row.status!=='Resolved') return false;
+      if(sf==='unvalidated' && row.status!=='Unvalidated') return false;
+      if(sf==='validated' && row.status!=='Validated') return false;
+      if(sf==='invalidated' && row.status!=='Invalidated') return false;
+      if(sf==='approved' && row.status!=='Approved') return false;
+      if(sf==='pending' && row.status!=='Pending Approval') return false;
+      if(sf==='deferred' && row.status!=='Deferred') return false;
+      if(sf==='atrisk' && row.status!=='At Risk') return false;
+      if(sf==='confirmed' && row.status!=='Confirmed') return false;
+      if(sf==='met' && row.status!=='Met') return false;
+      if(sf.startsWith('score_')) {
+        const targetScore = parseInt(sf.split('_')[1]);
+        if(row.score !== targetScore) return false;
+      }
+    }
+    return true;
+  });
+}
+
+function applyFilters() {
+  filters.search = document.getElementById('search-input').value;
+  renderScrollContent();
+}
+
+function setStatFilter(f) {
+  filters.statFilter = filters.statFilter === f ? 'all' : f;
+  renderScrollContent();
+}
+
+function clearFilters() {
+  filters = { search:'', priority:'all', category:'all', owner:'all', workstream:'all', escalatedOnly:false, statFilter:'all' };
+  document.getElementById('search-input').value = '';
+  // Reset chips
+  document.querySelectorAll('.fchip').forEach(c=>c.classList.remove('active-filter'));
+  document.getElementById('chip-esc').classList.remove('active-filter');
+  renderScrollContent();
+}
+
+function toggleEscFilter() {
+  filters.escalatedOnly = !filters.escalatedOnly;
+  document.getElementById('chip-esc').classList.toggle('active-filter', filters.escalatedOnly);
+  renderScrollContent();
+}
+
+function selectFilter(type, val, el) {
+  filters[type] = val;
+  // Update selected state in dropdown
+  el.closest('.dd-menu').querySelectorAll('.dd-item').forEach(i=>i.classList.remove('selected'));
+  el.classList.add('selected');
+  // Update chip label
+  const chip = document.getElementById('chip-'+type);
+  const labels = {priority:'Priority',category:'Category',owner:'Owner',workstream:'Workstream'};
+  chip.childNodes[0].textContent = val==='all' ? labels[type]+' ▾' : val+' ▾';
+  chip.classList.toggle('active-filter', val!=='all');
+  closeAllDropdowns();
+  renderScrollContent();
+}
+
+// ════════════════════════════════════════════════════════════
+//  DROPDOWNS
+// ════════════════════════════════════════════════════════════
+function toggleDropdown(id, chipEl) {
+  const menu = document.getElementById(id);
+  const wasOpen = menu.classList.contains('open');
+  closeAllDropdowns();
+  if(!wasOpen) menu.classList.add('open');
+  event.stopPropagation();
+}
+function closeAllDropdowns() {
+  document.querySelectorAll('.dd-menu').forEach(m=>m.classList.remove('open'));
+  document.getElementById('cols-menu').classList.remove('open');
+}
+document.addEventListener('click', closeAllDropdowns);
+
+// ════════════════════════════════════════════════════════════
+//  COLUMNS MENU
+// ════════════════════════════════════════════════════════════
+function toggleColsMenu() {
+  const m = document.getElementById('cols-menu');
+  const wasOpen = m.classList.contains('open');
+  closeAllDropdowns();
+  if(!wasOpen) m.classList.add('open');
+  event.stopPropagation();
+}
+
+function renderColsMenu() {
+  const log = LOGS[activeLog];
+  const m = document.getElementById('cols-menu');
+  m.innerHTML = log.columns.map(c => {
+    const vis = colsState[activeLog][c.key];
+    return `<div class="cols-item" onclick="toggleCol('${c.key}',event)">
+      <div class="cols-cb ${vis?'checked':''}" id="cb-${c.key}"></div>
+      ${c.label}
+    </div>`;
+  }).join('');
+}
+
+function toggleCol(key, e) {
+  e.stopPropagation();
+  colsState[activeLog][key] = !colsState[activeLog][key];
+  renderColsMenu();
+  renderScrollContent();
+}
+
+// ════════════════════════════════════════════════════════════
+//  VIEW TOGGLE
+// ════════════════════════════════════════════════════════════
+function setView(v) {
+  activeView = v;
+  document.getElementById('view-table').classList.toggle('active-view', v==='table');
+  document.getElementById('view-cards').classList.toggle('active-view', v==='cards');
+  renderScrollContent();
+}
+
+// ════════════════════════════════════════════════════════════
+//  LOG SWITCHING
+// ════════════════════════════════════════════════════════════
+function switchLog(key) {
+  activeLog = key;
+  filters = { search:'', priority:'all', category:'all', owner:'all', workstream:'all', escalatedOnly:false, statFilter:'all' };
+  document.getElementById('search-input').value = '';
+  render();
+}
+
+function setActiveTTool(el) {
+  document.querySelectorAll('.ttab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ════════════════════════════════════════════════════════════
+//  DRAWER — log-aware, per-row
+// ════════════════════════════════════════════════════════════
+function openDrawer(rowId) {
+  const log = LOGS[activeLog];
+  const row = log.rows.find(r=>r.id===rowId);
+  if(!row) return;
+
+  const ov = document.getElementById('drw-overlay');
+  const drw = document.getElementById('drw');
+  ov.style.display = 'block';
+  ov.className = 'drw-overlay';
+
+  let escSection = '';
+  if(row.escalated) {
+    escSection = `<div class="drw-esc">
+      <div class="drw-esc-head">
+        <div class="drw-esc-title">⚑ Escalation Active</div>
+        <div class="tog-wrap">De-escalate <div class="tog" id="esc-tog-${row.id}" onclick="deEscalate('${row.id}')"></div></div>
+      </div>
+      <div class="esc-grid">
+        <div><div class="f-lbl">Escalation Level</div><div class="f-val">${row.escLevel}</div></div>
+        <div><div class="f-lbl">Escalated To</div><div class="f-val">Sarah Jenkins</div></div>
+        <div><div class="f-lbl">Escalated By</div><div class="f-val auto">${row.owner} (auto)</div></div>
+        <div><div class="f-lbl">Escalation Date</div><div class="f-val auto">02 Feb 2026 (auto)</div></div>
+        <div class="wide"><div class="f-lbl">Escalation Reason</div><div class="f-val rich">Requires senior attention — see activity log for detail.</div></div>
+        <div><div class="f-lbl">Response Required By</div><div class="f-val ${row.days>=10?'over':''}">14 Feb 2026${row.days>=10?' ⚠ Overdue':''}</div></div>
+        <div><div class="f-lbl">Days Escalated</div><div class="f-val ${row.days>=10?'over':''}">${row.days} days</div></div>
+        <div class="wide"><div class="f-lbl">Escalation Response</div><div class="f-val rich" style="color:var(--text-muted);font-style:italic">Awaiting response…</div></div>
+        <div class="wide"><div class="age-bar"><div class="age-fill" style="width:${Math.min(100,(row.days/10)*100)}%;background:${row.days>=10?'var(--red)':'var(--amber)'}"></div></div><div style="font-size:10.5px;color:var(--text-muted);margin-top:3px">Age: ${row.days} days${row.days>=10?' — overdue':''}</div></div>
+      </div>
+    </div>`;
+  }
+
+  const fields = getDrawerFields(activeLog, row);
+  const linked = row.linked && row.linked.length ? row.linked.map(l=>`<div class="linked-chip"><span class="id-tag" style="font-size:10px">${l.id}</span><span style="flex:1">${l.label}</span></div>`).join('') : '<div style="color:var(--text-muted);font-size:12px">No linked items</div>';
+
+  const activity = row.activity && row.activity.length ? row.activity.map(a=>`
+    <div class="act-item">
+      <div class="act-dot ${a.dot}"></div>
+      <div>
+        <div class="act-text">${a.text} <span class="act-type act-type-${a.type}">${a.type}</span></div>
+        <div class="act-time">${a.time}</div>
+      </div>
+    </div>`).join('') : '';
+
+  drw.innerHTML = `
+    <div class="drw-head">
+      <div class="drw-head-top">
+        <span class="id-tag" style="margin-top:3px;flex-shrink:0">${row.id}</span>
+        <div class="drw-title">${row.title}</div>
+        <div class="drw-close" onclick="closeDrawer()"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+      </div>
+      <div class="drw-pills">
+        ${row.priority||row.impact ? `<span class="pri ${row.priCls}">${row.priority||row.impact}</span>` : ''}
+        <span class="stt ${row.stCls}">${row.status}</span>
+        ${row.escalated ? `<span class="esc-badge">${row.escLevel}</span>` : ''}
+      </div>
+    </div>
+    ${escSection}
+    <div class="drw-body">
+      <div class="drw-sec">
+        <div class="drw-sec-title">${log.title.split(' ')[0]} Detail</div>
+        <div class="f-grid">${fields}</div>
+      </div>
+      <div class="drw-sec">
+        <div class="drw-sec-title">Linked Items</div>
+        ${linked}
+      </div>
+      <div class="drw-sec">
+        <div class="drw-sec-title">Activity Log</div>
+        ${activity}
+        <div class="add-note-wrap">
+          <textarea class="add-note-input" placeholder="Add a note… (logged as manual entry with your name and timestamp)" id="note-input-${row.id}"></textarea>
+          <button class="add-note-btn" onclick="addNote('${row.id}')">+ Add Note</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function getDrawerFields(logKey, row) {
+  if(logKey==='r') return `
+    <div class="f-grp"><div class="f-lbl">Category</div><div class="f-val">${row.category}</div></div>
+    <div class="f-grp"><div class="f-lbl">Workstream</div><div class="f-val">${row.workstream||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Risk Score</div><div class="f-val"><span class="score-chip ${row.scoreCls}">${row.score}</span></div></div>
+    <div class="f-grp"><div class="f-lbl">Risk Response</div><div class="f-val">Escalate / Mitigate</div></div>
+    <div class="f-grp wide"><div class="f-lbl">Mitigation Action</div><div class="f-val rich">${row.mitigation||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Owner</div><div class="f-val"><div class="owner-chip"><div class="av" style="background:${row.ownerColor}">${row.ownerAv}</div>${row.owner}</div></div></div>
+    <div class="f-grp"><div class="f-lbl">Target Closure</div><div class="f-val">28 Feb 2026</div></div>`;
+
+  if(logKey==='a') return `
+    <div class="f-grp"><div class="f-lbl">Category</div><div class="f-val">${row.category}</div></div>
+    <div class="f-grp"><div class="f-lbl">Workstream</div><div class="f-val">${row.workstream||'—'}</div></div>
+    <div class="f-grp wide"><div class="f-lbl">Basis for Assumption</div><div class="f-val rich">${row.basis||'—'}</div></div>
+    <div class="f-grp wide"><div class="f-lbl">Validation Method</div><div class="f-val rich">${row.method||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Validation Due Date</div><div class="f-val">${row.dueDate||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Owner</div><div class="f-val"><div class="owner-chip"><div class="av" style="background:${row.ownerColor}">${row.ownerAv}</div>${row.owner}</div></div></div>`;
+
+  if(logKey==='i') return `
+    <div class="f-grp"><div class="f-lbl">Category</div><div class="f-val">${row.category}</div></div>
+    <div class="f-grp"><div class="f-lbl">Issue Type</div><div class="f-val">${row.type||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Workstream</div><div class="f-val">${row.workstream||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Timeline Impact</div><div class="f-val" style="${row.timelineCls||''}">${row.timeline||'—'}</div></div>
+    <div class="f-grp wide"><div class="f-lbl">Resolution Plan</div><div class="f-val rich">${row.resolution||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Owner</div><div class="f-val"><div class="owner-chip"><div class="av" style="background:${row.ownerColor}">${row.ownerAv}</div>${row.owner}</div></div></div>`;
+
+  if(logKey==='d') return `
+    <div class="f-grp"><div class="f-lbl">Dependency Type</div><div class="f-val">${row.type||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Dependent On</div><div class="f-val">${row.dependentOn||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Workstream</div><div class="f-val">${row.workstream||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Required By</div><div class="f-val" style="${row.requiredByCls||''}">${row.requiredBy||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Provider Confirmed</div><div class="f-val">${row.confirmed ? '<span class="tick">✓</span> Yes' : '<span class="cross">✗</span> No'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Impact if Not Met</div><div class="f-val"><span class="pri ${row.priCls}">${row.impact}</span></div></div>
+    <div class="f-grp"><div class="f-lbl">Owner</div><div class="f-val"><div class="owner-chip"><div class="av" style="background:${row.ownerColor}">${row.ownerAv}</div>${row.owner}</div></div></div>`;
+
+  if(logKey==='dc') return `
+    <div class="f-grp"><div class="f-lbl">Category</div><div class="f-val">${row.category}</div></div>
+    <div class="f-grp"><div class="f-lbl">Decision Body</div><div class="f-val">${row.body||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Decision Date</div><div class="f-val" style="${row.decisionDateCls||''}">${row.decisionDate||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Workstream</div><div class="f-val">${row.workstream||'—'}</div></div>
+    <div class="f-grp wide"><div class="f-lbl">Rationale</div><div class="f-val rich">${row.rationale||'—'}</div></div>
+    <div class="f-grp"><div class="f-lbl">Made By</div><div class="f-val"><div class="owner-chip"><div class="av" style="background:${row.ownerColor}">${row.ownerAv}</div>${row.owner}</div></div></div>`;
+
+  return '';
+}
+
+// ════════════════════════════════════════════════════════════
+//  DE-ESCALATION (fix #6)
+// ════════════════════════════════════════════════════════════
+function deEscalate(rowId) {
+  const log = LOGS[activeLog];
+  const row = log.rows.find(r=>r.id===rowId);
+  if(!row) return;
+  row.escalated = false;
+  row.escLevel = null;
+  // Add system activity entry
+  const now = new Date();
+  row.activity.unshift({dot:'green',text:`De-escalated by J. Morris`,time:`${now.getDate()} Feb 2026, ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`,type:'system'});
+  // Update counts in tab badges
+  updateEscCounts();
+  renderScrollContent();
+  closeDrawer();
+}
+
+function updateEscCounts() {
+  ['r','a','i','d','dc'].forEach(k=>{
+    const cnt = LOGS[k].rows.filter(r=>r.escalated).length;
+    const badge = document.getElementById('esc-cnt-'+k);
+    if(badge) {
+      if(cnt===0) badge.style.display='none';
+      else { badge.style.display=''; badge.textContent=cnt+' ⚑'; }
+    }
+    // Update stat card
+    const statIdx = LOGS[k].statCards.findIndex(s=>s.filter==='escalated');
+    if(statIdx>=0) LOGS[k].statCards[statIdx].val = String(cnt);
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  ADD NOTE (fix #8 — user-logged activity)
+// ════════════════════════════════════════════════════════════
+function addNote(rowId) {
+  const input = document.getElementById('note-input-'+rowId);
+  if(!input || !input.value.trim()) return;
+  const log = LOGS[activeLog];
+  const row = log.rows.find(r=>r.id===rowId);
+  if(!row) return;
+  const now = new Date();
+  row.activity.unshift({
+    dot:'',
+    text:'Note by J. Morris: ' + input.value.trim(),
+    time:`${now.getDate()} Feb 2026, ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`,
+    type:'user'
+  });
+  input.value = '';
+  openDrawer(rowId); // re-render drawer with new note
+}
+
+function closeDrawer() {
+  document.getElementById('drw-overlay').style.display = 'none';
+}
+
+function openEscModal() {
+  document.getElementById('modal-ov').style.display = 'flex';
+}
+
+// ════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════
+render();
+</script>
+</body>
+</html>

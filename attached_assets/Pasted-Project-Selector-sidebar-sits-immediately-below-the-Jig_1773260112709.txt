@@ -1,0 +1,16 @@
+Project Selector (sidebar) — sits immediately below the Jiganto logo, always visible. Shows the active project name, its type badge (Implementation, Programme, POC etc.), and the owning org. Click it to open a dropdown listing all your projects grouped into "Your Projects" and "Invited Projects — External." External projects show a purple EXTERNAL badge. Selecting any project switches the entire context of the app.
+
+
+Scope Banner (below topbar) — a persistent strip that always tells you exactly where you are: Project name · Type · Organisation · Your Role on this project · Your access scope. On the right side are phase filter pills (SIT / UAT / Integration / Regression / All Phases) — clicking these scopes every screen to that test phase. This is the visual enforcement of the phase-gated access rules from SR-03.
+
+
+Role Badge (topbar) — colour-coded badge showing your current role. It changes when you switch projects — so if you're TEST_MGR on Acme Corp but EXT_FUNC_CONSULT on the Jiganto product project, the badge makes that immediately visible. External roles render in purple to distinguish them from internal ones.
+
+
+All Projects screen — accessible from the dropdown's "All Projects" button or via the nav. Cards show every project with its type, progress bar, test counts, your role on that project, and the go-live date. External projects are visually differentiated. Closed/archived projects are shown below in a greyed-out section. Clicking any card switches context and navigates to the Command Centre.
+
+
+Access & Roles screen — the full project-level access management UI for Test Managers. Members are grouped by organisation (internal first, then each invited org). External members show in a purple-tinted section with their expiry date. The right panel has three components: a Role Permissions viewer (select any role to see its full module permission matrix with ✓ / R / C / —), a Phase Access Rules grid (which external roles can see SIT/UAT/Integration), and an Active Sharing Rules summary referencing the SR codes from the spec document. All invite, extend, and remove actions are wired up.
+
+
+Project switching is fully wired — switching projects updates the sidebar selector, the topbar org/project breadcrumb, the scope banner (role, org, type, access scope), and the topbar role badge simultaneously — so every part of the UI reflects the current project context, exactly as it will need to work in Replit.

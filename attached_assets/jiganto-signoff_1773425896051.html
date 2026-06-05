@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Jiganto — Document Sign-Off</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #F4F2EE;
+    --surface: #FFFFFF;
+    --surface2: #F9F8F6;
+    --border: #E2DDD6;
+    --border-strong: #C8C2B8;
+    --text: #1A1916;
+    --text-muted: #6B6660;
+    --text-light: #9E9890;
+    --accent: #2A5C45;
+    --accent-light: #EAF2ED;
+    --accent-mid: #4A8C6A;
+    --warn: #C4621A;
+    --warn-light: #FDF0E7;
+    --danger: #B03030;
+    --danger-light: #FAEAEA;
+    --blue: #1E4A8C;
+    --blue-light: #EAF0FA;
+    --radius: 10px;
+    --radius-lg: 16px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.05);
+    --shadow-lg: 0 4px 6px rgba(0,0,0,0.05), 0 12px 32px rgba(0,0,0,0.1);
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* ── VIEWS ── */
+  .view { display: none; min-height: 100vh; }
+  .view.active { display: block; }
+
+  /* ── NAV ── */
+  nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .nav-logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .nav-logo span {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-light);
+    background: var(--bg);
+    padding: 3px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .nav-actions { display: flex; gap: 10px; align-items: center; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 18px; border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px; font-weight: 500;
+    cursor: pointer; border: none; transition: all 0.15s ease;
+    text-decoration: none;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #214a38; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(42,92,69,0.3); }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); }
+  .btn-secondary:hover { background: var(--bg); }
+  .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--bg); color: var(--text); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: #8f2626; }
+  .btn-sm { padding: 6px 13px; font-size: 13px; }
+  .btn-lg { padding: 13px 28px; font-size: 15px; border-radius: 10px; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
+
+  /* ── LAYOUT ── */
+  .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+  .page-header { padding: 36px 0 28px; }
+  .page-header h1 { font-family: 'DM Serif Display', serif; font-size: 30px; font-weight: 400; margin-bottom: 6px; }
+  .page-header p { color: var(--text-muted); font-size: 15px; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: var(--shadow);
+  }
+  .card + .card { margin-top: 16px; }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px; padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-header h2 { font-size: 16px; font-weight: 600; }
+  .card-title-sm { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px; }
+
+  /* ── FORM ELEMENTS ── */
+  .form-group { margin-bottom: 18px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
+  .form-control {
+    width: 100%; padding: 10px 14px;
+    border: 1px solid var(--border-strong); border-radius: 8px;
+    font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text);
+    background: var(--surface); transition: border-color 0.15s;
+    outline: none;
+  }
+  .form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(42,92,69,0.1); }
+  textarea.form-control { resize: vertical; min-height: 100px; }
+
+  /* ── BADGES ── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500;
+  }
+  .badge-pending { background: var(--warn-light); color: var(--warn); }
+  .badge-signed { background: var(--accent-light); color: var(--accent); }
+  .badge-waiting { background: var(--blue-light); color: var(--blue); }
+  .badge-draft { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
+  .badge-declined { background: var(--danger-light); color: var(--danger); }
+
+  /* ── DOC LIST ── */
+  .doc-row {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 0; border-bottom: 1px solid var(--border);
+  }
+  .doc-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .doc-icon {
+    width: 42px; height: 42px; border-radius: 10px;
+    background: var(--accent-light); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+  .doc-info { flex: 1; }
+  .doc-name { font-weight: 600; font-size: 14px; margin-bottom: 3px; }
+  .doc-meta { font-size: 12px; color: var(--text-muted); }
+  .doc-actions { display: flex; gap: 8px; }
+
+  /* ── SIGNER ROW ── */
+  .signer-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; border-radius: 8px;
+    background: var(--surface2); margin-bottom: 8px;
+    border: 1px solid var(--border);
+  }
+  .signer-avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; flex-shrink: 0;
+  }
+  .signer-info { flex: 1; }
+  .signer-name { font-size: 14px; font-weight: 500; }
+  .signer-email { font-size: 12px; color: var(--text-muted); }
+  .signer-order {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--border); color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; flex-shrink: 0;
+  }
+
+  /* ── STEPS ── */
+  .steps { display: flex; gap: 0; margin-bottom: 32px; }
+  .step {
+    flex: 1; display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; background: var(--surface);
+    border: 1px solid var(--border); font-size: 13px;
+    color: var(--text-muted); font-weight: 500;
+    position: relative;
+  }
+  .step:first-child { border-radius: 10px 0 0 10px; }
+  .step:last-child { border-radius: 0 10px 10px 0; }
+  .step + .step { border-left: none; }
+  .step.active { background: var(--accent-light); border-color: var(--accent-mid); color: var(--accent); }
+  .step.done { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .step-num {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--border); color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; flex-shrink: 0;
+  }
+  .step.active .step-num { background: var(--accent); color: #fff; }
+  .step.done .step-num { background: rgba(255,255,255,0.3); color: #fff; }
+
+  /* ── TABS ── */
+  .tabs { display: flex; gap: 2px; margin-bottom: 24px; background: var(--border); padding: 3px; border-radius: 10px; }
+  .tab { flex: 1; padding: 8px; text-align: center; font-size: 13px; font-weight: 500; border-radius: 8px; cursor: pointer; transition: all 0.15s; color: var(--text-muted); }
+  .tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-zone {
+    border: 2px dashed var(--border-strong); border-radius: var(--radius-lg);
+    padding: 40px; text-align: center; cursor: pointer;
+    transition: all 0.2s; background: var(--surface2);
+  }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); background: var(--accent-light); }
+  .upload-icon { font-size: 36px; margin-bottom: 12px; }
+  .upload-zone h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .upload-zone p { font-size: 13px; color: var(--text-muted); }
+
+  /* ── DOCUMENT VIEWER ── */
+  .doc-viewer {
+    background: #f0ece6;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+  }
+  .doc-viewer-toolbar {
+    background: var(--surface); padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; color: var(--text-muted);
+  }
+  .doc-pages { padding: 24px; display: flex; flex-direction: column; gap: 16px; max-height: 480px; overflow-y: auto; }
+  .doc-page {
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    border-radius: 4px;
+    padding: 48px 56px;
+    font-size: 13.5px;
+    line-height: 1.8;
+    color: #2a2a2a;
+    min-height: 340px;
+  }
+  .doc-page h2 { font-family: 'DM Serif Display', serif; font-size: 20px; font-weight: 400; margin-bottom: 16px; text-align: center; }
+  .doc-page h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 20px 0 8px; }
+  .doc-page p { margin-bottom: 12px; }
+  .doc-page .doc-meta-block {
+    background: #f8f6f2; border: 1px solid #e0dbd3;
+    border-radius: 6px; padding: 14px 18px; margin-bottom: 20px; font-size: 12.5px;
+  }
+  .doc-meta-row { display: flex; justify-content: space-between; padding: 3px 0; }
+  .doc-meta-row span:first-child { color: #666; }
+  .doc-meta-row span:last-child { font-weight: 500; }
+
+  /* ── SIGN PANEL ── */
+  .sign-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .sign-panel-header {
+    background: var(--accent); color: #fff;
+    padding: 18px 24px;
+  }
+  .sign-panel-header h2 { font-family: 'DM Serif Display', serif; font-size: 20px; font-weight: 400; margin-bottom: 4px; }
+  .sign-panel-header p { font-size: 13px; opacity: 0.8; }
+  .sign-panel-body { padding: 24px; }
+
+  /* ── CHECKBOX ── */
+  .checkbox-label {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 16px; border: 1px solid var(--border);
+    border-radius: 10px; cursor: pointer;
+    transition: all 0.15s; background: var(--surface2);
+  }
+  .checkbox-label:hover { border-color: var(--accent-mid); background: var(--accent-light); }
+  .checkbox-label input[type="checkbox"] { margin-top: 2px; width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
+  .checkbox-label .check-text { font-size: 13.5px; line-height: 1.5; }
+
+  /* ── TIMELINE ── */
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 1px; background: var(--border); }
+  .tl-item { position: relative; margin-bottom: 20px; }
+  .tl-dot {
+    position: absolute; left: -24px; top: 3px;
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--surface); background: var(--border-strong);
+  }
+  .tl-dot.done { background: var(--accent); }
+  .tl-dot.pending { background: var(--warn); }
+  .tl-title { font-size: 13.5px; font-weight: 600; margin-bottom: 2px; }
+  .tl-sub { font-size: 12px; color: var(--text-muted); }
+
+  /* ── AUDIT RECEIPT ── */
+  .receipt {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 28px; max-width: 600px; margin: 0 auto;
+  }
+  .receipt-header { text-align: center; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .receipt-header .receipt-icon { font-size: 36px; margin-bottom: 10px; }
+  .receipt-header h2 { font-family: 'DM Serif Display', serif; font-size: 24px; font-weight: 400; }
+  .receipt-header p { color: var(--text-muted); font-size: 14px; }
+  .receipt-field { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+  .receipt-field:last-child { border-bottom: none; }
+  .receipt-field label { color: var(--text-muted); font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+  .receipt-field value { font-weight: 500; }
+  .receipt-hash { font-family: monospace; font-size: 11px; color: var(--text-muted); word-break: break-all; background: var(--bg); padding: 8px 12px; border-radius: 6px; margin-top: 16px; }
+
+  /* ── STATS ── */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+  .stat-val { font-size: 26px; font-weight: 600; font-family: 'DM Serif Display', serif; }
+  .stat-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 1000;
+    background: rgba(26,25,22,0.55); backdrop-filter: blur(3px);
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg); width: 90%; max-width: 520px;
+    overflow: hidden; animation: slideUp 0.2s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-header h3 { font-size: 16px; font-weight: 600; }
+  .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); padding: 4px; line-height: 1; }
+  .modal-body { padding: 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+
+  /* ── SIGNER PORTAL ── */
+  .signer-portal { min-height: 100vh; background: var(--bg); }
+  .portal-nav {
+    background: var(--text); color: #fff; padding: 0 32px;
+    height: 56px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .portal-nav .logo { font-family: 'DM Serif Display', serif; font-size: 18px; }
+  .portal-nav .secure-badge { display: flex; align-items: center; gap: 6px; font-size: 12px; opacity: 0.7; }
+  .portal-body { max-width: 820px; margin: 0 auto; padding: 32px 24px; display: grid; grid-template-columns: 1fr 340px; gap: 24px; }
+  @media (max-width: 680px) { .portal-body { grid-template-columns: 1fr; } .stats-row { grid-template-columns: repeat(2,1fr); } }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+    background: var(--text); color: #fff; padding: 14px 20px;
+    border-radius: 10px; font-size: 14px; box-shadow: var(--shadow-lg);
+    transform: translateY(80px); opacity: 0; transition: all 0.3s ease;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { background: var(--accent); }
+
+  /* ── EMPTY STATE ── */
+  .empty { text-align: center; padding: 48px 24px; color: var(--text-muted); }
+  .empty-icon { font-size: 40px; margin-bottom: 14px; }
+  .empty h3 { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .empty p { font-size: 14px; }
+
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+  .flex-between { display: flex; align-items: center; justify-content: space-between; }
+  .text-muted { color: var(--text-muted); font-size: 13px; }
+  .mt-16 { margin-top: 16px; }
+  .mt-24 { margin-top: 24px; }
+  .gap-10 { display: flex; gap: 10px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     VIEW 1: SENDER DASHBOARD
+═══════════════════════════════════════════ -->
+<div id="view-dashboard" class="view active">
+  <nav>
+    <div class="nav-logo">Jiganto <span>Sign-Off</span></div>
+    <div class="nav-actions">
+      <button class="btn btn-secondary btn-sm" onclick="showView('view-signer')">👁 Preview Signer View</button>
+      <button class="btn btn-primary btn-sm" onclick="showModal('modal-new-doc')">+ New Sign-Off</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Sign-Off Requests</h1>
+      <p>Manage document approvals and track signer progress</p>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-val">7</div>
+        <div class="stat-label">Total documents</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color:var(--warn)">3</div>
+        <div class="stat-label">Awaiting signatures</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color:var(--accent)">4</div>
+        <div class="stat-label">Fully signed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color:var(--text-muted)">1</div>
+        <div class="stat-label">Draft</div>
+      </div>
+    </div>
+
+    <!-- Document list -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Active Requests</h2>
+        <div class="tabs" style="margin:0;width:280px">
+          <div class="tab active">All</div>
+          <div class="tab" onclick="this.parentNode.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));this.classList.add('active')">Pending</div>
+          <div class="tab" onclick="this.parentNode.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));this.classList.add('active')">Signed</div>
+        </div>
+      </div>
+
+      <!-- Doc 1 — pending -->
+      <div class="doc-row">
+        <div class="doc-icon">📄</div>
+        <div class="doc-info">
+          <div class="doc-name">Project Alpha — Scope of Work v2.1</div>
+          <div class="doc-meta">Sent 2 days ago · 2 of 3 signed · Waiting on <strong>Emma Clarke</strong></div>
+        </div>
+        <span class="badge badge-pending">⏳ Pending</span>
+        <div class="doc-actions">
+          <button class="btn btn-ghost btn-sm" onclick="showView('view-detail')">View</button>
+          <button class="btn btn-secondary btn-sm" onclick="showToast('Reminder sent to Emma Clarke', 'success')">Remind</button>
+        </div>
+      </div>
+
+      <!-- Doc 2 — signed -->
+      <div class="doc-row">
+        <div class="doc-icon" style="background:var(--accent-light);color:var(--accent)">✅</div>
+        <div class="doc-info">
+          <div class="doc-name">Design Brief — Brand Refresh 2024</div>
+          <div class="doc-meta">Completed 5 days ago · 3 of 3 signed</div>
+        </div>
+        <span class="badge badge-signed">✓ Complete</span>
+        <div class="doc-actions">
+          <button class="btn btn-ghost btn-sm" onclick="showView('view-receipt')">Receipt</button>
+          <button class="btn btn-secondary btn-sm" onclick="showToast('PDF downloaded')">Download</button>
+        </div>
+      </div>
+
+      <!-- Doc 3 — waiting -->
+      <div class="doc-row">
+        <div class="doc-icon" style="background:var(--blue-light);color:var(--blue)">📋</div>
+        <div class="doc-info">
+          <div class="doc-name">Technical Specification — API Integration</div>
+          <div class="doc-meta">Sent 1 hour ago · 0 of 2 signed</div>
+        </div>
+        <span class="badge badge-waiting">📬 Sent</span>
+        <div class="doc-actions">
+          <button class="btn btn-ghost btn-sm">View</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:var(--danger-light)" onclick="showToast('Sign-off request cancelled')">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Doc 4 — signed -->
+      <div class="doc-row">
+        <div class="doc-icon" style="background:var(--accent-light);color:var(--accent)">✅</div>
+        <div class="doc-info">
+          <div class="doc-name">Q3 Project Delivery Report</div>
+          <div class="doc-meta">Completed 2 weeks ago · 4 of 4 signed</div>
+        </div>
+        <span class="badge badge-signed">✓ Complete</span>
+        <div class="doc-actions">
+          <button class="btn btn-ghost btn-sm" onclick="showView('view-receipt')">Receipt</button>
+          <button class="btn btn-secondary btn-sm" onclick="showToast('PDF downloaded')">Download</button>
+        </div>
+      </div>
+
+      <!-- Doc 5 — draft -->
+      <div class="doc-row">
+        <div class="doc-icon" style="background:var(--bg);color:var(--text-muted)">📝</div>
+        <div class="doc-info">
+          <div class="doc-name">Infrastructure Review — Draft</div>
+          <div class="doc-meta">Last edited 3 hours ago · Not yet sent</div>
+        </div>
+        <span class="badge badge-draft">Draft</span>
+        <div class="doc-actions">
+          <button class="btn btn-ghost btn-sm" onclick="showView('view-compose')">Edit</button>
+          <button class="btn btn-primary btn-sm" onclick="showModal('modal-send-confirm')">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     VIEW 2: DOCUMENT DETAIL / PROGRESS
+═══════════════════════════════════════════ -->
+<div id="view-detail" class="view">
+  <nav>
+    <div class="nav-logo">Jiganto <span>Sign-Off</span></div>
+    <div class="nav-actions">
+      <button class="btn btn-ghost btn-sm" onclick="showView('view-dashboard')">← Back</button>
+      <button class="btn btn-secondary btn-sm" onclick="showToast('Reminder sent to all pending signers', 'success')">Send Reminder</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <div class="flex-between">
+        <div>
+          <h1>Project Alpha — Scope of Work v2.1</h1>
+          <p>Sent by James Thornton · 2 days ago · 3 signers required</p>
+        </div>
+        <span class="badge badge-pending" style="font-size:13px;padding:6px 14px">⏳ In Progress</span>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:20px">
+      <div>
+        <!-- Document preview -->
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="doc-viewer">
+            <div class="doc-viewer-toolbar">
+              <span>📄 Project_Alpha_SoW_v2.1.pdf</span>
+              <span>Page 1 of 2</span>
+              <button class="btn btn-ghost btn-sm" onclick="showToast('Opening document...')">⤓ Download</button>
+            </div>
+            <div class="doc-pages">
+              <div class="doc-page">
+                <h2>Scope of Work — Project Alpha</h2>
+                <div class="doc-meta-block">
+                  <div class="doc-meta-row"><span>Client</span><span>Acme Corp Ltd</span></div>
+                  <div class="doc-meta-row"><span>Project</span><span>Project Alpha — Phase 2</span></div>
+                  <div class="doc-meta-row"><span>Version</span><span>2.1 — Final</span></div>
+                  <div class="doc-meta-row"><span>Date</span><span>11 March 2026</span></div>
+                </div>
+                <h3>1. Overview</h3>
+                <p>This Scope of Work outlines the deliverables, timelines, and responsibilities agreed between Jiganto Ltd and Acme Corp Ltd for the delivery of Project Alpha, Phase 2.</p>
+                <h3>2. Deliverables</h3>
+                <p>The following deliverables are in scope for this engagement: (a) System architecture design and documentation, (b) API integration with existing CRM platform, (c) User acceptance testing and sign-off, (d) Deployment to production environment.</p>
+                <h3>3. Timeline</h3>
+                <p>Work will commence on 1 April 2026 and is expected to complete by 30 June 2026, subject to timely receipt of client materials as outlined in Section 5.</p>
+                <h3>4. Commercial Terms</h3>
+                <p>The agreed project fee is £48,500 + VAT, payable in three instalments as detailed in the payment schedule attached hereto.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right panel: signers -->
+      <div>
+        <div class="card">
+          <div class="card-title-sm">Signing Progress</div>
+          <div class="timeline">
+            <div class="tl-item">
+              <div class="tl-dot done"></div>
+              <div class="tl-title">James Thornton <span class="badge badge-signed" style="font-size:11px;padding:2px 7px">Signed</span></div>
+              <div class="tl-sub">Sender · 11 Mar 2026, 09:14</div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-dot done"></div>
+              <div class="tl-title">Sarah Mitchell <span class="badge badge-signed" style="font-size:11px;padding:2px 7px">Signed</span></div>
+              <div class="tl-sub">Project Director · 11 Mar 2026, 14:32</div>
+            </div>
+            <div class="tl-item" style="margin-bottom:0">
+              <div class="tl-dot pending"></div>
+              <div class="tl-title">Emma Clarke <span class="badge badge-pending" style="font-size:11px;padding:2px 7px">Pending</span></div>
+              <div class="tl-sub">Client Signatory · Awaiting</div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <button class="btn btn-primary" style="width:100%" onclick="showToast('Reminder sent to Emma Clarke', 'success')">Send Reminder</button>
+          <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="showView('view-signer')">Preview Signer View →</button>
+        </div>
+
+        <div class="card mt-16">
+          <div class="card-title-sm">Document Info</div>
+          <div style="font-size:13px">
+            <div class="receipt-field"><label>Sent</label><value>11 Mar 2026</value></div>
+            <div class="receipt-field"><label>Expires</label><value>25 Mar 2026</value></div>
+            <div class="receipt-field"><label>Signers</label><value>3 required</value></div>
+            <div class="receipt-field"><label>Message</label><value style="font-size:12px;color:var(--text-muted);text-align:right">Please review and sign off the final SoW</value></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     VIEW 3: COMPOSE NEW SIGN-OFF
+═══════════════════════════════════════════ -->
+<div id="view-compose" class="view">
+  <nav>
+    <div class="nav-logo">Jiganto <span>Sign-Off</span></div>
+    <div class="nav-actions">
+      <button class="btn btn-ghost btn-sm" onclick="showView('view-dashboard')">← Cancel</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>New Sign-Off Request</h1>
+      <p>Upload a document and define who needs to sign it</p>
+    </div>
+
+    <div class="steps">
+      <div class="step done"><div class="step-num">✓</div> Document</div>
+      <div class="step active"><div class="step-num">2</div> Signers</div>
+      <div class="step"><div class="step-num">3</div> Message</div>
+      <div class="step"><div class="step-num">4</div> Send</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div>
+        <div class="card">
+          <div class="card-header"><h2>Uploaded Document</h2></div>
+          <div class="signer-row" style="background:var(--accent-light);border-color:var(--accent-mid)">
+            <div class="doc-icon">📄</div>
+            <div class="signer-info">
+              <div class="signer-name">Infrastructure_Review_v1.pdf</div>
+              <div class="signer-email">2.4 MB · Uploaded just now</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="showToast('Removing document...')">✕</button>
+          </div>
+          <div class="divider"></div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Document Title</label>
+            <input class="form-control" value="Infrastructure Review — Draft" placeholder="Give this a clear title"/>
+          </div>
+        </div>
+
+        <div class="card mt-16">
+          <div class="card-header">
+            <h2>Message to Signers</h2>
+          </div>
+          <div class="form-group">
+            <label>Message (optional)</label>
+            <textarea class="form-control" placeholder="e.g. Please review and sign off the infrastructure review document before the deadline.">Please review the attached infrastructure review and confirm your sign-off before Friday 20 March.</textarea>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Sign-Off Deadline</label>
+            <input class="form-control" type="date" value="2026-03-20"/>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-header">
+            <h2>Signers</h2>
+            <button class="btn btn-secondary btn-sm" onclick="showModal('modal-add-signer')">+ Add Signer</button>
+          </div>
+          <p class="text-muted" style="margin-bottom:16px">Signers will be notified in order. All must sign before the document is complete.</p>
+
+          <div class="signer-row">
+            <div class="signer-order">1</div>
+            <div class="signer-avatar">JT</div>
+            <div class="signer-info">
+              <div class="signer-name">James Thornton <tag class="tag" style="background:var(--accent-light);color:var(--accent)">You</tag></div>
+              <div class="signer-email">j.thornton@jiganto.io</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" style="opacity:0.4" disabled>–</button>
+          </div>
+
+          <div class="signer-row">
+            <div class="signer-order">2</div>
+            <div class="signer-avatar" style="background:var(--blue)">SM</div>
+            <div class="signer-info">
+              <div class="signer-name">Sarah Mitchell</div>
+              <div class="signer-email">s.mitchell@jiganto.io</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="this.closest('.signer-row').remove();showToast('Signer removed')">✕</button>
+          </div>
+
+          <div class="signer-row">
+            <div class="signer-order">3</div>
+            <div class="signer-avatar" style="background:var(--warn)">EC</div>
+            <div class="signer-info">
+              <div class="signer-name">Emma Clarke</div>
+              <div class="signer-email">e.clarke@acmecorp.com</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="this.closest('.signer-row').remove();showToast('Signer removed')">✕</button>
+          </div>
+
+          <div class="divider"></div>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-ghost" style="flex:1" onclick="showView('view-dashboard')">Save Draft</button>
+            <button class="btn btn-primary" style="flex:1" onclick="showModal('modal-send-confirm')">Review & Send →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     VIEW 4: SIGNER PORTAL (external view)
+═══════════════════════════════════════════ -->
+<div id="view-signer" class="view">
+  <div class="signer-portal">
+    <div class="portal-nav">
+      <div class="logo">Jiganto Sign-Off</div>
+      <div class="secure-badge">🔒 Secure signing session</div>
+    </div>
+
+    <div class="portal-body">
+      <!-- Left: document -->
+      <div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 22px;margin-bottom:16px">
+          <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px">You have been asked to sign off</div>
+          <div style="font-size:18px;font-family:'DM Serif Display',serif;font-weight:400;margin-bottom:8px">Project Alpha — Scope of Work v2.1</div>
+          <div style="font-size:13px;color:var(--text-muted)">From <strong style="color:var(--text)">James Thornton</strong> · Sent 11 Mar 2026 · Expires 25 Mar 2026</div>
+          <div style="margin-top:14px;padding:12px 16px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);font-size:13px;color:var(--text-muted)">
+            💬 <em>"Please review and sign off the final SoW for Project Alpha before the deadline."</em>
+          </div>
+        </div>
+
+        <div class="doc-viewer">
+          <div class="doc-viewer-toolbar">
+            <span>📄 Project_Alpha_SoW_v2.1.pdf</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="scroll-hint" style="font-size:12px;color:var(--warn);font-weight:500">↓ Please scroll to read the full document</span>
+              <button class="btn btn-ghost btn-sm" onclick="showToast('Opening document...')">⤓ Download</button>
+            </div>
+          </div>
+          <div class="doc-pages" id="doc-scroll" onscroll="checkScrolled(this)">
+            <div class="doc-page">
+              <h2>Scope of Work — Project Alpha</h2>
+              <div class="doc-meta-block">
+                <div class="doc-meta-row"><span>Client</span><span>Acme Corp Ltd</span></div>
+                <div class="doc-meta-row"><span>Project</span><span>Project Alpha — Phase 2</span></div>
+                <div class="doc-meta-row"><span>Version</span><span>2.1 — Final</span></div>
+                <div class="doc-meta-row"><span>Date</span><span>11 March 2026</span></div>
+              </div>
+              <h3>1. Overview</h3>
+              <p>This Scope of Work outlines the deliverables, timelines, and responsibilities agreed between Jiganto Ltd and Acme Corp Ltd for the delivery of Project Alpha, Phase 2.</p>
+              <h3>2. Deliverables</h3>
+              <p>The following deliverables are in scope for this engagement: (a) System architecture design and documentation, (b) API integration with existing CRM platform, (c) User acceptance testing and sign-off, (d) Deployment to production environment.</p>
+              <h3>3. Timeline</h3>
+              <p>Work will commence on 1 April 2026 and is expected to complete by 30 June 2026, subject to timely receipt of client materials as outlined in Section 5.</p>
+              <h3>4. Commercial Terms</h3>
+              <p>The agreed project fee is £48,500 + VAT, payable in three instalments as detailed in the payment schedule attached hereto.</p>
+            </div>
+            <div class="doc-page">
+              <h3>5. Client Responsibilities</h3>
+              <p>The client agrees to provide timely feedback within 5 business days of each milestone delivery, access to required systems and personnel, and prompt payment in accordance with the schedule.</p>
+              <h3>6. Intellectual Property</h3>
+              <p>All deliverables created under this agreement shall become the property of the client upon receipt of full payment. Pre-existing IP remains the property of Jiganto Ltd.</p>
+              <h3>7. Confidentiality</h3>
+              <p>Both parties agree to maintain the confidentiality of all proprietary information shared during the engagement.</p>
+              <h3>8. Acceptance</h3>
+              <p>By signing this document electronically, you confirm that you have read and agree to the terms set out in this Scope of Work, and that you are authorised to sign on behalf of your organisation.</p>
+              <br/><br/><br/>
+              <div style="border-top:1px solid #ddd;padding-top:14px;font-size:12px;color:#888;text-align:center">
+                Jiganto Ltd · Registered in England & Wales · Co. No. 12345678
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: sign panel -->
+      <div>
+        <div class="sign-panel">
+          <div class="sign-panel-header">
+            <h2>Your Sign-Off</h2>
+            <p>Step 2 of 3 · Emma Clarke</p>
+          </div>
+          <div class="sign-panel-body">
+            <div class="form-group">
+              <label>Your full name</label>
+              <input class="form-control" id="signer-name" placeholder="Type your full legal name" oninput="checkSignReady()"/>
+            </div>
+
+            <div style="margin-bottom:18px">
+              <label class="checkbox-label" id="check1-label">
+                <input type="checkbox" id="check1" onchange="checkSignReady()"/>
+                <div class="check-text">I confirm I have read the entire document in full.</div>
+              </label>
+            </div>
+
+            <div style="margin-bottom:18px">
+              <label class="checkbox-label" id="check2-label">
+                <input type="checkbox" id="check2" onchange="checkSignReady()"/>
+                <div class="check-text">I agree to the terms set out in this document and confirm I am authorised to sign on behalf of my organisation.</div>
+              </label>
+            </div>
+
+            <div style="margin-bottom:18px">
+              <label class="checkbox-label">
+                <input type="checkbox" id="check3" onchange="checkSignReady()"/>
+                <div class="check-text">I understand this electronic sign-off is legally equivalent to a handwritten signature.</div>
+              </label>
+            </div>
+
+            <div class="divider"></div>
+
+            <button class="btn btn-primary btn-lg" style="width:100%;justify-content:center" id="sign-btn" disabled onclick="submitSignature()">
+              ✍ Sign Off Document
+            </button>
+            <button class="btn btn-danger" style="width:100%;margin-top:8px;justify-content:center" onclick="showModal('modal-decline')">
+              Decline to Sign
+            </button>
+
+            <div style="margin-top:14px;text-align:center;font-size:12px;color:var(--text-muted)">
+              🔒 Secured with a one-time link · Your IP and timestamp will be recorded
+            </div>
+          </div>
+        </div>
+
+        <div class="card mt-16" style="font-size:13px">
+          <div class="card-title-sm">Other Signers</div>
+          <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px">
+            <div class="signer-avatar" style="width:28px;height:28px;font-size:11px;background:var(--accent)">JT</div>
+            <div><div style="font-size:13px;font-weight:500">James Thornton</div></div>
+            <span class="badge badge-signed" style="margin-left:auto;font-size:11px">✓ Signed</span>
+          </div>
+          <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px">
+            <div class="signer-avatar" style="width:28px;height:28px;font-size:11px;background:var(--blue)">SM</div>
+            <div><div style="font-size:13px;font-weight:500">Sarah Mitchell</div></div>
+            <span class="badge badge-signed" style="margin-left:auto;font-size:11px">✓ Signed</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="signer-avatar" style="width:28px;height:28px;font-size:11px;background:var(--warn)">EC</div>
+            <div><div style="font-size:13px;font-weight:500">Emma Clarke</div></div>
+            <span class="badge badge-pending" style="margin-left:auto;font-size:11px">You</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     VIEW 5: SIGN-OFF COMPLETE / RECEIPT
+═══════════════════════════════════════════ -->
+<div id="view-signed" class="view">
+  <div class="signer-portal">
+    <div class="portal-nav">
+      <div class="logo">Jiganto Sign-Off</div>
+      <div class="secure-badge">🔒 Session complete</div>
+    </div>
+    <div style="max-width:600px;margin:48px auto;padding:0 24px">
+      <div style="text-align:center;margin-bottom:32px">
+        <div style="font-size:56px;margin-bottom:16px;animation:pulse 2s ease infinite">✅</div>
+        <h1 style="font-family:'DM Serif Display',serif;font-size:30px;font-weight:400;margin-bottom:8px">Document Signed</h1>
+        <p style="color:var(--text-muted)">Your sign-off has been recorded. All parties will receive a copy once everyone has signed.</p>
+      </div>
+      <div class="receipt">
+        <div class="receipt-header">
+          <div class="receipt-icon">📋</div>
+          <h2>Sign-Off Certificate</h2>
+          <p>Project Alpha — Scope of Work v2.1</p>
+        </div>
+        <div id="receipt-name-row" class="receipt-field">
+          <label>Signed by</label>
+          <value id="receipt-name">Emma Clarke</value>
+        </div>
+        <div class="receipt-field">
+          <label>Document</label>
+          <value>Project Alpha — Scope of Work v2.1</value>
+        </div>
+        <div class="receipt-field">
+          <label>Date &amp; Time</label>
+          <value id="receipt-time"></value>
+        </div>
+        <div class="receipt-field">
+          <label>IP Address</label>
+          <value>82.45.112.87</value>
+        </div>
+        <div class="receipt-field">
+          <label>Status</label>
+          <value><span class="badge badge-pending">⏳ Awaiting 0 more signers</span></value>
+        </div>
+        <div class="receipt-hash">
+          Document hash (SHA-256): a3f8b2c1e94d057f6821b3c9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:24px;display:flex;gap:12px;justify-content:center">
+        <button class="btn btn-secondary" onclick="showToast('Certificate downloaded')">⤓ Download Certificate</button>
+        <button class="btn btn-primary" onclick="showView('view-receipt')">View Full Audit Trail →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     VIEW 6: AUDIT TRAIL / COMPLETED RECEIPT
+═══════════════════════════════════════════ -->
+<div id="view-receipt" class="view">
+  <nav>
+    <div class="nav-logo">Jiganto <span>Sign-Off</span></div>
+    <div class="nav-actions">
+      <button class="btn btn-ghost btn-sm" onclick="showView('view-dashboard')">← Back</button>
+      <button class="btn btn-primary btn-sm" onclick="showToast('PDF report downloaded')">⤓ Download PDF Report</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Audit Trail</h1>
+      <p>Design Brief — Brand Refresh 2024 · Completed 8 March 2026</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:20px">
+      <div>
+        <div class="card">
+          <div class="card-header"><h2>Signing Activity</h2></div>
+          <div class="timeline">
+            <div class="tl-item">
+              <div class="tl-dot done"></div>
+              <div class="tl-title">Document created by James Thornton</div>
+              <div class="tl-sub">3 March 2026, 10:02 · IP 185.22.14.3</div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-dot done"></div>
+              <div class="tl-title">Sign-off request sent to 3 signers</div>
+              <div class="tl-sub">3 March 2026, 10:04</div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-dot done"></div>
+              <div class="tl-title">James Thornton signed</div>
+              <div class="tl-sub">3 March 2026, 10:08 · IP 185.22.14.3 · "I confirm and agree"</div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-dot done"></div>
+              <div class="tl-title">Sarah Mitchell viewed document</div>
+              <div class="tl-sub">4 March 2026, 14:21 · IP 92.168.1.44</div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-dot done"></div>
+              <div class="tl-title">Sarah Mitchell signed</div>
+              <div class="tl-sub">4 March 2026, 14:35 · IP 92.168.1.44 · "I confirm and agree"</div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-dot done"></div>
+              <div class="tl-title">Reminder sent to Emma Clarke</div>
+              <div class="tl-sub">7 March 2026, 09:00 · Auto-reminder</div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-dot done"></div>
+              <div class="tl-title">Emma Clarke signed</div>
+              <div class="tl-sub">8 March 2026, 11:15 · IP 82.45.112.87 · "I confirm and agree"</div>
+            </div>
+            <div class="tl-item" style="margin-bottom:0">
+              <div class="tl-dot done"></div>
+              <div class="tl-title" style="color:var(--accent)">✓ Document fully signed — certificates sent to all parties</div>
+              <div class="tl-sub">8 March 2026, 11:15</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-title-sm">Document Summary</div>
+          <div style="font-size:13px">
+            <div class="receipt-field"><label>Document</label><value style="font-size:12px">Design Brief — Brand Refresh 2024</value></div>
+            <div class="receipt-field"><label>Sent</label><value>3 Mar 2026</value></div>
+            <div class="receipt-field"><label>Completed</label><value>8 Mar 2026</value></div>
+            <div class="receipt-field"><label>Signers</label><value>3 / 3</value></div>
+            <div class="receipt-field"><label>Status</label><value><span class="badge badge-signed">✓ Complete</span></value></div>
+          </div>
+          <div class="receipt-hash">
+            SHA-256: a3f8b2c1e94d057f6821b3c9d4e5f6a7b8c9d0e1f2a3b4c5
+          </div>
+        </div>
+
+        <div class="card mt-16">
+          <div class="card-title-sm">Signers</div>
+          <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="signer-avatar" style="width:30px;height:30px;font-size:11px">JT</div>
+              <div><div style="font-weight:500">James Thornton</div><div style="font-size:12px;color:var(--text-muted)">3 Mar, 10:08</div></div>
+              <span class="badge badge-signed" style="margin-left:auto;font-size:11px">✓</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="signer-avatar" style="width:30px;height:30px;font-size:11px;background:var(--blue)">SM</div>
+              <div><div style="font-weight:500">Sarah Mitchell</div><div style="font-size:12px;color:var(--text-muted)">4 Mar, 14:35</div></div>
+              <span class="badge badge-signed" style="margin-left:auto;font-size:11px">✓</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="signer-avatar" style="width:30px;height:30px;font-size:11px;background:var(--warn)">EC</div>
+              <div><div style="font-weight:500">Emma Clarke</div><div style="font-size:12px;color:var(--text-muted)">8 Mar, 11:15</div></div>
+              <span class="badge badge-signed" style="margin-left:auto;font-size:11px">✓</span>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;margin-top:16px;justify-content:center" onclick="showToast('PDF report downloaded')">
+          ⤓ Download Full Report
+        </button>
+        <button class="btn btn-ghost" style="width:100%;margin-top:8px;justify-content:center" onclick="showView('view-dashboard')">
+          Back to Dashboard
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     MODALS
+═══════════════════════════════════════════ -->
+
+<!-- New doc modal -->
+<div class="modal-overlay" id="modal-new-doc">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>New Sign-Off Request</h3>
+      <button class="modal-close" onclick="closeModal('modal-new-doc')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="upload-zone" onclick="showToast('File browser would open here');document.getElementById('modal-new-doc').classList.remove('active');setTimeout(()=>showView('view-compose'),300)">
+        <div class="upload-icon">📎</div>
+        <h3>Drop your document here</h3>
+        <p>PDF or DOCX · Max 50MB</p>
+        <button class="btn btn-secondary btn-sm" style="margin-top:16px">Browse files</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add signer modal -->
+<div class="modal-overlay" id="modal-add-signer">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add Signer</h3>
+      <button class="modal-close" onclick="closeModal('modal-add-signer')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Name</label>
+        <input class="form-control" id="new-signer-name" placeholder="Full name"/>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Email address</label>
+        <input class="form-control" id="new-signer-email" placeholder="email@company.com"/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-signer')">Cancel</button>
+      <button class="btn btn-primary" onclick="addSigner()">Add Signer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Send confirm modal -->
+<div class="modal-overlay" id="modal-send-confirm">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Send Sign-Off Request</h3>
+      <button class="modal-close" onclick="closeModal('modal-send-confirm')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;color:var(--text-muted);font-size:14px">You're about to send sign-off emails to <strong style="color:var(--text)">3 signers</strong>. They'll each receive a secure, one-time link.</p>
+      <div class="signer-row" style="margin-bottom:8px">
+        <div class="signer-avatar">JT</div>
+        <div class="signer-info"><div class="signer-name">James Thornton</div><div class="signer-email">j.thornton@jiganto.io</div></div>
+        <span class="badge badge-waiting">Order 1</span>
+      </div>
+      <div class="signer-row" style="margin-bottom:8px">
+        <div class="signer-avatar" style="background:var(--blue)">SM</div>
+        <div class="signer-info"><div class="signer-name">Sarah Mitchell</div><div class="signer-email">s.mitchell@jiganto.io</div></div>
+        <span class="badge badge-waiting">Order 2</span>
+      </div>
+      <div class="signer-row">
+        <div class="signer-avatar" style="background:var(--warn)">EC</div>
+        <div class="signer-info"><div class="signer-name">Emma Clarke</div><div class="signer-email">e.clarke@acmecorp.com</div></div>
+        <span class="badge badge-waiting">Order 3</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-send-confirm')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-send-confirm');showToast('Sign-off request sent to 3 signers ✓', 'success');setTimeout(()=>showView('view-dashboard'),1000)">Send Now →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Decline modal -->
+<div class="modal-overlay" id="modal-decline">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Decline to Sign</h3>
+      <button class="modal-close" onclick="closeModal('modal-decline')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;font-size:14px;color:var(--text-muted)">Please let the sender know why you are declining. They will be notified immediately.</p>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Reason for declining (required)</label>
+        <textarea class="form-control" id="decline-reason" placeholder="e.g. I do not agree with the commercial terms in Section 4 — please revise and reissue."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-decline')">Cancel</button>
+      <button class="btn btn-danger" onclick="closeModal('modal-decline');showToast('Decline recorded. Sender has been notified.', 'success');setTimeout(()=>showView('view-dashboard'),1200)">Confirm Decline</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<style>
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+</style>
+
+<script>
+// ── NAVIGATION ──
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ── MODALS ──
+function showModal(id) {
+  document.getElementById(id).classList.add('active');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+}
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('active'); });
+});
+
+// ── TOAST ──
+let toastTimer;
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type === 'success' ? ' success' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── SIGNING LOGIC ──
+function checkSignReady() {
+  const name = document.getElementById('signer-name').value.trim();
+  const c1 = document.getElementById('check1').checked;
+  const c2 = document.getElementById('check2').checked;
+  const c3 = document.getElementById('check3').checked;
+  document.getElementById('sign-btn').disabled = !(name.length > 2 && c1 && c2 && c3);
+}
+
+function submitSignature() {
+  const name = document.getElementById('signer-name').value.trim();
+  document.getElementById('receipt-name').textContent = name;
+  const now = new Date();
+  document.getElementById('receipt-time').textContent =
+    now.toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' }) +
+    ', ' + now.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  showView('view-signed');
+}
+
+// ── SCROLL CHECK ──
+function checkScrolled(el) {
+  const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  if (nearBottom) document.getElementById('scroll-hint').style.display = 'none';
+}
+
+// ── ADD SIGNER ──
+function addSigner() {
+  const name = document.getElementById('new-signer-name').value.trim();
+  const email = document.getElementById('new-signer-email').value.trim();
+  if (!name || !email) { showToast('Please enter name and email'); return; }
+  const initials = name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const colors = ['#2A5C45','#1E4A8C','#C4621A','#6B3FA0'];
+  const color = colors[Math.floor(Math.random()*colors.length)];
+  const rows = document.querySelectorAll('.signer-row');
+  const order = rows.length + 1;
+  const row = document.createElement('div');
+  row.className = 'signer-row';
+  row.innerHTML = `
+    <div class="signer-order">${order}</div>
+    <div class="signer-avatar" style="background:${color}">${initials}</div>
+    <div class="signer-info">
+      <div class="signer-name">${name}</div>
+      <div class="signer-email">${email}</div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="this.closest('.signer-row').remove();showToast('Signer removed')">✕</button>`;
+  document.querySelector('#view-compose .signer-row').parentNode.appendChild(row);
+  closeModal('modal-add-signer');
+  showToast(`${name} added as signer ${order}`, 'success');
+  document.getElementById('new-signer-name').value = '';
+  document.getElementById('new-signer-email').value = '';
+}
+</script>
+</body>
+</html>
