@@ -109,3 +109,12 @@ export async function sendOrgEmail(params: {
     error: "Configure SMTP (host + SMTP_PASSWORD) or RESEND_API_KEY + INVITE_EMAIL_FROM",
   };
 }
+
+/** True when Resend or global SMTP password is configured (tenant SMTP checked at send time). */
+export function isOrgEmailConfigured(): boolean {
+  const resend = Boolean(
+    process.env.RESEND_API_KEY?.trim() && process.env.INVITE_EMAIL_FROM?.trim(),
+  );
+  const smtp = Boolean(process.env.SMTP_PASSWORD?.trim());
+  return resend || smtp;
+}

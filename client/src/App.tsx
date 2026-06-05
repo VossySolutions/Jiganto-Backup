@@ -25,6 +25,7 @@ import SigningPortalPage from "@/pages/SigningPortalPage";
 import SurveysPage from "@/pages/SurveysPage";
 import SurveyPortalPage from "@/pages/SurveyPortalPage";
 import ClientsPage from "@/pages/ClientsPage";
+import CustomerManagementPage from "@/pages/CustomerManagementPage";
 import { useAuth } from "@/hooks/use-auth";
 import { SidebarStateProvider } from "@/hooks/use-sidebar-state";
 import { DashboardSelectorProvider } from "@/hooks/use-dashboard-selector";
@@ -131,6 +132,7 @@ function Router() {
         <Route path="/modules/bpm" component={BPMPage} />
         <Route path="/modules/test-mgmt" component={TestManagementPage} />
         <Route path="/modules/clients" component={ClientsPage} />
+        <Route path="/modules/customer-mgmt" component={CustomerManagementPage} />
         <Route path="/modules/e-sign" component={SignOffPage} />
         <Route path="/modules/surveys" component={SurveysPage} />
         <Route path="/settings/system" component={SettingsPage} />

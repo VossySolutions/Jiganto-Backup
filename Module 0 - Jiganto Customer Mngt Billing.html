@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Jiganto — Customer Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css" rel="stylesheet">
+<style>
+:root{
+  --brand:#534AB7;--brand-d:#3C3489;--brand-l:#EEEDFE;--brand-m:#AFA9EC;
+  --teal:#0F6E56;--teal-l:#E1F5EE;--green:#3B6D11;--green-l:#EAF3DE;
+  --amber:#854F0B;--amber-l:#FAEEDA;--amber-m:#EF9F27;
+  --red:#A32D2D;--red-l:#FCEBEB;--red-m:#E24B4A;
+  --blue:#185FA5;--blue-l:#E6F1FB;--blue-m:#378ADD;
+  --text:#1E1B2E;--text2:#4B5563;--text3:#9CA3AF;
+  --border:rgba(0,0,0,.1);--border2:rgba(0,0,0,.06);
+  --bg:#F8F8FC;--surface:#fff;--surface2:#F4F4F8;
+  --sidebar:#0F0F1A;
+  --font:'Plus Jakarta Sans',sans-serif;--mono:'DM Mono',monospace;
+  --r:8px;--rl:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;height:100%;}
+
+/* ── APP SHELL ── */
+.app{display:flex;height:100vh;overflow:hidden;}
+.sidebar{width:220px;flex-shrink:0;background:var(--sidebar);display:flex;flex-direction:column;overflow-y:auto;}
+.sidebar::before{content:'';position:absolute;width:220px;height:100vh;background:radial-gradient(ellipse 80% 40% at 50% 0%,rgba(83,74,183,.22),transparent);pointer-events:none;}
+.sb-brand{padding:16px 16px 14px;border-bottom:1px solid rgba(255,255,255,.07);position:relative;z-index:1;}
+.sb-name{font-size:14px;font-weight:700;color:#fff;}
+.sb-sub{font-size:10px;color:rgba(255,255,255,.35);letter-spacing:.04em;text-transform:uppercase;}
+.nav{flex:1;padding:6px 0;position:relative;z-index:1;}
+.nav-section{padding:12px 16px 4px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.22);}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 14px;cursor:pointer;position:relative;border-left:2px solid transparent;}
+.nav-item:hover{background:rgba(255,255,255,.05);}
+.nav-item.active{background:rgba(83,74,183,.22);border-left-color:var(--brand-m);}
+.nav-item i{font-size:15px;color:rgba(255,255,255,.5);}
+.nav-item.active i{color:var(--brand-m);}
+.nav-label{font-size:12px;font-weight:500;color:rgba(255,255,255,.55);}
+.nav-item.active .nav-label{color:#fff;font-weight:600;}
+.nav-badge{font-size:9px;font-weight:700;background:rgba(255,255,255,.1);color:rgba(255,255,255,.4);padding:1px 6px;border-radius:10px;margin-left:auto;}
+.sb-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.07);position:relative;z-index:1;}
+.u-row{display:flex;align-items:center;gap:8px;}
+.u-av{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--brand),var(--teal));display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;}
+.u-name{font-size:11px;font-weight:600;color:rgba(255,255,255,.8);}
+.u-role{font-size:10px;color:rgba(255,255,255,.35);}
+
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{height:54px;background:rgba(255,255,255,.96);backdrop-filter:blur(16px);border-bottom:1px solid var(--border2);display:flex;align-items:center;padding:0 24px;gap:12px;flex-shrink:0;position:relative;z-index:10;}
+.tb-title{font-size:15px;font-weight:700;color:var(--text);}
+.tb-sub{font-size:11px;color:var(--text3);}
+.tb-spacer{flex:1;}
+.search-wrap{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:6px 11px;display:flex;align-items:center;gap:7px;width:200px;}
+.search-wrap input{flex:1;border:none;background:transparent;font-size:12px;font-family:var(--font);outline:none;color:var(--text);}
+.search-wrap i{color:var(--text3);font-size:14px;}
+.content{flex:1;overflow-y:auto;padding:20px 24px;}
+.view{display:none;flex-direction:column;gap:16px;}
+.view.active{display:flex;}
+
+/* ── COMPONENTS ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:var(--font);transition:all .15s;}
+.btn-primary{background:var(--brand);color:#fff;} .btn-primary:hover{background:var(--brand-d);}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border);} .btn-ghost:hover{background:var(--surface2);}
+.btn-teal{background:var(--teal);color:#fff;} .btn-teal:hover{background:#085041;}
+.btn-danger{background:transparent;color:var(--red);border:1px solid rgba(231,76,60,.25);} .btn-danger:hover{background:var(--red-l);}
+.btn-sm{padding:4px 10px;font-size:11px;}
+.btn-warning{background:var(--amber-l);color:var(--amber);border:1px solid rgba(239,159,39,.3);}
+
+.kpi-grid{display:grid;gap:10px;}
+.g4{grid-template-columns:repeat(4,1fr);}
+.g5{grid-template-columns:repeat(5,1fr);}
+.kpi{background:var(--surface);border:1px solid var(--border2);border-radius:var(--rl);padding:13px 16px;}
+.kpi-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:4px;}
+.kpi-val{font-size:22px;font-weight:700;color:var(--text);line-height:1;}
+.kpi-sub{font-size:10px;color:var(--text3);margin-top:3px;display:flex;align-items:center;gap:3px;}
+.kpi-sub.up{color:var(--green);} .kpi-sub.warn{color:var(--amber);} .kpi-sub.dn{color:var(--red);}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;}
+.card-hdr{padding:12px 18px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.card-title{font-size:13px;font-weight:700;color:var(--text);}
+.card-sub{font-size:11px;color:var(--text3);margin-top:1px;}
+.card-body{padding:14px 18px;}
+
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);text-align:left;background:var(--surface2);border-bottom:1px solid var(--border2);}
+.tbl td{padding:10px 14px;font-size:12px;border-bottom:1px solid var(--border2);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:rgba(83,74,183,.02);}
+.tbl-warn td{background:rgba(250,238,218,.3);}
+.tbl-danger td{background:rgba(252,235,235,.3);}
+
+.badge{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;}
+.b-green{background:var(--green-l);color:var(--green);}
+.b-amber{background:var(--amber-l);color:var(--amber);}
+.b-red{background:var(--red-l);color:var(--red);}
+.b-blue{background:var(--blue-l);color:var(--blue);}
+.b-purple{background:var(--brand-l);color:var(--brand-d);}
+.b-teal{background:var(--teal-l);color:var(--teal);}
+.b-gray{background:#F1EFE8;color:#5F5E5A;}
+
+.av{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;}
+.av-p{background:var(--brand-l);color:var(--brand-d);}
+.av-t{background:var(--teal-l);color:var(--teal);}
+.av-b{background:var(--blue-l);color:var(--blue);}
+.av-o{background:var(--amber-l);color:var(--amber);}
+.av-r{background:var(--red-l);color:var(--red);}
+.av-g{background:var(--green-l);color:var(--green);}
+
+.chip{padding:4px 11px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2);transition:all .15s;}
+.chip.on{background:var(--brand-l);border-color:var(--brand);color:var(--brand-d);}
+.chip:hover:not(.on){background:var(--surface2);}
+
+select,input[type=text],input[type=email],textarea{padding:6px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:12px;font-family:var(--font);background:var(--surface2);color:var(--text);outline:none;}
+select:focus,input:focus,textarea:focus{border-color:var(--brand);}
+textarea{resize:none;height:60px;width:100%;}
+
+.toggle{width:34px;height:19px;border-radius:10px;background:#D1D5DB;position:relative;cursor:pointer;border:none;transition:.2s;flex-shrink:0;}
+.toggle.on{background:var(--brand);}
+.toggle::after{content:'';width:13px;height:13px;border-radius:50%;background:#fff;position:absolute;top:3px;left:3px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.toggle.on::after{left:18px;}
+
+.panel-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.panel-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+
+.field-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2);font-size:12px;}
+.field-row:last-child{border-bottom:none;}
+.fl{color:var(--text3);}
+.fv{color:var(--text);font-weight:600;}
+
+.health-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:4px;flex-shrink:0;}
+.hd-g{background:#639922;} .hd-a{background:#EF9F27;} .hd-r{background:#E24B4A;}
+
+.usage-row{display:flex;align-items:center;gap:8px;font-size:11px;padding:4px 0;}
+.usage-lbl{color:var(--text3);min-width:80px;}
+.usage-track{flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;}
+.usage-fill{height:100%;border-radius:3px;transition:width .3s;}
+.uf-p{background:var(--brand);}
+.uf-g{background:#639922;}
+.uf-a{background:#EF9F27;}
+.uf-r{background:#E24B4A;}
+.uf-b{background:#378ADD;}
+.usage-val{font-size:11px;font-weight:600;color:var(--text);min-width:38px;text-align:right;}
+
+.tl-item{display:flex;gap:10px;padding:7px 0;}
+.tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.tl-txt{font-size:11px;color:var(--text2);}
+.tl-txt strong{color:var(--text);font-weight:600;}
+
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;font-size:12px;border-bottom:1px solid var(--border2);gap:12px;}
+.toggle-row:last-child{border-bottom:none;}
+
+.prog-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+.prog-card{border:1px solid var(--border);border-radius:var(--rl);padding:14px;}
+.prog-add{border:2px dashed var(--border);border-radius:var(--rl);padding:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:170px;cursor:pointer;transition:all .15s;}
+.prog-add:hover{border-color:var(--brand-m);background:var(--brand-l);}
+.prog-name{font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;}
+.prog-meta{font-size:11px;color:var(--text3);line-height:1.5;}
+.prog-stats{display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;}
+.prog-stat{font-size:11px;color:var(--text3);}
+.prog-stat strong{color:var(--text);font-weight:600;}
+
+.contact-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border2);}
+.contact-row:last-child{border-bottom:none;}
+.ff-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2);}
+.ff-row:last-child{border-bottom:none;}
+.ff-name{font-size:12px;font-weight:600;color:var(--text);}
+.ff-desc{font-size:10px;color:var(--text3);}
+
+/* ── ALERT BANNER ── */
+.alert{border-radius:var(--r);padding:10px 14px;font-size:12px;display:flex;align-items:flex-start;gap:10px;}
+.alert i{font-size:16px;flex-shrink:0;margin-top:1px;}
+.alert-amber{background:var(--amber-l);color:var(--amber);border:1px solid rgba(239,159,39,.3);}
+.alert-red{background:var(--red-l);color:var(--red);border:1px solid rgba(231,76,60,.25);}
+.alert-blue{background:var(--blue-l);color:var(--blue);border:1px solid rgba(55,138,221,.3);}
+
+/* ── MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border-radius:var(--rl);border:1px solid var(--border);padding:24px;width:480px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.15);}
+.modal-title{font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;}
+.modal-sub{font-size:12px;color:var(--text3);margin-bottom:18px;}
+.form-group{margin-bottom:14px;}
+.form-label{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:5px;display:block;text-transform:uppercase;letter-spacing:.04em;}
+.type-selector{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+.type-opt{padding:7px 10px;border-radius:var(--r);border:1px solid var(--border);background:transparent;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);color:var(--text2);text-align:center;transition:all .15s;}
+.type-opt.on{background:var(--brand-l);border-color:var(--brand);color:var(--brand-d);}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border2);}
+
+/* ── REVENUE CHART ── */
+.bar-chart{display:flex;gap:6px;align-items:flex-end;height:80px;padding:0 4px;}
+.bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.bar{width:100%;border-radius:3px 3px 0 0;background:var(--brand-m);}
+.bar.cur{background:var(--brand);}
+.bar-lbl{font-size:9px;color:var(--text3);}
+
+/* ── FREE ACCESS COST ALERT ── */
+.cost-alert{background:var(--amber-l);border:1px solid rgba(239,159,39,.4);border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;gap:12px;}
+.cost-alert i{font-size:18px;color:var(--amber);flex-shrink:0;}
+.cost-alert-title{font-size:12px;font-weight:700;color:var(--amber);}
+.cost-alert-sub{font-size:11px;color:#92400e;}
+.cost-alert .badge{margin-left:auto;flex-shrink:0;}
+</style>
+</head>
+<body>
+
+<!-- MODAL: Grant access -->
+<div class="modal-overlay" id="modal-grant">
+  <div class="modal">
+    <div class="modal-title">Grant trial extension / free access</div>
+    <div class="modal-sub" id="modal-grant-sub">Brussels EU Affairs · Growth plan · Trial expires tomorrow</div>
+    <div class="alert alert-amber" style="margin-bottom:16px;">
+      <i class="ti ti-lock"></i>
+      <span><strong>Permission required.</strong> Only SI Super Admin and Commercial Lead roles can grant access extensions. This action is permanently logged to the audit trail with your name, role, and reason.</span>
+    </div>
+    <div class="form-group">
+      <div class="form-label">Extension type</div>
+      <div class="type-selector">
+        <button class="type-opt on" onclick="setType(this)">Trial extension</button>
+        <button class="type-opt" onclick="setType(this)">Free access period</button>
+        <button class="type-opt" onclick="setType(this)">Beta programme</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;" id="type-desc">Extends an active trial. The customer stays on free access for the additional duration. Use when a prospect needs more time to evaluate.</div>
+    </div>
+    <div class="form-group">
+      <div class="form-label">Duration</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <select><option>1 week</option><option selected>2 weeks</option><option>1 month</option><option>2 months</option><option>3 months</option><option>Custom</option></select>
+        <select><option>Starting immediately</option><option>From current expiry</option><option>Custom date</option></select>
+      </div>
+    </div>
+    <div class="form-group">
+      <div class="form-label">Reason (required — stored in audit log)</div>
+      <textarea placeholder="e.g. Prospect requested additional 2 weeks to complete internal evaluation process. Approved by Peter Voss."></textarea>
+    </div>
+    <div class="form-group">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="toggle on" onclick="this.classList.toggle('on')" aria-label="notify customer"></button>
+        <span style="font-size:12px;color:var(--text2);">Notify customer by email with new expiry date</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-grant')">Cancel</button>
+      <button class="btn btn-primary">Apply extension</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Create programme -->
+<div class="modal-overlay" id="modal-prog">
+  <div class="modal">
+    <div class="modal-title">Create beta / early access programme</div>
+    <div class="modal-sub">Give a group of organisations free access in exchange for testing, feedback, or market research</div>
+    <div class="form-group">
+      <div class="form-label">Programme name</div>
+      <input type="text" placeholder="e.g. Q3 Beta Cohort · Whiteboard Early Access" style="width:100%;">
+    </div>
+    <div class="form-group">
+      <div class="form-label">Programme type</div>
+      <select style="width:100%;">
+        <option>Beta testing — feature access in exchange for structured feedback</option>
+        <option>Early access — paid customers get new features first</option>
+        <option>Design partner — deep involvement, significant free credit</option>
+        <option>Market research — free access in exchange for research participation</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <div class="form-label">Compensation offered to participants</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <select><option>1 month free</option><option>2 months free</option><option selected>3 months free</option><option>Full programme duration free</option><option>Custom credit</option></select>
+        <select><option>All plans</option><option>Starter only</option><option selected>Growth & Enterprise only</option></select>
+      </div>
+    </div>
+    <div class="form-group">
+      <div class="form-label">Participant limits</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <input type="text" placeholder="Max participants (e.g. 10)">
+        <select><option>Invite only</option><option selected>Admin approval required</option><option>Self-signup with invite code</option></select>
+      </div>
+    </div>
+    <div class="form-group">
+      <div class="form-label">Programme end date (access reverts to paid plan)</div>
+      <input type="text" placeholder="e.g. 31 Aug 2026" style="width:100%;">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-prog')">Cancel</button>
+      <button class="btn btn-primary">Create programme</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <div class="sb-name">Jiganto</div>
+      <div class="sb-sub">Internal admin</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section">Customers</div>
+      <div class="nav-item active" onclick="showView('customers',this)"><i class="ti ti-building"></i><span class="nav-label">All customers</span><span class="nav-badge">47</span></div>
+      <div class="nav-item" onclick="showView('detail',this)"><i class="ti ti-file-description"></i><span class="nav-label">Customer detail</span></div>
+      <div class="nav-item" onclick="showView('health',this)"><i class="ti ti-heart-rate-monitor"></i><span class="nav-label">Health scores</span><span class="nav-badge" style="background:rgba(231,76,60,.3);color:#F7C1C1;">4</span></div>
+      <div class="nav-section">Access</div>
+      <div class="nav-item" onclick="showView('trials',this)"><i class="ti ti-clock"></i><span class="nav-label">Trials & extensions</span><span class="nav-badge" style="background:rgba(239,159,39,.2);color:#FAC775;">2!</span></div>
+      <div class="nav-item" onclick="showView('programmes',this)"><i class="ti ti-users-group"></i><span class="nav-label">Beta programmes</span></div>
+      <div class="nav-section">Commercial</div>
+      <div class="nav-item" onclick="showView('renewal',this)"><i class="ti ti-calendar-due"></i><span class="nav-label">Renewal pipeline</span></div>
+      <div class="nav-item" onclick="showView('pricing',this)"><i class="ti ti-tag"></i><span class="nav-label">Pricing & plans</span></div>
+      <div class="nav-item" onclick="showView('billing',this)"><i class="ti ti-credit-card"></i><span class="nav-label">Billing overview</span></div>
+      <div class="nav-section">Config</div>
+      <div class="nav-item" onclick="showView('settings',this)"><i class="ti ti-settings"></i><span class="nav-label">Plan settings</span></div>
+    </nav>
+    <div class="sb-footer">
+      <div class="u-row">
+        <div class="u-av">PV</div>
+        <div><div class="u-name">Peter Voss</div><div class="u-role">SI Super Admin</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <div class="tb-title" id="tb-title">All customers</div>
+        <div class="tb-sub" id="tb-sub">47 active organisations · 8 on trial</div>
+      </div>
+      <div class="tb-spacer"></div>
+      <div class="search-wrap"><i class="ti ti-search"></i><input placeholder="Search organisations..."></div>
+      <button class="btn btn-ghost" style="font-size:11px;"><i class="ti ti-download"></i> Export</button>
+      <button class="btn btn-primary" style="font-size:11px;"><i class="ti ti-plus"></i> Add customer</button>
+    </header>
+
+    <div class="content">
+
+      <!-- ═══ ALL CUSTOMERS ═══ -->
+      <div class="view active" id="view-customers">
+        <div class="kpi-grid g4">
+          <div class="kpi"><div class="kpi-label">Active customers</div><div class="kpi-val">47</div><div class="kpi-sub up"><i class="ti ti-trending-up" style="font-size:11px;"></i> +3 this month</div></div>
+          <div class="kpi"><div class="kpi-label">On trial / extension</div><div class="kpi-val">8</div><div class="kpi-sub warn"><i class="ti ti-alert-triangle" style="font-size:11px;"></i> 2 expiring this week</div></div>
+          <div class="kpi"><div class="kpi-label">Monthly recurring revenue</div><div class="kpi-val">£38,400</div><div class="kpi-sub up"><i class="ti ti-trending-up" style="font-size:11px;"></i> +12% MoM</div></div>
+          <div class="kpi"><div class="kpi-label">At-risk customers</div><div class="kpi-val">4</div><div class="kpi-sub dn"><i class="ti ti-alert-circle" style="font-size:11px;"></i> Health score red</div></div>
+        </div>
+        <div class="card">
+          <div style="padding:10px 16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button class="chip on" onclick="filterChip(this)">All</button>
+            <button class="chip" onclick="filterChip(this)">Active</button>
+            <button class="chip" onclick="filterChip(this)">Trial</button>
+            <button class="chip" onclick="filterChip(this)">At risk</button>
+            <button class="chip" onclick="filterChip(this)">Suspended</button>
+            <div class="tb-spacer"></div>
+            <select><option>All plans</option><option>Starter</option><option>Growth</option><option>Enterprise</option></select>
+            <select><option>All CSMs</option><option>Peter Voss</option><option>Ayesha Nawaz</option></select>
+          </div>
+          <table class="tbl">
+            <thead><tr><th>Organisation</th><th>Plan</th><th>Health</th><th>CSM</th><th>Status</th><th>MRR</th><th>Next action</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td><div style="display:flex;align-items:center;gap:9px;"><div class="av av-p">RC</div><div><div style="font-weight:600;">RetailCo Group</div><div style="font-size:10px;color:var(--text3);">48 users · retailco.com</div></div></div></td>
+                <td><span class="badge b-purple">Enterprise</span></td>
+                <td><div style="display:flex;align-items:center;"><span class="health-dot hd-g"></span><span style="color:var(--green);font-weight:600;font-size:11px;">Healthy · 82</span></div></td>
+                <td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-b" style="width:20px;height:20px;font-size:9px;">PV</div><span style="font-size:11px;">Peter</span></div></td>
+                <td><span class="badge b-green">Active</span></td>
+                <td style="font-weight:700;">£3,200</td>
+                <td style="font-size:11px;color:var(--text3);">Renews 1 Jun</td>
+                <td><button class="btn btn-ghost btn-sm" onclick="showView('detail',null)">View</button></td>
+              </tr>
+              <tr class="tbl-danger">
+                <td><div style="display:flex;align-items:center;gap:9px;"><div class="av av-r">BX</div><div><div style="font-weight:600;">Brussels EU Affairs</div><div style="font-size:10px;color:var(--text3);">15 users · eu-affairs.be</div></div></div></td>
+                <td><span class="badge b-blue">Growth</span></td>
+                <td><div style="display:flex;align-items:center;"><span class="health-dot hd-a"></span><span style="color:var(--amber);font-weight:600;font-size:11px;">Watch · 52</span></div></td>
+                <td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-o" style="width:20px;height:20px;font-size:9px;">AN</div><span style="font-size:11px;">Ayesha</span></div></td>
+                <td><span class="badge b-red">Trial — 1d left</span></td>
+                <td style="color:var(--text3);">—</td>
+                <td><button class="btn btn-teal btn-sm" onclick="openModal('modal-grant')"><i class="ti ti-clock-plus"></i> Extend</button></td>
+                <td><button class="btn btn-ghost btn-sm">View</button></td>
+              </tr>
+              <tr class="tbl-warn">
+                <td><div style="display:flex;align-items:center;gap:9px;"><div class="av av-o">MG</div><div><div style="font-weight:600;">MedGroup NHS Trust</div><div style="font-size:10px;color:var(--text3);">9 users · medgroup.nhs.uk</div></div></div></td>
+                <td><span class="badge b-green">Starter</span></td>
+                <td><div style="display:flex;align-items:center;"><span class="health-dot hd-g"></span><span style="color:var(--green);font-weight:600;font-size:11px;">Healthy · 77</span></div></td>
+                <td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-b" style="width:20px;height:20px;font-size:9px;">PV</div><span style="font-size:11px;">Peter</span></div></td>
+                <td><span class="badge b-amber">Trial — 5d left</span></td>
+                <td style="color:var(--text3);">—</td>
+                <td><button class="btn btn-teal btn-sm" onclick="openModal('modal-grant')"><i class="ti ti-clock-plus"></i> Extend</button></td>
+                <td><button class="btn btn-ghost btn-sm">View</button></td>
+              </tr>
+              <tr>
+                <td><div style="display:flex;align-items:center;gap:9px;"><div class="av av-b">TL</div><div><div style="font-weight:600;">Techline Partners</div><div style="font-size:10px;color:var(--text3);">67 users · techline.io</div></div></div></td>
+                <td><span class="badge b-purple">Enterprise</span></td>
+                <td><div style="display:flex;align-items:center;"><span class="health-dot hd-r"></span><span style="color:var(--red);font-weight:600;font-size:11px;">At risk · 28</span></div></td>
+                <td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-o" style="width:20px;height:20px;font-size:9px;">AN</div><span style="font-size:11px;">Ayesha</span></div></td>
+                <td><span class="badge b-green">Active</span></td>
+                <td style="font-weight:700;">£4,800</td>
+                <td style="font-size:11px;color:var(--red);font-weight:600;">CSM call overdue</td>
+                <td><button class="btn btn-ghost btn-sm">View</button></td>
+              </tr>
+              <tr>
+                <td><div style="display:flex;align-items:center;gap:9px;"><div class="av av-g">SW</div><div><div style="font-weight:600;">Stonewall Advisory</div><div style="font-size:10px;color:var(--text3);">12 users · beta participant</div></div></div></td>
+                <td><span class="badge b-blue">Growth</span></td>
+                <td><div style="display:flex;align-items:center;"><span class="health-dot hd-g"></span><span style="color:var(--green);font-weight:600;font-size:11px;">Healthy · 88</span></div></td>
+                <td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-b" style="width:20px;height:20px;font-size:9px;">PV</div><span style="font-size:11px;">Peter</span></div></td>
+                <td><span class="badge b-teal">Free access</span></td>
+                <td style="color:var(--text3);font-size:11px;">Beta</td>
+                <td style="font-size:11px;color:var(--text3);">Ends 31 Aug</td>
+                <td><button class="btn btn-ghost btn-sm">View</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ CUSTOMER DETAIL ═══ -->
+      <div class="view" id="view-detail">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="showView('customers',null)"><i class="ti ti-arrow-left"></i> All customers</button>
+          <span style="color:var(--text3);font-size:11px;">/ RetailCo Group</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div class="av av-p" style="width:42px;height:42px;font-size:14px;">RC</div>
+          <div>
+            <div style="font-size:17px;font-weight:700;">RetailCo Group</div>
+            <div style="font-size:11px;color:var(--text3);">Enterprise · Active Jan 2025 · CSM: Peter Voss · retailco.com</div>
+          </div>
+          <div class="tb-spacer"></div>
+          <span class="badge b-green" style="font-size:11px;"><span class="health-dot hd-g" style="width:7px;height:7px;"></span>Healthy · 82</span>
+          <button class="btn btn-teal btn-sm" onclick="openModal('modal-grant')"><i class="ti ti-clock-plus"></i> Grant access</button>
+          <button class="btn btn-ghost btn-sm"><i class="ti ti-edit"></i> Edit</button>
+        </div>
+        <div class="panel-2">
+          <div class="card">
+            <div class="card-hdr"><div class="card-title">Subscription</div></div>
+            <div class="card-body">
+              <div class="field-row"><span class="fl">Plan</span><span class="badge b-purple">Enterprise</span></div>
+              <div class="field-row"><span class="fl">MRR</span><span class="fv">£3,200 / month</span></div>
+              <div class="field-row"><span class="fl">Billing cycle</span><span class="fv">Annual (paid monthly)</span></div>
+              <div class="field-row"><span class="fl">Renewal date</span><span class="fv">1 Jun 2026</span></div>
+              <div class="field-row"><span class="fl">Discount applied</span><span class="badge b-teal" style="font-size:10px;">10% loyalty</span></div>
+              <div class="field-row"><span class="fl">Payment method</span><span class="fv">Stripe · Visa ···4242</span></div>
+              <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;">
+                <button class="btn btn-ghost btn-sm">Change plan</button>
+                <button class="btn btn-ghost btn-sm">Add discount</button>
+                <button class="btn btn-teal btn-sm" onclick="openModal('modal-grant')">Grant free access</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hdr"><div class="card-title">Health score</div><span class="badge b-green">82 / 100</span></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
+              <div class="usage-row"><span class="usage-lbl">Login frequency</span><div class="usage-track"><div class="usage-fill uf-g" style="width:90%;"></div></div><span class="usage-val" style="color:var(--green);">90</span></div>
+              <div class="usage-row"><span class="usage-lbl">Feature breadth</span><div class="usage-track"><div class="usage-fill uf-g" style="width:75%;"></div></div><span class="usage-val" style="color:var(--green);">75</span></div>
+              <div class="usage-row"><span class="usage-lbl">Support tickets</span><div class="usage-track"><div class="usage-fill uf-a" style="width:60%;"></div></div><span class="usage-val" style="color:var(--amber);">60</span></div>
+              <div class="usage-row"><span class="usage-lbl">NPS response</span><div class="usage-track"><div class="usage-fill uf-g" style="width:85%;"></div></div><span class="usage-val" style="color:var(--green);">85</span></div>
+              <div class="usage-row"><span class="usage-lbl">Renewal intent</span><div class="usage-track"><div class="usage-fill uf-g" style="width:80%;"></div></div><span class="usage-val" style="color:var(--green);">80</span></div>
+              <div style="font-size:10px;color:var(--text3);margin-top:4px;">Score calculated daily · Last updated today 06:00</div>
+            </div>
+          </div>
+        </div>
+        <div class="panel-2">
+          <div class="card">
+            <div class="card-hdr"><div class="card-title">Key contacts</div><button class="btn btn-ghost btn-sm"><i class="ti ti-plus"></i> Add</button></div>
+            <div class="card-body">
+              <div class="contact-row">
+                <div class="av av-p" style="width:32px;height:32px;font-size:11px;">NO</div>
+                <div style="flex:1;"><div style="font-size:12px;font-weight:600;">Nina Okafor</div><div style="font-size:10px;color:var(--text3);">nina@retailco.com</div></div>
+                <span class="badge b-purple" style="font-size:9px;">Economic buyer</span>
+              </div>
+              <div class="contact-row">
+                <div class="av av-b" style="width:32px;height:32px;font-size:11px;">MR</div>
+                <div style="flex:1;"><div style="font-size:12px;font-weight:600;">Mark Reynolds</div><div style="font-size:10px;color:var(--text3);">mark@retailco.com</div></div>
+                <span class="badge b-blue" style="font-size:9px;">Workspace Admin</span>
+              </div>
+              <div class="contact-row">
+                <div class="av av-g" style="width:32px;height:32px;font-size:11px;">SJ</div>
+                <div style="flex:1;"><div style="font-size:12px;font-weight:600;">Sarah Jones</div><div style="font-size:10px;color:var(--text3);">sarah@retailco.com</div></div>
+                <span class="badge b-gray" style="font-size:9px;">IT contact</span>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hdr"><div class="card-title">Feature flags</div><div class="card-sub">Overrides for this org only</div></div>
+            <div class="card-body">
+              <div class="ff-row"><div><div class="ff-name">Whiteboard beta</div><div class="ff-desc">Early access to Whiteboard module</div></div><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+              <div class="ff-row"><div><div class="ff-name">AI template generation</div><div class="ff-desc">Generate templates via Claude AI</div></div><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+              <div class="ff-row"><div><div class="ff-name">eSign field placement (Phase 2)</div><div class="ff-desc">Beta — field-level signature tagging</div></div><button class="toggle" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+              <div class="ff-row"><div><div class="ff-name">Advanced analytics dashboard</div><div class="ff-desc">Extended reporting — beta</div></div><button class="toggle" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hdr"><div class="card-title">Access & extension history</div></div>
+          <div class="card-body">
+            <div class="tl-item"><div><div class="tl-dot" style="background:var(--brand);"></div></div><div class="tl-txt"><strong>Plan renewed</strong> — annual contract signed · 1 Jan 2026</div></div>
+            <div class="tl-item"><div><div class="tl-dot" style="background:var(--amber-m);"></div></div><div class="tl-txt"><strong>1 month free access granted</strong> by Peter Voss (SI Super Admin) — "Loyalty credit for onboarding delay" · Oct 2025</div></div>
+            <div class="tl-item"><div><div class="tl-dot" style="background:var(--brand);"></div></div><div class="tl-txt"><strong>Upgraded to Enterprise</strong> from Growth · Jun 2025</div></div>
+            <div class="tl-item"><div><div class="tl-dot" style="background:var(--green);"></div></div><div class="tl-txt"><strong>Trial converted to paid</strong> — Growth plan · Feb 2025</div></div>
+            <div class="tl-item"><div><div class="tl-dot" style="background:var(--amber-m);"></div></div><div class="tl-txt"><strong>Trial extended 14 days</strong> by Peter Voss — "Prospect requested extension for internal sign-off" · Jan 2025</div></div>
+            <div class="tl-item"><div><div class="tl-dot" style="background:var(--blue-m);"></div></div><div class="tl-txt"><strong>30-day trial started</strong> · Growth plan · Jan 2025</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ HEALTH SCORES ═══ -->
+      <div class="view" id="view-health">
+        <div class="kpi-grid g4">
+          <div class="kpi"><div class="kpi-label">Healthy (70–100)</div><div class="kpi-val" style="color:var(--green);">38</div><div class="kpi-sub">No action needed</div></div>
+          <div class="kpi"><div class="kpi-label">Watch (40–69)</div><div class="kpi-val" style="color:var(--amber);">5</div><div class="kpi-sub warn">CSM outreach needed</div></div>
+          <div class="kpi"><div class="kpi-label">At risk (0–39)</div><div class="kpi-val" style="color:var(--red);">4</div><div class="kpi-sub dn">Urgent intervention</div></div>
+          <div class="kpi"><div class="kpi-label">Average health score</div><div class="kpi-val">74</div><div class="kpi-sub up">+6 pts vs last quarter</div></div>
+        </div>
+        <div class="alert alert-blue"><i class="ti ti-info-circle"></i><span>Health scores are calculated daily from five signals: login frequency (daily active users vs registered), feature breadth (how many of the 21 modules are in active use), support ticket volume (high volume = risk), NPS response score, and renewal intent signals from usage trends. Each signal contributes 20% of the composite score.</span></div>
+        <div class="card">
+          <div class="card-hdr"><div><div class="card-title">Customers needing attention</div><div class="card-sub">Watch and at-risk only — sorted by urgency</div></div></div>
+          <table class="tbl">
+            <thead><tr><th>Organisation</th><th>Status</th><th>Score</th><th>Primary signal</th><th>CSM</th><th>Last contact</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr class="tbl-danger">
+                <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-b">TL</div><span style="font-weight:600;">Techline Partners</span></div></td>
+                <td><span class="health-dot hd-r"></span><span style="color:var(--red);font-weight:600;">At risk</span></td>
+                <td style="color:var(--red);font-weight:700;">28</td>
+                <td style="font-size:11px;color:var(--text3);">Login frequency dropped 60% in last 30 days</td>
+                <td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-o" style="width:20px;height:20px;font-size:9px;">AN</div>Ayesha</div></td>
+                <td style="color:var(--red);font-size:11px;font-weight:600;">18 days ago</td>
+                <td><button class="btn btn-danger btn-sm">Schedule call now</button></td>
+              </tr>
+              <tr class="tbl-danger">
+                <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-r">DL</div><span style="font-weight:600;">Dalton & Reed LLP</span></div></td>
+                <td><span class="health-dot hd-r"></span><span style="color:var(--red);font-weight:600;">At risk</span></td>
+                <td style="color:var(--red);font-weight:700;">31</td>
+                <td style="font-size:11px;color:var(--text3);">Only 3 of 15 users active · Invoice 22 days overdue</td>
+                <td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-b" style="width:20px;height:20px;font-size:9px;">PV</div>Peter</div></td>
+                <td style="color:var(--red);font-size:11px;font-weight:600;">22 days ago</td>
+                <td><button class="btn btn-danger btn-sm">Schedule call now</button></td>
+              </tr>
+              <tr class="tbl-warn">
+                <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-o">KA</div><span style="font-weight:600;">Kestrel Advisory</span></div></td>
+                <td><span class="health-dot hd-a"></span><span style="color:var(--amber);font-weight:600;">Watch</span></td>
+                <td style="color:var(--amber);font-weight:700;">52</td>
+                <td style="font-size:11px;color:var(--text3);">3 support tickets in last 7 days · No NPS response</td>
+                <td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-o" style="width:20px;height:20px;font-size:9px;">AN</div>Ayesha</div></td>
+                <td style="color:var(--amber);font-size:11px;font-weight:600;">7 days ago</td>
+                <td><button class="btn btn-ghost btn-sm">Send check-in email</button></td>
+              </tr>
+              <tr class="tbl-warn">
+                <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-o">MP</div><span style="font-weight:600;">Moreton Pharma</span></div></td>
+                <td><span class="health-dot hd-a"></span><span style="color:var(--amber);font-weight:600;">Watch</span></td>
+                <td style="color:var(--amber);font-weight:700;">61</td>
+                <td style="font-size:11px;color:var(--text3);">Only using 4 of 21 modules — low feature breadth</td>
+                <td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-b" style="width:20px;height:20px;font-size:9px;">PV</div>Peter</div></td>
+                <td style="font-size:11px;color:var(--text3);">4 days ago</td>
+                <td><button class="btn btn-ghost btn-sm">Book training session</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ TRIALS & EXTENSIONS ═══ -->
+      <div class="view" id="view-trials">
+        <div class="alert alert-amber"><i class="ti ti-lock"></i><span><strong>Permission gate:</strong> Granting or extending free access requires SI Super Admin or Commercial Lead role. All grants are permanently logged to the audit trail with the approver's name, role, and written reason. Configure who can grant what in Settings → Plan settings.</span></div>
+        <div class="kpi-grid g5">
+          <div class="kpi"><div class="kpi-label">Standard trials</div><div class="kpi-val">6</div><div class="kpi-sub">Auto 30-day</div></div>
+          <div class="kpi"><div class="kpi-label">Admin extensions</div><div class="kpi-val">2</div><div class="kpi-sub warn">Manually granted</div></div>
+          <div class="kpi"><div class="kpi-label">Free access periods</div><div class="kpi-val">3</div><div class="kpi-sub">Paid → free credit</div></div>
+          <div class="kpi"><div class="kpi-label">Expiring this week</div><div class="kpi-val">2</div><div class="kpi-sub dn">Action needed</div></div>
+          <div class="kpi"><div class="kpi-label">Trial → paid (90d)</div><div class="kpi-val">67%</div><div class="kpi-sub up">vs 54% prev quarter</div></div>
+        </div>
+        <div class="card">
+          <div class="card-hdr">
+            <div><div class="card-title">All active trials & extensions</div><div class="card-sub">Standard trials, admin-granted extensions, free access periods, and beta participants</div></div>
+            <button class="btn btn-primary btn-sm" onclick="openModal('modal-grant')"><i class="ti ti-plus"></i> Grant access</button>
+          </div>
+          <table class="tbl">
+            <thead><tr><th>Organisation</th><th>Type</th><th>Plan</th><th>Started</th><th>Expires</th><th>Days left</th><th>Granted by</th><th>Reason</th><th>Actions</th></tr></thead>
+            <tbody>
+              <tr class="tbl-danger">
+                <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-r">BX</div><span style="font-weight:600;">Brussels EU Affairs</span></div></td>
+                <td><span class="badge b-red">Trial</span></td>
+                <td><span class="badge b-blue" style="font-size:9px;">Growth</span></td>
+                <td style="color:var(--text3);font-size:11px;">20 Apr 2026</td>
+                <td style="font-weight:600;color:var(--red);">Tomorrow</td>
+                <td style="font-weight:700;color:var(--red);">1</td>
+                <td style="font-size:11px;color:var(--text3);">System</td>
+                <td style="font-size:11px;color:var(--text3);">Standard trial</td>
+                <td><div style="display:flex;gap:4px;"><button class="btn btn-teal btn-sm" onclick="openModal('modal-grant')">Extend</button><button class="btn btn-primary btn-sm">Convert</button></div></td>
+              </tr>
+              <tr class="tbl-warn">
+                <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-o">MG</div><span style="font-weight:600;">MedGroup NHS Trust</span></div></td>
+                <td><span class="badge b-amber">Trial</span></td>
+                <td><span class="badge b-green" style="font-size:9px;">Starter</span></td>
+                <td style="color:var(--text3);font-size:11px;">1 May 2026</td>
+                <td style="font-weight:600;color:var(--amber);">5 Jun 2026</td>
+                <td style="font-weight:700;color:var(--amber);">5</td>
+                <td style="font-size:11px;color:var(--text3);">System</td>
+                <td style="font-size:11px;color:var(--text3);">Standard trial</td>
+                <td><div style="display:flex;gap:4px;"><button class="btn btn-teal btn-sm" onclick="openModal('modal-grant')">Extend</button><button class="btn btn-primary btn-sm">Convert</button></div></td>
+              </tr>
+              <tr>
+                <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-t">NV</div><span style="font-weight:600;">NovaStar Consulting</span></div></td>
+                <td><span class="badge b-blue">Extended</span></td>
+                <td><span class="badge b-purple" style="font-size:9px;">Enterprise</span></td>
+                <td style="color:var(--text3);font-size:11px;">10 May 2026</td>
+                <td style="font-weight:600;">8 Jun 2026</td>
+                <td style="font-weight:700;">15</td>
+                <td><div style="display:flex;align-items:center;gap:4px;font-size:11px;"><div class="av av-b" style="width:18px;height:18px;font-size:8px;">PV</div>Peter V</div></td>
+                <td style="font-size:11px;color:var(--text3);">Evaluation extended by request</td>
+                <td><div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" onclick="openModal('modal-grant')">Extend</button><button class="btn btn-primary btn-sm">Convert</button></div></td>
+              </tr>
+              <tr>
+                <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-g">SW</div><span style="font-weight:600;">Stonewall Advisory</span></div></td>
+                <td><span class="badge b-teal">Free access</span></td>
+                <td><span class="badge b-blue" style="font-size:9px;">Growth</span></td>
+                <td style="color:var(--text3);font-size:11px;">1 May 2026</td>
+                <td style="font-weight:600;">31 Jul 2026</td>
+                <td style="font-weight:700;">61</td>
+                <td><div style="display:flex;align-items:center;gap:4px;font-size:11px;"><div class="av av-b" style="width:18px;height:18px;font-size:8px;">PV</div>Peter V</div></td>
+                <td style="font-size:11px;color:var(--text3);">Q3 Beta Cohort participant</td>
+                <td><button class="btn btn-ghost btn-sm">View</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-hdr"><div class="card-title">Trial defaults & permission controls</div></div>
+          <div class="card-body">
+            <div class="toggle-row"><span>Default trial length</span><select style="width:auto;"><option>14 days</option><option selected>30 days</option><option>60 days</option></select></div>
+            <div class="toggle-row"><span>Allow self-serve 14-day extension (one-time, customer-initiated)</span><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+            <div class="toggle-row"><span>Auto-notify customer 7 days before expiry</span><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+            <div class="toggle-row"><span>Auto-notify customer 1 day before expiry</span><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+            <div class="toggle-row"><span>Who can grant trial extensions</span><select style="width:auto;"><option selected>SI Super Admin + Commercial Lead</option><option>SI Super Admin only</option><option>Any SI admin</option></select></div>
+            <div class="toggle-row"><span>Who can grant free access periods (paid → free credit)</span><select style="width:auto;"><option selected>SI Super Admin only</option><option>SI Super Admin + Commercial Lead</option></select></div>
+            <div class="toggle-row"><span>Require written reason for every grant</span><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+            <div class="toggle-row"><span>Maximum extension without CEO approval</span><select style="width:auto;"><option>1 month</option><option selected>3 months</option><option>6 months</option><option>No limit</option></select></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ BETA PROGRAMMES ═══ -->
+      <div class="view" id="view-programmes">
+        <div class="kpi-grid g4">
+          <div class="kpi"><div class="kpi-label">Active programmes</div><div class="kpi-val">3</div><div class="kpi-sub">Across all plan tiers</div></div>
+          <div class="kpi"><div class="kpi-label">Total participants</div><div class="kpi-val">22</div><div class="kpi-sub">Organisations enrolled</div></div>
+          <div class="kpi"><div class="kpi-label">Free access cost (MRR foregone)</div><div class="kpi-val" style="color:var(--amber);">£8,400</div><div class="kpi-sub warn">21.9% of MRR · Near threshold</div></div>
+          <div class="kpi"><div class="kpi-label">Converted to paid</div><div class="kpi-val">8</div><div class="kpi-sub up">From completed programmes</div></div>
+        </div>
+        <div class="cost-alert">
+          <i class="ti ti-alert-triangle"></i>
+          <div>
+            <div class="cost-alert-title">Free access cost approaching threshold</div>
+            <div class="cost-alert-sub">£8,400 MRR foregone this month = 21.9% of total MRR. Your configured alert threshold is 20%. Consider whether active programmes should continue or be wound down early. Configure this threshold in Settings → Plan settings.</div>
+          </div>
+          <span class="badge b-amber">21.9% of MRR</span>
+        </div>
+        <div style="display:flex;justify-content:flex-end;">
+          <button class="btn btn-primary btn-sm" onclick="openModal('modal-prog')"><i class="ti ti-plus"></i> Create programme</button>
+        </div>
+        <div class="prog-grid">
+          <div class="prog-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <div class="prog-name">Q3 Beta Cohort</div><span class="badge b-green">Active</span>
+            </div>
+            <div class="prog-meta">Beta testing · Whiteboard & eSign modules · 3 months free access · Growth & Enterprise only</div>
+            <div class="prog-stats">
+              <div class="prog-stat"><strong>10</strong> / 10 slots filled</div>
+              <div class="prog-stat">Ends <strong>31 Aug 2026</strong></div>
+              <div class="prog-stat" style="color:var(--amber);">Cost <strong>£4,200/mo</strong></div>
+            </div>
+            <div style="display:flex;gap:4px;margin-top:10px;flex-wrap:wrap;">
+              <div class="av av-p" title="RetailCo">RC</div>
+              <div class="av av-t" title="NovaStar">NV</div>
+              <div class="av av-g" title="Stonewall">SW</div>
+              <div class="av av-b" title="Kestrel">KA</div>
+              <div class="av" style="background:var(--surface2);color:var(--text3);" title="6 more">+6</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-top:10px;">Manage participants</button>
+          </div>
+          <div class="prog-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <div class="prog-name">AI Design Partners</div><span class="badge b-amber">7 / 10 slots</span>
+            </div>
+            <div class="prog-meta">Design partner · Deep involvement in AI features · 6 months free access · Enterprise only</div>
+            <div class="prog-stats">
+              <div class="prog-stat"><strong>7</strong> / 10 slots filled</div>
+              <div class="prog-stat">Ends <strong>30 Nov 2026</strong></div>
+              <div class="prog-stat" style="color:var(--amber);">Cost <strong>£3,500/mo</strong></div>
+            </div>
+            <div style="display:flex;gap:4px;margin-top:10px;">
+              <div class="av av-b">TL</div>
+              <div class="av av-r">BX</div>
+              <div class="av av-o">MG</div>
+              <div class="av" style="background:var(--surface2);color:var(--text3);">+4</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-top:10px;">Manage participants</button>
+          </div>
+          <div class="prog-add" onclick="openModal('modal-prog')">
+            <i class="ti ti-plus" style="font-size:26px;color:var(--text3);margin-bottom:8px;"></i>
+            <div style="font-size:13px;font-weight:600;color:var(--text2);">Create programme</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:5px;text-align:center;">Beta cohort · Design partner<br>Early access · Market research</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ RENEWAL PIPELINE ═══ -->
+      <div class="view" id="view-renewal">
+        <div class="kpi-grid g4">
+          <div class="kpi"><div class="kpi-label">Renewing in 30 days</div><div class="kpi-val">£12,400</div><div class="kpi-sub warn">MRR at stake</div></div>
+          <div class="kpi"><div class="kpi-label">Renewing in 31–90 days</div><div class="kpi-val">£18,800</div><div class="kpi-sub">MRR at stake</div></div>
+          <div class="kpi"><div class="kpi-label">At-risk renewals</div><div class="kpi-val">2</div><div class="kpi-sub dn">Health score below 40</div></div>
+          <div class="kpi"><div class="kpi-label">Expected renewal rate</div><div class="kpi-val">91%</div><div class="kpi-sub up">Based on health scores</div></div>
+        </div>
+        <div class="card">
+          <div class="card-hdr"><div><div class="card-title">Upcoming renewals — next 90 days</div><div class="card-sub">Sorted by renewal date · Red = at-risk · Prioritise CSM outreach by MRR value</div></div></div>
+          <table class="tbl">
+            <thead><tr><th>Organisation</th><th>Plan</th><th>MRR</th><th>Health</th><th>CSM</th><th>Renewal</th><th>Days away</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr class="tbl-warn">
+                <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-p">RC</div><span style="font-weight:600;">RetailCo Group</span></div></td>
+                <td><span class="badge b-purple">Enterprise</span></td>
+                <td style="font-weight:700;">£3,200</td>
+                <td><span class="health-dot hd-g"></span><span style="font-size:11px;">Healthy</span></td>
+                <td style="font-size:11px;">Peter V</td>
+                <td style="font-weight:600;">1 Jun 2026</td>
+                <td style="color:var(--red);font-weight:700;">1 day</td>
+                <td><span class="badge b-amber">Renewal call needed</span></td>
+                <td><button class="btn btn-primary btn-sm">Log call</button></td>
+              </tr>
+              <tr>
+                <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-b">AG</div><span style="font-weight:600;">Apex Global Bank</span></div></td>
+                <td><span class="badge b-blue">Growth</span></td>
+                <td style="font-weight:700;">£1,400</td>
+                <td><span class="health-dot hd-g"></span><span style="font-size:11px;">Healthy</span></td>
+                <td style="font-size:11px;">Ayesha</td>
+                <td style="font-weight:600;">15 Jun 2026</td>
+                <td style="color:var(--amber);font-weight:700;">15 days</td>
+                <td><span class="badge b-green">On track</span></td>
+                <td><button class="btn btn-ghost btn-sm">View</button></td>
+              </tr>
+              <tr class="tbl-danger">
+                <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-b">TL</div><span style="font-weight:600;">Techline Partners</span></div></td>
+                <td><span class="badge b-purple">Enterprise</span></td>
+                <td style="font-weight:700;">£4,800</td>
+                <td><span class="health-dot hd-r"></span><span style="color:var(--red);font-size:11px;font-weight:600;">At risk</span></td>
+                <td style="font-size:11px;">Ayesha</td>
+                <td style="font-weight:600;">1 Jul 2026</td>
+                <td style="font-weight:700;">30 days</td>
+                <td><span class="badge b-red">At risk — urgent</span></td>
+                <td><button class="btn btn-danger btn-sm">Urgent: book call</button></td>
+              </tr>
+              <tr class="tbl-warn">
+                <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-o">KA</div><span style="font-weight:600;">Kestrel Advisory</span></div></td>
+                <td><span class="badge b-blue">Growth</span></td>
+                <td style="font-weight:700;">£749</td>
+                <td><span class="health-dot hd-a"></span><span style="color:var(--amber);font-size:11px;font-weight:600;">Watch</span></td>
+                <td style="font-size:11px;">Peter V</td>
+                <td style="font-weight:600;">15 Jul 2026</td>
+                <td style="font-weight:700;">44 days</td>
+                <td><span class="badge b-amber">Check-in needed</span></td>
+                <td><button class="btn btn-ghost btn-sm">Send check-in</button></td>
+              </tr>
+              <tr>
+                <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-g">MP</div><span style="font-weight:600;">Moreton Pharma</span></div></td>
+                <td><span class="badge b-blue">Growth</span></td>
+                <td style="font-weight:700;">£1,200</td>
+                <td><span class="health-dot hd-a"></span><span style="color:var(--amber);font-size:11px;font-weight:600;">Watch</span></td>
+                <td style="font-size:11px;">Peter V</td>
+                <td style="font-weight:600;">1 Aug 2026</td>
+                <td style="font-weight:700;">61 days</td>
+                <td><span class="badge b-green">On track</span></td>
+                <td><button class="btn btn-ghost btn-sm">View</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ PRICING ═══ -->
+      <div class="view" id="view-pricing">
+        <div class="panel-3">
+          <div class="card"><div class="card-hdr"><div><div class="card-title">Starter</div><div class="card-sub">£299 / month</div></div></div><div class="card-body" style="font-size:12px;color:var(--text3);">Up to 15 users · Modules 01–12 · 50GB storage · 100k AI tokens/month<div style="margin-top:10px;"><button class="btn btn-ghost btn-sm">Edit plan</button></div></div></div>
+          <div class="card" style="border:2px solid var(--brand);"><div class="card-hdr"><div><div class="card-title" style="display:flex;align-items:center;gap:6px;">Growth <span class="badge b-purple" style="font-size:9px;">Most popular</span></div><div class="card-sub">£749 / month</div></div></div><div class="card-body" style="font-size:12px;color:var(--text3);">Up to 40 users · All 21 modules · 200GB storage · 500k AI tokens/month<div style="margin-top:10px;"><button class="btn btn-primary btn-sm">Edit plan</button></div></div></div>
+          <div class="card"><div class="card-hdr"><div><div class="card-title">Enterprise</div><div class="card-sub">Custom quoted</div></div></div><div class="card-body" style="font-size:12px;color:var(--text3);">Unlimited users · All 21 modules · Custom storage · Custom AI tokens · SSO · SLA · Dedicated CSM<div style="margin-top:10px;"><button class="btn btn-ghost btn-sm">Edit plan</button></div></div></div>
+        </div>
+        <div class="card">
+          <div class="card-hdr"><div class="card-title">Discount rules</div><button class="btn btn-ghost btn-sm"><i class="ti ti-plus"></i> Add rule</button></div>
+          <table class="tbl"><thead><tr><th>Rule name</th><th>Applies to</th><th>Discount</th><th>Duration</th><th>Who can apply</th><th>Auto?</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>Annual commitment</td><td>All plans</td><td>15% off MRR</td><td>While annual</td><td>System (auto)</td><td><span class="badge b-green">Auto</span></td><td><button class="btn btn-ghost btn-sm">Edit</button></td></tr>
+            <tr><td>Partner discount</td><td>Growth, Enterprise</td><td>20% off</td><td>Lifetime</td><td>SI Super Admin only</td><td><span class="badge b-gray">Manual</span></td><td><button class="btn btn-ghost btn-sm">Edit</button></td></tr>
+            <tr><td>Loyalty (12+ months)</td><td>All plans</td><td>10% off</td><td>Ongoing</td><td>System (auto)</td><td><span class="badge b-green">Auto</span></td><td><button class="btn btn-ghost btn-sm">Edit</button></td></tr>
+            <tr><td>Non-profit / charity</td><td>Starter only</td><td>50% off</td><td>Annual review</td><td>SI Super Admin only</td><td><span class="badge b-gray">Manual</span></td><td><button class="btn btn-ghost btn-sm">Edit</button></td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
+      <!-- ═══ BILLING ═══ -->
+      <div class="view" id="view-billing">
+        <div class="kpi-grid g4">
+          <div class="kpi"><div class="kpi-label">MRR</div><div class="kpi-val">£38,400</div><div class="kpi-sub up">+12% MoM</div></div>
+          <div class="kpi"><div class="kpi-label">ARR (run rate)</div><div class="kpi-val">£460,800</div><div class="kpi-sub up">Annualised</div></div>
+          <div class="kpi"><div class="kpi-label">Overdue invoices</div><div class="kpi-val">2</div><div class="kpi-sub dn">£2,800 outstanding</div></div>
+          <div class="kpi"><div class="kpi-label">Free access cost</div><div class="kpi-val" style="color:var(--amber);">£8,400</div><div class="kpi-sub warn">21.9% of MRR — near limit</div></div>
+        </div>
+        <div class="cost-alert">
+          <i class="ti ti-alert-triangle"></i>
+          <div>
+            <div class="cost-alert-title">Free access cost alert — threshold reached</div>
+            <div class="cost-alert-sub">Beta programmes and free access periods are costing £8,400 this month — 21.9% of MRR. Your alert threshold is 20%. Review active programmes in Beta programmes, or increase the threshold in Settings.</div>
+          </div>
+          <button class="btn btn-warning btn-sm" onclick="showView('programmes',null)">Review programmes</button>
+        </div>
+        <div class="panel-2">
+          <div class="card">
+            <div class="card-hdr"><div class="card-title">Revenue by plan</div></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:8px;">
+              <div class="usage-row"><span class="usage-lbl">Enterprise</span><div class="usage-track"><div class="usage-fill uf-p" style="width:62%;"></div></div><span class="usage-val">£23,800</span></div>
+              <div class="usage-row"><span class="usage-lbl">Growth</span><div class="usage-track"><div class="usage-fill uf-b" style="width:32%;"></div></div><span class="usage-val">£12,400</span></div>
+              <div class="usage-row"><span class="usage-lbl">Starter</span><div class="usage-track"><div class="usage-fill uf-g" style="width:6%;"></div></div><span class="usage-val">£2,200</span></div>
+              <div style="border-top:1px solid var(--border2);padding-top:8px;margin-top:4px;">
+                <div class="usage-row"><span class="usage-lbl" style="color:var(--amber);">Free access cost</span><div class="usage-track"><div class="usage-fill uf-a" style="width:22%;"></div></div><span class="usage-val" style="color:var(--amber);">−£8,400</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hdr"><div class="card-title">MRR trend — 6 months</div></div>
+            <div class="card-body">
+              <div class="bar-chart">
+                <div class="bar-wrap"><div class="bar" style="height:40px;"></div><div class="bar-lbl">Dec</div></div>
+                <div class="bar-wrap"><div class="bar" style="height:46px;"></div><div class="bar-lbl">Jan</div></div>
+                <div class="bar-wrap"><div class="bar" style="height:52px;"></div><div class="bar-lbl">Feb</div></div>
+                <div class="bar-wrap"><div class="bar" style="height:60px;"></div><div class="bar-lbl">Mar</div></div>
+                <div class="bar-wrap"><div class="bar" style="height:67px;"></div><div class="bar-lbl">Apr</div></div>
+                <div class="bar-wrap"><div class="bar cur" style="height:78px;"></div><div class="bar-lbl">May</div></div>
+              </div>
+              <div style="font-size:10px;color:var(--text3);margin-top:8px;">£28k → £38.4k · +37% in 6 months</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ SETTINGS ═══ -->
+      <div class="view" id="view-settings">
+        <div class="panel-2">
+          <div class="card">
+            <div class="card-hdr"><div class="card-title">Trial & onboarding defaults</div></div>
+            <div class="card-body">
+              <div class="toggle-row"><span>Default trial length</span><select style="width:auto;"><option>14 days</option><option selected>30 days</option><option>60 days</option></select></div>
+              <div class="toggle-row"><span>Require credit card to start trial</span><button class="toggle" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+              <div class="toggle-row"><span>Allow self-serve signup (no sales call)</span><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+              <div class="toggle-row"><span>Allow customer-initiated 14-day extension</span><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+              <div class="toggle-row"><span>Auto-notify 7 days before trial expiry</span><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+              <div class="toggle-row"><span>Auto-notify 1 day before trial expiry</span><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+              <div class="toggle-row"><span>Auto-suspend on expiry if no payment</span><button class="toggle" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hdr"><div class="card-title">Permission roles — sensitive actions</div></div>
+            <div class="card-body">
+              <div class="toggle-row"><span>Grant trial extensions</span><select style="width:auto;"><option selected>SI Super Admin + Commercial Lead</option><option>SI Super Admin only</option></select></div>
+              <div class="toggle-row"><span>Grant free access periods (paid → free)</span><select style="width:auto;"><option selected>SI Super Admin only</option><option>SI Super Admin + Commercial Lead</option></select></div>
+              <div class="toggle-row"><span>Create beta programmes</span><select style="width:auto;"><option selected>SI Super Admin only</option><option>SI Super Admin + Commercial Lead</option></select></div>
+              <div class="toggle-row"><span>Apply manual discounts</span><select style="width:auto;"><option selected>SI Super Admin + Commercial Lead</option><option>SI Super Admin only</option></select></div>
+              <div class="toggle-row"><span>Suspend or delete a customer</span><select style="width:auto;"><option selected>SI Super Admin only</option></select></div>
+              <div class="toggle-row"><span>Max extension without CEO approval</span><select style="width:auto;"><option>1 month</option><option selected>3 months</option><option>6 months</option><option>No limit</option></select></div>
+              <div class="toggle-row"><span>Require written reason for all grants</span><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hdr"><div><div class="card-title">Free access cost thresholds</div><div class="card-sub">Alert when beta programmes and free access periods cost too much relative to MRR</div></div></div>
+          <div class="card-body">
+            <div class="alert alert-blue" style="margin-bottom:14px;"><i class="ti ti-info-circle"></i><span>Free access periods and beta programmes are valuable for growth but have a real cost — they represent MRR you are not collecting. These thresholds ensure you always know when that cost becomes significant.</span></div>
+            <div class="toggle-row"><span>Alert threshold (% of MRR)</span><select style="width:auto;"><option>10% of MRR</option><option>15% of MRR</option><option selected>20% of MRR</option><option>25% of MRR</option><option>No threshold</option></select></div>
+            <div class="toggle-row"><span>Who receives the alert</span><select style="width:auto;"><option selected>SI Super Admin + Commercial Lead</option><option>SI Super Admin only</option></select></div>
+            <div class="toggle-row"><span>Alert frequency</span><select style="width:auto;"><option>Every day while over threshold</option><option selected>Once when threshold first breached</option><option>Weekly summary</option></select></div>
+            <div class="toggle-row"><span>Show cost alert banner in Billing overview</span><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+            <div class="toggle-row"><span>Show cost alert banner in Beta programmes</span><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+            <div class="toggle-row"><span>Block new programme creation when over threshold</span><button class="toggle" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+            <div style="margin-top:14px;padding:12px 14px;background:var(--surface2);border-radius:var(--r);font-size:11px;color:var(--text2);">
+              <strong style="display:block;margin-bottom:4px;">Current status:</strong>
+              Free access cost this month: <strong style="color:var(--amber);">£8,400 (21.9% of MRR)</strong> · Threshold: 20% · <span style="color:var(--red);font-weight:600;">Alert active</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hdr"><div class="card-title">Billing configuration</div></div>
+          <div class="card-body">
+            <div class="toggle-row"><span>Payment processor</span><span class="badge b-purple">Stripe</span></div>
+            <div class="toggle-row"><span>Invoice due date</span><select style="width:auto;"><option>7 days</option><option selected>14 days</option><option>30 days</option></select></div>
+            <div class="toggle-row"><span>Auto-retry failed payments</span><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+            <div class="toggle-row"><span>Retry schedule</span><select style="width:auto;"><option>3, 7, 14 days</option><option selected>1, 3, 7 days</option></select></div>
+            <div class="toggle-row"><span>Suspend on 3rd failed payment attempt</span><button class="toggle on" onclick="this.classList.toggle('on')" aria-label="toggle"></button></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+var titles={customers:'All customers',detail:'RetailCo Group',health:'Customer health scores',trials:'Trials & extensions',programmes:'Beta & access programmes',renewal:'Renewal pipeline — 90 days',pricing:'Pricing & plans',billing:'Billing overview',settings:'Plan settings'};
+var subs={customers:'47 active organisations · 8 on trial or free access',detail:'Enterprise plan · Active since Jan 2025 · CSM: Peter Voss',health:'Composite score from login frequency, feature breadth, support volume, NPS, and renewal intent',trials:'Standard trials · Admin-granted extensions · Free access periods',programmes:'Beta cohorts, design partners, early access, and market research programmes',renewal:'All renewals in the next 90 days — sorted by date, prioritised by MRR',pricing:'Define plans, pricing, discounts and rules',billing:'MRR, ARR, invoices, and free access cost tracking',settings:'Trial defaults, permission roles, free access cost thresholds, and billing configuration'};
+
+function showView(id, el) {
+  document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active');});
+  var v = document.getElementById('view-'+id);
+  if(v) v.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
+  if(el) el.classList.add('active');
+  else document.querySelectorAll('.nav-item').forEach(function(n){
+    if((n.getAttribute('onclick')||'').includes("'"+id+"'")) n.classList.add('active');
+  });
+  document.getElementById('tb-title').textContent = titles[id] || id;
+  document.getElementById('tb-sub').textContent = subs[id] || '';
+}
+
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+document.querySelectorAll('.modal-overlay').forEach(function(o){
+  o.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('open'); });
+});
+
+var typeDescs = {
+  0:'Extends an active trial. The customer stays on free access for the additional duration. Use when a prospect needs more time to evaluate before committing.',
+  1:'Gives an existing paying customer a period of free access as a credit or goodwill gesture. Their subscription continues but they are not billed for the chosen period.',
+  2:'Enrols this organisation in a beta or early access programme. Free access is granted for the programme duration in exchange for testing, feedback, or research participation.'
+};
+function setType(el) {
+  var opts = el.closest('.type-selector').querySelectorAll('.type-opt');
+  opts.forEach(function(o){o.classList.remove('on');});
+  el.classList.add('on');
+  var idx = Array.from(opts).indexOf(el);
+  document.getElementById('type-desc').textContent = typeDescs[idx];
+}
+
+function filterChip(el) {
+  el.closest('div').querySelectorAll('.chip').forEach(function(c){c.classList.remove('on');});
+  el.classList.add('on');
+}
+
+document.querySelectorAll('.chip:not([onclick])').forEach(function(c){
+  c.addEventListener('click', function(){ filterChip(this); });
+});
+</script>
+</body>
+</html>

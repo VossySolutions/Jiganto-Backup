@@ -122,6 +122,17 @@ export const moduleMetadata: ModuleMetadata[] = [
     color: "#22C55E",
   },
   {
+    key: "customer-mgmt",
+    name: "Customer Management",
+    icon: FinanceIcon,
+    href: "/modules/customer-mgmt",
+    shortDescription: "Commercial admin",
+    longDescription:
+      "Manage SaaS customers, subscriptions, trials, beta programmes, billing, and renewal pipeline.",
+    category: "Management",
+    color: "#534AB7",
+  },
+  {
     key: "finance-mgmt",
     name: "Finance",
     icon: FinanceIcon,

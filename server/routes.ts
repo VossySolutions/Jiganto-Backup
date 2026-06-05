@@ -207,6 +207,9 @@ export async function registerRoutes(
   registerImpersonationRoutes(app);
   registerChatRoutes(app);
 
+  const { registerCustomerMgmtRoutes } = await import("./customer-management/routes");
+  registerCustomerMgmtRoutes(app);
+
   // === Application Routes ===
 
   // Tenants
@@ -10499,6 +10502,10 @@ async function seedDatabase() {
       slug: "demo",
       country: "USA",
     });
+    const { ensureCommercialProfileForTenant } = await import(
+      "./customer-management/provision"
+    );
+    await ensureCommercialProfileForTenant(tenant);
 
     // Create a demo board
     const demoModule = (await storage.getModules()).find(m => m.key === "project-mgmt")!;

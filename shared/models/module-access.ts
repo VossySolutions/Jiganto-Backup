@@ -8,6 +8,7 @@ export const SETTINGS_MODULE_KEYS = [
   { key: "tasks", name: "Tasks" },
   { key: "portfolio-mgmt", name: "Portfolio" },
   { key: "project-mgmt", name: "Projects" },
+  { key: "customer-mgmt", name: "Customer Management" },
   { key: "finance-mgmt", name: "Finance" },
   { key: "resource-mgmt", name: "Resources" },
   { key: "test-mgmt", name: "Testing" },
@@ -37,6 +38,7 @@ export const NAV_PATH_TO_MODULE_KEY: Record<string, string> = {
   "/modules/e-sign": "e-sign",
   "/modules/whiteboarding": "whiteboard",
   "/modules/templates": "templates",
+  "/modules/customer-mgmt": "customer-mgmt",
 };
 
 /** Longest-prefix match for API module guard (ordered longest first). */
@@ -60,6 +62,7 @@ export const API_PREFIX_TO_MODULE_KEY: readonly [string, string][] = [
   ["/api/portal", "help-desk"],
   ["/api/workspaces", "workspaces"],
   ["/api/conversations", "chat"],
+  ["/api/customer-mgmt", "customer-mgmt"],
 ];
 
 /** Hidden in client workspace view for client_project_user / client_executive (Section 4). */
@@ -73,6 +76,7 @@ export const CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS = new Set([
   "surveys",
   "e-sign",
   "templates",
+  "customer-mgmt",
   "org-chart",
   "help-desk",
 ]);

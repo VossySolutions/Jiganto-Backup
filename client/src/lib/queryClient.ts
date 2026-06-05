@@ -40,6 +40,7 @@ function scopeApiUrl(url: string): string {
   if (scoped.startsWith("/api/org-memberships")) return scoped;
   if (scoped.startsWith("/api/tenants")) return scoped;
   if (scoped.startsWith("/api/client-workspace-grants")) return scoped;
+  if (scoped.startsWith("/api/customer-mgmt")) return scoped;
   return withWorkspaceScope(scoped, activeWorkspaceClientId);
 }
 

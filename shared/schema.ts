@@ -23,6 +23,7 @@ export * from "./models/clients";
 export * from "./models/permissions";
 export * from "./models/org-notifications";
 export * from "./models/ai-tokens";
+export * from "./models/commercial";
 
 import { users } from "./models/auth";
 

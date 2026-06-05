@@ -43,13 +43,13 @@ export function ModuleHeader({
             <p className="text-sm text-muted-foreground">{subtitle}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap w-full sm:w-auto justify-end">
           {onSearchChange && (
-            <div className="relative">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder={searchPlaceholder}
-                className="pl-9 w-64 rounded-xl"
+                className="pl-9 w-full rounded-xl"
                 value={searchValue || ""}
                 onChange={(e) => onSearchChange(e.target.value)}
                 data-testid={searchTestId}

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
@@ -264,6 +264,19 @@ const moduleGroups: ModuleGroup[] = [
   },
 ];
 
+const commercialModuleGroup: ModuleGroup = {
+  label: "Commercial",
+  items: [
+    {
+      name: "Customer Management",
+      icon: FinanceIcon,
+      href: "/modules/customer-mgmt",
+      description: "SaaS customers, billing & trials",
+      color: "#534AB7",
+    },
+  ],
+};
+
 const allModuleItems: ModuleItem[] = moduleGroups.flatMap((g) => g.items);
 
 const navItemIconClass = "h-[18px] w-[18px] flex-shrink-0";
@@ -349,6 +362,15 @@ export function Sidebar() {
   const displayCompanyName = activeClient ? activeClient.name : orgName;
   const showOrgDropdown =
     showContextSwitcher && !isClientUser && clients.length > 0;
+
+  const settingsAccess = getSettingsAccess(platformRole, isJigantoStaff);
+  const navGroups = useMemo(() => {
+    if (settingsAccess.tier !== "system") return moduleGroups;
+    const groups = [...moduleGroups];
+    const mgmtIdx = groups.findIndex((g) => g.label === "Management");
+    groups.splice(mgmtIdx >= 0 ? mgmtIdx : 1, 0, commercialModuleGroup);
+    return groups;
+  }, [settingsAccess.tier]);
 
   const renderNavItem = (item: ModuleItem) => {
     const isActive =
@@ -760,7 +782,7 @@ export function Sidebar() {
           )}
 
           <nav className="space-y-1">
-            {moduleGroups.map((group, groupIndex) => {
+            {navGroups.map((group, groupIndex) => {
               const visibleItems = group.items.filter(
                 (item) => !isModuleHidden(item.href),
               );

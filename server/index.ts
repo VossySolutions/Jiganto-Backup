@@ -24,8 +24,21 @@ const isMultipartOrStreamUpload = (req: any) => {
   return false;
 };
 
+const isStripeWebhook = (req: any) =>
+  req.method === "POST" && req.path === "/api/customer-mgmt/stripe/webhook";
+
+app.post(
+  "/api/customer-mgmt/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  (req, res, next) => {
+    import("./customer-management/stripe")
+      .then(({ handleStripeWebhook }) => handleStripeWebhook(req, res))
+      .catch(next);
+  },
+);
+
 app.use((req, res, next) => {
-  if (isMultipartOrStreamUpload(req)) return next();
+  if (isStripeWebhook(req) || isMultipartOrStreamUpload(req)) return next();
   express.json({
     limit: "50mb",
     verify: (req: any, _res: any, buf: any) => {
@@ -35,7 +48,7 @@ app.use((req, res, next) => {
 });
 
 app.use((req, res, next) => {
-  if (isMultipartOrStreamUpload(req)) return next();
+  if (isStripeWebhook(req) || isMultipartOrStreamUpload(req)) return next();
   express.urlencoded({ extended: false, limit: "50mb" })(req, res, next);
 });
 
