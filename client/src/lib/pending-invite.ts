@@ -1,3 +1,5 @@
+import { DASHBOARD_PATH, LANDING_PATH } from "@shared/app-routes";
+
 const STORAGE_KEY = "jiganto-pending-invite-token";
 const AUTO_ACCEPT_KEY = "jiganto-invite-auto-accept";
 
@@ -42,7 +44,7 @@ export function redirectAfterAuth(): void {
     window.location.href = inviteAcceptPath(token);
     return;
   }
-  window.location.href = "/";
+  window.location.href = DASHBOARD_PATH;
 }
 
 export function shouldAutoAcceptInvite(): boolean {
@@ -67,5 +69,5 @@ export function goToInviteSignIn(token: string, email?: string): void {
   const params = new URLSearchParams();
   params.set("invite", token);
   if (email) params.set("email", email);
-  window.location.href = `/?${params.toString()}`;
+  window.location.href = `${LANDING_PATH}?${params.toString()}`;
 }

@@ -1,418 +1,758 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { AppShell } from "@/components/AppShell";
 import { PmoDashboard } from "@/components/PmoDashboard";
 import { useClientContext } from "@/hooks/use-client-context";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, Activity, Users, DollarSign, Clock, ChevronDown, Settings2, Star, Check, MessageSquare, CheckSquare, FolderKanban, Presentation, FileStack, ClipboardList, PenTool, LayoutGrid } from "lucide-react";
-import { ModuleDiscovery } from "@/components/ModuleDiscovery";
-import { motion } from "framer-motion";
-import { useDashboardSelector, type DashboardType } from "@/hooks/use-dashboard-selector";
+import { Input } from "@/components/ui/input";
+import { ChevronDown, Settings2, Star, Check, Presentation, X, Plus, Sparkles, Search } from "lucide-react";
+import { ModuleDiscovery, useModuleDiscoveryShortcuts } from "@/components/ModuleDiscovery";
+
+import {
+
+  useDashboardSelector,
+
+  parseCustomDashboardId,
+
+  type DashboardType,
+
+} from "@/hooks/use-dashboard-selector";
+
 import { QuickActionsDropdown } from "@/components/QuickActionsDropdown";
+
 import { NotificationBell } from "@/components/NotificationBell";
+
 import { HelpMenu } from "@/components/HelpMenu";
+
 import { cn } from "@/lib/utils";
+
 import {
+
   DropdownMenu,
+
   DropdownMenuContent,
+
   DropdownMenuItem,
+
   DropdownMenuLabel,
+
   DropdownMenuSeparator,
+
   DropdownMenuTrigger,
+
 } from "@/components/ui/dropdown-menu";
+
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
 
-function MainDashboardContent() {
-  const metrics = [
-    { title: "Active Projects", value: "24", change: "+12%", icon: Activity, color: "text-status-blue-foreground bg-status-blue" },
-    { title: "Team Capacity", value: "87%", change: "+3%", icon: Users, color: "text-status-purple-foreground bg-status-purple" },
-    { title: "Revenue YTD", value: "$2.4M", change: "+18%", icon: DollarSign, color: "text-status-green-foreground bg-status-green" },
-    { title: "Avg. Cycle Time", value: "14d", change: "-2d", icon: Clock, color: "text-status-amber-foreground bg-status-amber" },
-  ];
+  ProjectsModulePanel,
+
+  TasksModulePanel,
+
+  CrmModulePanel,
+
+  HelpDeskModulePanel,
+
+  FinanceModulePanel,
+
+  BusinessModulePanel,
+
+} from "@/components/dashboard/ModuleDashboardPanels";
+
+import { DashboardContextSelector } from "@/components/dashboard/DashboardContextSelector";
+
+import { ExecutiveOverviewDashboard } from "@/components/dashboard/ExecutiveOverviewDashboard";
+import { DashboardConfigDialog } from "@/components/dashboard/DashboardConfigDialog";
+
+import { DashboardBriefingStrip } from "@/components/dashboard/DashboardBriefingStrip";
+
+import { BespokeDashboardView } from "@/components/dashboard/BespokeDashboardView";
+
+import { AiDashboardDialog, CreateBespokeDashboardDialog } from "@/components/dashboard/CreateDashboardDialogs";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
+
+
+function GenericModuleDashboard({ title }: { title: string }) {
 
   return (
-    <>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {metrics.map((metric, i) => (
-          <motion.div
-            key={metric.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-          >
-            <Card className="rounded-2xl border-border/50 shadow-sm hover:shadow-md transition-all">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {metric.title}
-                </CardTitle>
-                <div className={cn("p-1.5 rounded-lg", metric.color)}>
-                  <metric.icon className="h-4 w-4" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold font-display">{metric.value}</div>
-                <p className="text-xs text-muted-foreground flex items-center mt-1">
-                  <span className="text-status-green-foreground font-medium mr-1">{metric.change}</span>
-                  from last month
-                </p>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          <Card className="rounded-2xl border-border/50 shadow-sm h-full">
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>Latest updates across your modules</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {[
-                  { status: "In Progress", color: "bg-status-blue text-status-blue-foreground" },
-                  { status: "Completed", color: "bg-status-green text-status-green-foreground" },
-                  { status: "At Risk", color: "bg-status-amber text-status-amber-foreground" },
-                ].map((item, i) => (
-                  <div key={i} className="flex gap-4 items-start pb-6 border-b last:border-0 last:pb-0">
-                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
-                      <div className={cn("h-2.5 w-2.5 rounded-full", item.color.split(" ")[0])} />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium text-foreground">
-                        Project "Alpha" status updated to <span className={cn("px-1.5 py-0.5 rounded-md", item.color)}>{item.status}</span>
-                      </p>
-                      <p className="text-xs text-muted-foreground">{i + 1} hours ago • ERP Systems</p>
-                    </div>
-                    <Button variant="ghost" size="icon" className="ml-auto">
-                      <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+    <Card className="rounded-2xl border-border/50">
 
-        <div>
-          <Card className="rounded-2xl border-border/50 shadow-sm bg-gradient-to-br from-primary/5 to-transparent border-primary/10">
-            <CardHeader>
-              <CardTitle className="text-primary">AI Insights</CardTitle>
-              <CardDescription>Automated suggestions for you</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="p-4 rounded-xl bg-white/50 dark:bg-white/5 border border-white/20 shadow-sm text-sm leading-relaxed text-foreground/80 backdrop-blur-sm">
-                Resource utilization in <strong>Design Team</strong> is approaching capacity limits for next sprint.
-              </div>
-              <div className="p-4 rounded-xl bg-white/50 dark:bg-white/5 border border-white/20 shadow-sm text-sm leading-relaxed text-foreground/80 backdrop-blur-sm">
-                3 tasks in <strong>Mobile App</strong> project are overdue by 2 days.
-              </div>
-              <Button variant="outline" className="w-full rounded-xl border-primary/20 text-primary hover:bg-primary/5 hover:text-primary">
-                View All Insights
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </>
+      <CardHeader>
+
+        <CardTitle>{title}</CardTitle>
+
+        <CardDescription>Module dashboard template — connect live widgets in a future release.</CardDescription>
+
+      </CardHeader>
+
+      <CardContent className="text-sm text-muted-foreground">
+
+        Use Projects, Tasks, CRM, Help Desk, Finance, or Business dashboards for fully wired analytics today.
+
+      </CardContent>
+
+    </Card>
+
   );
+
 }
 
-function ChatDashboard() {
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2">
-        <Card className="rounded-2xl border-border/50 shadow-sm h-[400px]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-primary" />
-              Recent Conversations
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {["Product Team", "Design Review", "Engineering"].map((channel, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer">
-                  <div className="h-10 w-10 rounded-lg bg-status-blue flex items-center justify-center text-status-blue-foreground font-bold">
-                    {channel[0]}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{channel}</p>
-                    <p className="text-xs text-muted-foreground">Last message 2 min ago</p>
-                  </div>
-                  <span className="bg-status-red text-status-red-foreground text-xs px-2 py-0.5 rounded-full">3</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      <div>
-        <Card className="rounded-2xl border-border/50 shadow-sm">
-          <CardHeader>
-            <CardTitle>Quick Stats</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Unread Messages</span>
-              <span className="font-bold text-status-amber-foreground bg-status-amber px-2 py-0.5 rounded">12</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Active Channels</span>
-              <span className="font-bold">8</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Team Members Online</span>
-              <span className="font-bold text-status-green-foreground">24</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
 
-function TasksDashboard() {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <Card className="rounded-2xl border-border/50 shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-muted-foreground">To Do</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-status-amber-foreground">18</div>
-          <div className="mt-4 h-2 bg-status-amber rounded-full w-3/4" />
-        </CardContent>
-      </Card>
-      <Card className="rounded-2xl border-border/50 shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-muted-foreground">In Progress</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-status-blue-foreground">12</div>
-          <div className="mt-4 h-2 bg-status-blue rounded-full w-1/2" />
-        </CardContent>
-      </Card>
-      <Card className="rounded-2xl border-border/50 shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-muted-foreground">Completed</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-status-green-foreground">45</div>
-          <div className="mt-4 h-2 bg-status-green rounded-full" />
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function ProjectsDashboard() {
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <Card className="rounded-2xl border-border/50 shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FolderKanban className="h-5 w-5 text-primary" />
-            Project Health
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span>On Track</span>
-              <span className="bg-status-green text-status-green-foreground px-3 py-1 rounded-full text-sm font-medium">12</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>At Risk</span>
-              <span className="bg-status-amber text-status-amber-foreground px-3 py-1 rounded-full text-sm font-medium">5</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Off Track</span>
-              <span className="bg-status-red text-status-red-foreground px-3 py-1 rounded-full text-sm font-medium">2</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      <Card className="rounded-2xl border-border/50 shadow-sm">
-        <CardHeader>
-          <CardTitle>Upcoming Milestones</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {["Phase 1 Complete", "UAT Start", "Go Live"].map((milestone, i) => (
-              <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50">
-                <div className={cn("h-3 w-3 rounded-full", i === 0 ? "bg-status-green" : i === 1 ? "bg-status-amber" : "bg-status-blue")} />
-                <span className="text-sm">{milestone}</span>
-                <span className="text-xs text-muted-foreground ml-auto">{i + 1} week{i > 0 ? "s" : ""}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function GenericModuleDashboard({ title, icon: Icon }: { title: string; icon: React.ComponentType<{ className?: string }> }) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <Card className="rounded-2xl border-border/50 shadow-sm col-span-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon className="h-5 w-5 text-primary" />
-            {title} Overview
-          </CardTitle>
-          <CardDescription>Summary and key metrics for {title.toLowerCase()}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Dashboard content for {title} module will be customized here.</p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
 
 export function Dashboard() {
   const { user } = useAuth();
-  const { isMasterView, canViewPmoMaster } = useClientContext();
-  const { currentDashboard, setCurrentDashboard, enabledDashboards, dashboards, toggleDashboard, defaultDashboard, setDefaultDashboard } = useDashboardSelector();
+  const [, setLocation] = useLocation();
+  const { isMasterView, canViewPmoMaster, activeClient } = useClientContext();
+
+  const {
+
+    currentDashboard,
+
+    setCurrentDashboard,
+
+    enabledDashboards,
+
+    dashboards,
+
+    toggleDashboard,
+
+    defaultDashboard,
+
+    setDefaultDashboard,
+
+    hiddenModuleKeys,
+
+    toggleModuleVisibility,
+
+    refreshCustomDashboards,
+
+  } = useDashboardSelector();
+
+
+
   const [showConfigDialog, setShowConfigDialog] = useState(false);
 
-  const currentDashboardInfo = dashboards.find(d => d.id === currentDashboard);
+  const [presentationMode, setPresentationMode] = useState(false);
 
-  const renderDashboardContent = () => {
-    if (isMasterView && canViewPmoMaster && currentDashboard === "main") {
-      return <PmoDashboard />;
-    }
-    switch (currentDashboard) {
-      case "main":
-        return <MainDashboardContent />;
-      case "modules":
-        return <ModuleDiscovery />;
-      case "chat":
-        return <ChatDashboard />;
-      case "tasks":
-        return <TasksDashboard />;
-      case "projects":
-        return <ProjectsDashboard />;
-      case "whiteboarding":
-        return <GenericModuleDashboard title="Whiteboarding" icon={Presentation} />;
-      case "templates":
-        return <GenericModuleDashboard title="Templates" icon={FileStack} />;
-      case "surveys":
-        return <GenericModuleDashboard title="Surveys" icon={ClipboardList} />;
-      case "esign":
-        return <GenericModuleDashboard title="eSign" icon={PenTool} />;
-      default:
-        return <MainDashboardContent />;
-    }
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+
+  const [showAiDialog, setShowAiDialog] = useState(false);
+  const [dashboardSearch, setDashboardSearch] = useState("");
+  const CONTEXT_KEY = "jiganto-dashboard-context";
+  const [contextClientId, setContextClientId] = useState<number | null>(() => {
+    try {
+      const raw = sessionStorage.getItem(CONTEXT_KEY);
+      if (raw) return JSON.parse(raw).clientId ?? activeClient?.id ?? null;
+    } catch {}
+    return activeClient?.id ?? null;
+  });
+  const [contextProjectId, setContextProjectId] = useState<number | null>(() => {
+    try {
+      const raw = sessionStorage.getItem(CONTEXT_KEY);
+      if (raw) return JSON.parse(raw).projectId ?? null;
+    } catch {}
+    return null;
+  });
+
+  const moduleShortcuts = useModuleDiscoveryShortcuts(hiddenModuleKeys);
+
+  useEffect(() => {
+    sessionStorage.setItem(
+      CONTEXT_KEY,
+      JSON.stringify({ clientId: contextClientId, projectId: contextProjectId }),
+    );
+  }, [contextClientId, contextProjectId]);
+
+  useEffect(() => {
+    setContextClientId(activeClient?.id ?? null);
+  }, [activeClient?.id]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "Escape" && presentationMode) {
+        setPresentationMode(false);
+      }
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key >= "1" && e.key <= "9") {
+        const idx = Number(e.key) - 1;
+        if (currentDashboard === "modules" || currentDashboard === "main") {
+          const mod = moduleShortcuts[idx];
+          if (mod) {
+            setLocation(mod.href);
+            return;
+          }
+        }
+        const target = enabledDashboards[idx];
+        if (target) setCurrentDashboard(target.id);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    currentDashboard,
+    presentationMode,
+    setCurrentDashboard,
+    enabledDashboards,
+    moduleShortcuts,
+    setLocation,
+  ]);
+
+
+
+  const currentDashboardInfo = dashboards.find((d) => d.id === currentDashboard);
+
+
+
+  const groupedDashboards = useMemo(() => {
+    const system = enabledDashboards.filter((d) => d.group === "system");
+    const module = enabledDashboards.filter((d) => d.group === "module");
+    const custom = enabledDashboards.filter((d) => d.group === "custom");
+    return { system, module, custom };
+  }, [enabledDashboards]);
+
+  const filteredDashboards = useMemo(() => {
+    const q = dashboardSearch.trim().toLowerCase();
+    const match = (d: (typeof enabledDashboards)[number]) =>
+      !q || d.name.toLowerCase().includes(q) || d.description.toLowerCase().includes(q);
+    return {
+      system: groupedDashboards.system.filter(match),
+      module: groupedDashboards.module.filter(match),
+      custom: groupedDashboards.custom.filter(match),
+    };
+  }, [groupedDashboards, dashboardSearch]);
+
+
+
+  const customId = parseCustomDashboardId(currentDashboard);
+
+
+
+  const handleDashboardCreated = (id: DashboardType) => {
+
+    refreshCustomDashboards();
+
+    setCurrentDashboard(id);
+
   };
 
-  return (
-    <AppShell>
-        <div className="max-w-7xl mx-auto p-8 space-y-8">
-          
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="gap-2 text-3xl font-bold font-display tracking-tight text-foreground p-0 h-auto hover:bg-transparent" data-testid="dashboard-selector">
-                    {currentDashboardInfo?.name || "Dashboard"}
-                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-64">
-                  <DropdownMenuLabel>Switch Dashboard</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {enabledDashboards.map(dashboard => (
-                    <DropdownMenuItem
-                      key={dashboard.id}
-                      onClick={() => setCurrentDashboard(dashboard.id)}
-                      className="flex items-center justify-between cursor-pointer"
-                      data-testid={`dashboard-option-${dashboard.id}`}
-                    >
-                      <div>
-                        <p className="font-medium">{dashboard.name}</p>
-                        <p className="text-xs text-muted-foreground">{dashboard.description}</p>
-                      </div>
-                      {currentDashboard === dashboard.id && <Check className="h-4 w-4 text-primary" />}
-                      {defaultDashboard === dashboard.id && <Star className="h-3 w-3 text-status-amber-foreground fill-status-amber" />}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            <div className="flex gap-2 items-center">
-              <HelpMenu />
-              <NotificationBell />
-              <QuickActionsDropdown />
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={() => setShowConfigDialog(true)}
-                data-testid="configure-dashboards-btn"
-                title="Configure Dashboards"
-              >
-                <Settings2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
 
-          <p className="text-muted-foreground -mt-4">
-            {currentDashboardInfo?.description || "Overview of your enterprise performance."}
-          </p>
 
-          {renderDashboardContent()}
-        </div>
-      <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Configure Dashboards</DialogTitle>
-            <DialogDescription>
-              Choose which dashboards to show and set your default dashboard.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 max-h-96 overflow-y-auto">
-            {dashboards.map(dashboard => (
-              <div 
-                key={dashboard.id} 
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Switch
-                    checked={dashboard.enabled}
-                    onCheckedChange={() => toggleDashboard(dashboard.id)}
-                    data-testid={`toggle-dashboard-${dashboard.id}`}
-                  />
-                  <div>
-                    <p className="font-medium text-sm">{dashboard.name}</p>
-                    <p className="text-xs text-muted-foreground">{dashboard.description}</p>
+  const showBriefing =
+    currentDashboard === "modules" ||
+    currentDashboard === "projects" ||
+    currentDashboard === "tasks" ||
+    currentDashboard === "crm";
+
+
+
+  const renderDashboardContent = () => {
+
+    if (isMasterView && canViewPmoMaster && currentDashboard === "main") {
+
+      return <PmoDashboard />;
+
+    }
+
+
+
+    const ctx = { clientId: contextClientId, projectId: contextProjectId };
+
+
+
+    if (customId != null) {
+
+      return <BespokeDashboardView dashboardId={customId} {...ctx} />;
+
+    }
+
+
+
+    switch (currentDashboard) {
+
+      case "modules":
+
+        return (
+
+          <ModuleDiscovery
+
+            clientId={ctx.clientId}
+
+            projectId={ctx.projectId}
+
+            hiddenModuleKeys={hiddenModuleKeys}
+
+          />
+
+        );
+
+      case "projects":
+
+        return <ProjectsModulePanel {...ctx} />;
+
+      case "tasks":
+
+        return <TasksModulePanel {...ctx} />;
+
+      case "crm":
+
+        return <CrmModulePanel {...ctx} />;
+
+      case "helpdesk":
+
+        return <HelpDeskModulePanel {...ctx} />;
+
+      case "finance":
+
+        return <FinanceModulePanel {...ctx} />;
+
+      case "business":
+
+        return <BusinessModulePanel {...ctx} />;
+
+      case "main":
+        return (
+          <ExecutiveOverviewDashboard
+            clientId={ctx.clientId}
+            projectId={ctx.projectId}
+          />
+        );
+
+      case "portfolio":
+
+        return <GenericModuleDashboard title="Portfolio Dashboard" />;
+
+      default:
+
+        return <GenericModuleDashboard title={currentDashboardInfo?.name ?? "Dashboard"} />;
+
+    }
+
+  };
+
+
+
+  const shell = (
+
+    <div
+
+      className={cn(
+
+        "max-w-7xl mx-auto p-4 md:p-8 space-y-6",
+
+        presentationMode && "max-w-[1600px]",
+
+      )}
+
+      data-testid="dashboard-page"
+
+    >
+
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+
+        <div className="space-y-2">
+
+          <div className="flex flex-wrap items-center gap-3">
+
+            <DropdownMenu>
+
+              <DropdownMenuTrigger asChild>
+
+                <Button
+
+                  variant="ghost"
+
+                  className="gap-2 text-2xl md:text-3xl font-bold font-display tracking-tight text-foreground p-0 h-auto hover:bg-transparent"
+
+                  data-testid="dashboard-selector"
+
+                >
+
+                  {currentDashboardInfo?.name || "Dashboard"}
+
+                  <ChevronDown className="h-5 w-5 text-muted-foreground" />
+
+                </Button>
+
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent align="start" className="w-72 max-h-[70vh] overflow-y-auto">
+
+                <DropdownMenuLabel>Switch dashboard</DropdownMenuLabel>
+                <div className="px-2 pb-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      value={dashboardSearch}
+                      onChange={(e) => setDashboardSearch(e.target.value)}
+                      placeholder="Search dashboards…"
+                      className="h-8 pl-8 text-xs"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
                   </div>
                 </div>
-                <Button
-                  variant={defaultDashboard === dashboard.id ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setDefaultDashboard(dashboard.id)}
-                  className="gap-1"
-                  data-testid={`set-default-${dashboard.id}`}
-                >
-                  <Star className={cn("h-3 w-3", defaultDashboard === dashboard.id && "fill-current")} />
-                  {defaultDashboard === dashboard.id ? "Default" : "Set Default"}
-                </Button>
-              </div>
-            ))}
+                <DropdownMenuSeparator />
+                {filteredDashboards.system.length > 0 && (
+
+                  <>
+
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">System views</DropdownMenuLabel>
+
+                    {filteredDashboards.system.map((dashboard, idx) => (
+
+                      <DropdownMenuItem
+
+                        key={dashboard.id}
+
+                        onClick={() => setCurrentDashboard(dashboard.id)}
+
+                        className="flex items-center justify-between cursor-pointer"
+
+                      >
+
+                        <div>
+
+                          <p className="font-medium">{dashboard.name}</p>
+
+                          <p className="text-xs text-muted-foreground">{dashboard.description}</p>
+
+                        </div>
+
+                        <div className="flex items-center gap-1">
+
+                          {idx < 9 && (
+
+                            <span className="text-[10px] text-muted-foreground border rounded px-1">{idx + 1}</span>
+
+                          )}
+
+                          {defaultDashboard === dashboard.id && (
+
+                            <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
+
+                          )}
+
+                          {currentDashboard === dashboard.id && <Check className="h-4 w-4 text-primary" />}
+
+                        </div>
+
+                      </DropdownMenuItem>
+
+                    ))}
+
+                  </>
+
+                )}
+
+                {filteredDashboards.module.length > 0 && (
+
+                  <>
+
+                    <DropdownMenuSeparator />
+
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">Module dashboards</DropdownMenuLabel>
+
+                    {filteredDashboards.module.map((dashboard) => (
+
+                      <DropdownMenuItem
+
+                        key={dashboard.id}
+
+                        onClick={() => setCurrentDashboard(dashboard.id)}
+
+                        className="flex items-center justify-between cursor-pointer"
+
+                      >
+
+                        <div>
+
+                          <p className="font-medium">{dashboard.name}</p>
+
+                          <p className="text-xs text-muted-foreground">{dashboard.description}</p>
+
+                        </div>
+
+                        <div className="flex items-center gap-1">
+
+                          {defaultDashboard === dashboard.id && (
+
+                            <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
+
+                          )}
+
+                          {currentDashboard === dashboard.id && <Check className="h-4 w-4 text-primary" />}
+
+                        </div>
+
+                      </DropdownMenuItem>
+
+                    ))}
+
+                  </>
+
+                )}
+
+                {filteredDashboards.custom.length > 0 && (
+
+                  <>
+
+                    <DropdownMenuSeparator />
+
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">My dashboards</DropdownMenuLabel>
+
+                    {filteredDashboards.custom.map((dashboard) => (
+
+                      <DropdownMenuItem
+
+                        key={dashboard.id}
+
+                        onClick={() => setCurrentDashboard(dashboard.id)}
+
+                        className="flex items-center justify-between cursor-pointer"
+
+                      >
+
+                        <div>
+
+                          <p className="font-medium">{dashboard.name}</p>
+
+                          <p className="text-xs text-muted-foreground">{dashboard.description}</p>
+
+                        </div>
+
+                        {currentDashboard === dashboard.id && <Check className="h-4 w-4 text-primary" />}
+
+                      </DropdownMenuItem>
+
+                    ))}
+
+                  </>
+
+                )}
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem onClick={() => setShowCreateDialog(true)} className="gap-2 cursor-pointer">
+
+                  <Plus className="h-4 w-4" />
+
+                  Create custom dashboard
+
+                </DropdownMenuItem>
+
+                <DropdownMenuItem onClick={() => setShowAiDialog(true)} className="gap-2 cursor-pointer">
+
+                  <Sparkles className="h-4 w-4" />
+
+                  AI dashboard builder
+
+                </DropdownMenuItem>
+
+              </DropdownMenuContent>
+
+            </DropdownMenu>
+
+            <DashboardContextSelector
+
+              dashboardId={currentDashboard}
+
+              clientId={contextClientId}
+
+              projectId={contextProjectId}
+
+              onClientChange={setContextClientId}
+
+              onProjectChange={setContextProjectId}
+
+            />
+
           </div>
-        </DialogContent>
-      </Dialog>
-    </AppShell>
+
+          <p className="text-muted-foreground text-sm">
+
+            {currentDashboardInfo?.description || "Overview of your enterprise performance."}
+
+            {user?.firstName ? ` · Welcome back, ${user.firstName}` : ""}
+
+            <span className="hidden sm:inline"> · Press 1–9 to switch, D for default</span>
+
+          </p>
+
+        </div>
+
+        <div className="flex gap-2 items-center flex-wrap">
+
+          {!presentationMode && (
+
+            <>
+
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowCreateDialog(true)}>
+
+                <Plus className="h-4 w-4" />
+
+                New
+
+              </Button>
+
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowAiDialog(true)}>
+
+                <Sparkles className="h-4 w-4" />
+
+                AI
+
+              </Button>
+
+              <HelpMenu />
+
+              <NotificationBell />
+
+              <QuickActionsDropdown />
+
+              <Button
+
+                variant="ghost"
+
+                size="icon"
+
+                onClick={() => setShowConfigDialog(true)}
+
+                data-testid="configure-dashboards-btn"
+
+                title="Configure dashboards"
+
+              >
+
+                <Settings2 className="h-4 w-4" />
+
+              </Button>
+
+            </>
+
+          )}
+
+          <Button
+
+            variant={presentationMode ? "default" : "outline"}
+
+            size="sm"
+
+            className="gap-1.5"
+
+            onClick={() => setPresentationMode((v) => !v)}
+
+          >
+
+            {presentationMode ? <X className="h-4 w-4" /> : <Presentation className="h-4 w-4" />}
+
+            {presentationMode ? "Exit present" : "Present"}
+
+          </Button>
+
+        </div>
+
+      </div>
+
+
+
+      {presentationMode && (
+
+        <p className="text-xs text-muted-foreground text-right">
+
+          Presentation mode · {new Date().toLocaleString()} · Press Esc to exit
+
+        </p>
+
+      )}
+
+
+
+      {showBriefing && (
+
+        <DashboardBriefingStrip clientId={contextClientId} projectId={contextProjectId} />
+
+      )}
+
+
+
+      {renderDashboardContent()}
+
+
+
+      <DashboardConfigDialog
+
+        open={showConfigDialog}
+
+        onOpenChange={setShowConfigDialog}
+
+        dashboards={dashboards.filter((d) => d.group !== "custom")}
+
+        defaultDashboard={defaultDashboard}
+
+        hiddenModuleKeys={hiddenModuleKeys}
+
+        onToggleDashboard={toggleDashboard}
+
+        onSetDefault={setDefaultDashboard}
+
+        onToggleModuleVisibility={toggleModuleVisibility}
+        customDashboardId={customId}
+        contextClientId={contextClientId}
+        contextProjectId={contextProjectId}
+      />
+
+
+
+      <CreateBespokeDashboardDialog
+
+        open={showCreateDialog}
+
+        onOpenChange={setShowCreateDialog}
+
+        onCreated={handleDashboardCreated}
+
+        clientId={contextClientId}
+
+        projectId={contextProjectId}
+
+      />
+
+      <AiDashboardDialog
+
+        open={showAiDialog}
+
+        onOpenChange={setShowAiDialog}
+
+        onCreated={handleDashboardCreated}
+
+        clientId={contextClientId}
+
+        projectId={contextProjectId}
+
+      />
+
+    </div>
+
   );
+
+
+
+  if (presentationMode) {
+
+    return (
+
+      <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-6 md:p-10">{shell}</div>
+
+    );
+
+  }
+
+
+
+  return <AppShell>{shell}</AppShell>;
+
 }
+
+

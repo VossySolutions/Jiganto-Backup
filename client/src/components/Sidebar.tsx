@@ -49,6 +49,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { useClientContext } from "@/hooks/use-client-context";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useModuleAccess } from "@/hooks/use-module-access";
+import { DASHBOARD_PATH, isDashboardPath } from "@shared/app-routes";
 import { PLATFORM_ROLE_LABELS } from "@shared/models/permissions";
 import {
   CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS,
@@ -95,7 +96,7 @@ interface ModuleGroup {
 const pinnedItem: ModuleItem = {
   name: "Dashboard",
   icon: DashboardIcon,
-  href: "/",
+  href: DASHBOARD_PATH,
   color: "#1E88C8",
 };
 
@@ -374,8 +375,10 @@ export function Sidebar() {
 
   const renderNavItem = (item: ModuleItem) => {
     const isActive =
-      location === item.href ||
-      (item.href !== "/" && location.startsWith(item.href));
+      item.href === DASHBOARD_PATH
+        ? isDashboardPath(location)
+        : location === item.href ||
+          (item.href !== DASHBOARD_PATH && location.startsWith(item.href));
     if (isModuleHidden(item.href)) return null;
     if (!canAccessNavPath(item.href)) return null;
     if (isClientWorkspaceView) {

@@ -1,4 +1,5 @@
 import type { Client } from "@/hooks/use-client-context";
+import { DASHBOARD_PATH, workspaceDashboardPath } from "@shared/app-routes";
 
 /** Append workspace scope query for API calls (Section 4.1). */
 export function withWorkspaceScope(url: string, clientId: number | null): string {
@@ -8,8 +9,8 @@ export function withWorkspaceScope(url: string, clientId: number | null): string
 }
 
 export function workspacePathFromClient(client: Pick<Client, "slug"> | null): string {
-  if (!client?.slug) return "/";
-  return `/ws/${client.slug}`;
+  if (!client?.slug) return DASHBOARD_PATH;
+  return workspaceDashboardPath(client.slug);
 }
 
 export function parseWorkspaceSlug(pathname: string): string | null {

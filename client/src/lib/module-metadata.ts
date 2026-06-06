@@ -30,16 +30,58 @@ export interface ModuleMetadata {
   color: string;
 }
 
-export type ModuleCategory = "Collaboration" | "Portfolio" | "Management" | "Service & Support" | "Utilities";
+export type ModuleCategory =
+  | "Collaboration"
+  | "Commercial"
+  | "Management"
+  | "Portfolio"
+  | "Service & Support"
+  | "Utilities";
 
 export const categoryColors: Record<ModuleCategory, { bg: string; text: string; border: string }> = {
-  "Collaboration": { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-300", border: "border-blue-200 dark:border-blue-800" },
-  "Portfolio": { bg: "bg-purple-100 dark:bg-purple-900/30", text: "text-purple-700 dark:text-purple-300", border: "border-purple-200 dark:border-purple-800" },
-  "Management": { bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-300", border: "border-emerald-200 dark:border-emerald-800" },
-  "Service & Support": { bg: "bg-orange-100 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-300", border: "border-orange-200 dark:border-orange-800" },
-  "Utilities": { bg: "bg-cyan-100 dark:bg-cyan-900/30", text: "text-cyan-700 dark:text-cyan-300", border: "border-cyan-200 dark:border-cyan-800" },
+  Collaboration: {
+    bg: "bg-blue-100 dark:bg-blue-900/30",
+    text: "text-blue-700 dark:text-blue-300",
+    border: "border-blue-200 dark:border-blue-800",
+  },
+  Commercial: {
+    bg: "bg-violet-100 dark:bg-violet-900/30",
+    text: "text-violet-700 dark:text-violet-300",
+    border: "border-violet-200 dark:border-violet-800",
+  },
+  Management: {
+    bg: "bg-emerald-100 dark:bg-emerald-900/30",
+    text: "text-emerald-700 dark:text-emerald-300",
+    border: "border-emerald-200 dark:border-emerald-800",
+  },
+  Portfolio: {
+    bg: "bg-purple-100 dark:bg-purple-900/30",
+    text: "text-purple-700 dark:text-purple-300",
+    border: "border-purple-200 dark:border-purple-800",
+  },
+  "Service & Support": {
+    bg: "bg-orange-100 dark:bg-orange-900/30",
+    text: "text-orange-700 dark:text-orange-300",
+    border: "border-orange-200 dark:border-orange-800",
+  },
+  Utilities: {
+    bg: "bg-cyan-100 dark:bg-cyan-900/30",
+    text: "text-cyan-700 dark:text-cyan-300",
+    border: "border-cyan-200 dark:border-cyan-800",
+  },
 };
 
+/** Category order matches sidebar (Commercial inserted before Management for system users). */
+export const allCategories: ModuleCategory[] = [
+  "Collaboration",
+  "Commercial",
+  "Management",
+  "Portfolio",
+  "Service & Support",
+  "Utilities",
+];
+
+/** Module list order within each category matches sidebar navigation. */
 export const moduleMetadata: ModuleMetadata[] = [
   {
     key: "chat",
@@ -47,7 +89,8 @@ export const moduleMetadata: ModuleMetadata[] = [
     icon: ChatIcon,
     href: "/modules/chat",
     shortDescription: "Team communication",
-    longDescription: "Real-time team messaging and channels for seamless collaboration across your organisation.",
+    longDescription:
+      "Real-time team messaging and channels for seamless collaboration across your organisation.",
     category: "Collaboration",
     color: "#6366F1",
   },
@@ -57,9 +100,72 @@ export const moduleMetadata: ModuleMetadata[] = [
     icon: DocumentsIcon,
     href: "/modules/documents",
     shortDescription: "Document management",
-    longDescription: "Shared documents and knowledge base with version control, rich text editing, and access management.",
+    longDescription:
+      "Shared documents and knowledge base with version control, rich text editing, and access management.",
     category: "Collaboration",
     color: "#3B82F6",
+  },
+  {
+    key: "customer-mgmt",
+    name: "Customer Management",
+    icon: FinanceIcon,
+    href: "/modules/customer-mgmt",
+    shortDescription: "Commercial admin",
+    longDescription:
+      "Manage SaaS customers, subscriptions, trials, beta programmes, billing, and renewal pipeline.",
+    category: "Commercial",
+    color: "#534AB7",
+  },
+  {
+    key: "business-mgmt",
+    name: "Business",
+    icon: BusinessIcon,
+    href: "/modules/business-mgmt",
+    shortDescription: "Strategic planning & operations",
+    longDescription: "Company structure, strategic planning, execution maps and operational management.",
+    category: "Management",
+    color: "#7C3AED",
+  },
+  {
+    key: "clients",
+    name: "Clients",
+    icon: CRMIcon,
+    href: "/modules/clients",
+    shortDescription: "Client workspace management",
+    longDescription: "Manage client workspaces, access, and delivery context for consulting engagements.",
+    category: "Management",
+    color: "#185FA5",
+  },
+  {
+    key: "crm",
+    name: "CRM",
+    icon: CRMIcon,
+    href: "/modules/crm",
+    shortDescription: "Customer relationships",
+    longDescription: "Customer relationships, sales pipeline, lead management and deal tracking.",
+    category: "Management",
+    color: "#22C55E",
+  },
+  {
+    key: "finance-mgmt",
+    name: "Finance",
+    icon: FinanceIcon,
+    href: "/modules/finance-mgmt",
+    shortDescription: "Budgeting & invoicing",
+    longDescription: "Budgets, actuals, invoicing and financial reporting across projects and departments.",
+    category: "Management",
+    color: "#10B981",
+  },
+  {
+    key: "resource-mgmt",
+    name: "Resources",
+    icon: ResourcesIcon,
+    href: "/modules/resource-mgmt",
+    shortDescription: "Capacity planning",
+    longDescription:
+      "Team capacity and resource allocation with skills tracking, timesheets and utilisation reporting.",
+    category: "Management",
+    color: "#F97316",
   },
   {
     key: "portfolio",
@@ -100,57 +206,6 @@ export const moduleMetadata: ModuleMetadata[] = [
     longDescription: "Notion-inspired collaborative spaces for meeting notes, checklists, quick task boards and wikis.",
     category: "Portfolio",
     color: "#F59E0B",
-  },
-  {
-    key: "business-mgmt",
-    name: "Business",
-    icon: BusinessIcon,
-    href: "/modules/business-mgmt",
-    shortDescription: "Strategic planning & operations",
-    longDescription: "Company structure, strategic planning, execution maps and operational management.",
-    category: "Management",
-    color: "#7C3AED",
-  },
-  {
-    key: "crm",
-    name: "CRM",
-    icon: CRMIcon,
-    href: "/modules/crm",
-    shortDescription: "Customer relationships",
-    longDescription: "Customer relationships, sales pipeline, lead management and deal tracking.",
-    category: "Management",
-    color: "#22C55E",
-  },
-  {
-    key: "customer-mgmt",
-    name: "Customer Management",
-    icon: FinanceIcon,
-    href: "/modules/customer-mgmt",
-    shortDescription: "Commercial admin",
-    longDescription:
-      "Manage SaaS customers, subscriptions, trials, beta programmes, billing, and renewal pipeline.",
-    category: "Management",
-    color: "#534AB7",
-  },
-  {
-    key: "finance-mgmt",
-    name: "Finance",
-    icon: FinanceIcon,
-    href: "/modules/finance-mgmt",
-    shortDescription: "Budgeting & invoicing",
-    longDescription: "Budgets, actuals, invoicing and financial reporting across projects and departments.",
-    category: "Management",
-    color: "#10B981",
-  },
-  {
-    key: "resource-mgmt",
-    name: "Resources",
-    icon: ResourcesIcon,
-    href: "/modules/resource-mgmt",
-    shortDescription: "Capacity planning",
-    longDescription: "Team capacity and resource allocation with skills tracking, timesheets and utilisation reporting.",
-    category: "Management",
-    color: "#F97316",
   },
   {
     key: "service-desk",
@@ -204,10 +259,10 @@ export const moduleMetadata: ModuleMetadata[] = [
   },
   {
     key: "esign",
-    name: "Digital Signing",
+    name: "e-Sign",
     icon: DigitalSigningIcon,
-    href: "/modules/esign",
-    shortDescription: "Digital signatures",
+    href: "/modules/e-sign",
+    shortDescription: "Electronic sign-off & approvals",
     longDescription: "Secure document signing and approval workflows with audit trails.",
     category: "Utilities",
     color: "#EC4899",
@@ -235,11 +290,20 @@ export const moduleMetadata: ModuleMetadata[] = [
 ];
 
 export function getModuleByKey(key: string): ModuleMetadata | undefined {
-  return moduleMetadata.find(m => m.key === key);
+  return moduleMetadata.find((m) => m.key === key);
 }
 
 export function getModulesByCategory(category: ModuleCategory): ModuleMetadata[] {
-  return moduleMetadata.filter(m => m.category === category);
+  return moduleMetadata.filter((m) => m.category === category);
 }
 
-export const allCategories: ModuleCategory[] = ["Collaboration", "Portfolio", "Management", "Service & Support", "Utilities"];
+export function getDiscoveryCategories(includeCommercial: boolean): ModuleCategory[] {
+  if (includeCommercial) return allCategories;
+  return allCategories.filter((c) => c !== "Commercial");
+}
+
+export function modulesInDiscoveryOrder(includeCommercial = true): ModuleMetadata[] {
+  return getDiscoveryCategories(includeCommercial).flatMap((category) =>
+    getModulesByCategory(category),
+  );
+}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { DASHBOARD_PATH } from "@shared/app-routes";
 import { Sidebar } from "@/components/Sidebar";
 import { useShellLayout } from "@/hooks/use-shell-layout";
 import { useClientContext, type Client } from "@/hooks/use-client-context";
@@ -295,7 +296,7 @@ function ClientCard({
 
   const handleEnter = () => {
     setActiveClient(client);
-    navigate("/");
+    navigate(DASHBOARD_PATH);
   };
 
   return (

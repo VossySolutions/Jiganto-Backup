@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
+import { DASHBOARD_PATH } from "@shared/app-routes";
 import { getQueryFn, queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -29,6 +30,7 @@ import CustomerManagementPage from "@/pages/CustomerManagementPage";
 import { useAuth } from "@/hooks/use-auth";
 import { SidebarStateProvider } from "@/hooks/use-sidebar-state";
 import { DashboardSelectorProvider } from "@/hooks/use-dashboard-selector";
+import { DashboardGlobalShortcuts } from "@/hooks/use-dashboard-global-shortcuts";
 import { CommandPaletteProvider } from "@/hooks/use-command-palette";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { ClientContextProvider } from "@/hooks/use-client-context";
@@ -117,8 +119,11 @@ function Router() {
       <WhatsNewAutoPopup />
       <AIAssistantButton />
       <Switch>
+        <Route path={DASHBOARD_PATH} component={Dashboard} />
         <Route path="/ws/:slug" component={Dashboard} />
-        <Route path="/" component={Dashboard} />
+        <Route path="/">
+          <Redirect to={DASHBOARD_PATH} />
+        </Route>
         <Route path="/modules/chat" component={ChatPage} />
         <Route path="/modules/crm" component={CRMPage} />
         <Route path="/modules/business-mgmt" component={BusinessManagementPage} />
@@ -160,6 +165,7 @@ function App() {
             <TooltipProvider>
               <SidebarStateProvider>
                 <DashboardSelectorProvider>
+                  <DashboardGlobalShortcuts />
                   <CommandPaletteProvider>
                     <Toaster />
                     <CommandPalette />

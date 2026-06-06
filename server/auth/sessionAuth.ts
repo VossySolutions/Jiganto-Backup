@@ -6,6 +6,7 @@ import {
   buildPassportUserForUserId,
   isDevLoginEnabled,
 } from "./devLogin";
+import { DASHBOARD_PATH } from "@shared/app-routes";
 import { getDevPreset } from "@shared/dev-login-presets";
 
 /** Default sign-in user id (override with AUTH_USER_ID). */
@@ -76,7 +77,7 @@ export function registerSessionAuthRoutes(app: Express): void {
         );
         return req.login(user, (err) => {
           if (err) return next(err);
-          res.redirect("/");
+          res.redirect(DASHBOARD_PATH);
         });
       }
 
@@ -89,7 +90,7 @@ export function registerSessionAuthRoutes(app: Express): void {
       );
       req.login(user, (err) => {
         if (err) return next(err);
-        res.redirect("/");
+        res.redirect(DASHBOARD_PATH);
       });
     } catch (err) {
       next(err);

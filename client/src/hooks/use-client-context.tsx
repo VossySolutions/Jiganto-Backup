@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { DASHBOARD_PATH } from "@shared/app-routes";
 import { usePermissions } from "@/hooks/use-permissions";
 import {
   parseWorkspaceSlug,
@@ -184,7 +185,7 @@ export function ClientContextProvider({ children }: { children: ReactNode }) {
     } else {
       localStorage.removeItem(STORAGE_KEY);
       if (location.startsWith("/ws/")) {
-        navigate("/");
+        navigate(DASHBOARD_PATH);
       }
     }
   };

@@ -16,9 +16,12 @@ export const SETTINGS_MODULE_KEYS = [
   { key: "workspaces", name: "Workspaces" },
 ] as const;
 
+import { DASHBOARD_PATH, LANDING_PATH } from "../app-routes";
+
 /** Maps sidebar routes to legacy module permission keys (Settings → Module roles). */
 export const NAV_PATH_TO_MODULE_KEY: Record<string, string> = {
-  "/": "dashboard",
+  [LANDING_PATH]: "dashboard",
+  [DASHBOARD_PATH]: "dashboard",
   "/modules/chat": "chat",
   "/modules/documents": "documents",
   "/modules/business-mgmt": "business-mgmt",

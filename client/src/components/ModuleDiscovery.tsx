@@ -1,17 +1,21 @@
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { Activity, AlertTriangle, AlertCircle, DollarSign, Users, ArrowRight } from "lucide-react";
+import { ArrowRight, Lock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { moduleMetadata, categoryColors, type ModuleCategory } from "@/lib/module-metadata";
-
-const kpiMetrics = [
-  { label: "Active Items", value: "14", icon: Activity, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/20" },
-  { label: "At Risk", value: "4", icon: AlertTriangle, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-900/20" },
-  { label: "Critical", value: "2", icon: AlertCircle, color: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-900/20" },
-  { label: "Portfolio Budget", value: "£4.2M", icon: DollarSign, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-900/20" },
-  { label: "Team Members", value: "23", icon: Users, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-900/20" },
-];
+import {
+  categoryColors,
+  type ModuleCategory,
+  getDiscoveryCategories,
+  modulesInDiscoveryOrder,
+} from "@/lib/module-metadata";
+import { DashboardKpiStrip } from "@/components/dashboard/DashboardKpiStrip";
+import { useAuth } from "@/hooks/use-auth";
+import { useModuleAccess } from "@/hooks/use-module-access";
+import { isModuleLicensed, useModuleEntitlements } from "@/hooks/use-module-entitlements";
+import { getSettingsAccess } from "@/lib/settings-access";
+import { navPathToModuleKey } from "@shared/models/module-access";
 
 function CategoryBadge({ category }: { category: ModuleCategory }) {
   const colors = categoryColors[category];
@@ -22,69 +26,118 @@ function CategoryBadge({ category }: { category: ModuleCategory }) {
   );
 }
 
-export function ModuleDiscovery() {
+export function ModuleDiscovery({
+  clientId,
+  projectId,
+  hiddenModuleKeys = [],
+}: {
+  clientId?: number | null;
+  projectId?: number | null;
+  hiddenModuleKeys?: string[];
+}) {
+  const { user } = useAuth();
+  const { canAccessNavPath } = useModuleAccess();
+  const { data: entitlements } = useModuleEntitlements();
+  const settingsAccess = getSettingsAccess(user?.platformRole, user?.isJigantoStaff);
+  const includeCommercial = settingsAccess.tier === "system";
+  const discoveryCategories = getDiscoveryCategories(includeCommercial);
+
+  const visibleModules = modulesInDiscoveryOrder(includeCommercial)
+    .filter((mod) => !hiddenModuleKeys.includes(mod.key))
+    .filter((mod) => canAccessNavPath(mod.href))
+    .map((mod) => ({
+      ...mod,
+      locked: !isModuleLicensed(navPathToModuleKey(mod.href) ?? mod.key, entitlements),
+    }));
+
+  const grouped = discoveryCategories
+    .map((category) => ({
+      category,
+      modules: visibleModules.filter((m) => m.category === category),
+    }))
+    .filter((g) => g.modules.length > 0);
+
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        {kpiMetrics.map((metric, i) => (
-          <motion.div
-            key={metric.label}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-          >
-            <Card className="rounded-xl border-border/50 shadow-sm">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className={cn("p-2 rounded-lg", metric.bg)}>
-                  <metric.icon className={cn("h-5 w-5", metric.color)} />
-                </div>
-                <div>
-                  <div className="text-xl font-bold font-display">{metric.value}</div>
-                  <div className="text-xs text-muted-foreground">{metric.label}</div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+      <DashboardKpiStrip clientId={clientId} projectId={projectId} />
 
-      <div>
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4" data-testid="all-modules-heading">All Modules</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {moduleMetadata.map((mod, i) => (
-            <motion.div
-              key={mod.key}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 + i * 0.03 }}
-            >
-              <Link href={mod.href}>
+      {grouped.map(({ category, modules }) => (
+        <div key={category}>
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+            {category}
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {modules.map((mod, i) => {
+              const card = (
                 <Card
-                  className="rounded-xl border-border/50 shadow-sm hover:shadow-md hover:border-primary/20 transition-all cursor-pointer group h-full"
+                  className={cn(
+                    "rounded-xl border-border/50 shadow-sm transition-all h-full",
+                    mod.locked
+                      ? "opacity-60 cursor-not-allowed bg-muted/30"
+                      : "hover:shadow-md hover:border-primary/30 cursor-pointer group",
+                  )}
                   data-testid={`module-card-${mod.key}`}
                 >
                   <CardContent className="p-5 flex flex-col h-full">
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div
-                        className="p-2.5 rounded-xl"
+                        className={cn("p-2.5 rounded-xl", mod.locked && "grayscale")}
                         style={{ backgroundColor: `${mod.color}15` }}
                       >
                         <mod.icon className="h-5 w-5" />
                       </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
+                      {mod.locked ? (
+                        <Lock className="h-4 w-4 text-muted-foreground mt-1" />
+                      ) : (
+                        <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
+                      )}
                     </div>
-                    <h4 className="font-semibold text-sm text-foreground mb-1" data-testid={`module-name-${mod.key}`}>{mod.name}</h4>
-                    <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1">{mod.longDescription}</p>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <CategoryBadge category={mod.category} />
-                    </div>
+                    <h4 className="font-semibold text-sm text-foreground mb-1">{mod.name}</h4>
+                    <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1 line-clamp-2">
+                      {mod.shortDescription}
+                    </p>
+                    <CategoryBadge category={mod.category} />
                   </CardContent>
                 </Card>
-              </Link>
-            </motion.div>
-          ))}
+              );
+
+              return (
+                <motion.div
+                  key={mod.key}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 + i * 0.03 }}
+                >
+                  {mod.locked ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>{card}</div>
+                      </TooltipTrigger>
+                      <TooltipContent>Upgrade to unlock this module</TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Link href={mod.href}>{card}</Link>
+                  )}
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ))}
     </div>
   );
+}
+
+/** Flat list of authorized (clickable) modules for keyboard shortcuts 1–9 */
+export function useModuleDiscoveryShortcuts(hiddenModuleKeys: string[] = []) {
+  const { user } = useAuth();
+  const { canAccessNavPath } = useModuleAccess();
+  const { data: entitlements } = useModuleEntitlements();
+  const settingsAccess = getSettingsAccess(user?.platformRole, user?.isJigantoStaff);
+  const includeCommercial = settingsAccess.tier === "system";
+
+  return modulesInDiscoveryOrder(includeCommercial)
+    .filter((mod) => !hiddenModuleKeys.includes(mod.key))
+    .filter((mod) => canAccessNavPath(mod.href))
+    .filter((mod) => isModuleLicensed(navPathToModuleKey(mod.href) ?? mod.key, entitlements));
 }

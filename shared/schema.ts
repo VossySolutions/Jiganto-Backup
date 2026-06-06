@@ -24,6 +24,7 @@ export * from "./models/permissions";
 export * from "./models/org-notifications";
 export * from "./models/ai-tokens";
 export * from "./models/commercial";
+export * from "./models/dashboard";
 
 import { users } from "./models/auth";
 

@@ -210,6 +210,9 @@ export async function registerRoutes(
   const { registerCustomerMgmtRoutes } = await import("./customer-management/routes");
   registerCustomerMgmtRoutes(app);
 
+  const { registerDashboardRoutes } = await import("./dashboard/routes");
+  registerDashboardRoutes(app);
+
   // === Application Routes ===
 
   // Tenants

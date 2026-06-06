@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { useLocation } from "wouter";
+import { DASHBOARD_PATH } from "@shared/app-routes";
 import { useToast } from "@/hooks/use-toast";
 import { useReadOnly } from "@/hooks/use-read-only";
 
@@ -56,7 +57,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       icon: "LayoutDashboard",
       hotkey: "g d",
       hotkeyLabel: "G → D",
-      action: () => navigate("/"),
+      action: () => navigate(DASHBOARD_PATH),
       enabled: true,
       pinned: true,
     },

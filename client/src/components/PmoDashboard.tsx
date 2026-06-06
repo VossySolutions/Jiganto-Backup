@@ -36,7 +36,7 @@ interface PmoProjectRow {
 }
 
 export function PmoDashboard() {
-  const { setActiveClient } = useClientContext();
+  const { setActiveClient, clients: workspaceClients } = useClientContext();
 
   const {
     data: pmoData,
@@ -162,7 +162,10 @@ export function PmoDashboard() {
                     size="sm"
                     variant="outline"
                     className="gap-1"
-                    onClick={() => setActiveClient(c)}
+                    onClick={() => {
+                      const full = workspaceClients.find((x) => x.id === c.id);
+                      if (full) setActiveClient(full);
+                    }}
                     data-testid={`pmo-enter-${c.id}`}
                   >
                     <ArrowRightCircle className="h-3.5 w-3.5" />
@@ -214,7 +217,7 @@ export function PmoDashboard() {
             )}
             {allProjects.length > 20 && (
               <Link href="/modules/projects">
-                <Button variant="link" className="px-0">
+                <Button variant="ghost" className="px-0 text-primary hover:text-primary">
                   View all in Projects →
                 </Button>
               </Link>

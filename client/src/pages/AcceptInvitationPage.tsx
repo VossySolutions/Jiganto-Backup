@@ -16,6 +16,7 @@ import {
   savePendingInviteToken,
   shouldAutoAcceptInvite,
 } from "@/lib/pending-invite";
+import { DASHBOARD_PATH } from "@shared/app-routes";
 
 async function parseErrorMessage(res: Response): Promise<string> {
   const text = await res.text();
@@ -79,7 +80,7 @@ export function AcceptInvitationPage() {
       clearAutoAcceptInvite();
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/access"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/session"] });
-      window.location.href = "/";
+      window.location.href = DASHBOARD_PATH;
     },
   });
 
@@ -192,7 +193,7 @@ export function AcceptInvitationPage() {
               )}
             </p>
           )}
-          <Button variant="outline" onClick={() => { window.location.href = "/"; }}>
+          <Button variant="outline" onClick={() => { window.location.href = DASHBOARD_PATH; }}>
             Go to home
           </Button>
         </div>
@@ -230,7 +231,7 @@ export function AcceptInvitationPage() {
           >
             {acceptMutation.isPending ? "Accepting..." : "Accept invitation"}
           </Button>
-          <Button variant="outline" onClick={() => { window.location.href = "/"; }}>
+          <Button variant="outline" onClick={() => { window.location.href = DASHBOARD_PATH; }}>
             Cancel
           </Button>
         </div>

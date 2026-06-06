@@ -6,6 +6,7 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
+import { DASHBOARD_PATH } from "@shared/app-routes";
 import { getPendingInviteToken, inviteAcceptPath } from "@/lib/pending-invite";
 
 type AccessState = {
@@ -37,7 +38,7 @@ export function AccessPendingPage() {
       void queryClient.invalidateQueries({ queryKey: ["/api/auth/access"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/auth/session"] });
       void queryClient.invalidateQueries({ queryKey: ["/api/tenants"] });
-      window.location.href = "/";
+      window.location.href = DASHBOARD_PATH;
     },
   });
 
