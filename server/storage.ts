@@ -6,7 +6,7 @@ import {
   type OrgUnit, type InsertOrgUnit,
   type CostCentre, type InsertCostCentre,
   type UserProjectAssignment, type InsertUserProjectAssignment,
-  projects, customers, projectMembers, channels, channelMembers, chatMessages, messageReactions, userFavorites,
+  projects, customers, projectMembers, channels, channelMembers, chatMessages, messageReactions, userFavorites, channelFavorites, messageAttachments, pinnedMessages,
   crmAccounts, crmContacts, crmContactRelationships, crmLeads, crmPipelines, crmOpportunityStages, crmOpportunities,
   crmResourceRequirements, crmActivities, crmTasks, crmNotes, crmContracts, crmCustomerSystems, crmAttachments,
   crmSavedViews, crmEmailTemplates, crmEmailLogs, crmForecasts, crmTerritories, crmAutomationRules,
@@ -22,6 +22,8 @@ import {
   type ProjectMember, type InsertProjectMember, type Channel, type InsertChannel,
   type ChannelMember, type InsertChannelMember, type ChatMessage, type InsertChatMessage,
   type MessageReaction, type InsertMessageReaction, type UserFavorite,
+  type ChatInboxItem, type ChatMessageWithMeta, type ChatSearchHit, type ChannelBridgeConfig, type ChatNotificationPref,
+  type MessageAttachment, type InsertMessageAttachment, type PinnedMessage,
   type CrmAccount, type InsertCrmAccount, type CrmContact, type InsertCrmContact,
   type CrmContactRelationship, type InsertCrmContactRelationship,
   type CrmLead, type InsertCrmLead, type CrmPipeline, type InsertCrmPipeline, type CrmOpportunityStage, type InsertCrmOpportunityStage,
@@ -147,8 +149,10 @@ import {
 } from "@shared/models/clients";
 import { documents } from "@shared/models/documents";
 import { db } from "./db";
-import { eq, and, desc, isNull, or, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, isNull, or, sql, inArray, gt, lt, ne } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { users } from "@shared/models/auth";
+import { orgMemberships } from "@shared/models/permissions";
 
 export interface IStorage {
   // Tenants
@@ -252,8 +256,11 @@ export interface IStorage {
   updateLastRead(channelId: number, userId: string): Promise<void>;
 
   // Messages
-  getMessages(channelId: number, limit?: number, before?: number): Promise<(ChatMessage & { user: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]>;
+  getMessages(channelId: number, limit?: number, before?: number, parentId?: number | null, currentUserId?: string): Promise<ChatMessageWithMeta[]>;
   getMessage(id: number): Promise<ChatMessage | undefined>;
+  getMessageWithUser(id: number): Promise<
+    (ChatMessage & { user: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } }) | undefined
+  >;
   createMessage(message: InsertChatMessage): Promise<ChatMessage>;
   updateMessage(id: number, content: string): Promise<ChatMessage | undefined>;
   deleteMessage(id: number): Promise<ChatMessage | undefined>;
@@ -275,6 +282,32 @@ export interface IStorage {
   // Direct Messages
   getOrCreateDMChannel(userId: string, otherUserId: string, tenantId: number): Promise<Channel>;
   getDirectMessageChannels(userId: string, tenantId: number): Promise<(Channel & { otherUser: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]>;
+
+  // Chat inbox & favourites
+  getChatInbox(userId: string, tenantId: number): Promise<ChatInboxItem[]>;
+  getFavoriteChannelIds(userId: string, tenantId: number): Promise<number[]>;
+  addChannelFavorite(userId: string, channelId: number, tenantId: number): Promise<void>;
+  removeChannelFavorite(userId: string, channelId: number, tenantId: number): Promise<void>;
+  createChatTeam(
+    userId: string,
+    tenantId: number,
+    input: { name: string; description?: string; isPrivate?: boolean; memberIds?: string[] },
+  ): Promise<{ project: Project; channel: Channel }>;
+  searchChatMessages(userId: string, tenantId: number, query: string, channelId?: number): Promise<ChatSearchHit[]>;
+  getThreadReplies(
+    parentId: number,
+  ): Promise<(ChatMessage & { user: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null }; reactions: MessageReaction[] })[]>;
+
+  createMessageAttachment(row: InsertMessageAttachment): Promise<MessageAttachment>;
+  linkAttachmentsToMessage(messageId: number, attachmentIds: number[], channelId: number, userId: string): Promise<void>;
+  getAttachmentsForMessages(messageIds: number[]): Promise<MessageAttachment[]>;
+  pinMessage(channelId: number, messageId: number, userId: string): Promise<PinnedMessage>;
+  unpinMessage(channelId: number, messageId: number): Promise<void>;
+  getPinnedMessages(channelId: number): Promise<(PinnedMessage & { message: ChatMessage & { user: { id: string; firstName: string | null; lastName: string | null } } })[]>;
+  updateChannelBridge(channelId: number, bridgeConfig: ChannelBridgeConfig | null): Promise<Channel | undefined>;
+  updateChannelNotificationPref(channelId: number, userId: string, pref: ChatNotificationPref): Promise<void>;
+  getChannelMemberRecord(channelId: number, userId: string): Promise<ChannelMember | undefined>;
+  isChannelAdmin(channelId: number, userId: string): Promise<boolean>;
 
   // CRM Accounts
   getCrmAccounts(tenantId: number, clientId?: number): Promise<CrmAccount[]>;
@@ -1519,21 +1552,25 @@ export class DatabaseStorage implements IStorage {
 
   // Channels
   async getChannels(tenantId: number, userId: string, projectId?: number | null): Promise<Channel[]> {
-    const userChannelIds = await db.select({ channelId: channelMembers.channelId }).from(channelMembers).where(eq(channelMembers.userId, userId));
-    const memberChannelIds = userChannelIds.map(c => c.channelId);
-
-    if (projectId === undefined) {
-      const allChannels = await db.select().from(channels).where(eq(channels.tenantId, tenantId)).orderBy(channels.name);
-      return allChannels.filter(ch => ch.type === 'public' || memberChannelIds.includes(ch.id));
-    }
-
+    // Single LEFT JOIN — returns channel if it's public OR the user is a member
+    const myMembership = alias(channelMembers, "cm_user");
+    const conditions = [eq(channels.tenantId, tenantId)];
     if (projectId === null) {
-      const companyChannels = await db.select().from(channels).where(and(eq(channels.tenantId, tenantId), isNull(channels.projectId))).orderBy(channels.name);
-      return companyChannels.filter(ch => ch.type === 'public' || memberChannelIds.includes(ch.id));
+      conditions.push(isNull(channels.projectId));
+    } else if (projectId !== undefined) {
+      conditions.push(eq(channels.projectId, projectId));
     }
 
-    const projectChannels = await db.select().from(channels).where(and(eq(channels.tenantId, tenantId), eq(channels.projectId, projectId))).orderBy(channels.name);
-    return projectChannels.filter(ch => ch.type === 'public' || memberChannelIds.includes(ch.id));
+    const rows = await db
+      .select({ channel: channels, isMember: myMembership.userId })
+      .from(channels)
+      .leftJoin(myMembership, and(eq(myMembership.channelId, channels.id), eq(myMembership.userId, userId)))
+      .where(and(...conditions))
+      .orderBy(channels.name);
+
+    return rows
+      .filter((r) => r.channel.type === "public" || r.isMember != null)
+      .map((r) => r.channel);
   }
 
   async getChannel(id: number): Promise<Channel | undefined> {
@@ -1593,8 +1630,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Messages
-  async getMessages(channelId: number, limit: number = 50, before?: number): Promise<(ChatMessage & { user: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]> {
-    let query = db
+  async getMessages(
+    channelId: number,
+    limit: number = 50,
+    before?: number,
+    parentId: number | null = null,
+    currentUserId?: string,
+  ): Promise<ChatMessageWithMeta[]> {
+    const conditions = [
+      eq(chatMessages.channelId, channelId),
+      eq(chatMessages.isDeleted, false),
+    ];
+    if (parentId === null) {
+      conditions.push(isNull(chatMessages.parentId));
+    } else {
+      conditions.push(eq(chatMessages.parentId, parentId));
+    }
+    if (before) {
+      conditions.push(lt(chatMessages.id, before));
+    }
+
+    const result = await db
       .select({
         message: chatMessages,
         user: {
@@ -1602,21 +1658,119 @@ export class DatabaseStorage implements IStorage {
           firstName: users.firstName,
           lastName: users.lastName,
           profileImageUrl: users.profileImageUrl,
-        }
+        },
       })
       .from(chatMessages)
       .innerJoin(users, eq(chatMessages.userId, users.id))
-      .where(eq(chatMessages.channelId, channelId))
+      .where(and(...conditions))
       .orderBy(desc(chatMessages.createdAt))
       .limit(limit);
 
-    const result = await query;
-    return result.map(r => ({ ...r.message, user: r.user })).reverse();
+    const rows = result.map((r) => ({ ...r.message, user: r.user })).reverse();
+    if (rows.length === 0) return [];
+
+    const messageIds = rows.map((m) => m.id);
+    const reactionRows = await db
+      .select()
+      .from(messageReactions)
+      .where(inArray(messageReactions.messageId, messageIds));
+
+    const threadStats =
+      parentId === null
+        ? await db
+            .select({
+              parentId: chatMessages.parentId,
+              count: sql<number>`count(*)::int`,
+              lastAt: sql<string>`max(${chatMessages.createdAt})`,
+            })
+            .from(chatMessages)
+            .where(
+              and(
+                eq(chatMessages.channelId, channelId),
+                eq(chatMessages.isDeleted, false),
+                inArray(chatMessages.parentId, messageIds),
+              ),
+            )
+            .groupBy(chatMessages.parentId)
+        : [];
+
+    const threadMap = new Map(
+      threadStats.map((t) => [t.parentId!, { count: t.count, lastAt: t.lastAt }]),
+    );
+
+    const attachmentRows =
+      messageIds.length > 0
+        ? await db.select().from(messageAttachments).where(inArray(messageAttachments.messageId, messageIds))
+        : [];
+
+    const pinnedRows =
+      messageIds.length > 0
+        ? await db
+            .select({ messageId: pinnedMessages.messageId })
+            .from(pinnedMessages)
+            .where(
+              and(
+                eq(pinnedMessages.channelId, channelId),
+                inArray(pinnedMessages.messageId, messageIds),
+              ),
+            )
+        : [];
+    const pinnedSet = new Set(pinnedRows.map((p) => p.messageId));
+
+    return rows.map((message) => {
+      const grouped = new Map<string, { count: number; userIds: string[] }>();
+      for (const r of reactionRows.filter((x) => x.messageId === message.id)) {
+        const existing = grouped.get(r.emoji) ?? { count: 0, userIds: [] };
+        existing.count += 1;
+        existing.userIds.push(r.userId);
+        grouped.set(r.emoji, existing);
+      }
+      const thread = threadMap.get(message.id);
+      return {
+        ...message,
+        reactions: Array.from(grouped.entries()).map(([emoji, data]) => ({
+          emoji,
+          count: data.count,
+          userIds: data.userIds,
+          reactedByMe: currentUserId ? data.userIds.includes(currentUserId) : false,
+        })),
+        threadReplyCount: thread?.count ?? 0,
+        threadLastReplyAt: thread?.lastAt ?? null,
+        attachments: attachmentRows
+          .filter((a) => a.messageId === message.id)
+          .map((a) => ({
+            id: a.id,
+            fileName: a.fileName,
+            mimeType: a.mimeType,
+            sizeBytes: a.sizeBytes,
+            url: a.url,
+          })),
+        isPinned: pinnedSet.has(message.id),
+      };
+    });
   }
 
   async getMessage(id: number): Promise<ChatMessage | undefined> {
     const [message] = await db.select().from(chatMessages).where(eq(chatMessages.id, id));
     return message;
+  }
+
+  async getMessageWithUser(id: number) {
+    const [row] = await db
+      .select({
+        message: chatMessages,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          profileImageUrl: users.profileImageUrl,
+        },
+      })
+      .from(chatMessages)
+      .innerJoin(users, eq(chatMessages.userId, users.id))
+      .where(and(eq(chatMessages.id, id), eq(chatMessages.isDeleted, false)));
+    if (!row) return undefined;
+    return { ...row.message, user: row.user };
   }
 
   async createMessage(insertMessage: InsertChatMessage): Promise<ChatMessage> {
@@ -1688,36 +1842,58 @@ export class DatabaseStorage implements IStorage {
 
   // User Search
   async searchUsers(tenantId: number, query: string, projectId?: number): Promise<{ id: string; firstName: string | null; lastName: string | null; email: string | null; profileImageUrl: string | null }[]> {
-    // For MVP, return all users that match the search query
-    // In a real implementation, we'd filter by tenant/project membership
-    if (!query) {
+    const lowerQuery = query.trim() ? `%${query.toLowerCase()}%` : null;
+
+    if (projectId) {
+      const conditions = [
+        eq(projectMembers.projectId, projectId),
+        eq(orgMemberships.orgId, tenantId),
+        eq(orgMemberships.isActive, true),
+      ];
+      if (lowerQuery) {
+        conditions.push(
+          or(
+            sql`LOWER(${users.firstName}) LIKE ${lowerQuery}`,
+            sql`LOWER(${users.lastName}) LIKE ${lowerQuery}`,
+            sql`LOWER(${users.email}) LIKE ${lowerQuery}`,
+          )!,
+        );
+      }
+      return db
+        .select({
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+          profileImageUrl: users.profileImageUrl,
+        })
+        .from(users)
+        .innerJoin(projectMembers, eq(projectMembers.userId, users.id))
+        .innerJoin(
+          orgMemberships,
+          and(eq(orgMemberships.userId, users.id), eq(orgMemberships.orgId, tenantId), eq(orgMemberships.isActive, true)),
+        )
+        .where(and(...conditions))
+        .limit(lowerQuery ? 20 : 100);
+    }
+
+    if (!lowerQuery) {
       return this.getTenantUsers(tenantId);
     }
-    const lowerQuery = `%${query.toLowerCase()}%`;
-    const result = await db
-      .select({
-        id: users.id,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        email: users.email,
-        profileImageUrl: users.profileImageUrl,
-      })
-      .from(users)
+
+    return this.getTenantUsersQuery(tenantId)
       .where(
         or(
           sql`LOWER(${users.firstName}) LIKE ${lowerQuery}`,
           sql`LOWER(${users.lastName}) LIKE ${lowerQuery}`,
-          sql`LOWER(${users.email}) LIKE ${lowerQuery}`
-        )
+          sql`LOWER(${users.email}) LIKE ${lowerQuery}`,
+        ),
       )
       .limit(20);
-    return result;
   }
 
-  async getTenantUsers(tenantId: number): Promise<{ id: string; firstName: string | null; lastName: string | null; email: string | null; profileImageUrl: string | null }[]> {
-    // For MVP, return all users in the system
-    // In production, filter by tenant membership via profiles table
-    return await db
+  private getTenantUsersQuery(tenantId: number) {
+    return db
       .select({
         id: users.id,
         firstName: users.firstName,
@@ -1726,7 +1902,14 @@ export class DatabaseStorage implements IStorage {
         profileImageUrl: users.profileImageUrl,
       })
       .from(users)
-      .limit(100);
+      .innerJoin(
+        orgMemberships,
+        and(eq(orgMemberships.userId, users.id), eq(orgMemberships.orgId, tenantId), eq(orgMemberships.isActive, true)),
+      );
+  }
+
+  async getTenantUsers(tenantId: number): Promise<{ id: string; firstName: string | null; lastName: string | null; email: string | null; profileImageUrl: string | null }[]> {
+    return this.getTenantUsersQuery(tenantId).limit(100);
   }
 
   // Direct Messages
@@ -1767,42 +1950,493 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDirectMessageChannels(userId: string, tenantId: number): Promise<(Channel & { otherUser: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]> {
-    // Get all DM channels where user is a member
-    const dmChannels = await db
-      .select()
-      .from(channels)
-      .innerJoin(channelMembers, eq(channels.id, channelMembers.channelId))
-      .where(and(
-        eq(channels.tenantId, tenantId),
-        eq(channels.type, "direct"),
-        eq(channelMembers.userId, userId)
-      ));
-    
-    // For each DM channel, find the other user
-    const result = await Promise.all(dmChannels.map(async (row) => {
-      const channel = row.channels;
-      // Get the other member of this channel
-      const [otherMember] = await db
-        .select({
+    // Single query: join channels → my membership → other member → other user profile
+    const myMembership = alias(channelMembers, "my_cm");
+    const otherMembership = alias(channelMembers, "other_cm");
+
+    const rows = await db
+      .select({
+        channel: channels,
+        otherUser: {
           id: users.id,
           firstName: users.firstName,
           lastName: users.lastName,
           profileImageUrl: users.profileImageUrl,
-        })
-        .from(channelMembers)
-        .innerJoin(users, eq(channelMembers.userId, users.id))
-        .where(and(
-          eq(channelMembers.channelId, channel.id),
-          sql`${channelMembers.userId} != ${userId}`
-        ));
-      
+        },
+      })
+      .from(channels)
+      .innerJoin(myMembership, and(eq(channels.id, myMembership.channelId), eq(myMembership.userId, userId)))
+      .leftJoin(otherMembership, and(eq(channels.id, otherMembership.channelId), ne(otherMembership.userId, userId)))
+      .leftJoin(users, eq(otherMembership.userId, users.id))
+      .where(and(eq(channels.tenantId, tenantId), eq(channels.type, "direct")));
+
+    // Deduplicate by channel ID — group DMs can produce multiple rows (one per other member)
+    const seen = new Set<number>();
+    return rows
+      .filter((r) => {
+        if (seen.has(r.channel.id)) return false;
+        seen.add(r.channel.id);
+        return true;
+      })
+      .map((r) => ({
+        ...r.channel,
+        otherUser: r.otherUser ?? { id: "", firstName: null, lastName: null, profileImageUrl: null },
+      }));
+  }
+
+  async getFavoriteChannelIds(userId: string, tenantId: number): Promise<number[]> {
+    const rows = await db
+      .select({ channelId: channelFavorites.channelId })
+      .from(channelFavorites)
+      .where(and(eq(channelFavorites.userId, userId), eq(channelFavorites.tenantId, tenantId)));
+    return rows.map((r) => r.channelId);
+  }
+
+  async addChannelFavorite(userId: string, channelId: number, tenantId: number): Promise<void> {
+    await db
+      .insert(channelFavorites)
+      .values({ userId, channelId, tenantId })
+      .onConflictDoNothing();
+  }
+
+  async removeChannelFavorite(userId: string, channelId: number, tenantId: number): Promise<void> {
+    await db
+      .delete(channelFavorites)
+      .where(
+        and(
+          eq(channelFavorites.userId, userId),
+          eq(channelFavorites.channelId, channelId),
+          eq(channelFavorites.tenantId, tenantId),
+        ),
+      );
+  }
+
+  private async buildInboxItem(
+    userId: string,
+    channel: Channel & {
+      bridgeConfig?: ChannelBridgeConfig | null;
+      otherUser?: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null };
+    },
+    favoriteIds: Set<number>,
+    lastReadAt: Date | null | undefined,
+    projectName: string | null,
+    notificationPref: ChatNotificationPref,
+    memberRole: string,
+  ): Promise<ChatInboxItem> {
+    const [lastMsg] = await db
+      .select()
+      .from(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.channelId, channel.id),
+          isNull(chatMessages.parentId),
+          eq(chatMessages.isDeleted, false),
+        ),
+      )
+      .orderBy(desc(chatMessages.createdAt))
+      .limit(1);
+
+    const unreadConditions = [
+      eq(chatMessages.channelId, channel.id),
+      isNull(chatMessages.parentId),
+      eq(chatMessages.isDeleted, false),
+      ne(chatMessages.userId, userId),
+    ];
+    if (lastReadAt) unreadConditions.push(gt(chatMessages.createdAt, lastReadAt));
+
+    const [{ unreadCount }] = await db
+      .select({ unreadCount: sql<number>`count(*)::int` })
+      .from(chatMessages)
+      .where(and(...unreadConditions));
+
+    const displayName =
+      channel.type === "direct" && channel.otherUser
+        ? [channel.otherUser.firstName, channel.otherUser.lastName].filter(Boolean).join(" ") || "Direct message"
+        : channel.name.startsWith("#")
+          ? channel.name
+          : `#${channel.name}`;
+
+    let preview = lastMsg?.content ?? null;
+    if (lastMsg?.messageType === "poll") preview = `📊 ${preview?.replace(/^📊\s*/, "") ?? "Poll"}`;
+    if (preview && preview.length > 80) preview = `${preview.slice(0, 77)}…`;
+
+    return {
+      channelId: channel.id,
+      name: channel.name,
+      displayName,
+      type: channel.type,
+      projectId: channel.projectId,
+      projectName,
+      unreadCount: unreadCount ?? 0,
+      lastMessagePreview: preview,
+      lastMessageAt: lastMsg?.createdAt?.toISOString() ?? null,
+      isFavorite: favoriteIds.has(channel.id),
+      bridge: (channel.bridgeConfig as ChannelBridgeConfig | null) ?? null,
+      notificationPref,
+      memberRole,
+      canPost: channel.type !== "announcement" || memberRole === "admin" || memberRole === "owner",
+      otherUser: channel.otherUser,
+    };
+  }
+
+  async getChatInbox(userId: string, tenantId: number): Promise<ChatInboxItem[]> {
+    const [channelList, dmList, favoriteIdsList, memberRows, projectList] = await Promise.all([
+      this.getChannels(tenantId, userId),
+      this.getDirectMessageChannels(userId, tenantId),
+      this.getFavoriteChannelIds(userId, tenantId),
+      db.select().from(channelMembers).where(eq(channelMembers.userId, userId)),
+      this.getProjects(tenantId),
+    ]);
+
+    const favoriteIds = new Set(favoriteIdsList);
+    const lastReadMap = new Map(memberRows.map((m) => [m.channelId, m.lastReadAt]));
+    const notifMap = new Map(
+      memberRows.map((m) => [m.channelId, (m.notificationPref ?? "mentions") as ChatNotificationPref]),
+    );
+    const roleMap = new Map(memberRows.map((m) => [m.channelId, m.role ?? "member"]));
+    const projectNameMap = new Map(projectList.map((p) => [p.id, p.name]));
+
+    const nonDmChannels = channelList.filter((c) => c.type !== "direct");
+    const allEntries: Array<Channel & { otherUser?: ChatInboxItem["otherUser"] }> = [
+      ...nonDmChannels,
+      ...dmList,
+    ];
+
+    if (allEntries.length === 0) return [];
+
+    const allChannelIds = [...new Set(allEntries.map((c) => c.id))];
+
+    // ─── BATCH 1: Last top-level message per channel (max-ID subquery approach) ───
+    const maxIdSub = db
+      .select({
+        channelId: chatMessages.channelId,
+        maxId: sql<number>`max(${chatMessages.id})`.as("max_id"),
+      })
+      .from(chatMessages)
+      .where(
+        and(
+          inArray(chatMessages.channelId, allChannelIds),
+          isNull(chatMessages.parentId),
+          eq(chatMessages.isDeleted, false),
+        ),
+      )
+      .groupBy(chatMessages.channelId)
+      .as("last_msg_sub");
+
+    const lastMsgRows = await db
+      .select({
+        channelId: chatMessages.channelId,
+        content: chatMessages.content,
+        createdAt: chatMessages.createdAt,
+        messageType: chatMessages.messageType,
+      })
+      .from(chatMessages)
+      .innerJoin(maxIdSub, eq(chatMessages.id, maxIdSub.maxId));
+
+    const lastMsgMap = new Map(
+      lastMsgRows.map((r) => [r.channelId, r]),
+    );
+
+    // ─── BATCH 2: Unread counts per channel (single JOIN + GROUP BY query) ─────────
+    const myMembershipRef = alias(channelMembers, "cm_read");
+    const unreadRows = await db
+      .select({
+        channelId: chatMessages.channelId,
+        unreadCount: sql<number>`count(*)::int`,
+      })
+      .from(chatMessages)
+      .leftJoin(
+        myMembershipRef,
+        and(eq(myMembershipRef.channelId, chatMessages.channelId), eq(myMembershipRef.userId, userId)),
+      )
+      .where(
+        and(
+          inArray(chatMessages.channelId, allChannelIds),
+          isNull(chatMessages.parentId),
+          eq(chatMessages.isDeleted, false),
+          ne(chatMessages.userId, userId),
+          or(isNull(myMembershipRef.lastReadAt), gt(chatMessages.createdAt, myMembershipRef.lastReadAt)),
+        ),
+      )
+      .groupBy(chatMessages.channelId);
+    const unreadMap = new Map(unreadRows.map((r) => [r.channelId, r.unreadCount ?? 0]));
+
+    // ─── Build inbox items in-memory (zero additional DB queries) ────────────────
+    const items: ChatInboxItem[] = allEntries.map((ch) => {
+      const lastMsg = lastMsgMap.get(ch.id);
+      const memberRole = roleMap.get(ch.id) ?? "member";
+      const notificationPref = notifMap.get(ch.id) ?? "mentions";
+
+      const displayName =
+        ch.type === "direct" && ch.otherUser
+          ? [ch.otherUser.firstName, ch.otherUser.lastName].filter(Boolean).join(" ") || "Direct message"
+          : ch.name.startsWith("#")
+            ? ch.name
+            : `#${ch.name}`;
+
+      let preview = lastMsg?.content ?? null;
+      if (lastMsg?.messageType === "poll") preview = `📊 ${preview?.replace(/^📊\s*/, "") ?? "Poll"}`;
+      if (preview && preview.length > 80) preview = `${preview.slice(0, 77)}…`;
+
+      const lastReadAt = lastReadMap.get(ch.id);
       return {
-        ...channel,
-        otherUser: otherMember || { id: '', firstName: null, lastName: null, profileImageUrl: null },
+        channelId: ch.id,
+        name: ch.name,
+        displayName,
+        description: ch.description ?? null,
+        type: ch.type,
+        projectId: ch.projectId,
+        projectName: ch.projectId ? (projectNameMap.get(ch.projectId) ?? null) : null,
+        unreadCount: unreadMap.get(ch.id) ?? 0,
+        lastMessagePreview: preview,
+        lastMessageAt: lastMsg ? new Date(lastMsg.createdAt).toISOString() : null,
+        lastReadAt: lastReadAt ? lastReadAt.toISOString() : null,
+        isFavorite: favoriteIds.has(ch.id),
+        bridge: (ch.bridgeConfig as ChannelBridgeConfig | null) ?? null,
+        notificationPref,
+        memberRole,
+        canPost: ch.type !== "announcement" || memberRole === "admin" || memberRole === "owner",
+        otherUser: ch.otherUser,
       };
+    });
+
+    return items.sort((a, b) => {
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+      return bTime - aTime;
+    });
+  }
+
+  async createChatTeam(
+    userId: string,
+    tenantId: number,
+    input: { name: string; description?: string; isPrivate?: boolean; memberIds?: string[] },
+  ): Promise<{ project: Project; channel: Channel }> {
+    const project = await this.createProject({
+      tenantId,
+      name: input.name,
+      description: input.description ?? null,
+      status: "active",
+    });
+    await this.addProjectMember({ projectId: project.id, userId, role: "owner" });
+    for (const memberId of input.memberIds ?? []) {
+      if (memberId !== userId) {
+        await this.addProjectMember({ projectId: project.id, userId: memberId, role: "member" });
+      }
+    }
+    const channel = await this.createChannel({
+      tenantId,
+      projectId: project.id,
+      name: "general",
+      description: `General discussion for ${input.name}`,
+      type: input.isPrivate ? "private" : "public",
+      isDefault: true,
+      createdById: userId,
+    });
+    await this.addChannelMember({ channelId: channel.id, userId, role: "admin" });
+    for (const memberId of input.memberIds ?? []) {
+      if (memberId !== userId) {
+        await this.addChannelMember({ channelId: channel.id, userId: memberId, role: "member" });
+      }
+    }
+    return { project, channel };
+  }
+
+  async searchChatMessages(
+    userId: string,
+    tenantId: number,
+    query: string,
+    channelId?: number,
+  ): Promise<ChatSearchHit[]> {
+    if (!query.trim()) return [];
+    const accessible = await this.getChannels(tenantId, userId);
+    const dms = await this.getDirectMessageChannels(userId, tenantId);
+    const allowedIds = new Set([
+      ...accessible.map((c) => c.id),
+      ...dms.map((d) => d.id),
+    ]);
+    if (channelId && !allowedIds.has(channelId)) return [];
+
+    const targetIds = channelId ? [channelId] : Array.from(allowedIds);
+    if (targetIds.length === 0) return [];
+
+    const pattern = `%${query.toLowerCase()}%`;
+    const rows = await db
+      .select({
+        message: chatMessages,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+        channel: channels,
+      })
+      .from(chatMessages)
+      .innerJoin(users, eq(chatMessages.userId, users.id))
+      .innerJoin(channels, eq(chatMessages.channelId, channels.id))
+      .where(
+        and(
+          inArray(chatMessages.channelId, targetIds),
+          eq(chatMessages.isDeleted, false),
+          sql`LOWER(${chatMessages.content}) LIKE ${pattern}`,
+        ),
+      )
+      .orderBy(desc(chatMessages.createdAt))
+      .limit(40);
+
+    return rows.map((r) => ({
+      messageId: r.message.id,
+      channelId: r.channel.id,
+      channelName: r.channel.type === "direct" ? "Direct message" : r.channel.name,
+      content: r.message.content,
+      createdAt: r.message.createdAt.toISOString(),
+      user: r.user,
     }));
-    
+  }
+
+  async getThreadReplies(
+    parentId: number,
+  ): Promise<
+    (ChatMessage & {
+      user: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null };
+      reactions: MessageReaction[];
+    })[]
+  > {
+    const parent = await this.getMessage(parentId);
+    if (!parent) return [];
+
+    const rows = await db
+      .select({
+        message: chatMessages,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          profileImageUrl: users.profileImageUrl,
+        },
+      })
+      .from(chatMessages)
+      .innerJoin(users, eq(chatMessages.userId, users.id))
+      .where(
+        and(
+          eq(chatMessages.parentId, parentId),
+          eq(chatMessages.isDeleted, false),
+        ),
+      )
+      .orderBy(chatMessages.createdAt);
+
+    const ids = rows.map((r) => r.message.id);
+    const reactionRows =
+      ids.length > 0
+        ? await db.select().from(messageReactions).where(inArray(messageReactions.messageId, ids))
+        : [];
+
+    return rows.map((r) => ({
+      ...r.message,
+      user: r.user,
+      reactions: reactionRows.filter((x) => x.messageId === r.message.id),
+    }));
+  }
+
+  async createMessageAttachment(row: InsertMessageAttachment): Promise<MessageAttachment> {
+    const [result] = await db.insert(messageAttachments).values(row).returning();
     return result;
+  }
+
+  async linkAttachmentsToMessage(
+    messageId: number,
+    attachmentIds: number[],
+    channelId: number,
+    userId: string,
+  ): Promise<void> {
+    if (attachmentIds.length === 0) return;
+    await db
+      .update(messageAttachments)
+      .set({ messageId })
+      .where(
+        and(
+          inArray(messageAttachments.id, attachmentIds),
+          eq(messageAttachments.channelId, channelId),
+          eq(messageAttachments.userId, userId),
+        ),
+      );
+  }
+
+  async getAttachmentsForMessages(messageIds: number[]): Promise<MessageAttachment[]> {
+    if (messageIds.length === 0) return [];
+    return db.select().from(messageAttachments).where(inArray(messageAttachments.messageId, messageIds));
+  }
+
+  async pinMessage(channelId: number, messageId: number, userId: string): Promise<PinnedMessage> {
+    const [row] = await db
+      .insert(pinnedMessages)
+      .values({ channelId, messageId, pinnedByUserId: userId })
+      .onConflictDoNothing()
+      .returning();
+    if (row) return row;
+    const [existing] = await db
+      .select()
+      .from(pinnedMessages)
+      .where(and(eq(pinnedMessages.channelId, channelId), eq(pinnedMessages.messageId, messageId)));
+    return existing!;
+  }
+
+  async unpinMessage(channelId: number, messageId: number): Promise<void> {
+    await db
+      .delete(pinnedMessages)
+      .where(and(eq(pinnedMessages.channelId, channelId), eq(pinnedMessages.messageId, messageId)));
+  }
+
+  async getPinnedMessages(channelId: number) {
+    const rows = await db
+      .select({
+        pin: pinnedMessages,
+        message: chatMessages,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+      })
+      .from(pinnedMessages)
+      .innerJoin(chatMessages, eq(pinnedMessages.messageId, chatMessages.id))
+      .innerJoin(users, eq(chatMessages.userId, users.id))
+      .where(eq(pinnedMessages.channelId, channelId))
+      .orderBy(desc(pinnedMessages.pinnedAt));
+    return rows.map((r) => ({ ...r.pin, message: { ...r.message, user: r.user } }));
+  }
+
+  async updateChannelBridge(channelId: number, bridgeConfig: ChannelBridgeConfig | null): Promise<Channel | undefined> {
+    const [channel] = await db
+      .update(channels)
+      .set({ bridgeConfig, updatedAt: new Date() })
+      .where(eq(channels.id, channelId))
+      .returning();
+    return channel;
+  }
+
+  async updateChannelNotificationPref(
+    channelId: number,
+    userId: string,
+    pref: ChatNotificationPref,
+  ): Promise<void> {
+    await db
+      .update(channelMembers)
+      .set({ notificationPref: pref })
+      .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.userId, userId)));
+  }
+
+  async getChannelMemberRecord(channelId: number, userId: string): Promise<ChannelMember | undefined> {
+    const [row] = await db
+      .select()
+      .from(channelMembers)
+      .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.userId, userId)));
+    return row;
+  }
+
+  async isChannelAdmin(channelId: number, userId: string): Promise<boolean> {
+    const member = await this.getChannelMemberRecord(channelId, userId);
+    return member?.role === "admin";
   }
 
   // CRM Accounts

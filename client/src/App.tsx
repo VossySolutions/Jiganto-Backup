@@ -124,7 +124,7 @@ function Router() {
         <Route path="/">
           <Redirect to={DASHBOARD_PATH} />
         </Route>
-        <Route path="/modules/chat" component={ChatPage} />
+        <Route path="/modules/chat/:channelId?" component={ChatPage} />
         <Route path="/modules/crm" component={CRMPage} />
         <Route path="/modules/business-mgmt" component={BusinessManagementPage} />
         <Route path="/modules/workspaces" component={WorkspacesPage} />

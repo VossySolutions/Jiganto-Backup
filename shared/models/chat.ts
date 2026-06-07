@@ -1,8 +1,24 @@
-import { pgTable, serial, integer, text, timestamp, boolean, varchar, unique, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, boolean, varchar, unique, index, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql, relations } from "drizzle-orm";
 import { users } from "./auth";
+
+export type ChatBridgeProvider = "slack" | "teams";
+
+export type ChannelBridgeConfig = {
+  provider: ChatBridgeProvider;
+  externalChannelName?: string;
+  webhookUrl?: string;
+  slackChannelId?: string;
+  active: boolean;
+  lastError?: string | null;
+  lastSyncedAt?: string | null;
+};
+
+export type ChatNotificationPref = "all" | "mentions" | "nothing" | "muted";
+
+export type ChatAuthorSource = "jiganto" | "slack" | "teams";
 
 // Projects - Container for project-level chat
 export const projects = pgTable("projects", {
@@ -46,8 +62,9 @@ export const channels = pgTable("channels", {
   projectId: integer("project_id").references(() => projects.id, { onDelete: "cascade" }), // null = company-level channel
   name: text("name").notNull(),
   description: text("description"),
-  type: text("type").notNull().default("public"), // public, private, direct
-  isDefault: boolean("is_default").default(false), // Default channels like #general
+  type: text("type").notNull().default("public"), // public, private, direct, announcement
+  isDefault: boolean("is_default").default(false),
+  bridgeConfig: jsonb("bridge_config").$type<ChannelBridgeConfig | null>(),
   createdById: varchar("created_by_id").references(() => users.id),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -62,6 +79,7 @@ export const channelMembers = pgTable("channel_members", {
   channelId: integer("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   role: text("role").default("member"), // admin, member
+  notificationPref: text("notification_pref").default("mentions").notNull(), // all, mentions, nothing, muted
   lastReadAt: timestamp("last_read_at"),
   joinedAt: timestamp("joined_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 }, (table) => ({
@@ -77,8 +95,9 @@ export const chatMessages = pgTable("chat_messages", {
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
   parentId: integer("parent_id"), // For threaded replies
-  messageType: text("message_type").default("text").notNull(), // 'text' | 'poll' | 'system'
-  pollId: integer("poll_id"), // populated when messageType = 'poll'
+  messageType: text("message_type").default("text").notNull(), // text | poll | system | summary
+  authorSource: text("author_source").default("jiganto").notNull(),
+  pollId: integer("poll_id"),
   isEdited: boolean("is_edited").default(false),
   isDeleted: boolean("is_deleted").default(false),
   editedAt: timestamp("edited_at"),
@@ -89,6 +108,36 @@ export const chatMessages = pgTable("chat_messages", {
   userIdx: index("chat_messages_user_idx").on(table.userId),
   parentIdx: index("chat_messages_parent_idx").on(table.parentId),
   createdAtIdx: index("chat_messages_created_at_idx").on(table.createdAt),
+  // Compound index — covers the most common query: messages in a channel, top-level only, newest first
+  channelCreatedIdx: index("chat_messages_channel_created_idx").on(table.channelId, table.createdAt),
+  // Compound index — covers thread reply queries: replies under a parent in a channel
+  channelParentIdx: index("chat_messages_channel_parent_idx").on(table.channelId, table.parentId, table.createdAt),
+}));
+
+export const messageAttachments = pgTable("message_attachments", {
+  id: serial("id").primaryKey(),
+  channelId: integer("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+  messageId: integer("message_id").references(() => chatMessages.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  fileName: text("file_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  url: text("url").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => ({
+  messageIdx: index("message_attachments_message_idx").on(table.messageId),
+  channelIdx: index("message_attachments_channel_idx").on(table.channelId),
+}));
+
+export const pinnedMessages = pgTable("pinned_messages", {
+  id: serial("id").primaryKey(),
+  channelId: integer("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+  messageId: integer("message_id").notNull().references(() => chatMessages.id, { onDelete: "cascade" }),
+  pinnedByUserId: varchar("pinned_by_user_id").notNull().references(() => users.id),
+  pinnedAt: timestamp("pinned_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => ({
+  channelMessageUnique: unique().on(table.channelId, table.messageId),
+  channelIdx: index("pinned_messages_channel_idx").on(table.channelId),
 }));
 
 // Chat Polls - Polls created in channels
@@ -129,6 +178,19 @@ export const userFavorites = pgTable("user_favorites", {
   userFavoriteUnique: unique().on(table.userId, table.favoriteUserId),
   userIdx: index("user_favorites_user_idx").on(table.userId),
   tenantIdx: index("user_favorites_tenant_idx").on(table.tenantId),
+}));
+
+/** Starred channels / DMs in the conversations sidebar (spec §2.1 Favourites). */
+export const channelFavorites = pgTable("channel_favorites", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  channelId: integer("channel_id").notNull().references(() => channels.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => ({
+  userChannelUnique: unique().on(table.userId, table.channelId),
+  userIdx: index("channel_favorites_user_idx").on(table.userId),
+  channelIdx: index("channel_favorites_channel_idx").on(table.channelId),
 }));
 
 // Message Reactions - Emoji reactions on messages
@@ -290,6 +352,11 @@ export const insertUserFavoriteSchema = createInsertSchema(userFavorites).omit({
   createdAt: true,
 });
 
+export const insertChannelFavoriteSchema = createInsertSchema(channelFavorites).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertChatPollSchema = createInsertSchema(chatPolls).omit({
   id: true,
   closedAt: true,
@@ -299,6 +366,16 @@ export const insertChatPollSchema = createInsertSchema(chatPolls).omit({
 export const insertChatPollVoteSchema = createInsertSchema(chatPollVotes).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertMessageAttachmentSchema = createInsertSchema(messageAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPinnedMessageSchema = createInsertSchema(pinnedMessages).omit({
+  id: true,
+  pinnedAt: true,
 });
 
 // Types
@@ -326,10 +403,78 @@ export type InsertMessageReaction = z.infer<typeof insertMessageReactionSchema>;
 export type UserFavorite = typeof userFavorites.$inferSelect;
 export type InsertUserFavorite = z.infer<typeof insertUserFavoriteSchema>;
 
+export type ChannelFavorite = typeof channelFavorites.$inferSelect;
+export type InsertChannelFavorite = z.infer<typeof insertChannelFavoriteSchema>;
+
 export type ChatPoll = typeof chatPolls.$inferSelect;
 export type InsertChatPoll = z.infer<typeof insertChatPollSchema>;
 export type ChatPollVote = typeof chatPollVotes.$inferSelect;
 export type InsertChatPollVote = z.infer<typeof insertChatPollVoteSchema>;
+
+export type MessageAttachment = typeof messageAttachments.$inferSelect;
+export type InsertMessageAttachment = z.infer<typeof insertMessageAttachmentSchema>;
+
+export type PinnedMessage = typeof pinnedMessages.$inferSelect;
+export type InsertPinnedMessage = z.infer<typeof insertPinnedMessageSchema>;
+
+/** Sidebar conversation row with unread + preview (Module 02 §3). */
+export type ChatInboxItem = {
+  channelId: number;
+  name: string;
+  displayName: string;
+  description?: string | null;
+  type: string;
+  projectId: number | null;
+  projectName: string | null;
+  unreadCount: number;
+  lastMessagePreview: string | null;
+  lastMessageAt: string | null;
+  lastReadAt?: string | null;
+  isFavorite: boolean;
+  bridge?: ChannelBridgeConfig | null;
+  notificationPref?: ChatNotificationPref;
+  memberRole?: string;
+  canPost?: boolean;
+  otherUser?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    profileImageUrl: string | null;
+  };
+};
+
+export type ChatMessageReactionGroup = {
+  emoji: string;
+  count: number;
+  userIds: string[];
+  reactedByMe: boolean;
+};
+
+export type ChatAttachmentMeta = {
+  id: number;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+};
+
+export type ChatMessageWithMeta = ChatMessage & {
+  user: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null };
+  reactions: ChatMessageReactionGroup[];
+  threadReplyCount: number;
+  threadLastReplyAt: string | null;
+  attachments: ChatAttachmentMeta[];
+  isPinned?: boolean;
+};
+
+export type ChatSearchHit = {
+  messageId: number;
+  channelId: number;
+  channelName: string;
+  content: string;
+  createdAt: string;
+  user: { id: string; firstName: string | null; lastName: string | null };
+};
 
 // Legacy exports for AI conversations (keeping backward compatibility)
 export const conversations = pgTable("conversations", {

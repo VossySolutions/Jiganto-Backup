@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
+import compression from "compression";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -26,6 +27,14 @@ const isMultipartOrStreamUpload = (req: any) => {
 
 const isStripeWebhook = (req: any) =>
   req.method === "POST" && req.path === "/api/customer-mgmt/stripe/webhook";
+
+// Compress all responses except SSE streams (those need flush control)
+app.use(compression({
+  filter: (req, res) => {
+    if (req.headers["accept"] === "text/event-stream") return false;
+    return compression.filter(req, res);
+  },
+}));
 
 app.post(
   "/api/customer-mgmt/stripe/webhook",

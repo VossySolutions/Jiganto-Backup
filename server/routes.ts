@@ -1619,6 +1619,8 @@ export async function registerRoutes(
 
   // === CHAT MODULE ROUTES ===
 
+  const { assertCanAccessChannel, assertCanAccessMessage, assertCanPostToChannel } = await import("./chat/access");
+
   // Helper to get user ID from OIDC claims
   const getUserId = (req: any): string | null => {
     return req.user?.claims?.sub || null;
@@ -1650,7 +1652,8 @@ export async function registerRoutes(
       return res.status(401).json({ message: "Not authenticated" });
     }
     try {
-      const project = await storage.createProject(req.body);
+      const tenantId = getApiTenantIdWithFallback(req);
+      const project = await storage.createProject({ ...req.body, tenantId });
       // Add creator as project owner
       await storage.addProjectMember({
         projectId: project.id,
@@ -1703,10 +1706,15 @@ export async function registerRoutes(
     if (!userId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    const tenantId = getApiTenantIdWithFallback(req);
-    const projectId = req.query.projectId === "null" ? null : req.query.projectId ? Number(req.query.projectId) : undefined;
-    const channels = await storage.getChannels(tenantId, userId, projectId);
-    res.json(channels);
+    try {
+      const tenantId = getApiTenantIdWithFallback(req);
+      const projectId = req.query.projectId === "null" ? null : req.query.projectId ? Number(req.query.projectId) : undefined;
+      const channels = await storage.getChannels(tenantId, userId, projectId);
+      res.json(channels);
+    } catch (err) {
+      console.error("[chat/channels] error:", err);
+      res.status(500).json({ message: "Failed to load channels" });
+    }
   });
 
   app.post("/api/chat/channels", async (req, res) => {
@@ -1715,8 +1723,10 @@ export async function registerRoutes(
       return res.status(401).json({ message: "Not authenticated" });
     }
     try {
+      const tenantId = getApiTenantIdWithFallback(req);
       const channel = await storage.createChannel({
         ...req.body,
+        tenantId,
         createdById: userId,
       });
       // Add creator as channel admin
@@ -1736,31 +1746,34 @@ export async function registerRoutes(
     if (!userId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    const channel = await storage.getChannel(Number(req.params.id));
-    if (!channel) return res.status(404).json({ message: "Channel not found" });
-    
-    // Check access for private channels
-    if (channel.type === "private") {
-      const isMember = await storage.isChannelMember(channel.id, userId);
-      if (!isMember) return res.status(403).json({ message: "Access denied" });
-    }
-    res.json(channel);
+    const channelId = Number(req.params.id);
+    const access = await assertCanAccessChannel(channelId, userId);
+    if (!access.ok) return res.status(access.status).json({ message: access.message });
+    res.json(access.channel);
   });
 
   app.delete("/api/chat/channels/:id", async (req, res) => {
-    if (!isRequestAuthenticated(req) || !req.user) {
+    const userId = getUserId(req);
+    if (!userId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    await storage.deleteChannel(Number(req.params.id));
+    const channelId = Number(req.params.id);
+    const isAdmin = await storage.isChannelAdmin(channelId, userId);
+    if (!isAdmin) return res.status(403).json({ message: "Admin only" });
+    await storage.deleteChannel(channelId);
     res.status(204).send();
   });
 
   // Channel Members
   app.get("/api/chat/channels/:id/members", async (req, res) => {
-    if (!isRequestAuthenticated(req)) {
+    const userId = getUserId(req);
+    if (!userId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    const members = await storage.getChannelMembers(Number(req.params.id));
+    const channelId = Number(req.params.id);
+    const access = await assertCanAccessChannel(channelId, userId);
+    if (!access.ok) return res.status(access.status).json({ message: access.message });
+    const members = await storage.getChannelMembers(channelId);
     res.json(members);
   });
 
@@ -1816,19 +1829,24 @@ export async function registerRoutes(
     if (!userId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    const channel = await storage.getChannel(Number(req.params.id));
-    if (!channel) return res.status(404).json({ message: "Channel not found" });
+    try {
+      const channelId = Number(req.params.id);
+      const access = await assertCanAccessChannel(channelId, userId);
+      if (!access.ok) return res.status(access.status).json({ message: access.message });
+      const channel = access.channel;
 
-    // Check access
-    if (channel.type === "private") {
-      const isMember = await storage.isChannelMember(channel.id, userId);
-      if (!isMember) return res.status(403).json({ message: "Access denied" });
+      const limit = Number(req.query.limit) || 50;
+      const before = req.query.before ? Number(req.query.before) : undefined;
+      const parentId =
+        req.query.parentId === "null" || req.query.parentId === undefined
+          ? null
+          : Number(req.query.parentId);
+      const messages = await storage.getMessages(channel.id, limit, before, parentId, userId);
+      res.json(messages);
+    } catch (err) {
+      console.error("[chat/messages] error:", err);
+      res.status(500).json({ message: "Failed to load messages" });
     }
-
-    const limit = Number(req.query.limit) || 50;
-    const before = req.query.before ? Number(req.query.before) : undefined;
-    const messages = await storage.getMessages(channel.id, limit, before);
-    res.json(messages);
   });
 
   app.post("/api/chat/channels/:id/messages", async (req, res) => {
@@ -1836,7 +1854,12 @@ export async function registerRoutes(
     if (!userId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    const channel = await storage.getChannel(Number(req.params.id));
+    const channelId = Number(req.params.id);
+    const { assertCanPostToChannel, afterChatMessageCreated } = await import("./chat/extended-routes");
+    const gate = await assertCanPostToChannel(channelId, userId);
+    if (!gate.ok) return res.status(gate.status).json({ message: gate.message });
+
+    const channel = await storage.getChannel(channelId);
     if (!channel) return res.status(404).json({ message: "Channel not found" });
 
     try {
@@ -1845,6 +1868,23 @@ export async function registerRoutes(
         userId,
         content: req.body.content,
         parentId: req.body.parentId || null,
+      });
+      if (channel.type === "public") {
+        const isMember = await storage.isChannelMember(channel.id, userId);
+        if (!isMember) {
+          await storage.addChannelMember({ channelId: channel.id, userId, role: "member" });
+        }
+      }
+      const members = await storage.getChannelMembers(channel.id);
+      const author = members.find((m) => m.user.id === userId)?.user;
+      const authorName = [author?.firstName, author?.lastName].filter(Boolean).join(" ") || "User";
+      await afterChatMessageCreated({
+        channelId: channel.id,
+        userId,
+        content: req.body.content,
+        messageId: message.id,
+        attachmentIds: Array.isArray(req.body.attachmentIds) ? req.body.attachmentIds : undefined,
+        authorName,
       });
       res.status(201).json(message);
     } catch (err) {
@@ -1885,11 +1925,22 @@ export async function registerRoutes(
       return res.status(401).json({ message: "Not authenticated" });
     }
     try {
+      const messageId = Number(req.params.id);
+      const access = await assertCanAccessMessage(messageId, userId);
+      if (!access.ok) return res.status(access.status).json({ message: access.message });
       const reaction = await storage.addReaction({
-        messageId: Number(req.params.id),
+        messageId,
         userId,
         emoji: req.body.emoji,
       });
+      const { getChatWebSocket } = await import("./websocket");
+      const wss = getChatWebSocket();
+      if (wss) {
+        wss.sendToChannel(access.message.channelId, {
+          type: "reaction",
+          payload: { channelId: access.message.channelId, messageId },
+        });
+      }
       res.status(201).json(reaction);
     } catch (err) {
       res.status(400).json({ message: "Reaction already exists" });
@@ -1901,8 +1952,99 @@ export async function registerRoutes(
     if (!userId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    await storage.removeReaction(Number(req.params.id), userId, req.params.emoji);
+    const messageId = Number(req.params.id);
+    const access = await assertCanAccessMessage(messageId, userId);
+    if (!access.ok) return res.status(access.status).json({ message: access.message });
+    await storage.removeReaction(messageId, userId, decodeURIComponent(req.params.emoji));
+    const { getChatWebSocket } = await import("./websocket");
+    const wss = getChatWebSocket();
+    if (wss) {
+      wss.sendToChannel(access.message.channelId, {
+        type: "reaction",
+        payload: { channelId: access.message.channelId, messageId },
+      });
+    }
     res.status(204).send();
+  });
+
+  app.get("/api/chat/messages/:id/thread", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const parentId = Number(req.params.id);
+      const access = await assertCanAccessMessage(parentId, userId);
+      if (!access.ok) return res.status(access.status).json({ message: access.message });
+      const parentMsg = await storage.getMessageWithUser(parentId);
+      if (!parentMsg) return res.status(404).json({ message: "Message not found" });
+      const replies = await storage.getThreadReplies(parentId);
+      res.json({ parent: parentMsg, replies });
+    } catch (err) {
+      console.error("[chat/thread] error:", err);
+      res.status(500).json({ message: "Failed to load thread" });
+    }
+  });
+
+  app.get("/api/chat/inbox", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    try {
+      const inbox = await storage.getChatInbox(userId, tenantId);
+      res.json(inbox);
+    } catch (err) {
+      console.error("[chat/inbox] error:", err);
+      res.status(500).json({ message: "Failed to load inbox" });
+    }
+  });
+
+  app.post("/api/chat/channel-favorites/:channelId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    await storage.addChannelFavorite(userId, Number(req.params.channelId), tenantId);
+    res.status(201).json({ success: true });
+  });
+
+  app.delete("/api/chat/channel-favorites/:channelId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    await storage.removeChannelFavorite(userId, Number(req.params.channelId), tenantId);
+    res.status(204).send();
+  });
+
+  app.post("/api/chat/teams", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    const { name, description, isPrivate, memberIds } = req.body;
+    if (!name?.trim()) return res.status(400).json({ message: "Team name is required" });
+    try {
+      const result = await storage.createChatTeam(userId, tenantId, {
+        name: name.trim(),
+        description,
+        isPrivate: Boolean(isPrivate),
+        memberIds: Array.isArray(memberIds) ? memberIds : [],
+      });
+      res.status(201).json(result);
+    } catch {
+      res.status(400).json({ message: "Failed to create team" });
+    }
+  });
+
+  app.get("/api/chat/search", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const tenantId = getApiTenantIdWithFallback(req);
+      const q = String(req.query.q ?? "");
+      const channelId = req.query.channelId ? Number(req.query.channelId) : undefined;
+      const hits = await storage.searchChatMessages(userId, tenantId, q, channelId);
+      res.json(hits);
+    } catch (err) {
+      console.error("[chat/search] error:", err);
+      res.status(500).json({ message: "Search failed" });
+    }
   });
 
   // ── Chat Polls ──────────────────────────────────────────────────────────────
@@ -1911,6 +2053,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const channelId = Number(req.params.id);
+    const gate = await assertCanPostToChannel(channelId, userId);
+    if (!gate.ok) return res.status(gate.status).json({ message: gate.message });
     const { question, options, durationMinutes = 1440, anonymous = false } = req.body;
     if (!question || !Array.isArray(options) || options.length < 2 || options.length > 6) {
       return res.status(400).json({ message: "Question and 2–6 options required" });
@@ -1945,6 +2089,8 @@ export async function registerRoutes(
       const { chatPolls, chatPollVotes } = await import("@shared/models/chat");
       const [poll] = await db.select().from(chatPolls).where(eq(chatPolls.id, pollId));
       if (!poll) return res.status(404).json({ message: "Poll not found" });
+      const access = await assertCanAccessChannel(poll.channelId, userId);
+      if (!access.ok) return res.status(access.status).json({ message: access.message });
       const votes = await db.select().from(chatPollVotes).where(eq(chatPollVotes.pollId, pollId));
       const options: string[] = JSON.parse(poll.options);
       const voteCounts = options.map((_, i) => votes.filter(v => v.optionIndex === i).length);
@@ -1966,8 +2112,14 @@ export async function registerRoutes(
       const { chatPolls, chatPollVotes } = await import("@shared/models/chat");
       const [poll] = await db.select().from(chatPolls).where(eq(chatPolls.id, pollId));
       if (!poll) return res.status(404).json({ message: "Poll not found" });
+      const access = await assertCanAccessChannel(poll.channelId, userId);
+      if (!access.ok) return res.status(access.status).json({ message: access.message });
       if (poll.closedAt && new Date(poll.closedAt) < new Date()) {
         return res.status(400).json({ message: "Poll is closed" });
+      }
+      const options: string[] = JSON.parse(poll.options);
+      if (optionIndex < 0 || optionIndex >= options.length) {
+        return res.status(400).json({ message: "Invalid option" });
       }
       const existing = await db.select().from(chatPollVotes)
         .where(and(eq(chatPollVotes.pollId, pollId), eq(chatPollVotes.userId, userId)));
@@ -2058,6 +2210,9 @@ export async function registerRoutes(
     const dms = await storage.getDirectMessageChannels(userId, tenantId);
     res.json(dms);
   });
+
+  const { registerExtendedChatRoutes } = await import("./chat/extended-routes");
+  await registerExtendedChatRoutes(app, getUserId, getApiTenantIdWithFallback);
 
   // === CRM MODULE ROUTES ===
 
