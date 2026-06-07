@@ -28,6 +28,7 @@ import CharacterCount from '@tiptap/extension-character-count';
 import {
   CalloutNode, CollapsibleNode, VideoEmbedNode, MathBlockNode,
   TextDirectionExtension, SlashCommandExtension, buildSlashSuggestion,
+  InlineCommentMark,
   type SlashCommandItem,
 } from './editor-extensions';
 import { Button } from '@/components/ui/button';
@@ -52,6 +53,7 @@ import {
   Search, Replace, X, ChevronUp, ChevronsUpDown, Check,
   Paintbrush, Video, Sigma, Smile, Languages, BookOpen, Layers, Scissors, Combine,
   Info, AlertTriangle, CheckCircle, AlertCircle, ChevronsLeftRight, FileSignature,
+  MessageSquare,
 } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { useLocation } from 'wouter';
@@ -707,12 +709,13 @@ function buildMentionSuggestion(usersRef: { current: MentionUser[] }) {
 interface TipTapEditorProps {
   content: string;
   onChange: (content: string) => void;
-  onExport?: (format: 'pdf' | 'html' | 'markdown') => void;
+  onExport?: (format: 'pdf' | 'html' | 'markdown' | 'docx') => void;
   editable?: boolean;
   placeholder?: string;
   users?: MentionUser[];
   documentId?: number;
   documentTitle?: string;
+  onAnchorComment?: (commentId: string, selectedText: string) => void;
 }
 
 export function TipTapEditor({ 
@@ -724,6 +727,7 @@ export function TipTapEditor({
   users = [],
   documentId,
   documentTitle,
+  onAnchorComment,
 }: TipTapEditorProps) {
   const [, setLocation] = useLocation();
   const usersRef = useRef<MentionUser[]>(users);
@@ -990,6 +994,7 @@ export function TipTapEditor({
       VideoEmbedNode,
       MathBlockNode,
       TextDirectionExtension,
+      InlineCommentMark,
       SlashCommandExtension.configure({
         suggestion: buildSlashSuggestion(getSlashItems),
       }),
@@ -2370,6 +2375,9 @@ export function TipTapEditor({
                     <DropdownMenuItem onClick={() => onExport('pdf')} data-testid="toolbar-export-pdf">
                       <FileText className="h-4 w-4 mr-2" /> Export as PDF
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onExport('docx')} data-testid="toolbar-export-docx">
+                      <FileText className="h-4 w-4 mr-2" /> Export as Word (.docx)
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => onExport('html')} data-testid="toolbar-export-html">
                       <FileCode className="h-4 w-4 mr-2" /> Export as HTML
                     </DropdownMenuItem>
@@ -2378,6 +2386,36 @@ export function TipTapEditor({
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+              </>
+            )}
+
+            {onAnchorComment && (
+              <>
+                <Separator orientation="vertical" className="h-6 mx-0.5" />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 px-2"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        if (!editor) return;
+                        const { from, to, empty } = editor.state.selection;
+                        if (empty) return;
+                        const selectedText = editor.state.doc.textBetween(from, to, ' ');
+                        const commentId = `c_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+                        editor.chain().focus().setInlineComment(commentId).run();
+                        onAnchorComment(commentId, selectedText);
+                      }}
+                      data-testid="toolbar-anchor-comment"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      <span className="text-xs">Comment</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>Anchor comment to selected text</p></TooltipContent>
+                </Tooltip>
               </>
             )}
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Send, Users, Pin, Link2, Sparkles, CheckCircle2, XCircle, Zap, ExternalLink, AlertTriangle, Copy, Check } from "lucide-react";
+import { X, Send, Users, Pin, Link2, Sparkles, CheckCircle2, Zap, ExternalLink, AlertTriangle, Copy, Check } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { displayPersonName, formatMessageTime, getUserInitials } from "@/lib/chat-utils";
+import { cn } from "@/lib/utils";
 import type { ChatMessage, ChatSearchHit } from "@shared/models/chat";
 import { ChatButtonSpinner, ChatSpinner } from "@/components/chat/ChatLoading";
 
@@ -26,18 +27,35 @@ export type RightPanelMode =
 export function ChatRightPanel({
   panel,
   currentUserId,
+  isMobile,
   onClose,
   onJumpToMessage,
 }: {
   panel: RightPanelMode;
   currentUserId: string;
+  isMobile?: boolean;
   onClose: () => void;
   onJumpToMessage?: (messageId: number) => void;
 }) {
   if (!panel) return null;
 
   return (
-    <div className="w-96 border-l bg-card flex flex-col shrink-0 animate-in slide-in-from-right duration-200">
+    <>
+      {isMobile && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={onClose}
+          aria-hidden
+        />
+      )}
+      <div
+        className={cn(
+          "bg-card flex flex-col shrink-0 animate-in slide-in-from-right duration-200 min-h-0 overflow-hidden",
+          isMobile
+            ? "fixed inset-y-0 right-0 z-50 w-full max-w-md border-l shadow-xl"
+            : "w-80 lg:w-96 border-l relative h-full",
+        )}
+      >
       <div className="h-14 border-b flex items-center justify-between px-4 shrink-0">
         <h3 className="font-semibold text-sm">
           {panel.type === "thread" && "Thread"}
@@ -65,7 +83,8 @@ export function ChatRightPanel({
       )}
       {panel.type === "pins" && <PinsPanel channelId={panel.channelId} />}
       {panel.type === "bridge" && <BridgePanel channelId={panel.channelId} />}
-    </div>
+      </div>
+    </>
   );
 }
 

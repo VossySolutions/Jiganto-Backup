@@ -253,9 +253,11 @@ export function GrantAuditNotice() {
 
 export function InfoAlert({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 px-4 py-3 flex items-start gap-3">
+    <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 px-4 py-3 flex items-start gap-3 min-w-0">
       <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-      <p className="text-xs text-blue-900/90 dark:text-blue-100/80">{children}</p>
+      <p className="text-xs text-blue-900/90 dark:text-blue-100/80 min-w-0 break-words [&_code]:break-all">
+        {children}
+      </p>
     </div>
   );
 }
@@ -263,13 +265,22 @@ export function InfoAlert({ children }: { children: React.ReactNode }) {
 export function ResponsiveTableWrap({
   children,
   minWidthClass = "min-w-[720px]",
+  hint = true,
 }: {
   children: React.ReactNode;
   minWidthClass?: string;
+  hint?: boolean;
 }) {
   return (
-    <div className="overflow-x-auto -mx-1 px-1">
-      <div className={cn("w-full", minWidthClass)}>{children}</div>
+    <div className="min-w-0">
+      <div className="overflow-x-auto -mx-1 px-1 overscroll-x-contain touch-pan-x scrollbar-thin">
+        <div className={cn("w-full", minWidthClass)}>{children}</div>
+      </div>
+      {hint && (
+        <p className="text-[10px] text-muted-foreground mt-1.5 md:hidden">
+          Swipe horizontally to see all columns
+        </p>
+      )}
     </div>
   );
 }
@@ -312,14 +323,14 @@ export function SectionCard({
 }) {
   return (
     <Card className={cn("rounded-xl border bg-card shadow-sm", className)}>
-      <CardHeader className="py-3 px-4 sm:px-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 space-y-0 border-b border-border/40">
-        <div>
+      <CardHeader className="py-3 px-4 sm:px-5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 space-y-0 border-b border-border/40">
+        <div className="min-w-0 flex-1">
           <CardTitle className="text-sm font-semibold">{title}</CardTitle>
           {description && <CardDescription className="text-xs mt-0.5">{description}</CardDescription>}
         </div>
-        {action}
+        {action && <div className="shrink-0 w-full sm:w-auto [&_button]:w-full sm:[&_button]:w-auto">{action}</div>}
       </CardHeader>
-      <CardContent className="px-5 py-4">{children}</CardContent>
+      <CardContent className="px-4 sm:px-5 py-4">{children}</CardContent>
     </Card>
   );
 }

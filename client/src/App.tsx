@@ -129,6 +129,7 @@ function Router() {
         <Route path="/modules/business-mgmt" component={BusinessManagementPage} />
         <Route path="/modules/workspaces" component={WorkspacesPage} />
         <Route path="/modules/documents" component={DocumentManagementPage} />
+        <Route path="/documents" component={DocumentManagementPage} />
         <Route path="/modules/tasks" component={TaskManagementPage} />
         <Route path="/modules/portfolio" component={PortfolioManagementPage} />
         <Route path="/modules/projects/:projectId" component={ProjectsManagementPage} />

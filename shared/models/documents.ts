@@ -5,7 +5,7 @@ import { relations } from "drizzle-orm";
 import { users } from "./auth";
 import { tenants } from "../schema";
 
-export const documentStatusEnum = ["draft", "published", "archived"] as const;
+export const documentStatusEnum = ["draft", "review", "awaiting_approval", "published", "archived"] as const;
 export const permissionLevelEnum = ["read", "write", "share", "admin"] as const;
 export const documentTypeEnum = [
   "document", "wiki", "template", "sop", "policy", "contract",

@@ -96,7 +96,7 @@ function ConversationRow({
       <Button
         size="icon"
         variant="ghost"
-        className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0"
+        className="h-7 w-7 sm:h-6 sm:w-6 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 shrink-0"
         disabled={favoriting}
         onClick={(e) => {
           e.stopPropagation();
@@ -165,6 +165,7 @@ export function ConversationSidebar({
   onCreateTeam,
   inboxLoading,
   favoritingChannelId,
+  className,
 }: {
   inbox: ChatInboxItem[];
   selectedChannelId: number | null;
@@ -180,6 +181,7 @@ export function ConversationSidebar({
   onCreateTeam?: () => void;
   inboxLoading?: boolean;
   favoritingChannelId?: number | null;
+  className?: string;
 }) {
   const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(loadCollapsedTeams);
 
@@ -233,7 +235,13 @@ export function ConversationSidebar({
     ));
 
   return (
-    <div className="w-80 border-r bg-card flex flex-col shrink-0" data-testid="channel-sidebar">
+    <div
+      className={cn(
+        "w-full md:w-72 lg:w-80 border-r bg-card flex flex-col shrink-0 min-h-0",
+        className,
+      )}
+      data-testid="channel-sidebar"
+    >
       <div className="h-14 border-b flex items-center px-4 justify-between">
         <h2 className="font-semibold text-sm">Conversations</h2>
         <Button size="icon" variant="ghost" onClick={onCreateChannel}>
@@ -251,7 +259,7 @@ export function ConversationSidebar({
           />
         </div>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         {inboxLoading ? (
           <ChatSidebarSkeleton />
         ) : (

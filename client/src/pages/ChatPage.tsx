@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageSquare, Plus, UserPlus, Hash, Users } from "lucide-react";
+import { MessageSquare, Plus, UserPlus, Hash, Users, MoreHorizontal } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { motion } from "framer-motion";
 import { Sidebar } from "@/components/Sidebar";
 import { ModuleHeader } from "@/components/ModuleHeader";
@@ -28,7 +34,7 @@ import {
 } from "@/components/chat/ChatDialogs";
 
 export function ChatPage() {
-  const { mainOffset, mobileTopOffset } = useShellLayout();
+  const { mainOffset, mobileTopOffset, isMobile } = useShellLayout();
   const { user } = useAuth();
   const { data: permissions } = usePermissions();
   const tenantId = permissions?.orgId ?? 1;
@@ -65,8 +71,24 @@ export function ChatPage() {
   }, [userSearchQuery]);
 
   useEffect(() => {
-    if (routeChannelId) setSelectedChannelId(routeChannelId);
-  }, [routeChannelId]);
+    if (routeChannelId) {
+      setSelectedChannelId(routeChannelId);
+    } else if (isMobile) {
+      setSelectedChannelId(null);
+    }
+  }, [routeChannelId, isMobile]);
+
+  const selectChannel = useCallback((id: number) => {
+    setSelectedChannelId(id);
+    setRightPanel(null);
+    navigate(`/modules/chat/${id}`);
+  }, [navigate]);
+
+  const backToConversationList = useCallback(() => {
+    setSelectedChannelId(null);
+    setRightPanel(null);
+    navigate("/modules/chat");
+  }, [navigate]);
 
   const inboxQueryKey = useMemo(
     () => [`/api/chat/inbox?tenantId=${tenantId}`],
@@ -219,16 +241,14 @@ export function ChatPage() {
   }, [selectedChannelId]);
 
   useEffect(() => {
-    if (!selectedChannelId && inbox.length > 0) {
+    // Desktop: auto-open first conversation; mobile: stay on list until user picks one
+    if (!selectedChannelId && inbox.length > 0 && !isMobile) {
       selectChannel(inbox[0].channelId);
     }
-  }, [inbox, selectedChannelId]);
+  }, [inbox, selectedChannelId, isMobile, selectChannel]);
 
-  const selectChannel = (id: number) => {
-    setSelectedChannelId(id);
-    setRightPanel(null);
-    navigate(`/modules/chat/${id}`);
-  };
+  const showSidebar = !isMobile || !selectedChannelId;
+  const showThread = !isMobile || !!selectedChannelId;
 
   const toggleSection = (key: keyof ChatSectionState) => {
     setSections((prev) => {
@@ -358,7 +378,7 @@ export function ChatPage() {
     <div className="min-h-screen bg-background" data-testid="chat-page">
       <Sidebar />
       <main className={cn("transition-all duration-300 h-screen flex flex-col", mainOffset, mobileTopOffset)}>
-        <div className="px-4 pt-4 shrink-0">
+        <div className="px-4 pt-4 shrink-0 hidden lg:block">
           <ModuleWelcomeBanner
             moduleKey="chat"
             features={["Real-time messaging", "Threads & reactions", "Teams & channels", "Polls"]}
@@ -368,45 +388,66 @@ export function ChatPage() {
           <ModuleHeader
             icon={MessageSquare}
             title="Chat"
-            subtitle="Team messaging and collaboration"
+            subtitle={isMobile ? "Messages" : "Team messaging and collaboration"}
             titleTestId="text-chat-title"
             actions={
               <>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setIsNewChatOpen(true)}>
+                <Button variant="outline" size="sm" className="gap-1.5 hidden sm:inline-flex" onClick={() => setIsNewChatOpen(true)}>
                   <MessageSquare className="h-4 w-4" /> New Chat
                 </Button>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setIsCreateTeamOpen(true)}>
+                <Button variant="outline" size="sm" className="gap-1.5 hidden md:inline-flex" onClick={() => setIsCreateTeamOpen(true)}>
                   <Users className="h-4 w-4" /> New Team
                 </Button>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setIsCreateChannelOpen(true)}>
+                <Button variant="outline" size="sm" className="gap-1.5 hidden sm:inline-flex" onClick={() => setIsCreateChannelOpen(true)}>
                   <Hash className="h-4 w-4" /> New Channel
                 </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-8 w-8 sm:hidden shrink-0">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setIsNewChatOpen(true)}>
+                      <MessageSquare className="h-4 w-4 mr-2" /> New Chat
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setIsCreateTeamOpen(true)}>
+                      <Users className="h-4 w-4 mr-2" /> New Team
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setIsCreateChannelOpen(true)}>
+                      <Hash className="h-4 w-4 mr-2" /> New Channel
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </>
             }
           />
         </div>
 
         <div className="flex-1 flex overflow-hidden min-h-0 relative">
-          <ConversationSidebar
-            inbox={inbox}
-            selectedChannelId={selectedChannelId}
-            searchQuery={searchQuery}
-            sections={sections}
-            onlineUsers={onlineUsers}
-            onSearchChange={setSearchQuery}
-            onSelectChannel={selectChannel}
-            onToggleSection={toggleSection}
-            onToggleFavorite={(channelId, isFavorite) =>
-              toggleFavorite.mutate({ channelId, isFavorite })
-            }
-            onNewChat={() => setIsNewChatOpen(true)}
-            onCreateChannel={() => setIsCreateChannelOpen(true)}
-            onCreateTeam={() => setIsCreateTeamOpen(true)}
-            inboxLoading={inboxLoading}
-            favoritingChannelId={favoritingChannelId}
-          />
+          {showSidebar && (
+            <ConversationSidebar
+              inbox={inbox}
+              selectedChannelId={selectedChannelId}
+              searchQuery={searchQuery}
+              sections={sections}
+              onlineUsers={onlineUsers}
+              onSearchChange={setSearchQuery}
+              onSelectChannel={selectChannel}
+              onToggleSection={toggleSection}
+              onToggleFavorite={(channelId, isFavorite) =>
+                toggleFavorite.mutate({ channelId, isFavorite })
+              }
+              onNewChat={() => setIsNewChatOpen(true)}
+              onCreateChannel={() => setIsCreateChannelOpen(true)}
+              onCreateTeam={() => setIsCreateTeamOpen(true)}
+              inboxLoading={inboxLoading}
+              favoritingChannelId={favoritingChannelId}
+              className={cn(isMobile && "w-full border-r-0")}
+            />
+          )}
 
-          {selectedChannel ? (
+          {showThread && selectedChannel ? (
             <>
               <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden relative">
                 <MessageThread
@@ -419,6 +460,7 @@ export function ChatPage() {
                   loadingMore={loadingMore}
                   aiEnabled={chatConfig?.aiEnabled}
                   memberCount={memberCount}
+                  onBack={isMobile ? backToConversationList : undefined}
                   onLoadMore={() => void loadMore()}
                   onOpenThread={(messageId) =>
                     setRightPanel({ type: "thread", messageId, channelId: selectedChannel.channelId })
@@ -465,6 +507,7 @@ export function ChatPage() {
               <ChatRightPanel
                 panel={rightPanel}
                 currentUserId={user?.id ?? ""}
+                isMobile={isMobile}
                 onClose={() => setRightPanel(null)}
                 onJumpToMessage={(messageId) => {
                   // Scroll to message in merged list — find it and scroll into view
@@ -478,12 +521,12 @@ export function ChatPage() {
                 }}
               />
             </>
-          ) : inboxLoading ? (
-            <div className="flex-1 flex items-center justify-center">
+          ) : showThread && inboxLoading ? (
+            <div className="flex-1 flex items-center justify-center min-w-0">
               <ChatSpinner label="Loading conversations…" />
             </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
+          ) : showThread ? (
+            <div className="flex-1 flex items-center justify-center min-w-0">
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-md px-6">
                 <MessageSquare className="h-14 w-14 mx-auto text-[#4338CA]/60 mb-4" />
                 <h3 className="font-semibold text-xl mb-2">Welcome to Chat</h3>
@@ -500,7 +543,7 @@ export function ChatPage() {
                 </div>
               </motion.div>
             </div>
-          )}
+          ) : null}
         </div>
       </main>
 

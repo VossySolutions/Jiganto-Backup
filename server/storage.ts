@@ -590,6 +590,8 @@ export interface IStorage {
   searchDocuments(tenantId: number, query: string, clientId?: number): Promise<Document[]>;
   getFavoriteDocuments(tenantId: number, userId: string, clientId?: number): Promise<Document[]>;
   getRecentDocuments(tenantId: number, userId: string, limit?: number, clientId?: number): Promise<Document[]>;
+  getSharedWithMeDocuments(tenantId: number, userId: string, clientId?: number): Promise<(Document & { ownerName: string | null })[]>;
+  getDocumentByPublicToken(token: string): Promise<Document | undefined>;
 
   // Document Management - Versions
   getDocumentVersions(documentId: number): Promise<DocumentVersion[]>;
@@ -4105,6 +4107,57 @@ export class DatabaseStorage implements IStorage {
       .where(and(...conditions))
       .orderBy(desc(documents.lastViewedAt))
       .limit(limit);
+  }
+
+  async getSharedWithMeDocuments(tenantId: number, userId: string, clientId?: number): Promise<(Document & { ownerName: string | null })[]> {
+    const aclEntries = await db.select().from(documentAcl)
+      .where(and(
+        eq(documentAcl.subjectType, "user"),
+        eq(documentAcl.subjectId, userId),
+      ));
+    if (!aclEntries.length) return [];
+    const docIds = Array.from(new Set(aclEntries.map(a => a.documentId).filter((id): id is number => id != null)));
+    if (!docIds.length) return [];
+
+    const conditions = [
+      eq(documents.tenantId, tenantId),
+      inArray(documents.id, docIds),
+      ne(documents.ownerId, userId),
+    ];
+    if (clientId !== undefined) conditions.push(eq(documents.clientId, clientId));
+
+    return await db.select({
+      id: documents.id,
+      tenantId: documents.tenantId,
+      clientId: documents.clientId,
+      folderId: documents.folderId,
+      title: documents.title,
+      description: documents.description,
+      content: documents.content,
+      type: documents.type,
+      status: documents.status,
+      ownerId: documents.ownerId,
+      currentVersion: documents.currentVersion,
+      isFavorite: documents.isFavorite,
+      isPinned: documents.isPinned,
+      viewCount: documents.viewCount,
+      lastViewedAt: documents.lastViewedAt,
+      metadata: documents.metadata,
+      createdAt: documents.createdAt,
+      updatedAt: documents.updatedAt,
+      ownerName: sql<string | null>`COALESCE(${users.firstName} || ' ' || ${users.lastName}, ${users.email}, ${documents.ownerId})`,
+    })
+      .from(documents)
+      .leftJoin(users, eq(documents.ownerId, users.id))
+      .where(and(...conditions))
+      .orderBy(desc(documents.updatedAt));
+  }
+
+  async getDocumentByPublicToken(token: string): Promise<Document | undefined> {
+    const all = await db.select().from(documents)
+      .where(sql`(${documents.metadata}->>'publicToken') = ${token}`)
+      .limit(1);
+    return all[0];
   }
 
   // Document Management - Versions

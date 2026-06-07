@@ -116,6 +116,30 @@ const BASE_NAV: {
   { id: "settings", label: "Plan settings", icon: Settings2 },
 ];
 
+const NAV_SHORT_LABELS: Record<ViewId, string> = {
+  customers: "Customers",
+  detail: "Detail",
+  health: "Health",
+  trials: "Trials",
+  programmes: "Programmes",
+  renewal: "Renewals",
+  pricing: "Pricing",
+  billing: "Billing",
+  settings: "Settings",
+};
+
+function clearCustomerFilters(
+  setSearch: (v: string) => void,
+  setStatusFilter: (v: string) => void,
+  setPlanFilter: (v: string) => void,
+  setCsmFilter: (v: string) => void,
+) {
+  setSearch("");
+  setStatusFilter("all");
+  setPlanFilter("all");
+  setCsmFilter("all");
+}
+
 function buildNavItems(dashboard: CustomerMgmtDashboard | null | undefined) {
   if (!dashboard) return BASE_NAV;
 
@@ -565,12 +589,11 @@ export default function CustomerManagementPage() {
                     <span className="hidden sm:inline">Add customer</span>
                   </Button>
                 </>
-              ) : view === "detail" ? (
+              ) : view === "detail" && detail ? (
                 <Button
                   size="sm"
-                  className="gap-1.5 h-9 hidden sm:inline-flex"
+                  className="gap-1.5 h-9"
                   onClick={() =>
-                    detail &&
                     openGrant({
                       customerId: detail.id,
                       customerSlug: detail.slug,
@@ -579,7 +602,8 @@ export default function CustomerManagementPage() {
                     })
                   }
                 >
-                  Grant access
+                  <span className="hidden sm:inline">Grant access</span>
+                  <span className="sm:hidden">Grant</span>
                 </Button>
               ) : undefined
             }
@@ -613,7 +637,8 @@ export default function CustomerManagementPage() {
                     data-testid={`tab-customer-mgmt-${item.id}`}
                   >
                     <TabIcon className="h-4 w-4 shrink-0" />
-                    <span className="whitespace-nowrap">{item.label}</span>
+                    <span className="whitespace-nowrap hidden xl:inline">{item.label}</span>
+                    <span className="whitespace-nowrap xl:hidden">{NAV_SHORT_LABELS[item.id]}</span>
                     {item.badge && (
                       <Badge
                         variant="secondary"
@@ -745,9 +770,9 @@ export default function CustomerManagementPage() {
                           </button>
                         ))}
                       </div>
-                      <div className="flex items-center gap-2 sm:ml-auto shrink-0">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:ml-auto shrink-0 w-full sm:w-auto">
                         <Select value={planFilter} onValueChange={setPlanFilter}>
-                          <SelectTrigger className="h-8 w-[130px]">
+                          <SelectTrigger className="h-8 w-full sm:w-[130px]">
                             <SelectValue placeholder="All plans" />
                           </SelectTrigger>
                           <SelectContent>
@@ -758,7 +783,7 @@ export default function CustomerManagementPage() {
                           </SelectContent>
                         </Select>
                         <Select value={csmFilter} onValueChange={setCsmFilter}>
-                          <SelectTrigger className="h-8 w-[140px]">
+                          <SelectTrigger className="h-8 w-full sm:w-[140px]">
                             <SelectValue placeholder="All CSMs" />
                           </SelectTrigger>
                           <SelectContent>
@@ -772,6 +797,22 @@ export default function CustomerManagementPage() {
                         </Select>
                       </div>
                     </div>
+                    {filteredCustomers.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                        <p className="text-sm text-muted-foreground mb-3">
+                          No organisations match your filters.
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            clearCustomerFilters(setSearch, setStatusFilter, setPlanFilter, setCsmFilter)
+                          }
+                        >
+                          Clear filters
+                        </Button>
+                      </div>
+                    ) : (
                     <ResponsiveTableWrap minWidthClass="min-w-[960px]">
                     <Table>
                       <TableHeader>
@@ -860,6 +901,7 @@ export default function CustomerManagementPage() {
                       </TableBody>
                     </Table>
                     </ResponsiveTableWrap>
+                    )}
                   </SectionCard>
                 </>
               )}
@@ -880,7 +922,7 @@ export default function CustomerManagementPage() {
                   >
                     <ArrowLeft className="h-3.5 w-3.5 mr-1" /> All customers
                   </Button>
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                     <OrgAvatar initials={detail.initials} color={detail.avatarColor} size="lg" />
                     <div className="flex-1 min-w-0">
                       <h2 className="text-lg font-bold">{detail.name}</h2>
@@ -891,9 +933,10 @@ export default function CustomerManagementPage() {
                       </p>
                     </div>
                     <HealthBadge band={detail.healthBand} score={detail.healthScore} />
+                    <div className="flex gap-2 w-full sm:w-auto">
                     <Button
                       size="sm"
-                      className="w-full sm:w-auto"
+                      className="flex-1 sm:flex-initial"
                       onClick={() =>
                         openGrant({
                           customerId: detail.id,
@@ -908,12 +951,13 @@ export default function CustomerManagementPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-1.5"
+                      className="gap-1.5 flex-1 sm:flex-initial"
                       onClick={() => setEditCustomerOpen(true)}
                     >
                       <Pencil className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Edit</span>
+                      Edit
                     </Button>
+                    </div>
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">
                     <SectionCard title="Subscription">
@@ -937,15 +981,16 @@ export default function CustomerManagementPage() {
                         }
                       />
                       <FieldRow label="Payment method" value={detail.subscription.paymentMethod} />
-                      <div className="flex gap-2 mt-3 flex-wrap">
-                        <Button variant="outline" size="sm" onClick={() => setChangePlanOpen(true)}>
+                      <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                        <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setChangePlanOpen(true)}>
                           Change plan
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => setAddDiscountOpen(true)}>
+                        <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setAddDiscountOpen(true)}>
                           Add discount
                         </Button>
                         <Button
                           size="sm"
+                          className="w-full sm:w-auto"
                           onClick={() =>
                             openGrant({
                               customerId: detail.id,
@@ -1060,7 +1105,17 @@ export default function CustomerManagementPage() {
                     </div>
                   </SectionCard>
                 </>
-                  ) : null}
+                  ) : (
+                    <Card className="rounded-xl p-8 sm:p-12 text-center max-w-md mx-auto">
+                      <Building2 className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
+                      <h3 className="font-semibold mb-2">No customer selected</h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Choose an organisation from All customers to view subscription, usage, and
+                        activity.
+                      </p>
+                      <Button onClick={() => setView("customers")}>Browse customers</Button>
+                    </Card>
+                  )}
                 </>
               )}
 
@@ -1261,8 +1316,8 @@ export default function CustomerManagementPage() {
                     />
                     <KpiCard label="Converted to paid" value={dashboard.programmes.kpis.convertedToPaid} subTone="up" sub="From completed programmes" />
                   </div>
-                  <div className="flex justify-end">
-                    <Button size="sm" onClick={() => setCreateProgrammeOpen(true)} disabled={programmesBlocked}>
+                  <div className="flex justify-stretch sm:justify-end">
+                    <Button size="sm" className="w-full sm:w-auto" onClick={() => setCreateProgrammeOpen(true)} disabled={programmesBlocked}>
                       <Plus className="h-4 w-4 mr-1" />
                       Create programme
                     </Button>
@@ -1732,7 +1787,7 @@ export default function CustomerManagementPage() {
                               })
                             }
                           >
-                            <SelectTrigger className="w-36 h-8">
+                            <SelectTrigger className="w-full sm:w-36 h-8">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1757,7 +1812,7 @@ export default function CustomerManagementPage() {
                               })
                             }
                           >
-                            <SelectTrigger className="w-52 h-8">
+                            <SelectTrigger className="w-full sm:w-52 h-8">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1780,7 +1835,7 @@ export default function CustomerManagementPage() {
                               })
                             }
                           >
-                            <SelectTrigger className="w-52 h-8">
+                            <SelectTrigger className="w-full sm:w-52 h-8">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1854,7 +1909,7 @@ export default function CustomerManagementPage() {
                           value={dashboard.settings.retrySchedule}
                           onValueChange={(v) => saveSettingsMut.mutate({ retrySchedule: v })}
                         >
-                          <SelectTrigger className="w-36 h-8">
+                          <SelectTrigger className="w-full sm:w-36 h-8">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -1972,7 +2027,7 @@ function TrialDefaultsPanel({
             value={dashboard.settings.grantTrialExtensions}
             onValueChange={(v) => onSave({ grantTrialExtensions: v })}
           >
-            <SelectTrigger className="w-52 h-8">
+            <SelectTrigger className="w-full sm:w-52 h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1990,7 +2045,7 @@ function TrialDefaultsPanel({
             value={dashboard.settings.grantFreeAccess}
             onValueChange={(v) => onSave({ grantFreeAccess: v })}
           >
-            <SelectTrigger className="w-52 h-8">
+            <SelectTrigger className="w-full sm:w-52 h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2012,7 +2067,7 @@ function TrialDefaultsPanel({
             value={dashboard.settings.maxExtensionWithoutCeo}
             onValueChange={(v) => onSave({ maxExtensionWithoutCeo: v })}
           >
-            <SelectTrigger className="w-36 h-8">
+            <SelectTrigger className="w-full sm:w-36 h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2044,7 +2099,7 @@ function PermissionSettingsPanel({
             value={dashboard.settings.grantTrialExtensions}
             onValueChange={(v) => onSave({ grantTrialExtensions: v })}
           >
-            <SelectTrigger className="w-52 h-8">
+            <SelectTrigger className="w-full sm:w-52 h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2061,7 +2116,7 @@ function PermissionSettingsPanel({
             value={dashboard.settings.grantFreeAccess}
             onValueChange={(v) => onSave({ grantFreeAccess: v })}
           >
-            <SelectTrigger className="w-52 h-8">
+            <SelectTrigger className="w-full sm:w-52 h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2078,7 +2133,7 @@ function PermissionSettingsPanel({
             value={dashboard.settings.createBetaProgrammes}
             onValueChange={(v) => onSave({ createBetaProgrammes: v })}
           >
-            <SelectTrigger className="w-52 h-8">
+            <SelectTrigger className="w-full sm:w-52 h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2095,7 +2150,7 @@ function PermissionSettingsPanel({
             value={dashboard.settings.applyManualDiscounts}
             onValueChange={(v) => onSave({ applyManualDiscounts: v })}
           >
-            <SelectTrigger className="w-52 h-8">
+            <SelectTrigger className="w-full sm:w-52 h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2112,7 +2167,7 @@ function PermissionSettingsPanel({
             value={dashboard.settings.suspendCustomer}
             onValueChange={(v) => onSave({ suspendCustomer: v })}
           >
-            <SelectTrigger className="w-52 h-8">
+            <SelectTrigger className="w-full sm:w-52 h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2128,7 +2183,7 @@ function PermissionSettingsPanel({
             value={dashboard.settings.maxExtensionWithoutCeo}
             onValueChange={(v) => onSave({ maxExtensionWithoutCeo: v })}
           >
-            <SelectTrigger className="w-36 h-8">
+            <SelectTrigger className="w-full sm:w-36 h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2152,9 +2207,9 @@ function SettingsToggleRow({
   control: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-border/40 last:border-0 gap-4">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-2 border-b border-border/40 last:border-0 gap-2 sm:gap-4">
       <span className="text-sm">{label}</span>
-      {control}
+      <div className="w-full sm:w-auto shrink-0">{control}</div>
     </div>
   );
 }
@@ -2171,9 +2226,9 @@ function SettingsSwitchRow({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-border/40 last:border-0 gap-4">
-      <Label className="text-sm font-normal">{label}</Label>
-      <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} />
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-2 border-b border-border/40 last:border-0 gap-2 sm:gap-4">
+      <span className="text-sm">{label}</span>
+      <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} className="shrink-0" />
     </div>
   );
 }

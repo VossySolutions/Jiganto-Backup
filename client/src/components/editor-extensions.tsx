@@ -23,36 +23,80 @@ const CALLOUT_CONFIG: Record<CalloutType, { bg: string; border: string; icon: an
   danger:  { bg: 'bg-red-50 dark:bg-red-950/40',     border: 'border-l-red-400',    icon: AlertCircle,   iconColor: 'text-red-500',    label: 'Danger' },
 };
 
+const CALLOUT_ORDER: CalloutType[] = ['info', 'warning', 'success', 'danger'];
+
 function CalloutComponent({ node, updateAttributes }: any) {
+  const [pickerOpen, setPickerOpen] = useState(false);
   const type = (node.attrs.type || 'info') as CalloutType;
   const cfg = CALLOUT_CONFIG[type];
   const Icon = cfg.icon;
+
+  const cycleType = () => {
+    const idx = CALLOUT_ORDER.indexOf(type);
+    const next = CALLOUT_ORDER[(idx + 1) % CALLOUT_ORDER.length];
+    updateAttributes({ type: next });
+  };
+
   return (
     <NodeViewWrapper as="div">
       <div
         className={cn('rounded-lg border-l-4 p-4 my-2 relative group', cfg.bg, cfg.border)}
         data-callout={type}
       >
+        {/* Hover colour picker — top-right dots */}
         <div
           className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
           contentEditable={false}
         >
-          {(['info', 'warning', 'success', 'danger'] as CalloutType[]).map(t => (
+          {CALLOUT_ORDER.map(t => (
             <button
               key={t}
-              onClick={() => updateAttributes({ type: t })}
+              onClick={() => { updateAttributes({ type: t }); setPickerOpen(false); }}
               className={cn(
                 'w-3.5 h-3.5 rounded-full border-2 border-white/60 transition-all hover:scale-125',
                 t === type && 'ring-2 ring-offset-1 ring-current scale-110',
               )}
               style={{ background: t === 'info' ? '#3b82f6' : t === 'warning' ? '#f59e0b' : t === 'success' ? '#22c55e' : '#ef4444' }}
-              title={`Change to ${t}`}
+              title={`Change to ${CALLOUT_CONFIG[t].label}`}
               data-testid={`callout-type-${t}`}
             />
           ))}
         </div>
+
         <div className="flex gap-3">
-          <Icon className={cn('h-5 w-5 mt-0.5 shrink-0', cfg.iconColor)} />
+          {/* Single-click on icon cycles; Ctrl+click opens inline picker */}
+          <div className="relative" contentEditable={false}>
+            <button
+              onClick={(e) => {
+                if (e.ctrlKey || e.metaKey) {
+                  setPickerOpen(p => !p);
+                } else {
+                  cycleType();
+                }
+              }}
+              title={`${cfg.label} — click to cycle, Ctrl+click to pick`}
+              className="mt-0.5 cursor-pointer hover:opacity-70 transition-opacity focus:outline-none"
+              data-testid="callout-icon-cycle"
+            >
+              <Icon className={cn('h-5 w-5', cfg.iconColor)} />
+            </button>
+            {pickerOpen && (
+              <div className="absolute left-0 top-7 z-50 flex gap-1 rounded-lg border bg-card shadow-lg p-1.5" data-testid="callout-inline-picker">
+                {CALLOUT_ORDER.map(t => (
+                  <button
+                    key={t}
+                    onClick={() => { updateAttributes({ type: t }); setPickerOpen(false); }}
+                    className={cn(
+                      'w-5 h-5 rounded-full border-2 border-white/60 transition-all hover:scale-125',
+                      t === type && 'ring-2 ring-primary ring-offset-1 scale-110',
+                    )}
+                    style={{ background: t === 'info' ? '#3b82f6' : t === 'warning' ? '#f59e0b' : t === 'success' ? '#22c55e' : '#ef4444' }}
+                    title={CALLOUT_CONFIG[t].label}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
           <NodeViewContent className="flex-1 min-w-0" />
         </div>
       </div>
@@ -81,6 +125,19 @@ export const CalloutNode = Node.create({
     return {
       insertCallout: (type: CalloutType = 'info') => ({ chain }: any) =>
         chain().insertContent({ type: 'callout', attrs: { type }, content: [{ type: 'paragraph' }] }).run(),
+    };
+  },
+  addKeyboardShortcuts() {
+    return {
+      'Mod-Shift-c': ({ editor }) => {
+        const { selection } = editor.state;
+        const node = selection.$anchor.node(-1);
+        if (node?.type.name !== 'callout') return false;
+        const current = (node.attrs.type || 'info') as CalloutType;
+        const idx = CALLOUT_ORDER.indexOf(current);
+        const next = CALLOUT_ORDER[(idx + 1) % CALLOUT_ORDER.length];
+        return editor.chain().updateAttributes('callout', { type: next }).run();
+      },
     };
   },
 });
@@ -528,3 +585,56 @@ export const SlashCommandExtension = Extension.create({
 
 // Re-export callout config for toolbar use
 export { CALLOUT_CONFIG };
+
+// ── Inline Comment Mark ────────────────────────────────────────────────────────
+// Highlights selected text with a coloured underline; commentId is stored as attr.
+
+import { Mark } from '@tiptap/core';
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    inlineComment: {
+      setInlineComment: (commentId: string) => ReturnType;
+      unsetInlineComment: (commentId: string) => ReturnType;
+    };
+  }
+}
+
+export const InlineCommentMark = Mark.create({
+  name: 'inlineComment',
+  spanning: true,
+  inclusive: false,
+
+  addAttributes() {
+    return {
+      commentId: {
+        default: null,
+        parseHTML: el => el.getAttribute('data-comment-id'),
+        renderHTML: attrs => attrs.commentId ? { 'data-comment-id': attrs.commentId } : {},
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'span[data-comment-id]' }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['span', mergeAttributes(HTMLAttributes, {
+      style: 'background: rgba(251,191,36,0.25); border-bottom: 2px solid #f59e0b; cursor: pointer;',
+    }), 0];
+  },
+
+  addCommands() {
+    return {
+      setInlineComment:
+        (commentId: string) =>
+        ({ commands }) =>
+          commands.setMark(this.name, { commentId }),
+      unsetInlineComment:
+        () =>
+        ({ commands }) =>
+          commands.unsetMark(this.name),
+    };
+  },
+});

@@ -165,6 +165,58 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // ── Public document access (no auth required) ─────────────────────────────
+  app.get("/public/documents/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      if (!token || !/^[a-f0-9]{48}$/.test(token)) {
+        return res.status(404).send("Document not found");
+      }
+      const doc = await storage.getDocumentByPublicToken(token);
+      if (!doc) return res.status(404).send("Document not found or link has been revoked");
+      // Return a minimal read-only HTML page
+      const htmlStyles = `
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1.5rem; line-height: 1.6; color: #1a1a1a; }
+        h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .meta { color: #666; font-size: 0.875rem; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #eee; }
+        .badge { display: inline-flex; align-items: center; border-radius: 4px; border: 1px solid; padding: 2px 8px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-left: 0.5rem; }
+        .badge-draft { border-color: #d97706; color: #d97706; }
+        .badge-published { border-color: #16a34a; color: #16a34a; }
+        .badge-review { border-color: #2563eb; color: #2563eb; }
+        .content { line-height: 1.7; }
+        [data-callout="info"] { border-left: 4px solid #3b82f6; background: #eff6ff; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
+        [data-callout="warning"] { border-left: 4px solid #f59e0b; background: #fffbeb; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
+        [data-callout="success"] { border-left: 4px solid #22c55e; background: #f0fdf4; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
+        [data-callout="danger"]  { border-left: 4px solid #ef4444; background: #fef2f2; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
+        table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #f5f5f5; font-weight: 600; }
+        .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; color: #999; font-size: 0.75rem; text-align: center; }
+      `;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${doc.title} — Jiganto</title>
+  <style>${htmlStyles}</style>
+</head>
+<body>
+  <h1>${doc.title}<span class="badge badge-${doc.status}">${doc.status}</span></h1>
+  <div class="meta">
+    Shared document · Last updated ${new Date(doc.updatedAt!).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+  </div>
+  <div class="content">${doc.content || "<p><em>No content</em></p>"}</div>
+  <div class="footer">Shared via Jiganto · Read-only public view</div>
+</body>
+</html>`);
+    } catch (err) {
+      console.error("Public doc error:", err);
+      res.status(500).send("An error occurred");
+    }
+  });
+
   // Setup Auth and Integrations
   await setupAuth(app);
   app.use(attachPermissionContext);
@@ -5071,6 +5123,118 @@ export async function registerRoutes(
     const limit = Number(req.query.limit) || 10;
     const docs = await storage.getRecentDocuments(tenantId, userId, limit, resolveListClientId(req));
     res.json(docs);
+  });
+
+  // Documents shared with the current user via ACL
+  app.get("/api/documents/shared-with-me", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    try {
+      const docs = await storage.getSharedWithMeDocuments(tenantId, userId, resolveListClientId(req));
+      res.json(docs);
+    } catch (err) {
+      console.error("Error fetching shared docs:", err);
+      res.status(500).json({ message: "Failed to fetch shared documents" });
+    }
+  });
+
+  // Public token management for documents
+  app.get("/api/documents/:id/public-token", async (req, res, next) => {
+    if (!/^\d+$/.test(req.params.id)) return next();
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const doc = await storage.getDocument(Number(req.params.id));
+    if (!doc) return res.status(404).json({ message: "Not found" });
+    const token = (doc.metadata as any)?.publicToken ?? null;
+    res.json({ token });
+  });
+
+  app.post("/api/documents/:id/public-token", async (req, res, next) => {
+    if (!/^\d+$/.test(req.params.id)) return next();
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const doc = await storage.getDocument(Number(req.params.id));
+    if (!doc) return res.status(404).json({ message: "Not found" });
+    const existingToken = (doc.metadata as any)?.publicToken;
+    if (existingToken) return res.json({ token: existingToken });
+    const { randomBytes } = await import("crypto");
+    const token = randomBytes(24).toString("hex");
+    const metadata = { ...((doc.metadata as object) || {}), publicToken: token };
+    await storage.updateDocument(doc.id, { metadata });
+    res.json({ token });
+  });
+
+  app.delete("/api/documents/:id/public-token", async (req, res, next) => {
+    if (!/^\d+$/.test(req.params.id)) return next();
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const doc = await storage.getDocument(Number(req.params.id));
+    if (!doc) return res.status(404).json({ message: "Not found" });
+    const metadata = { ...((doc.metadata as object) || {}) };
+    delete (metadata as any).publicToken;
+    await storage.updateDocument(doc.id, { metadata });
+    res.status(204).send();
+  });
+
+  // Server-side PDF export via Puppeteer
+  app.get("/api/documents/:id/export-pdf", async (req, res, next) => {
+    if (!/^\d+$/.test(req.params.id)) return next();
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const doc = await storage.getDocument(Number(req.params.id));
+    if (!doc) return res.status(404).json({ message: "Not found" });
+    try {
+      const puppeteer = await import("puppeteer-core");
+      const browser = await puppeteer.default.launch({
+        executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
+        headless: true,
+      });
+      const page = await browser.newPage();
+      const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${doc.title}</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:800px;margin:2rem auto;padding:0 1.5rem;line-height:1.6;color:#1a1a1a;}
+  h1,h2,h3,h4{margin-top:1.5em;margin-bottom:0.5em;}
+  table{border-collapse:collapse;width:100%;margin:1em 0;}
+  th,td{border:1px solid #ddd;padding:8px;text-align:left;}
+  th{background:#f5f5f5;font-weight:600;}
+  ul,ol{padding-left:1.5em;}
+  blockquote{border-left:4px solid #ddd;margin:1em 0;padding-left:1em;font-style:italic;}
+  code{background:#f5f5f5;padding:0.2em 0.4em;border-radius:3px;font-family:monospace;}
+  pre{background:#f5f5f5;padding:1em;border-radius:6px;overflow-x:auto;}
+  [data-callout="info"]{border-left:4px solid #3b82f6;background:#eff6ff;border-radius:6px;padding:12px 16px;margin:8px 0;}
+  [data-callout="warning"]{border-left:4px solid #f59e0b;background:#fffbeb;border-radius:6px;padding:12px 16px;margin:8px 0;}
+  [data-callout="success"]{border-left:4px solid #22c55e;background:#f0fdf4;border-radius:6px;padding:12px 16px;margin:8px 0;}
+  [data-callout="danger"]{border-left:4px solid #ef4444;background:#fef2f2;border-radius:6px;padding:12px 16px;margin:8px 0;}
+  @media print{body{margin:0;padding:1cm 1.5cm;}}
+</style>
+</head>
+<body>
+  <h1 style="border-bottom:2px solid #e5e7eb;padding-bottom:0.5rem;margin-bottom:1rem;">${doc.title}</h1>
+  <p style="color:#666;font-size:0.875rem;margin-bottom:2rem;">Last updated: ${new Date(doc.updatedAt!).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
+  ${doc.content || "<p><em>No content</em></p>"}
+</body>
+</html>`;
+      await page.setContent(htmlContent, { waitUntil: "domcontentloaded" });
+      const pdfBuffer = await page.pdf({
+        format: "A4",
+        margin: { top: "2cm", right: "1.5cm", bottom: "2cm", left: "1.5cm" },
+        printBackground: true,
+      });
+      await browser.close();
+      const safeTitle = doc.title.replace(/[^a-z0-9]/gi, "_");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.pdf"`);
+      res.send(Buffer.from(pdfBuffer));
+    } catch (err: any) {
+      console.error("PDF export error:", err);
+      res.status(500).json({ message: "PDF generation failed: " + err.message });
+    }
   });
 
   app.get("/api/documents/:id", async (req, res, next) => {

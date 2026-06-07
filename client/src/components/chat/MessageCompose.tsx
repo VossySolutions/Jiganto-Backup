@@ -164,7 +164,7 @@ export function MessageCompose({
 
   return (
     <div
-      className="border-t p-4 bg-card/80 backdrop-blur-sm shrink-0"
+      className="border-t p-2 sm:p-4 bg-card/80 backdrop-blur-sm shrink-0"
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
     >
@@ -212,7 +212,7 @@ export function MessageCompose({
           </div>
         )}
         {showFormat && (
-          <div className="flex flex-wrap gap-1 mb-2 p-2 rounded-lg border bg-muted/30">
+          <div className="flex flex-wrap gap-1 mb-2 p-2 rounded-lg border bg-muted/30 overflow-x-auto">
             <Button type="button" size="sm" variant="ghost" className="h-8 px-2" title="Bold" onClick={() => wrapSelection("**")}>
               <Bold className="h-4 w-4" />
             </Button>
@@ -239,8 +239,8 @@ export function MessageCompose({
             </Button>
           </div>
         )}
-        <div className="flex items-end gap-3">
-          <div className="flex-1 relative bg-background rounded-2xl border shadow-sm overflow-hidden">
+        <div className="flex items-end gap-2 sm:gap-3">
+          <div className="flex-1 relative bg-background rounded-2xl border shadow-sm overflow-hidden min-w-0">
             <Textarea
               ref={textareaRef}
               placeholder={placeholder}
@@ -257,12 +257,12 @@ export function MessageCompose({
                 }
               }}
               onPaste={handlePaste}
-              className="min-h-[52px] max-h-40 resize-none pr-48 border-0 focus-visible:ring-0 text-sm"
+              className="min-h-[44px] sm:min-h-[52px] max-h-32 sm:max-h-40 resize-none pr-3 sm:pr-48 border-0 focus-visible:ring-0 text-sm"
               rows={1}
               disabled={disabled || readOnly}
               data-testid="input-message"
             />
-            <div className="absolute right-2 bottom-2 flex items-center gap-0.5">
+            <div className="hidden sm:flex absolute right-2 bottom-2 items-center gap-0.5">
               <Button type="button" size="sm" variant="ghost" className="px-2 h-8" onClick={() => setShowFormat((v) => !v)}>
                 <span className="text-xs font-semibold">Aa</span>
               </Button>
@@ -305,11 +305,35 @@ export function MessageCompose({
             }}
             disabled={disabled || readOnly || !canSend || sending}
             size="icon"
-            className="h-11 w-11 rounded-xl shrink-0 text-white"
+            className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl shrink-0 text-white"
             style={{ backgroundColor: CHAT_ACCENT }}
             data-testid="button-send-message"
           >
             {sending ? <ChatButtonSpinner className="text-white" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </div>
+        <div className="flex sm:hidden items-center gap-0.5 mt-2 overflow-x-auto pb-0.5">
+          <Button type="button" size="sm" variant="ghost" className="px-2 h-8 shrink-0" onClick={() => setShowFormat((v) => !v)}>
+            <span className="text-xs font-semibold">Aa</span>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="px-2 h-8 shrink-0"
+            disabled={readOnly || uploading || pendingAttachments.length >= maxAttachments}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {uploading ? <ChatButtonSpinner className="h-3.5 w-3.5" /> : <Paperclip className="h-4 w-4" />}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" className="px-2 h-8 shrink-0" onClick={() => setShowEmoji((v) => !v)}>
+            <Smile className="h-4 w-4" />
+          </Button>
+          <Button type="button" size="sm" variant="ghost" className="px-2 h-8 shrink-0" onClick={() => insertAtCursor("@")}>
+            <AtSign className="h-4 w-4" />
+          </Button>
+          <Button type="button" size="sm" variant="ghost" className="px-2 h-8 shrink-0" onClick={onOpenPoll} disabled={readOnly}>
+            <BarChart2 className="h-4 w-4" />
           </Button>
         </div>
       </div>

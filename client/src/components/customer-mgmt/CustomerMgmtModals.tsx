@@ -101,7 +101,7 @@ export function CreateProgrammeModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create beta / early access programme</DialogTitle>
           <DialogDescription>
@@ -289,7 +289,7 @@ export function ManageParticipantsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Manage participants</DialogTitle>
           <DialogDescription>
@@ -385,7 +385,7 @@ export function ChangePlanModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Change plan</DialogTitle>
           <DialogDescription>{customer?.name}</DialogDescription>
@@ -458,7 +458,7 @@ export function AddDiscountModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add discount</DialogTitle>
           <DialogDescription>{customer?.name}</DialogDescription>
@@ -547,7 +547,7 @@ export function EditPlanModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit {plan?.name} plan</DialogTitle>
           <DialogDescription>Update pricing and entitlements shown to sales and customers</DialogDescription>
@@ -616,7 +616,7 @@ export function AddCustomerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add customer</DialogTitle>
           <DialogDescription>Create a new organisation record and start trial or paid subscription</DialogDescription>
@@ -708,7 +708,7 @@ export function AddContactModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add contact</DialogTitle>
           <DialogDescription>{customerName}</DialogDescription>
@@ -803,7 +803,7 @@ export function DiscountRuleModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit discount rule" : "Add discount rule"}</DialogTitle>
           <DialogDescription>Define who receives the discount and who can apply it</DialogDescription>
@@ -875,7 +875,7 @@ export function EditCustomerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit customer</DialogTitle>
           <DialogDescription>Update organisation profile details</DialogDescription>

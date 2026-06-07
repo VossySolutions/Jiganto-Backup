@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   ChevronDown,
+  ChevronLeft,
   FileText,
   Hash,
   Link2,
@@ -22,6 +23,12 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import type { ChatAttachmentMeta, ChatInboxItem, ChatMessageWithMeta } from "@shared/models/chat";
@@ -47,6 +54,7 @@ export function MessageThread({
   loadingMore,
   aiEnabled,
   memberCount,
+  onBack,
   onLoadMore,
   onOpenThread,
   onOpenMembers,
@@ -66,6 +74,7 @@ export function MessageThread({
   loadingMore: boolean;
   aiEnabled?: boolean;
   memberCount?: number;
+  onBack?: () => void;
   onLoadMore: () => void;
   onOpenThread: (messageId: number) => void;
   onOpenMembers: () => void;
@@ -156,10 +165,21 @@ export function MessageThread({
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0 relative bg-gradient-to-br from-background to-muted/10" data-testid="message-area">
       {/* Channel header */}
-      <div className="h-14 border-b flex items-center px-4 sm:px-6 gap-3 bg-card/80 backdrop-blur-sm shrink-0">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
+      <div className="h-12 sm:h-14 border-b flex items-center px-2 sm:px-4 md:px-6 gap-2 sm:gap-3 bg-card/80 backdrop-blur-sm shrink-0">
+        {onBack && (
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 shrink-0 md:hidden"
+            onClick={onBack}
+            title="Back to conversations"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+        )}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <div
-            className="p-2 rounded-xl shrink-0 text-white"
+            className="p-1.5 sm:p-2 rounded-xl shrink-0 text-white"
             style={{ backgroundColor: CHAT_ACCENT }}
           >
             {channel.type === "private" ? (
@@ -180,14 +200,14 @@ export function MessageThread({
               {bridgeActive && (
                 <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded-full shrink-0">
                   <Link2 className="h-3 w-3" />
-                  {channel.bridge?.provider === "slack" ? "Slack" : "Teams"}
+                  <span className="hidden sm:inline">{channel.bridge?.provider === "slack" ? "Slack" : "Teams"}</span>
                 </span>
               )}
             </div>
             {channel.description ? (
-              <p className="text-[11px] text-muted-foreground truncate max-w-xs">{channel.description}</p>
+              <p className="text-[11px] text-muted-foreground truncate max-w-[10rem] sm:max-w-xs hidden sm:block">{channel.description}</p>
             ) : channel.type === "announcement" ? (
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground hidden sm:block">
                 {channel.canPost === false
                   ? "Announcements only — admins can post"
                   : "Announcement channel"}
@@ -225,9 +245,28 @@ export function MessageThread({
               <span className="text-xs text-muted-foreground">{memberCount}</span>
             )}
           </Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={onOpenBridge} title="Bridge settings">
+          <Button size="icon" variant="ghost" className="h-8 w-8 hidden sm:inline-flex" onClick={onOpenBridge} title="Bridge settings">
             <Settings className="h-4 w-4" />
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost" className="h-8 w-8 sm:hidden" title="More">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {aiEnabled && channel.unreadCount > 10 && onSummarizeUnread && (
+                <DropdownMenuItem onClick={onSummarizeUnread} disabled={summarizeUnreadPending}>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Summarise unread
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={onOpenBridge}>
+                <Settings className="h-4 w-4 mr-2" />
+                Bridge settings
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -240,7 +279,7 @@ export function MessageThread({
       {/* Scrollable messages area */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto min-h-0 p-4"
+        className="flex-1 overflow-y-auto min-h-0 p-2 sm:p-4"
         onScroll={handleScroll}
       >
         <div className="max-w-3xl mx-auto space-y-1 pb-2">
@@ -324,7 +363,7 @@ export function MessageThread({
                       <div className="w-8 shrink-0" />
                     ) : null}
 
-                    <div className={cn("max-w-[75%] min-w-0", isOwn && "items-end flex flex-col")}>
+                    <div className={cn("max-w-[88%] sm:max-w-[75%] min-w-0", isOwn && "items-end flex flex-col")}>
                       {!isOwn && showHeader && (
                         <div className="flex items-center gap-2 mb-1 px-1">
                           <span className="text-xs font-semibold">{displayPersonName(message.user)}</span>
@@ -408,7 +447,7 @@ export function MessageThread({
                       {/* Hover action bar */}
                       <div
                         className={cn(
-                          "absolute top-0 -translate-y-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-card border rounded-lg shadow-sm p-0.5 z-10",
+                          "absolute top-0 -translate-y-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-card border rounded-lg shadow-sm p-0.5 z-10",
                           isOwn ? "right-0" : "right-0",
                         )}
                       >
@@ -504,7 +543,7 @@ export function MessageThread({
       )}
 
       {showJump && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+        <div className="absolute bottom-20 sm:bottom-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
           <Button
             size="sm"
             variant="secondary"

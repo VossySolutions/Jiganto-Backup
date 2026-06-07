@@ -101,7 +101,7 @@ export function GrantAccessModal({ open, onOpenChange, target }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Grant trial extension / free access</DialogTitle>
           <DialogDescription>
@@ -138,7 +138,7 @@ export function GrantAccessModal({ open, onOpenChange, target }: Props) {
             <p className="text-[10px] text-muted-foreground mt-2">{GRANT_TYPE_DESCRIPTIONS[grantType]}</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <Label className="text-xs">Duration</Label>
               <Select value={duration} onValueChange={setDuration}>

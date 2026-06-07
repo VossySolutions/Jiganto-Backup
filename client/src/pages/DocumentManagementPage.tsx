@@ -1,7 +1,7 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+﻿import { useState, useCallback, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useShellLayout } from "@/hooks/use-shell-layout";
@@ -23,6 +23,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
@@ -33,7 +35,7 @@ import {
   GripVertical, FolderInput, Save, X, FileUp,
   File, FileImage, FileSpreadsheet, FileArchive, Paperclip,
   Mail, Copy, Check, BookCopy, Globe, Building2, Layers, Palette, Users,
-  FileSignature, Bell, XCircle, Eye
+  FileSignature, Bell, XCircle, Eye, Loader2
 } from "lucide-react";
 import {
   DocAllIcon,
@@ -67,7 +69,7 @@ function PdfCanvasViewer({ fileId }: { fileId: number }) {
 
     (async () => {
       try {
-        const response = await fetch(`/api/document-files/${fileId}/download?inline=true`);
+        const response = await fetchWithAuth(`/api/document-files/${fileId}/download?inline=true`);
         if (!response.ok) throw new Error("Failed to fetch PDF");
         const arrayBuffer = await response.arrayBuffer();
         if (cancelled) return;
@@ -138,7 +140,7 @@ function PdfCanvasViewer({ fileId }: { fileId: number }) {
           {pageCount} page{pageCount !== 1 ? "s" : ""}
         </div>
       )}
-      <div ref={containerRef} className="flex-1 overflow-auto px-6 pb-6" />
+      <div ref={containerRef} className="flex-1 overflow-auto px-3 sm:px-6 pb-4 sm:pb-6" />
     </div>
   );
 }
@@ -151,10 +153,78 @@ interface FolderTreeItem extends DocumentFolder {
 
 type ViewMode = "tile" | "list";
 
+function TabLoadingState({ label = "Loading..." }: { label?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 gap-3" data-testid="tab-loading">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <p className="text-sm text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function ExplorerLoadingSkeleton() {
+  return (
+    <div className="px-2 pb-2 space-y-3" data-testid="explorer-loading">
+      <div className="space-y-1.5">
+        <Skeleton className="h-3 w-20" />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-2 p-1.5">
+            <Skeleton className="h-7 w-7 rounded-md shrink-0" />
+            <div className="flex-1 space-y-1">
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-2 w-16" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-1.5">
+        <Skeleton className="h-3 w-16" />
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-7 w-full" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DocumentsPageSkeleton() {
+  return (
+    <div className="flex-1 flex flex-col min-h-0 p-4 gap-4" data-testid="documents-page-loading">
+      <Skeleton className="h-16 w-full rounded-lg" />
+      <div className="flex-1 flex gap-4 min-h-0">
+        <Skeleton className="w-64 shrink-0 rounded-lg" />
+        <Skeleton className="flex-1 rounded-lg" />
+      </div>
+    </div>
+  );
+}
+
+function TableLoadingSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="border rounded-md overflow-hidden" data-testid="documents-table-loading">
+      <div className="bg-muted/50 px-4 py-3">
+        <Skeleton className="h-4 w-full" />
+      </div>
+      <div className="divide-y">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="flex items-center gap-4 px-4 py-3">
+            <Skeleton className="h-4 w-6" />
+            <Skeleton className="h-4 flex-1" />
+            <Skeleton className="h-4 w-12" />
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-28" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function DocumentManagementPage() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { mainOffset, mobileTopOffset } = useShellLayout();
+  const { mainOffset, mobileTopOffset, isMobile } = useShellLayout();
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [highlightedDocument, setHighlightedDocument] = useState<Document | null>(null);
@@ -163,7 +233,9 @@ export default function DocumentManagementPage() {
   const [isNewFolderOpen, setIsNewFolderOpen] = useState(false);
   const [isNewDocOpen, setIsNewDocOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderColor, setNewFolderColor] = useState("#f97316");
   const [newFolderParentId, setNewFolderParentId] = useState<number | null | "root">(null);
+  const [renamingFolderColor, setRenamingFolderColor] = useState<string>("#f97316");
   const [newDocTitle, setNewDocTitle] = useState("");
   const [newDocType, setNewDocType] = useState("document");
   const [isEditing, setIsEditing] = useState(false);
@@ -180,10 +252,9 @@ export default function DocumentManagementPage() {
     try {
       const formData = new FormData();
       formData.append("content", new Blob([contentStr], { type: "text/html" }), "content.html");
-      const res = await fetch(`/api/documents/${docId}/content`, {
+      const res = await fetchWithAuth(`/api/documents/${docId}/content`, {
         method: "POST",
         body: formData,
-        credentials: "include",
       });
       if (res.ok) {
         lastAutoSavedContent.current = contentStr;
@@ -208,10 +279,9 @@ export default function DocumentManagementPage() {
     lastAutoSavedContent.current = contentStr;
     const formData = new FormData();
     formData.append("content", new Blob([contentStr], { type: "text/html" }), "content.html");
-    fetch(`/api/documents/${docId}/content`, {
+    fetchWithAuth(`/api/documents/${docId}/content`, {
       method: "POST",
       body: formData,
-      credentials: "include",
       keepalive: true,
     }).catch(() => {});
   }, []);
@@ -246,6 +316,9 @@ export default function DocumentManagementPage() {
   const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
   const [saveAsTitle, setSaveAsTitle] = useState("");
   const [saveAsFolderId, setSaveAsFolderId] = useState<number | null>(null);
+  const FOLDER_COLORS = ["#f97316", "#3b82f6", "#10b981", "#8b5cf6", "#ef4444", "#f59e0b", "#ec4899", "#6b7280"] as const;
+
+  const [pendingAnchoredComment, setPendingAnchoredComment] = useState<{ id: string; text: string } | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importTitle, setImportTitle] = useState("");
   const [importFolderId, setImportFolderId] = useState<number | null>(null);
@@ -255,7 +328,11 @@ export default function DocumentManagementPage() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareDialogUrl, setShareDialogUrl] = useState("");
   const [shareDialogName, setShareDialogName] = useState("");
+  const [shareDialogDocId, setShareDialogDocId] = useState<number | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [publicToken, setPublicToken] = useState<string | null>(null);
+  const [publicLinkLoading, setPublicLinkLoading] = useState(false);
+  const [shareTokenLoading, setShareTokenLoading] = useState(false);
   const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [templateFilter, setTemplateFilter] = useState<string>("all");
@@ -267,7 +344,7 @@ export default function DocumentManagementPage() {
   const [newTemplateCategory, setNewTemplateCategory] = useState("");
   const [documentCategory, setDocumentCategory] = useState<string>("all");
   const [explorerSearch, setExplorerSearch] = useState("");
-  const [activeChip, setActiveChip] = useState<"recent" | "starred">("recent");
+  const [activeChip, setActiveChip] = useState<"recent" | "starred" | "shared">("recent");
   const [isMoveToFolderOpen, setIsMoveToFolderOpen] = useState(false);
   const [moveToFolderId, setMoveToFolderId] = useState<number | null>(null);
   const [isMoveFolderOpen, setIsMoveFolderOpen] = useState(false);
@@ -276,11 +353,11 @@ export default function DocumentManagementPage() {
   const docClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const docxInputRef = useRef<HTMLInputElement>(null);
 
-  const handleExport = (format: "pdf" | "html" | "markdown") => {
+  const handleExport = async (format: "pdf" | "html" | "markdown" | "docx") => {
     if (!selectedDocument) return;
     
     let content = editContent || selectedDocument.content || "";
-    let filename = selectedDocument.title.replace(/[^a-z0-9]/gi, '_');
+    const filename = selectedDocument.title.replace(/[^a-z0-9]/gi, '_');
     let mimeType = "text/plain";
     let extension = "txt";
     
@@ -297,51 +374,171 @@ export default function DocumentManagementPage() {
       pre code { background-color: transparent; padding: 0; }
       img { max-width: 100%; height: auto; }
       mark { background-color: #fff3a3; }
+      /* RAG callout blocks */
+      [data-callout="info"] { border-left: 4px solid #3b82f6; background: #eff6ff; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
+      [data-callout="warning"] { border-left: 4px solid #f59e0b; background: #fffbeb; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
+      [data-callout="success"] { border-left: 4px solid #22c55e; background: #f0fdf4; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
+      [data-callout="danger"]  { border-left: 4px solid #ef4444; background: #fef2f2; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
     `;
     
     if (format === "html") {
-      content = `<!DOCTYPE html>
-<html>
-<head>
-  <title>${selectedDocument.title}</title>
-  <style>${htmlStyles}</style>
-</head>
-<body>
-  <h1>${selectedDocument.title}</h1>
-  <div class="content">${content}</div>
-</body>
-</html>`;
+      content = `<!DOCTYPE html>\n<html>\n<head>\n  <title>${selectedDocument.title}</title>\n  <style>${htmlStyles}</style>\n</head>\n<body>\n  <h1>${selectedDocument.title}</h1>\n  <div class="content">${content}</div>\n</body>\n</html>`;
       mimeType = "text/html";
       extension = "html";
     } else if (format === "markdown") {
-      const tempDiv = document.createElement('div');
+      // Convert HTML to Markdown using DOM traversal
+      const tempDiv = document.createElement("div");
       tempDiv.innerHTML = content;
-      const textContent = tempDiv.textContent || tempDiv.innerText || '';
-      content = `# ${selectedDocument.title}\n\n${textContent}`;
+      const htmlToMd = (el: Element | null): string => {
+        if (!el) return "";
+        let md = "";
+        el.childNodes.forEach((node) => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            md += node.textContent || "";
+          } else if (node.nodeType === Node.ELEMENT_NODE) {
+            const n = node as Element;
+            const tag = n.tagName.toLowerCase();
+            const inner = htmlToMd(n);
+            if (tag === "h1") md += `\n# ${inner}\n`;
+            else if (tag === "h2") md += `\n## ${inner}\n`;
+            else if (tag === "h3") md += `\n### ${inner}\n`;
+            else if (tag === "h4") md += `\n#### ${inner}\n`;
+            else if (tag === "p") md += `\n${inner}\n`;
+            else if (tag === "strong" || tag === "b") md += `**${inner}**`;
+            else if (tag === "em" || tag === "i") md += `_${inner}_`;
+            else if (tag === "code" && n.closest("pre")) md += inner;
+            else if (tag === "code") md += `\`${inner}\``;
+            else if (tag === "pre") md += `\n\`\`\`\n${inner}\n\`\`\`\n`;
+            else if (tag === "blockquote") md += `\n> ${inner.trim()}\n`;
+            else if (tag === "li") md += `- ${inner}\n`;
+            else if (tag === "ul" || tag === "ol") md += `\n${inner}`;
+            else if (tag === "br") md += "\n";
+            else if (tag === "hr") md += "\n---\n";
+            else if (tag === "a") md += `[${inner}](${n.getAttribute("href") || ""})`;
+            else if (tag === "img") md += `![${n.getAttribute("alt") || ""}](${n.getAttribute("src") || ""})`;
+            else if (n.getAttribute("data-callout")) md += `\n> **${n.getAttribute("data-callout")?.toUpperCase()}:** ${inner.trim()}\n`;
+            else md += inner;
+          }
+        });
+        return md;
+      };
+      content = `# ${selectedDocument.title}\n\n${htmlToMd(tempDiv).trim()}\n`;
       mimeType = "text/markdown";
       extension = "md";
     } else if (format === "pdf") {
-      toast({
-        title: "Export to PDF",
-        description: "PDF export will open a print dialog. Use 'Save as PDF' option.",
-      });
-      const printWindow = window.open('', '_blank');
+      // Try server-side PDF first
+      toast({ title: "Generating PDF..." });
+      try {
+        const pdfRes = await fetchWithAuth(`/api/documents/${selectedDocument.id}/export-pdf`);
+        if (pdfRes.ok) {
+          const blob = await pdfRes.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${filename}.pdf`;
+          a.click();
+          URL.revokeObjectURL(url);
+          toast({ title: "PDF downloaded", description: `${selectedDocument.title}.pdf` });
+          return;
+        }
+      } catch { /* fall through to browser print */ }
+      // Fallback: browser print dialog
+      const printWindow = window.open("", "_blank");
       if (printWindow) {
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>${selectedDocument.title}</title>
-            <style>${htmlStyles}</style>
-          </head>
-          <body>
-            <h1>${selectedDocument.title}</h1>
-            <div class="content">${content}</div>
-          </body>
-          </html>
-        `);
+        printWindow.document.write(`<!DOCTYPE html><html><head><title>${selectedDocument.title}</title><style>${htmlStyles}</style></head><body><h1>${selectedDocument.title}</h1><div class="content">${content}</div></body></html>`);
         printWindow.document.close();
-        printWindow.print();
+        setTimeout(() => printWindow.print(), 500);
+      }
+      return;
+    } else if (format === "docx") {
+      toast({ title: "Generating Word document…" });
+      try {
+        const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } = await import("docx");
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = content;
+
+        const parseChildren = (el: Element): TextRun[] => {
+          const runs: TextRun[] = [];
+          el.childNodes.forEach((node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              const text = node.textContent || "";
+              if (text) runs.push(new TextRun({ text }));
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+              const n = node as Element;
+              const tag = n.tagName.toLowerCase();
+              const innerText = n.textContent || "";
+              if (tag === "strong" || tag === "b") runs.push(new TextRun({ text: innerText, bold: true }));
+              else if (tag === "em" || tag === "i") runs.push(new TextRun({ text: innerText, italics: true }));
+              else if (tag === "u") runs.push(new TextRun({ text: innerText, underline: {} }));
+              else if (tag === "code") runs.push(new TextRun({ text: innerText, font: "Courier New" }));
+              else runs.push(...parseChildren(n));
+            }
+          });
+          return runs;
+        };
+
+        const docChildren: any[] = [
+          new Paragraph({ text: selectedDocument.title, heading: HeadingLevel.TITLE }),
+        ];
+
+        const parseNode = (node: Element) => {
+          const tag = node.tagName?.toLowerCase();
+          if (!tag) return;
+          if (tag === "h1") docChildren.push(new Paragraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_1 }));
+          else if (tag === "h2") docChildren.push(new Paragraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_2 }));
+          else if (tag === "h3") docChildren.push(new Paragraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_3 }));
+          else if (tag === "h4") docChildren.push(new Paragraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_4 }));
+          else if (tag === "p" || tag === "div") {
+            const callout = node.getAttribute("data-callout");
+            const text = node.textContent || "";
+            if (callout) {
+              docChildren.push(new Paragraph({
+                children: [new TextRun({ text: `[${callout.toUpperCase()}] ${text}`, bold: true })],
+                border: { left: { color: callout === "info" ? "3b82f6" : callout === "warning" ? "f59e0b" : callout === "success" ? "22c55e" : "ef4444", size: 12, style: BorderStyle.SINGLE } },
+              }));
+            } else {
+              docChildren.push(new Paragraph({ children: parseChildren(node) }));
+            }
+          } else if (tag === "ul" || tag === "ol") {
+            node.querySelectorAll("li").forEach((li) => {
+              docChildren.push(new Paragraph({ text: li.textContent || "", bullet: { level: 0 } }));
+            });
+          } else if (tag === "table") {
+            const rows: TableRow[] = [];
+            node.querySelectorAll("tr").forEach((tr) => {
+              const cells: TableCell[] = [];
+              tr.querySelectorAll("td, th").forEach((td) => {
+                cells.push(new TableCell({ children: [new Paragraph({ text: td.textContent || "" })] }));
+              });
+              if (cells.length) rows.push(new TableRow({ children: cells }));
+            });
+            if (rows.length) {
+              docChildren.push(new Table({ rows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+            }
+          } else if (tag === "blockquote") {
+            docChildren.push(new Paragraph({ text: node.textContent || "", indent: { left: 720 } }));
+          } else {
+            node.childNodes.forEach((child) => {
+              if (child.nodeType === Node.ELEMENT_NODE) parseNode(child as Element);
+            });
+          }
+        };
+
+        tempDiv.childNodes.forEach((child) => {
+          if (child.nodeType === Node.ELEMENT_NODE) parseNode(child as Element);
+        });
+
+        const doc = new Document({ sections: [{ children: docChildren }] });
+        const buffer = await Packer.toBlob(doc);
+        const url = URL.createObjectURL(buffer);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${filename}.docx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast({ title: "Word document downloaded", description: `${selectedDocument.title}.docx` });
+      } catch (err: any) {
+        toast({ title: "Export failed", description: err.message || "Failed to generate Word file", variant: "destructive" });
       }
       return;
     }
@@ -366,7 +563,7 @@ export default function DocumentManagementPage() {
     queryKey: ["/api/documents/folders"],
   });
 
-  const { data: documents = [], isLoading: docsLoading } = useQuery<(Document & { ownerName: string | null })[]>({
+  const { data: documents = [], isLoading: docsLoading, isFetching: docsFetching } = useQuery<(Document & { ownerName: string | null })[]>({
     queryKey: ["/api/documents", selectedFolderId],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -375,7 +572,7 @@ export default function DocumentManagementPage() {
       } else {
         params.append("folderId", "null");
       }
-      const res = await fetch(`/api/documents?${params}`);
+      const res = await fetchWithAuth(`/api/documents?${params}`);
       if (!res.ok) throw new Error("Failed to fetch documents");
       return res.json();
     },
@@ -383,61 +580,86 @@ export default function DocumentManagementPage() {
     staleTime: 30_000,
   });
 
-  const { data: allDocuments = [] } = useQuery<(Document & { ownerName: string | null })[]>({
+  const { data: allDocuments = [], isLoading: allDocsLoading } = useQuery<(Document & { ownerName: string | null })[]>({
     queryKey: ["/api/documents/all"],
     queryFn: async () => {
-      const res = await fetch(`/api/documents`);
+      const res = await fetchWithAuth("/api/documents");
       if (!res.ok) throw new Error("Failed to fetch all documents");
       return res.json();
     },
   });
 
-  const { data: searchResults = [] } = useQuery<(Document & { ownerName: string | null })[]>({
+  const { data: searchResults = [], isLoading: searchLoading, isFetching: searchFetching } = useQuery<(Document & { ownerName: string | null })[]>({
     queryKey: ["/api/documents/search", searchQuery],
     enabled: searchQuery.length > 2,
     queryFn: async () => {
-      const res = await fetch(`/api/documents/search?q=${encodeURIComponent(searchQuery)}`);
+      const res = await fetchWithAuth(`/api/documents/search?q=${encodeURIComponent(searchQuery)}`);
       if (!res.ok) throw new Error("Failed to search");
       return res.json();
     },
   });
 
-  const { data: versions = [] } = useQuery<DocumentVersion[]>({
+  const { data: versions = [], isLoading: versionsLoading } = useQuery<DocumentVersion[]>({
     queryKey: ["/api/documents", selectedDocument?.id, "versions"],
     enabled: !!selectedDocument,
     queryFn: async () => {
-      const res = await fetch(`/api/documents/${selectedDocument!.id}/versions`);
+      const res = await fetchWithAuth(`/api/documents/${selectedDocument!.id}/versions`);
       if (!res.ok) throw new Error("Failed to fetch versions");
       return res.json();
     },
   });
 
-  const { data: comments = [] } = useQuery<(DocumentComment & { author: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]>({
+  const { data: comments = [], isLoading: commentsLoading } = useQuery<(DocumentComment & { author: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]>({
     queryKey: ["/api/documents", selectedDocument?.id, "comments"],
     enabled: !!selectedDocument,
     queryFn: async () => {
-      const res = await fetch(`/api/documents/${selectedDocument!.id}/comments`);
+      const res = await fetchWithAuth(`/api/documents/${selectedDocument!.id}/comments`);
       if (!res.ok) throw new Error("Failed to fetch comments");
       return res.json();
     },
   });
 
-  const { data: recentDocs = [] } = useQuery<Document[]>({
+  const { data: recentDocs = [], isLoading: recentDocsLoading } = useQuery<Document[]>({
     queryKey: ["/api/documents/recent"],
   });
 
-  const { data: favoriteDocs = [] } = useQuery<Document[]>({
+  const { data: favoriteDocs = [], isLoading: favoriteDocsLoading } = useQuery<Document[]>({
     queryKey: ["/api/documents/favorites"],
     queryFn: async () => {
-      const res = await fetch("/api/documents/favorites");
+      const res = await fetchWithAuth("/api/documents/favorites");
       if (!res.ok) throw new Error("Failed to fetch favorites");
+      return res.json();
+    },
+  });
+
+  const { data: sharedWithMeDocs = [], isLoading: sharedDocsLoading } = useQuery<(Document & { sharedBy?: string; sharedAt?: string })[]>({
+    queryKey: ["/api/documents/shared-with-me"],
+    queryFn: async () => {
+      const res = await fetchWithAuth("/api/documents/shared-with-me");
+      if (!res.ok) throw new Error("Failed to fetch shared documents");
       return res.json();
     },
   });
 
   const [selectedFile, setSelectedFile] = useState<DocumentFile | null>(null);
 
-  const { data: folderFiles = [] } = useQuery<DocumentFile[]>({
+  useEffect(() => {
+    if (isMobile) setIsFolderPanelOpen(false);
+  }, [isMobile]);
+
+  const prevMobileSelectionRef = useRef<{ docId?: number; fileId?: number }>({});
+  useEffect(() => {
+    if (!isMobile) return;
+    const docId = selectedDocument?.id;
+    const fileId = selectedFile?.id;
+    const prev = prevMobileSelectionRef.current;
+    if (docId !== prev.docId || fileId !== prev.fileId) {
+      if (docId || fileId) setIsFolderPanelOpen(false);
+      prevMobileSelectionRef.current = { docId, fileId };
+    }
+  }, [isMobile, selectedDocument?.id, selectedFile?.id]);
+
+  const { data: folderFiles = [], isLoading: folderFilesLoading } = useQuery<DocumentFile[]>({
     queryKey: ["/api/document-files", selectedFolderId],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -446,24 +668,29 @@ export default function DocumentManagementPage() {
       } else {
         params.append("folderId", "null");
       }
-      const res = await fetch(`/api/document-files?${params}`);
+      const res = await fetchWithAuth(`/api/document-files?${params}`);
       if (!res.ok) throw new Error("Failed to fetch files");
       return res.json();
     },
   });
 
-  const { data: allFiles = [] } = useQuery<DocumentFile[]>({
+  const { data: allFiles = [], isLoading: allFilesLoading } = useQuery<DocumentFile[]>({
     queryKey: ["/api/document-files/all"],
   });
 
-  const { data: templates = [] } = useQuery<DocumentTemplate[]>({
+  const { data: templates = [], isLoading: templatesLoading } = useQuery<DocumentTemplate[]>({
     queryKey: ["/api/documents/templates"],
   });
 
-  const { data: allSignoffRequests = [] } = useQuery<any[]>({
+  const { data: allSignoffRequests = [], isLoading: signoffLoading } = useQuery<any[]>({
     queryKey: ["/api/signoff"],
     enabled: !!selectedDocument,
   });
+
+  const explorerChipLoading =
+    activeChip === "starred" ? favoriteDocsLoading
+    : activeChip === "shared" ? sharedDocsLoading
+    : recentDocsLoading;
   const docSignoffRequests = allSignoffRequests
     .filter((r: any) => r.sourceDocumentId === selectedDocument?.id)
     .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -517,24 +744,25 @@ export default function DocumentManagementPage() {
   };
 
   const createFolderMutation = useMutation({
-    mutationFn: async (data: { name: string; parentId: number | null }) => 
+    mutationFn: async (data: { name: string; parentId: number | null; color?: string }) => 
       apiRequest("POST", "/api/documents/folders", { ...data, tenantId: 1 }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents/folders"] });
       setIsNewFolderOpen(false);
       setNewFolderName("");
+      setNewFolderColor("#f97316");
       toast({ title: "Folder created" });
     },
   });
 
   const renameFolderMutation = useMutation({
-    mutationFn: async ({ id, name }: { id: number; name: string }) =>
-      apiRequest("PUT", `/api/documents/folders/${id}`, { name }),
+    mutationFn: async ({ id, name, color }: { id: number; name: string; color?: string }) =>
+      apiRequest("PUT", `/api/documents/folders/${id}`, { name, ...(color ? { color } : {}) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents/folders"] });
       setRenamingFolder(null);
       setRenameValue("");
-      toast({ title: "Folder renamed" });
+      toast({ title: "Folder updated" });
     },
   });
 
@@ -617,10 +845,9 @@ export default function DocumentManagementPage() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 30000);
             try {
-              const contentRes = await fetch(`/api/documents/${id}/content`, {
+              const contentRes = await fetchWithAuth(`/api/documents/${id}/content`, {
                 method: "POST",
                 body: formData,
-                credentials: "include",
                 signal: controller.signal,
               });
               clearTimeout(timeoutId);
@@ -700,7 +927,7 @@ export default function DocumentManagementPage() {
       if (selectedFolderId !== null) {
         formData.append("folderId", String(selectedFolderId));
       }
-      const res = await fetch("/api/document-files/upload", {
+      const res = await fetchWithAuth("/api/document-files/upload", {
         method: "POST",
         body: formData,
       });
@@ -719,7 +946,7 @@ export default function DocumentManagementPage() {
 
   const deleteFileMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/document-files/${id}`, { method: "DELETE" });
+      const res = await fetchWithAuth(`/api/document-files/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
@@ -793,10 +1020,9 @@ export default function DocumentManagementPage() {
           let uploadUrl = "";
           for (let attempt = 0; attempt < 3; attempt++) {
             try {
-              const uploadRes = await fetch("/api/documents/upload-image", {
+              const uploadRes = await fetchWithAuth("/api/documents/upload-image", {
                 method: "POST",
                 body: formData,
-                credentials: "include",
               });
               if (uploadRes.ok) {
                 const data = await uploadRes.json();
@@ -864,8 +1090,8 @@ export default function DocumentManagementPage() {
   });
 
   const addCommentMutation = useMutation({
-    mutationFn: async ({ documentId, content }: { documentId: number; content: string }) =>
-      apiRequest("POST", `/api/documents/${documentId}/comments`, { content }),
+    mutationFn: async ({ documentId, content, position }: { documentId: number; content: string; position?: { commentId: string; anchoredText: string } }) =>
+      apiRequest("POST", `/api/documents/${documentId}/comments`, { content, ...(position ? { position } : {}) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedDocument?.id, "comments"] });
       toast({ title: "Comment added" });
@@ -877,12 +1103,57 @@ export default function DocumentManagementPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/documents/favorites"] });
   };
 
-  const handleShareLink = (type: "folder" | "document", id: number, name: string) => {
+  const handleShareLink = async (type: "folder" | "document", id: number, name: string) => {
     const url = `${window.location.origin}/modules/documents?${type}=${id}`;
     setShareDialogUrl(url);
     setShareDialogName(name);
     setLinkCopied(false);
+    setPublicToken(null);
     setShareDialogOpen(true);
+    if (type === "document") {
+      setShareDialogDocId(id);
+      setShareTokenLoading(true);
+      try {
+        const res = await fetchWithAuth(`/api/documents/${id}/public-token`);
+        if (res.ok) {
+          const data = await res.json() as { token: string | null };
+          setPublicToken(data.token);
+        }
+      } catch { /* ignore */ } finally {
+        setShareTokenLoading(false);
+      }
+    } else {
+      setShareDialogDocId(null);
+      setShareTokenLoading(false);
+    }
+  };
+
+  const generatePublicLink = async () => {
+    if (!shareDialogDocId) return;
+    setPublicLinkLoading(true);
+    try {
+      const res = await fetchWithAuth(`/api/documents/${shareDialogDocId}/public-token`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed to generate public link");
+      const data = await res.json() as { token: string };
+      setPublicToken(data.token);
+      toast({ title: "Public link created", description: "Anyone with this link can view the document (read-only)." });
+    } catch {
+      toast({ title: "Failed to generate public link", variant: "destructive" });
+    } finally {
+      setPublicLinkLoading(false);
+    }
+  };
+
+  const revokePublicLink = async () => {
+    if (!shareDialogDocId) return;
+    setPublicLinkLoading(true);
+    try {
+      await fetchWithAuth(`/api/documents/${shareDialogDocId}/public-token`, { method: "DELETE" });
+      setPublicToken(null);
+      toast({ title: "Public link revoked" });
+    } catch { /* ignore */ } finally {
+      setPublicLinkLoading(false);
+    }
   };
 
   const copyShareLink = async () => {
@@ -1195,7 +1466,7 @@ export default function DocumentManagementPage() {
       customer: ["customer", "client", "crm", "sales", "account"],
       project: ["project", "delivery", "implementation", "deployment"],
       finance: ["finance", "budget", "invoice", "cost", "billing", "accounting"],
-      testing: ["test", "qa", "quality", "validation", "uат"],
+      testing: ["test", "qa", "quality", "validation", "uÐ°Ñ‚"],
       bpm: ["bpm", "process", "workflow", "procedure", "sop"],
     };
     const keywords = categoryKeywords[documentCategory] || [];
@@ -1279,7 +1550,7 @@ export default function DocumentManagementPage() {
                 <FolderPlus className="h-4 w-4 mr-2" /> New Sibling Folder
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolder(folder); setRenameValue(folder.name); }}>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolder(folder); setRenameValue(folder.name); setRenamingFolderColor(folder.color || "#f97316"); }}>
                 <Pencil className="h-4 w-4 mr-2" /> Rename
               </DropdownMenuItem>
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("folder", folder.id, folder.name); }}>
@@ -1404,15 +1675,17 @@ export default function DocumentManagementPage() {
   };
 
   const renderExplorerPanel = () => {
-    const baseChipDocs = activeChip === "starred" ? favoriteDocs : recentDocs;
+    const baseChipDocs = activeChip === "starred" ? favoriteDocs : activeChip === "shared" ? sharedWithMeDocs : recentDocs;
     const displayChipDocs = explorerSearch.length > 0
       ? allDocuments.filter(d => d.title.toLowerCase().includes(explorerSearch.toLowerCase())).slice(0, 7)
-      : (baseChipDocs as any[]).slice(0, 5);
+      : (baseChipDocs as any[]).slice(0, 8);
 
     const statusBadgeColors: Record<string, string> = {
       draft: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
       published: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
       archived: "bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400",
+      review: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+      awaiting_approval: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
     };
 
     const openDoc = (doc: Document) => {
@@ -1468,27 +1741,24 @@ export default function DocumentManagementPage() {
         {!explorerSearch && (
           <div className="px-2 pb-2 flex items-center gap-1 shrink-0 flex-wrap">
             {([
-              { key: "recent", label: "Recent", icon: Clock },
-              { key: "starred", label: "Starred", icon: Star },
-              { key: "shared", label: "Shared with me", icon: Users, disabled: true },
-            ] as const).map(({ key, label, icon: Icon, disabled }) => (
+              { key: "recent", label: "Recent", mobileLabel: "Recent", icon: Clock },
+              { key: "starred", label: "Starred", mobileLabel: "Starred", icon: Star },
+              { key: "shared", label: "Shared with me", mobileLabel: "Shared", icon: Users },
+            ] as const).map(({ key, label, mobileLabel, icon: Icon }) => (
               <button
                 key={key}
-                disabled={disabled}
-                onClick={() => !disabled && setActiveChip(key as "recent" | "starred")}
-                title={disabled ? "Coming soon — document sharing model" : undefined}
+                onClick={() => setActiveChip(key as "recent" | "starred" | "shared")}
                 className={cn(
                   "flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
-                  disabled
-                    ? "opacity-40 cursor-not-allowed border-border text-muted-foreground"
-                    : activeChip === key
+                  activeChip === key
                     ? "bg-primary/10 text-primary border-primary/30"
                     : "border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
                 )}
                 data-testid={`chip-${key}`}
               >
                 <Icon className="h-3 w-3" />
-                {label}
+                <span className="hidden sm:inline">{label}</span>
+                <span className="sm:hidden">{mobileLabel}</span>
               </button>
             ))}
           </div>
@@ -1498,10 +1768,12 @@ export default function DocumentManagementPage() {
           <div className="px-2 pb-2 space-y-3">
 
             {/* Recent / Starred / Search results */}
-            {displayChipDocs.length > 0 && (
+            {(explorerSearch ? allDocsLoading : explorerChipLoading) ? (
+              <ExplorerLoadingSkeleton />
+            ) : displayChipDocs.length > 0 ? (
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                  {explorerSearch ? "Matching Documents" : activeChip === "starred" ? "Starred Docs" : "Recent Docs"}
+                  {explorerSearch ? "Matching Documents" : activeChip === "starred" ? "Starred Docs" : activeChip === "shared" ? "Shared with me" : "Recent Docs"}
                 </p>
                 <div className="space-y-0.5">
                   {displayChipDocs.map(doc => {
@@ -1558,14 +1830,16 @@ export default function DocumentManagementPage() {
                   })}
                 </div>
               </div>
-            )}
+            ) : explorerSearch ? (
+              <p className="text-xs text-muted-foreground px-1.5 py-2">No matching documents</p>
+            ) : null}
 
             {/* Folders section */}
             {!explorerSearch && (
               <div>
                 <div className="flex items-center justify-between mb-1.5 group/fh">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Folders <span className="font-normal text-muted-foreground/60">· {folders.length}</span>
+                    Folders <span className="font-normal text-muted-foreground/60">Â· {folders.length}</span>
                   </p>
                   <button
                     onClick={() => openNewFolderDialog(null)}
@@ -1714,12 +1988,33 @@ export default function DocumentManagementPage() {
       draft: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
       published: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
       archived: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400",
+      review: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+      awaiting_approval: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
     };
+    const STATUS_OPTIONS = [
+      { value: "draft", label: "Draft" },
+      { value: "review", label: "Under Review" },
+      { value: "awaiting_approval", label: "Awaiting Approval" },
+      { value: "published", label: "Published" },
+      { value: "archived", label: "Archived" },
+    ];
+    const statusLabel = STATUS_OPTIONS.find(s => s.value === selectedDocument.status)?.label
+      ?? (selectedDocument.status.charAt(0).toUpperCase() + selectedDocument.status.slice(1));
+    // Word count + reading time from HTML content
+    const contentHtml = editContent || selectedDocument.content || "";
+    const tmpDiv = typeof document !== "undefined" ? document.createElement("div") : null;
+    if (tmpDiv) tmpDiv.innerHTML = contentHtml;
+    const plainText = tmpDiv?.textContent || tmpDiv?.innerText || "";
+    const wordCount = plainText.trim() ? plainText.trim().split(/\s+/).length : 0;
+    const readingMinutes = Math.max(1, Math.ceil(wordCount / 200));
+    const templateSource = (selectedDocument as any).templateId
+      ? templates.find(t => t.id === (selectedDocument as any).templateId)
+      : null;
 
     return (
       <div className="flex flex-col h-full overflow-hidden">
-        <div className="border-b px-4 py-2 flex items-center justify-between bg-card sticky top-0 z-10 shrink-0 gap-2">
-          <div className="flex items-center gap-2 min-w-0 shrink">
+        <div className="border-b px-3 sm:px-4 py-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-card sticky top-0 z-10 shrink-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             {!isFolderPanelOpen && (
               <Button
                 variant="ghost"
@@ -1743,19 +2038,19 @@ export default function DocumentManagementPage() {
               {selectedDocument.title}
             </span>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 shrink-0 overflow-x-auto max-w-full">
             {isEditing ? (
               <>
                 {autoSaveStatus === "saving" && (
-                  <span className="text-xs text-muted-foreground mr-1 flex items-center gap-1" data-testid="text-autosave-saving">
+                  <span className="text-xs text-muted-foreground mr-1 flex items-center gap-1 shrink-0" data-testid="text-autosave-saving">
                     <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse inline-block" />
-                    Saving…
+                    <span className="hidden sm:inline">Saving…</span>
                   </span>
                 )}
                 {autoSaveStatus === "saved" && (
-                  <span className="text-xs text-green-600 dark:text-green-400 mr-1 flex items-center gap-1" data-testid="text-autosave-saved">
+                  <span className="text-xs text-green-600 dark:text-green-400 mr-1 flex items-center gap-1 shrink-0" data-testid="text-autosave-saved">
                     <Check className="h-3 w-3" />
-                    Autosaved
+                    <span className="hidden sm:inline">Autosaved</span>
                   </span>
                 )}
                 <Button
@@ -1765,11 +2060,11 @@ export default function DocumentManagementPage() {
                     updateDocMutation.mutate({ id: selectedDocument.id, updates: { content: editContentRef.current } });
                   }}
                   disabled={updateDocMutation.isPending}
-                  className="gap-1.5"
+                  className="gap-1.5 shrink-0"
                   data-testid="button-save-document"
                 >
                   <Save className="h-3.5 w-3.5" />
-                  {updateDocMutation.isPending ? "Saving..." : "Save"}
+                  <span className="hidden sm:inline">{updateDocMutation.isPending ? "Saving..." : "Save"}</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -1779,7 +2074,7 @@ export default function DocumentManagementPage() {
                     setSaveAsFolderId(selectedDocument.folderId ?? selectedFolderId);
                     setIsSaveAsOpen(true);
                   }}
-                  className="gap-1.5"
+                  className="gap-1.5 shrink-0 hidden md:inline-flex"
                   data-testid="button-save-as"
                 >
                   <FilePlus className="h-3.5 w-3.5" /> Save As
@@ -1788,25 +2083,27 @@ export default function DocumentManagementPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => { setIsEditing(false); setIsPreviewMode(true); setEditContent(selectedDocument.content || ""); }}
-                  className="gap-1.5"
+                  className="gap-1.5 shrink-0"
                   data-testid="button-cancel-edit"
                 >
-                  <X className="h-3.5 w-3.5" /> Cancel
+                  <X className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Cancel</span>
                 </Button>
               </>
             ) : (
               <Button
                 size="sm"
                 onClick={() => { setIsEditing(true); setIsPreviewMode(false); setEditContent(selectedDocument.content || ""); }}
-                className="gap-1.5"
+                className="gap-1.5 shrink-0"
                 data-testid="button-edit-document"
               >
-                <Edit className="h-3.5 w-3.5" /> Edit Document
+                <Edit className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Edit Document</span>
               </Button>
             )}
-            <div className="h-4 w-px bg-border mx-1" />
+            <div className="h-4 w-px bg-border mx-1 hidden sm:block shrink-0" />
             {docTags.length > 0 && (
-              <div className="flex items-center gap-1 mr-1">
+              <div className="hidden md:flex items-center gap-1 mr-1 shrink-0">
                 {docTags.slice(0, 3).map((tag, i) => (
                   <Badge
                     key={i}
@@ -1827,6 +2124,7 @@ export default function DocumentManagementPage() {
             <Button
               variant="ghost"
               size="icon"
+              className="hidden sm:inline-flex shrink-0"
               onClick={() => handleDownloadDocument(selectedDocument)}
               data-testid="button-download-document"
             >
@@ -1834,7 +2132,8 @@ export default function DocumentManagementPage() {
             </Button>
             <Button 
               variant="ghost" 
-              size="icon" 
+              size="icon"
+              className="hidden sm:inline-flex shrink-0"
               onClick={() => handleShareLink("document", selectedDocument.id, selectedDocument.title)}
               data-testid="button-share-document"
             >
@@ -1855,6 +2154,19 @@ export default function DocumentManagementPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {isEditing && (
+                  <DropdownMenuItem
+                    className="md:hidden"
+                    onClick={() => {
+                      setSaveAsTitle(selectedDocument.title + " (Copy)");
+                      setSaveAsFolderId(selectedDocument.folderId ?? selectedFolderId);
+                      setIsSaveAsOpen(true);
+                    }}
+                    data-testid="button-save-as-mobile"
+                  >
+                    <FilePlus className="h-4 w-4 mr-2" /> Save As
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => { setRenamingDocument(selectedDocument); setRenameValue(selectedDocument.title); }}>
                   <Pencil className="h-4 w-4 mr-2" /> Rename
                 </DropdownMenuItem>
@@ -1883,7 +2195,7 @@ export default function DocumentManagementPage() {
         </div>
 
         <ScrollArea className="flex-1">
-          <div className="max-w-4xl mx-auto px-8 py-6">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
             <div className="mb-4">
               <div className="flex items-center gap-3 mb-2">
                 <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -1939,7 +2251,7 @@ export default function DocumentManagementPage() {
                   {selectedDocument.type.replace(/_/g, " ")}
                 </Badge>
               </div>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground ml-12 mb-4">
+              <div className="flex items-center gap-3 sm:gap-4 text-xs text-muted-foreground ml-0 sm:ml-12 mb-4 flex-wrap">
                 <span>v{selectedDocument.currentVersion}</span>
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
@@ -1951,16 +2263,12 @@ export default function DocumentManagementPage() {
                       className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold cursor-pointer hover:opacity-75 transition-opacity select-none focus:outline-none", statusColors[selectedDocument.status] || statusColors.draft)}
                       data-testid="text-doc-status-badge"
                     >
-                      {selectedDocument.status.charAt(0).toUpperCase() + selectedDocument.status.slice(1)}
+                      {statusLabel}
                       <ChevronDown className="h-2.5 w-2.5" />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
-                    {[
-                      { value: "draft", label: "Draft" },
-                      { value: "published", label: "Published" },
-                      { value: "archived", label: "Archived" },
-                    ].map((opt) => (
+                    {STATUS_OPTIONS.map((opt) => (
                       <DropdownMenuItem
                         key={opt.value}
                         onClick={() => updateDocMutation.mutate({ id: selectedDocument.id, updates: { status: opt.value as any } })}
@@ -1977,36 +2285,42 @@ export default function DocumentManagementPage() {
             </div>
 
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-              <TabsList className="mb-4 bg-muted">
-                <TabsTrigger value="content" data-testid="tab-content">
-                  <FileText className="h-4 w-4 mr-1.5" /> Content
-                </TabsTrigger>
-                <TabsTrigger value="comments" data-testid="tab-comments">
-                  <MessageSquare className="h-4 w-4 mr-1.5" /> Comments ({comments.length})
-                </TabsTrigger>
-                <TabsTrigger value="versions" data-testid="tab-versions">
-                  <Clock className="h-4 w-4 mr-1.5" /> History
-                </TabsTrigger>
-                <TabsTrigger value="properties" data-testid="tab-properties">
-                  <Hash className="h-4 w-4 mr-1.5" /> Properties
-                </TabsTrigger>
-                <TabsTrigger value="signoff" data-testid="tab-signoff">
-                  <FileSignature className="h-4 w-4 mr-1.5" />
-                  Sign-off
-                  {docSignoffRequests.length > 0 && (
-                    <span className={cn(
-                      "ml-1.5 inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
-                      docSignoffRequests.some((r: any) => r.status === "sent") 
-                        ? "bg-amber-100 text-amber-700" 
-                        : docSignoffRequests.some((r: any) => r.status === "completed")
-                        ? "bg-green-100 text-green-700"
-                        : "bg-muted text-muted-foreground"
-                    )}>
-                      {docSignoffRequests.length}
-                    </span>
-                  )}
-                </TabsTrigger>
-              </TabsList>
+              <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto">
+                <TabsList className="mb-4 bg-muted inline-flex w-max min-w-full sm:w-full flex-nowrap h-auto p-1">
+                  <TabsTrigger value="content" className="shrink-0 text-xs sm:text-sm px-2.5 sm:px-3 gap-1.5" data-testid="tab-content">
+                    <FileText className="h-4 w-4" />
+                    <span className="hidden sm:inline">Content</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="comments" className="shrink-0 text-xs sm:text-sm px-2.5 sm:px-3 gap-1" data-testid="tab-comments">
+                    <MessageSquare className="h-4 w-4" />
+                    <span className="hidden sm:inline">Comments </span>({comments.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="versions" className="shrink-0 text-xs sm:text-sm px-2.5 sm:px-3 gap-1.5" data-testid="tab-versions">
+                    <Clock className="h-4 w-4" />
+                    <span className="hidden sm:inline">History</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="properties" className="shrink-0 text-xs sm:text-sm px-2.5 sm:px-3 gap-1.5" data-testid="tab-properties">
+                    <Hash className="h-4 w-4" />
+                    <span className="hidden sm:inline">Properties</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="signoff" className="shrink-0 text-xs sm:text-sm px-2.5 sm:px-3 gap-1" data-testid="tab-signoff">
+                    <FileSignature className="h-4 w-4" />
+                    <span className="hidden sm:inline">Sign-off</span>
+                    {docSignoffRequests.length > 0 && (
+                      <span className={cn(
+                        "ml-1 inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                        docSignoffRequests.some((r: any) => r.status === "sent") 
+                          ? "bg-amber-100 text-amber-700" 
+                          : docSignoffRequests.some((r: any) => r.status === "completed")
+                          ? "bg-green-100 text-green-700"
+                          : "bg-muted text-muted-foreground"
+                      )}>
+                        {docSignoffRequests.length}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
               <div className="flex items-center justify-end gap-2 mb-3 pb-3 border-b" data-testid="inline-tags-section">
                 <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
@@ -2099,63 +2413,109 @@ export default function DocumentManagementPage() {
                   users={mentionUsers}
                   documentId={selectedDocument?.id}
                   documentTitle={selectedDocument?.title}
+                  onAnchorComment={(commentId, selectedText) => {
+                    setPendingAnchoredComment({ id: commentId, text: selectedText });
+                    setActiveTab("comments");
+                  }}
                 />
               </TabsContent>
 
               <TabsContent value="comments" className="mt-0">
-                <div className="space-y-4">
+                {commentsLoading ? (
+                  <TabLoadingState label="Loading comments..." />
+                ) : (
+                <div className="space-y-3">
                   {comments.length === 0 ? (
                     <p className="text-muted-foreground text-center py-8">No comments yet</p>
                   ) : (
-                    comments.map((comment) => (
-                      <div key={comment.id} className="flex gap-3 p-4 rounded-lg bg-muted/30">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="text-xs">
-                            {comment.author?.firstName?.[0]}{comment.author?.lastName?.[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <span className="font-medium text-sm">
-                              {comment.author?.firstName} {comment.author?.lastName}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(comment.createdAt!).toLocaleString()}
-                            </span>
+                    comments.map((comment) => {
+                      const rawPosition = (comment as any).position;
+                      const anchor = rawPosition
+                        ? (typeof rawPosition === "string"
+                          ? JSON.parse(rawPosition) as { anchoredText?: string }
+                          : rawPosition as { anchoredText?: string })
+                        : null;
+                      return (
+                        <div key={comment.id} className="flex gap-3 p-3 rounded-lg bg-muted/30">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="text-xs">
+                              {comment.author?.firstName?.[0]}{comment.author?.lastName?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <span className="font-medium text-sm">
+                                {comment.author?.firstName} {comment.author?.lastName}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(comment.createdAt!).toLocaleString()}
+                              </span>
+                            </div>
+                            {anchor?.anchoredText && (
+                              <blockquote className="border-l-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 pl-2 py-0.5 text-xs text-muted-foreground italic mb-1.5 rounded-sm truncate">
+                                "{anchor.anchoredText}"
+                              </blockquote>
+                            )}
+                            <p className="text-sm">{comment.content}</p>
                           </div>
-                          <p className="text-sm">{comment.content}</p>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
-                  <div className="pt-4 border-t">
+                  <div className="pt-3 border-t space-y-2">
+                    {pendingAnchoredComment && (
+                      <div className="text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-2 py-1.5 flex items-start gap-2">
+                        <span className="text-amber-600 shrink-0 font-medium">Anchored to:</span>
+                        <span className="italic text-muted-foreground truncate">"{pendingAnchoredComment.text}"</span>
+                        <button
+                          onClick={() => setPendingAnchoredComment(null)}
+                          className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    )}
                     <form
                       onSubmit={(e) => {
                         e.preventDefault();
                         const form = e.target as HTMLFormElement;
                         const input = form.elements.namedItem("comment") as HTMLInputElement;
                         if (input.value.trim()) {
-                          addCommentMutation.mutate({ documentId: selectedDocument.id, content: input.value });
+                          const position = pendingAnchoredComment
+                            ? { commentId: pendingAnchoredComment.id, anchoredText: pendingAnchoredComment.text }
+                            : undefined;
+                          addCommentMutation.mutate({
+                            documentId: selectedDocument.id,
+                            content: input.value,
+                            ...(position ? { position } : {}),
+                          });
                           input.value = "";
+                          setPendingAnchoredComment(null);
                         }
                       }}
                       className="flex gap-2"
                     >
                       <Input
                         name="comment"
-                        placeholder="Add a comment..."
+                        placeholder={pendingAnchoredComment ? "Comment on selected text…" : "Add a comment..."}
                         className="flex-1"
                         data-testid="input-add-comment"
                       />
-                      <Button type="submit" size="sm" data-testid="button-add-comment">
-                        Comment
+                      <Button type="submit" size="sm" disabled={addCommentMutation.isPending} data-testid="button-add-comment">
+                        {addCommentMutation.isPending ? (
+                          <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Adding...</>
+                        ) : "Comment"}
                       </Button>
                     </form>
                   </div>
                 </div>
+                )}
               </TabsContent>
 
               <TabsContent value="versions" className="mt-0">
+                {versionsLoading ? (
+                  <TabLoadingState label="Loading version history..." />
+                ) : (
                 <div className="space-y-2">
                   {versions.length === 0 ? (
                     <p className="text-muted-foreground text-center py-8">No version history</p>
@@ -2180,6 +2540,7 @@ export default function DocumentManagementPage() {
                     ))
                   )}
                 </div>
+                )}
               </TabsContent>
 
               <TabsContent value="properties" className="mt-0">
@@ -2195,16 +2556,12 @@ export default function DocumentManagementPage() {
                               className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold cursor-pointer hover:opacity-75 transition-opacity select-none focus:outline-none", statusColors[selectedDocument.status] || statusColors.draft)}
                               data-testid="text-doc-status"
                             >
-                              {selectedDocument.status.charAt(0).toUpperCase() + selectedDocument.status.slice(1)}
+                              {statusLabel}
                               <ChevronDown className="h-2.5 w-2.5" />
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="start">
-                            {[
-                              { value: "draft", label: "Draft" },
-                              { value: "published", label: "Published" },
-                              { value: "archived", label: "Archived" },
-                            ].map((opt) => (
+                            {STATUS_OPTIONS.map((opt) => (
                               <DropdownMenuItem
                                 key={opt.value}
                                 onClick={() => updateDocMutation.mutate({ id: selectedDocument.id, updates: { status: opt.value as any } })}
@@ -2256,8 +2613,41 @@ export default function DocumentManagementPage() {
                           <span className="text-sm" data-testid="text-doc-views">{selectedDocument.viewCount}</span>
                         </div>
                       )}
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Word count</span>
+                        <span className="text-sm" data-testid="text-doc-wordcount">{wordCount.toLocaleString()} words</span>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Reading time</span>
+                        <span className="text-sm" data-testid="text-doc-readtime">~{readingMinutes} min read</span>
+                      </div>
+                      {templateSource && (
+                        <div className="flex items-start gap-3">
+                          <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Template</span>
+                          <span className="text-sm text-primary" data-testid="text-doc-template">{templateSource.name}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
+
+                  {/* Tags summary */}
+                  {docTags.length > 0 && (
+                    <div className="border-t pt-4">
+                      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Tags</h3>
+                      <div className="flex flex-wrap gap-1.5">
+                        {docTags.map((tag, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium"
+                            style={{ borderColor: tag.color, color: tag.color }}
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                            {tag.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {selectedDocument.description && (
                     <div className="border-t pt-4">
@@ -2269,7 +2659,9 @@ export default function DocumentManagementPage() {
               </TabsContent>
 
               <TabsContent value="signoff" className="mt-0">
-                {docSignoffRequests.length === 0 ? (
+                {signoffLoading ? (
+                  <TabLoadingState label="Loading sign-off requests..." />
+                ) : docSignoffRequests.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-14 text-center">
                     <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
                       <FileSignature className="h-6 w-6 text-muted-foreground" />
@@ -2322,7 +2714,7 @@ export default function DocumentManagementPage() {
                                   </span>
                                   {req.sentAt && (
                                     <>
-                                      <span className="text-muted-foreground/40 text-xs">·</span>
+                                      <span className="text-muted-foreground/40 text-xs">Â·</span>
                                       <span className="text-xs text-muted-foreground">
                                         Sent {new Date(req.sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                                       </span>
@@ -2330,7 +2722,7 @@ export default function DocumentManagementPage() {
                                   )}
                                   {req.deadline && (
                                     <>
-                                      <span className="text-muted-foreground/40 text-xs">·</span>
+                                      <span className="text-muted-foreground/40 text-xs">Â·</span>
                                       <span className="text-xs text-muted-foreground">
                                         Due {new Date(req.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                                       </span>
@@ -2445,7 +2837,7 @@ export default function DocumentManagementPage() {
     if (isNativePreview) { setFilePreviewData(null); return; }
     setFilePreviewLoading(true);
     setActiveSheetIndex(0);
-    fetch(`/api/document-files/${selectedFile.id}/preview`)
+    fetchWithAuth(`/api/document-files/${selectedFile.id}/preview`)
       .then(r => r.json())
       .then(data => setFilePreviewData(data))
       .catch(() => setFilePreviewData({ type: "unsupported" }))
@@ -2456,25 +2848,26 @@ export default function DocumentManagementPage() {
     if (!selectedFile) return null;
     return (
       <div className="flex flex-col h-full overflow-hidden">
-        <div className="border-b px-6 py-3 flex items-center justify-between bg-card sticky top-0 z-10 shrink-0">
-          <div className="flex items-center gap-3 flex-wrap">
+        <div className="border-b px-3 sm:px-6 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-card sticky top-0 z-10 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
+              className="shrink-0 sm:w-auto sm:px-3"
               onClick={() => setSelectedFile(null)}
-              className="gap-1.5"
               data-testid="button-back-from-file"
             >
-              <ArrowLeft className="h-4 w-4" /> Back
+              <ArrowLeft className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1.5">Back</span>
             </Button>
-            <div className="h-4 w-px bg-border" />
-            <div className="flex items-center gap-2">
+            <div className="h-4 w-px bg-border shrink-0 hidden sm:block" />
+            <div className="flex items-center gap-2 min-w-0">
               {getFileIcon(selectedFile.mimeType)}
-              <span className="font-medium">{selectedFile.originalName}</span>
-              <Badge variant="secondary" className="text-xs">{formatFileSize(selectedFile.size)}</Badge>
+              <span className="font-medium truncate">{selectedFile.originalName}</span>
+              <Badge variant="secondary" className="text-xs shrink-0">{formatFileSize(selectedFile.size)}</Badge>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Button
               variant="outline"
               size="sm"
@@ -2482,7 +2875,8 @@ export default function DocumentManagementPage() {
               onClick={() => window.open(`/api/document-files/${selectedFile.id}/download`, '_blank')}
               data-testid="button-download-preview-file"
             >
-              <Download className="h-4 w-4" /> Download
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Download</span>
             </Button>
             <Button
               variant="ghost"
@@ -2495,7 +2889,7 @@ export default function DocumentManagementPage() {
             </Button>
           </div>
         </div>
-        <div className="flex-1 overflow-auto p-6 bg-muted/30">
+        <div className="flex-1 overflow-auto p-3 sm:p-6 bg-muted/30">
           {selectedFile.mimeType.startsWith("image/") ? (
             <div className="flex items-center justify-center h-full">
               <img
@@ -2704,9 +3098,14 @@ export default function DocumentManagementPage() {
                   size="sm" 
                   className="h-8 gap-1.5"
                   onClick={handleUploadFile}
+                  disabled={uploadFileMutation.isPending}
                   data-testid="quick-upload-file"
                 >
-                  <Upload className="h-3.5 w-3.5" /> Upload
+                  {uploadFileMutation.isPending ? (
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading...</>
+                  ) : (
+                    <><Upload className="h-3.5 w-3.5" /> Upload</>
+                  )}
                 </Button>
                 <div className="h-4 w-px bg-border mx-1" />
                 <div className="flex items-center border rounded-md">
@@ -2773,7 +3172,7 @@ export default function DocumentManagementPage() {
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownloadFolder(folder); }}>
                           <Download className="h-4 w-4 mr-2" /> Download Folder
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolder(folder); setRenameValue(folder.name); }}>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolder(folder); setRenameValue(folder.name); setRenamingFolderColor(folder.color || "#f97316"); }}>
                           <Pencil className="h-4 w-4 mr-2" /> Rename Folder
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("folder", folder.id, folder.name); }}>
@@ -2843,7 +3242,7 @@ export default function DocumentManagementPage() {
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownloadFolder(folder); }}>
                                 <Download className="h-4 w-4 mr-2" /> Download Folder
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolder(folder); setRenameValue(folder.name); }}>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolder(folder); setRenameValue(folder.name); setRenamingFolderColor(folder.color || "#f97316"); }}>
                                 <Pencil className="h-4 w-4 mr-2" /> Rename Folder
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("folder", folder.id, folder.name); }}>
@@ -2907,9 +3306,14 @@ export default function DocumentManagementPage() {
             <FileText className="h-4 w-4" /> 
             {searchQuery ? `Search Results` : "Documents"}
             {displayedDocs.length > 0 && <span className="text-xs">({displayedDocs.length})</span>}
+            {(searchQuery ? (searchLoading || searchFetching) : (docsLoading || docsFetching)) && (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" data-testid="documents-list-loading" />
+            )}
           </h2>
           
-          {displayedDocs.length === 0 ? (
+          {(searchQuery ? searchLoading : docsLoading) ? (
+            <TableLoadingSkeleton />
+          ) : displayedDocs.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -3026,7 +3430,15 @@ export default function DocumentManagementPage() {
             </div>
           )}
 
-        {folderFiles.length > 0 && !searchQuery && (
+        {folderFilesLoading && !searchQuery ? (
+          <div className="mt-8">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+              <Paperclip className="h-4 w-4" /> Uploaded Files
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            </h2>
+            <TableLoadingSkeleton rows={3} />
+          </div>
+        ) : folderFiles.length > 0 && !searchQuery && (
           <div className="mt-8">
             <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
               <Paperclip className="h-4 w-4" /> Uploaded Files
@@ -3104,12 +3516,12 @@ export default function DocumentManagementPage() {
     </ScrollArea>
   );
 
-  if (foldersLoading || docsLoading) {
+  if (foldersLoading && docsLoading) {
     return (
       <div className="min-h-screen bg-background" data-testid="documents-page">
         <Sidebar />
-        <main className={cn("transition-all duration-300 h-screen flex items-center justify-center", mainOffset, mobileTopOffset)}>
-          <div className="animate-pulse text-muted-foreground">Loading...</div>
+        <main className={cn("transition-all duration-300 h-screen flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
+          <DocumentsPageSkeleton />
         </main>
       </div>
     );
@@ -3119,7 +3531,7 @@ export default function DocumentManagementPage() {
     <div className="min-h-screen bg-background" data-testid="documents-page">
       <Sidebar />
       <main className={cn("transition-all duration-300 h-screen flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
-        <div className="px-4 pt-4">
+        <div className="px-3 sm:px-4 pt-3 sm:pt-4 hidden md:block">
           <ModuleWelcomeBanner moduleKey="documents" features={["Rich text editing", "Version control", "Folder hierarchy", "Access control"]} />
         </div>
         <header className="border-b border-border/30 bg-card backdrop-blur-sm sticky top-0 z-10 shrink-0">
@@ -3147,8 +3559,8 @@ export default function DocumentManagementPage() {
               </>
             }
           />
-          <div className="flex items-center justify-between px-6 pb-3 flex-wrap gap-2">
-            <nav className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-3 sm:px-6 pb-3 gap-2">
+            <nav className="flex items-center gap-1 text-xs sm:text-sm text-muted-foreground flex-wrap min-w-0">
               {getBreadcrumbs().map((crumb, idx, arr) => (
                 <span key={crumb.id ?? "root"} className="flex items-center gap-1">
                   {idx > 0 && <ChevronRight className="h-3 w-3" />}
@@ -3165,11 +3577,29 @@ export default function DocumentManagementPage() {
                 </span>
               ))}
             </nav>
-            <div className="flex items-center gap-2">
-              
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-8 w-8 sm:hidden" data-testid="button-mobile-more-actions">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => { setNewFolderParentId(selectedFolderId); setIsNewFolderOpen(true); }} data-testid="button-new-folder-mobile">
+                    <FolderPlus className="h-4 w-4 mr-2" /> New Folder
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsTemplateManagerOpen(true)}>
+                    <BookCopy className="h-4 w-4 mr-2" /> Templates
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => docxInputRef.current?.click()} disabled={isImporting}>
+                    <FileUp className="h-4 w-4 mr-2" /> {isImporting ? "Converting..." : "Import Word"}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <Dialog open={isNewFolderOpen} onOpenChange={setIsNewFolderOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setNewFolderParentId(selectedFolderId)} data-testid="button-new-folder">
+                  <Button variant="outline" size="sm" className="gap-1.5 hidden sm:inline-flex" onClick={() => setNewFolderParentId(selectedFolderId)} data-testid="button-new-folder">
                     <FolderPlus className="h-4 w-4" /> Folder
                   </Button>
                 </DialogTrigger>
@@ -3193,6 +3623,26 @@ export default function DocumentManagementPage() {
                       />
                     </div>
                     <div className="space-y-2">
+                      <Label>Folder Color</Label>
+                      <div className="flex items-center gap-2 flex-wrap" data-testid="folder-color-picker">
+                        {FOLDER_COLORS.map(color => (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() => setNewFolderColor(color)}
+                            className="h-7 w-7 rounded-md border-2 transition-all hover:scale-110 focus:outline-none"
+                            style={{
+                              backgroundColor: color,
+                              borderColor: newFolderColor === color ? "#1e3a5f" : "transparent",
+                              boxShadow: newFolderColor === color ? `0 0 0 2px white, 0 0 0 4px ${color}` : undefined,
+                            }}
+                            title={color}
+                            data-testid={`folder-color-${color}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
                       <Label>Location</Label>
                       <Select 
                         value={newFolderParentId === null ? "root" : String(newFolderParentId)} 
@@ -3213,11 +3663,13 @@ export default function DocumentManagementPage() {
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setIsNewFolderOpen(false)}>Cancel</Button>
                     <Button 
-                      onClick={() => createFolderMutation.mutate({ name: newFolderName, parentId: newFolderParentId === "root" ? null : newFolderParentId as number | null })}
+                      onClick={() => createFolderMutation.mutate({ name: newFolderName, parentId: newFolderParentId === "root" ? null : newFolderParentId as number | null, color: newFolderColor })}
                       disabled={!newFolderName.trim() || createFolderMutation.isPending}
                       data-testid="button-create-folder"
                     >
-                      Create Folder
+                      {createFolderMutation.isPending ? (
+                        <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Creating...</>
+                      ) : "Create Folder"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -3226,16 +3678,17 @@ export default function DocumentManagementPage() {
               <Dialog open={isNewDocOpen} onOpenChange={(open) => { setIsNewDocOpen(open); if (!open) setSelectedTemplateId(null); }}>
                 <DialogTrigger asChild>
                   <Button size="sm" className="gap-1.5" data-testid="button-new-document">
-                    <Plus className="h-4 w-4" /> New Page
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline">New Page</span>
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] sm:w-full">
                   <DialogHeader>
                     <DialogTitle>Create New Document</DialogTitle>
                     <DialogDescription>Start blank or choose a template</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-2">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Document Title</Label>
                         <Input
@@ -3269,7 +3722,7 @@ export default function DocumentManagementPage() {
                           <BookCopy className="h-4 w-4" />
                           Start from Template (optional)
                         </Label>
-                        <div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-y-auto p-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-[200px] overflow-y-auto p-1">
                           <button
                             className={cn(
                               "flex flex-col items-center gap-1 p-3 rounded-md border text-sm cursor-pointer transition-colors",
@@ -3331,7 +3784,7 @@ export default function DocumentManagementPage() {
               <Button 
                 size="sm" 
                 variant="outline" 
-                className="gap-1.5" 
+                className="gap-1.5 hidden sm:inline-flex" 
                 onClick={() => setIsTemplateManagerOpen(true)}
                 data-testid="button-manage-templates"
               >
@@ -3341,7 +3794,7 @@ export default function DocumentManagementPage() {
               <Button
                 size="sm"
                 variant="outline"
-                className="gap-1.5"
+                className="gap-1.5 hidden sm:inline-flex"
                 onClick={() => docxInputRef.current?.click()}
                 disabled={isImporting}
                 data-testid="button-import-word"
@@ -3364,7 +3817,7 @@ export default function DocumentManagementPage() {
         </header>
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
-          {!isFolderPanelOpen && (
+          {!isMobile && !isFolderPanelOpen && (
             <div className="w-10 shrink-0 border-r bg-muted/30 flex flex-col items-center pt-2 gap-1">
               <Button
                 variant="ghost"
@@ -3378,45 +3831,82 @@ export default function DocumentManagementPage() {
               </Button>
             </div>
           )}
-          <ResizablePanelGroup direction="horizontal" className="flex-1">
-            {isFolderPanelOpen && (
-              <>
-                <ResizablePanel id="explorer-panel" order={1} defaultSize={22} minSize={15} maxSize={35} className="bg-muted/30">
-                  {renderExplorerPanel()}
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-              </>
-            )}
 
-            <ResizablePanel id="content-panel" order={2} defaultSize={78}>
-              {selectedFile ? renderFilePreview() : selectedDocument ? renderDocumentView() : renderWelcomeState()}
-            </ResizablePanel>
-          </ResizablePanelGroup>
+          {isMobile ? (
+            <>
+              <Sheet open={isFolderPanelOpen} onOpenChange={setIsFolderPanelOpen}>
+                <SheetContent side="left" className="w-[min(100vw,20rem)] p-0 flex flex-col [&>button]:hidden">
+                  {renderExplorerPanel()}
+                </SheetContent>
+              </Sheet>
+              <div className="flex-1 min-h-0 min-w-0">
+                {selectedFile ? renderFilePreview() : selectedDocument ? renderDocumentView() : renderWelcomeState()}
+              </div>
+            </>
+          ) : (
+            <ResizablePanelGroup direction="horizontal" className="flex-1">
+              {isFolderPanelOpen && (
+                <>
+                  <ResizablePanel id="explorer-panel" order={1} defaultSize={22} minSize={15} maxSize={35} className="bg-muted/30">
+                    {renderExplorerPanel()}
+                  </ResizablePanel>
+                  <ResizableHandle withHandle />
+                </>
+              )}
+
+              <ResizablePanel id="content-panel" order={2} defaultSize={78}>
+                {selectedFile ? renderFilePreview() : selectedDocument ? renderDocumentView() : renderWelcomeState()}
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          )}
         </div>
       </main>
 
-      <Dialog open={!!renamingFolder} onOpenChange={(open) => !open && setRenamingFolder(null)}>
+      <Dialog open={!!renamingFolder} onOpenChange={(open) => { if (!open) setRenamingFolder(null); else if (renamingFolder) setRenamingFolderColor(renamingFolder.color || "#f97316"); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rename Folder</DialogTitle>
-            <DialogDescription>Enter a new name for this folder.</DialogDescription>
+            <DialogTitle>Edit Folder</DialogTitle>
+            <DialogDescription>Update the name and color of this folder.</DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Input
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              placeholder="Folder name"
-              data-testid="input-rename-folder"
-            />
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Folder Name</Label>
+              <Input
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                placeholder="Folder name"
+                data-testid="input-rename-folder"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Folder Color</Label>
+              <div className="flex items-center gap-2 flex-wrap" data-testid="folder-color-picker-edit">
+                {FOLDER_COLORS.map(color => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setRenamingFolderColor(color)}
+                    className="h-7 w-7 rounded-md border-2 transition-all hover:scale-110 focus:outline-none"
+                    style={{
+                      backgroundColor: color,
+                      borderColor: renamingFolderColor === color ? "#1e3a5f" : "transparent",
+                      boxShadow: renamingFolderColor === color ? `0 0 0 2px white, 0 0 0 4px ${color}` : undefined,
+                    }}
+                    title={color}
+                    data-testid={`folder-edit-color-${color}`}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenamingFolder(null)}>Cancel</Button>
             <Button
-              onClick={() => renamingFolder && renameFolderMutation.mutate({ id: renamingFolder.id, name: renameValue })}
+              onClick={() => renamingFolder && renameFolderMutation.mutate({ id: renamingFolder.id, name: renameValue, color: renamingFolderColor })}
               disabled={!renameValue.trim() || renameFolderMutation.isPending}
               data-testid="button-confirm-rename-folder"
             >
-              Rename
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3755,10 +4245,9 @@ export default function DocumentManagementPage() {
                       const contentBlob = new Blob([importContent], { type: "text/html" });
                       const formData = new FormData();
                       formData.append("content", contentBlob, "content.html");
-                      contentRes = await fetch(`/api/documents/${newDoc.id}/content`, {
+                      contentRes = await fetchWithAuth(`/api/documents/${newDoc.id}/content`, {
                         method: "POST",
                         body: formData,
-                        credentials: "include",
                       });
                       if (contentRes.ok) break;
                     } catch {
@@ -3806,39 +4295,76 @@ export default function DocumentManagementPage() {
             <DialogDescription>Share this item with others via link or email.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="flex items-center gap-2">
-              <Input
-                value={shareDialogUrl}
-                readOnly
-                className="flex-1 text-xs"
-                data-testid="input-share-url"
-              />
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={copyShareLink}
-                data-testid="button-copy-share-link"
-              >
-                {linkCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-              </Button>
+            {/* Internal link */}
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">Internal link (requires login)</p>
+              <div className="flex items-center gap-2">
+                <Input value={shareDialogUrl} readOnly className="flex-1 text-xs" data-testid="input-share-url" />
+                <Button variant="outline" size="icon" onClick={copyShareLink} data-testid="button-copy-share-link">
+                  {linkCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-2"
-                onClick={shareViaEmail}
-                data-testid="button-share-email"
-              >
+
+            {/* Public link â€” only for documents */}
+            {shareDialogDocId !== null && (
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                    Public link (no login required)
+                    {shareTokenLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+                  </p>
+                  {publicToken ? (
+                    <button onClick={revokePublicLink} className="text-[11px] text-destructive hover:underline" disabled={publicLinkLoading}>Revoke</button>
+                  ) : null}
+                </div>
+                {publicToken ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={`${window.location.origin}/public/documents/${publicToken}`}
+                      readOnly
+                      className="flex-1 text-xs"
+                      data-testid="input-public-url"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/public/documents/${publicToken}`);
+                        toast({ title: "Public link copied" });
+                      }}
+                      data-testid="button-copy-public-link"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2"
+                    onClick={generatePublicLink}
+                    disabled={publicLinkLoading}
+                    data-testid="button-generate-public-link"
+                  >
+                    <Globe className="h-4 w-4" />
+                    {publicLinkLoading ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
+                    ) : "Generate public link"}
+                  </Button>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2 border-t pt-4">
+              <Button variant="outline" className="w-full justify-start gap-2" onClick={shareViaEmail} data-testid="button-share-email">
                 <Mail className="h-4 w-4" />
                 Share via Email
               </Button>
               <Button
                 variant="outline"
                 className="w-full justify-start gap-2"
-                onClick={() => {
-                  window.open(shareDialogUrl, '_blank');
-                  setShareDialogOpen(false);
-                }}
+                onClick={() => { window.open(shareDialogUrl, "_blank"); setShareDialogOpen(false); }}
                 data-testid="button-open-in-new-tab"
               >
                 <ExternalLink className="h-4 w-4" />
@@ -3864,7 +4390,9 @@ export default function DocumentManagementPage() {
             </TabsList>
 
             <TabsContent value="browse" className="mt-4">
-              {templates.length === 0 ? (
+              {templatesLoading ? (
+                <TabLoadingState label="Loading templates..." />
+              ) : templates.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <BookCopy className="h-12 w-12 mx-auto mb-3 opacity-30" />
                   <p className="font-medium">No templates yet</p>
@@ -4016,3 +4544,4 @@ export default function DocumentManagementPage() {
     </div>
   );
 }
+
