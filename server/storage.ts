@@ -11,6 +11,8 @@ import {
   crmResourceRequirements, crmActivities, crmTasks, crmNotes, crmContracts, crmCustomerSystems, crmAttachments,
   crmSavedViews, crmEmailTemplates, crmEmailLogs, crmForecasts, crmTerritories, crmAutomationRules,
   strategyItems, risks, departments, processes, tools, goals, objectives, okrs, keyResults, kpis, initiatives, businessTasks, meetings, documentLinks,
+  governanceItems, strategyDocumentLinks, strategyKpiValues, strategyReviewNotes, strategyRagHistory,
+  strategyRefCounters, strategyEntityRefs,
   documentFolders, documents, documentVersions, tags, documentTags, documentAcl, documentComments, documentTemplates, documentAuditLogs, documentInitiativeLinks,
   tasks, taskBoards, taskLinks, taskSubtasks, taskViews,
   pmPortfolios, pmPrograms, pmProjects, pmProjectPhases, pmMilestones, pmTasks, pmTeamMembers, pmRaiddItems, pmPhaseTemplates, pmProjectTools,
@@ -130,9 +132,11 @@ import {
   type SignoffRequestWithDetails,
 } from "@shared/models/signoff";
 import {
-  strategyReviewNotes, strategyRagHistory,
   type StrategyReviewNote, type InsertStrategyReviewNote,
   type StrategyRagHistory, type InsertStrategyRagHistory,
+  type GovernanceItem, type InsertGovernanceItem,
+  type StrategyDocumentLink, type InsertStrategyDocumentLink,
+  type StrategyKpiValue, type InsertStrategyKpiValue,
 } from "@shared/models/business";
 import {
   surveys, surveyQuestions, surveyResponses, surveyAnswers,
@@ -572,6 +576,31 @@ export interface IStorage {
 
   // Business Governance - Overdue Reviews
   getOverdueReviews(tenantId: number): Promise<{ entityType: string; entityId: number; entityTitle: string; ownerName: string | null; nextReviewDate: string; reviewCadence: string; daysOverdue: number }[]>;
+
+  // Business Governance - Governance Items
+  getGovernanceItems(tenantId: number): Promise<GovernanceItem[]>;
+  getGovernanceItem(id: number): Promise<GovernanceItem | undefined>;
+  createGovernanceItem(item: InsertGovernanceItem): Promise<GovernanceItem>;
+  updateGovernanceItem(id: number, updates: Partial<InsertGovernanceItem>): Promise<GovernanceItem | undefined>;
+  deleteGovernanceItem(id: number): Promise<void>;
+
+  // Business - Strategy Document Links
+  getStrategyDocLinks(tenantId: number, layerType?: string, layerItemId?: number): Promise<StrategyDocumentLink[]>;
+  createStrategyDocLink(link: InsertStrategyDocumentLink): Promise<StrategyDocumentLink>;
+  deleteStrategyDocLink(id: number): Promise<void>;
+
+  // Business - KPI Time-series Values
+  getStrategyKpiValues(tenantId: number, kpiId?: number): Promise<StrategyKpiValue[]>;
+  createStrategyKpiValue(val: InsertStrategyKpiValue): Promise<StrategyKpiValue>;
+  deleteStrategyKpiValue(id: number): Promise<void>;
+
+  // Ref sequencer
+  getNextEntityRef(tenantId: number, layer: string): Promise<number>;
+  getEntityRef(tenantId: number, entityType: string, entityId: number): Promise<number | null>;
+  assignEntityRef(tenantId: number, entityType: string, entityId: number): Promise<number>;
+  getEntityRefs(tenantId: number): Promise<Array<{ entityType: string; entityId: number; refSeq: number }>>;
+  backfillEntityRefs(tenantId: number): Promise<{ assigned: number }>;
+  bulkImportBusinessLayers(tenantId: number, userId: string, rows: Record<string, unknown>[]): Promise<{ created: Record<string, number>; skipped: number }>;
 
   // Document Management - Folders
   getDocumentFolders(tenantId: number, parentId?: number | null, clientId?: number): Promise<DocumentFolder[]>;
@@ -3301,6 +3330,215 @@ export class DatabaseStorage implements IStorage {
     return { imported };
   }
 
+  async bulkImportBusinessLayers(
+    tenantId: number,
+    userId: string,
+    rows: Record<string, unknown>[],
+  ): Promise<{ created: Record<string, number>; skipped: number }> {
+    const get = (row: Record<string, unknown>, ...keys: string[]): string => {
+      for (const key of keys) {
+        const val = row[key];
+        if (val !== undefined && val !== null && String(val).trim() !== "") return String(val).trim();
+      }
+      return "";
+    };
+    const parseRag = (raw: string): string => {
+      const s = raw.toLowerCase();
+      if (["green", "amber", "red"].includes(s)) return s;
+      if (s.includes("risk") || s.includes("amber")) return "amber";
+      if (s.includes("behind") || s.includes("off track") || s.includes("red")) return "red";
+      if (s.includes("track") || s.includes("green")) return "green";
+      return "green";
+    };
+    const parseProgress = (row: Record<string, unknown>): number => {
+      const raw = get(row, "Progress %", "Progress", "progress").replace(/%/g, "");
+      const n = Number(raw);
+      return Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0;
+    };
+    const isDataRow = (row: Record<string, unknown>): boolean => {
+      const title = get(row, "Title", "Name", "title", "name");
+      if (!title) return false;
+      const upper = title.toUpperCase();
+      if (upper === "TITLE" || upper === "NAME" || upper === "CODE") return false;
+      return true;
+    };
+    const normalizeSheet = (raw: string): string | null => {
+      const s = raw.trim().toLowerCase();
+      if (!s || s === "instructions") return null;
+      if (s === "strategy" || s === "strategies") return "strategies";
+      if (s === "goal" || s === "goals") return "goals";
+      if (s === "objective" || s === "objectives") return "objectives";
+      if (s === "initiative" || s === "initiatives") return "initiatives";
+      if (s === "okr" || s === "okrs") return "okrs";
+      if (s === "kpi" || s === "kpis") return "kpis";
+      if (s === "governance") return "governance";
+      return null;
+    };
+
+    const prefixByType: Record<string, string> = {
+      strategy: "S", goal: "G", objective: "O", initiative: "I", okr: "K", kpi: "P", governance: "GV",
+    };
+    const refs = await this.getEntityRefs(tenantId);
+    const codeToId: Record<string, number> = {};
+    for (const ref of refs) {
+      const prefix = prefixByType[ref.entityType];
+      if (prefix) codeToId[`${prefix}${String(ref.refSeq).padStart(2, "0")}`] = ref.entityId;
+    }
+
+    const grouped = new Map<string, Record<string, unknown>[]>();
+    let skipped = 0;
+    for (const row of rows) {
+      const sheet = normalizeSheet(String(row._sheet ?? ""));
+      if (!sheet) { skipped++; continue; }
+      if (!grouped.has(sheet)) grouped.set(sheet, []);
+      grouped.get(sheet)!.push(row);
+    }
+
+    const resolveCode = (code: string): number | null => {
+      const key = code.trim().toUpperCase();
+      return key ? (codeToId[key] ?? null) : null;
+    };
+
+    const created: Record<string, number> = {};
+    const sheetOrder = ["strategies", "goals", "objectives", "initiatives", "okrs", "kpis", "governance"];
+
+    for (const sheet of sheetOrder) {
+      for (const row of grouped.get(sheet) ?? []) {
+        if (!isDataRow(row)) { skipped++; continue; }
+        const code = get(row, "Code").toUpperCase();
+
+        if (sheet === "strategies") {
+          const item = await this.createStrategyItem({
+            tenantId,
+            ownerId: userId,
+            title: get(row, "Title", "title"),
+            description: get(row, "Description", "description") || null,
+            templateType: get(row, "Type", "type", "Template Type") || "strategy",
+            ownerName: get(row, "Owner Name", "ownerName") || null,
+            ragStatus: parseRag(get(row, "RAG Status", "ragStatus")),
+            progress: parseProgress(row),
+            targetDate: get(row, "Target Date", "targetDate") || null,
+          });
+          await this.assignEntityRef(tenantId, "strategy", item.id);
+          if (code) codeToId[code] = item.id;
+          created.strategy = (created.strategy ?? 0) + 1;
+        } else if (sheet === "goals") {
+          const strategyItemId = resolveCode(get(row, "Strategy Code", "strategyCode"));
+          const item = await this.createGoal({
+            tenantId,
+            ownerId: userId,
+            strategyItemId: strategyItemId ?? undefined,
+            title: get(row, "Title", "title"),
+            description: get(row, "Description", "description") || null,
+            ownerName: get(row, "Owner Name", "ownerName") || null,
+            ragStatus: parseRag(get(row, "RAG Status", "ragStatus")),
+            progress: parseProgress(row),
+            targetDate: get(row, "Target Date", "targetDate") || null,
+          });
+          await this.assignEntityRef(tenantId, "goal", item.id);
+          if (code) codeToId[code] = item.id;
+          created.goals = (created.goals ?? 0) + 1;
+        } else if (sheet === "objectives") {
+          const goalId = resolveCode(get(row, "Goal Code", "goalCode"));
+          const item = await this.createObjective({
+            tenantId,
+            ownerId: userId,
+            goalId: goalId ?? undefined,
+            title: get(row, "Title", "title"),
+            description: get(row, "Description", "description") || null,
+            ownerName: get(row, "Owner Name", "ownerName") || null,
+            ragStatus: parseRag(get(row, "RAG Status", "ragStatus")),
+            progress: parseProgress(row),
+            targetDate: get(row, "Target Date", "targetDate") || null,
+          });
+          await this.assignEntityRef(tenantId, "objective", item.id);
+          if (code) codeToId[code] = item.id;
+          created.objectives = (created.objectives ?? 0) + 1;
+        } else if (sheet === "initiatives") {
+          const objectiveId = resolveCode(get(row, "Objective Code", "objectiveCode"));
+          let goalId: number | undefined;
+          if (objectiveId) {
+            const objective = await this.getObjective(objectiveId);
+            goalId = objective?.goalId ?? undefined;
+          }
+          const item = await this.createInitiative({
+            tenantId,
+            ownerId: userId,
+            objectiveId: objectiveId ?? undefined,
+            goalId,
+            title: get(row, "Title", "title"),
+            description: get(row, "Description", "description") || null,
+            ownerName: get(row, "Owner Name", "ownerName") || null,
+            priority: get(row, "Priority", "priority") || "medium",
+            ragStatus: parseRag(get(row, "RAG Status", "ragStatus")),
+            progress: parseProgress(row),
+            startDate: get(row, "Start Date", "startDate") || undefined,
+            dueDate: get(row, "End Date", "endDate", "Due Date", "dueDate") || undefined,
+            targetDate: get(row, "Target Date", "targetDate") || null,
+          });
+          await this.assignEntityRef(tenantId, "initiative", item.id);
+          if (code) codeToId[code] = item.id;
+          created.initiatives = (created.initiatives ?? 0) + 1;
+        } else if (sheet === "okrs") {
+          const objectiveId = resolveCode(get(row, "Objective Code", "objectiveCode"));
+          const item = await this.createOkr({
+            tenantId,
+            ownerId: userId,
+            objectiveId: objectiveId ?? undefined,
+            title: get(row, "Title", "title"),
+            description: get(row, "Key Result Description", "Description", "description") || null,
+            ownerName: get(row, "Owner Name", "ownerName") || null,
+            ragStatus: parseRag(get(row, "RAG Status", "ragStatus")),
+            targetDate: get(row, "Target Date", "targetDate") || null,
+          });
+          await this.assignEntityRef(tenantId, "okr", item.id);
+          if (code) codeToId[code] = item.id;
+          created.okrs = (created.okrs ?? 0) + 1;
+        } else if (sheet === "kpis") {
+          const goalId = resolveCode(get(row, "Goal Code", "goalCode"));
+          const item = await this.createKpi({
+            tenantId,
+            ownerId: userId,
+            goalId: goalId ?? undefined,
+            name: get(row, "Name", "Title", "name", "title"),
+            description: get(row, "Description", "description") || null,
+            ownerName: get(row, "Owner Name", "ownerName") || null,
+            indicatorType: get(row, "KPI Type", "indicatorType") || "lagging",
+            currentValue: get(row, "Current Value", "currentValue") || null,
+            targetValue: get(row, "Target Value", "targetValue") || null,
+            unit: get(row, "Unit", "unit") || null,
+            ragStatus: parseRag(get(row, "RAG Status", "ragStatus")),
+            targetDate: get(row, "Target Date", "targetDate") || null,
+          });
+          await this.assignEntityRef(tenantId, "kpi", item.id);
+          if (code) codeToId[code] = item.id;
+          created.kpis = (created.kpis ?? 0) + 1;
+        } else if (sheet === "governance") {
+          const linkedStrategyItemId = resolveCode(get(row, "Strategy Code", "strategyCode"));
+          const item = await this.createGovernanceItem({
+            tenantId,
+            ownerId: userId,
+            linkedStrategyItemId: linkedStrategyItemId ?? undefined,
+            title: get(row, "Title", "title"),
+            govType: get(row, "Type", "govType", "type") || "board_decision",
+            description: get(row, "Description", "description") || null,
+            ownerName: get(row, "Owner Name", "ownerName") || null,
+            departmentName: get(row, "Department", "departmentName") || null,
+            ragStatus: parseRag(get(row, "RAG Status", "ragStatus")),
+            status: get(row, "Status", "status") || "not_started",
+            progress: parseProgress(row),
+            targetDate: get(row, "Target Date", "targetDate") || null,
+          });
+          await this.assignEntityRef(tenantId, "governance", item.id);
+          if (code) codeToId[code] = item.id;
+          created.governance = (created.governance ?? 0) + 1;
+        }
+      }
+    }
+
+    return { created, skipped };
+  }
+
   async bulkImportResources(tenantId: number, rows: Record<string, string>[], mode: "append" | "replace"): Promise<{ imported: number }> {
     if (mode === "replace") await db.delete(resources).where(eq(resources.tenantId, tenantId));
     let imported = 0;
@@ -3961,6 +4199,138 @@ export class DatabaseStorage implements IStorage {
       }
     }
     return result.sort((a, b) => b.daysOverdue - a.daysOverdue);
+  }
+
+  // Business Governance - Governance Items
+  async getGovernanceItems(tenantId: number): Promise<GovernanceItem[]> {
+    return await db.select().from(governanceItems)
+      .where(eq(governanceItems.tenantId, tenantId))
+      .orderBy(desc(governanceItems.updatedAt));
+  }
+
+  async getGovernanceItem(id: number): Promise<GovernanceItem | undefined> {
+    const [item] = await db.select().from(governanceItems).where(eq(governanceItems.id, id));
+    return item;
+  }
+
+  async createGovernanceItem(item: InsertGovernanceItem): Promise<GovernanceItem> {
+    const [result] = await db.insert(governanceItems).values(item).returning();
+    return result;
+  }
+
+  async updateGovernanceItem(id: number, updates: Partial<InsertGovernanceItem>): Promise<GovernanceItem | undefined> {
+    const [result] = await db.update(governanceItems)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(governanceItems.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteGovernanceItem(id: number): Promise<void> {
+    await db.delete(governanceItems).where(eq(governanceItems.id, id));
+  }
+
+  // Business - Strategy Document Links
+  async getStrategyDocLinks(tenantId: number, layerType?: string, layerItemId?: number): Promise<StrategyDocumentLink[]> {
+    const conditions = [eq(strategyDocumentLinks.tenantId, tenantId)];
+    if (layerType) conditions.push(eq(strategyDocumentLinks.layerType, layerType));
+    if (layerItemId !== undefined) conditions.push(eq(strategyDocumentLinks.layerItemId, layerItemId));
+    return await db.select().from(strategyDocumentLinks)
+      .where(and(...conditions))
+      .orderBy(desc(strategyDocumentLinks.createdAt));
+  }
+
+  async createStrategyDocLink(link: InsertStrategyDocumentLink): Promise<StrategyDocumentLink> {
+    const [result] = await db.insert(strategyDocumentLinks).values(link).returning();
+    return result;
+  }
+
+  async deleteStrategyDocLink(id: number): Promise<void> {
+    await db.delete(strategyDocumentLinks).where(eq(strategyDocumentLinks.id, id));
+  }
+
+  // Business - KPI Time-series Values
+  async getStrategyKpiValues(tenantId: number, kpiId?: number): Promise<StrategyKpiValue[]> {
+    const conditions = [eq(strategyKpiValues.tenantId, tenantId)];
+    if (kpiId !== undefined) conditions.push(eq(strategyKpiValues.kpiId, kpiId));
+    return await db.select().from(strategyKpiValues)
+      .where(and(...conditions))
+      .orderBy(desc(strategyKpiValues.periodDate));
+  }
+
+  async createStrategyKpiValue(val: InsertStrategyKpiValue): Promise<StrategyKpiValue> {
+    const [result] = await db.insert(strategyKpiValues).values(val).returning();
+    return result;
+  }
+
+  async deleteStrategyKpiValue(id: number): Promise<void> {
+    await db.delete(strategyKpiValues).where(eq(strategyKpiValues.id, id));
+  }
+
+  // Ref sequencer
+  async getNextEntityRef(tenantId: number, layer: string): Promise<number> {
+    const [existing] = await db.select().from(strategyRefCounters)
+      .where(and(eq(strategyRefCounters.tenantId, tenantId), eq(strategyRefCounters.layer, layer)));
+    if (existing) {
+      const next = existing.lastSeq + 1;
+      await db.update(strategyRefCounters)
+        .set({ lastSeq: next })
+        .where(eq(strategyRefCounters.id, existing.id));
+      return next;
+    } else {
+      await db.insert(strategyRefCounters).values({ tenantId, layer, lastSeq: 1 });
+      return 1;
+    }
+  }
+
+  async getEntityRef(tenantId: number, entityType: string, entityId: number): Promise<number | null> {
+    const [row] = await db.select().from(strategyEntityRefs)
+      .where(and(
+        eq(strategyEntityRefs.tenantId, tenantId),
+        eq(strategyEntityRefs.entityType, entityType),
+        eq(strategyEntityRefs.entityId, entityId),
+      ));
+    return row?.refSeq ?? null;
+  }
+
+  async assignEntityRef(tenantId: number, entityType: string, entityId: number): Promise<number> {
+    const existing = await this.getEntityRef(tenantId, entityType, entityId);
+    if (existing !== null) return existing;
+    const seq = await this.getNextEntityRef(tenantId, entityType);
+    await db.insert(strategyEntityRefs).values({ tenantId, entityType, entityId, refSeq: seq });
+    return seq;
+  }
+
+  async getEntityRefs(tenantId: number): Promise<Array<{ entityType: string; entityId: number; refSeq: number }>> {
+    return await db.select({
+      entityType: strategyEntityRefs.entityType,
+      entityId: strategyEntityRefs.entityId,
+      refSeq: strategyEntityRefs.refSeq,
+    }).from(strategyEntityRefs).where(eq(strategyEntityRefs.tenantId, tenantId));
+  }
+
+  async backfillEntityRefs(tenantId: number): Promise<{ assigned: number }> {
+    const layers: Array<{ type: string; items: Array<{ id: number }> }> = [
+      { type: "strategy", items: await this.getStrategyItems(tenantId) },
+      { type: "goal", items: await this.getGoals(tenantId) },
+      { type: "objective", items: await this.getObjectives(tenantId) },
+      { type: "initiative", items: await this.getInitiatives(tenantId) },
+      { type: "okr", items: await this.getOkrs(tenantId) },
+      { type: "kpi", items: await this.getKpis(tenantId) },
+      { type: "governance", items: await this.getGovernanceItems(tenantId) },
+    ];
+    let assigned = 0;
+    for (const { type, items } of layers) {
+      const sorted = [...items].sort((a, b) => a.id - b.id);
+      for (const item of sorted) {
+        const existing = await this.getEntityRef(tenantId, type, item.id);
+        if (existing === null) {
+          await this.assignEntityRef(tenantId, type, item.id);
+          assigned++;
+        }
+      }
+    }
+    return { assigned };
   }
 
   // Document Management - Folders

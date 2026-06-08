@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -102,6 +103,10 @@ export function CreateProgrammeModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <SubmitForm
+          onSubmit={() => createMut.mutate()}
+          disabled={blocked || name.trim().length < 3 || createMut.isPending}
+        >
         <DialogHeader>
           <DialogTitle>Create beta / early access programme</DialogTitle>
           <DialogDescription>
@@ -213,17 +218,17 @@ export function CreateProgrammeModal({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <AsyncButton
+            type="submit"
             pending={createMut.isPending}
-            disabled={blocked || name.trim().length < 3}
-            onClick={() => createMut.mutate()}
           >
             {createMut.isPending ? "Creating…" : "Create programme"}
           </AsyncButton>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -290,6 +295,10 @@ export function ManageParticipantsModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <SubmitForm
+          onSubmit={() => addMut.mutate(newInitials.trim())}
+          disabled={newInitials.trim().length < 1 || programme.slotsFilled >= programme.slotsMax || addMut.isPending}
+        >
         <DialogHeader>
           <DialogTitle>Manage participants</DialogTitle>
           <DialogDescription>
@@ -334,17 +343,17 @@ export function ManageParticipantsModal({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             Close
           </Button>
           <AsyncButton
+            type="submit"
             pending={addMut.isPending}
-            disabled={newInitials.trim().length < 1 || programme.slotsFilled >= programme.slotsMax}
-            onClick={() => addMut.mutate(newInitials.trim())}
           >
             Add participant
           </AsyncButton>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -386,6 +395,7 @@ export function ChangePlanModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm max-h-[90vh] overflow-y-auto">
+        <SubmitForm onSubmit={() => planMut.mutate()} disabled={!customer || planMut.isPending}>
         <DialogHeader>
           <DialogTitle>Change plan</DialogTitle>
           <DialogDescription>{customer?.name}</DialogDescription>
@@ -406,13 +416,14 @@ export function ChangePlanModal({
           </Select>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <AsyncButton pending={planMut.isPending} disabled={!customer} onClick={() => planMut.mutate()}>
+          <AsyncButton type="submit" pending={planMut.isPending}>
             {planMut.isPending ? "Saving…" : "Confirm change"}
           </AsyncButton>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -459,6 +470,10 @@ export function AddDiscountModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm max-h-[90vh] overflow-y-auto">
+        <SubmitForm
+          onSubmit={() => discountMut.mutate()}
+          disabled={note.trim().length < 3 || !customer || discountMut.isPending}
+        >
         <DialogHeader>
           <DialogTitle>Add discount</DialogTitle>
           <DialogDescription>{customer?.name}</DialogDescription>
@@ -491,17 +506,14 @@ export function AddDiscountModal({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <AsyncButton
-            pending={discountMut.isPending}
-            disabled={note.trim().length < 3 || !customer}
-            onClick={() => discountMut.mutate()}
-          >
+          <AsyncButton type="submit" pending={discountMut.isPending}>
             {discountMut.isPending ? "Applying…" : "Apply discount"}
           </AsyncButton>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -548,6 +560,7 @@ export function EditPlanModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <SubmitForm onSubmit={() => saveMut.mutate()} disabled={!plan || saveMut.isPending}>
         <DialogHeader>
           <DialogTitle>Edit {plan?.name} plan</DialogTitle>
           <DialogDescription>Update pricing and entitlements shown to sales and customers</DialogDescription>
@@ -563,13 +576,14 @@ export function EditPlanModal({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <AsyncButton pending={saveMut.isPending} disabled={!plan} onClick={() => saveMut.mutate()}>
+          <AsyncButton type="submit" pending={saveMut.isPending}>
             {saveMut.isPending ? "Saving…" : "Save plan"}
           </AsyncButton>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -617,6 +631,10 @@ export function AddCustomerModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <SubmitForm
+          onSubmit={() => createMut.mutate()}
+          disabled={name.trim().length < 2 || domain.trim().length < 3 || createMut.isPending}
+        >
         <DialogHeader>
           <DialogTitle>Add customer</DialogTitle>
           <DialogDescription>Create a new organisation record and start trial or paid subscription</DialogDescription>
@@ -647,17 +665,14 @@ export function AddCustomerModal({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <AsyncButton
-            pending={createMut.isPending}
-            disabled={name.trim().length < 2 || domain.trim().length < 3}
-            onClick={() => createMut.mutate()}
-          >
+          <AsyncButton type="submit" pending={createMut.isPending}>
             {createMut.isPending ? "Creating…" : "Add customer"}
           </AsyncButton>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -709,6 +724,10 @@ export function AddContactModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm max-h-[90vh] overflow-y-auto">
+        <SubmitForm
+          onSubmit={() => contactMut.mutate()}
+          disabled={name.trim().length < 2 || !email.includes("@") || !customerSlug || contactMut.isPending}
+        >
         <DialogHeader>
           <DialogTitle>Add contact</DialogTitle>
           <DialogDescription>{customerName}</DialogDescription>
@@ -739,17 +758,14 @@ export function AddContactModal({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <AsyncButton
-            pending={contactMut.isPending}
-            disabled={name.trim().length < 2 || !email.includes("@") || !customerSlug}
-            onClick={() => contactMut.mutate()}
-          >
+          <AsyncButton type="submit" pending={contactMut.isPending}>
             {contactMut.isPending ? "Adding…" : "Add contact"}
           </AsyncButton>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -804,6 +820,7 @@ export function DiscountRuleModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <SubmitForm onSubmit={() => ruleMut.mutate()} disabled={name.trim().length < 2 || ruleMut.isPending}>
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit discount rule" : "Add discount rule"}</DialogTitle>
           <DialogDescription>Define who receives the discount and who can apply it</DialogDescription>
@@ -819,17 +836,14 @@ export function DiscountRuleModal({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <AsyncButton
-            pending={ruleMut.isPending}
-            disabled={name.trim().length < 2}
-            onClick={() => ruleMut.mutate()}
-          >
+          <AsyncButton type="submit" pending={ruleMut.isPending}>
             {ruleMut.isPending ? "Saving…" : isEdit ? "Save rule" : "Create rule"}
           </AsyncButton>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -876,6 +890,7 @@ export function EditCustomerModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm max-h-[90vh] overflow-y-auto">
+        <SubmitForm onSubmit={() => saveMut.mutate()} disabled={!customer || saveMut.isPending}>
         <DialogHeader>
           <DialogTitle>Edit customer</DialogTitle>
           <DialogDescription>Update organisation profile details</DialogDescription>
@@ -891,13 +906,14 @@ export function EditCustomerModal({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <AsyncButton pending={saveMut.isPending} disabled={!customer} onClick={() => saveMut.mutate()}>
+          <AsyncButton type="submit" pending={saveMut.isPending}>
             {saveMut.isPending ? "Saving…" : "Save changes"}
           </AsyncButton>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );

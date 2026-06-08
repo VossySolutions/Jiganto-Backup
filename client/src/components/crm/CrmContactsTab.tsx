@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -690,6 +691,24 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
             </button>
           </DialogTrigger>
           <DialogContent>
+            <SubmitForm
+              onSubmit={() => {
+                if (editingId) {
+                  updateMutation.mutate({
+                    id: editingId,
+                    updates: {
+                      ...formData,
+                      accountId: formData.accountId ? parseInt(formData.accountId) : null,
+                    },
+                  });
+                  setIsOpen(false);
+                  resetForm();
+                } else {
+                  createMutation.mutate(formData);
+                }
+              }}
+              disabled={!formData.firstName || !formData.lastName || createMutation.isPending || updateMutation.isPending}
+            >
             <DialogHeader>
               <DialogTitle>{editingId ? "Edit Contact" : "Create New Contact"}</DialogTitle>
             </DialogHeader>
@@ -774,24 +793,10 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
               <Button
-                onClick={() => {
-                  if (editingId) {
-                    updateMutation.mutate({
-                      id: editingId,
-                      updates: {
-                        ...formData,
-                        accountId: formData.accountId ? parseInt(formData.accountId) : null,
-                      },
-                    });
-                    setIsOpen(false);
-                    resetForm();
-                  } else {
-                    createMutation.mutate(formData);
-                  }
-                }}
+                type="submit"
                 disabled={!formData.firstName || !formData.lastName || createMutation.isPending || updateMutation.isPending}
                 data-testid="button-save-contact"
               >
@@ -800,6 +805,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
                   : (createMutation.isPending ? "Creating..." : "Create Contact")}
               </Button>
             </DialogFooter>
+            </SubmitForm>
           </DialogContent>
         </Dialog>
       </div>

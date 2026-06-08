@@ -14,6 +14,7 @@ import { useShellLayout } from "@/hooks/use-shell-layout";
 import { cn } from "@/lib/utils";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { TemplateSelector, type BoardTemplate } from "@/components/TemplateSelector";
+import { SubmitForm } from "@/components/ui/submit-form";
 
 export function ModulePage() {
   const [match, params] = useRoute("/modules/:key");
@@ -133,7 +134,7 @@ export function ModulePage() {
                     <DialogTitle>Create New Board</DialogTitle>
                     <DialogDescription>Add a new board to this module</DialogDescription>
                   </DialogHeader>
-                  <div className="space-y-4 py-4">
+                  <SubmitForm onSubmit={handleCreateBoard} disabled={createBoard.isPending} className="space-y-4 py-4">
                     <div className="space-y-2">
                       <Label>Board Name</Label>
                       <Input 
@@ -143,9 +144,9 @@ export function ModulePage() {
                         data-testid="new-board-name"
                       />
                     </div>
-                  </div>
                   <div className="flex justify-between">
                     <Button 
+                      type="button"
                       variant="outline" 
                       onClick={() => { setIsDialogOpen(false); setIsTemplateOpen(true); }}
                       data-testid="use-template-btn"
@@ -153,10 +154,11 @@ export function ModulePage() {
                       <LayoutTemplate className="h-4 w-4 mr-2" />
                       Use Template
                     </Button>
-                    <Button onClick={handleCreateBoard} disabled={createBoard.isPending} data-testid="create-board-btn">
+                    <Button type="submit" disabled={createBoard.isPending} data-testid="create-board-btn">
                       {createBoard.isPending ? "Creating..." : "Create Board"}
                     </Button>
                   </div>
+                  </SubmitForm>
                 </DialogContent>
               </Dialog>
             </div>

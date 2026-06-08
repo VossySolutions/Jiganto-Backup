@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
@@ -1444,6 +1445,7 @@ function AddRowModal({ open, onClose, skillsList, resourcesList, rateCardItems, 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md" data-testid="add-row-modal">
+        <SubmitForm onSubmit={handleAdd}>
         <DialogHeader>
           <DialogTitle>Add Resource Requirement</DialogTitle>
         </DialogHeader>
@@ -1539,11 +1541,12 @@ function AddRowModal({ open, onClose, skillsList, resourcesList, rateCardItems, 
           </div>
         </div>
         <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button className="bg-[#0ea5e9] hover:bg-[#0284c7]" onClick={handleAdd} data-testid="button-confirm-add">
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="submit" className="bg-[#0ea5e9] hover:bg-[#0284c7]" data-testid="button-confirm-add">
             Add Resource
           </Button>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -1576,6 +1579,7 @@ function BreakModal({ row, onClose, onUpdate }: {
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md" data-testid="break-modal">
+        <SubmitForm onSubmit={() => onUpdate(breaks)}>
         <DialogHeader>
           <DialogTitle>Breaks — {row.roleName}{row.namedResourceLabel ? ` (${row.namedResourceLabel})` : ""}</DialogTitle>
         </DialogHeader>
@@ -1631,13 +1635,14 @@ function BreakModal({ row, onClose, onUpdate }: {
               <Label className="text-[10px] uppercase text-muted-foreground">Notes (Optional)</Label>
               <Input value={bNotes} onChange={e => setBNotes(e.target.value)} placeholder="e.g. Annual leave" className="text-xs" />
             </div>
-            <Button size="sm" className="text-xs bg-[#0ea5e9] hover:bg-[#0284c7]" onClick={addBreak}>Add Break</Button>
+            <Button type="button" size="sm" className="text-xs bg-[#0ea5e9] hover:bg-[#0284c7]" onClick={addBreak}>Add Break</Button>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button className="bg-[#0ea5e9] hover:bg-[#0284c7]" onClick={() => onUpdate(breaks)}>Save Breaks</Button>
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="submit" className="bg-[#0ea5e9] hover:bg-[#0284c7]">Save Breaks</Button>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -1721,6 +1726,7 @@ function SaveTemplateModal({ open, onClose, rows, onSaved }: {
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="max-w-md" data-testid="save-template-modal">
+        <SubmitForm onSubmit={handleSave} disabled={!name.trim() || saving}>
         <DialogHeader>
           <DialogTitle>Save as Template</DialogTitle>
           <DialogDescription>
@@ -1733,17 +1739,17 @@ function SaveTemplateModal({ open, onClose, rows, onSaved }: {
             placeholder="e.g. SAP Implementation"
             value={name}
             onChange={e => setName(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleSave()}
             autoFocus
             data-testid="input-template-name"
           />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={!name.trim() || saving} data-testid="button-save-template-confirm">
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={!name.trim() || saving} data-testid="button-save-template-confirm">
             {saving ? "Saving..." : "Save Template"}
           </Button>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );

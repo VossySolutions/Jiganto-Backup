@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose, DialogDescription } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,6 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Sidebar } from "@/components/Sidebar";
 import { useShellLayout } from "@/hooks/use-shell-layout";
+import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { 
@@ -23,9 +25,12 @@ import {
   Eye, Lightbulb, Shield, Users, Workflow, Wrench, CheckCircle2,
   BarChart3, PieChart, Activity, Clock, Calendar, Flag, Link2,
   FileText, ExternalLink, ShieldCheck, MessageSquarePlus, Trash2, History,
-  Bell, Send, Upload
+  Bell, Send, Upload, Brain, X, RefreshCw, CheckCircle, TriangleAlert, Info, Zap
 } from "lucide-react";
-import { ImportModal } from "@/components/ImportModal";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
+import { BusinessLoadingState } from "@/components/business/BusinessLoadingState";
+import { BusinessTableScroll } from "@/components/business/BusinessTableScroll";
 import {
   BizDashboardIcon,
   BizStrategyMapIcon,
@@ -46,9 +51,9 @@ import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import {
   EnhancedStrategyTab, EnhancedGoalsTab, EnhancedObjectivesTab,
-  EnhancedInitiativesTab, EnhancedOkrsTab, EnhancedKpisTab,
+  EnhancedInitiativesTab, EnhancedOkrsTab, EnhancedKpisTab, EnhancedGovernanceTab,
   type StrategyItemEx, type GoalEx, type ObjectiveEx,
-  type InitiativeEx, type OkrEx, type KpiEx,
+  type InitiativeEx, type OkrEx, type KpiEx, type GovernanceItemEx,
 } from "@/components/BusinessManageLayerView";
 
 type StrategyItem = {
@@ -287,8 +292,10 @@ const statusColors: Record<string, string> = {
 export default function BusinessManagementPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [searchTerm, setSearchTerm] = useState("");
+  const [aiInsightsOpen, setAiInsightsOpen] = useState(false);
   const { toast } = useToast();
   const { mainOffset, mobileTopOffset } = useShellLayout();
+  const { isAuthenticated, sessionReady } = useAuth();
 
   const { data: stats, isLoading: statsLoading } = useQuery<BusinessStats>({
     queryKey: ["/api/business/stats"],
@@ -330,19 +337,48 @@ export default function BusinessManagementPage() {
     queryKey: ["/api/business/risks"],
   });
 
-  const { data: objectives = [] } = useQuery<Objective[]>({
+  const { data: objectives = [], isLoading: objectivesLoading } = useQuery<Objective[]>({
     queryKey: ["/api/business/objectives"],
   });
 
-  const { data: okrs = [] } = useQuery<Okr[]>({
+  const { data: okrs = [], isLoading: okrsLoading } = useQuery<Okr[]>({
     queryKey: ["/api/business/okrs"],
   });
 
-  const { data: businessTasks = [] } = useQuery<BusinessTask[]>({
+  const { data: businessTasks = [], isLoading: tasksLoading } = useQuery<BusinessTask[]>({
     queryKey: ["/api/business/tasks"],
   });
 
-  const isLoading = statsLoading || strategyLoading || goalsLoading || initiativesLoading || kpisLoading || deptsLoading || risksLoading;
+  const { data: governanceItems = [], isLoading: governanceLoading } = useQuery<GovernanceItemEx[]>({
+    queryKey: ["/api/business/governance"],
+  });
+
+  const { data: entityRefs } = useQuery<Record<string, number>>({
+    queryKey: ["/api/business/entity-refs"],
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (!sessionReady || !isAuthenticated) return;
+    void apiRequest("POST", "/api/business/entity-refs/backfill")
+      .then(() => queryClient.invalidateQueries({ queryKey: ["/api/business/entity-refs"] }))
+      .catch(() => {});
+  }, [sessionReady, isAuthenticated]);
+
+  const tabLoading: Record<string, boolean> = {
+    dashboard: statsLoading,
+    "strategy-map": false,
+    strategy: strategyLoading,
+    goals: goalsLoading,
+    objectives: objectivesLoading,
+    initiatives: initiativesLoading,
+    okrs: okrsLoading,
+    kpis: kpisLoading,
+    governance: governanceLoading,
+    reviews: false,
+    documents: false,
+    operations: deptsLoading || processLoading || toolsLoading,
+  };
 
   const createStrategyMutation = useMutation({
     mutationFn: (data: { templateType: string; title: string; description?: string }) =>
@@ -350,6 +386,7 @@ export default function BusinessManagementPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/business/strategy"] });
       queryClient.invalidateQueries({ queryKey: ["/api/business/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/business/entity-refs"] });
       toast({ title: "Strategy item created" });
     },
   });
@@ -383,58 +420,6 @@ export default function BusinessManagementPage() {
     },
   });
 
-  const invalidateAllBusinessQueries = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/business/strategy"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/business/goals"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/business/initiatives"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/business/kpis"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/business/risks"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/business/departments"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/business/processes"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/business/tools"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/business/key-results"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/business/objectives"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/business/okrs"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/business/tasks"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/business/stats"] });
-  };
-
-  const seedDemoMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/business/seed-demo"),
-    onSuccess: () => {
-      invalidateAllBusinessQueries();
-      toast({ title: "Jiganto strategy data loaded!", description: "Strategy pillars, goals, initiatives, and projects are now available." });
-    },
-    onError: () => {
-      toast({ title: "Failed to load demo data", variant: "destructive" });
-    },
-  });
-
-  const clearDemoMutation = useMutation({
-    mutationFn: () => apiRequest("DELETE", "/api/business/seed-demo"),
-    onSuccess: () => {
-      invalidateAllBusinessQueries();
-      toast({ title: "Strategy data cleared", description: "All Jiganto strategy data has been removed." });
-    },
-    onError: () => {
-      toast({ title: "Failed to clear demo data", variant: "destructive" });
-    },
-  });
-
-  if (isLoading) {
-    return (
-      <div className="h-screen overflow-hidden bg-background" data-testid="business-loading">
-        <Sidebar />
-        <main className={cn("transition-all duration-300 h-full flex items-center justify-center overflow-hidden", mainOffset, mobileTopOffset)}>
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 text-primary animate-spin" />
-            <p className="text-sm text-muted-foreground">Loading Business Management...</p>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   const primaryTabs = [
     { id: "dashboard", label: "Dashboard", icon: BizDashboardIcon },
     { id: "strategy-map", label: "Strategy Map", icon: BizStrategyMapIcon },
@@ -456,11 +441,12 @@ export default function BusinessManagementPage() {
   return (
     <div className="h-screen overflow-hidden bg-background" data-testid="business-page">
       <Sidebar />
+      <AIInsightsPanel open={aiInsightsOpen} onClose={() => setAiInsightsOpen(false)} />
       <main className={cn("transition-all duration-300 h-full flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
-        <div className="px-4 pt-4">
-          <ModuleWelcomeBanner moduleKey="business-mgmt" features={["Strategy mapping", "Execution tracking", "RAG status rollup", "Demo data"]} />
+        <div className="px-3 sm:px-4 pt-3 sm:pt-4">
+          <ModuleWelcomeBanner moduleKey="business-mgmt" features={["Strategy mapping", "Governance layer", "RAG status rollup", "AI insights"]} />
         </div>
-        <div className="border-b border-border/30 bg-card backdrop-blur-sm sticky top-0 z-50">
+        <div className="border-b border-border/30 bg-card/95 backdrop-blur-md sticky top-0 z-50 shadow-sm">
           <ModuleHeader
             icon={Briefcase}
             title="Business Management"
@@ -470,91 +456,40 @@ export default function BusinessManagementPage() {
             onSearchChange={setSearchTerm}
             searchTestId="input-business-search"
             titleTestId="business-title"
-            actions={
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="rounded-xl gap-2" data-testid="button-demo-data">
-                    <Building2 className="h-4 w-4 text-status-blue" />
-                    Demo Data
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Jiganto Market Launch Strategy</DialogTitle>
-                    <DialogDescription>
-                      Load the Jiganto platform market launch strategy data with a 6-pillar strategic framework covering Platform Build, Market Entry, AI/Technology, Commercial Growth, Ecosystem Development, and Trust & Compliance.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-                      <h4 className="font-medium text-sm">Strategy Data Includes:</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-status-green" /> 6 Strategic Pillars with full hierarchy</li>
-                        <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-status-green" /> 6 Goals, 6 Objectives, 6 Initiatives with OKRs & KPIs</li>
-                        <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-status-green" /> 1 Portfolio, 6 Programmes, 6 Projects linked to initiatives</li>
-                        <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-status-green" /> 8 Departments, 12 Business Processes, 14 Tools</li>
-                        <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-status-green" /> 10 Document Templates with initiative links</li>
-                        <li className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-status-green" /> Strategy-to-Execution traceability chain</li>
-                      </ul>
-                    </div>
-                  </div>
-                  <DialogFooter className="gap-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => clearDemoMutation.mutate()}
-                      disabled={clearDemoMutation.isPending}
-                      data-testid="button-clear-demo"
-                    >
-                      {clearDemoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Clear Data
-                    </Button>
-                    <DialogClose asChild>
-                      <Button 
-                        onClick={() => seedDemoMutation.mutate()}
-                        disabled={seedDemoMutation.isPending}
-                        data-testid="button-seed-demo"
-                      >
-                        {seedDemoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                        Load Strategy Data
-                      </Button>
-                    </DialogClose>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            }
           />
 
-          <div className="px-4 flex items-center gap-1 pb-3">
+          <ScrollArea className="w-full">
+          <div className="px-3 sm:px-4 flex items-center gap-1 pb-3 min-w-max sm:min-w-0 flex-wrap sm:flex-nowrap">
             {primaryTabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors hover-elevate",
+                  "inline-flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors hover-elevate shrink-0",
                   activeTab === tab.id 
-                    ? "bg-primary/10 text-primary" 
-                    : "text-muted-foreground"
+                    ? "bg-primary/10 text-primary shadow-sm" 
+                    : "text-muted-foreground hover:text-foreground"
                 )}
                 data-testid={`tab-${tab.id}`}
               >
-                <tab.icon className="h-4 w-4" />
-                {tab.label}
+                <tab.icon className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">{tab.label}</span>
               </button>
             ))}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   className={cn(
-                    "inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors hover-elevate",
+                    "inline-flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors hover-elevate shrink-0",
                     isManageTab 
-                      ? "bg-primary/10 text-primary" 
-                      : "text-muted-foreground"
+                      ? "bg-primary/10 text-primary shadow-sm" 
+                      : "text-muted-foreground hover:text-foreground"
                   )}
                   data-testid="tab-manage"
                 >
-                  {currentManageItem ? <currentManageItem.icon className="h-4 w-4" /> : <BizStrategyIcon className="h-4 w-4" />}
-                  {currentManageItem?.label || "Manage"}
-                  <ChevronDown className="h-3 w-3" />
+                  {currentManageItem ? <currentManageItem.icon className="h-4 w-4 shrink-0" /> : <BizStrategyIcon className="h-4 w-4 shrink-0" />}
+                  <span className="max-w-[80px] sm:max-w-none truncate">{currentManageItem?.label || "Manage"}</span>
+                  <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-48">
@@ -577,65 +512,85 @@ export default function BusinessManagementPage() {
             <button
               onClick={() => setActiveTab("reviews")}
               className={cn(
-                "inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors hover-elevate",
+                "inline-flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors hover-elevate shrink-0",
                 activeTab === "reviews"
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground"
+                  ? "bg-primary/10 text-primary shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
               )}
               data-testid="tab-reviews"
             >
-              <BizExecutionIcon className="h-4 w-4" />
-              Reviews
+              <BizExecutionIcon className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">Reviews</span>
             </button>
             <button
               onClick={() => setActiveTab("documents")}
               className={cn(
-                "inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors hover-elevate",
+                "inline-flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors hover-elevate shrink-0",
                 activeTab === "documents" 
-                  ? "bg-primary/10 text-primary" 
-                  : "text-muted-foreground"
+                  ? "bg-primary/10 text-primary shadow-sm" 
+                  : "text-muted-foreground hover:text-foreground"
               )}
               data-testid="tab-documents"
             >
-              <BizDocumentsIcon className="h-4 w-4" />
-              Documents
+              <BizDocumentsIcon className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">Documents</span>
             </button>
+
+            <div className="ml-auto shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs h-8 border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-900/30"
+                onClick={() => setAiInsightsOpen(true)}
+                data-testid="button-ai-insights"
+              >
+                <Brain className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">AI Insights</span>
+              </Button>
+            </div>
           </div>
+          </ScrollArea>
         </div>
 
-        <ScrollArea className="flex-1">
-          <div className="p-6 space-y-6">
+        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden">
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-[1600px] mx-auto w-full min-w-0">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsContent value="dashboard" className="m-0">
-                <DashboardTab 
-                  stats={stats} 
-                  goals={goals} 
-                  initiatives={initiatives} 
-                  risks={risks}
-                  strategyItems={strategyItems}
-                />
+              <TabsContent value="dashboard" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
+                {tabLoading.dashboard ? (
+                  <BusinessLoadingState variant="dashboard" />
+                ) : (
+                  <DashboardTab 
+                    stats={stats} 
+                    goals={goals} 
+                    initiatives={initiatives} 
+                    risks={risks}
+                    strategyItems={strategyItems}
+                  />
+                )}
               </TabsContent>
 
-              <TabsContent value="strategy-map" className="m-0">
+              <TabsContent value="strategy-map" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <StrategyMap />
               </TabsContent>
 
-              <TabsContent value="strategy" className="m-0">
+              <TabsContent value="strategy" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <EnhancedStrategyTab
                   strategyItems={strategyItems as unknown as StrategyItemEx[]}
+                  loading={tabLoading.strategy}
                   addButton={<AddStrategyButton onSave={(d) => createStrategyMutation.mutate(d)} isCreating={createStrategyMutation.isPending} />}
                 />
               </TabsContent>
 
-              <TabsContent value="goals" className="m-0">
+              <TabsContent value="goals" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <EnhancedGoalsTab
                   goals={goals as unknown as GoalEx[]}
                   strategyItems={strategyItems as unknown as StrategyItemEx[]}
+                  loading={tabLoading.goals}
                   addButton={<AddGoalButton strategyItems={strategyItems} onSave={(d) => createGoalMutation.mutate(d)} isCreating={createGoalMutation.isPending} />}
                 />
               </TabsContent>
 
-              <TabsContent value="operations" className="m-0">
+              <TabsContent value="operations" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <OperationsTab 
                   departments={departments} 
                   processes={processes}
@@ -645,53 +600,58 @@ export default function BusinessManagementPage() {
                 />
               </TabsContent>
 
-              <TabsContent value="initiatives" className="m-0">
+              <TabsContent value="initiatives" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <EnhancedInitiativesTab
                   initiatives={initiatives as unknown as InitiativeEx[]}
                   goals={goals as unknown as GoalEx[]}
+                  loading={tabLoading.initiatives}
                   addButton={<AddInitiativeButton goals={goals} onSave={(d) => createInitiativeMutation.mutate(d)} isCreating={createInitiativeMutation.isPending} />}
                 />
               </TabsContent>
 
-              <TabsContent value="objectives" className="m-0">
+              <TabsContent value="objectives" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <EnhancedObjectivesTab
                   objectives={objectives as unknown as ObjectiveEx[]}
                   goals={goals as unknown as GoalEx[]}
+                  loading={tabLoading.objectives}
                 />
               </TabsContent>
 
-              <TabsContent value="okrs" className="m-0">
+              <TabsContent value="okrs" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <EnhancedOkrsTab
                   okrs={okrs as unknown as OkrEx[]}
                   objectives={objectives as unknown as ObjectiveEx[]}
                   goals={goals as unknown as GoalEx[]}
+                  loading={tabLoading.okrs}
                 />
               </TabsContent>
 
-              <TabsContent value="kpis" className="m-0">
+              <TabsContent value="kpis" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <EnhancedKpisTab
                   kpis={kpis as unknown as KpiEx[]}
                   goals={goals as unknown as GoalEx[]}
+                  loading={tabLoading.kpis}
                 />
               </TabsContent>
 
-              <TabsContent value="governance" className="m-0">
-                <GovernanceTab tenantId={1} />
+              <TabsContent value="governance" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
+                <EnhancedGovernanceTab items={governanceItems} loading={tabLoading.governance} />
               </TabsContent>
 
-              <TabsContent value="reviews" className="m-0">
+              <TabsContent value="reviews" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <ReviewsTab
                   strategyItems={strategyItems} goals={goals} objectives={objectives}
                   initiatives={initiatives} okrs={okrs} kpis={kpis}
+                  entityRefs={entityRefs}
                 />
               </TabsContent>
 
-              <TabsContent value="documents" className="m-0">
+              <TabsContent value="documents" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <DocumentsTab initiatives={initiatives} />
               </TabsContent>
             </Tabs>
           </div>
-        </ScrollArea>
+        </div>
       </main>
     </div>
   );
@@ -705,12 +665,40 @@ function AddStrategyButton({ onSave, isCreating }: {
 }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ templateType: "strategy", title: "", description: "" });
+  const [aiLoading, setAiLoading] = useState(false);
+  const { toast } = useToast();
+
   const save = () => {
     if (!form.title || !form.templateType) return;
     onSave(form);
     setForm({ templateType: "strategy", title: "", description: "" });
     setOpen(false);
   };
+
+  const suggestWithAI = async () => {
+    if (!form.title.trim()) {
+      toast({ title: "Enter a title first", description: "The AI needs a title to generate a description.", variant: "destructive" });
+      return;
+    }
+    setAiLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/business/ai-assist", {
+        type: form.templateType,
+        title: form.title.trim(),
+        action: "describe",
+      });
+      const data = await res.json();
+      if (data.description) {
+        setForm(f => ({ ...f, description: data.description }));
+        toast({ title: "AI suggestion applied" });
+      }
+    } catch {
+      toast({ title: "AI assist failed", variant: "destructive" });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -719,6 +707,7 @@ function AddStrategyButton({ onSave, isCreating }: {
         </Button>
       </DialogTrigger>
       <DialogContent>
+        <SubmitForm onSubmit={save} disabled={isCreating || !form.title}>
         <DialogHeader><DialogTitle>Add Strategy Item</DialogTitle></DialogHeader>
         <div className="space-y-3 py-2">
           <div className="space-y-1.5"><Label className="text-xs font-semibold">Type</Label>
@@ -732,16 +721,28 @@ function AddStrategyButton({ onSave, isCreating }: {
           <div className="space-y-1.5"><Label className="text-xs font-semibold">Title</Label>
             <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="h-8 text-sm" data-testid="input-strategy-title" />
           </div>
-          <div className="space-y-1.5"><Label className="text-xs font-semibold">Description</Label>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold">Description</Label>
+              <Button
+                type="button" variant="ghost" size="sm" className="h-6 gap-1 text-[10px] text-violet-600 hover:text-violet-700 hover:bg-violet-50 px-2"
+                onClick={suggestWithAI} disabled={aiLoading}
+                data-testid="button-ai-assist-description"
+              >
+                {aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                AI Suggest
+              </Button>
+            </div>
             <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={3} className="text-sm" data-testid="input-strategy-description" />
           </div>
         </div>
         <DialogFooter>
-          <DialogClose asChild><Button variant="outline" size="sm">Cancel</Button></DialogClose>
-          <Button size="sm" onClick={save} disabled={isCreating || !form.title} data-testid="button-save-strategy">
+          <DialogClose asChild><Button type="button" variant="outline" size="sm">Cancel</Button></DialogClose>
+          <Button type="submit" size="sm" data-testid="button-save-strategy">
             {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
           </Button>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -768,6 +769,7 @@ function AddGoalButton({ strategyItems, onSave, isCreating }: {
         </Button>
       </DialogTrigger>
       <DialogContent>
+        <SubmitForm onSubmit={save} disabled={isCreating || !form.title}>
         <DialogHeader><DialogTitle>Add Goal</DialogTitle></DialogHeader>
         <div className="space-y-3 py-2">
           <div className="space-y-1.5"><Label className="text-xs font-semibold">Title</Label>
@@ -786,11 +788,12 @@ function AddGoalButton({ strategyItems, onSave, isCreating }: {
           </div>
         </div>
         <DialogFooter>
-          <DialogClose asChild><Button variant="outline" size="sm">Cancel</Button></DialogClose>
-          <Button size="sm" onClick={save} disabled={isCreating || !form.title} data-testid="button-save-goal">
+          <DialogClose asChild><Button type="button" variant="outline" size="sm">Cancel</Button></DialogClose>
+          <Button type="submit" size="sm" data-testid="button-save-goal">
             {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
           </Button>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -817,6 +820,7 @@ function AddInitiativeButton({ goals, onSave, isCreating }: {
         </Button>
       </DialogTrigger>
       <DialogContent>
+        <SubmitForm onSubmit={save} disabled={isCreating || !form.title}>
         <DialogHeader><DialogTitle>Add Initiative</DialogTitle></DialogHeader>
         <div className="space-y-3 py-2">
           <div className="space-y-1.5"><Label className="text-xs font-semibold">Title</Label>
@@ -843,11 +847,12 @@ function AddInitiativeButton({ goals, onSave, isCreating }: {
           </div>
         </div>
         <DialogFooter>
-          <DialogClose asChild><Button variant="outline" size="sm">Cancel</Button></DialogClose>
-          <Button size="sm" onClick={save} disabled={isCreating || !form.title} data-testid="button-save-initiative">
+          <DialogClose asChild><Button type="button" variant="outline" size="sm">Cancel</Button></DialogClose>
+          <Button type="submit" size="sm" data-testid="button-save-initiative">
             {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
           </Button>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -870,8 +875,8 @@ function DashboardTab({ stats, goals, initiatives, risks, strategyItems }: {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {metrics.map((metric, i) => (
           <motion.div
             key={metric.title}
@@ -879,17 +884,17 @@ function DashboardTab({ stats, goals, initiatives, risks, strategyItems }: {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
           >
-            <Card className="rounded-2xl border-border/20 shadow-sm hover:shadow-md transition-all h-full" data-testid={`card-metric-${metric.testId}`}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
+            <Card className="rounded-xl sm:rounded-2xl border-border/20 shadow-sm hover:shadow-md transition-all h-full" data-testid={`card-metric-${metric.testId}`}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2 p-4 sm:p-6">
+                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">
                   {metric.title}
                 </CardTitle>
-                <div className={cn("p-2 rounded-lg", metric.color)}>
-                  <metric.icon className="h-4 w-4 text-white" />
+                <div className={cn("p-1.5 sm:p-2 rounded-lg shrink-0", metric.color)}>
+                  <metric.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold" data-testid={`stat-${metric.testId}`}>{metric.value}</div>
+              <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6 pt-0">
+                <div className="text-2xl sm:text-3xl font-bold" data-testid={`stat-${metric.testId}`}>{metric.value}</div>
                 <p className="text-xs text-muted-foreground mt-1 min-h-[1rem]">{metric.subtitle || "\u00A0"}</p>
               </CardContent>
             </Card>
@@ -1053,6 +1058,7 @@ function StrategyTab({ strategyItems, risks, onCreateStrategy, isCreating }: {
             </Button>
           </DialogTrigger>
           <DialogContent>
+            <SubmitForm onSubmit={handleCreate} disabled={isCreating || !newItem.title || !newItem.templateType}>
             <DialogHeader>
               <DialogTitle>Add Strategy Item</DialogTitle>
               <DialogDescription>Create a new strategic element for your organization</DialogDescription>
@@ -1092,12 +1098,13 @@ function StrategyTab({ strategyItems, risks, onCreateStrategy, isCreating }: {
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
-              <Button onClick={handleCreate} disabled={isCreating || !newItem.title || !newItem.templateType} data-testid="button-save-strategy">
+              <Button type="submit" data-testid="button-save-strategy">
                 {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
               </Button>
             </DialogFooter>
+            </SubmitForm>
           </DialogContent>
         </Dialog>
       </div>
@@ -1184,6 +1191,7 @@ function GoalsTab({ goals, keyResults, kpis, strategyItems, onCreateGoal, isCrea
             </Button>
           </DialogTrigger>
           <DialogContent>
+            <SubmitForm onSubmit={handleCreate} disabled={isCreating || !newGoal.title}>
             <DialogHeader>
               <DialogTitle>Add Goal</DialogTitle>
               <DialogDescription>Create a new objective or OKR</DialogDescription>
@@ -1235,12 +1243,13 @@ function GoalsTab({ goals, keyResults, kpis, strategyItems, onCreateGoal, isCrea
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
-              <Button onClick={handleCreate} disabled={isCreating || !newGoal.title} data-testid="button-save-goal">
+              <Button type="submit" data-testid="button-save-goal">
                 {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
               </Button>
             </DialogFooter>
+            </SubmitForm>
           </DialogContent>
         </Dialog>
       </div>
@@ -1347,6 +1356,7 @@ function OperationsTab({ departments, processes, tools, onCreateDepartment, isCr
             </Button>
           </DialogTrigger>
           <DialogContent>
+            <SubmitForm onSubmit={handleCreate} disabled={isCreating || !newDept.name}>
             <DialogHeader>
               <DialogTitle>Add Department</DialogTitle>
               <DialogDescription>Create a new department for your organization</DialogDescription>
@@ -1373,12 +1383,13 @@ function OperationsTab({ departments, processes, tools, onCreateDepartment, isCr
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
-              <Button onClick={handleCreate} disabled={isCreating || !newDept.name} data-testid="button-save-department">
+              <Button type="submit" data-testid="button-save-department">
                 {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
               </Button>
             </DialogFooter>
+            </SubmitForm>
           </DialogContent>
         </Dialog>
       </div>
@@ -1509,6 +1520,7 @@ function InitiativesTab({ initiatives, goals, onCreateInitiative, isCreating }: 
             </Button>
           </DialogTrigger>
           <DialogContent>
+            <SubmitForm onSubmit={handleCreate} disabled={isCreating || !newInit.title}>
             <DialogHeader>
               <DialogTitle>Add Initiative</DialogTitle>
               <DialogDescription>Create a new initiative to support your goals</DialogDescription>
@@ -1562,12 +1574,13 @@ function InitiativesTab({ initiatives, goals, onCreateInitiative, isCreating }: 
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
-              <Button onClick={handleCreate} disabled={isCreating || !newInit.title} data-testid="button-save-initiative">
+              <Button type="submit" data-testid="button-save-initiative">
                 {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
               </Button>
             </DialogFooter>
+            </SubmitForm>
           </DialogContent>
         </Dialog>
       </div>
@@ -1689,11 +1702,13 @@ function ObjectivesTab({ objectives, goals }: { objectives: Objective[]; goals: 
         <Card className="rounded-2xl">
           <CardContent className="py-12 text-center">
             <Crosshair className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground">No objectives yet. Load the Apex Solutions data or create them from the Strategy Map.</p>
+            <p className="text-muted-foreground">No objectives yet. Create them from the Strategy Map or Manage tabs.</p>
           </CardContent>
         </Card>
       ) : (
-        <MondayTable data={objectives} columns={cols} rowTestId="objective-row" />
+        <div className="w-full max-w-full min-w-0 overflow-x-hidden">
+          <MondayTable data={objectives} columns={cols} rowTestId="objective-row" />
+        </div>
       )}
     </div>
   );
@@ -1731,11 +1746,13 @@ function OkrsTab({ okrs, goals, objectives }: { okrs: Okr[]; goals: Goal[]; obje
         <Card className="rounded-2xl">
           <CardContent className="py-12 text-center">
             <Activity className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground">No OKRs yet. Load the Apex Solutions data or define them in the Strategy Map.</p>
+            <p className="text-muted-foreground">No OKRs yet. Define them in the Strategy Map or Manage tabs.</p>
           </CardContent>
         </Card>
       ) : (
-        <MondayTable data={okrs} columns={cols} rowTestId="okr-row" />
+        <div className="w-full max-w-full min-w-0 overflow-x-hidden">
+          <MondayTable data={okrs} columns={cols} rowTestId="okr-row" />
+        </div>
       )}
     </div>
   );
@@ -1778,11 +1795,13 @@ function KpisTab({ kpis, goals }: { kpis: Kpi[]; goals: Goal[] }) {
         <Card className="rounded-2xl">
           <CardContent className="py-12 text-center">
             <BarChart3 className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground">No KPIs yet. Load the Apex Solutions data to see example KPIs.</p>
+            <p className="text-muted-foreground">No KPIs yet. Add KPIs from the Manage tab or Strategy Map.</p>
           </CardContent>
         </Card>
       ) : (
-        <MondayTable data={kpis} columns={cols} rowTestId="kpi-row" />
+        <div className="w-full max-w-full min-w-0 overflow-x-hidden">
+          <MondayTable data={kpis} columns={cols} rowTestId="kpi-row" />
+        </div>
       )}
     </div>
   );
@@ -1797,15 +1816,17 @@ const ENTITY_BADGE_CLS: Record<string, string> = {
   initiative: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
   okr:        "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
   kpi:        "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300",
+  governance: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300",
 };
 
 const REVIEW_REF_PREFIX: Record<string, string> = {
-  strategy: "S", goal: "G", objective: "OBJ", initiative: "INI", okr: "OKR", kpi: "KPI",
+  strategy: "S", goal: "G", objective: "OBJ", initiative: "INI", okr: "OKR", kpi: "KPI", governance: "GOV",
 };
 
-function reviewRefCode(entityType: string, entityId: number) {
+function reviewRefCode(entityType: string, entityId: number, entityRefs?: Record<string, number>) {
   const prefix = REVIEW_REF_PREFIX[entityType] ?? entityType.toUpperCase().slice(0, 3);
-  return `${prefix}-${String(entityId).padStart(3, "0")}`;
+  const seq = entityRefs?.[`${entityType}-${entityId}`];
+  return `${prefix}-${String(seq ?? entityId).padStart(3, "0")}`;
 }
 
 function reviewFeedDate(d: string) {
@@ -1853,23 +1874,33 @@ function OverdueCard({ item }: { item: OverdueItem }) {
   );
 }
 
+const REVIEWS_PAGE_SIZE = 20;
+
 function ReviewsTab({
-  strategyItems, goals, objectives, initiatives, okrs, kpis,
+  strategyItems, goals, objectives, initiatives, okrs, kpis, entityRefs,
 }: {
   strategyItems: StrategyItem[]; goals: Goal[]; objectives: Objective[];
   initiatives: Initiative[]; okrs: Okr[]; kpis: Kpi[];
+  entityRefs?: Record<string, number>;
 }) {
   const [entityFilter, setEntityFilter] = useState("all");
+  const [page, setPage] = useState(1);
 
-  const { data: allNotes = [], isLoading: notesLoading } = useQuery<ReviewNote[]>({
-    queryKey: ["/api/business/review-notes", "all"],
-    queryFn: () => fetch("/api/business/review-notes?tenantId=1", { credentials: "include" }).then(r => r.json()),
+  const { data: allNotesRaw, isLoading: notesLoading } = useQuery<ReviewNote[]>({
+    queryKey: ["/api/business/review-notes"],
   });
+  const allNotes = useMemo(
+    () => (Array.isArray(allNotesRaw) ? allNotesRaw : []),
+    [allNotesRaw],
+  );
 
-  const { data: overdueItems = [] } = useQuery<OverdueItem[]>({
+  const { data: overdueItemsRaw, isLoading: overdueLoading } = useQuery<OverdueItem[]>({
     queryKey: ["/api/business/overdue-reviews"],
-    queryFn: () => fetch("/api/business/overdue-reviews?tenantId=1", { credentials: "include" }).then(r => r.json()),
   });
+  const overdueItems = useMemo(
+    () => (Array.isArray(overdueItemsRaw) ? overdueItemsRaw : []),
+    [overdueItemsRaw],
+  );
 
   const titleMap = useMemo<Record<string, Record<number, string>>>(() => ({
     strategy:   Object.fromEntries(strategyItems.map(s => [s.id, s.title])),
@@ -1881,32 +1912,118 @@ function ReviewsTab({
   }), [strategyItems, goals, objectives, initiatives, okrs, kpis]);
 
   const filteredNotes = useMemo(() =>
-    entityFilter === "all" ? allNotes : allNotes.filter(n => n.entityType === entityFilter),
+    entityFilter === "all" ? [...allNotes].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      : allNotes.filter(n => n.entityType === entityFilter).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
   [allNotes, entityFilter]);
+
+  const paginatedNotes = useMemo(() => filteredNotes.slice(0, page * REVIEWS_PAGE_SIZE), [filteredNotes, page]);
+  const hasMore = paginatedNotes.length < filteredNotes.length;
 
   const totalCheckins = allNotes.length;
   const overdueCount = overdueItems.length;
   const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const reviewedThisWeek = allNotes.filter(n => new Date(n.createdAt).getTime() > oneWeekAgo).length;
+  const reviewedThisWeekSet = new Set(
+    allNotes.filter(n => new Date(n.createdAt).getTime() > oneWeekAgo)
+      .map(n => `${n.entityType}-${n.entityId}`)
+  );
+  const reviewedThisWeek = reviewedThisWeekSet.size;
+
+  // Anomaly detection: items with consecutive red/amber check-ins
+  const anomalies = useMemo(() => {
+    const now = Date.now();
+    const result: Array<{ type: string; title: string; reason: string; severity: "high" | "medium" }> = [];
+
+    // Initiatives overdue and not completed
+    initiatives.filter(i => i.endDate && new Date(i.endDate).getTime() < now && i.status !== "completed").forEach(i => {
+      const daysOverdue = Math.round((now - new Date(i.endDate!).getTime()) / 86400000);
+      result.push({ type: "initiative", title: i.title, reason: `${daysOverdue}d overdue`, severity: daysOverdue > 30 ? "high" : "medium" });
+    });
+
+    // Goals with low progress and upcoming target
+    goals.filter(g => {
+      if (!g.targetDate) return false;
+      const daysLeft = (new Date(g.targetDate).getTime() - now) / 86400000;
+      return daysLeft > 0 && daysLeft < 30 && (g.progress ?? 0) < 25;
+    }).forEach(g => {
+      const daysLeft = Math.round((new Date(g.targetDate!).getTime() - now) / 86400000);
+      result.push({ type: "goal", title: g.title, reason: `${(g.progress ?? 0)}% progress, ${daysLeft}d to target`, severity: "high" });
+    });
+
+    // Items with consecutive red check-ins
+    const redStreaks = new Map<string, number>();
+    [...allNotes].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()).forEach(n => {
+      const key = `${n.entityType}-${n.entityId}`;
+      if (n.ragSnapshot === "red") {
+        redStreaks.set(key, (redStreaks.get(key) ?? 0) + 1);
+      } else if (n.ragSnapshot === "green") {
+        redStreaks.delete(key);
+      }
+    });
+    redStreaks.forEach((count, key) => {
+      if (count >= 2) {
+        const [et, eid] = key.split("-");
+        const title = titleMap[et]?.[Number(eid)] ?? `${et} #${eid}`;
+        result.push({ type: et, title, reason: `Red for ${count} consecutive check-ins`, severity: count >= 3 ? "high" : "medium" });
+      }
+    });
+
+    return result.slice(0, 8);
+  }, [initiatives, goals, allNotes, titleMap]);
 
   const getTitle = (entityType: string, entityId: number) => {
     const map = titleMap[entityType];
     return map?.[entityId] ?? `${ENTITY_LABELS[entityType] ?? entityType} #${entityId}`;
   };
 
+  if (notesLoading || overdueLoading) {
+    return <BusinessLoadingState variant="panel" label="Loading reviews…" />;
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5 w-full min-w-0 max-w-full">
       <div>
-        <h2 className="text-lg font-semibold">Reviews &amp; Check-ins</h2>
-        <p className="text-sm text-muted-foreground">Cross-entity progress log — all check-in notes across Strategy, Goals, Objectives, Initiatives, OKRs and KPIs</p>
+        <h2 className="text-base sm:text-lg font-semibold">Reviews &amp; Check-ins</h2>
+        <p className="text-xs sm:text-sm text-muted-foreground">Cross-layer progress log — check-ins across all 7 layers including Governance</p>
       </div>
 
       {/* Stats bar */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <ReviewStatCard icon={MessageSquarePlus} label="Total check-ins" value={totalCheckins} color="text-primary" />
         <ReviewStatCard icon={Bell} label="Overdue reviews" value={overdueCount} color={overdueCount > 0 ? "text-destructive" : "text-muted-foreground"} />
-        <ReviewStatCard icon={Clock} label="Reviewed this week" value={reviewedThisWeek} color="text-emerald-600 dark:text-emerald-400" />
+        <ReviewStatCard icon={Clock} label="Unique items reviewed this week" value={reviewedThisWeek} color="text-emerald-600 dark:text-emerald-400" />
       </div>
+
+      {/* Anomaly Detection Panel */}
+      {anomalies.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+            <Zap className="h-4 w-4 text-violet-500" />
+            <span className="text-violet-700 dark:text-violet-400">Anomalies Detected</span>
+            <span className="font-normal text-muted-foreground">· {anomalies.length} flag{anomalies.length !== 1 ? "s" : ""}</span>
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+            {anomalies.map((a, i) => (
+              <div key={i} className={cn(
+                "rounded-xl border p-3 space-y-1",
+                a.severity === "high" ? "border-red-200 bg-red-50 dark:border-red-800/30 dark:bg-red-900/10" : "border-amber-200 bg-amber-50 dark:border-amber-800/30 dark:bg-amber-900/10"
+              )}>
+                <div className="flex items-start gap-2">
+                  <TriangleAlert className={cn("h-3.5 w-3.5 shrink-0 mt-0.5", a.severity === "high" ? "text-red-500" : "text-amber-500")} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold truncate">{a.title}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full", ENTITY_BADGE_CLS[a.type] ?? "bg-muted text-muted-foreground")}>
+                        {ENTITY_LABELS[a.type] ?? a.type}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">{a.reason}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Needs Attention */}
       {overdueItems.length > 0 && (
@@ -1928,7 +2045,7 @@ function ReviewsTab({
           return (
             <button
               key={opt.value}
-              onClick={() => setEntityFilter(opt.value)}
+              onClick={() => { setEntityFilter(opt.value); setPage(1); }}
               className={cn(
                 "text-xs font-medium px-2.5 py-1 rounded-lg transition-colors",
                 entityFilter === opt.value ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
@@ -1942,11 +2059,7 @@ function ReviewsTab({
       </div>
 
       {/* Feed */}
-      {notesLoading ? (
-        <div className="py-8 text-center text-muted-foreground flex items-center justify-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading check-ins…
-        </div>
-      ) : filteredNotes.length === 0 ? (
+      {filteredNotes.length === 0 ? (
         <Card className="rounded-2xl">
           <CardContent className="py-12 text-center">
             <MessageSquarePlus className="h-10 w-10 mx-auto mb-3 opacity-30" />
@@ -1956,7 +2069,7 @@ function ReviewsTab({
         </Card>
       ) : (
         <div className="space-y-2">
-          {filteredNotes.map(note => {
+          {paginatedNotes.map(note => {
             const badgeCls = ENTITY_BADGE_CLS[note.entityType] ?? "bg-muted text-muted-foreground";
             const title = getTitle(note.entityType, note.entityId);
             return (
@@ -1967,7 +2080,7 @@ function ReviewsTab({
                     <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize shrink-0", badgeCls)}>
                       {ENTITY_LABELS[note.entityType] ?? note.entityType}
                     </span>
-                    <span className="font-mono text-[10px] text-muted-foreground shrink-0">{reviewRefCode(note.entityType, note.entityId)}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground shrink-0">{reviewRefCode(note.entityType, note.entityId, entityRefs)}</span>
                     <span className="text-xs font-medium line-clamp-1">{title}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -1976,13 +2089,151 @@ function ReviewsTab({
                   </div>
                 </div>
                 <p className="text-sm leading-relaxed whitespace-pre-wrap line-clamp-4">{note.content}</p>
+                {(note as any).progressAtCheckin != null && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] text-muted-foreground">Progress at check-in:</span>
+                    <div className="flex-1 max-w-[120px] h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full bg-primary rounded-full" style={{ width: `${(note as any).progressAtCheckin}%` }} />
+                    </div>
+                    <span className="text-[10px] font-semibold">{(note as any).progressAtCheckin}%</span>
+                  </div>
+                )}
                 <p className="text-[10px] text-muted-foreground">— {note.authorName}</p>
               </div>
             );
           })}
+          {hasMore && (
+            <button
+              onClick={() => setPage(p => p + 1)}
+              className="w-full text-xs text-primary hover:underline py-2 rounded-xl border border-dashed border-border hover:bg-muted/30 transition-colors"
+            >
+              Load more ({filteredNotes.length - paginatedNotes.length} remaining)
+            </button>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+// ─── AI INSIGHTS PANEL ───────────────────────────────────────────────────────
+
+type AiInsight = {
+  type: "anomaly" | "risk" | "recommendation" | "positive";
+  severity: "high" | "medium" | "low" | "info";
+  title: string;
+  description: string;
+};
+
+function AIInsightsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [generated, setGenerated] = useState(false);
+  const { toast } = useToast();
+
+  const { data, isFetching, refetch } = useQuery<{ insights: AiInsight[]; generatedAt: string; source: string; summary: Record<string, unknown> }>({
+    queryKey: ["/api/business/ai-insights"],
+    queryFn: () => apiRequest("POST", "/api/business/ai-insights", {}).then(r => r.json()),
+    enabled: false,
+  });
+
+  const handleGenerate = () => {
+    setGenerated(true);
+    refetch().catch(() => toast({ title: "AI generation failed", variant: "destructive" }));
+  };
+
+  const insightIcon = (type: string, severity: string) => {
+    if (type === "anomaly") return <TriangleAlert className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />;
+    if (type === "risk") return <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+    if (type === "recommendation") return <Lightbulb className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+    if (type === "positive") return <CheckCircle className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />;
+    return <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />;
+  };
+
+  const insightBg = (type: string) => {
+    if (type === "anomaly") return "border-red-200 bg-red-50 dark:border-red-800/30 dark:bg-red-900/10";
+    if (type === "risk") return "border-amber-200 bg-amber-50 dark:border-amber-800/30 dark:bg-amber-900/10";
+    if (type === "recommendation") return "border-blue-200 bg-blue-50 dark:border-blue-800/30 dark:bg-blue-900/10";
+    if (type === "positive") return "border-green-200 bg-green-50 dark:border-green-800/30 dark:bg-green-900/10";
+    return "border-border bg-muted/30";
+  };
+
+  const severityBadge = (s: string) => {
+    const cls = s === "high" ? "bg-red-100 text-red-700" : s === "medium" ? "bg-amber-100 text-amber-700" : s === "low" ? "bg-blue-100 text-blue-700" : "bg-muted text-muted-foreground";
+    return <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide", cls)}>{s}</span>;
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={v => !v && onClose()}>
+      <SheetContent className="w-[420px] sm:max-w-[420px] p-0 flex flex-col" data-testid="ai-insights-panel">
+        <SheetHeader className="px-6 pt-6 pb-4 border-b">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-violet-500/10">
+              <Brain className="h-5 w-5 text-violet-500" />
+            </div>
+            <div>
+              <SheetTitle className="text-base">AI Strategy Insights</SheetTitle>
+              <p className="text-xs text-muted-foreground">Anomaly detection & recommendations</p>
+            </div>
+          </div>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {!generated ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-violet-500/10 flex items-center justify-center">
+                <Brain className="h-8 w-8 text-violet-500" />
+              </div>
+              <div>
+                <p className="font-semibold">Strategy AI Advisor</p>
+                <p className="text-sm text-muted-foreground mt-1">Analyse your entire strategy portfolio for risks, anomalies, and improvement recommendations.</p>
+              </div>
+              <Button onClick={handleGenerate} className="gap-2">
+                <Sparkles className="h-4 w-4" /> Generate Insights
+              </Button>
+            </div>
+          ) : isFetching ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
+              <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
+              <p className="text-sm text-muted-foreground">Analysing your strategy data…</p>
+            </div>
+          ) : data ? (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs">{data.insights.length} insight{data.insights.length !== 1 ? "s" : ""}</Badge>
+                  {data.source === "ai" && <Badge variant="outline" className="text-xs text-violet-600"><Sparkles className="h-2.5 w-2.5 mr-1" />AI</Badge>}
+                </div>
+                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleGenerate}>
+                  <RefreshCw className="h-3 w-3" /> Refresh
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                {data.insights.map((insight, i) => (
+                  <div key={i} className={cn("rounded-xl border p-3 space-y-1.5", insightBg(insight.type))}>
+                    <div className="flex items-start gap-2">
+                      {insightIcon(insight.type, insight.severity)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold">{insight.title}</p>
+                          {severityBadge(insight.severity)}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{insight.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {data.generatedAt && (
+                <p className="text-[10px] text-muted-foreground text-center">
+                  Generated {new Date(data.generatedAt).toLocaleString()}
+                </p>
+              )}
+            </>
+          ) : null}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -2026,7 +2277,222 @@ const docTypeLabels: Record<string, string> = {
   requirements: "Requirements",
 };
 
+type StrategyDocLink = {
+  id: number; tenantId: number; layerType: string; layerItemId: number;
+  docType: string; externalUrl: string | null; externalTitle: string | null;
+  externalDescription: string | null; jigantoDocumentId: number | null;
+  fileUrl: string | null; fileName: string | null; addedByName: string | null;
+  createdAt: string;
+};
+
+const DOC_SOURCE_TYPES = [
+  { value: "external", label: "External URL", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  { value: "file", label: "Uploaded File", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+  { value: "jiganto", label: "Jiganto Link", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" },
+];
+
+function StrategyLinksPanel() {
+  const { toast } = useToast();
+  const [addOpen, setAddOpen] = useState(false);
+  const [filterLayer, setFilterLayer] = useState("all");
+  const [filterSource, setFilterSource] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [form, setForm] = useState({ layerType: "strategy", layerItemId: "", docType: "external", externalUrl: "", externalTitle: "", externalDescription: "" });
+
+  const { data: links = [], isLoading } = useQuery<StrategyDocLink[]>({
+    queryKey: ["/api/business/doc-links"],
+  });
+
+  const addMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiRequest("POST", "/api/business/doc-links", body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/business/doc-links"] });
+      setForm({ layerType: "strategy", layerItemId: "", docType: "external", externalUrl: "", externalTitle: "", externalDescription: "" });
+      setAddOpen(false);
+      toast({ title: "Link added" });
+    },
+    onError: () => toast({ title: "Failed to add link", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/business/doc-links/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/business/doc-links"] });
+      toast({ title: "Link removed" });
+    },
+  });
+
+  const save = () => {
+    if (!form.externalUrl.trim() || !form.layerItemId) return;
+    addMutation.mutate({
+      layerType: form.layerType,
+      layerItemId: Number(form.layerItemId),
+      docType: form.docType,
+      externalUrl: form.externalUrl.trim(),
+      externalTitle: form.externalTitle.trim() || null,
+      externalDescription: form.externalDescription.trim() || null,
+    });
+  };
+
+  if (isLoading) {
+    return <BusinessLoadingState variant="inline" label="Loading strategy links…" />;
+  }
+
+  const filtered = links.filter(link => {
+    if (filterLayer !== "all" && link.layerType !== filterLayer) return false;
+    if (filterSource !== "all" && link.docType !== filterSource) return false;
+    if (searchTerm) {
+      const sl = searchTerm.toLowerCase();
+      const text = [link.externalTitle, link.externalUrl, link.externalDescription, link.fileName].filter(Boolean).join(" ").toLowerCase();
+      if (!text.includes(sl)) return false;
+    }
+    return true;
+  });
+
+  const sourceLabel = (t: string) => DOC_SOURCE_TYPES.find(s => s.value === t)?.label ?? t;
+  const sourceCls = (t: string) => DOC_SOURCE_TYPES.find(s => s.value === t)?.color ?? "bg-muted text-muted-foreground";
+
+  return (
+    <div className="space-y-3 w-full min-w-0 max-w-full">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+          <div className="relative min-w-[180px] flex-1 max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input placeholder="Search links…" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-8 h-8 text-xs" />
+          </div>
+          <Select value={filterLayer} onValueChange={setFilterLayer}>
+            <SelectTrigger className="h-8 text-xs w-[140px]"><SelectValue placeholder="All Layers" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Layers</SelectItem>
+              {ENTITY_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterSource} onValueChange={setFilterSource}>
+            <SelectTrigger className="h-8 text-xs w-[150px]"><SelectValue placeholder="All Sources" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Sources</SelectItem>
+              {DOC_SOURCE_TYPES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <Dialog open={addOpen} onOpenChange={setAddOpen}>
+          <Button size="sm" className="h-8 gap-1.5 text-xs shrink-0" onClick={() => setAddOpen(true)} data-testid="button-add-strategy-link">
+            <Plus className="h-3 w-3" /> Add Link
+          </Button>
+          <DialogContent className="max-w-md">
+            <SubmitForm onSubmit={save} disabled={addMutation.isPending || !form.externalUrl.trim() || !form.layerItemId}>
+            <DialogHeader><DialogTitle>Add Document Link</DialogTitle></DialogHeader>
+            <div className="space-y-3 py-2">
+              <div className="space-y-1"><Label className="text-xs">Source Type</Label>
+                <Select value={form.docType} onValueChange={v => setForm(f => ({ ...f, docType: v }))}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {DOC_SOURCE_TYPES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1"><Label className="text-xs">Layer Type</Label>
+                  <Select value={form.layerType} onValueChange={v => setForm(f => ({ ...f, layerType: v }))}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {ENTITY_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1"><Label className="text-xs">Item ID</Label>
+                  <Input type="number" placeholder="e.g. 1" value={form.layerItemId} onChange={e => setForm(f => ({ ...f, layerItemId: e.target.value }))} className="h-8 text-xs" />
+                </div>
+              </div>
+              <div className="space-y-1"><Label className="text-xs">URL / Path *</Label>
+                <Input placeholder="https://..." value={form.externalUrl} onChange={e => setForm(f => ({ ...f, externalUrl: e.target.value }))} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-1"><Label className="text-xs">Title / Label (optional)</Label>
+                <Input placeholder="Descriptive name" value={form.externalTitle} onChange={e => setForm(f => ({ ...f, externalTitle: e.target.value }))} className="h-8 text-xs" />
+              </div>
+              <div className="space-y-1"><Label className="text-xs">Description (optional)</Label>
+                <Textarea placeholder="Brief description…" value={form.externalDescription} onChange={e => setForm(f => ({ ...f, externalDescription: e.target.value }))} rows={2} className="text-xs resize-none" />
+              </div>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild><Button type="button" variant="outline" size="sm">Cancel</Button></DialogClose>
+              <Button type="submit" size="sm">
+                {addMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null} Add Link
+              </Button>
+            </DialogFooter>
+            </SubmitForm>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border p-8 text-center">
+          <Link2 className="h-8 w-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm font-medium mb-1">{links.length === 0 ? "No links yet" : "No results"}</p>
+          <p className="text-xs text-muted-foreground">{links.length === 0 ? "Add external URLs, file paths, or Jiganto module links to any strategy layer item." : "Adjust your filters to see more results."}</p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-card w-full min-w-0 max-w-full">
+          <BusinessTableScroll minWidth={720}>
+          <table className="text-xs w-max min-w-full table-auto">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-[110px]">Source</th>
+                <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-[110px]">Layer</th>
+                <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Title / URL</th>
+                <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-[120px]">Added By</th>
+                <th className="text-left px-3 py-2 font-semibold text-muted-foreground w-[90px]">Date</th>
+                <th className="w-[40px]" />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((link, i) => (
+                <tr key={link.id} className={cn("border-b border-border last:border-0", i % 2 === 0 ? "bg-background" : "bg-muted/20")}>
+                  <td className="px-3 py-2">
+                    <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", sourceCls(link.docType))}>
+                      {sourceLabel(link.docType)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", ENTITY_BADGE_CLS[link.layerType] ?? "bg-muted text-muted-foreground")}>
+                      {ENTITY_LABELS[link.layerType] ?? link.layerType}
+                    </span>
+                    <span className="ml-1 font-mono text-muted-foreground text-[10px]">#{link.layerItemId}</span>
+                  </td>
+                  <td className="px-3 py-2 max-w-0">
+                    <div className="truncate">
+                      {link.externalTitle && <span className="font-medium block truncate">{link.externalTitle}</span>}
+                      {link.externalUrl && (
+                        <a href={link.externalUrl} target="_blank" rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline truncate block">
+                          {link.externalTitle ? link.externalUrl : link.externalUrl}
+                        </a>
+                      )}
+                      {link.fileName && <span className="text-muted-foreground truncate block">{link.fileName}</span>}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground truncate">{link.addedByName ?? "—"}</td>
+                  <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                    {link.createdAt ? new Date(link.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}
+                  </td>
+                  <td className="px-3 py-2">
+                    <button onClick={() => deleteMutation.mutate(link.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </BusinessTableScroll>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DocumentsTab({ initiatives }: { initiatives: Initiative[] }) {
+  const [activeSection, setActiveSection] = useState<"initiative" | "links">("initiative");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterInitiative, setFilterInitiative] = useState<string>("all");
@@ -2053,6 +2519,10 @@ function DocumentsTab({ initiatives }: { initiatives: Initiative[] }) {
   const isLoading = linksLoading || documentsLoading;
   const hasNonAuthError = (linksError && (linksError as { message?: string })?.message !== "Not authenticated") || 
                           (docsError && (docsError as { message?: string })?.message !== "Not authenticated");
+
+  if (isLoading) {
+    return <BusinessLoadingState variant="table" label="Loading documents…" />;
+  }
 
   if (hasNonAuthError) {
     return (
@@ -2155,17 +2625,30 @@ function DocumentsTab({ initiatives }: { initiatives: Initiative[] }) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full min-w-0 max-w-full">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-lg font-semibold" data-testid="title-documents">Documents</h2>
-          <p className="text-sm text-muted-foreground">Documents linked to strategic initiatives</p>
+          <p className="text-sm text-muted-foreground">Documents and external links for strategy layers</p>
         </div>
         <Badge variant="secondary" className="text-xs" data-testid="badge-doc-count">
           {filteredRows.length} of {tableRows.length} documents
         </Badge>
       </div>
 
+      {/* Section switcher */}
+      <div className="flex items-center gap-1 border-b border-border pb-2">
+        <button onClick={() => setActiveSection("initiative")} className={cn("text-xs font-medium px-3 py-1.5 rounded-lg", activeSection === "initiative" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>
+          Initiative Documents
+        </button>
+        <button onClick={() => setActiveSection("links")} className={cn("text-xs font-medium px-3 py-1.5 rounded-lg", activeSection === "links" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>
+          Strategy Links
+        </button>
+      </div>
+
+      {activeSection === "links" && <StrategyLinksPanel />}
+      {activeSection === "initiative" && (
+      <>
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-[320px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -2243,34 +2726,38 @@ function DocumentsTab({ initiatives }: { initiatives: Initiative[] }) {
         </div>
       </div>
 
-      <MondayTable
-        columns={columns as ColumnDef<DocTableRow>[]}
-        data={viewMode === "table" ? filteredRows : []}
-        columnWidthStorageKey="jiganto-business-mgmt-col-widths"
-        totalCount={tableRows.length}
-        groups={groups}
-        loading={isLoading}
-        emptyMessage="No documents linked to initiatives yet. Link documents from the Document Management module to track deliverables."
-        selectable={false}
-        onRowClick={(row: DocTableRow) => window.open(`/modules/documents?doc=${row.documentId}`, '_blank')}
-        renderRowActions={(row: DocTableRow) => (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={(e) => { e.stopPropagation(); window.open(`/modules/documents?doc=${row.documentId}`, '_blank'); }}
-            data-testid={`button-view-doc-${row.documentId}`}
-          >
-            <ExternalLink className="h-4 w-4" />
-          </Button>
-        )}
-        alwaysShowRowActions
-      />
+      <div className="w-full max-w-full min-w-0 overflow-x-hidden">
+        <MondayTable
+          columns={columns as ColumnDef<DocTableRow>[]}
+          data={viewMode === "table" ? filteredRows : []}
+          columnWidthStorageKey="jiganto-business-mgmt-col-widths"
+          totalCount={tableRows.length}
+          groups={groups}
+          loading={isLoading}
+          emptyMessage="No documents linked to initiatives yet. Link documents from the Document Management module to track deliverables."
+          selectable={false}
+          onRowClick={(row: DocTableRow) => window.open(`/modules/documents?doc=${row.documentId}`, '_blank')}
+          renderRowActions={(row: DocTableRow) => (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => { e.stopPropagation(); window.open(`/modules/documents?doc=${row.documentId}`, '_blank'); }}
+              data-testid={`button-view-doc-${row.documentId}`}
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          )}
+          alwaysShowRowActions
+        />
+      </div>
+      </>
+      )}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GOVERNANCE TAB
+// GOVERNANCE / REVIEW SUPPORT TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ReviewNote = {
@@ -2293,16 +2780,17 @@ type OverdueItem = {
 
 const ENTITY_LABELS: Record<string, string> = {
   strategy: "Strategy", goal: "Goal", objective: "Objective",
-  initiative: "Initiative", okr: "OKR", kpi: "KPI",
+  initiative: "Initiative", okr: "OKR", kpi: "KPI", governance: "Governance",
 };
 
 const ENTITY_OPTIONS = [
-  { value: "strategy", label: "Strategy" },
-  { value: "goal",     label: "Goal" },
-  { value: "objective",label: "Objective" },
-  { value: "initiative",label: "Initiative" },
-  { value: "okr",      label: "OKR" },
-  { value: "kpi",      label: "KPI" },
+  { value: "strategy",   label: "Strategy" },
+  { value: "goal",       label: "Goal" },
+  { value: "objective",  label: "Objective" },
+  { value: "initiative", label: "Initiative" },
+  { value: "okr",        label: "OKR" },
+  { value: "kpi",        label: "KPI" },
+  { value: "governance", label: "Governance" },
 ];
 
 function RagChip({ rag }: { rag: string | null }) {
@@ -2331,10 +2819,13 @@ function GovernanceTab({ tenantId }: { tenantId: number }) {
     queryFn: () => fetch(`/api/business/rag-history?tenantId=${tenantId}`, { credentials: "include" }).then(r => r.json()),
   });
 
-  const { data: notes = [], isLoading: notesLoading } = useQuery<ReviewNote[]>({
-    queryKey: ["/api/business/review-notes", tenantId],
-    queryFn: () => fetch(`/api/business/review-notes?tenantId=${tenantId}`, { credentials: "include" }).then(r => r.json()),
+  const { data: notesRaw, isLoading: notesLoading } = useQuery<ReviewNote[]>({
+    queryKey: ["/api/business/review-notes"],
   });
+  const notes = useMemo(
+    () => (Array.isArray(notesRaw) ? notesRaw : []),
+    [notesRaw],
+  );
 
   const addNoteMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) => apiRequest("POST", "/api/business/review-notes", body),
@@ -2395,6 +2886,7 @@ function GovernanceTab({ tenantId }: { tenantId: number }) {
             <MessageSquarePlus className="h-3.5 w-3.5" /> Add Review Note
           </Button>
           <DialogContent className="max-w-lg">
+            <SubmitForm onSubmit={saveNote} disabled={addNoteMutation.isPending || !noteForm.content.trim() || !noteForm.entityId}>
             <DialogHeader><DialogTitle>Add Review Note</DialogTitle></DialogHeader>
             <div className="space-y-3 py-2">
               <div className="grid grid-cols-2 gap-3">
@@ -2440,16 +2932,17 @@ function GovernanceTab({ tenantId }: { tenantId: number }) {
               </div>
             </div>
             <DialogFooter>
-              <DialogClose asChild><Button variant="outline" size="sm">Cancel</Button></DialogClose>
+              <DialogClose asChild><Button type="button" variant="outline" size="sm">Cancel</Button></DialogClose>
               <Button
-                size="sm" onClick={saveNote}
-                disabled={addNoteMutation.isPending || !noteForm.content.trim() || !noteForm.entityId}
+                type="submit"
+                size="sm"
                 data-testid="button-save-note"
               >
                 {addNoteMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                 Save Note
               </Button>
             </DialogFooter>
+            </SubmitForm>
           </DialogContent>
         </Dialog>
       </div>
@@ -2530,9 +3023,9 @@ function GovernanceTab({ tenantId }: { tenantId: number }) {
             No RAG status changes recorded yet. Changes will appear here automatically when a RAG status is updated.
           </div>
         ) : (
-          <div className="rounded-xl border border-border overflow-hidden bg-card">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs border-collapse">
+          <div className="rounded-xl border border-border bg-card w-full min-w-0 max-w-full">
+            <BusinessTableScroll minWidth={800}>
+              <table className="text-xs border-collapse w-max min-w-full table-auto">
                 <thead>
                   <tr className="border-b-2 border-border bg-muted/60">
                     <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap w-[160px]">Date</th>
@@ -2561,7 +3054,7 @@ function GovernanceTab({ tenantId }: { tenantId: number }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </BusinessTableScroll>
             {filteredHistory.length > 50 && (
               <div className="px-4 py-2 border-t border-border bg-muted/20 text-xs text-muted-foreground">
                 Showing 50 of {filteredHistory.length} entries

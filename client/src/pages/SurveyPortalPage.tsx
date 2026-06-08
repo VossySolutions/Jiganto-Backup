@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "wouter";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import type { SurveyWithDetails, SurveyQuestion } from "@shared/models/surveys";
 
@@ -121,7 +122,7 @@ export default function SurveyPortalPage() {
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".1em", color: C.teal, marginBottom: 8 }}>Almost done</div>
             <h1 style={{ fontFamily: "serif", fontSize: 20, fontWeight: 700, marginBottom: 4, margin: 0 }}>Your details</h1>
           </div>
-          <div style={{ padding: "28px 36px" }}>
+          <SubmitForm onSubmit={handleSubmit} disabled={submitMut.isPending} style={{ padding: "28px 36px" }}>
             <p style={{ fontSize: 14, color: C.ink3, marginBottom: 20 }}>Optional — your name and email help the survey organiser attribute responses.</p>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: C.ink3, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".05em" }}>Your name</label>
@@ -132,14 +133,14 @@ export default function SurveyPortalPage() {
               <input type="email" value={respondentEmail} onChange={e => setRespondentEmail(e.target.value)} style={inputStyle} placeholder="Email address (optional)" data-testid="input-respondent-email" />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 20, borderTop: `1px solid ${C.line}` }}>
-              <button onClick={handleBack} style={{ padding: "11px 22px", border: `1.5px solid ${C.line}`, borderRadius: 10, background: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 500 }}>← Back</button>
-              <button onClick={handleSubmit} disabled={submitMut.isPending}
+              <button type="button" onClick={handleBack} style={{ padding: "11px 22px", border: `1.5px solid ${C.line}`, borderRadius: 10, background: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 500 }}>← Back</button>
+              <button type="submit" disabled={submitMut.isPending}
                 style={{ padding: "11px 28px", background: C.teal, color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 15, fontWeight: 600, opacity: submitMut.isPending ? 0.6 : 1 }}
                 data-testid="button-submit-survey">
                 {submitMut.isPending ? "Submitting…" : "Submit Survey ✓"}
               </button>
             </div>
-          </div>
+          </SubmitForm>
         </div>
       </div>
     );

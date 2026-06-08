@@ -67,7 +67,15 @@ export function AccessPendingPage() {
               No administrator exists yet. Enter your organisation name and become{" "}
               <strong>SI Super Admin</strong> (full access).
             </p>
-            <div className="space-y-2">
+            <form
+              className="space-y-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!bootstrapMutation.isPending && organisationName.trim()) {
+                  bootstrapMutation.mutate();
+                }
+              }}
+            >
               <Label htmlFor="organisation-name">Organisation name</Label>
               <Input
                 id="organisation-name"
@@ -76,10 +84,9 @@ export function AccessPendingPage() {
                 placeholder="e.g. Contoso Consulting"
                 data-testid="input-organisation-name"
               />
-            </div>
             <Button
+              type="submit"
               className="w-full"
-              onClick={() => bootstrapMutation.mutate()}
               disabled={bootstrapMutation.isPending || !organisationName.trim()}
             >
               {bootstrapMutation.isPending ? "Setting up…" : "Set up as first administrator"}
@@ -87,6 +94,7 @@ export function AccessPendingPage() {
             {bootstrapMutation.error && (
               <p className="text-xs text-destructive">{String(bootstrapMutation.error)}</p>
             )}
+            </form>
           </div>
         ) : pendingInvite ? (
           <div className="space-y-3">

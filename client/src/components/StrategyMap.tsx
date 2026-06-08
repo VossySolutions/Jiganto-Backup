@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -13,12 +14,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { EntityDetailPanel } from "@/components/EntityDetailPanel";
+import { BusinessTableScroll } from "@/components/business/BusinessTableScroll";
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from "xlsx";
-import {
+import { 
   Search, ArrowRight, ChevronDown, ChevronRight, X,
-  Target, Flag, Crosshair, Zap, TrendingUp, BarChart3, CheckSquare,
-  Download, Upload, User, Calendar, FileText, LayoutList, GitBranch, Workflow, Building2, Table2, Layers
+  Target, Flag, Crosshair, Zap, TrendingUp, BarChart3, ShieldCheck,
+  Download, Upload, User, Calendar, FileText, LayoutList, GitBranch, Workflow, Building2, Table2, Layers, Loader2
 } from "lucide-react";
 
 interface StrategyEntity {
@@ -48,7 +50,7 @@ interface StrategyMapRow {
   initiative: StrategyEntity | null;
   okr: StrategyEntity | null;
   kpi: StrategyEntity | null;
-  execution: StrategyEntity | null;
+  governance: StrategyEntity | null;
   worstRag: string;
 }
 
@@ -58,7 +60,7 @@ interface StrategyMapData {
   rows: StrategyMapRow[];
   summary: {
     totalStrategies: number; totalGoals: number; totalObjectives: number;
-    totalInitiatives: number; totalOkrs: number; totalKpis: number; totalTasks: number;
+    totalInitiatives: number; totalOkrs: number; totalKpis: number; totalGovernance: number;
   };
   departments: Department[];
 }
@@ -89,9 +91,9 @@ const STRATEGY_LAYERS = [
   { key: "kpi" as const, label: "KPIs", icon: BarChart3, accent: "#f472b6",
     bg: "bg-pink-500/10 dark:bg-pink-500/15", border: "border-pink-500/30 dark:border-pink-400/30",
     text: "text-pink-600 dark:text-pink-400", summaryKey: "totalKpis" as const },
-  { key: "execution" as const, label: "Execution", icon: CheckSquare, accent: "#94a3b8",
-    bg: "bg-slate-500/10 dark:bg-slate-500/15", border: "border-slate-500/30 dark:border-slate-400/30",
-    text: "text-slate-600 dark:text-slate-400", summaryKey: "totalTasks" as const },
+  { key: "governance" as const, label: "Governance", icon: ShieldCheck, accent: "#8b5cf6",
+    bg: "bg-violet-500/10 dark:bg-violet-500/15", border: "border-violet-500/30 dark:border-violet-400/30",
+    text: "text-violet-600 dark:text-violet-400", summaryKey: "totalGovernance" as const },
 ] as const;
 
 const SUB_LAYERS = STRATEGY_LAYERS.slice(1);
@@ -149,13 +151,18 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
   const importFileRef = useRef<HTMLInputElement>(null);
   const [tableGroupBy, setTableGroupBy] = useState<"none" | "rag" | "department" | "owner">("none");
 
-  const { data, isLoading } = useQuery<StrategyMapData>({ queryKey: ["/api/business/strategy-map"] });
+  const { data, isLoading, isFetching } = useQuery<StrategyMapData>({ queryKey: ["/api/business/strategy-map"] });
+
+  const { data: entityRefs } = useQuery<Record<string, number>>({
+    queryKey: ["/api/business/entity-refs"],
+    staleTime: 60_000,
+  });
 
   const uniqueOwners = useMemo(() => {
     if (!data?.rows) return [];
     const names = new Set<string>();
     data.rows.forEach(row => {
-      [row.strategy, row.goal, row.objective, row.initiative, row.okr, row.kpi, row.execution].forEach(e => {
+      [row.strategy, row.goal, row.objective, row.initiative, row.okr, row.kpi, row.governance].forEach(e => {
         const owner = getOwner(e);
         if (owner) names.add(owner);
       });
@@ -179,7 +186,7 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
     return (data?.rows || []).filter(row => {
       if (searchTerm) {
         const sl = searchTerm.toLowerCase();
-        const matches = [row.strategy, row.goal, row.objective, row.initiative, row.okr, row.kpi, row.execution]
+        const matches = [row.strategy, row.goal, row.objective, row.initiative, row.okr, row.kpi, row.governance]
           .some(e => e && getEntityTitle(e).toLowerCase().includes(sl));
         if (!matches) return false;
       }
@@ -195,12 +202,12 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
         if (!hasDept) return false;
       }
       if (ownerFilter && ownerFilter !== "all") {
-        const hasOwner = [row.strategy, row.goal, row.objective, row.initiative, row.okr, row.kpi, row.execution]
+        const hasOwner = [row.strategy, row.goal, row.objective, row.initiative, row.okr, row.kpi, row.governance]
           .some(e => getOwner(e) === ownerFilter);
         if (!hasOwner) return false;
       }
       if (ragFilter !== "all") {
-        const hasRag = [row.strategy, row.goal, row.objective, row.initiative, row.okr, row.kpi, row.execution]
+        const hasRag = [row.strategy, row.goal, row.objective, row.initiative, row.okr, row.kpi, row.governance]
           .some(e => (e?.ragStatus || "green") === ragFilter);
         if (!hasRag) return false;
       }
@@ -261,7 +268,7 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
       totalInitiatives: focusedLayerItems.initiative?.length ?? 0,
       totalOkrs: focusedLayerItems.okr?.length ?? 0,
       totalKpis: focusedLayerItems.kpi?.length ?? 0,
-      totalTasks: focusedLayerItems.execution?.length ?? 0,
+      totalGovernance: focusedLayerItems.governance?.length ?? 0,
     };
   }, [data?.summary, focusedStrategyId, focusedLayerItems, viewMode]);
 
@@ -298,9 +305,9 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
       ["4. RAG Status valid values: On Track | At Risk | Behind"],
       ["5. Progress: integer 0–100"],
       ["6. Dates: YYYY-MM-DD (e.g. 2026-12-31)"],
-      ["7. Priority (Initiatives/Execution): low | medium | high | critical"],
+      ["7. Priority (Initiatives/Governance): low | medium | high | critical"],
       [""],
-      ["Sheets: Strategies → Goals → Objectives → Initiatives → OKRs → KPIs → Execution"],
+      ["Sheets: Strategies → Goals → Objectives → Initiatives → OKRs → KPIs → Governance"],
     ]), "Instructions");
 
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
@@ -340,10 +347,10 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
     ]), "KPIs");
 
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-      ["Code", "Initiative Code", "Title", "Description", "Assignee", "Priority", "Status", "RAG Status", "Progress %", "Due Date"],
-      ["E01", "I01", "Identify target account list", "Build ICP-based list of 200 accounts", "Tom Hughes", "high", "in_progress", "On Track", 80, "2026-02-28"],
-      ["E02", "I01", "Develop executive pitch deck", "Create deck for F500 decision-makers", "Lisa Park", "high", "in_progress", "On Track", 65, "2026-03-15"],
-    ]), "Execution");
+      ["Code", "Strategy Code", "Title", "Type", "Description", "Owner Name", "RAG Status", "Status", "Progress %", "Target Date"],
+      ["GV01", "S01", "Board Q1 Review", "board_decision", "Quarterly board strategy review", "Sarah Blackwell", "On Track", "active", 100, "2026-03-31"],
+      ["GV02", "S02", "Compliance Audit", "policy", "Annual compliance policy review", "Ayesha Nawaz", "On Track", "active", 50, "2026-06-30"],
+    ]), "Governance");
 
     XLSX.writeFile(wb, "Jiganto_Strategy_Template.xlsx");
     toast({ title: "Template downloaded", description: "Fill in each sheet and use Import to load your data." });
@@ -363,7 +370,7 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
     const initiativesMap = new Map<number, StrategyEntity & { _oCode?: string }>();
     const okrsMap = new Map<number, StrategyEntity & { _oCode?: string }>();
     const kpisMap = new Map<number, StrategyEntity & { _gCode?: string }>();
-    const execMap = new Map<number, StrategyEntity & { _iCode?: string }>();
+    const govMap = new Map<number, StrategyEntity & { _sCode?: string }>();
 
     data.rows.forEach(row => {
       if (row.strategy) stratsMap.set(row.strategy.id, row.strategy);
@@ -372,7 +379,7 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
       if (row.initiative) initiativesMap.set(row.initiative.id, { ...row.initiative, _oCode: row.objective ? `O${String(row.objective.id).padStart(2, "0")}` : "" });
       if (row.okr) okrsMap.set(row.okr.id, { ...row.okr, _oCode: row.objective ? `O${String(row.objective.id).padStart(2, "0")}` : "" });
       if (row.kpi) kpisMap.set(row.kpi.id, { ...row.kpi, _gCode: row.goal ? `G${String(row.goal.id).padStart(2, "0")}` : "" });
-      if (row.execution) execMap.set(row.execution.id, { ...row.execution, _iCode: row.initiative ? `I${String(row.initiative.id).padStart(2, "0")}` : "" });
+      if (row.governance) govMap.set(row.governance.id, { ...row.governance, _sCode: row.strategy ? `S${String(row.strategy.id).padStart(2, "0")}` : "" });
     });
 
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
@@ -392,11 +399,11 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
 
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
       ["Code", "Objective Code", "Title", "Description", "Owner Name", "Department", "RAG Status", "Priority", "Progress %", "Start Date", "End Date"],
-      ...[...initiativesMap.values()].map((ini, i) => [`I${String(i + 1).padStart(2, "0")}`, (ini as StrategyEntity & { _oCode?: string })._oCode || "", getEntityTitle(ini), ini.description || "", getOwner(ini) || "", ini.departmentName || "", ragLabel(ini.ragStatus || ""), ini.priority || "", ini.progress ?? "", ini.startDate || "", ini.endDate || ""]),
+      ...[...initiativesMap.values()].map((ini, i) => [`I${String(i + 1).padStart(2, "0")}`, (ini as StrategyEntity & { _oCode?: string })._oCode || "", getEntityTitle(ini), ini.description || "", getOwner(ini) || "", ini.departmentName || "", ragLabel(ini.ragStatus || ""), ini.priority || "", ini.progress ?? "", ini.startDate || "", (ini as StrategyEntity & { dueDate?: string }).dueDate || ini.endDate || ""]),
     ]), "Initiatives");
 
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-      ["Code", "Objective Code", "Title", "Description", "Owner Name", "RAG Status", "Target Date"],
+      ["Code", "Objective Code", "Title", "Key Result Description", "Owner Name", "RAG Status", "Target Date"],
       ...[...okrsMap.values()].map((o, i) => [`K${String(i + 1).padStart(2, "0")}`, (o as StrategyEntity & { _oCode?: string })._oCode || "", getEntityTitle(o), o.description || "", getOwner(o) || "", ragLabel(o.ragStatus || ""), o.targetDate || ""]),
     ]), "OKRs");
 
@@ -406,13 +413,43 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
     ]), "KPIs");
 
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-      ["Code", "Initiative Code", "Title", "Description", "Assignee", "Priority", "Status", "RAG Status", "Progress %", "Due Date"],
-      ...[...execMap.values()].map((e, i) => [`E${String(i + 1).padStart(2, "0")}`, (e as StrategyEntity & { _iCode?: string })._iCode || "", getEntityTitle(e), e.description || "", getOwner(e) || "", e.priority || "", e.status || "", ragLabel(e.ragStatus || ""), e.progress ?? "", e.dueDate || ""]),
-    ]), "Execution");
+      ["Code", "Strategy Code", "Title", "Type", "Description", "Owner Name", "RAG Status", "Status", "Progress %", "Target Date"],
+      ...[...govMap.values()].map((g, i) => [`GV${String(i + 1).padStart(2, "0")}`, (g as StrategyEntity & { _sCode?: string })._sCode || "", getEntityTitle(g), (g as StrategyEntity & { govType?: string }).govType || "", g.description || "", getOwner(g) || "", ragLabel(g.ragStatus || ""), g.status || "", g.progress ?? "", g.targetDate || ""]),
+    ]), "Governance");
 
     XLSX.writeFile(wb, `strategy-map-${new Date().toISOString().split("T")[0]}.xlsx`);
     toast({ title: "Export complete", description: `Exported data across 7 sheets.` });
   };
+
+  const BUSINESS_IMPORT_QUERY_KEYS = [
+    "/api/business/strategy-map",
+    "/api/business/strategy",
+    "/api/business/goals",
+    "/api/business/objectives",
+    "/api/business/initiatives",
+    "/api/business/okrs",
+    "/api/business/kpis",
+    "/api/business/governance",
+    "/api/business/entity-refs",
+  ];
+
+  const importMutation = useMutation({
+    mutationFn: async (rows: Record<string, unknown>[]) => {
+      return apiRequest("POST", "/api/business/bulk-import", { rows });
+    },
+    onSuccess: (data: { created?: Record<string, number>; skipped?: number }) => {
+      BUSINESS_IMPORT_QUERY_KEYS.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+      const total = Object.values(data?.created ?? {}).reduce((a, b) => a + b, 0);
+      toast({
+        title: "Import complete",
+        description: total > 0
+          ? `Imported ${total} record(s)${data?.skipped ? ` (${data.skipped} skipped)` : ""}.`
+          : "No records were imported. Check sheet names and required Title/Name columns.",
+        variant: total > 0 ? "default" : "destructive",
+      });
+    },
+    onError: () => toast({ title: "Import failed", description: "Could not persist rows. Check console for details.", variant: "destructive" }),
+  });
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -421,10 +458,21 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
     reader.onload = (ev) => {
       try {
         const wb = XLSX.read(ev.target?.result, { type: "binary" });
-        toast({
-          title: "File parsed",
-          description: `Found sheets: ${wb.SheetNames.join(", ")}. Full import API coming soon — use this to verify your template format first.`,
-        });
+        const allRows: Record<string, unknown>[] = [];
+        for (const sheetName of wb.SheetNames) {
+          if (sheetName.toLowerCase() === "instructions") continue;
+          const sheet = wb.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+          for (const row of rows) {
+            allRows.push({ _sheet: sheetName, ...row });
+          }
+        }
+        if (allRows.length === 0) {
+          toast({ title: "Empty file", description: "No data rows found in the file.", variant: "destructive" });
+        } else {
+          importMutation.mutate(allRows);
+          toast({ title: `Importing ${allRows.length} rows…`, description: `Sheets: ${wb.SheetNames.join(", ")}` });
+        }
       } catch {
         toast({ title: "Parse error", description: "Could not read the file. Please use .xlsx or .csv format.", variant: "destructive" });
       }
@@ -437,7 +485,7 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
   if (isLoading) {
     return (
       <div className="space-y-4" data-testid="strategy-map-loading">
-        <div className="grid grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
           {STRATEGY_LAYERS.map(l => <Skeleton key={l.key} className="h-20 rounded-xl" />)}
         </div>
         <Skeleton className="h-10 w-full" />
@@ -454,11 +502,16 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
   ];
 
   return (
-    <div className="space-y-4" data-testid="strategy-map">
+    <div className="space-y-3 sm:space-y-4 w-full min-w-0 max-w-full" data-testid="strategy-map">
+      {isFetching && !isLoading && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
+          <Loader2 className="h-3 w-3 animate-spin" /> Refreshing map…
+        </div>
+      )}
 
       {/* Stats Strip — dynamic when strategy is focused */}
       {displaySummary && (
-        <div className="grid grid-cols-7 gap-3" data-testid="stats-strip">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3" data-testid="stats-strip">
           {STRATEGY_LAYERS.map(layer => {
             const count = displaySummary[layer.summaryKey] ?? 0;
             const isActive = activeLayer === layer.key;
@@ -511,13 +564,13 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
       )}
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
+          <div className="relative flex-1 sm:flex-none min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search across all layers..."
-              className="pl-9 w-[220px] rounded-lg"
+              className="pl-9 w-full sm:w-[220px] rounded-lg"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               data-testid="input-strategy-map-search"
@@ -698,7 +751,7 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
         />
       )}
       {viewMode === "table" && (
-        <TableView rows={filteredRows} onCellClick={handleCellClick} showIds={showIds} groupBy={tableGroupBy} />
+        <TableView rows={filteredRows} onCellClick={handleCellClick} showIds={showIds} groupBy={tableGroupBy} entityRefs={entityRefs} />
       )}
 
       {/* Import Dialog */}
@@ -767,7 +820,7 @@ const TABLE_COLS = [
   { key: "initiative" as const, label: "Initiative", accent: "#f97316" },
   { key: "okr" as const, label: "OKR", accent: "#10b981" },
   { key: "kpi" as const, label: "KPI", accent: "#f59e0b" },
-  { key: "execution" as const, label: "Execution", accent: "#6b7280" },
+  { key: "governance" as const, label: "Governance", accent: "#8b5cf6" },
 ];
 
 // Short reference code prefixes per layer  e.g. S-053, G-061
@@ -778,21 +831,23 @@ const REF_PREFIXES: Record<string, string> = {
   initiative:"INI",
   okr:       "OKR",
   kpi:       "KPI",
-  execution: "EX",
+  governance: "GOV",
 };
-function refCode(colKey: string, id: number): string {
+function refCode(colKey: string, id: number, entityRefs?: Record<string, number>): string {
   const prefix = REF_PREFIXES[colKey] ?? colKey.slice(0, 3).toUpperCase();
-  return `${prefix}-${String(id).padStart(3, "0")}`;
+  const seq = entityRefs?.[`${colKey}-${id}`];
+  return `${prefix}-${String(seq ?? id).padStart(3, "0")}`;
 }
 
-function TableView({ rows, onCellClick, showIds, groupBy = "none" }: {
+function TableView({ rows, onCellClick, showIds, groupBy = "none", entityRefs }: {
   rows: StrategyMapRow[];
   onCellClick: (entityType: string, entity: unknown) => void;
   showIds: boolean;
   groupBy?: "none" | "rag" | "department" | "owner";
+  entityRefs?: Record<string, number>;
 }) {
-  type ColKey = "strategy" | "goal" | "objective" | "initiative" | "okr" | "kpi" | "execution";
-  const colKeys: ColKey[] = ["strategy", "goal", "objective", "initiative", "okr", "kpi", "execution"];
+  type ColKey = "strategy" | "goal" | "objective" | "initiative" | "okr" | "kpi" | "governance";
+  const colKeys: ColKey[] = ["strategy", "goal", "objective", "initiative", "okr", "kpi", "governance"];
 
   // Subtle alternating bg tints per strategy group
   const groupBgs = [
@@ -896,9 +951,9 @@ function TableView({ rows, onCellClick, showIds, groupBy = "none" }: {
   ), [visibleDataRows, groupBy]);
 
   return (
-    <div className="rounded-xl border border-border overflow-hidden bg-card" data-testid="table-view">
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs border-collapse">
+    <div className="rounded-xl border border-border bg-card w-full min-w-0 max-w-full" data-testid="table-view">
+      <BusinessTableScroll minWidth={1200}>
+        <table className="text-xs border-collapse w-max min-w-full table-auto">
           <thead>
             <tr className="border-b-2 border-border bg-muted/60">
               {TABLE_COLS.map(col => (
@@ -995,7 +1050,7 @@ function TableView({ rows, onCellClick, showIds, groupBy = "none" }: {
                                 className="block font-mono text-[9px] font-semibold tracking-widest mb-0.5 opacity-50"
                                 style={{ color: TABLE_COLS[ci]?.accent }}
                               >
-                                {refCode(key, entity.id)}
+                                {refCode(key, entity.id, entityRefs)}
                               </span>
                             )}
                             {getEntityTitle(entity)}
@@ -1034,7 +1089,7 @@ function TableView({ rows, onCellClick, showIds, groupBy = "none" }: {
             })}
           </tbody>
         </table>
-      </div>
+      </BusinessTableScroll>
       <div className="px-4 py-2 border-t border-border bg-muted/20 flex items-center justify-between">
         <span className="text-xs text-muted-foreground">
           {strategyIds.length} strateg{strategyIds.length !== 1 ? "ies" : "y"} · {visibleDataRows.length} row{visibleDataRows.length !== 1 ? "s" : ""}
@@ -1309,7 +1364,7 @@ function StrategyFocusView({
             </div>
             <p className="text-sm font-semibold text-foreground">Select a strategy to see its full cascade</p>
             <p className="text-xs text-muted-foreground max-w-xs">
-              Click any strategy in the list to drill into its Goals → Objectives → Initiatives → OKRs → KPIs → Execution
+              Click any strategy in the list to drill into its Goals → Objectives → Initiatives → OKRs → KPIs → Governance
             </p>
           </div>
         ) : (

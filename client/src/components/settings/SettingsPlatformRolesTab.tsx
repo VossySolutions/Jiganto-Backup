@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Shield } from "lucide-react";
 import type { PlatformRole } from "@shared/models/permissions";
@@ -190,6 +191,19 @@ export default function SettingsPlatformRolesTab({ tenantId, clients }: Props) {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
+          <SubmitForm
+            onSubmit={() =>
+              createMut.mutate({
+                userId,
+                orgId: tenantId,
+                platformRole,
+                isActive: true,
+                lockedWorkspaceId:
+                  lockedWorkspaceId !== "none" ? Number(lockedWorkspaceId) : null,
+              })
+            }
+            disabled={!userId || createMut.isPending}
+          >
           <DialogHeader>
             <DialogTitle>Assign platform role</DialogTitle>
           </DialogHeader>
@@ -250,26 +264,17 @@ export default function SettingsPlatformRolesTab({ tenantId, clients }: Props) {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
             <Button
-              disabled={!userId || createMut.isPending}
-              onClick={() =>
-                createMut.mutate({
-                  userId,
-                  orgId: tenantId,
-                  platformRole,
-                  isActive: true,
-                  lockedWorkspaceId:
-                    lockedWorkspaceId !== "none" ? Number(lockedWorkspaceId) : null,
-                })
-              }
+              type="submit"
               data-testid="save-platform-role"
             >
               Save
             </Button>
           </DialogFooter>
+          </SubmitForm>
         </DialogContent>
       </Dialog>
     </Card>

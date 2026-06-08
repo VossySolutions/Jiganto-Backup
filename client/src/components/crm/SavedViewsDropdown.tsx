@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
@@ -321,6 +322,10 @@ export function SavedViewsDropdown({
 
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
         <DialogContent className="sm:max-w-md">
+          <SubmitForm
+            onSubmit={handleSaveView}
+            disabled={createViewMutation.isPending}
+          >
           <DialogHeader>
             <DialogTitle>Save View</DialogTitle>
           </DialogHeader>
@@ -366,16 +371,17 @@ export function SavedViewsDropdown({
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button type="button" variant="outline">Cancel</Button>
             </DialogClose>
             <Button
-              onClick={handleSaveView}
+              type="submit"
               disabled={createViewMutation.isPending}
               data-testid="button-save-view"
             >
               {createViewMutation.isPending ? "Saving..." : "Save View"}
             </Button>
           </DialogFooter>
+          </SubmitForm>
         </DialogContent>
       </Dialog>
 

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -756,6 +757,10 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
             </Button>
           </DialogTrigger>
           <DialogContent>
+            <SubmitForm
+              onSubmit={() => createPipelineMutation.mutate({ name: pipelineName })}
+              disabled={!pipelineName || createPipelineMutation.isPending}
+            >
             <DialogHeader>
               <DialogTitle>Create New Pipeline</DialogTitle>
             </DialogHeader>
@@ -773,16 +778,17 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline" data-testid="button-cancel-pipeline-opp">Cancel</Button>
+                <Button type="button" variant="outline" data-testid="button-cancel-pipeline-opp">Cancel</Button>
               </DialogClose>
               <Button
-                onClick={() => createPipelineMutation.mutate({ name: pipelineName })}
+                type="submit"
                 disabled={!pipelineName || createPipelineMutation.isPending}
                 data-testid="button-save-pipeline-opp"
               >
                 {createPipelineMutation.isPending ? "Creating..." : "Create Pipeline"}
               </Button>
             </DialogFooter>
+            </SubmitForm>
           </DialogContent>
         </Dialog>
 
@@ -794,6 +800,24 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
             </Button>
           </DialogTrigger>
           <DialogContent>
+            <SubmitForm
+              onSubmit={() => {
+                if (editingId) {
+                  updateMutation.mutate({ id: editingId, updates: {
+                    ...formData,
+                    stageId: formData.stageId ? parseInt(formData.stageId) : null,
+                    accountId: formData.accountId ? parseInt(formData.accountId) : null,
+                    probability: formData.probability ? parseInt(formData.probability) : null,
+                  }});
+                  setIsOpen(false);
+                  setEditingId(null);
+                  setFormData({ name: "", amount: "", stageId: "", accountId: "", expectedCloseDate: "", probability: "" });
+                } else {
+                  createMutation.mutate(formData);
+                }
+              }}
+              disabled={!formData.name || createMutation.isPending}
+            >
             <DialogHeader>
               <DialogTitle>{editingId ? "Edit Opportunity" : "Create New Opportunity"}</DialogTitle>
             </DialogHeader>
@@ -869,30 +893,17 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline" data-testid="button-cancel-opp">Cancel</Button>
+                <Button type="button" variant="outline" data-testid="button-cancel-opp">Cancel</Button>
               </DialogClose>
               <Button
-                onClick={() => {
-                  if (editingId) {
-                    updateMutation.mutate({ id: editingId, updates: {
-                      ...formData,
-                      stageId: formData.stageId ? parseInt(formData.stageId) : null,
-                      accountId: formData.accountId ? parseInt(formData.accountId) : null,
-                      probability: formData.probability ? parseInt(formData.probability) : null,
-                    }});
-                    setIsOpen(false);
-                    setEditingId(null);
-                    setFormData({ name: "", amount: "", stageId: "", accountId: "", expectedCloseDate: "", probability: "" });
-                  } else {
-                    createMutation.mutate(formData);
-                  }
-                }}
+                type="submit"
                 disabled={!formData.name || createMutation.isPending}
                 data-testid="button-save-opp"
               >
                 {editingId ? (updateMutation.isPending ? "Updating..." : "Update Opportunity") : (createMutation.isPending ? "Creating..." : "Create Opportunity")}
               </Button>
             </DialogFooter>
+            </SubmitForm>
           </DialogContent>
         </Dialog>
       </div>

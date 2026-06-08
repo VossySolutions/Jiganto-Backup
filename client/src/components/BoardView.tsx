@@ -30,6 +30,7 @@ import {
 import { FilterPanel, type FilterCondition } from "@/components/FilterPanel";
 import { ExportDropdown } from "@/components/ExportDropdown";
 import { ImportDropdown } from "@/components/ImportDropdown";
+import { SubmitForm } from "@/components/ui/submit-form";
 
 interface BoardViewProps {
   boardId: number;
@@ -432,7 +433,7 @@ export function BoardView({ boardId, boardName = "Board" }: BoardViewProps) {
             <DialogTitle>Add New Item</DialogTitle>
             <DialogDescription>Create a new item for this board</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
+          <SubmitForm onSubmit={handleCreateItem} disabled={createItem.isPending} className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
             {columns.map((col) => (
               <div key={col.id} className="space-y-2">
                 <Label htmlFor={col.key} className="text-xs uppercase font-semibold text-muted-foreground">
@@ -446,13 +447,13 @@ export function BoardView({ boardId, boardName = "Board" }: BoardViewProps) {
                 />
               </div>
             ))}
-          </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateItem} disabled={createItem.isPending} data-testid="create-item-btn">
+            <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={createItem.isPending} data-testid="create-item-btn">
               {createItem.isPending ? "Creating..." : "Create Item"}
             </Button>
           </div>
+          </SubmitForm>
         </DialogContent>
       </Dialog>
 
@@ -464,7 +465,7 @@ export function BoardView({ boardId, boardName = "Board" }: BoardViewProps) {
               Save your current view settings as a new tab. This preserves the view type and any active filters.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <SubmitForm onSubmit={handleSaveView} disabled={!newViewName.trim()} className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>View Name</Label>
               <Input
@@ -477,14 +478,14 @@ export function BoardView({ boardId, boardName = "Board" }: BoardViewProps) {
             <div className="text-sm text-muted-foreground">
               <p>View Type: <strong>{currentView}</strong></p>
             </div>
-          </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setShowSaveViewDialog(false)}>Cancel</Button>
-            <Button onClick={handleSaveView} disabled={!newViewName.trim()} data-testid="confirm-save-view-btn">
+            <Button type="button" variant="outline" onClick={() => setShowSaveViewDialog(false)}>Cancel</Button>
+            <Button type="submit" disabled={!newViewName.trim()} data-testid="confirm-save-view-btn">
               <Save className="h-4 w-4 mr-2" />
               Save View
             </Button>
           </div>
+          </SubmitForm>
         </DialogContent>
       </Dialog>
 

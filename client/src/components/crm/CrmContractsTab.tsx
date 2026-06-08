@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -809,6 +810,30 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
             </button>
           </DialogTrigger>
           <DialogContent>
+            <SubmitForm
+              onSubmit={() => {
+                if (editingId) {
+                  updateMutation.mutate({
+                    id: editingId,
+                    updates: {
+                      name: formData.name,
+                      accountId: formData.accountId ? parseInt(formData.accountId) : null,
+                      type: formData.type,
+                      status: formData.status,
+                      startDate: formData.startDate || null,
+                      endDate: formData.endDate || null,
+                      value: formData.value || null,
+                    },
+                  });
+                  setIsOpen(false);
+                  setEditingId(null);
+                  setFormData({ name: "", accountId: "", type: "service", status: "draft", startDate: "", endDate: "", value: "" });
+                } else {
+                  createMutation.mutate(formData);
+                }
+              }}
+              disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
+            >
             <DialogHeader>
               <DialogTitle>{editingId ? "Edit Contract" : "Create New Contract"}</DialogTitle>
             </DialogHeader>
@@ -898,30 +923,10 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
               <Button
-                onClick={() => {
-                  if (editingId) {
-                    updateMutation.mutate({
-                      id: editingId,
-                      updates: {
-                        name: formData.name,
-                        accountId: formData.accountId ? parseInt(formData.accountId) : null,
-                        type: formData.type,
-                        status: formData.status,
-                        startDate: formData.startDate || null,
-                        endDate: formData.endDate || null,
-                        value: formData.value || null,
-                      },
-                    });
-                    setIsOpen(false);
-                    setEditingId(null);
-                    setFormData({ name: "", accountId: "", type: "service", status: "draft", startDate: "", endDate: "", value: "" });
-                  } else {
-                    createMutation.mutate(formData);
-                  }
-                }}
+                type="submit"
                 disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
                 data-testid="button-save-contract"
               >
@@ -930,6 +935,7 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
                   : (createMutation.isPending ? "Creating..." : "Create Contract")}
               </Button>
             </DialogFooter>
+            </SubmitForm>
           </DialogContent>
         </Dialog>
       </div>

@@ -261,7 +261,13 @@ export function LandingPage() {
               </p>
             </div>
           ) : canUseSupabase ? (
-            <div className="space-y-4 pt-4">
+            <form
+              className="space-y-4 pt-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!authBusy) void handleEmailAuth();
+              }}
+            >
               <div className="space-y-2">
                 <label className="text-xs text-muted-foreground">Email</label>
                 <input
@@ -285,10 +291,8 @@ export function LandingPage() {
                 />
               </div>
               <Button
+                type="submit"
                 className="w-full h-12 text-base font-semibold rounded-xl bg-primary shadow-lg shadow-primary/20"
-                onClick={() => {
-                  void handleEmailAuth();
-                }}
                 disabled={authBusy}
               >
                 {authBusy
@@ -299,6 +303,7 @@ export function LandingPage() {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
               <button
+                type="button"
                 className="w-full text-xs text-primary hover:underline"
                 onClick={() => {
                   setAuthMode((prev) => (prev === "signin" ? "signup" : "signin"));
@@ -318,7 +323,7 @@ export function LandingPage() {
                   {authMessage}
                 </p>
               )}
-            </div>
+            </form>
           ) : (
             <div className="space-y-4 pt-4">
               <Button

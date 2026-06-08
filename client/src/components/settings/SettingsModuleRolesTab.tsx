@@ -21,6 +21,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -173,6 +174,34 @@ export default function SettingsModuleRolesTab({ tenantId }: Props) {
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+            <SubmitForm
+              className="flex flex-col flex-1 min-h-0"
+              onSubmit={() => {
+                if (editingRole) {
+                  updateRoleMutation.mutate({
+                    id: editingRole.id,
+                    data: {
+                      name: newRoleName,
+                      description: newRoleDescription,
+                      isAdmin: newRoleIsAdmin,
+                      permissions: newRolePermissions,
+                    },
+                  });
+                } else {
+                  createRoleMutation.mutate({
+                    name: newRoleName,
+                    description: newRoleDescription,
+                    isAdmin: newRoleIsAdmin,
+                    permissions: newRolePermissions,
+                  });
+                }
+              }}
+              disabled={
+                !newRoleName.trim() ||
+                createRoleMutation.isPending ||
+                updateRoleMutation.isPending
+              }
+            >
             <DialogHeader>
               <DialogTitle>{editingRole ? "Edit module role" : "Create module role"}</DialogTitle>
               <DialogDescription>
@@ -256,6 +285,7 @@ export default function SettingsModuleRolesTab({ tenantId }: Props) {
             </div>
             <DialogFooter>
               <Button
+                type="button"
                 variant="outline"
                 onClick={() => {
                   setIsRoleDialogOpen(false);
@@ -265,36 +295,13 @@ export default function SettingsModuleRolesTab({ tenantId }: Props) {
                 Cancel
               </Button>
               <Button
-                onClick={() => {
-                  if (editingRole) {
-                    updateRoleMutation.mutate({
-                      id: editingRole.id,
-                      data: {
-                        name: newRoleName,
-                        description: newRoleDescription,
-                        isAdmin: newRoleIsAdmin,
-                        permissions: newRolePermissions,
-                      },
-                    });
-                  } else {
-                    createRoleMutation.mutate({
-                      name: newRoleName,
-                      description: newRoleDescription,
-                      isAdmin: newRoleIsAdmin,
-                      permissions: newRolePermissions,
-                    });
-                  }
-                }}
-                disabled={
-                  !newRoleName.trim() ||
-                  createRoleMutation.isPending ||
-                  updateRoleMutation.isPending
-                }
+                type="submit"
                 data-testid="button-save-role"
               >
                 {editingRole ? "Update role" : "Create role"}
               </Button>
             </DialogFooter>
+            </SubmitForm>
           </DialogContent>
         </Dialog>
       </div>

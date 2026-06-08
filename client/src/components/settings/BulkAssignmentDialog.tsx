@@ -4,6 +4,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -99,6 +100,10 @@ export default function BulkAssignmentDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
       <DialogContent className="max-w-lg">
+        <SubmitForm
+          onSubmit={handleSubmit}
+          disabled={!hasSelection || bulkAssignMutation.isPending}
+        >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderKanban className="h-5 w-5" />
@@ -193,12 +198,11 @@ export default function BulkAssignmentDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => { resetForm(); onOpenChange(false); }} data-testid="button-cancel-bulk-assign">
+          <Button type="button" variant="outline" onClick={() => { resetForm(); onOpenChange(false); }} data-testid="button-cancel-bulk-assign">
             Cancel
           </Button>
           <Button
-            onClick={handleSubmit}
-            disabled={!hasSelection || bulkAssignMutation.isPending}
+            type="submit"
             data-testid="button-submit-bulk-assign"
           >
             {bulkAssignMutation.isPending ? (
@@ -208,6 +212,7 @@ export default function BulkAssignmentDialog({
             )}
           </Button>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );

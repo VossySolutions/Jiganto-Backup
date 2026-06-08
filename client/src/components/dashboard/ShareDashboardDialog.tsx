@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { SubmitForm } from "@/components/ui/submit-form";
 
 function scopeQuery(base: string, clientId?: number | null, projectId?: number | null) {
   const params = new URLSearchParams();
@@ -78,7 +79,11 @@ export function ShareDashboardDialog({
           <DialogTitle>Share dashboard</DialogTitle>
           <DialogDescription>Grant view or edit access to another user by their user ID.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <SubmitForm
+          onSubmit={() => shareMutation.mutate()}
+          disabled={!userId.trim() || shareMutation.isPending}
+          className="space-y-4 py-2"
+        >
           <div className="space-y-2">
             <Label htmlFor="share-user">User ID</Label>
             <Input id="share-user" value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="uuid…" />
@@ -95,15 +100,15 @@ export function ShareDashboardDialog({
               </SelectContent>
             </Select>
           </div>
-        </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button disabled={!userId.trim() || shareMutation.isPending} onClick={() => shareMutation.mutate()}>
+          <Button type="submit" disabled={!userId.trim() || shareMutation.isPending}>
             Share
           </Button>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -157,7 +162,11 @@ export function DigestDashboardDialog({
           <DialogTitle>Email digest</DialogTitle>
           <DialogDescription>Receive a summary of this dashboard on a schedule.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <SubmitForm
+          onSubmit={() => digestMutation.mutate()}
+          disabled={digestMutation.isPending}
+          className="space-y-4 py-2"
+        >
           <div className="space-y-2">
             <Label>Frequency</Label>
             <Select value={frequency} onValueChange={(v) => setFrequency(v as "daily" | "weekly")}>
@@ -180,15 +189,15 @@ export function DigestDashboardDialog({
               placeholder="Uses your account email if blank"
             />
           </div>
-        </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button disabled={digestMutation.isPending} onClick={() => digestMutation.mutate()}>
+          <Button type="submit" disabled={digestMutation.isPending}>
             Schedule
           </Button>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );

@@ -3767,6 +3767,22 @@ export async function registerRoutes(
     res.json(item);
   });
 
+  // Multi-layer bulk import (Strategy Map + Manage layer tabs)
+  app.post("/api/business/bulk-import", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    const { rows } = req.body;
+    if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
+    try {
+      const result = await storage.bulkImportBusinessLayers(tenantId, userId, rows);
+      const total = Object.values(result.created).reduce((a, b) => a + b, 0);
+      res.json({ success: true, ...result, total });
+    } catch (err: any) {
+      res.status(400).json({ message: "Import failed", error: err.message });
+    }
+  });
+
   app.post("/api/business/strategy/bulk-import", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
@@ -3787,7 +3803,8 @@ export async function registerRoutes(
       const tenantId = getApiTenantIdWithFallback(req);
       const validated = insertStrategyItemSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const item = await storage.createStrategyItem(validated);
-      res.status(201).json(item);
+      const refSeq = await storage.assignEntityRef(tenantId, "strategy", item.id);
+      res.status(201).json({ ...item, refSeq, refCode: `S-${String(refSeq).padStart(3,"0")}` });
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: "Validation error", errors: err.errors });
@@ -4004,7 +4021,8 @@ export async function registerRoutes(
       const tenantId = getApiTenantIdWithFallback(req);
       const validated = insertGoalSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const goal = await storage.createGoal(validated);
-      res.status(201).json(goal);
+      const refSeq = await storage.assignEntityRef(tenantId, "goal", goal.id);
+      res.status(201).json({ ...goal, refSeq, refCode: `G-${String(refSeq).padStart(3,"0")}` });
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: "Validation error", errors: err.errors });
@@ -4093,7 +4111,8 @@ export async function registerRoutes(
       const tenantId = getApiTenantIdWithFallback(req);
       const validated = insertKpiSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const kpi = await storage.createKpi(validated);
-      res.status(201).json(kpi);
+      const refSeq = await storage.assignEntityRef(tenantId, "kpi", kpi.id);
+      res.status(201).json({ ...kpi, refSeq, refCode: `KPI-${String(refSeq).padStart(3,"0")}` });
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: "Validation error", errors: err.errors });
@@ -4147,7 +4166,8 @@ export async function registerRoutes(
       const tenantId = getApiTenantIdWithFallback(req);
       const validated = insertObjectiveSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const objective = await storage.createObjective(validated);
-      res.status(201).json(objective);
+      const refSeq = await storage.assignEntityRef(tenantId, "objective", objective.id);
+      res.status(201).json({ ...objective, refSeq, refCode: `OBJ-${String(refSeq).padStart(3,"0")}` });
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: "Validation error", errors: err.errors });
@@ -4201,7 +4221,8 @@ export async function registerRoutes(
       const tenantId = getApiTenantIdWithFallback(req);
       const validated = insertOkrSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const okr = await storage.createOkr(validated);
-      res.status(201).json(okr);
+      const refSeq = await storage.assignEntityRef(tenantId, "okr", okr.id);
+      res.status(201).json({ ...okr, refSeq, refCode: `OKR-${String(refSeq).padStart(3,"0")}` });
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: "Validation error", errors: err.errors });
@@ -4256,7 +4277,8 @@ export async function registerRoutes(
       const tenantId = getApiTenantIdWithFallback(req);
       const validated = insertInitiativeSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const initiative = await storage.createInitiative(validated);
-      res.status(201).json(initiative);
+      const refSeq = await storage.assignEntityRef(tenantId, "initiative", initiative.id);
+      res.status(201).json({ ...initiative, refSeq, refCode: `INI-${String(refSeq).padStart(3,"0")}` });
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: "Validation error", errors: err.errors });
@@ -4445,6 +4467,7 @@ export async function registerRoutes(
         entityId: Number(req.body.entityId),
         content: req.body.content,
         ragSnapshot: req.body.ragSnapshot ?? null,
+        progressAtCheckin: req.body.progressAtCheckin != null ? Number(req.body.progressAtCheckin) : null,
         authorName: req.body.authorName || authorName,
         authorId: userId,
         signoffRequestId: req.body.signoffRequestId ?? null,
@@ -4501,7 +4524,7 @@ export async function registerRoutes(
       initiativesList,
       okrsList,
       kpisList,
-      tasksList,
+      governanceList,
       departmentsList,
       allUsers,
     ] = await Promise.all([
@@ -4511,7 +4534,7 @@ export async function registerRoutes(
       storage.getInitiatives(tenantId, undefined, resolveListClientId(req)),
       storage.getOkrs(tenantId, undefined, resolveListClientId(req)),
       storage.getKpis(tenantId, undefined, resolveListClientId(req)),
-      storage.getBusinessTasks(tenantId, undefined, resolveListClientId(req)),
+      storage.getGovernanceItems(tenantId),
       storage.getDepartments(tenantId),
       db.select({ id: usersTable.id, firstName: usersTable.firstName, lastName: usersTable.lastName }).from(usersTable),
     ]);
@@ -4554,7 +4577,7 @@ export async function registerRoutes(
       initiative: (typeof initiativesList[0] & { ownerName: string | null; departmentName: string | null }) | null;
       okr: (typeof okrsList[0] & { ownerName: string | null; departmentName: string | null }) | null;
       kpi: (typeof kpisList[0] & { ownerName: string | null; departmentName: string | null }) | null;
-      execution: (typeof tasksList[0] & { ownerName: string | null; assigneeName: string | null; departmentName: string | null }) | null;
+      governance: (typeof governanceList[0] & { ownerName: string | null; departmentName: string | null }) | null;
       worstRag: string;
     }> = [];
 
@@ -4572,7 +4595,7 @@ export async function registerRoutes(
           initiative: null,
           okr: null,
           kpi: null,
-          execution: null,
+          governance: null,
           worstRag: strategy.ragStatus || 'green',
         });
       } else {
@@ -4588,7 +4611,7 @@ export async function registerRoutes(
               initiative: null,
               okr: null,
               kpi: null,
-              execution: null,
+              governance: null,
               worstRag: getWorstRag([strategy.ragStatus, goal.ragStatus]),
             });
           } else {
@@ -4604,16 +4627,15 @@ export async function registerRoutes(
                   initiative: null,
                   okr: null,
                   kpi: null,
-                  execution: null,
+                  governance: null,
                   worstRag: getWorstRag([strategy.ragStatus, goal.ragStatus, objective.ragStatus]),
                 });
               } else {
                 for (const initiative of linkedInitiatives) {
                   const linkedOkrs = okrsList.filter(o => o.initiativeId === initiative.id);
                   const linkedKpis = kpisList.filter(k => k.initiativeId === initiative.id);
-                  const linkedTasks = tasksList.filter(t => t.initiativeId === initiative.id);
                   
-                  if (linkedOkrs.length === 0 && linkedKpis.length === 0 && linkedTasks.length === 0) {
+                  if (linkedOkrs.length === 0 && linkedKpis.length === 0) {
                     rows.push({
                       id: `row-${rowId++}`,
                       strategy: withOwnerName(strategy),
@@ -4622,11 +4644,11 @@ export async function registerRoutes(
                       initiative: withOwnerName(initiative),
                       okr: null,
                       kpi: null,
-                      execution: null,
+                      governance: null,
                       worstRag: getWorstRag([strategy.ragStatus, goal.ragStatus, objective.ragStatus, initiative.ragStatus]),
                     });
                   } else {
-                    const maxLen = Math.max(linkedOkrs.length, linkedKpis.length, linkedTasks.length, 1);
+                    const maxLen = Math.max(linkedOkrs.length, linkedKpis.length, 1);
                     for (let i = 0; i < maxLen; i++) {
                       rows.push({
                         id: `row-${rowId++}`,
@@ -4636,7 +4658,7 @@ export async function registerRoutes(
                         initiative: i === 0 ? withOwnerName(initiative) : null,
                         okr: linkedOkrs[i] ? withOwnerName(linkedOkrs[i]) : null,
                         kpi: linkedKpis[i] ? withOwnerName(linkedKpis[i]) : null,
-                        execution: linkedTasks[i] ? withAssigneeName(linkedTasks[i]) : null,
+                        governance: null,
                         worstRag: getWorstRag([
                           strategy.ragStatus,
                           goal.ragStatus,
@@ -4662,7 +4684,7 @@ export async function registerRoutes(
                     initiative: null,
                     okr: withOwnerName(okr),
                     kpi: null,
-                    execution: null,
+                    governance: null,
                     worstRag: getWorstRag([strategy.ragStatus, goal.ragStatus, objective.ragStatus, okr.ragStatus]),
                   });
                 });
@@ -4681,13 +4703,29 @@ export async function registerRoutes(
                 initiative: null,
                 okr: null,
                 kpi: withOwnerName(kpi),
-                execution: null,
+                governance: null,
                 worstRag: getWorstRag([strategy.ragStatus, goal.ragStatus, kpi.ragStatus]),
               });
             });
           }
         }
       }
+    }
+
+    // Add standalone governance rows linked at strategy level
+    for (const gov of governanceList) {
+      const linkedStrategy = gov.linkedStrategyId ? strategyItemsList.find(s => s.id === gov.linkedStrategyId) : null;
+      rows.push({
+        id: `row-${rowId++}`,
+        strategy: linkedStrategy ? withOwnerName(linkedStrategy) : null,
+        goal: null,
+        objective: null,
+        initiative: null,
+        okr: null,
+        kpi: null,
+        governance: withOwnerName(gov as any),
+        worstRag: getWorstRag([linkedStrategy?.ragStatus, gov.ragStatus]),
+      });
     }
 
     let filteredRows = rows;
@@ -4707,7 +4745,7 @@ export async function registerRoutes(
         r.initiative?.ownerId === filterOwner ||
         r.okr?.ownerId === filterOwner ||
         r.kpi?.ownerId === filterOwner ||
-        r.execution?.assigneeId === filterOwner
+        r.governance?.ownerId === filterOwner
       );
     }
     if (filterDepartment) {
@@ -4736,10 +4774,272 @@ export async function registerRoutes(
         totalInitiatives: initiativesList.length,
         totalOkrs: okrsList.length,
         totalKpis: kpisList.length,
-        totalTasks: tasksList.length,
+        totalGovernance: governanceList.length,
       },
       departments: departmentsList,
     });
+  });
+
+  // ── AI Insights ──────────────────────────────────────────────────────────────
+
+  app.post("/api/business/ai-insights", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+
+    // Gather strategy data
+    const [strategies, goals, objectives, initiatives, okrs, kpis, govItems] = await Promise.all([
+      storage.getStrategyItems(tenantId),
+      storage.getGoals(tenantId),
+      storage.getObjectives(tenantId),
+      storage.getInitiatives(tenantId),
+      storage.getOkrs(tenantId),
+      storage.getKpis(tenantId),
+      storage.getGovernanceItems(tenantId),
+    ]);
+
+    const ragCounts = (items: Array<{ ragStatus?: string | null }>) => {
+      const c = { green: 0, amber: 0, red: 0 };
+      items.forEach(i => { const r = i.ragStatus || "green"; if (r in c) c[r as keyof typeof c]++; });
+      return c;
+    };
+
+    const now = Date.now();
+    const overdueInitiatives = initiatives.filter(i => i.endDate && new Date(i.endDate).getTime() < now && i.status !== "completed");
+    const staleItems = [...strategies, ...goals, ...objectives, ...initiatives].filter(i => {
+      if (!i.updatedAt) return false;
+      const daysSince = (now - new Date(i.updatedAt).getTime()) / (1000 * 86400);
+      return daysSince > 60;
+    });
+
+    const summary = {
+      strategies: { total: strategies.length, rag: ragCounts(strategies) },
+      goals: { total: goals.length, rag: ragCounts(goals) },
+      objectives: { total: objectives.length, rag: ragCounts(objectives) },
+      initiatives: { total: initiatives.length, rag: ragCounts(initiatives), overdue: overdueInitiatives.length },
+      okrs: { total: okrs.length, rag: ragCounts(okrs) },
+      kpis: { total: kpis.length, rag: ragCounts(kpis) },
+      governance: { total: govItems.length },
+      staleItems: staleItems.length,
+      redRiskItems: [
+        ...strategies.filter(i => i.ragStatus === "red").map(i => ({ type: "Strategy", title: i.title })),
+        ...goals.filter(i => i.ragStatus === "red").map(i => ({ type: "Goal", title: i.title })),
+        ...initiatives.filter(i => i.ragStatus === "red").map(i => ({ type: "Initiative", title: i.title })),
+      ].slice(0, 10),
+      overdueList: overdueInitiatives.slice(0, 5).map(i => ({ title: i.title, endDate: i.endDate })),
+    };
+
+    // Try AI generation
+    const { getOpenAIConfig } = await import("./lib/openai");
+    const { apiKey, baseURL } = getOpenAIConfig();
+    if (!apiKey) {
+      // Return data-driven insights without AI when key is not configured
+      const insights = [];
+      if (summary.strategies.rag.red > 0)
+        insights.push({ type: "anomaly", severity: "high", title: "Red-status strategies detected", description: `${summary.strategies.rag.red} strategy item(s) are currently red. Immediate review recommended.` });
+      if (summary.goals.rag.amber + summary.goals.rag.red > 0)
+        insights.push({ type: "risk", severity: "medium", title: "Goals at risk", description: `${summary.goals.rag.amber} goals are amber and ${summary.goals.rag.red} are red. Consider re-planning.` });
+      if (summary.initiatives.overdue > 0)
+        insights.push({ type: "anomaly", severity: "high", title: "Overdue initiatives", description: `${summary.initiatives.overdue} initiative(s) are past their end date without completion.` });
+      if (summary.staleItems > 0)
+        insights.push({ type: "recommendation", severity: "low", title: "Stale items need attention", description: `${summary.staleItems} item(s) haven't been updated in over 60 days. Schedule a review session.` });
+      if (insights.length === 0)
+        insights.push({ type: "positive", severity: "info", title: "Strategy health looks good", description: "All tracked items are on track. Keep up the momentum and ensure regular check-ins." });
+      return res.json({ insights, summary, generatedAt: new Date().toISOString(), source: "rules" });
+    }
+
+    try {
+      const { default: OpenAI } = await import("openai");
+      const openai = new OpenAI({ apiKey, baseURL });
+      const completion = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: `You are a strategic planning advisor for Jiganto. Analyze strategy data and return JSON: 
+{ "insights": [{ "type": "anomaly"|"risk"|"recommendation"|"positive", "severity": "high"|"medium"|"low"|"info", "title": string, "description": string }] }
+Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy → blocked goals), achievement opportunities, governance gaps. Be specific and actionable. Return 4-6 insights max.`,
+          },
+          {
+            role: "user",
+            content: `Business strategy data summary:\n${JSON.stringify(summary, null, 2)}`,
+          },
+        ],
+      });
+      const raw = completion.choices[0]?.message?.content;
+      const parsed = raw ? JSON.parse(raw) : { insights: [] };
+      res.json({ ...parsed, summary, generatedAt: new Date().toISOString(), source: "ai" });
+    } catch (aiErr) {
+      res.status(500).json({ message: "AI generation failed", error: String(aiErr) });
+    }
+  });
+
+  // AI Strategy Creation Assist
+  app.post("/api/business/ai-assist", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const { type, title, action = "describe" } = req.body;
+    if (!title) return res.status(400).json({ message: "title is required" });
+
+    const { getOpenAIConfig: getConfig } = await import("./lib/openai");
+    const { apiKey, baseURL } = getConfig();
+    if (!apiKey) {
+      const fallback = `A ${type || "strategic"} focused on "${title}": drive measurable progress, align stakeholders, and deliver value through structured execution and clear accountability.`;
+      return res.json({ description: fallback, source: "fallback" });
+    }
+
+    try {
+      const { default: OpenAI } = await import("openai");
+      const openai = new OpenAI({ apiKey, baseURL });
+      const prompts: Record<string, string> = {
+        describe: `Write a concise, professional description (2-3 sentences) for a ${type || "strategy"} item titled: "${title}". Focus on purpose, expected outcomes, and business value. Be specific and actionable.`,
+        objectives: `List 3-5 SMART objectives for a ${type || "strategy"} titled: "${title}". Return as a JSON array of strings.`,
+      };
+      const completion = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are a strategic planning expert for Jiganto. Be concise, professional, and business-focused." },
+          { role: "user", content: prompts[action] ?? prompts.describe },
+        ],
+        max_tokens: 300,
+      });
+      const content = completion.choices[0]?.message?.content ?? "";
+      res.json({ description: content, source: "ai" });
+    } catch (err) {
+      res.status(500).json({ message: "AI assist failed", error: String(err) });
+    }
+  });
+
+  // ── Governance Items ──────────────────────────────────────────────────────────
+
+  // Entity refs endpoint — returns a map of entityType+id → refSeq for all entities in tenant
+  app.get("/api/business/entity-refs", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    const refs = await storage.getEntityRefs(tenantId);
+    const map: Record<string, number> = {};
+    refs.forEach(r => { map[`${r.entityType}-${r.entityId}`] = r.refSeq; });
+    res.json(map);
+  });
+
+  app.post("/api/business/entity-refs/backfill", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    const result = await storage.backfillEntityRefs(tenantId);
+    res.json(result);
+  });
+
+  app.get("/api/business/governance", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    const items = await storage.getGovernanceItems(tenantId);
+    res.json(items);
+  });
+
+  app.post("/api/business/governance", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    try {
+      const item = await storage.createGovernanceItem({ ...req.body, tenantId });
+      const refSeq = await storage.assignEntityRef(tenantId, "governance", item.id);
+      res.status(201).json({ ...item, refSeq, refCode: `GOV-${String(refSeq).padStart(3,"0")}` });
+    } catch (err) {
+      res.status(400).json({ message: "Failed to create governance item", error: String(err) });
+    }
+  });
+
+  app.patch("/api/business/governance/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const item = await storage.updateGovernanceItem(Number(req.params.id), req.body);
+      if (!item) return res.status(404).json({ message: "Not found" });
+      res.json(item);
+    } catch (err) {
+      res.status(400).json({ message: "Failed to update governance item" });
+    }
+  });
+
+  app.delete("/api/business/governance/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    await storage.deleteGovernanceItem(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  // ── Strategy Document Links ───────────────────────────────────────────────────
+
+  app.get("/api/business/doc-links", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    const layerType = req.query.layerType ? String(req.query.layerType) : undefined;
+    const layerItemId = req.query.layerItemId ? Number(req.query.layerItemId) : undefined;
+    const links = await storage.getStrategyDocLinks(tenantId, layerType, layerItemId);
+    res.json(links);
+  });
+
+  app.post("/api/business/doc-links", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const claims = (req.user as any)?.claims;
+    const addedByName = claims?.first_name && claims?.last_name
+      ? `${claims.first_name} ${claims.last_name}`.trim()
+      : claims?.email || "Unknown";
+    const tenantId = getApiTenantIdWithFallback(req);
+    try {
+      const link = await storage.createStrategyDocLink({
+        ...req.body,
+        tenantId,
+        addedBy: userId,
+        addedByName: req.body.addedByName || addedByName,
+      });
+      res.status(201).json(link);
+    } catch (err) {
+      res.status(400).json({ message: "Failed to create doc link", error: String(err) });
+    }
+  });
+
+  app.delete("/api/business/doc-links/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    await storage.deleteStrategyDocLink(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  // ── KPI Time-series Values ────────────────────────────────────────────────────
+
+  app.get("/api/business/kpi-values", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    const kpiId = req.query.kpiId ? Number(req.query.kpiId) : undefined;
+    const values = await storage.getStrategyKpiValues(tenantId, kpiId);
+    res.json(values);
+  });
+
+  app.post("/api/business/kpi-values", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    try {
+      const val = await storage.createStrategyKpiValue({ ...req.body, tenantId, createdBy: userId });
+      res.status(201).json(val);
+    } catch (err) {
+      res.status(400).json({ message: "Failed to create KPI value", error: String(err) });
+    }
+  });
+
+  app.delete("/api/business/kpi-values/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    await storage.deleteStrategyKpiValue(Number(req.params.id));
+    res.status(204).send();
   });
 
   // Seed Jiganto Strategy Data for Business Management

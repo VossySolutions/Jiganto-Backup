@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { getUserInitials } from "@/lib/chat-utils";
 import { ChatButtonSpinner, ChatSpinner } from "@/components/chat/ChatLoading";
+import { SubmitForm } from "@/components/ui/submit-form";
 import type { Project } from "@shared/models/chat";
 
 type SearchUser = {
@@ -150,7 +151,7 @@ export function CreateChannelDialog({
           <DialogTitle>Create channel</DialogTitle>
           <DialogDescription>Add a new channel to a team or company.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        <SubmitForm onSubmit={submit} className="space-y-4" disabled={!name.trim() || pending}>
           <div>
             <Label>Channel name</Label>
             <Input
@@ -199,11 +200,11 @@ export function CreateChannelDialog({
               </SelectContent>
             </Select>
           </div>
-          <Button className="w-full" onClick={submit} disabled={!name.trim() || pending}>
+          <Button type="submit" className="w-full" disabled={!name.trim() || pending}>
             {pending ? <ChatButtonSpinner /> : null}
             {pending ? "Creating channel…" : "Create channel"}
           </Button>
-        </div>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -239,7 +240,7 @@ export function CreateTeamDialog({
           <DialogTitle>Create team</DialogTitle>
           <DialogDescription>Creates a team with a default #general channel.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        <SubmitForm onSubmit={submit} className="space-y-4" disabled={!name.trim() || pending}>
           <div>
             <Label>Team name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1.5" />
@@ -252,11 +253,11 @@ export function CreateTeamDialog({
             <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
             Private team
           </label>
-          <Button className="w-full" onClick={submit} disabled={!name.trim() || pending}>
+          <Button type="submit" className="w-full" disabled={!name.trim() || pending}>
             {pending ? <ChatButtonSpinner /> : null}
             {pending ? "Creating team…" : "Create team"}
           </Button>
-        </div>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -296,7 +297,7 @@ export function PollCreatorDialog({
             <BarChart2 className="h-5 w-5 text-[#4338CA]" /> Create poll
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <SubmitForm onSubmit={submit} className="space-y-4" disabled={pending}>
           <Input placeholder="Question" value={question} onChange={(e) => setQuestion(e.target.value)} />
           {options.map((opt, i) => (
             <div key={i} className="flex gap-2">
@@ -310,14 +311,14 @@ export function PollCreatorDialog({
                 }}
               />
               {options.length > 2 && (
-                <Button size="icon" variant="ghost" onClick={() => setOptions(options.filter((_, idx) => idx !== i))}>
+                <Button type="button" size="icon" variant="ghost" onClick={() => setOptions(options.filter((_, idx) => idx !== i))}>
                   <X className="h-4 w-4" />
                 </Button>
               )}
             </div>
           ))}
           {options.length < 6 && (
-            <Button variant="outline" size="sm" className="w-full" onClick={() => setOptions([...options, ""])}>
+            <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setOptions([...options, ""])}>
               + Add option
             </Button>
           )}
@@ -336,11 +337,11 @@ export function PollCreatorDialog({
             <input type="checkbox" checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} />
             Anonymous votes
           </label>
-          <Button className="w-full gap-2" onClick={submit} disabled={pending}>
+          <Button type="submit" className="w-full gap-2" disabled={pending}>
             {pending ? <ChatButtonSpinner /> : <Check className="h-4 w-4" />}
             {pending ? "Posting poll…" : "Post poll"}
           </Button>
-        </div>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );

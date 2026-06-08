@@ -21,6 +21,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -153,6 +154,7 @@ function ClientFormDialog({
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="sm:max-w-[480px]">
+        <SubmitForm onSubmit={handleSubmit} disabled={!form.name.trim() || isPending}>
         <DialogHeader>
           <DialogTitle>{editing ? "Edit Client" : "Add Client Workspace"}</DialogTitle>
           <DialogDescription>
@@ -243,15 +245,15 @@ function ClientFormDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isPending}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>Cancel</Button>
           <Button
+            type="submit"
             data-testid="button-save-client"
-            onClick={handleSubmit}
-            disabled={!form.name.trim() || isPending}
           >
             {isPending ? "Saving…" : editing ? "Save Changes" : "Create Client"}
           </Button>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );

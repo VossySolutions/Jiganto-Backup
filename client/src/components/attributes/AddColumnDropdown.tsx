@@ -19,6 +19,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { 
   Plus, Clock, Calendar, Tag, CheckSquare, Type, FileText, ListChecks, Link, Paperclip, Hash, CircleDot, User,
   Link2, Users, ThumbsUp, TrendingUp, Star, Mail, Phone, Calculator, RefreshCw, UserCheck, MousePointerClick, Fingerprint,
@@ -168,6 +169,7 @@ export function AddColumnDropdown({ onAddColumn, variant = "default" }: AddColum
 
       <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">
+          <SubmitForm onSubmit={handleSave} disabled={!title.trim()}>
           <DialogHeader>
             <DialogTitle>Configure Column</DialogTitle>
             <DialogDescription>
@@ -236,13 +238,14 @@ export function AddColumnDropdown({ onAddColumn, variant = "default" }: AddColum
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfigDialogOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setConfigDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={!title.trim()} data-testid="save-column-btn">
+            <Button type="submit" data-testid="save-column-btn">
               Add Column
             </Button>
           </DialogFooter>
+          </SubmitForm>
         </DialogContent>
       </Dialog>
     </>

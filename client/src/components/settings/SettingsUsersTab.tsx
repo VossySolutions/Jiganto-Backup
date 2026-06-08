@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -1323,6 +1324,14 @@ export default function SettingsUsersTab({
               </Button>
             </DialogTrigger>
             <DialogContent className="w-[calc(100vw-2rem)] max-w-lg max-h-[90vh] overflow-y-auto">
+              <SubmitForm
+                onSubmit={handleAddUser}
+                disabled={
+                  !addUserForm.email ||
+                  createUserMutation.isPending ||
+                  createInvitationMutation.isPending
+                }
+              >
               <DialogHeader>
                 <DialogTitle>Add team member</DialogTitle>
                 <DialogDescription>
@@ -1542,14 +1551,9 @@ export default function SettingsUsersTab({
                 )}
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddUserOpen(false)} data-testid="button-cancel-add">Cancel</Button>
+                <Button type="button" variant="outline" onClick={() => setIsAddUserOpen(false)} data-testid="button-cancel-add">Cancel</Button>
                 <Button
-                  onClick={handleAddUser}
-                  disabled={
-                    !addUserForm.email ||
-                    createUserMutation.isPending ||
-                    createInvitationMutation.isPending
-                  }
+                  type="submit"
                   data-testid="button-submit-add-user"
                 >
                   {createUserMutation.isPending || createInvitationMutation.isPending ? (
@@ -1561,6 +1565,7 @@ export default function SettingsUsersTab({
                   )}
                 </Button>
               </DialogFooter>
+              </SubmitForm>
             </DialogContent>
           </Dialog>
         </div>

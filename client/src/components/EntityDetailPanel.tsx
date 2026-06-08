@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,13 +12,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  X, Save, Trash2, ExternalLink, User, Calendar, Target, Flag, 
+  Save, Trash2, ExternalLink, Calendar, Target, Flag, 
   Crosshair, Zap, TrendingUp, BarChart3, CheckSquare, Loader2,
-  ChevronRight, Link2
+  ChevronRight, ChevronUp, Link2, MessageSquare, Send, ShieldCheck, Plus,
+  FileText, Globe, X as XIcon
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -49,6 +51,7 @@ const entityIcons: Record<string, typeof Target> = {
   okr: TrendingUp,
   kpi: BarChart3,
   execution: CheckSquare,
+  governance: ShieldCheck,
 };
 
 const entityLabels: Record<string, string> = {
@@ -59,6 +62,12 @@ const entityLabels: Record<string, string> = {
   okr: "OKR",
   kpi: "KPI",
   execution: "Task",
+  governance: "Governance",
+};
+
+const REF_PREFIXES: Record<string, string> = {
+  strategy: "S", goal: "G", objective: "OBJ", initiative: "INI",
+  okr: "OKR", kpi: "KPI", execution: "TASK", governance: "GOV",
 };
 
 const ragColors: Record<string, string> = {
@@ -68,12 +77,14 @@ const ragColors: Record<string, string> = {
 };
 
 const statusOptions = [
-  { value: "not_started", label: "Not Started" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "on_track", label: "On Track" },
-  { value: "at_risk", label: "At Risk" },
-  { value: "off_track", label: "Off Track" },
-  { value: "completed", label: "Completed" },
+  { value: "not_started",  label: "Not Started" },
+  { value: "in_progress",  label: "In Progress" },
+  { value: "on_track",     label: "On Track" },
+  { value: "at_risk",      label: "At Risk" },
+  { value: "off_track",    label: "Off Track" },
+  { value: "on_hold",      label: "On Hold" },
+  { value: "cancelled",    label: "Cancelled" },
+  { value: "completed",    label: "Completed" },
 ];
 
 const ragOptions = [
@@ -96,13 +107,43 @@ function getUserInitials(user: UserProfile["user"]): string {
   return "?";
 }
 
+type ReviewNote = {
+  id: number; entityType: string; entityId: number; content: string;
+  ragSnapshot: string | null; progressAtCheckin: number | null; authorName: string; createdAt: string;
+};
+
+type DocLink = {
+  id: number; entityType: string; entityId: number; url: string;
+  label: string | null; addedByName: string | null; createdAt: string;
+};
+
+type InitiativeDoc = {
+  id: number; initiativeId: number; filename: string; fileType: string | null;
+  fileSize: number | null; uploadedByName: string | null; createdAt: string;
+};
+
 export function EntityDetailPanel({ open, onClose, entityType, entity }: EntityDetailPanelProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("details");
   const [editedEntity, setEditedEntity] = useState<Record<string, unknown> | null>(null);
+  const [checkinContent, setCheckinContent] = useState("");
+  const [checkinRag, setCheckinRag] = useState("");
+  const [checkinProgress, setCheckinProgress] = useState<string>("");
 
   const Icon = entityIcons[entityType] || Target;
   const label = entityLabels[entityType] || "Entity";
+  const refPrefix = REF_PREFIXES[entityType] ?? entityType.toUpperCase().slice(0, 3);
+
+  const { data: entityRefs } = useQuery<Record<string, number>>({
+    queryKey: ["/api/business/entity-refs"],
+    enabled: open,
+    staleTime: 60_000,
+  });
+
+  const entityRefSeq = entity?.id ? (entityRefs?.[`${entityType}-${entity.id}`] ?? null) : null;
+  const displayRef = entityRefSeq
+    ? `${refPrefix}-${String(entityRefSeq).padStart(3, "0")}`
+    : `${refPrefix}-${String(entity?.id ?? 0).padStart(3, "0")}`;
 
   const ownerField = entityType === "execution" ? "assigneeId" : "ownerId";
 
@@ -120,9 +161,37 @@ export function EntityDetailPanel({ open, onClose, entityType, entity }: EntityD
       case "okr": return "/api/business/okrs";
       case "kpi": return "/api/business/kpis";
       case "execution": return "/api/business/tasks";
+      case "governance": return "/api/business/governance";
       default: return "";
     }
   };
+
+  const parentEntityType = (() => {
+    if (entityType === "goal") return "strategy";
+    if (entityType === "objective") return "goal";
+    if (entityType === "initiative") return "objective";
+    if (entityType === "okr") return entity?.initiativeId ? "initiative" : (entity?.objectiveId ? "objective" : null);
+    if (entityType === "kpi") return entity?.initiativeId ? "initiative" : (entity?.goalId ? "goal" : null);
+    return null;
+  })();
+
+  const parentEntityId = (() => {
+    if (entityType === "goal") return entity?.strategyItemId as number | null;
+    if (entityType === "objective") return entity?.goalId as number | null;
+    if (entityType === "initiative") return entity?.objectiveId as number | null;
+    if (entityType === "okr") return (entity?.initiativeId || entity?.objectiveId) as number | null;
+    if (entityType === "kpi") return (entity?.initiativeId || entity?.goalId) as number | null;
+    return null;
+  })();
+
+  const { data: parentEntity } = useQuery<Record<string, unknown>>({
+    queryKey: [parentEntityType && getApiPath(parentEntityType), parentEntityId],
+    queryFn: () => {
+      if (!parentEntityType || !parentEntityId) return Promise.resolve(null);
+      return fetch(`${getApiPath(parentEntityType)}/${parentEntityId}`, { credentials: "include" }).then(r => r.ok ? r.json() : null);
+    },
+    enabled: open && !!parentEntityType && !!parentEntityId,
+  });
 
   const READONLY_FIELDS = ["ownerName", "assigneeName", "createdByName", "updatedByName", "id", "createdAt", "updatedAt"];
 
@@ -163,6 +232,82 @@ export function EntityDetailPanel({ open, onClose, entityType, entity }: EntityD
     },
   });
 
+  const { data: checkInsRaw } = useQuery<ReviewNote[]>({
+    queryKey: ["/api/business/review-notes", entityType, entity?.id],
+    queryFn: async () => {
+      if (!entity?.id) return [];
+      const res = await fetchWithAuth(
+        `/api/business/review-notes?entityType=${entityType}&entityId=${entity.id}`,
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: open && !!entity?.id && activeTab === "checkins",
+  });
+  const checkIns = Array.isArray(checkInsRaw) ? checkInsRaw : [];
+
+  const { data: docLinks = [], refetch: refetchDocLinks } = useQuery<DocLink[]>({
+    queryKey: ["/api/business/doc-links", entityType, entity?.id],
+    queryFn: () => {
+      if (!entity?.id) return Promise.resolve([]);
+      return fetch(`/api/business/doc-links?entityType=${entityType}&entityId=${entity.id}`, { credentials: "include" }).then(r => r.json());
+    },
+    enabled: open && !!entity?.id && activeTab === "docs",
+  });
+
+  const { data: initiativeDocs = [] } = useQuery<InitiativeDoc[]>({
+    queryKey: ["/api/business/initiative-documents", entity?.id],
+    queryFn: () => {
+      if (!entity?.id) return Promise.resolve([]);
+      return fetch(`/api/business/initiative-documents?initiativeId=${entity.id}`, { credentials: "include" }).then(r => r.json());
+    },
+    enabled: open && entityType === "initiative" && !!entity?.id && activeTab === "docs",
+  });
+
+  const [newDocUrl, setNewDocUrl] = useState("");
+  const [newDocLabel, setNewDocLabel] = useState("");
+
+  const addDocLinkMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiRequest("POST", "/api/business/doc-links", body),
+    onSuccess: () => {
+      refetchDocLinks();
+      setNewDocUrl("");
+      setNewDocLabel("");
+      toast({ title: "Link added" });
+    },
+    onError: () => toast({ title: "Failed to add link", variant: "destructive" }),
+  });
+
+  const removeDocLinkMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/business/doc-links/${id}`),
+    onSuccess: () => { refetchDocLinks(); },
+  });
+
+  const addCheckinMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiRequest("POST", "/api/business/review-notes", body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/business/review-notes", entityType, entity?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/business/review-notes"] });
+      setCheckinContent("");
+      setCheckinRag("");
+      setCheckinProgress("");
+      toast({ title: "Check-in saved" });
+    },
+    onError: () => toast({ title: "Failed to save check-in", variant: "destructive" }),
+  });
+
+  const submitCheckin = () => {
+    if (!checkinContent.trim() || !entity?.id) return;
+    addCheckinMutation.mutate({
+      entityType,
+      entityId: Number(entity.id),
+      content: checkinContent.trim(),
+      ragSnapshot: checkinRag || null,
+      progressAtCheckin: checkinProgress !== "" ? Number(checkinProgress) : null,
+    });
+  };
+
   const handleSave = () => {
     if (!editedEntity) return;
     updateMutation.mutate(editedEntity);
@@ -197,6 +342,11 @@ export function EntityDetailPanel({ open, onClose, entityType, entity }: EntityD
         onOpenAutoFocus={handleOpen}
         data-testid="entity-detail-panel"
       >
+        <SubmitForm
+          className="flex flex-col flex-1 min-h-0"
+          onSubmit={handleSave}
+          disabled={updateMutation.isPending || !editedEntity}
+        >
         <SheetHeader className="px-6 pt-6 pb-4 border-b">
           <div className="flex items-center gap-3">
             <div className={cn(
@@ -210,23 +360,28 @@ export function EntityDetailPanel({ open, onClose, entityType, entity }: EntityD
                 ragStatus === "amber" ? "text-status-amber" : "text-status-green"
               )} />
             </div>
-            <div className="flex-1">
-              <SheetTitle className="text-lg" data-testid="detail-panel-title">{title}</SheetTitle>
-              <SheetDescription className="text-sm">
-                {label} Details
-              </SheetDescription>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] text-muted-foreground shrink-0">
+                  {displayRef}
+                </span>
+                <Badge variant="outline" className={cn(ragColors[ragStatus], "text-[10px] shrink-0")}>
+                  {ragStatus.toUpperCase()}
+                </Badge>
+              </div>
+              <SheetTitle className="text-base leading-snug mt-0.5 line-clamp-2" data-testid="detail-panel-title">{title}</SheetTitle>
+              <SheetDescription className="text-xs">{label} Details</SheetDescription>
             </div>
-            <Badge variant="outline" className={cn(ragColors[ragStatus], "text-xs")}>
-              {ragStatus.toUpperCase()}
-            </Badge>
           </div>
         </SheetHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          <TabsList className="mx-6 mt-4 justify-start bg-muted/50">
-            <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
-            <TabsTrigger value="progress" data-testid="tab-progress">Progress</TabsTrigger>
-            <TabsTrigger value="links" data-testid="tab-links">Links</TabsTrigger>
+          <TabsList className="mx-6 mt-4 justify-start bg-muted/50 h-8 overflow-x-auto">
+            <TabsTrigger value="details" className="text-xs" data-testid="tab-details">Details</TabsTrigger>
+            <TabsTrigger value="progress" className="text-xs" data-testid="tab-progress">Progress</TabsTrigger>
+            <TabsTrigger value="checkins" className="text-xs" data-testid="tab-checkins">Activity</TabsTrigger>
+            <TabsTrigger value="docs" className="text-xs" data-testid="tab-docs">Docs</TabsTrigger>
+            <TabsTrigger value="links" className="text-xs" data-testid="tab-links">Hierarchy</TabsTrigger>
           </TabsList>
 
           <ScrollArea className="flex-1 px-6 py-4">
@@ -357,6 +512,24 @@ export function EntityDetailPanel({ open, onClose, entityType, entity }: EntityD
 
               <Separator className="my-4" />
 
+              {parentEntityType && parentEntity && (
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-xs uppercase tracking-wide">Parent {entityLabels[parentEntityType] || parentEntityType}</Label>
+                  <div className="flex items-center gap-2 p-2.5 border rounded-lg bg-muted/30">
+                    {(() => { const PIcon = entityIcons[parentEntityType] || Target; return <PIcon className="h-4 w-4 text-muted-foreground shrink-0" />; })()}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {(parentEntity.title || parentEntity.name || parentEntity.objective || "Untitled") as string}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground font-mono">
+                        {(REF_PREFIXES[parentEntityType] ?? parentEntityType.toUpperCase()).slice(0,3)}-{String(parentEntity.id ?? 0).padStart(3,"0")}
+                      </p>
+                    </div>
+                    <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label className="text-muted-foreground text-xs uppercase tracking-wide">Metadata</Label>
                 <div className="grid gap-2 text-sm">
@@ -428,26 +601,215 @@ export function EntityDetailPanel({ open, onClose, entityType, entity }: EntityD
               )}
             </TabsContent>
 
-            <TabsContent value="links" className="m-0 space-y-4">
-              <div className="text-sm text-muted-foreground">
-                <p>Related entities in the strategy chain:</p>
+            <TabsContent value="checkins" className="m-0 space-y-4">
+              {/* Add check-in form */}
+              <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3">
+                <Label className="text-xs font-semibold">Log a Check-in</Label>
+                <Textarea
+                  placeholder="What's the latest status? Any blockers or wins?"
+                  value={checkinContent}
+                  onChange={e => setCheckinContent(e.target.value)}
+                  rows={3}
+                  className="text-sm resize-none"
+                  data-testid="checkin-content"
+                />
+                <div className="flex items-center gap-2">
+                  <Select value={checkinRag || "none"} onValueChange={v => setCheckinRag(v === "none" ? "" : v)}>
+                    <SelectTrigger className="h-7 text-xs flex-1" data-testid="checkin-rag">
+                      <SelectValue placeholder="RAG status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No RAG</SelectItem>
+                      <SelectItem value="green">🟢 Green</SelectItem>
+                      <SelectItem value="amber">🟡 Amber</SelectItem>
+                      <SelectItem value="red">🔴 Red</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number" min={0} max={100}
+                    placeholder="Progress %"
+                    value={checkinProgress}
+                    onChange={e => setCheckinProgress(e.target.value)}
+                    className="h-7 text-xs w-28"
+                    data-testid="checkin-progress"
+                  />
+                  <Button
+                    size="sm" className="h-7 text-xs px-3"
+                    onClick={submitCheckin}
+                    disabled={addCheckinMutation.isPending || !checkinContent.trim()}
+                    data-testid="button-submit-checkin"
+                  >
+                    {addCheckinMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                  </Button>
+                </div>
               </div>
-              
+
+              {/* Check-in feed */}
+              {checkIns.length === 0 ? (
+                <div className="py-8 text-center">
+                  <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-xs text-muted-foreground">No check-ins yet for this item.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {checkIns.map(note => (
+                    <div key={note.id} className="rounded-xl border border-border bg-card p-3 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          {note.ragSnapshot && (
+                            <span className={cn(
+                              "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
+                              note.ragSnapshot === "green" ? "bg-green-100 text-green-700" :
+                              note.ragSnapshot === "amber" ? "bg-amber-100 text-amber-700" :
+                              "bg-red-100 text-red-700"
+                            )}>
+                              {note.ragSnapshot === "green" ? "🟢" : note.ragSnapshot === "amber" ? "🟡" : "🔴"} {note.ragSnapshot}
+                            </span>
+                          )}
+                          {note.progressAtCheckin != null && (
+                            <span className="text-[10px] text-muted-foreground">{note.progressAtCheckin}%</span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground shrink-0">
+                          {format(new Date(note.createdAt), "d MMM yyyy")}
+                        </span>
+                      </div>
+                      <p className="text-xs leading-relaxed whitespace-pre-wrap">{note.content}</p>
+                      <p className="text-[10px] text-muted-foreground">— {note.authorName}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="docs" className="m-0 space-y-4">
+              {/* Add link form */}
+              <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3">
+                <Label className="text-xs font-semibold">Add External Link</Label>
+                <Input
+                  placeholder="https://..."
+                  value={newDocUrl}
+                  onChange={e => setNewDocUrl(e.target.value)}
+                  className="h-8 text-xs"
+                  data-testid="doc-link-url"
+                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Label (optional)"
+                    value={newDocLabel}
+                    onChange={e => setNewDocLabel(e.target.value)}
+                    className="h-8 text-xs flex-1"
+                    data-testid="doc-link-label"
+                  />
+                  <Button
+                    size="sm" className="h-8 px-3"
+                    disabled={!newDocUrl.trim() || addDocLinkMutation.isPending}
+                    onClick={() => {
+                      if (!entity?.id || !newDocUrl.trim()) return;
+                      addDocLinkMutation.mutate({ entityType, entityId: Number(entity.id), url: newDocUrl.trim(), label: newDocLabel.trim() || null });
+                    }}
+                    data-testid="button-add-doc-link"
+                  >
+                    {addDocLinkMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                  </Button>
+                </div>
+              </div>
+
+              {/* External links */}
+              {docLinks.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">External Links</p>
+                  {docLinks.map(link => (
+                    <div key={link.id} className="flex items-center gap-2 p-2.5 border rounded-lg">
+                      <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <a href={link.url} target="_blank" rel="noopener noreferrer"
+                          className="text-xs font-medium text-primary hover:underline truncate block">
+                          {link.label || link.url}
+                        </a>
+                        {link.addedByName && (
+                          <p className="text-[10px] text-muted-foreground">Added by {link.addedByName}</p>
+                        )}
+                      </div>
+                      <button
+                        className="text-muted-foreground hover:text-destructive transition-colors"
+                        onClick={() => removeDocLinkMutation.mutate(link.id)}
+                        data-testid={`button-remove-link-${link.id}`}
+                      >
+                        <XIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Initiative documents */}
+              {entityType === "initiative" && initiativeDocs.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Uploaded Files</p>
+                  {initiativeDocs.map(doc => (
+                    <div key={doc.id} className="flex items-center gap-2 p-2.5 border rounded-lg">
+                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{doc.filename}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {doc.fileType} {doc.fileSize ? `· ${(doc.fileSize / 1024).toFixed(0)}KB` : ""}
+                          {doc.uploadedByName ? ` · ${doc.uploadedByName}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {docLinks.length === 0 && !(entityType === "initiative" && initiativeDocs.length > 0) && (
+                <div className="py-8 text-center">
+                  <FileText className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-xs text-muted-foreground">No documents linked yet.</p>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="links" className="m-0 space-y-4">
               <div className="space-y-2">
-                {entityType !== "strategy" && (
-                  <div className="flex items-center gap-2 p-3 border rounded-lg text-sm">
-                    <Target className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Parent Strategy</span>
-                    <ChevronRight className="h-4 w-4 ml-auto text-muted-foreground" />
+                {parentEntityType && parentEntity ? (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Parent</p>
+                    <div className="flex items-center gap-2.5 p-3 border rounded-lg bg-muted/30">
+                      {(() => { const PIcon = entityIcons[parentEntityType] || Target; return <PIcon className="h-4 w-4 shrink-0" style={{ color: "#6366f1" }} />; })()}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {(parentEntity.title || parentEntity.name || parentEntity.objective || "Untitled") as string}
+                        </p>
+                        <Badge variant="outline" className="text-[10px] mt-0.5">
+                          {entityLabels[parentEntityType] || parentEntityType}
+                        </Badge>
+                      </div>
+                      <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </div>
                   </div>
-                )}
-                {entityType !== "execution" && (
-                  <div className="flex items-center gap-2 p-3 border rounded-lg text-sm">
-                    <Link2 className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Child Items</span>
-                    <ChevronRight className="h-4 w-4 ml-auto text-muted-foreground" />
+                ) : parentEntityType ? (
+                  <div className="p-3 border rounded-lg bg-muted/30 text-xs text-muted-foreground">
+                    Loading parent…
                   </div>
-                )}
+                ) : null}
+
+                <Separator className="my-3" />
+
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Current Item</p>
+                  <div className="flex items-center gap-2.5 p-3 border-2 border-primary/30 rounded-lg bg-primary/5">
+                    {(() => { const CIcon = entityIcons[entityType] || Target; return <CIcon className="h-4 w-4 shrink-0 text-primary" />; })()}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{title}</p>
+                      <p className="text-[10px] font-mono text-muted-foreground">{displayRef}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-xs text-muted-foreground pt-1">
+                  <p>Use the Strategy Map or Goals/Objectives tabs to navigate to child items.</p>
+                </div>
               </div>
             </TabsContent>
           </ScrollArea>
@@ -455,6 +817,7 @@ export function EntityDetailPanel({ open, onClose, entityType, entity }: EntityD
 
         <SheetFooter className="px-6 py-4 border-t bg-muted/30 gap-2">
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={() => deleteMutation.mutate()}
@@ -465,19 +828,19 @@ export function EntityDetailPanel({ open, onClose, entityType, entity }: EntityD
             {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
           </Button>
           <div className="flex-1" />
-          <Button variant="outline" size="sm" onClick={onClose} data-testid="button-cancel">
+          <Button type="button" variant="outline" size="sm" onClick={onClose} data-testid="button-cancel">
             Cancel
           </Button>
           <Button
+            type="submit"
             size="sm"
-            onClick={handleSave}
-            disabled={updateMutation.isPending || !editedEntity}
             data-testid="button-save"
           >
             {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
             Save
           </Button>
         </SheetFooter>
+        </SubmitForm>
       </SheetContent>
     </Sheet>
   );

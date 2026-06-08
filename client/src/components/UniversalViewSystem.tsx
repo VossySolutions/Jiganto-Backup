@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -1974,6 +1975,7 @@ function FormView<T extends { id: number | string }>({
         <CardDescription>Fill in the details below to add a new item.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <SubmitForm onSubmit={handleSubmit}>
         {columns.filter(c => c.editable !== false && !["created_time", "modified_time", "created_by", "modified_by", "autonumber"].includes(c.type)).map((column) => (
           <div key={column.id} className="space-y-2">
             <Label>{column.header}{column.required && <span className="text-destructive ml-1">*</span>}</Label>
@@ -2035,9 +2037,10 @@ function FormView<T extends { id: number | string }>({
             )}
           </div>
         ))}
-        <Button onClick={handleSubmit} className="w-full" data-testid="button-submit-form">
+        <Button type="submit" className="w-full" data-testid="button-submit-form">
           <Plus className="h-4 w-4 mr-1" /> Add Item
         </Button>
+        </SubmitForm>
       </CardContent>
     </Card>
   );

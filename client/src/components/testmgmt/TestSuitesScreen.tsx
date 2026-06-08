@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { useToast } from "@/hooks/use-toast";
 import { useTmProject } from "@/contexts/TmProjectContext";
 
@@ -164,6 +165,10 @@ export function TestSuitesScreen() {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
+          <SubmitForm
+            onSubmit={handleSubmit}
+            disabled={!form.name.trim() || createMutation.isPending || updateMutation.isPending}
+          >
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Suite" : "New Test Suite"}</DialogTitle>
           </DialogHeader>
@@ -202,16 +207,16 @@ export function TestSuitesScreen() {
               </select>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
               <Button
-                onClick={handleSubmit}
-                disabled={!form.name.trim() || createMutation.isPending || updateMutation.isPending}
+                type="submit"
                 data-testid="button-submit-suite"
               >
                 {editing ? "Save Changes" : "Create Suite"}
               </Button>
             </div>
           </div>
+          </SubmitForm>
         </DialogContent>
       </Dialog>
     </div>

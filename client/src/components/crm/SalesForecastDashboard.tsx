@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, MoreHorizontal } from "lucide-react";
@@ -289,6 +290,10 @@ export function SalesForecastDashboard({ opportunities, stages }: SalesForecastD
                 </button>
               </DialogTrigger>
               <DialogContent>
+                <SubmitForm
+                  onSubmit={() => createForecastMutation.mutate(newForecast)}
+                  disabled={createForecastMutation.isPending}
+                >
                 <DialogHeader>
                   <DialogTitle>Create Forecast</DialogTitle>
                 </DialogHeader>
@@ -349,16 +354,17 @@ export function SalesForecastDashboard({ opportunities, stages }: SalesForecastD
                 </div>
                 <DialogFooter>
                   <DialogClose asChild>
-                    <Button variant="outline">Cancel</Button>
+                    <Button type="button" variant="outline">Cancel</Button>
                   </DialogClose>
                   <Button
-                    onClick={() => createForecastMutation.mutate(newForecast)}
+                    type="submit"
                     disabled={createForecastMutation.isPending}
                     data-testid="button-save-forecast"
                   >
                     {createForecastMutation.isPending ? "Creating..." : "Create Forecast"}
                   </Button>
                 </DialogFooter>
+                </SubmitForm>
               </DialogContent>
             </Dialog>
           </div>
@@ -543,6 +549,10 @@ export function SalesForecastDashboard({ opportunities, stages }: SalesForecastD
 
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
+          <SubmitForm
+            onSubmit={() => editingForecast && updateForecastMutation.mutate(editingForecast)}
+            disabled={updateForecastMutation.isPending}
+          >
           <DialogHeader>
             <DialogTitle>Edit Forecast</DialogTitle>
           </DialogHeader>
@@ -608,16 +618,17 @@ export function SalesForecastDashboard({ opportunities, stages }: SalesForecastD
           )}
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button type="button" variant="outline">Cancel</Button>
             </DialogClose>
             <Button
-              onClick={() => editingForecast && updateForecastMutation.mutate(editingForecast)}
+              type="submit"
               disabled={updateForecastMutation.isPending}
               data-testid="button-update-forecast"
             >
               {updateForecastMutation.isPending ? "Updating..." : "Update Forecast"}
             </Button>
           </DialogFooter>
+          </SubmitForm>
         </DialogContent>
       </Dialog>
     </div>

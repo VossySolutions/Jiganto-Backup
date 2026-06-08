@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -700,6 +701,17 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
             </button>
           </DialogTrigger>
           <DialogContent>
+            <SubmitForm
+              onSubmit={() => {
+                if (editingId) {
+                  updateMutation.mutate({ id: editingId, updates: formData });
+                  setIsOpen(false);
+                } else {
+                  createMutation.mutate(formData);
+                }
+              }}
+              disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
+            >
             <DialogHeader>
               <DialogTitle>{editingId ? "Edit Account" : "Create New Account"}</DialogTitle>
             </DialogHeader>
@@ -760,17 +772,10 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
+                <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
               <Button
-                onClick={() => {
-                  if (editingId) {
-                    updateMutation.mutate({ id: editingId, updates: formData });
-                    setIsOpen(false);
-                  } else {
-                    createMutation.mutate(formData);
-                  }
-                }}
+                type="submit"
                 disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
                 data-testid="button-save-customer"
               >
@@ -779,6 +784,7 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
                   : (createMutation.isPending ? "Creating..." : "Create Account")}
               </Button>
             </DialogFooter>
+            </SubmitForm>
           </DialogContent>
         </Dialog>
       </div>

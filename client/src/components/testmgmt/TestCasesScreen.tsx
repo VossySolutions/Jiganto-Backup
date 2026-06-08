@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -366,6 +367,10 @@ export function TestCasesScreen() {
       {/* Case Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <SubmitForm
+            onSubmit={handleSubmit}
+            disabled={!form.title.trim() || createMutation.isPending || updateMutation.isPending}
+          >
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Test Case" : "New Test Case"}</DialogTitle>
           </DialogHeader>
@@ -551,16 +556,16 @@ export function TestCasesScreen() {
 
             {/* Actions */}
             <div className="flex justify-end gap-2 pt-2 border-t border-border">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
               <Button
-                onClick={handleSubmit}
-                disabled={!form.title.trim() || createMutation.isPending || updateMutation.isPending}
+                type="submit"
                 data-testid="button-submit-case"
               >
                 {editing ? "Save Changes" : "Create Test Case"}
               </Button>
             </div>
           </div>
+          </SubmitForm>
         </DialogContent>
       </Dialog>
 

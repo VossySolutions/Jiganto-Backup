@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -806,6 +807,7 @@ function PeopleTab({
 
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <SubmitForm onSubmit={handleCreate} disabled={!formData.firstName || !formData.lastName}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
@@ -882,12 +884,13 @@ function PeopleTab({
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button type="button" variant="outline">Cancel</Button>
             </DialogClose>
-            <Button onClick={handleCreate} disabled={!formData.firstName || !formData.lastName} data-testid="button-save-resource">
+            <Button type="submit" data-testid="button-save-resource">
               Add Resource
             </Button>
           </DialogFooter>
+          </SubmitForm>
         </DialogContent>
       </Dialog>
 

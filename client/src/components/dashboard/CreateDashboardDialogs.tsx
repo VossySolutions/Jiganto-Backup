@@ -22,6 +22,7 @@ import { fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { DashboardLayout } from "@shared/models/dashboard";
 import { customDashboardId, type DashboardType } from "@/hooks/use-dashboard-selector";
+import { SubmitForm } from "@/components/ui/submit-form";
 
 function scopeQuery(base: string, clientId?: number | null, projectId?: number | null) {
   const params = new URLSearchParams();
@@ -78,7 +79,11 @@ export function CreateBespokeDashboardDialog({
           <DialogTitle>Create custom dashboard</DialogTitle>
           <DialogDescription>Build a bespoke view with widgets from any module.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <SubmitForm
+          onSubmit={() => createMutation.mutate()}
+          disabled={name.trim().length < 2 || createMutation.isPending}
+          className="space-y-4 py-2"
+        >
           <div className="space-y-2">
             <Label htmlFor="dash-name">Name</Label>
             <Input
@@ -101,18 +106,18 @@ export function CreateBespokeDashboardDialog({
               </SelectContent>
             </Select>
           </div>
-        </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
+            type="submit"
             disabled={name.trim().length < 2 || createMutation.isPending}
-            onClick={() => createMutation.mutate()}
           >
             Create
           </Button>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
@@ -167,26 +172,31 @@ export function AiDashboardDialog({
             Describe the dashboard you want. We will pick widgets and layout automatically.
           </DialogDescription>
         </DialogHeader>
-        <div className="py-2">
-          <Label htmlFor="ai-prompt">Prompt</Label>
-          <textarea
-            id="ai-prompt"
-            className="mt-2 w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-          />
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            disabled={prompt.trim().length < 8 || generateMutation.isPending}
-            onClick={() => generateMutation.mutate()}
-          >
-            {generateMutation.isPending ? "Generating…" : "Generate"}
-          </Button>
-        </DialogFooter>
+        <SubmitForm
+          onSubmit={() => generateMutation.mutate()}
+          disabled={prompt.trim().length < 8 || generateMutation.isPending}
+        >
+          <div className="py-2">
+            <Label htmlFor="ai-prompt">Prompt</Label>
+            <textarea
+              id="ai-prompt"
+              className="mt-2 w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={prompt.trim().length < 8 || generateMutation.isPending}
+            >
+              {generateMutation.isPending ? "Generating…" : "Generate"}
+            </Button>
+          </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );

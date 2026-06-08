@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -549,6 +550,10 @@ export function Crm360ViewTab({
                   </button>
                 </DialogTrigger>
                 <DialogContent>
+                  <SubmitForm
+                    onSubmit={() => createNoteMutation.mutate({ content: newNoteContent, tag: newNoteTag, sentiment: newNoteSentiment })}
+                    disabled={!newNoteContent.trim() || createNoteMutation.isPending}
+                  >
                   <DialogHeader>
                     <DialogTitle>Add Note — {selectedAccount.name}</DialogTitle>
                   </DialogHeader>
@@ -597,15 +602,16 @@ export function Crm360ViewTab({
                     </div>
                   </div>
                   <DialogFooter>
-                    <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                    <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
                     <Button
-                      onClick={() => createNoteMutation.mutate({ content: newNoteContent, tag: newNoteTag, sentiment: newNoteSentiment })}
+                      type="submit"
                       disabled={!newNoteContent.trim() || createNoteMutation.isPending}
                       data-testid="button-save-360-note"
                     >
                       {createNoteMutation.isPending ? "Saving..." : "Save Note"}
                     </Button>
                   </DialogFooter>
+                  </SubmitForm>
                 </DialogContent>
               </Dialog>
               <button className="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-border bg-background hover:bg-muted transition-colors">

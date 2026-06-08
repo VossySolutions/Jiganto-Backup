@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams } from "wouter";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { FileText, FileSpreadsheet, Presentation, CheckCircle2, AlertTriangle, Clock, Link2, Download, Shield } from "lucide-react";
 
 type SignoffSigner = {
@@ -298,7 +299,11 @@ export default function SigningPortalPage() {
                 </button>
               </div>
             ) : step === "sign" ? (
-              <div className="space-y-3">
+              <SubmitForm
+                onSubmit={handleSign}
+                disabled={submitting || sigName.trim().length < 2}
+                className="space-y-3"
+              >
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Type your full legal name</label>
                   <input value={sigName} onChange={e => setSigName(e.target.value)}
@@ -307,14 +312,14 @@ export default function SigningPortalPage() {
                     placeholder="Full legal name" />
                   <p className="text-xs text-gray-400 mt-1">This constitutes your legal signature on this document.</p>
                 </div>
-                <button onClick={handleSign} disabled={submitting || sigName.trim().length < 2} data-testid="btn-confirm-sign"
+                <button type="submit" disabled={submitting || sigName.trim().length < 2} data-testid="btn-confirm-sign"
                   className="w-full py-3 bg-green-600 text-white rounded-xl font-semibold text-sm hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2">
                   <CheckCircle2 className="h-4 w-4" /> {submitting ? "Signing…" : "Confirm Signature"}
                 </button>
-                <button onClick={() => setStep("view")} className="w-full py-2.5 border border-gray-200 text-gray-500 rounded-xl text-sm hover:bg-gray-50">
+                <button type="button" onClick={() => setStep("view")} className="w-full py-2.5 border border-gray-200 text-gray-500 rounded-xl text-sm hover:bg-gray-50">
                   ← Back
                 </button>
-              </div>
+              </SubmitForm>
             ) : step === "decline" ? (
               <div className="space-y-3">
                 <div>

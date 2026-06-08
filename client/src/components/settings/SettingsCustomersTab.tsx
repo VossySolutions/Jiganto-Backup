@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -556,6 +557,10 @@ export default function SettingsCustomersTab({ profiles, roles, tenantId }: Sett
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
+              <SubmitForm
+                onSubmit={handleAddCustomer}
+                disabled={!addCustomerForm.email || createUserMutation.isPending}
+              >
               <DialogHeader>
                 <DialogTitle>Add Customer User</DialogTitle>
                 <DialogDescription>Create a new customer user and assign them to projects</DialogDescription>
@@ -637,10 +642,9 @@ export default function SettingsCustomersTab({ profiles, roles, tenantId }: Sett
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddCustomerOpen(false)} data-testid="button-cancel-add-customer">Cancel</Button>
+                <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(false)} data-testid="button-cancel-add-customer">Cancel</Button>
                 <Button
-                  onClick={handleAddCustomer}
-                  disabled={!addCustomerForm.email || createUserMutation.isPending}
+                  type="submit"
                   data-testid="button-submit-add-customer"
                 >
                   {createUserMutation.isPending ? (
@@ -650,6 +654,7 @@ export default function SettingsCustomersTab({ profiles, roles, tenantId }: Sett
                   )}
                 </Button>
               </DialogFooter>
+              </SubmitForm>
             </DialogContent>
           </Dialog>
         </div>

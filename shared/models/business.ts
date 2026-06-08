@@ -461,14 +461,100 @@ export const documentLinks = pgTable("document_links", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ── Governance Items (7th layer) ──────────────────────────────────────────────
+export const GOV_TYPES = ["board_decision", "review_meeting", "policy", "audit_item", "risk"] as const;
+export type GovType = typeof GOV_TYPES[number];
+
+export const governanceItems = pgTable("governance_items", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  title: text("title").notNull(),
+  govType: text("gov_type").notNull().default("board_decision"),
+  description: text("description"),
+  ownerId: varchar("owner_id").references(() => users.id),
+  ownerName: text("owner_name"),
+  departmentId: integer("department_id").references(() => departments.id),
+  departmentName: text("department_name"),
+  ragStatus: text("rag_status").default("green"),
+  status: text("status").default("not_started"),
+  progress: integer("progress").default(0),
+  targetDate: text("target_date"),
+  reviewCadence: text("review_cadence").default("quarterly"),
+  nextReviewDate: date("next_review_date"),
+  lastReviewDate: date("last_review_date"),
+  // Board decision fields
+  decisionText: text("decision_text"),
+  decisionMaker: text("decision_maker"),
+  decisionOutcome: text("decision_outcome"),
+  // Meeting fields
+  meetingDate: date("meeting_date"),
+  attendees: jsonb("attendees"),
+  agenda: text("agenda"),
+  meetingOutcomes: text("meeting_outcomes"),
+  actionItems: jsonb("action_items"),
+  // Risk/Audit fields
+  riskProbability: text("risk_probability"),
+  riskImpact: text("risk_impact"),
+  riskRating: text("risk_rating"),
+  mitigationPlan: text("mitigation_plan"),
+  // Policy fields
+  policyEffectiveDate: date("policy_effective_date"),
+  policyReviewDate: date("policy_review_date"),
+  // Cross-links
+  linkedStrategyItemId: integer("linked_strategy_item_id").references(() => strategyItems.id),
+  linkedGoalId: integer("linked_goal_id").references(() => goals.id),
+  clientId: integer("client_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const governanceItemsRelations = relations(governanceItems, ({ one }) => ({
+  owner: one(users, { fields: [governanceItems.ownerId], references: [users.id] }),
+  department: one(departments, { fields: [governanceItems.departmentId], references: [departments.id] }),
+  linkedStrategy: one(strategyItems, { fields: [governanceItems.linkedStrategyItemId], references: [strategyItems.id] }),
+}));
+
+// ── Strategy Document Links (link docs/URLs to any layer) ─────────────────────
+export const strategyDocumentLinks = pgTable("strategy_document_links", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  layerType: text("layer_type").notNull(), // strategy|goal|objective|initiative|okr|kpi|governance
+  layerItemId: integer("layer_item_id").notNull(),
+  docType: text("doc_type").notNull().default("external"), // jiganto|external|upload
+  jigantoDocumentId: integer("jiganto_document_id"),
+  externalUrl: text("external_url"),
+  externalTitle: text("external_title"),
+  externalDescription: text("external_description"),
+  fileUrl: text("file_url"),
+  fileName: text("file_name"),
+  fileSize: integer("file_size"),
+  addedBy: varchar("added_by"),
+  addedByName: text("added_by_name"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ── KPI Time-series Values ─────────────────────────────────────────────────────
+export const strategyKpiValues = pgTable("strategy_kpi_values", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  kpiId: integer("kpi_id").notNull().references(() => kpis.id, { onDelete: "cascade" }),
+  valueNumeric: decimal("value_numeric"),
+  valueText: text("value_text"),
+  periodDate: date("period_date").notNull(),
+  note: text("note"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // ── Strategy Review Notes ─────────────────────────────────────────────────────
 export const strategyReviewNotes = pgTable("strategy_review_notes", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull().references(() => tenants.id),
-  entityType: text("entity_type").notNull(), // "strategy" | "goal" | "objective" | "initiative" | "okr" | "kpi"
+  entityType: text("entity_type").notNull(), // "strategy"|"goal"|"objective"|"initiative"|"okr"|"kpi"|"governance"
   entityId: integer("entity_id").notNull(),
   content: text("content").notNull(),
-  ragSnapshot: text("rag_snapshot"),          // rag status at time of note
+  ragSnapshot: text("rag_snapshot"),
+  progressAtCheckin: integer("progress_at_checkin"),
   authorName: text("author_name").notNull(),
   authorId: varchar("author_id"),
   signoffRequestId: integer("signoff_request_id"),
@@ -490,13 +576,42 @@ export const strategyRagHistory = pgTable("strategy_rag_history", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ── Ref Counters (per-tenant, per-layer sequential IDs) ──────────────────────
+export const strategyRefCounters = pgTable("strategy_ref_counters", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  layer: text("layer").notNull(),
+  lastSeq: integer("last_seq").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const strategyEntityRefs = pgTable("strategy_entity_refs", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  entityType: text("entity_type").notNull(),
+  entityId: integer("entity_id").notNull(),
+  refSeq: integer("ref_seq").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertStrategyReviewNoteSchema = createInsertSchema(strategyReviewNotes).omit({ id: true, createdAt: true });
 export const insertStrategyRagHistorySchema = createInsertSchema(strategyRagHistory).omit({ id: true, createdAt: true });
+export const insertGovernanceItemSchema = createInsertSchema(governanceItems).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertStrategyDocumentLinkSchema = createInsertSchema(strategyDocumentLinks).omit({ id: true, createdAt: true });
+export const insertStrategyKpiValueSchema = createInsertSchema(strategyKpiValues).omit({ id: true, createdAt: true });
 
 export type StrategyReviewNote = typeof strategyReviewNotes.$inferSelect;
 export type InsertStrategyReviewNote = z.infer<typeof insertStrategyReviewNoteSchema>;
 export type StrategyRagHistory = typeof strategyRagHistory.$inferSelect;
 export type InsertStrategyRagHistory = z.infer<typeof insertStrategyRagHistorySchema>;
+export type GovernanceItem = typeof governanceItems.$inferSelect;
+export type InsertGovernanceItem = z.infer<typeof insertGovernanceItemSchema>;
+export type StrategyDocumentLink = typeof strategyDocumentLinks.$inferSelect;
+export type InsertStrategyDocumentLink = z.infer<typeof insertStrategyDocumentLinkSchema>;
+export type StrategyKpiValue = typeof strategyKpiValues.$inferSelect;
+export type InsertStrategyKpiValue = z.infer<typeof insertStrategyKpiValueSchema>;
+export type StrategyRefCounter = typeof strategyRefCounters.$inferSelect;
+export type StrategyEntityRef = typeof strategyEntityRefs.$inferSelect;
 
 export const insertStrategyItemSchema = createInsertSchema(strategyItems).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertRiskSchema = createInsertSchema(risks).omit({ id: true, createdAt: true });

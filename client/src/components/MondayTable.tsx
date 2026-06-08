@@ -988,15 +988,21 @@ export function MondayTable<T extends { id: number | string }>({
       if (hasResizedWidths && columnWidths[col.id]) {
         total += columnWidths[col.id];
       } else if (col.width) {
-        const parsed = parseInt(col.width, 10);
-        total += isNaN(parsed) ? (idx === 0 ? 200 : 140) : parsed;
+        const px = parseInt(col.width, 10);
+        if (!isNaN(px) && col.width.includes("px")) {
+          total += px;
+        } else if (!isNaN(px) && col.width.includes("%")) {
+          total += Math.max(px * 12, idx === 0 ? 200 : 120);
+        } else {
+          total += idx === 0 ? 200 : 140;
+        }
       } else {
         total += idx === 0 ? 200 : 140;
       }
     });
     if (renderRowActions) total += 40;
     total += 40;
-    return total;
+    return Math.max(total, 640);
   }, [visibleColumns, selectable, renderRowActions, columnWidths, hasResizedWidths]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent, columnId: string) => {
@@ -1514,7 +1520,7 @@ export function MondayTable<T extends { id: number | string }>({
   const activeCfRuleCount = cfRules.filter(r => r.enabled).length;
 
   return (
-    <div className={cn("rounded-md border border-border/10 bg-card", className)}>
+    <div className={cn("rounded-md border border-border/10 bg-card w-full max-w-full min-w-0", className)}>
       {selectedIds.size > 0 ? (
         <div className="flex items-center gap-3 px-4 py-2 bg-primary/5 border-b border-border/10">
           <span className="text-sm font-medium">{selectedIds.size} selected</span>
@@ -1559,7 +1565,7 @@ export function MondayTable<T extends { id: number | string }>({
       )}
 
       <div
-        className="w-full min-w-0 overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)] overscroll-x-contain"
+        className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)] overscroll-x-contain touch-pan-x [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
         ref={tableContainerRef}
       >
         <div style={{ minWidth: `${totalMinWidth}px` }}>

@@ -7,14 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { LayoutList, LayoutGrid, Upload, Edit2, Loader2, Search, Target, Flag, Crosshair, Zap, TrendingUp, BarChart3, Layers, ChevronDown, ChevronRight, MessageSquare, Send, Trash2 } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { LayoutList, LayoutGrid, Upload, Download, FileText, Edit2, Loader2, Search, Target, Flag, Crosshair, Zap, TrendingUp, BarChart3, Layers, ChevronDown, ChevronRight, MessageSquare, Send, Trash2, ShieldCheck } from "lucide-react";
+import { BusinessLoadingState } from "@/components/business/BusinessLoadingState";
+import { BusinessTableScroll } from "@/components/business/BusinessTableScroll";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import * as XLSX from "xlsx";
 
 // ── Extended entity types (matching actual API responses) ─────────────────────
@@ -132,8 +135,9 @@ function ProgressBar({ value }: { value: number | null | undefined }) {
   );
 }
 
-function refCode(prefix: string, id: number) {
-  return `${prefix}-${String(id).padStart(3, "0")}`;
+function refCode(prefix: string, id: number, entityRefs?: Record<string, number>, entityType?: string) {
+  const seq = entityType ? entityRefs?.[`${entityType}-${id}`] : undefined;
+  return `${prefix}-${String(seq ?? id).padStart(3, "0")}`;
 }
 
 function DateCell({ date }: { date: string | null | undefined }) {
@@ -183,6 +187,7 @@ function EditDialog({
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
       <DialogContent className="max-w-2xl">
+        <SubmitForm onSubmit={() => onSave(form)} disabled={isSaving}>
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         <div className="grid grid-cols-2 gap-4 py-2 max-h-[60vh] overflow-y-auto pr-1">
           {fields.map(f => (
@@ -202,14 +207,81 @@ function EditDialog({
           ))}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => onSave(form)} disabled={isSaving}>
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={isSaving}>
             {isSaving && <Loader2 className="h-4 w-4 animate-spin mr-2" />} Save Changes
           </Button>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
+}
+
+// ── Import / export sheet configs (aligned with Strategy Map template) ─────────
+
+const BUSINESS_IMPORT_QUERY_KEYS = [
+  "/api/business/strategy-map",
+  "/api/business/strategy",
+  "/api/business/goals",
+  "/api/business/objectives",
+  "/api/business/initiatives",
+  "/api/business/okrs",
+  "/api/business/kpis",
+  "/api/business/governance",
+  "/api/business/entity-refs",
+];
+
+const LAYER_SHEET_CONFIG: Record<string, { headers: string[]; example: (string | number)[] }> = {
+  Strategies: {
+    headers: ["Code", "Title", "Description", "Owner Name", "Department", "RAG Status", "Progress %", "Target Date"],
+    example: ["S01", "Market Leadership", "Grow market share to 25% by 2027", "Sarah Blackwell", "Sales & Marketing", "On Track", 55, "2027-12-31"],
+  },
+  Goals: {
+    headers: ["Code", "Strategy Code", "Title", "Description", "Owner Name", "Department", "RAG Status", "Progress %", "Target Date"],
+    example: ["G01", "S01", "Revenue Growth", "Achieve £12M ARR by year-end", "James Cole", "Sales & Marketing", "On Track", 60, "2026-12-31"],
+  },
+  Objectives: {
+    headers: ["Code", "Goal Code", "Title", "Description", "Owner Name", "RAG Status", "Progress %", "Target Date"],
+    example: ["O01", "G01", "Close 20 new enterprise deals", "Win 20 deals > £50K in 2026", "Tom Hughes", "On Track", 55, "2026-12-31"],
+  },
+  Initiatives: {
+    headers: ["Code", "Objective Code", "Title", "Description", "Owner Name", "Department", "RAG Status", "Priority", "Progress %", "Start Date", "End Date"],
+    example: ["I01", "O01", "Enterprise Sales Campaign", "Targeted outreach to F500 companies", "Tom Hughes", "Sales & Marketing", "On Track", "high", 65, "2026-01-01", "2026-12-31"],
+  },
+  OKRs: {
+    headers: ["Code", "Objective Code", "Title", "Key Result Description", "Owner Name", "RAG Status", "Target Date"],
+    example: ["K01", "O01", "Win Rate OKR", "Increase win rate from 22% to 35%", "Tom Hughes", "On Track", "2026-12-31"],
+  },
+  KPIs: {
+    headers: ["Code", "Goal Code", "Name", "Description", "Owner Name", "KPI Type", "Current Value", "Target Value", "Unit", "RAG Status", "Target Date"],
+    example: ["P01", "G01", "Monthly Recurring Revenue", "Track MRR growth month-on-month", "Sarah Blackwell", "Financial", "3.2", "4.2", "£M", "On Track", "2026-12-31"],
+  },
+  Governance: {
+    headers: ["Code", "Strategy Code", "Title", "Type", "Description", "Owner Name", "RAG Status", "Status", "Progress %", "Target Date"],
+    example: ["GV01", "S01", "Board Q1 Review", "board_decision", "Quarterly board strategy review", "Sarah Blackwell", "On Track", "active", 100, "2026-03-31"],
+  },
+};
+
+const PARENT_ENTITY_TYPE: Record<string, string> = {
+  strategyItemId: "strategy",
+  goalId: "goal",
+  objectiveId: "objective",
+};
+
+function ragExportLabel(rag: string | null | undefined): string {
+  if (rag === "green") return "On Track";
+  if (rag === "amber") return "At Risk";
+  if (rag === "red") return "Behind";
+  return rag ?? "";
+}
+
+function shortImportCode(entityType: string | undefined, id: number | null | undefined, entityRefs?: Record<string, number>): string {
+  if (!entityType || id == null) return "";
+  const seq = entityRefs?.[`${entityType}-${id}`] ?? id;
+  const prefix: Record<string, string> = { strategy: "S", goal: "G", objective: "O", initiative: "I", okr: "K", kpi: "P", governance: "GV" };
+  const p = prefix[entityType];
+  return p ? `${p}${String(seq).padStart(2, "0")}` : "";
 }
 
 // ── ManageLayerView core ──────────────────────────────────────────────────────
@@ -242,6 +314,7 @@ interface ManageLayerViewProps<T extends {id:number}> {
   parentKey?: string;
   parentLabel?: string;
   entityType?: string;
+  loading?: boolean;
 }
 
 const DELIVERY_TYPE_OPTIONS = [
@@ -275,9 +348,14 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
   items, refPrefix, title, subtitle, icon: Icon, accent,
   columns, editFields, filters = [], apiBase, queryKey,
   defaultCard, addButton, importSheetName, searchKeys = ["title" as keyof T, "name" as keyof T],
-  parentItems, parentKey, parentLabel = "Parent", entityType,
+  parentItems, parentKey, parentLabel = "Parent", entityType, loading = false,
 }: ManageLayerViewProps<T>) {
   const { toast } = useToast();
+
+  const { data: entityRefs } = useQuery<Record<string, number>>({
+    queryKey: ["/api/business/entity-refs"],
+    staleTime: 60_000,
+  });
   const [view, setView] = useState<"table"|"card">("table");
   const [search, setSearch] = useState("");
   const [activeFilters, setActiveFilters] = useState<Record<string,string>>({});
@@ -295,16 +373,20 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
 
   useEffect(() => { setCollapsedGroups(new Set()); }, [groupBy]);
 
-  // ── Notes query (per entity type) ────────────────────────────────────────
-  const { data: allNotes = [] } = useQuery<ReviewNote[]>({
-    queryKey: ["/api/business/review-notes", entityType],
-    queryFn: () => fetch(`/api/business/review-notes?tenantId=1&entityType=${entityType}`, { credentials: "include" }).then(r => r.json()),
+  // ── Notes query (shared list, filtered per entity type) ─────────────────
+  const { data: allNotesRaw } = useQuery<ReviewNote[]>({
+    queryKey: ["/api/business/review-notes"],
     enabled: !!entityType,
   });
 
+  const allNotes = useMemo(() => {
+    const list = Array.isArray(allNotesRaw) ? allNotesRaw : [];
+    return entityType ? list.filter((n) => n.entityType === entityType) : list;
+  }, [allNotesRaw, entityType]);
+
   const noteCountByItem = useMemo(() => {
     const map: Record<number, number> = {};
-    allNotes.forEach(n => { map[n.entityId] = (map[n.entityId] || 0) + 1; });
+    allNotes.forEach((n) => { map[n.entityId] = (map[n.entityId] || 0) + 1; });
     return map;
   }, [allNotes]);
 
@@ -432,27 +514,139 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, groupBy, collapsedGroups]);
 
+  const importMutation = useMutation({
+    mutationFn: (rows: Record<string, unknown>[]) => apiRequest("POST", "/api/business/bulk-import", { rows }),
+    onSuccess: (data: { created?: Record<string, number>; skipped?: number }) => {
+      BUSINESS_IMPORT_QUERY_KEYS.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+      const total = Object.values(data?.created ?? {}).reduce((a, b) => a + b, 0);
+      toast({
+        title: "Import complete",
+        description: total > 0
+          ? `Imported ${total} record(s) into ${title}.`
+          : "No records imported. Check column headers and Title/Name values.",
+        variant: total > 0 ? "default" : "destructive",
+      });
+      setImportOpen(false);
+    },
+    onError: () => toast({ title: "Import failed", description: "Could not save imported rows.", variant: "destructive" }),
+  });
+
+  const parseImportRows = (wb: XLSX.WorkBook): Record<string, unknown>[] => {
+    const targetSheet = importSheetName ?? title;
+    const matchedSheet = wb.SheetNames.find((s) => s.toLowerCase() === targetSheet.toLowerCase())
+      ?? wb.SheetNames.find((s) => s.toLowerCase().includes(targetSheet.toLowerCase().replace(/s$/, "")));
+    const rows: Record<string, unknown>[] = [];
+
+    if (matchedSheet) {
+      const ws = wb.Sheets[matchedSheet];
+      const parsed = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
+      for (const row of parsed) rows.push({ _sheet: matchedSheet, ...row });
+      return rows;
+    }
+
+    if (wb.SheetNames.length === 1) {
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const parsed = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
+      for (const row of parsed) rows.push({ _sheet: targetSheet, ...row });
+      return rows;
+    }
+
+    for (const sheetName of wb.SheetNames) {
+      if (sheetName.toLowerCase() === "instructions") continue;
+      const ws = wb.Sheets[sheetName];
+      const parsed = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
+      for (const row of parsed) rows.push({ _sheet: sheetName, ...row });
+    }
+    return rows;
+  };
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
       const ab = await file.arrayBuffer();
       const wb = XLSX.read(ab);
-      const sheetName = importSheetName ?? wb.SheetNames.find(s => s.toLowerCase().includes(title.toLowerCase())) ?? wb.SheetNames[0];
-      const ws = wb.Sheets[sheetName] ?? wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string,unknown>>(ws);
-      toast({ title: `Import ready`, description: `Parsed ${rows.length} rows from "${sheetName}". Review and confirm to apply.` });
+      const rows = parseImportRows(wb);
+      if (rows.length === 0) {
+        toast({ title: "Empty file", description: "No data rows found.", variant: "destructive" });
+      } else {
+        importMutation.mutate(rows);
+      }
     } catch {
       toast({ title: "Import failed", description: "Could not parse the file.", variant: "destructive" });
     }
-    setImportOpen(false);
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  const sheetConfig = importSheetName ? LAYER_SHEET_CONFIG[importSheetName] : undefined;
+
+  const handleDownloadTemplate = () => {
+    if (!sheetConfig || !importSheetName) {
+      toast({ title: "Template unavailable", description: "No template defined for this layer.", variant: "destructive" });
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([sheetConfig.headers, sheetConfig.example]), importSheetName);
+    XLSX.writeFile(wb, `Jiganto_${importSheetName}_Template.xlsx`);
+    toast({ title: "Template downloaded", description: `Fill in the ${importSheetName} sheet and import.` });
+  };
+
+  const handleExportCurrentData = () => {
+    if (!sheetConfig || !importSheetName) return;
+    if (filtered.length === 0) {
+      toast({ title: "No data to export", description: "No records match the current filters.", variant: "destructive" });
+      return;
+    }
+    const parentType = parentKey ? PARENT_ENTITY_TYPE[parentKey] : undefined;
+    const dataRows = filtered.map((item, i) => {
+      const rec = item as Record<string, unknown>;
+      const codePrefix = { Strategies: "S", Goals: "G", Objectives: "O", Initiatives: "I", OKRs: "K", KPIs: "P", Governance: "GV" }[importSheetName] ?? "X";
+      const code = `${codePrefix}${String(i + 1).padStart(2, "0")}`;
+      const parentId = parentKey ? (rec[parentKey] as number | null | undefined) : null;
+      const parentCode = parentType ? shortImportCode(parentType, parentId, entityRefs) : "";
+      const rag = ragExportLabel(rec.ragStatus as string | null | undefined);
+      const progress = rec.progress ?? "";
+
+      if (importSheetName === "Strategies") {
+        return [code, rec.title ?? "", rec.description ?? "", rec.ownerName ?? "", rec.departmentName ?? "", rag, progress, rec.targetDate ?? ""];
+      }
+      if (importSheetName === "Goals") {
+        return [code, parentCode, rec.title ?? "", rec.description ?? "", rec.ownerName ?? "", rec.departmentName ?? "", rag, progress, rec.targetDate ?? ""];
+      }
+      if (importSheetName === "Objectives") {
+        return [code, parentCode, rec.title ?? "", rec.description ?? "", rec.ownerName ?? "", rag, progress, rec.targetDate ?? ""];
+      }
+      if (importSheetName === "Initiatives") {
+        const objCode = shortImportCode("objective", rec.objectiveId as number | null, entityRefs);
+        return [code, objCode, rec.title ?? "", rec.description ?? "", rec.ownerName ?? "", rec.departmentName ?? "", rag, rec.priority ?? "", progress, rec.startDate ?? "", rec.dueDate ?? rec.targetDate ?? ""];
+      }
+      if (importSheetName === "OKRs") {
+        return [code, parentCode, rec.title ?? "", rec.description ?? "", rec.ownerName ?? "", rag, rec.targetDate ?? ""];
+      }
+      if (importSheetName === "KPIs") {
+        return [code, parentCode, rec.name ?? rec.title ?? "", rec.description ?? "", rec.ownerName ?? "", rec.indicatorType ?? "", rec.currentValue ?? "", rec.targetValue ?? "", rec.unit ?? "", rag, rec.targetDate ?? ""];
+      }
+      if (importSheetName === "Governance") {
+        const stratCode = shortImportCode("strategy", rec.linkedStrategyItemId as number | null, entityRefs);
+        return [code, stratCode, rec.title ?? "", rec.govType ?? "", rec.description ?? "", rec.ownerName ?? "", rag, rec.status ?? "", progress, rec.targetDate ?? ""];
+      }
+      return [code, rec.title ?? rec.name ?? ""];
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([sheetConfig.headers, ...dataRows]), importSheetName);
+    XLSX.writeFile(wb, `${importSheetName.toLowerCase()}-${new Date().toISOString().split("T")[0]}.xlsx`);
+    toast({ title: "Export complete", description: `Exported ${filtered.length} record(s).` });
+  };
+
+  if (loading) {
+    return <BusinessLoadingState variant="table" label={`Loading ${title.toLowerCase()}…`} />;
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full min-w-0">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <div className="flex items-center gap-3 mr-auto">
           <div className="p-2 rounded-lg" style={{ background: `${accent}20` }}>
             <Icon className="h-5 w-5" style={{ color: accent }} />
@@ -466,7 +660,7 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
         {/* Search */}
         <div className="relative">
           <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="h-8 pl-8 w-40 text-xs" />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="h-8 pl-8 w-full sm:w-40 text-xs" />
         </div>
 
         {/* Dynamic filters */}
@@ -527,17 +721,36 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
           ))}
         </div>
 
-        <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setImportOpen(true)}>
-          <Upload className="h-3.5 w-3.5" /> Import
+        <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setImportOpen(true)} disabled={importMutation.isPending}>
+          {importMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          Import
         </Button>
+        {sheetConfig && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                <Download className="h-3.5 w-3.5" /> Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleDownloadTemplate}>
+                <Download className="h-3.5 w-3.5 mr-2" /> Download Template
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleExportCurrentData}>
+                <FileText className="h-3.5 w-3.5 mr-2" /> Export Current Data
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         {addButton}
       </div>
 
       {/* Table View */}
       {view === "table" && (
-        <div className="rounded-xl border border-border overflow-hidden bg-card">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
+        <div className="rounded-xl border border-border bg-card w-full min-w-0 max-w-full">
+          <BusinessTableScroll minWidth={1100}>
+            <table className="text-xs border-collapse w-max min-w-full table-auto">
               <thead>
                 <tr className="border-b-2 border-border bg-muted/60">
                   <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap w-[80px]">Ref</th>
@@ -587,7 +800,7 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
                     <tr key={item.id}
                       className={cn("border-t border-border/30 hover:bg-muted/30 transition-colors", rowIndex % 2 !== 0 ? "bg-muted/10" : "")}>
                       <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground whitespace-nowrap" style={{ color: accent }}>
-                        {refCode(refPrefix, item.id)}
+                        {refCode(refPrefix, item.id, entityRefs, entityType)}
                       </td>
                       {columns.map(c => (
                         <td key={c.key} className="px-3 py-2 align-middle max-w-[220px]">{c.render(item)}</td>
@@ -618,8 +831,8 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
                 })}
               </tbody>
             </table>
-          </div>
-          <div className="px-4 py-2 border-t border-border bg-muted/20 flex justify-between items-center">
+          </BusinessTableScroll>
+          <div className="px-4 py-2 border-t border-border bg-muted/20 flex flex-wrap gap-2 justify-between items-center">
             <span className="text-xs text-muted-foreground">{filtered.length} of {items.length} records shown</span>
             <span className="text-xs text-muted-foreground">Click <Edit2 className="h-2.5 w-2.5 inline mx-0.5" /> to edit any row</span>
           </div>
@@ -632,7 +845,7 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
           ? <div className="text-center py-16 text-muted-foreground text-sm">No records match the current filters</div>
           : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {filtered.map(item => defaultCard ? defaultCard(item, setEditItem) : (
-                <DefaultCard key={item.id} item={item} refPrefix={refPrefix} accent={accent} onEdit={() => setEditItem(item)} />
+                <DefaultCard key={item.id} item={item} refPrefix={refPrefix} accent={accent} onEdit={() => setEditItem(item)} entityRefs={entityRefs} entityType={entityType} />
               ))}
             </div>
       )}
@@ -643,7 +856,7 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
           <SheetHeader className="px-5 pt-5 pb-3 border-b border-border shrink-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted capitalize">{entityType}</span>
-              {checkinItem && <span className="font-mono text-[10px] text-muted-foreground" style={{ color: accent }}>{refCode(refPrefix, checkinItem.id)}</span>}
+              {checkinItem && <span className="font-mono text-[10px] text-muted-foreground" style={{ color: accent }}>{refCode(refPrefix, checkinItem.id, entityRefs, entityType)}</span>}
             </div>
             <SheetTitle className="text-sm leading-snug line-clamp-2">
               {checkinItem ? String(checkinItem.title ?? checkinItem.name ?? "") : ""}
@@ -755,19 +968,33 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Import {title}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">Upload a CSV or Excel file. The first row must be column headers. Download the Strategy Map template for the expected column format.</p>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImport}
-              className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer" />
+            <p className="text-sm text-muted-foreground">
+              Upload an Excel or CSV file with the {importSheetName ?? title} sheet format. The first row must be column headers.
+            </p>
+            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} disabled={importMutation.isPending}
+              className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer disabled:opacity-50" />
+            {sheetConfig && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
+                <Download className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Need the template?{" "}
+                  <button type="button" className="underline font-medium text-foreground" onClick={handleDownloadTemplate}>
+                    Download {importSheetName} template
+                  </button>
+                </span>
+              </div>
+            )}
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => setImportOpen(false)}>Cancel</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setImportOpen(false)} disabled={importMutation.isPending}>Cancel</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
 
-function DefaultCard({ item, refPrefix, accent, onEdit }: {
+function DefaultCard({ item, refPrefix, accent, onEdit, entityRefs, entityType }: {
   item: Record<string,unknown>; refPrefix: string; accent: string; onEdit: ()=>void;
+  entityRefs?: Record<string, number>; entityType?: string;
 }) {
   const title = String(item.title ?? item.name ?? "");
   const rag = item.ragStatus as string | null;
@@ -778,7 +1005,7 @@ function DefaultCard({ item, refPrefix, accent, onEdit }: {
       <div className="absolute top-0 left-0 bottom-0 w-[3px]" style={{ background: accent }} />
       <CardHeader className="pb-2 pl-5">
         <div className="flex items-start justify-between gap-2">
-          <span className="font-mono text-[9px] text-muted-foreground" style={{ color: accent }}>{refCode(refPrefix, item.id as number)}</span>
+          <span className="font-mono text-[9px] text-muted-foreground" style={{ color: accent }}>{refCode(refPrefix, item.id as number, entityRefs, entityType)}</span>
           <button onClick={onEdit} className="text-muted-foreground hover:text-foreground p-0.5 shrink-0"><Edit2 className="h-3.5 w-3.5" /></button>
         </div>
         <CardTitle className="text-sm leading-snug line-clamp-2 mt-1">{title}</CardTitle>
@@ -833,13 +1060,16 @@ const RAG_FILTER: FilterDef = {
 };
 
 const EDIT_STATUS_OPTIONS = [
-  { value: "on_track",   label: "On Track" },
-  { value: "at_risk",    label: "At Risk" },
-  { value: "off_track",  label: "Off Track" },
-  { value: "active",     label: "Active" },
-  { value: "in_progress",label: "In Progress" },
-  { value: "completed",  label: "Completed" },
-  { value: "draft",      label: "Draft" },
+  { value: "not_started", label: "Not Started" },
+  { value: "on_track",    label: "On Track" },
+  { value: "at_risk",     label: "At Risk" },
+  { value: "off_track",   label: "Off Track" },
+  { value: "active",      label: "Active" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "on_hold",     label: "On Hold" },
+  { value: "completed",   label: "Completed" },
+  { value: "cancelled",   label: "Cancelled" },
+  { value: "draft",       label: "Draft" },
 ];
 
 const EDIT_RAG_OPTIONS = [
@@ -885,15 +1115,15 @@ const STRATEGY_EDIT_FIELDS: FieldDef[] = [
   { key:"progress", label:"Progress (%)", type:"number" },
   { key:"targetDate", label:"Target Date", type:"date" },
   { key:"reviewCadence", label:"Review Cadence", type:"select", options:[
-    {value:"monthly",label:"Monthly"},{value:"quarterly",label:"Quarterly"},{value:"bi-annual",label:"Bi-Annual"},{value:"annual",label:"Annual"},
+    {value:"weekly",label:"Weekly"},{value:"monthly",label:"Monthly"},{value:"quarterly",label:"Quarterly"},{value:"bi-annual",label:"Bi-Annual"},{value:"annual",label:"Annual"},
   ]},
   { key:"ownerName", label:"Owner Name", type:"text" },
   { key:"notes", label:"Notes", type:"textarea", span:"full" },
 ];
 
 export function EnhancedStrategyTab({
-  strategyItems, addButton,
-}: { strategyItems: StrategyItemEx[]; addButton?: React.ReactNode }) {
+  strategyItems, addButton, loading,
+}: { strategyItems: StrategyItemEx[]; addButton?: React.ReactNode; loading?: boolean }) {
   const columns: ColDef<StrategyItemEx>[] = [
     { key:"title",        label:"Title",       width:"22%", render:r=><TitleCell text={r.title} /> },
     { key:"templateType", label:"Type",        width:"12%", render:r=><span className="text-[10px] capitalize">{STRATEGY_TEMPLATE_LABELS[r.templateType] ?? r.templateType}</span> },
@@ -912,7 +1142,7 @@ export function EnhancedStrategyTab({
       icon={Target} accent="#a855f7" columns={columns} editFields={STRATEGY_EDIT_FIELDS}
       filters={[STATUS_FILTER, RAG_FILTER, { key:"templateType", label:"Type", options: Object.entries(STRATEGY_TEMPLATE_LABELS).map(([v,l])=>({value:v,label:l})) }]}
       apiBase="/api/business/strategy" queryKey="/api/business/strategy"
-      addButton={addButton} importSheetName="Strategies" entityType="strategy"
+      addButton={addButton} importSheetName="Strategies" entityType="strategy" loading={loading}
     />
   );
 }
@@ -930,13 +1160,13 @@ const GOALS_EDIT_FIELDS: FieldDef[] = [
   { key:"endDate",     label:"End Date",    type:"date" },
   { key:"ownerName",   label:"Owner Name",  type:"text" },
   { key:"reviewCadence",label:"Review Cadence",type:"select", options:[
-    {value:"monthly",label:"Monthly"},{value:"quarterly",label:"Quarterly"},{value:"bi-annual",label:"Bi-Annual"},{value:"annual",label:"Annual"},
+    {value:"weekly",label:"Weekly"},{value:"monthly",label:"Monthly"},{value:"quarterly",label:"Quarterly"},{value:"bi-annual",label:"Bi-Annual"},{value:"annual",label:"Annual"},
   ]},
 ];
 
 export function EnhancedGoalsTab({
-  goals, strategyItems, addButton,
-}: { goals: GoalEx[]; strategyItems: StrategyItemEx[]; addButton?: React.ReactNode }) {
+  goals, strategyItems, addButton, loading,
+}: { goals: GoalEx[]; strategyItems: StrategyItemEx[]; addButton?: React.ReactNode; loading?: boolean }) {
   const stratMap = useMemo(() => Object.fromEntries(strategyItems.map(s => [s.id, s])), [strategyItems]);
 
   const columns: ColDef<GoalEx>[] = [
@@ -959,7 +1189,7 @@ export function EnhancedGoalsTab({
       apiBase="/api/business/goals" queryKey="/api/business/goals"
       addButton={addButton} importSheetName="Goals"
       parentItems={strategyItems} parentKey="strategyItemId" parentLabel="Strategy"
-      entityType="goal"
+      entityType="goal" loading={loading}
     />
   );
 }
@@ -978,8 +1208,8 @@ const OBJECTIVES_EDIT_FIELDS: FieldDef[] = [
 ];
 
 export function EnhancedObjectivesTab({
-  objectives, goals,
-}: { objectives: ObjectiveEx[]; goals: GoalEx[] }) {
+  objectives, goals, loading,
+}: { objectives: ObjectiveEx[]; goals: GoalEx[]; loading?: boolean }) {
   const goalMap = useMemo(() => Object.fromEntries(goals.map(g => [g.id, g])), [goals]);
 
   const goalOptions = useMemo(() => goals.map(g => ({ value: String(g.id), label: g.title })), [goals]);
@@ -1004,7 +1234,7 @@ export function EnhancedObjectivesTab({
       apiBase="/api/business/objectives" queryKey="/api/business/objectives"
       importSheetName="Objectives"
       parentItems={goals} parentKey="goalId" parentLabel="Goal"
-      entityType="objective"
+      entityType="objective" loading={loading}
     />
   );
 }
@@ -1026,8 +1256,8 @@ const INITIATIVES_EDIT_FIELDS: FieldDef[] = [
 ];
 
 export function EnhancedInitiativesTab({
-  initiatives, goals, addButton,
-}: { initiatives: InitiativeEx[]; goals: GoalEx[]; addButton?: React.ReactNode }) {
+  initiatives, goals, addButton, loading,
+}: { initiatives: InitiativeEx[]; goals: GoalEx[]; addButton?: React.ReactNode; loading?: boolean }) {
   const goalMap = useMemo(() => Object.fromEntries(goals.map(g => [g.id, g])), [goals]);
   const goalOptions = useMemo(() => goals.map(g => ({ value: String(g.id), label: g.title })), [goals]);
   const fieldsWithGoal = [...INITIATIVES_EDIT_FIELDS, { key:"goalId", label:"Parent Goal", type:"select" as const, options: goalOptions }];
@@ -1055,7 +1285,7 @@ export function EnhancedInitiativesTab({
       apiBase="/api/business/initiatives" queryKey="/api/business/initiatives"
       addButton={addButton} importSheetName="Initiatives"
       parentItems={goals} parentKey="goalId" parentLabel="Goal"
-      entityType="initiative"
+      entityType="initiative" loading={loading}
     />
   );
 }
@@ -1073,8 +1303,8 @@ const OKRS_EDIT_FIELDS: FieldDef[] = [
 ];
 
 export function EnhancedOkrsTab({
-  okrs, objectives, goals,
-}: { okrs: OkrEx[]; objectives: ObjectiveEx[]; goals: GoalEx[] }) {
+  okrs, objectives, goals, loading,
+}: { okrs: OkrEx[]; objectives: ObjectiveEx[]; goals: GoalEx[]; loading?: boolean }) {
   const objMap  = useMemo(() => Object.fromEntries(objectives.map(o => [o.id, o])), [objectives]);
   const goalMap = useMemo(() => Object.fromEntries(goals.map(g => [g.id, g])), [goals]);
   const objOptions = useMemo(() => objectives.map(o => ({ value: String(o.id), label: o.title })), [objectives]);
@@ -1119,8 +1349,8 @@ const KPIS_EDIT_FIELDS: FieldDef[] = [
 ];
 
 export function EnhancedKpisTab({
-  kpis, goals,
-}: { kpis: KpiEx[]; goals: GoalEx[] }) {
+  kpis, goals, loading,
+}: { kpis: KpiEx[]; goals: GoalEx[]; loading?: boolean }) {
   const goalMap = useMemo(() => Object.fromEntries(goals.map(g => [g.id, g])), [goals]);
   const goalOptions = useMemo(() => goals.map(g => ({ value: String(g.id), label: g.title })), [goals]);
   const fieldsWithGoal = [...KPIS_EDIT_FIELDS, { key:"goalId", label:"Parent Goal", type:"select" as const, options: goalOptions }];
@@ -1147,7 +1377,97 @@ export function EnhancedKpisTab({
       apiBase="/api/business/kpis" queryKey="/api/business/kpis"
       importSheetName="KPIs" searchKeys={["name"]}
       parentItems={goals} parentKey="goalId" parentLabel="Goal"
-      entityType="kpi"
+      entityType="kpi" loading={loading}
+    />
+  );
+}
+
+// ── Governance Tab ────────────────────────────────────────────────────────────
+
+export type GovernanceItemEx = {
+  id: number;
+  title: string;
+  govType?: string | null;
+  description?: string | null;
+  ownerName?: string | null;
+  departmentName?: string | null;
+  ragStatus?: string | null;
+  status?: string | null;
+  progress?: number | null;
+  targetDate?: string | null;
+  reviewCadence?: string | null;
+  nextReviewDate?: string | null;
+  decisionText?: string | null;
+  riskProbability?: string | null;
+  riskImpact?: string | null;
+  riskRating?: string | null;
+  updatedAt?: string | Date | null;
+};
+
+const GOV_TYPE_LABELS: Record<string, string> = {
+  board_decision: "Board Decision",
+  review_meeting: "Review Meeting",
+  policy: "Policy",
+  audit_item: "Audit Item",
+  risk: "Risk",
+};
+
+const GOVERNANCE_EDIT_FIELDS: FieldDef[] = [
+  { key:"title",          label:"Title",         type:"text",     span:"full" },
+  { key:"description",    label:"Description",   type:"textarea", span:"full" },
+  { key:"govType",        label:"Governance Type", type:"select", options:[
+    {value:"board_decision",label:"Board Decision"},
+    {value:"review_meeting",label:"Review Meeting"},
+    {value:"policy",        label:"Policy"},
+    {value:"audit_item",    label:"Audit Item"},
+    {value:"risk",          label:"Risk"},
+  ]},
+  { key:"status",         label:"Status",        type:"select", options: EDIT_STATUS_OPTIONS },
+  { key:"ragStatus",      label:"RAG Status",    type:"select", options: EDIT_RAG_OPTIONS },
+  { key:"progress",       label:"Progress (%)",  type:"number" },
+  { key:"targetDate",     label:"Target Date",   type:"date" },
+  { key:"reviewCadence",  label:"Review Cadence",type:"select", options:[
+    {value:"weekly",label:"Weekly"},{value:"monthly",label:"Monthly"},{value:"quarterly",label:"Quarterly"},{value:"bi-annual",label:"Bi-Annual"},{value:"annual",label:"Annual"},
+  ]},
+  { key:"ownerName",      label:"Owner Name",    type:"text" },
+  { key:"decisionText",   label:"Decision / Resolution", type:"textarea", span:"full" },
+  { key:"riskProbability",label:"Risk Probability", type:"select", options:[
+    {value:"low",label:"Low"},{value:"medium",label:"Medium"},{value:"high",label:"High"},{value:"critical",label:"Critical"},
+  ]},
+  { key:"riskImpact",     label:"Risk Impact",   type:"select", options:[
+    {value:"low",label:"Low"},{value:"medium",label:"Medium"},{value:"high",label:"High"},{value:"critical",label:"Critical"},
+  ]},
+  { key:"mitigationPlan", label:"Mitigation Plan", type:"textarea", span:"full" },
+];
+
+export function EnhancedGovernanceTab({
+  items, addButton, loading,
+}: { items: GovernanceItemEx[]; addButton?: React.ReactNode; loading?: boolean }) {
+  const columns: ColDef<GovernanceItemEx>[] = [
+    { key:"title",      label:"Title",     width:"24%", render:r=><TitleCell text={r.title} /> },
+    { key:"govType",    label:"Type",      width:"14%", render:r=><span className="text-[10px] capitalize">{GOV_TYPE_LABELS[r.govType ?? ""] ?? r.govType ?? "—"}</span> },
+    { key:"ownerName",  label:"Owner",     width:"13%", render:r=><OwnerCell name={r.ownerName} /> },
+    { key:"departmentName",label:"Dept",   width:"11%", render:r=><span className="text-[10px] truncate max-w-[90px] block">{r.departmentName ?? "—"}</span> },
+    { key:"status",     label:"Status",    width:"10%", render:r=><StatusBadge status={r.status} /> },
+    { key:"ragStatus",  label:"RAG",       width:"7%",  render:r=><RagBadge rag={r.ragStatus} /> },
+    { key:"progress",   label:"Progress",  width:"9%",  render:r=><ProgressBar value={r.progress ?? 0} /> },
+    { key:"targetDate", label:"Target",    width:"10%", render:r=><DateCell date={r.targetDate} /> },
+    { key:"riskImpact", label:"Impact",    width:"8%",  render:r=>r.riskImpact ? <span className={`text-[10px] capitalize px-1.5 py-0.5 rounded ${r.riskImpact === "critical" ? "bg-red-100 text-red-700" : r.riskImpact === "high" ? "bg-orange-100 text-orange-700" : r.riskImpact === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600"}`}>{r.riskImpact}</span> : <span className="text-muted-foreground/40">—</span> },
+  ];
+
+  return (
+    <ManageLayerView
+      items={items} refPrefix="GOV" title="Governance" subtitle="Decisions, meetings, policies, audits & risks"
+      icon={ShieldCheck} accent="#8b5cf6" columns={columns} editFields={GOVERNANCE_EDIT_FIELDS}
+      filters={[STATUS_FILTER, RAG_FILTER,
+        { key:"govType", label:"Type", options:[
+          {value:"board_decision",label:"Board Decision"},{value:"review_meeting",label:"Review Meeting"},
+          {value:"policy",label:"Policy"},{value:"audit_item",label:"Audit Item"},{value:"risk",label:"Risk"},
+        ]},
+      ]}
+      apiBase="/api/business/governance" queryKey="/api/business/governance"
+      importSheetName="Governance" searchKeys={["title","decisionText"]}
+      entityType="governance" loading={loading}
     />
   );
 }

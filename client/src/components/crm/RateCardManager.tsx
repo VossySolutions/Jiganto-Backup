@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -278,10 +279,14 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
 
         <div className="flex-1 overflow-hidden flex flex-col gap-4">
           {showForm ? (
+            <SubmitForm
+              onSubmit={handleSaveCard}
+              disabled={createCardMutation.isPending || updateCardMutation.isPending}
+            >
             <div className="space-y-4 p-4 border rounded-lg bg-muted/20" data-testid="rate-card-form">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <h4 className="text-sm font-bold">{editingCard ? "Edit Rate Card" : "Create New Rate Card"}</h4>
-                <Button variant="ghost" size="icon" onClick={resetForm} data-testid="button-cancel-form">
+                <Button type="button" variant="ghost" size="icon" onClick={resetForm} data-testid="button-cancel-form">
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -352,11 +357,11 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
                 </Label>
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={resetForm}>Cancel</Button>
+                <Button type="button" variant="outline" size="sm" onClick={resetForm}>Cancel</Button>
                 <Button
+                  type="submit"
                   size="sm"
                   className="bg-[#0ea5e9] hover:bg-[#0284c7] gap-1.5"
-                  onClick={handleSaveCard}
                   disabled={createCardMutation.isPending || updateCardMutation.isPending}
                   data-testid="button-save-card"
                 >
@@ -369,6 +374,7 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
                 </Button>
               </div>
             </div>
+            </SubmitForm>
           ) : (
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">

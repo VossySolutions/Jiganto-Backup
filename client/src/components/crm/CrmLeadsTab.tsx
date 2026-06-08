@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -683,6 +684,19 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
             </Button>
           </DialogTrigger>
           <DialogContent>
+            <SubmitForm
+              onSubmit={() => {
+                if (editingId) {
+                  updateMutation.mutate({ id: editingId, updates: formData });
+                  setIsOpen(false);
+                  setEditingId(null);
+                  setFormData({ firstName: "", lastName: "", email: "", company: "", source: "", status: "new" });
+                } else {
+                  createMutation.mutate(formData);
+                }
+              }}
+              disabled={!formData.firstName || !formData.lastName || createMutation.isPending || updateMutation.isPending}
+            >
             <DialogHeader>
               <DialogTitle>{editingId ? "Edit Lead" : "Create New Lead"}</DialogTitle>
             </DialogHeader>
@@ -747,19 +761,10 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="outline" data-testid="button-cancel-lead">Cancel</Button>
+                <Button type="button" variant="outline" data-testid="button-cancel-lead">Cancel</Button>
               </DialogClose>
               <Button
-                onClick={() => {
-                  if (editingId) {
-                    updateMutation.mutate({ id: editingId, updates: formData });
-                    setIsOpen(false);
-                    setEditingId(null);
-                    setFormData({ firstName: "", lastName: "", email: "", company: "", source: "", status: "new" });
-                  } else {
-                    createMutation.mutate(formData);
-                  }
-                }}
+                type="submit"
                 disabled={!formData.firstName || !formData.lastName || createMutation.isPending || updateMutation.isPending}
                 data-testid="button-save-lead"
               >
@@ -768,6 +773,7 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
                   : (createMutation.isPending ? "Creating..." : "Create Lead")}
               </Button>
             </DialogFooter>
+            </SubmitForm>
           </DialogContent>
         </Dialog>
       </div>
@@ -844,6 +850,14 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
 
       <Dialog open={isConvertOpen} onOpenChange={setIsConvertOpen}>
         <DialogContent className="max-w-md">
+          <SubmitForm
+            onSubmit={() => {
+              if (selectedLead) {
+                convertMutation.mutate({ id: selectedLead.id, options: convertOptions });
+              }
+            }}
+            disabled={convertMutation.isPending}
+          >
           <DialogHeader>
             <DialogTitle>Convert Lead</DialogTitle>
           </DialogHeader>
@@ -941,14 +955,10 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
           )}
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline" data-testid="button-cancel-convert">Cancel</Button>
+              <Button type="button" variant="outline" data-testid="button-cancel-convert">Cancel</Button>
             </DialogClose>
             <Button
-              onClick={() => {
-                if (selectedLead) {
-                  convertMutation.mutate({ id: selectedLead.id, options: convertOptions });
-                }
-              }}
+              type="submit"
               disabled={convertMutation.isPending}
               className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
               data-testid="button-confirm-convert"
@@ -956,6 +966,7 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
               {convertMutation.isPending ? "Converting..." : "Convert Lead"}
             </Button>
           </DialogFooter>
+          </SubmitForm>
         </DialogContent>
       </Dialog>
     </div>

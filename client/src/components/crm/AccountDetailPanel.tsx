@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -291,6 +292,10 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                 </Button>
               </DialogTrigger>
               <DialogContent>
+                <SubmitForm
+                  onSubmit={() => createLeadMutation.mutate(leadFormData)}
+                  disabled={!leadFormData.firstName || !leadFormData.lastName || createLeadMutation.isPending}
+                >
                 <DialogHeader>
                   <DialogTitle>Add Lead from {account.name}</DialogTitle>
                 </DialogHeader>
@@ -336,15 +341,16 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                 </div>
                 <DialogFooter>
                   <DialogClose asChild>
-                    <Button variant="outline">Cancel</Button>
+                    <Button type="button" variant="outline">Cancel</Button>
                   </DialogClose>
                   <Button 
-                    onClick={() => createLeadMutation.mutate(leadFormData)}
+                    type="submit"
                     disabled={!leadFormData.firstName || !leadFormData.lastName || createLeadMutation.isPending}
                   >
                     {createLeadMutation.isPending ? "Creating..." : "Create Lead"}
                   </Button>
                 </DialogFooter>
+                </SubmitForm>
               </DialogContent>
             </Dialog>
             <Button variant="outline" size="sm" onClick={() => setIsAddContactOpen(true)} data-testid="button-add-contact-quick">
@@ -591,6 +597,10 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
+                    <SubmitForm
+                      onSubmit={() => createContactMutation.mutate(contactFormData)}
+                      disabled={!contactFormData.firstName || !contactFormData.lastName || createContactMutation.isPending}
+                    >
                     <DialogHeader>
                       <DialogTitle>Add Contact to {account.name}</DialogTitle>
                     </DialogHeader>
@@ -639,16 +649,17 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                     </div>
                     <DialogFooter>
                       <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button type="button" variant="outline">Cancel</Button>
                       </DialogClose>
                       <Button 
-                        onClick={() => createContactMutation.mutate(contactFormData)}
+                        type="submit"
                         disabled={!contactFormData.firstName || !contactFormData.lastName || createContactMutation.isPending}
                         data-testid="button-save-new-contact"
                       >
                         {createContactMutation.isPending ? "Adding..." : "Add Contact"}
                       </Button>
                     </DialogFooter>
+                    </SubmitForm>
                   </DialogContent>
                 </Dialog>
               </div>
@@ -773,6 +784,10 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
+                    <SubmitForm
+                      onSubmit={() => createActivityMutation.mutate(activityFormData)}
+                      disabled={!activityFormData.subject || createActivityMutation.isPending}
+                    >
                     <DialogHeader>
                       <DialogTitle>Log Activity for {account.name}</DialogTitle>
                     </DialogHeader>
@@ -817,16 +832,17 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                     </div>
                     <DialogFooter>
                       <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button type="button" variant="outline">Cancel</Button>
                       </DialogClose>
                       <Button 
-                        onClick={() => createActivityMutation.mutate(activityFormData)}
+                        type="submit"
                         disabled={!activityFormData.subject || createActivityMutation.isPending}
                         data-testid="button-save-activity-detail"
                       >
                         {createActivityMutation.isPending ? "Logging..." : "Log Activity"}
                       </Button>
                     </DialogFooter>
+                    </SubmitForm>
                   </DialogContent>
                 </Dialog>
               </div>
@@ -915,6 +931,10 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
+                    <SubmitForm
+                      onSubmit={() => createNoteMutation.mutate(noteContent)}
+                      disabled={!noteContent.trim() || createNoteMutation.isPending}
+                    >
                     <DialogHeader>
                       <DialogTitle>Add Note to {account.name}</DialogTitle>
                     </DialogHeader>
@@ -929,16 +949,17 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                     </div>
                     <DialogFooter>
                       <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button type="button" variant="outline">Cancel</Button>
                       </DialogClose>
                       <Button 
-                        onClick={() => createNoteMutation.mutate(noteContent)}
+                        type="submit"
                         disabled={!noteContent.trim() || createNoteMutation.isPending}
                         data-testid="button-save-note"
                       >
                         {createNoteMutation.isPending ? "Saving..." : "Add Note"}
                       </Button>
                     </DialogFooter>
+                    </SubmitForm>
                   </DialogContent>
                 </Dialog>
               </div>
@@ -983,6 +1004,10 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
 
       <Dialog open={isEditMode} onOpenChange={setIsEditMode}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <SubmitForm
+            onSubmit={() => updateAccountMutation.mutate(editFormData)}
+            disabled={!editFormData.name || updateAccountMutation.isPending}
+          >
           <DialogHeader>
             <DialogTitle>Edit Account</DialogTitle>
           </DialogHeader>
@@ -1102,16 +1127,17 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button type="button" variant="outline">Cancel</Button>
             </DialogClose>
             <Button 
-              onClick={() => updateAccountMutation.mutate(editFormData)}
+              type="submit"
               disabled={!editFormData.name || updateAccountMutation.isPending}
               data-testid="button-save-account-edit"
             >
               {updateAccountMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
+          </SubmitForm>
         </DialogContent>
       </Dialog>
     </div>

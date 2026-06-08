@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ATTRIBUTE_TYPES, ATTRIBUTE_TYPE_INFO, type AttributeType } from "@shared/attributeTypes";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,6 +70,10 @@ export function ColumnEditorDialog({ open, onOpenChange, onSave, existingColumn 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg">
+        <SubmitForm
+          onSubmit={handleSave}
+          disabled={step !== "configure" || !title.trim()}
+        >
         <DialogHeader>
           <DialogTitle>
             {step === "type" ? "Add Custom Attribute" : "Configure Attribute"}
@@ -289,19 +294,20 @@ export function ColumnEditorDialog({ open, onOpenChange, onSave, existingColumn 
 
         <DialogFooter className="gap-2">
           {step === "configure" && (
-            <Button variant="ghost" onClick={() => setStep("type")} data-testid="back-button">
+            <Button type="button" variant="ghost" onClick={() => setStep("type")} data-testid="back-button">
               Back
             </Button>
           )}
-          <Button variant="outline" onClick={handleClose} data-testid="cancel-button">
+          <Button type="button" variant="outline" onClick={handleClose} data-testid="cancel-button">
             Cancel
           </Button>
           {step === "configure" && (
-            <Button onClick={handleSave} disabled={!title.trim()} data-testid="save-column-button">
+            <Button type="submit" data-testid="save-column-button">
               Add Attribute
             </Button>
           )}
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );

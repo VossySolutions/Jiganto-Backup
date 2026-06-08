@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SubmitForm } from "@/components/ui/submit-form";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -102,6 +103,10 @@ export function GrantAccessModal({ open, onOpenChange, target }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <SubmitForm
+          onSubmit={() => grantMut.mutate()}
+          disabled={!target || reason.trim().length < 3 || grantMut.isPending}
+        >
         <DialogHeader>
           <DialogTitle>Grant trial extension / free access</DialogTitle>
           <DialogDescription>
@@ -190,16 +195,14 @@ export function GrantAccessModal({ open, onOpenChange, target }: Props) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button
-            disabled={!target || reason.trim().length < 3 || grantMut.isPending}
-            onClick={() => grantMut.mutate()}
-          >
+          <Button type="submit">
             {grantMut.isPending ? "Applying…" : "Apply extension"}
           </Button>
         </DialogFooter>
+        </SubmitForm>
       </DialogContent>
     </Dialog>
   );
