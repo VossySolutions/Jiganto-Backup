@@ -3,6 +3,8 @@ import { useLocation } from "wouter";
 import { DASHBOARD_PATH } from "@shared/app-routes";
 import { useToast } from "@/hooks/use-toast";
 import { useReadOnly } from "@/hooks/use-read-only";
+import { useClientContext } from "@/hooks/use-client-context";
+import { isCommandActionAllowedInWorkspace, NAV_ACTION_PATHS } from "@/lib/workspace-nav-filter";
 
 export type ActionCategory = "navigation" | "create" | "search" | "settings" | "module";
 
@@ -46,6 +48,8 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
   const readOnly = useReadOnly();
+  const { activeClient } = useClientContext();
+  const inClientWorkspace = !!activeClient;
 
   const createDefaultActions = useCallback((): QuickAction[] => [
     // ── Navigation (G then X) ───────────────────────────────────────────────
@@ -263,19 +267,25 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
     // ── Search ────────────────────────────────────────────────────────────
     {
       id: "search-global",
-      name: "Search Everything",
-      description: "Search across all modules",
+      name: inClientWorkspace ? "Search workspace" : "Search Everything",
+      description: inClientWorkspace
+        ? "Search within the active client workspace"
+        : "Search across all modules",
       category: "search",
       icon: "Search",
       hotkey: "ctrl+/",
       hotkeyLabel: "Ctrl+/ · ⌘/",
       action: () => {
-        window.dispatchEvent(new CustomEvent("jiganto:global-search"));
+        window.dispatchEvent(
+          new CustomEvent("jiganto:global-search", {
+            detail: { clientId: activeClient?.id ?? null },
+          }),
+        );
       },
       enabled: true,
       pinned: false,
     },
-  ], [navigate]);
+  ], [navigate, inClientWorkspace, activeClient?.id]);
 
   const [actions, setActions] = useState<QuickAction[]>(() => {
     try {
@@ -302,6 +312,16 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
+    setActions((prev) => {
+      const defaults = createDefaultActions();
+      return defaults.map((d) => {
+        const stored = prev.find((p) => p.id === d.id);
+        return stored ? { ...d, enabled: stored.enabled, pinned: stored.pinned, hotkey: stored.hotkey, hotkeyLabel: stored.hotkeyLabel } : d;
+      });
+    });
+  }, [createDefaultActions]);
+
+  useEffect(() => {
     const toStore = actions.map(a => ({
       id: a.id,
       enabled: a.enabled,
@@ -314,10 +334,15 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 
   const effectiveActions = useMemo(
     () =>
-      actions.map((a) =>
-        readOnly && a.category === "create" ? { ...a, enabled: false } : a,
-      ),
-    [actions, readOnly],
+      actions.map((a) => {
+        let enabled = a.enabled;
+        if (readOnly && a.category === "create") enabled = false;
+        if (inClientWorkspace && !isCommandActionAllowedInWorkspace(a.id, NAV_ACTION_PATHS[a.id], true)) {
+          enabled = false;
+        }
+        return { ...a, enabled };
+      }),
+    [actions, readOnly, inClientWorkspace],
   );
 
   const pinnedActions = effectiveActions.filter((a) => a.pinned && a.enabled);

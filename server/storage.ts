@@ -147,9 +147,10 @@ import {
   type SurveyWithDetails, type SurveyResponseWithAnswers,
 } from "@shared/models/surveys";
 import {
-  clients, clientUsers,
+  clients, clientUsers, clientModuleVisibility, clientInvitations,
   type Client, type InsertClient,
   type ClientUser, type InsertClientUser,
+  type ClientModuleVisibility, type ClientInvitation,
 } from "@shared/models/clients";
 import { documents } from "@shared/models/documents";
 import { db } from "./db";
@@ -157,6 +158,14 @@ import { eq, and, desc, isNull, or, sql, inArray, gt, lt, ne } from "drizzle-orm
 import { alias } from "drizzle-orm/pg-core";
 import { users } from "@shared/models/auth";
 import { orgMemberships } from "@shared/models/permissions";
+
+export type GlobalSearchHit = {
+  type: "document" | "project" | "task" | "chat";
+  id: number;
+  title: string;
+  subtitle?: string;
+  href: string;
+};
 
 export interface IStorage {
   // Tenants
@@ -289,7 +298,7 @@ export interface IStorage {
   getDirectMessageChannels(userId: string, tenantId: number): Promise<(Channel & { otherUser: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]>;
 
   // Chat inbox & favourites
-  getChatInbox(userId: string, tenantId: number): Promise<ChatInboxItem[]>;
+  getChatInbox(userId: string, tenantId: number, clientId?: number): Promise<ChatInboxItem[]>;
   getFavoriteChannelIds(userId: string, tenantId: number): Promise<number[]>;
   addChannelFavorite(userId: string, channelId: number, tenantId: number): Promise<void>;
   removeChannelFavorite(userId: string, channelId: number, tenantId: number): Promise<void>;
@@ -1119,22 +1128,57 @@ export interface IStorage {
   createSurveyAnswer(data: InsertSurveyAnswer): Promise<SurveyAnswer>;
 
   // Clients
-  getClients(tenantId: number): Promise<Client[]>;
+  getClients(tenantId: number, opts?: { includeArchived?: boolean }): Promise<Client[]>;
+  getClientSlugs(tenantId: number): Promise<string[]>;
   getAccessibleClients(
     userId: string,
     tenantId: number,
-    options?: { platformRole?: string; isJigantoStaff?: boolean },
+    options?: { platformRole?: string; isJigantoStaff?: boolean; includeArchived?: boolean },
   ): Promise<Client[]>;
+  /** Workspace IDs assigned via client_users and/or client_workspace_grants. */
+  getAssignedClientIdsForUser(userId: string, tenantId: number): Promise<number[]>;
+  globalSearch(
+    userId: string,
+    tenantId: number,
+    query: string,
+    clientId?: number,
+  ): Promise<GlobalSearchHit[]>;
   getClientById(id: number, tenantId: number): Promise<Client | undefined>;
+  getClientBySlug(slug: string, tenantId: number, opts?: { allowArchived?: boolean }): Promise<Client | undefined>;
   createClient(data: InsertClient): Promise<Client>;
   updateClient(id: number, tenantId: number, data: Partial<InsertClient>): Promise<Client | undefined>;
   archiveClient(id: number, tenantId: number): Promise<Client | undefined>;
+  unarchiveClient(id: number, tenantId: number): Promise<Client | undefined>;
+  requestClientDeletion(id: number, tenantId: number): Promise<Client | undefined>;
+  restoreClient(id: number, tenantId: number): Promise<Client | undefined>;
+  purgeExpiredDeletedClients(): Promise<number>;
+  getClientsPendingDelete(tenantId: number): Promise<Client[]>;
   getClientUsers(clientId: number): Promise<(ClientUser & { userInfo?: { firstName: string | null; lastName: string | null; email: string | null; profileImageUrl: string | null } })[]>;
+  getClientMemberCounts(clientIds: number[]): Promise<Map<number, number>>;
   addClientUser(data: InsertClientUser): Promise<ClientUser>;
   removeClientUser(clientId: number, userId: string): Promise<void>;
   getClientByUserId(userId: string, tenantId: number): Promise<Client | undefined>;
-  getClientMembershipByUserId(userId: string, tenantId: number): Promise<{ client: Client; role: string } | undefined>;
-  getClientProjectSummary(tenantId: number): Promise<{ clientId: number | null; projectCount: number; atRiskCount: number }[]>;
+  getClientMembershipByUserId(userId: string, tenantId: number): Promise<{ client: Client; role: string; memberType: string } | undefined>;
+  /** External client users only (member_type = client) — used for workspace lock. */
+  getLockedClientMembershipByUserId(userId: string, tenantId: number): Promise<{ client: Client; role: string; memberType: string } | undefined>;
+  getClientProjectSummary(tenantId: number): Promise<{ clientId: number | null; projectCount: number; atRiskCount: number; activeProjectCount: number }[]>;
+  getActiveEngagementCount(tenantId: number): Promise<number>;
+  getClientModuleVisibility(clientId: number): Promise<ClientModuleVisibility[]>;
+  upsertClientModuleVisibility(clientId: number, moduleKey: string, isVisible: number, updatedBy: string): Promise<ClientModuleVisibility>;
+  createClientInvitation(data: {
+    tenantId: number;
+    clientId: number;
+    email: string;
+    role: string;
+    memberType: string;
+    token: string;
+    invitedBy: string;
+    expiresAt: Date;
+  }): Promise<ClientInvitation>;
+  getClientInvitationByToken(token: string): Promise<ClientInvitation | undefined>;
+  acceptClientInvitation(token: string, userId: string): Promise<ClientUser | undefined>;
+  getClientInvitations(clientId: number): Promise<ClientInvitation[]>;
+  userCanAccessClient(userId: string, tenantId: number, clientId: number, options?: { platformRole?: string; isJigantoStaff?: boolean }): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1226,9 +1270,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Notifications
-  async getNotifications(userId: string, limit?: number): Promise<Notification[]> {
+  async getNotifications(
+    userId: string,
+    limit?: number,
+    clientId?: number | null,
+  ): Promise<Notification[]> {
+    const conditions = [eq(notifications.userId, userId)];
+    if (clientId != null) {
+      conditions.push(eq(notifications.clientId, clientId));
+    }
     const query = db.select().from(notifications)
-      .where(eq(notifications.userId, userId))
+      .where(and(...conditions))
       .orderBy(desc(notifications.createdAt));
     if (limit) {
       return query.limit(limit);
@@ -1236,10 +1288,14 @@ export class DatabaseStorage implements IStorage {
     return query;
   }
 
-  async getUnreadNotificationCount(userId: string): Promise<number> {
+  async getUnreadNotificationCount(userId: string, clientId?: number | null): Promise<number> {
+    const conditions = [eq(notifications.userId, userId), eq(notifications.isRead, false)];
+    if (clientId != null) {
+      conditions.push(eq(notifications.clientId, clientId));
+    }
     const result = await db.select({ count: sql<number>`count(*)` })
       .from(notifications)
-      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+      .where(and(...conditions));
     return result[0]?.count || 0;
   }
 
@@ -2124,7 +2180,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getChatInbox(userId: string, tenantId: number): Promise<ChatInboxItem[]> {
+  async getChatInbox(userId: string, tenantId: number, clientId?: number): Promise<ChatInboxItem[]> {
     const [channelList, dmList, favoriteIdsList, memberRows, projectList] = await Promise.all([
       this.getChannels(tenantId, userId),
       this.getDirectMessageChannels(userId, tenantId),
@@ -2245,7 +2301,21 @@ export class DatabaseStorage implements IStorage {
       };
     });
 
-    return items.sort((a, b) => {
+    let filtered = items;
+    if (clientId != null && clientId > 0) {
+      const client = await this.getClientById(clientId, tenantId);
+      if (client) {
+        const teamName = `${client.name} Team`;
+        const clientProjectIds = new Set(
+          projectList.filter((p) => p.name === teamName).map((p) => p.id),
+        );
+        filtered = items.filter(
+          (item) => item.projectId != null && clientProjectIds.has(item.projectId),
+        );
+      }
+    }
+
+    return filtered.sort((a, b) => {
       const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
       const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
       return bTime - aTime;
@@ -6863,42 +6933,208 @@ export class DatabaseStorage implements IStorage {
 
   // ===== Clients =====
 
-  async getClients(tenantId: number): Promise<Client[]> {
+  async getClients(tenantId: number, opts?: { includeArchived?: boolean }): Promise<Client[]> {
+    const conditions = [eq(clients.tenantId, tenantId)];
+    if (!opts?.includeArchived) {
+      conditions.push(eq(clients.status, "active"));
+    } else {
+      conditions.push(ne(clients.status, "pending_delete"));
+    }
     return db.select().from(clients)
-      .where(and(eq(clients.tenantId, tenantId), eq(clients.status, "active")))
+      .where(and(...conditions))
       .orderBy(clients.name);
+  }
+
+  async getClientSlugs(tenantId: number): Promise<string[]> {
+    const rows = await db
+      .select({ slug: clients.slug })
+      .from(clients)
+      .where(eq(clients.tenantId, tenantId));
+    return rows.map((r) => r.slug).filter((s): s is string => Boolean(s));
   }
 
   async getAccessibleClients(
     userId: string,
     tenantId: number,
-    options?: { platformRole?: string; isJigantoStaff?: boolean },
+    options?: { platformRole?: string; isJigantoStaff?: boolean; includeArchived?: boolean },
   ): Promise<Client[]> {
-    const all = await this.getClients(tenantId);
-    if (options?.isJigantoStaff) return all;
+    const statusConditions = !options?.includeArchived
+      ? [eq(clients.status, "active")]
+      : [ne(clients.status, "pending_delete")];
+
+    if (options?.isJigantoStaff) {
+      return this.getClients(tenantId, { includeArchived: options?.includeArchived });
+    }
     if (
       options?.platformRole === "si_super_admin" ||
       options?.platformRole === "client_jiganto_user" ||
       options?.platformRole === "jiganto_staff"
     ) {
-      return all;
+      return this.getClients(tenantId, { includeArchived: options?.includeArchived });
     }
     if (options?.platformRole === "si_consultant_pm") {
-      const { clientWorkspaceGrants } = await import("@shared/models/permissions");
-      const grants = await db
+      const ids = await this.getAssignedClientIdsForUser(userId, tenantId);
+      if (ids.length === 0) return [];
+      return db
         .select()
+        .from(clients)
+        .where(and(eq(clients.tenantId, tenantId), inArray(clients.id, ids), ...statusConditions))
+        .orderBy(clients.name);
+    }
+    return this.getClients(tenantId, { includeArchived: options?.includeArchived });
+  }
+
+  async getAssignedClientIdsForUser(userId: string, tenantId: number): Promise<number[]> {
+    const { clientWorkspaceGrants } = await import("@shared/models/permissions");
+
+    const [memberships, grants] = await Promise.all([
+      db
+        .select({ clientId: clientUsers.clientId })
+        .from(clientUsers)
+        .where(
+          and(
+            eq(clientUsers.userId, userId),
+            eq(clientUsers.tenantId, tenantId),
+            eq(clientUsers.isActive, 1),
+          ),
+        ),
+      db
+        .select({ clientId: clientWorkspaceGrants.clientId })
         .from(clientWorkspaceGrants)
         .where(
           and(
             eq(clientWorkspaceGrants.userId, userId),
             eq(clientWorkspaceGrants.tenantId, tenantId),
           ),
-        );
-      if (grants.length === 0) return all;
-      const ids = new Set(grants.map((g) => g.clientId));
-      return all.filter((c) => ids.has(c.id));
+        ),
+    ]);
+
+    const ids = new Set<number>();
+    for (const row of memberships) ids.add(row.clientId);
+    for (const row of grants) ids.add(row.clientId);
+    return Array.from(ids);
+  }
+
+  async globalSearch(
+    userId: string,
+    tenantId: number,
+    query: string,
+    clientId?: number,
+  ): Promise<GlobalSearchHit[]> {
+    const q = query.trim();
+    if (!q) return [];
+
+    const hits: GlobalSearchHit[] = [];
+    const pattern = `%${q.toLowerCase()}%`;
+
+    const docs = await this.searchDocuments(tenantId, q, clientId);
+    for (const doc of docs.slice(0, 8)) {
+      hits.push({
+        type: "document",
+        id: doc.id,
+        title: doc.title,
+        subtitle: doc.type ?? "Document",
+        href: `/documents?doc=${doc.id}`,
+      });
     }
-    return all;
+
+    const projectConditions = [
+      eq(pmProjects.tenantId, tenantId),
+      or(
+        sql`LOWER(${pmProjects.name}) LIKE ${pattern}`,
+        sql`LOWER(${pmProjects.description}) LIKE ${pattern}`,
+      ),
+    ];
+    if (clientId !== undefined) {
+      projectConditions.push(eq(pmProjects.clientId, clientId));
+    }
+    const projects = await db
+      .select({ id: pmProjects.id, name: pmProjects.name, status: pmProjects.status })
+      .from(pmProjects)
+      .where(and(...projectConditions))
+      .orderBy(desc(pmProjects.updatedAt))
+      .limit(8);
+    for (const project of projects) {
+      hits.push({
+        type: "project",
+        id: project.id,
+        title: project.name,
+        subtitle: project.status ?? "Project",
+        href: `/modules/projects/${project.id}`,
+      });
+    }
+
+    const taskConditions = [
+      eq(tasks.tenantId, tenantId),
+      or(
+        sql`LOWER(${tasks.title}) LIKE ${pattern}`,
+        sql`LOWER(${tasks.description}) LIKE ${pattern}`,
+      ),
+    ];
+    if (clientId !== undefined) {
+      taskConditions.push(eq(tasks.clientId, clientId));
+    }
+    const taskRows = await db
+      .select({ id: tasks.id, title: tasks.title, status: tasks.status })
+      .from(tasks)
+      .where(and(...taskConditions))
+      .orderBy(desc(tasks.updatedAt))
+      .limit(8);
+    for (const task of taskRows) {
+      hits.push({
+        type: "task",
+        id: task.id,
+        title: task.title,
+        subtitle: task.status ?? "Task",
+        href: `/modules/tasks?task=${task.id}`,
+      });
+    }
+
+    const chatHits = await this.searchChatMessages(userId, tenantId, q);
+    for (const msg of chatHits.slice(0, 8)) {
+      hits.push({
+        type: "chat",
+        id: msg.messageId,
+        title: msg.channelName,
+        subtitle: msg.content.slice(0, 120),
+        href: `/modules/chat/${msg.channelId}`,
+      });
+    }
+
+    return hits.slice(0, 24);
+  }
+
+  async userCanAccessClient(
+    userId: string,
+    tenantId: number,
+    clientId: number,
+    options?: { platformRole?: string; isJigantoStaff?: boolean },
+  ): Promise<boolean> {
+    if (options?.isJigantoStaff) return true;
+
+    const role = options?.platformRole;
+    if (
+      role === "si_super_admin" ||
+      role === "client_jiganto_user" ||
+      role === "jiganto_staff"
+    ) {
+      const [row] = await db
+        .select({ id: clients.id })
+        .from(clients)
+        .where(and(eq(clients.id, clientId), eq(clients.tenantId, tenantId)));
+      return !!row;
+    }
+
+    if (role === "si_consultant_pm") {
+      const ids = await this.getAssignedClientIdsForUser(userId, tenantId);
+      return ids.includes(clientId);
+    }
+
+    const [row] = await db
+      .select({ id: clients.id })
+      .from(clients)
+      .where(and(eq(clients.id, clientId), eq(clients.tenantId, tenantId)));
+    return !!row;
   }
 
   async getClientById(id: number, tenantId: number): Promise<Client | undefined> {
@@ -6907,9 +7143,19 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async getClientBySlug(slug: string, tenantId: number): Promise<Client | undefined> {
-    const [row] = await db.select().from(clients)
-      .where(and(eq(clients.slug, slug), eq(clients.tenantId, tenantId), eq(clients.status, "active")));
+  async getClientBySlug(
+    slug: string,
+    tenantId: number,
+    opts?: { allowArchived?: boolean },
+  ): Promise<Client | undefined> {
+    const conditions = [
+      eq(clients.slug, slug),
+      eq(clients.tenantId, tenantId),
+    ];
+    if (!opts?.allowArchived) {
+      conditions.push(eq(clients.status, "active"));
+    }
+    const [row] = await db.select().from(clients).where(and(...conditions));
     return row;
   }
 
@@ -6928,25 +7174,101 @@ export class DatabaseStorage implements IStorage {
 
   async archiveClient(id: number, tenantId: number): Promise<Client | undefined> {
     const [row] = await db.update(clients)
-      .set({ status: "archived", updatedAt: new Date() })
+      .set({ status: "archived", engagementStatus: "archived", updatedAt: new Date() })
       .where(and(eq(clients.id, id), eq(clients.tenantId, tenantId)))
       .returning();
     return row;
   }
 
+  async unarchiveClient(id: number, tenantId: number): Promise<Client | undefined> {
+    const [row] = await db.update(clients)
+      .set({ status: "active", engagementStatus: "active", updatedAt: new Date() })
+      .where(and(eq(clients.id, id), eq(clients.tenantId, tenantId)))
+      .returning();
+    return row;
+  }
+
+  async requestClientDeletion(id: number, tenantId: number): Promise<Client | undefined> {
+    const purgeAt = new Date();
+    purgeAt.setDate(purgeAt.getDate() + 30);
+    const [row] = await db.update(clients)
+      .set({
+        status: "pending_delete",
+        engagementStatus: "archived",
+        deletedAt: new Date(),
+        purgeAt,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(clients.id, id), eq(clients.tenantId, tenantId)))
+      .returning();
+    return row;
+  }
+
+  async restoreClient(id: number, tenantId: number): Promise<Client | undefined> {
+    const [row] = await db.update(clients)
+      .set({
+        status: "active",
+        engagementStatus: "active",
+        deletedAt: null,
+        purgeAt: null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(clients.id, id), eq(clients.tenantId, tenantId)))
+      .returning();
+    return row;
+  }
+
+  async purgeExpiredDeletedClients(): Promise<number> {
+    const now = new Date();
+    const expired = await db.select().from(clients)
+      .where(and(eq(clients.status, "pending_delete"), lt(clients.purgeAt, now)));
+    for (const c of expired) {
+      await db.delete(clients).where(eq(clients.id, c.id));
+    }
+    return expired.length;
+  }
+
+  async getClientsPendingDelete(tenantId: number): Promise<Client[]> {
+    return db
+      .select()
+      .from(clients)
+      .where(and(eq(clients.tenantId, tenantId), eq(clients.status, "pending_delete")));
+  }
+
   async getClientUsers(clientId: number): Promise<(ClientUser & { userInfo?: { firstName: string | null; lastName: string | null; email: string | null; profileImageUrl: string | null } })[]> {
     const rows = await db.select().from(clientUsers).where(eq(clientUsers.clientId, clientId));
-    const result = [];
-    for (const row of rows) {
-      const [user] = await db.select({
+    if (rows.length === 0) return [];
+
+    const userIds = [...new Set(rows.map((r) => r.userId))];
+    const userRows = await db
+      .select({
+        id: users.id,
         firstName: users.firstName,
         lastName: users.lastName,
         email: users.email,
         profileImageUrl: users.profileImageUrl,
-      }).from(users).where(eq(users.id, row.userId));
-      result.push({ ...row, userInfo: user || undefined });
-    }
-    return result;
+      })
+      .from(users)
+      .where(inArray(users.id, userIds));
+    const userMap = new Map(userRows.map((u) => [u.id, u]));
+
+    return rows.map((row) => ({
+      ...row,
+      userInfo: userMap.get(row.userId) ?? undefined,
+    }));
+  }
+
+  async getClientMemberCounts(clientIds: number[]): Promise<Map<number, number>> {
+    if (clientIds.length === 0) return new Map();
+    const rows = await db
+      .select({
+        clientId: clientUsers.clientId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(clientUsers)
+      .where(inArray(clientUsers.clientId, clientIds))
+      .groupBy(clientUsers.clientId);
+    return new Map(rows.map((r) => [r.clientId, r.count]));
   }
 
   async addClientUser(data: InsertClientUser): Promise<ClientUser> {
@@ -6966,27 +7288,129 @@ export class DatabaseStorage implements IStorage {
     return this.getClientById(cu.clientId, tenantId);
   }
 
-  async getClientMembershipByUserId(userId: string, tenantId: number): Promise<{ client: Client; role: string } | undefined> {
+  async getClientMembershipByUserId(userId: string, tenantId: number): Promise<{ client: Client; role: string; memberType: string } | undefined> {
     const [cu] = await db.select().from(clientUsers)
       .where(and(eq(clientUsers.userId, userId), eq(clientUsers.tenantId, tenantId)));
     if (!cu) return undefined;
     const client = await this.getClientById(cu.clientId, tenantId);
     if (!client) return undefined;
-    return { client, role: cu.role };
+    return { client, role: cu.role, memberType: cu.memberType };
   }
 
-  async getClientProjectSummary(tenantId: number): Promise<{ clientId: number | null; projectCount: number; atRiskCount: number }[]> {
-    const { pmProjects } = await import("@shared/models/projects");
-    const rows = await db.select().from(pmProjects).where(eq(pmProjects.tenantId, tenantId));
-    const map = new Map<string, { clientId: number | null; projectCount: number; atRiskCount: number }>();
-    for (const p of rows) {
-      const key = String(p.clientId ?? "null");
-      if (!map.has(key)) map.set(key, { clientId: p.clientId ?? null, projectCount: 0, atRiskCount: 0 });
-      const entry = map.get(key)!;
-      entry.projectCount++;
-      if (p.ragStatus === "red" || p.ragStatus === "amber") entry.atRiskCount++;
+  async getLockedClientMembershipByUserId(userId: string, tenantId: number): Promise<{ client: Client; role: string; memberType: string } | undefined> {
+    const [row] = await db
+      .select({
+        client: clients,
+        role: clientUsers.role,
+        memberType: clientUsers.memberType,
+      })
+      .from(clientUsers)
+      .innerJoin(clients, eq(clientUsers.clientId, clients.id))
+      .where(
+        and(
+          eq(clientUsers.userId, userId),
+          eq(clientUsers.tenantId, tenantId),
+          eq(clientUsers.memberType, "client"),
+        ),
+      );
+    if (!row) return undefined;
+    return { client: row.client, role: row.role, memberType: row.memberType };
+  }
+
+  async getClientProjectSummary(tenantId: number): Promise<{ clientId: number | null; projectCount: number; atRiskCount: number; activeProjectCount: number }[]> {
+    const rows = await db
+      .select({
+        clientId: pmProjects.clientId,
+        projectCount: sql<number>`count(*)::int`,
+        activeProjectCount: sql<number>`count(*) filter (where ${pmProjects.status} = 'active')::int`,
+        atRiskCount: sql<number>`count(*) filter (where lower(${pmProjects.ragStatus}) in ('red', 'amber'))::int`,
+      })
+      .from(pmProjects)
+      .where(eq(pmProjects.tenantId, tenantId))
+      .groupBy(pmProjects.clientId);
+
+    return rows.map((r) => ({
+      clientId: r.clientId ?? null,
+      projectCount: r.projectCount,
+      atRiskCount: r.atRiskCount,
+      activeProjectCount: r.activeProjectCount,
+    }));
+  }
+
+  async getActiveEngagementCount(tenantId: number): Promise<number> {
+    const summaries = await this.getClientProjectSummary(tenantId);
+    return summaries.filter((s) => s.clientId != null && s.activeProjectCount > 0).length;
+  }
+
+  async getClientModuleVisibility(clientId: number): Promise<ClientModuleVisibility[]> {
+    return db.select().from(clientModuleVisibility).where(eq(clientModuleVisibility.clientId, clientId));
+  }
+
+  async upsertClientModuleVisibility(
+    clientId: number,
+    moduleKey: string,
+    isVisible: number,
+    updatedBy: string,
+  ): Promise<ClientModuleVisibility> {
+    const existing = await db.select().from(clientModuleVisibility)
+      .where(and(eq(clientModuleVisibility.clientId, clientId), eq(clientModuleVisibility.moduleKey, moduleKey)));
+    if (existing[0]) {
+      const [row] = await db.update(clientModuleVisibility)
+        .set({ isVisible, updatedBy, updatedAt: new Date() })
+        .where(eq(clientModuleVisibility.id, existing[0].id))
+        .returning();
+      return row;
     }
-    return Array.from(map.values());
+    const [row] = await db.insert(clientModuleVisibility)
+      .values({ clientId, moduleKey, isVisible, updatedBy })
+      .returning();
+    return row;
+  }
+
+  async createClientInvitation(data: {
+    tenantId: number;
+    clientId: number;
+    email: string;
+    role: string;
+    memberType: string;
+    token: string;
+    invitedBy: string;
+    expiresAt: Date;
+  }): Promise<ClientInvitation> {
+    const [row] = await db.insert(clientInvitations).values(data).returning();
+    return row;
+  }
+
+  async getClientInvitationByToken(token: string): Promise<ClientInvitation | undefined> {
+    const [row] = await db.select().from(clientInvitations).where(eq(clientInvitations.token, token));
+    return row;
+  }
+
+  async getClientInvitations(clientId: number): Promise<ClientInvitation[]> {
+    return db.select().from(clientInvitations)
+      .where(and(eq(clientInvitations.clientId, clientId), isNull(clientInvitations.acceptedAt)))
+      .orderBy(desc(clientInvitations.createdAt));
+  }
+
+  async acceptClientInvitation(token: string, userId: string): Promise<ClientUser | undefined> {
+    const invite = await this.getClientInvitationByToken(token);
+    if (!invite || invite.acceptedAt) return undefined;
+    if (invite.expiresAt < new Date()) return undefined;
+    const [accepted] = await db.update(clientInvitations)
+      .set({ acceptedAt: new Date() })
+      .where(eq(clientInvitations.id, invite.id))
+      .returning();
+    if (!accepted) return undefined;
+    return this.addClientUser({
+      tenantId: invite.tenantId,
+      clientId: invite.clientId,
+      userId,
+      role: invite.role,
+      memberType: invite.memberType,
+      invitedBy: invite.invitedBy,
+      joinedAt: new Date(),
+      isActive: 1,
+    });
   }
 }
 

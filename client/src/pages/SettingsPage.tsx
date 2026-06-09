@@ -41,6 +41,8 @@ import SettingsPersonalTab from "@/components/settings/SettingsPersonalTab";
 import { usePermissions } from "@/hooks/use-permissions";
 import SettingsStaffAuditTab from "@/components/settings/SettingsStaffAuditTab";
 import SettingsWorkspaceRolesGuide from "@/components/settings/SettingsWorkspaceRolesGuide";
+import SettingsClientWorkspaceTab from "@/components/settings/SettingsClientWorkspaceTab";
+import { useClientContext } from "@/hooks/use-client-context";
 import SettingsIntegrationsTab from "@/components/settings/SettingsIntegrationsTab";
 import SettingsBillingTab from "@/components/settings/SettingsBillingTab";
 import SettingsDataGovernanceTab from "@/components/settings/SettingsDataGovernanceTab";
@@ -119,6 +121,7 @@ const timezoneOptions = [
 export default function SettingsPage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { activeClient } = useClientContext();
   const { mainOffset, mobileTopOffset } = useShellLayout();
   const [location, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<SettingsTabId>("personal");
@@ -1858,6 +1861,7 @@ export default function SettingsPage() {
                   </>
                 )}
                 <SettingsWorkspaceRolesGuide />
+                {activeClient && <SettingsClientWorkspaceTab />}
                 {tenantId != null && <SettingsModuleRolesTab tenantId={tenantId} />}
               </TabsContent>
 

@@ -13,4 +13,9 @@ if (!process.env.DATABASE_URL) {
 }
 
 export const pool = new Pool(getDatabasePoolConfig(process.env.DATABASE_URL));
+
+pool.on("error", (err) => {
+  console.warn("[db] Idle pool client error (will be replaced):", err.message);
+});
+
 export const db = drizzle(pool, { schema });

@@ -124,6 +124,20 @@ export function registerCustomerMgmtRoutes(app: Express): void {
     }
   });
 
+  app.post("/api/customer-mgmt/ai-insights", async (req, res) => {
+    if (!requireCommercialAdmin(req, res)) return;
+    try {
+      const { generateCustomerMgmtAiInsights } = await import("./ai-insights");
+      res.json(await generateCustomerMgmtAiInsights());
+    } catch (err) {
+      if (err instanceof CustomerMgmtNotReadyError) {
+        return res.status(404).json({ message: err.message, empty: true });
+      }
+      console.error("Customer mgmt AI insights error:", err);
+      res.status(500).json({ message: "Failed to generate customer insights" });
+    }
+  });
+
   app.get("/api/customer-mgmt/customers/:slug", async (req, res) => {
     if (!requireCommercialAdmin(req, res)) return;
     const slug = String(req.params.slug);

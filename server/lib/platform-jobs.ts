@@ -4,6 +4,7 @@ import { tenants } from "@shared/schema";
 import { runNotificationDigests } from "./notification-digest";
 import { runOrgDataRetention } from "./data-retention";
 import { resetMonthlyAiBalances } from "./ai-tokens";
+import { storage } from "../storage";
 
 const DAILY_MS = 24 * 60 * 60 * 1000;
 
@@ -36,9 +37,16 @@ export function startPlatformBackgroundJobs(): void {
       const n = await resetMonthlyAiBalances();
       if (n > 0) console.log(`[platform-jobs] Reset AI balances for ${n} org(s)`);
     }
+
+    try {
+      const purged = await storage.purgeExpiredDeletedClients();
+      if (purged > 0) console.log(`[platform-jobs] Purged ${purged} expired client workspace(s)`);
+    } catch (err) {
+      console.warn("[platform-jobs] Client purge error:", err);
+    }
   };
 
   setTimeout(() => void runDaily(), 60_000);
   setInterval(() => void runDaily(), DAILY_MS);
-  console.log("[platform-jobs] Daily jobs: digests, retention; AI reset on 1st of month");
+  console.log("[platform-jobs] Daily jobs: digests, retention, client purge; AI reset on 1st of month");
 }

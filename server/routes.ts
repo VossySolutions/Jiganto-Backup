@@ -18,10 +18,13 @@ import {
   requireMasterWorkspace,
 } from "./middleware/workspace";
 import { enforceWorkspaceMutations } from "./middleware/workspace-enforcement";
+import { enforceArchivedWorkspaceReadOnly } from "./middleware/workspace-readonly";
 import { injectWorkspaceQueryScope } from "./middleware/workspace-query-scope";
 import { filterWorkspaceResponses } from "./middleware/workspace-response-filter";
 import { guardWorkspaceResourceAccess } from "./middleware/workspace-resource-guard";
 import { restrictClientWorkspaceModules } from "./middleware/client-workspace-modules";
+import { setWorkspaceRlsContext } from "./middleware/workspace-rls";
+import { attachWorkspaceClaims } from "./lib/workspace-claims";
 import { guardPmProjectScope } from "./middleware/pm-project-guard";
 import {
   workspaceClientId,
@@ -223,11 +226,14 @@ export async function registerRoutes(
   app.use(injectApiTenantScope);
   app.use(enforceOrgMembershipAccess);
   app.use(attachWorkspaceContext);
+  app.use(attachWorkspaceClaims);
   app.use(injectWorkspaceQueryScope);
   app.use(enforceWorkspaceMutations);
+  app.use(enforceArchivedWorkspaceReadOnly);
   app.use(guardPmProjectScope);
   app.use(guardWorkspaceResourceAccess);
   app.use(restrictClientWorkspaceModules);
+  app.use(setWorkspaceRlsContext);
   app.use(enforceModulePermissions);
   app.use(enforceReadOnlyApiAccess);
   app.use(filterWorkspaceResponses);
@@ -264,6 +270,9 @@ export async function registerRoutes(
 
   const { registerDashboardRoutes } = await import("./dashboard/routes");
   registerDashboardRoutes(app);
+
+  const { registerClientRoutes } = await import("./clients/routes");
+  registerClientRoutes(app);
 
   // === Application Routes ===
 
@@ -679,6 +688,14 @@ export async function registerRoutes(
       console.error("Data export download error:", err);
       res.status(500).json({ message: "Failed to generate export" });
     }
+  });
+
+  app.get("/api/ai/status", async (req, res) => {
+    if (!isRequestAuthenticated(req)) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const { getAiModuleStatus } = await import("./lib/openai");
+    res.json(getAiModuleStatus());
   });
 
   app.get("/api/settings/ai-usage", async (req, res) => {
@@ -1151,14 +1168,16 @@ export async function registerRoutes(
     const userId = req.user?.claims?.sub;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     const limit = req.query.limit ? Number(req.query.limit) : undefined;
-    const notifications = await storage.getNotifications(userId, limit);
+    const scopedClientId = workspaceClientId(req);
+    const notifications = await storage.getNotifications(userId, limit, scopedClientId);
     res.json(notifications);
   });
 
   app.get("/api/notifications/unread-count", async (req, res) => {
     const userId = req.user?.claims?.sub;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    const count = await storage.getUnreadNotificationCount(userId);
+    const scopedClientId = workspaceClientId(req);
+    const count = await storage.getUnreadNotificationCount(userId, scopedClientId);
     res.json({ count });
   });
 
@@ -2070,7 +2089,8 @@ export async function registerRoutes(
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const tenantId = getApiTenantIdWithFallback(req);
     try {
-      const inbox = await storage.getChatInbox(userId, tenantId);
+      const scopedClientId = workspaceClientId(req);
+      const inbox = await storage.getChatInbox(userId, tenantId, scopedClientId);
       res.json(inbox);
     } catch (err) {
       console.error("[chat/inbox] error:", err);
@@ -5425,6 +5445,26 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     } catch (err) {
       console.error("Error fetching documents:", err);
       res.status(500).json({ message: "Failed to fetch documents" });
+    }
+  });
+
+  app.get("/api/search", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    const query = String(req.query.q || "").trim();
+    if (!query) return res.json([]);
+    try {
+      const hits = await storage.globalSearch(
+        userId,
+        tenantId,
+        query,
+        resolveListClientId(req),
+      );
+      res.json(hits);
+    } catch (err) {
+      console.error("[search] error:", err);
+      res.status(500).json({ message: "Search failed" });
     }
   });
 
@@ -10964,164 +11004,6 @@ Use a mix of question types appropriate to the topic. For satisfaction/rating to
     try {
       const responses = await storage.getSurveyResponses(Number(req.params.id));
       res.json(responses);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // ===== Clients =====
-
-  app.get("/api/clients", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const tenantId = req.workspace?.tenantId ?? 1;
-      const ws = req.workspace;
-      if (ws?.mode === "client" && ws.client) {
-        const summaries = await storage.getClientProjectSummary(tenantId);
-        const summary = summaries.find((s) => s.clientId === ws.client!.id);
-        return res.json([{
-          ...ws.client,
-          projectCount: summary?.projectCount ?? 0,
-          atRiskCount: summary?.atRiskCount ?? 0,
-        }]);
-      }
-      const userId = (req.user as { claims?: { sub?: string } })?.claims?.sub ?? "";
-      const clientList = await storage.getAccessibleClients(userId, tenantId, {
-        platformRole: req.permissions?.platformRole,
-        isJigantoStaff: req.permissions?.isJigantoStaff,
-      });
-      const summaries = await storage.getClientProjectSummary(tenantId);
-      const summaryMap = new Map(summaries.map(s => [s.clientId, s]));
-      const result = clientList
-        .filter((c) => !isLegacySampleClient(c.shortCode))
-        .map((c) => ({
-          ...c,
-          projectCount: summaryMap.get(c.id)?.projectCount ?? 0,
-          atRiskCount: summaryMap.get(c.id)?.atRiskCount ?? 0,
-        }));
-      res.json(result);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.get("/api/clients/pmo-dashboard", requireMasterWorkspace, async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const tenantId = 1;
-      const clientList = await storage.getClients(tenantId);
-      const summaries = await storage.getClientProjectSummary(tenantId);
-      const summaryMap = new Map(summaries.map(s => [s.clientId, s]));
-      const internalSummary = summaryMap.get(null) ?? { clientId: null, projectCount: 0, atRiskCount: 0 };
-      const cards = clientList.map(c => ({
-        ...c,
-        projectCount: summaryMap.get(c.id)?.projectCount ?? 0,
-        atRiskCount: summaryMap.get(c.id)?.atRiskCount ?? 0,
-      }));
-      const totals = {
-        totalClients: clientList.length,
-        totalProjects: summaries.reduce((sum, s) => sum + s.projectCount, 0),
-        totalAtRisk: summaries.reduce((sum, s) => sum + s.atRiskCount, 0),
-        internalProjects: internalSummary.projectCount,
-      };
-      res.json({ clients: cards, totals });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.get("/api/clients/by-slug/:slug", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const tenantId = req.workspace?.tenantId ?? 1;
-      const client = await storage.getClientBySlug(req.params.slug, tenantId);
-      if (!client) return res.status(404).json({ message: "Workspace not found" });
-      if (req.workspace?.mode === "client" && req.workspace.clientId !== client.id) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-      res.json(client);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // Returns the calling user's own client membership (role + client), or null for SI users
-  app.get("/api/clients/me", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const userId = (req.user as any)?.claims?.sub ?? (req.user as any)?.id;
-      const tenantId = getApiTenantIdWithFallback(req);
-      const membership = await storage.getClientMembershipByUserId(userId, tenantId);
-      res.json(membership ?? null);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.get("/api/clients/:id", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const client = await storage.getClientById(Number(req.params.id), 1);
-      if (!client) return res.status(404).json({ message: "Client not found" });
-      const users = await storage.getClientUsers(client.id);
-      res.json({ ...client, users });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.post("/api/clients", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const tenantId = 1;
-      let slug = typeof req.body.slug === "string" && req.body.slug.trim()
-        ? slugify(req.body.slug)
-        : slugify(req.body.name ?? "workspace");
-      const existing = await storage.getClients(tenantId);
-      const taken = new Set(existing.map((c) => c.slug).filter(Boolean));
-      let suffix = 0;
-      let candidate = slug;
-      while (taken.has(candidate)) {
-        suffix += 1;
-        candidate = `${slug}-${suffix}`;
-      }
-      slug = candidate;
-      const parsed = insertClientSchema.safeParse({ ...req.body, tenantId, slug });
-      if (!parsed.success) return res.status(400).json({ message: "Validation error", errors: parsed.error.errors });
-      const client = await storage.createClient(parsed.data);
-      res.status(201).json(client);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.put("/api/clients/:id", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const client = await storage.updateClient(Number(req.params.id), 1, req.body);
-      if (!client) return res.status(404).json({ message: "Client not found" });
-      res.json(client);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.delete("/api/clients/:id", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const client = await storage.archiveClient(Number(req.params.id), 1);
-      if (!client) return res.status(404).json({ message: "Client not found" });
-      res.json({ success: true });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.get("/api/clients/:id/users", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const users = await storage.getClientUsers(Number(req.params.id));
-      res.json(users);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.post("/api/clients/:id/users", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const parsed = insertClientUserSchema.safeParse({ ...req.body, clientId: Number(req.params.id), tenantId: 1 });
-      if (!parsed.success) return res.status(400).json({ message: "Validation error", errors: parsed.error.errors });
-      const cu = await storage.addClientUser(parsed.data);
-      res.status(201).json(cu);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.delete("/api/clients/:id/users/:userId", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      await storage.removeClientUser(Number(req.params.id), req.params.userId);
-      res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

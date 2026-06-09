@@ -130,7 +130,7 @@ export const moduleMetadata: ModuleMetadata[] = [
     key: "clients",
     name: "Clients",
     icon: CRMIcon,
-    href: "/modules/clients",
+    href: "/clients",
     shortDescription: "Client workspace management",
     longDescription: "Manage client workspaces, access, and delivery context for consulting engagements.",
     category: "Management",

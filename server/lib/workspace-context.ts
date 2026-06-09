@@ -1,12 +1,9 @@
-import { eq, and } from "drizzle-orm";
 import type { Client } from "@shared/models/clients";
 import {
-  clientWorkspaceGrants,
   canViewPmoMasterForRole,
   type PlatformRole,
 } from "@shared/models/permissions";
 import { storage } from "../storage";
-import { db } from "../db";
 import type { EffectivePermissions } from "./permissions";
 
 export type WorkspaceViewMode = "master" | "client";
@@ -38,17 +35,8 @@ async function userMayAccessClient(
   if (role === "si_super_admin" || role === "client_jiganto_user") return true;
   if (role !== "si_consultant_pm") return false;
 
-  const grants = await db
-    .select()
-    .from(clientWorkspaceGrants)
-    .where(
-      and(
-        eq(clientWorkspaceGrants.userId, userId),
-        eq(clientWorkspaceGrants.tenantId, tenantId),
-      ),
-    );
-  if (grants.length === 0) return true;
-  return grants.some((g) => g.clientId === clientId);
+  const assigned = await storage.getAssignedClientIdsForUser(userId, tenantId);
+  return assigned.includes(clientId);
 }
 
 /**
@@ -64,7 +52,7 @@ export async function resolveWorkspaceContext(
   const platformRole = permissions?.platformRole ?? "client_executive";
   const canViewPmoMaster = canViewPmoMasterForRole(platformRole);
 
-  const membership = await storage.getClientMembershipByUserId(userId, tenantId);
+  const membership = await storage.getLockedClientMembershipByUserId(userId, tenantId);
   if (membership) {
     return {
       tenantId,
@@ -153,4 +141,19 @@ export class WorkspaceAccessError extends Error {
 
 export function requestedClientIdFromQuery(query: Record<string, unknown>): number | null {
   return parseClientId(query.clientId ?? query.workspaceId);
+}
+
+/** Resolve active workspace — session first (Docs §8.2), then header, then query fallback. */
+export function resolveRequestedClientId(
+  query: Record<string, unknown>,
+  sessionClientId?: number | null,
+  workspaceHeader?: string | string[] | undefined,
+): number | null {
+  if (sessionClientId != null && sessionClientId > 0) return sessionClientId;
+  const rawHeader = Array.isArray(workspaceHeader) ? workspaceHeader[0] : workspaceHeader;
+  if (rawHeader) {
+    const fromHeader = parseClientId(rawHeader);
+    if (fromHeader) return fromHeader;
+  }
+  return requestedClientIdFromQuery(query);
 }

@@ -46,7 +46,18 @@ export function registerPermissionsRoutes(app: Express): void {
           ? {
               mode: req.workspace.mode,
               clientId: req.workspace.clientId,
+              workspaceId: req.workspace.clientId,
               canViewPmoMaster: req.workspace.canViewPmoMaster,
+              client: req.workspace.client
+                ? {
+                    id: req.workspace.client.id,
+                    name: req.workspace.client.name,
+                    slug: req.workspace.client.slug,
+                    shortCode: req.workspace.client.shortCode,
+                    color: req.workspace.client.color,
+                    status: req.workspace.client.status,
+                  }
+                : null,
             }
           : undefined,
       });

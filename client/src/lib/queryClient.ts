@@ -1,5 +1,4 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { withWorkspaceScope } from "./workspace-scope";
 import { getStaffOrgOverride } from "./staff-org-scope";
 import { getSupabaseAccessToken } from "./supabase-session";
 import { supabaseAuthEnabled } from "./supabase";
@@ -29,20 +28,8 @@ function scopeApiUrl(url: string): string {
     const sep = scoped.includes("?") ? "&" : "?";
     scoped = `${scoped}${sep}tenantId=${staffOrg}`;
   }
-  if (!activeWorkspaceClientId) return scoped;
-  if (!scoped.startsWith("/api")) return scoped;
-  if (scoped.includes("clientId=")) return scoped;
-  if (scoped.startsWith("/api/clients/pmo-dashboard")) return scoped;
-  if (scoped.startsWith("/api/clients/me")) return scoped;
-  if (scoped.startsWith("/api/pm/projects") && scoped.includes("tenantId=")) return scoped;
-  if (scoped.startsWith("/api/auth/")) return scoped;
-  if (scoped.startsWith("/api/settings/")) return scoped;
-  if (scoped.startsWith("/api/org-memberships")) return scoped;
-  if (scoped.startsWith("/api/tenants")) return scoped;
-  if (scoped.startsWith("/api/client-workspace-grants")) return scoped;
-  if (scoped.startsWith("/api/customer-mgmt")) return scoped;
-  if (scoped.startsWith("/api/dashboard/preferences")) return scoped;
-  return withWorkspaceScope(scoped, activeWorkspaceClientId);
+  // Workspace scope is enforced server-side via session workspace_id (Docs §8.2).
+  return scoped;
 }
 
 async function throwIfResNotOk(res: Response) {

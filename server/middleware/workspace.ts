@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { isApiRequest } from "../lib/request-paths";
 import {
   resolveWorkspaceContext,
-  requestedClientIdFromQuery,
+  resolveRequestedClientId,
   WorkspaceAccessError,
   type WorkspaceContext,
 } from "../lib/workspace-context";
@@ -50,8 +50,10 @@ export async function attachWorkspaceContext(
   }
 
   try {
-    const requested = requestedClientIdFromQuery(
+    const requested = resolveRequestedClientId(
       req.query as Record<string, unknown>,
+      req.session?.activeClientId,
+      req.headers["x-workspace-id"],
     );
     req.workspace = await resolveWorkspaceContext(
       userId,

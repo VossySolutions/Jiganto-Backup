@@ -11,3 +11,10 @@ export function isDashboardPath(pathname: string): boolean {
 export function workspaceDashboardPath(slug: string): string {
   return `/ws/${slug}`;
 }
+
+/** Client workspaces module (Module 05 — spec route). */
+export const CLIENTS_PATH = "/clients";
+
+export function clientDetailPath(id: number): string {
+  return `${CLIENTS_PATH}/${id}`;
+}

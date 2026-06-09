@@ -13,6 +13,14 @@ export function workspacePathFromClient(client: Pick<Client, "slug"> | null): st
   return workspaceDashboardPath(client.slug);
 }
 
+/** Dashboard href — stays on /ws/:slug when inside a client workspace. */
+export function dashboardPathForClient(
+  client: Pick<Client, "slug"> | null | undefined,
+): string {
+  if (client?.slug) return workspaceDashboardPath(client.slug);
+  return DASHBOARD_PATH;
+}
+
 export function parseWorkspaceSlug(pathname: string): string | null {
   const m = pathname.match(/^\/ws\/([^/]+)/);
   return m ? decodeURIComponent(m[1]) : null;

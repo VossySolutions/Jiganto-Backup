@@ -85,6 +85,7 @@ export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   tenantId: integer("tenant_id").references(() => tenants.id),
+  clientId: integer("client_id"),
   title: text("title").notNull(),
   message: text("message"),
   type: text("type").default("info"), // info, warning, success, error, workflow, system

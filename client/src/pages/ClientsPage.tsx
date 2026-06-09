@@ -1,566 +1,748 @@
 import { useState } from "react";
+
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
-import { DASHBOARD_PATH } from "@shared/app-routes";
+
+import { Redirect } from "wouter";
+
 import { Sidebar } from "@/components/Sidebar";
+
 import { useShellLayout } from "@/hooks/use-shell-layout";
-import { useClientContext, type Client } from "@/hooks/use-client-context";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+
+import { useClientContext } from "@/hooks/use-client-context";
+
+import { usePermissions } from "@/hooks/use-permissions";
+
+import type { PlatformRole } from "@shared/models/permissions";
+
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
+
 import { cn } from "@/lib/utils";
+
 import { useToast } from "@/hooks/use-toast";
+
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
+
   AlertDialog,
+
   AlertDialogAction,
+
   AlertDialogCancel,
+
   AlertDialogContent,
+
   AlertDialogDescription,
+
   AlertDialogFooter,
+
   AlertDialogHeader,
+
   AlertDialogTitle,
+
 } from "@/components/ui/alert-dialog";
+
+import { Plus, Briefcase, TrendingUp, Users, AlertTriangle } from "lucide-react";
+
+import { ClientFormDialog } from "@/components/clients/ClientFormDialog";
+
+import { ClientCard } from "@/components/clients/ClientCard";
+
+import { ClientDetailPanel } from "@/components/clients/ClientDetailPanel";
+
+import { ClientMembersPanel } from "@/components/clients/ClientMembersPanel";
+
+import { ClientDeleteDialog } from "@/components/clients/ClientDeleteDialog";
+
+import { ClientModuleVisibilityPanel } from "@/components/clients/ClientModuleVisibilityPanel";
+
+import { ClientAdminPanel } from "@/components/clients/ClientAdminPanel";
+
 import {
-  Plus,
-  MoreHorizontal,
-  ArrowRightCircle,
-  Pencil,
-  Archive,
-  Briefcase,
-  TrendingUp,
-  AlertTriangle,
-  Users,
-  RefreshCw,
-} from "lucide-react";
 
-const PRESET_COLORS = [
-  "#185FA5", "#0F6E56", "#993C1D", "#7C3AED",
-  "#0EA5E9", "#EC4899", "#F97316", "#10B981",
-  "#6366F1", "#EF4444", "#14B8A6", "#F59E0B",
-];
+  ClientsKpiLoading,
 
-function generateShortCode(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length >= 3) return (words[0][0] + words[1][0] + words[2][0]).toUpperCase();
-  if (words.length === 2) return (words[0].slice(0, 2) + words[1][0]).toUpperCase();
-  return name.slice(0, 3).toUpperCase();
-}
+  ClientsCardGridLoading,
 
-interface ClientFormData {
-  name: string;
-  shortCode: string;
-  color: string;
-  industry: string;
-  website: string;
-  notes: string;
-}
+  ClientsPanelState,
 
-const emptyForm: ClientFormData = {
-  name: "",
-  shortCode: "",
-  color: PRESET_COLORS[0],
-  industry: "",
-  website: "",
-  notes: "",
-};
+} from "@/components/clients/ClientLoadingStates";
 
-function ClientFormDialog({
-  open,
-  onClose,
-  editing,
-}: {
-  open: boolean;
-  onClose: () => void;
-  editing: Client | null;
-}) {
-  const { toast } = useToast();
-  const [form, setForm] = useState<ClientFormData>(
-    editing
-      ? {
-          name: editing.name,
-          shortCode: editing.shortCode,
-          color: editing.color,
-          industry: editing.industry || "",
-          website: editing.website || "",
-          notes: editing.notes || "",
-        }
-      : emptyForm
-  );
+import { clientDetailPath } from "@shared/app-routes";
+import { useLocation } from "wouter";
 
-  const handleNameChange = (val: string) => {
-    setForm(f => ({
-      ...f,
-      name: val,
-      shortCode: editing ? f.shortCode : generateShortCode(val),
-    }));
-  };
+import type { ClientKpis, ClientWorkspace } from "@/components/clients/types";
 
-  const createMutation = useMutation({
-    mutationFn: (data: Partial<ClientFormData>) =>
-      apiRequest("POST", "/api/clients", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      toast({ title: "Client created", description: `${form.name} has been added.` });
-      onClose();
-    },
-    onError: () => toast({ title: "Error", description: "Failed to create client.", variant: "destructive" }),
-  });
 
-  const updateMutation = useMutation({
-    mutationFn: (data: Partial<ClientFormData>) =>
-      apiRequest("PUT", `/api/clients/${editing!.id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      toast({ title: "Client updated" });
-      onClose();
-    },
-    onError: () => toast({ title: "Error", description: "Failed to update client.", variant: "destructive" }),
-  });
-
-  const isPending = createMutation.isPending || updateMutation.isPending;
-
-  const handleSubmit = () => {
-    if (!form.name.trim()) return;
-    const payload = {
-      name: form.name.trim(),
-      shortCode: form.shortCode.trim() || generateShortCode(form.name),
-      color: form.color,
-      industry: form.industry.trim() || undefined,
-      website: form.website.trim() || undefined,
-      notes: form.notes.trim() || undefined,
-    };
-    editing ? updateMutation.mutate(payload) : createMutation.mutate(payload);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="sm:max-w-[480px]">
-        <SubmitForm onSubmit={handleSubmit} disabled={!form.name.trim() || isPending}>
-        <DialogHeader>
-          <DialogTitle>{editing ? "Edit Client" : "Add Client Workspace"}</DialogTitle>
-          <DialogDescription>
-            {editing ? "Update client details." : "Create a new customer workspace to scope data by client."}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label>Client Name <span className="text-destructive">*</span></Label>
-            <Input
-              data-testid="input-client-name"
-              placeholder="e.g. Apex Global Bank"
-              value={form.name}
-              onChange={e => handleNameChange(e.target.value)}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Short Code</Label>
-              <Input
-                data-testid="input-client-shortcode"
-                placeholder="e.g. AGB"
-                maxLength={5}
-                value={form.shortCode}
-                onChange={e => setForm(f => ({ ...f, shortCode: e.target.value.toUpperCase() }))}
-              />
-              <p className="text-[11px] text-muted-foreground">Up to 5 characters, shown in badge</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Industry</Label>
-              <Input
-                data-testid="input-client-industry"
-                placeholder="e.g. Financial Services"
-                value={form.industry}
-                onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Brand Colour</Label>
-            <div className="flex flex-wrap gap-2">
-              {PRESET_COLORS.map(c => (
-                <button
-                  key={c}
-                  type="button"
-                  data-testid={`color-${c}`}
-                  className={cn(
-                    "h-7 w-7 rounded-md transition-all",
-                    form.color === c ? "ring-2 ring-offset-2 ring-primary scale-110" : "hover:scale-105"
-                  )}
-                  style={{ backgroundColor: c }}
-                  onClick={() => setForm(f => ({ ...f, color: c }))}
-                />
-              ))}
-              <input
-                type="color"
-                value={form.color}
-                onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
-                className="h-7 w-7 rounded-md cursor-pointer border border-border"
-                title="Custom colour"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Website</Label>
-            <Input
-              data-testid="input-client-website"
-              placeholder="https://example.com"
-              value={form.website}
-              onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Notes</Label>
-            <Textarea
-              data-testid="input-client-notes"
-              placeholder="Engagement overview, key contacts, context…"
-              rows={3}
-              value={form.notes}
-              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>Cancel</Button>
-          <Button
-            type="submit"
-            data-testid="button-save-client"
-          >
-            {isPending ? "Saving…" : editing ? "Save Changes" : "Create Client"}
-          </Button>
-        </DialogFooter>
-        </SubmitForm>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 function KpiCard({
+
   label,
+
   value,
+
   icon: Icon,
+
   color,
+
+  loading,
+
 }: {
+
   label: string;
+
   value: string | number;
+
   icon: React.ComponentType<{ className?: string }>;
+
   color: string;
-}) {
-  return (
-    <div className="rounded-xl border bg-card p-4 flex items-center gap-4">
-      <div className="h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: color + "20" }}>
-        <Icon className="h-5 w-5" style={{ color }} />
-      </div>
-      <div>
-        <p className="text-2xl font-bold">{value}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
-      </div>
-    </div>
-  );
-}
 
-function ClientCard({
-  client,
-  onEdit,
-  onArchive,
-}: {
-  client: Client;
-  onEdit: (c: Client) => void;
-  onArchive: (c: Client) => void;
-}) {
-  const { setActiveClient, activeClient } = useClientContext();
-  const [, navigate] = useLocation();
-  const isActive = activeClient?.id === client.id;
+  loading?: boolean;
 
-  const handleEnter = () => {
-    setActiveClient(client);
-    navigate(DASHBOARD_PATH);
-  };
+}) {
 
   return (
-    <div
-      data-testid={`client-card-${client.id}`}
-      className={cn(
-        "rounded-xl border bg-card p-5 flex flex-col gap-4 transition-all hover:shadow-md",
-        isActive && "ring-2"
-      )}
-      style={isActive ? { ringColor: client.color } : undefined}
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className="h-12 w-12 rounded-xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 shadow-sm"
-          style={{ backgroundColor: client.color }}
-          data-testid={`client-badge-${client.id}`}
-        >
-          {client.shortCode}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-sm truncate" data-testid={`client-name-${client.id}`}>{client.name}</h3>
-            {isActive && (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0" style={{ borderColor: client.color, color: client.color }}>
-                Active
-              </Badge>
-            )}
-          </div>
-          {client.industry && (
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">{client.industry}</p>
-          )}
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" data-testid={`client-menu-${client.id}`}>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onClick={handleEnter} className="gap-2 cursor-pointer">
-              <ArrowRightCircle className="h-4 w-4" />
-              Enter workspace
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onEdit(client)} className="gap-2 cursor-pointer">
-              <Pencil className="h-4 w-4" />
-              Edit details
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => onArchive(client)}
-              className="gap-2 cursor-pointer text-destructive focus:text-destructive"
-            >
-              <Archive className="h-4 w-4" />
-              Archive
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
 
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <div className="rounded-lg bg-muted/50 px-3 py-2">
-          <p className="text-muted-foreground">Projects</p>
-          <p className="font-semibold mt-0.5">{client.projectCount ?? 0}</p>
-        </div>
-        <div className="rounded-lg bg-muted/50 px-3 py-2">
-          <p className="text-muted-foreground">At Risk</p>
-          <p className={cn("font-semibold mt-0.5", (client.atRiskCount ?? 0) > 0 ? "text-destructive" : "")}>
-            {client.atRiskCount ?? 0}
-          </p>
-        </div>
-      </div>
+    <div className="rounded-2xl border bg-card/90 backdrop-blur-sm p-4 sm:p-5 flex items-center gap-3 sm:gap-4 shadow-sm hover:shadow-md transition-shadow">
 
-      <Button
-        size="sm"
-        className="w-full gap-2 text-white"
-        style={{ backgroundColor: client.color }}
-        onClick={handleEnter}
-        data-testid={`button-enter-${client.id}`}
+      <div
+
+        className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl flex items-center justify-center flex-shrink-0"
+
+        style={{ backgroundColor: color + "18" }}
+
       >
-        <ArrowRightCircle className="h-4 w-4" />
-        {isActive ? "Currently viewing" : "Enter workspace"}
-      </Button>
+
+        <Icon className="h-5 w-5" style={{ color }} />
+
+      </div>
+
+      <div className="min-w-0">
+
+        <p className={cn("text-xl sm:text-2xl font-bold tabular-nums truncate", loading && "opacity-60")}>
+
+          {loading ? "—" : value}
+
+        </p>
+
+        <p className="text-xs text-muted-foreground truncate">{label}</p>
+
+      </div>
+
     </div>
+
   );
+
 }
+
+
 
 export default function ClientsPage() {
-  const { mainOffset, mobileTopOffset } = useShellLayout();
-  const { toast } = useToast();
-  const [filter, setFilter] = useState<"active" | "archived" | "all">("active");
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<Client | null>(null);
-  const [archiving, setArchiving] = useState<Client | null>(null);
 
-  const { data: clients = [], isLoading } = useQuery<Client[]>({
-    queryKey: ["/api/clients"],
+  const { mainOffset, mobileTopOffset } = useShellLayout();
+
+  const { toast } = useToast();
+
+  const { isClientUser } = useClientContext();
+
+  const { platformRole, isJigantoStaff, permissions } = usePermissions();
+
+  const tenantId = permissions?.orgId;
+
+
+
+  const canAccess =
+
+    isJigantoStaff ||
+
+    platformRole === "si_super_admin" ||
+
+    platformRole === "si_consultant_pm" ||
+
+    platformRole === "jiganto_staff";
+
+  const canCreate = isJigantoStaff || platformRole === "si_super_admin";
+
+  const canDelete = canCreate;
+
+  const canAdmin = isJigantoStaff || platformRole === "si_super_admin";
+
+  const [, navigate] = useLocation();
+
+
+
+  const [filter, setFilter] = useState<"active" | "archived" | "all">("active");
+
+  const [showForm, setShowForm] = useState(false);
+
+  const [editing, setEditing] = useState<ClientWorkspace | null>(null);
+
+  const [archiving, setArchiving] = useState<ClientWorkspace | null>(null);
+
+  const [deleting, setDeleting] = useState<ClientWorkspace | null>(null);
+
+  const [detailClient, setDetailClient] = useState<ClientWorkspace | null>(null);
+
+  const [membersClient, setMembersClient] = useState<ClientWorkspace | null>(null);
+
+  const [visibilityClient, setVisibilityClient] = useState<ClientWorkspace | null>(null);
+
+
+
+  const {
+
+    data: clients = [],
+
+    isLoading: clientsLoading,
+
+    isError: clientsError,
+
+    error: clientsQueryError,
+
+    refetch: refetchClients,
+
+  } = useQuery<ClientWorkspace[]>({
+
+    queryKey: ["/api/clients", "all"],
+
+    queryFn: async () => {
+
+      const res = await fetchWithAuth("/api/clients?includeArchived=true");
+
+      if (!res.ok) throw new Error(await res.text());
+
+      return res.json();
+
+    },
+
+    enabled: canAccess,
+
   });
+
+
+
+  const { data: kpis, isLoading: kpisLoading } = useQuery<ClientKpis>({
+
+    queryKey: ["/api/clients/kpis"],
+
+    enabled: canAccess,
+
+  });
+
+
+
+  const { data: orgData } = useQuery({
+
+    queryKey: ["/api/org-memberships", tenantId],
+
+    enabled: canAccess && !!tenantId,
+
+    queryFn: async () => {
+
+      const res = await fetchWithAuth(`/api/org-memberships?orgId=${tenantId}`);
+
+      if (!res.ok) throw new Error(await res.text());
+
+      return res.json() as Promise<{
+
+        memberships: {
+
+          userId: string;
+
+          platformRole: PlatformRole;
+
+          user?: { email: string | null; firstName: string | null; lastName: string | null };
+
+        }[];
+
+      }>;
+
+    },
+
+  });
+
+
+
+  const siMembers = (orgData?.memberships ?? [])
+
+    .filter((m) => m.platformRole === "si_consultant_pm" || m.platformRole === "si_super_admin")
+
+    .map((m) => ({
+
+      userId: m.userId,
+
+      label:
+
+        `${m.user?.firstName ?? ""} ${m.user?.lastName ?? ""}`.trim() ||
+
+        m.user?.email ||
+
+        m.userId,
+
+    }));
+
+
 
   const archiveMutation = useMutation({
+
     mutationFn: (id: number) => apiRequest("DELETE", `/api/clients/${id}`, {}),
+
     onSuccess: () => {
+
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/clients/kpis"] });
+
       toast({ title: "Client archived" });
+
       setArchiving(null);
+
     },
+
     onError: () => toast({ title: "Error", description: "Failed to archive client.", variant: "destructive" }),
+
   });
 
-  const displayed = clients.filter(c => {
+
+
+  const unarchiveMutation = useMutation({
+
+    mutationFn: (id: number) => apiRequest("POST", `/api/clients/${id}/unarchive`, {}),
+
+    onSuccess: () => {
+
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/clients/kpis"] });
+
+      toast({ title: "Workspace restored" });
+
+    },
+
+  });
+
+
+
+  if (isClientUser || !canAccess) {
+
+    return <Redirect to="/" />;
+
+  }
+
+
+
+  const displayed = clients.filter((c) => {
+
     if (filter === "active") return c.status === "active";
-    if (filter === "archived") return c.status === "archived";
+
+    if (filter === "archived") return c.status === "archived" || c.status === "pending_delete";
+
     return true;
+
   });
 
-  const activeCount = clients.filter(c => c.status === "active").length;
-  const atRiskTotal = clients.reduce((sum, c) => sum + (c.atRiskCount ?? 0), 0);
-  const totalProjects = clients.reduce((sum, c) => sum + (c.projectCount ?? 0), 0);
 
-  const openForm = (client?: Client) => {
+
+  const openForm = (client?: ClientWorkspace) => {
+
     setEditing(client ?? null);
+
     setShowForm(true);
+
   };
+
+
 
   const closeForm = () => {
+
     setShowForm(false);
+
     setEditing(null);
+
   };
 
+
+
+  const handleEdit = (client: ClientWorkspace) => {
+
+    setDetailClient(null);
+
+    openForm(client);
+
+  };
+
+
+
+  const clientsInitialLoad = clientsLoading && clients.length === 0;
+
+  const kpisBusy = kpisLoading && !kpis;
+
+
+
   return (
+
     <div className="flex h-screen bg-background">
+
       <Sidebar />
+
       <main className={cn("flex-1 flex flex-col overflow-hidden transition-all duration-300", mainOffset, mobileTopOffset)}>
+
         <div className="flex-1 overflow-y-auto">
-          {/* Page header */}
-          <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-bold">Client Workspaces</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  Manage customer engagements and switch between isolated client views
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  className="gap-2"
-                  onClick={() => openForm()}
-                  data-testid="button-add-client"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Client
-                </Button>
-              </div>
-            </div>
-          </div>
 
-          <div className="p-6 space-y-6">
-            {/* KPI cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <KpiCard label="Total Clients" value={clients.length} icon={Briefcase} color="#185FA5" />
-              <KpiCard label="Active Engagements" value={activeCount} icon={TrendingUp} color="#0F6E56" />
-              <KpiCard label="Projects Tracked" value={totalProjects} icon={Users} color="#7C3AED" />
-              <KpiCard label="At-Risk Projects" value={atRiskTotal} icon={AlertTriangle} color={atRiskTotal > 0 ? "#EF4444" : "#6B7280"} />
-            </div>
+          <div className="sticky top-0 z-10 border-b bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75">
 
-            {/* Filter bar */}
-            <div className="flex items-center gap-1 border-b">
-              {(["active", "archived", "all"] as const).map(f => (
-                <button
-                  key={f}
-                  data-testid={`filter-${f}`}
-                  onClick={() => setFilter(f)}
-                  className={cn(
-                    "px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px capitalize",
-                    filter === f
-                      ? "border-primary text-primary"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {f}
-                  {f !== "all" && (
-                    <span className="ml-1.5 text-xs text-muted-foreground">
-                      ({clients.filter(c => c.status === f).length})
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
+            <div className="px-4 sm:px-6 py-4 sm:py-5">
 
-            {/* Client grid */}
-            {isLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="rounded-xl border bg-card p-5 h-48 animate-pulse" />
-                ))}
-              </div>
-            ) : displayed.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                  <Briefcase className="h-8 w-8 text-muted-foreground" />
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+                <div className="min-w-0">
+
+                  <div className="flex items-center gap-2">
+
+                    <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+
+                      <Briefcase className="h-4 w-4 text-primary" />
+
+                    </div>
+
+                    <div>
+
+                      <h1 className="text-lg sm:text-xl font-bold tracking-tight">Client Workspaces</h1>
+
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 line-clamp-2 sm:line-clamp-1">
+
+                        Manage engagements and switch between isolated client views
+
+                      </p>
+
+                    </div>
+
+                  </div>
+
                 </div>
-                <h3 className="font-semibold text-lg mb-1">
-                  {filter === "archived" ? "No archived clients" : "No client workspaces yet"}
-                </h3>
-                <p className="text-sm text-muted-foreground mb-4 max-w-xs">
-                  {filter === "archived"
-                    ? "Archived clients will appear here."
-                    : "Add a client workspace to isolate projects, tasks, and CRM data for each customer engagement."}
-                </p>
-                {filter !== "archived" && (
-                  <Button size="sm" className="gap-2" onClick={() => openForm()}>
+
+                {canCreate && (
+
+                  <Button
+
+                    size="sm"
+
+                    className="gap-2 w-full sm:w-auto shrink-0"
+
+                    onClick={() => openForm()}
+
+                    data-testid="button-add-client"
+
+                  >
+
                     <Plus className="h-4 w-4" />
-                    Add client
+
+                    Add Client
+
                   </Button>
+
                 )}
+
               </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {displayed.map(client => (
-                  <ClientCard
-                    key={client.id}
-                    client={client}
-                    onEdit={openForm}
-                    onArchive={setArchiving}
-                  />
-                ))}
-              </div>
-            )}
+
+            </div>
+
           </div>
+
+
+
+          <div className="px-4 sm:px-6 py-5 sm:py-6 space-y-5 sm:space-y-6 max-w-[1600px]">
+
+            {kpisBusy ? (
+
+              <ClientsKpiLoading />
+
+            ) : (
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+
+                <KpiCard label="Total Clients" value={kpis?.totalClients ?? clients.length} icon={Briefcase} color="#185FA5" loading={kpisBusy} />
+
+                <KpiCard label="Active Engagements" value={kpis?.activeEngagements ?? 0} icon={TrendingUp} color="#0F6E56" loading={kpisBusy} />
+
+                <KpiCard label="Projects Tracked" value={kpis?.projectsTracked ?? 0} icon={Users} color="#7C3AED" loading={kpisBusy} />
+
+                <KpiCard
+
+                  label="At-Risk Projects"
+
+                  value={kpis?.atRiskProjects ?? 0}
+
+                  icon={AlertTriangle}
+
+                  color={(kpis?.atRiskProjects ?? 0) > 0 ? "#EF4444" : "#6B7280"}
+
+                  loading={kpisBusy}
+
+                />
+
+              </div>
+
+            )}
+
+
+
+            <ClientAdminPanel canAdmin={canAdmin} />
+
+
+
+            <div className="flex items-center gap-1 border-b overflow-x-auto scrollbar-none -mx-1 px-1">
+
+              {(["active", "archived", "all"] as const).map((f) => (
+
+                <button
+
+                  key={f}
+
+                  data-testid={`filter-${f}`}
+
+                  onClick={() => setFilter(f)}
+
+                  className={cn(
+
+                    "px-3 sm:px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px capitalize whitespace-nowrap shrink-0",
+
+                    filter === f
+
+                      ? "border-primary text-primary"
+
+                      : "border-transparent text-muted-foreground hover:text-foreground",
+
+                  )}
+
+                >
+
+                  {f}
+
+                  {f !== "all" && (
+
+                    <span className="ml-1.5 text-xs text-muted-foreground tabular-nums">
+
+                      ({clients.filter((c) =>
+
+                        f === "archived"
+
+                          ? c.status === "archived" || c.status === "pending_delete"
+
+                          : c.status === f,
+
+                      ).length})
+
+                    </span>
+
+                  )}
+
+                </button>
+
+              ))}
+
+            </div>
+
+
+
+            <ClientsPanelState
+
+              isLoading={clientsInitialLoad}
+
+              isError={clientsError}
+
+              error={clientsQueryError}
+
+              onRetry={() => void refetchClients()}
+
+              loadingFallback={<ClientsCardGridLoading />}
+
+            >
+
+            {displayed.length === 0 ? (
+
+              <div className="flex flex-col items-center justify-center py-16 sm:py-20 text-center px-4 rounded-2xl border border-dashed bg-muted/20">
+
+                <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
+
+                  <Briefcase className="h-7 w-7 text-muted-foreground" />
+
+                </div>
+
+                <h3 className="font-semibold text-lg mb-1">
+
+                  {filter === "archived" ? "No archived clients" : "No client workspaces yet"}
+
+                </h3>
+
+                <p className="text-sm text-muted-foreground mb-5 max-w-sm">
+
+                  {filter === "archived"
+
+                    ? "Archived clients will appear here."
+
+                    : "Add a client workspace to isolate projects, tasks, and CRM data for each customer engagement."}
+
+                </p>
+
+                {filter !== "archived" && canCreate && (
+
+                  <Button size="sm" className="gap-2" onClick={() => openForm()}>
+
+                    <Plus className="h-4 w-4" />
+
+                    Add client
+
+                  </Button>
+
+                )}
+
+              </div>
+
+            ) : (
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
+
+                {displayed.map((client) => (
+
+                  <ClientCard
+
+                    key={client.id}
+
+                    client={client}
+
+                    onViewDetails={(c) => navigate(clientDetailPath(c.id))}
+
+                    onArchive={setArchiving}
+
+                    onDelete={setDeleting}
+
+                    onUnarchive={(c) => unarchiveMutation.mutate(c.id)}
+
+                    canCreate={canCreate}
+
+                    canDelete={canDelete}
+
+                  />
+
+                ))}
+
+              </div>
+
+            )}
+
+            </ClientsPanelState>
+
+          </div>
+
         </div>
+
       </main>
 
-      {/* Create / Edit modal */}
+
+
       {showForm && (
-        <ClientFormDialog
-          open={showForm}
-          onClose={closeForm}
-          editing={editing}
-        />
+
+        <ClientFormDialog open={showForm} onClose={closeForm} editing={editing} siMembers={siMembers} />
+
       )}
 
-      {/* Archive confirmation */}
-      <AlertDialog open={!!archiving} onOpenChange={v => !v && setArchiving(null)}>
-        <AlertDialogContent>
+
+
+      <ClientDetailPanel
+
+        client={detailClient}
+
+        open={!!detailClient}
+
+        onClose={() => setDetailClient(null)}
+
+        onEdit={handleEdit}
+
+        onManageMembers={setMembersClient}
+
+        onModuleVisibility={setVisibilityClient}
+
+        canConfigure={canCreate}
+
+      />
+
+
+
+      <ClientMembersPanel
+
+        client={membersClient}
+
+        open={!!membersClient}
+
+        onClose={() => setMembersClient(null)}
+
+        siMembers={siMembers}
+
+      />
+
+
+
+      <ClientModuleVisibilityPanel
+
+        client={visibilityClient}
+
+        open={!!visibilityClient}
+
+        onClose={() => setVisibilityClient(null)}
+
+      />
+
+
+
+      <ClientDeleteDialog client={deleting} onClose={() => setDeleting(null)} />
+
+
+
+      <AlertDialog open={!!archiving} onOpenChange={(v) => !v && setArchiving(null)}>
+
+        <AlertDialogContent className="sm:max-w-md">
+
           <AlertDialogHeader>
+
             <AlertDialogTitle>Archive {archiving?.name}?</AlertDialogTitle>
+
             <AlertDialogDescription>
-              This client workspace will be hidden from the switcher. All associated data is preserved and can be restored.
+
+              This workspace will move to the Archived tab. Data is preserved and can be viewed read-only.
+
             </AlertDialogDescription>
+
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+
+            <AlertDialogCancel disabled={archiveMutation.isPending}>Cancel</AlertDialogCancel>
+
             <AlertDialogAction
+
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+
+              disabled={archiveMutation.isPending}
+
               onClick={() => archiving && archiveMutation.mutate(archiving.id)}
-              data-testid="button-confirm-archive"
+
             >
-              Archive
+
+              {archiveMutation.isPending ? "Archiving…" : "Archive"}
+
             </AlertDialogAction>
+
           </AlertDialogFooter>
+
         </AlertDialogContent>
+
       </AlertDialog>
+
     </div>
+
   );
+
 }
+
+

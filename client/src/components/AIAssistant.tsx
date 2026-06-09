@@ -8,10 +8,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   Bot, Send, Sparkles, User, Loader2, X,
   FileText, BarChart3, CheckSquare, Users, Lightbulb,
-  Zap, Lock
+  Zap,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { fetchWithAuth } from "@/lib/queryClient";
+import { useAiStatus } from "@/hooks/use-ai-status";
 
 interface Message {
   role: "user" | "assistant";
@@ -26,17 +28,18 @@ const quickActions = [
 ];
 
 export function AIAssistantButton() {
+  const { data: aiStatus, isLoading: aiStatusLoading } = useAiStatus();
+  const aiEnabled = aiStatus?.modules.assistant ?? false;
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isSubscribed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [conversationId, setConversationId] = useState<number | null>(null);
 
   useEffect(() => {
-    if (isOpen && !conversationId && isSubscribed) {
-      fetch("/api/conversations", {
+    if (isOpen && !conversationId && aiEnabled) {
+      fetchWithAuth("/api/conversations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: "Jiganto AI Session" }),
@@ -45,7 +48,7 @@ export function AIAssistantButton() {
         .then(data => setConversationId(data.id))
         .catch(err => console.error("Failed to init chat", err));
     }
-  }, [isOpen, conversationId, isSubscribed]);
+  }, [isOpen, conversationId, aiEnabled]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -57,7 +60,7 @@ export function AIAssistantButton() {
     e?.preventDefault();
     if (!inputValue.trim()) return;
 
-    if (!isSubscribed) return;
+    if (!aiEnabled) return;
     if (!conversationId) return;
 
     const userMsg = inputValue;
@@ -66,7 +69,7 @@ export function AIAssistantButton() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+      const response = await fetchWithAuth(`/api/conversations/${conversationId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: userMsg }),
@@ -118,7 +121,7 @@ export function AIAssistantButton() {
   };
 
   const handleQuickAction = (prompt: string) => {
-    if (!isSubscribed) return;
+    if (!aiEnabled) return;
     setInputValue(prompt);
   };
 
@@ -138,7 +141,7 @@ export function AIAssistantButton() {
             <Sparkles className="h-5 w-5 drop-shadow-sm" />
             <span
               className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-background"
-              style={{ backgroundColor: isSubscribed ? "#22C55E" : "#6B7280" }}
+              style={{ backgroundColor: aiEnabled ? "#22C55E" : "#6B7280" }}
             />
           </Button>
         </TooltipTrigger>
@@ -162,15 +165,18 @@ export function AIAssistantButton() {
                 <div className="flex flex-col">
                   <span>Jiganto AI</span>
                   <span className="text-xs font-normal text-muted-foreground">
-                    {isSubscribed ? "Ready to assist" : "Preview Mode"}
+                    {aiStatusLoading
+                      ? "Checking availability…"
+                      : aiEnabled
+                        ? "Ready to assist"
+                        : "Not configured"}
                   </span>
                 </div>
               </SheetTitle>
               <div className="flex items-center gap-2">
-                {!isSubscribed && (
+                {!aiStatusLoading && !aiEnabled && (
                   <Badge variant="outline" className="text-[10px] gap-1 text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-600">
-                    <Lock className="h-2.5 w-2.5" />
-                    Subscription Required
+                    OPENAI_API_KEY required
                   </Badge>
                 )}
                 <Button
@@ -187,7 +193,12 @@ export function AIAssistantButton() {
 
           <ScrollArea className="flex-1">
             <div className="px-5 py-4 space-y-4">
-              {!isSubscribed ? (
+              {aiStatusLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+                  <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#6366F1" }} />
+                  <p className="text-sm">Checking AI availability…</p>
+                </div>
+              ) : !aiEnabled ? (
                 <div className="space-y-6 py-4">
                   <div className="text-center px-4">
                     <div
@@ -198,7 +209,7 @@ export function AIAssistantButton() {
                     </div>
                     <h3 className="text-lg font-semibold mb-2">Jiganto AI Assistant</h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">
-                      Unlock intelligent assistance across all your enterprise modules. AI helps you work smarter with context-aware suggestions and automation.
+                      Add <code className="text-xs bg-muted px-1 py-0.5 rounded">OPENAI_API_KEY</code> to the server <code className="text-xs bg-muted px-1 py-0.5 rounded">.env</code> file, then restart the app. AI powers Chat, Dashboard builder, Business insights, and Survey generation.
                     </p>
                   </div>
 
@@ -231,19 +242,6 @@ export function AIAssistantButton() {
                     ))}
                   </div>
 
-                  <div className="px-2">
-                    <Button
-                      className="w-full text-white border-0"
-                      style={{ background: "linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)" }}
-                      data-testid="ai-subscribe-button"
-                    >
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Subscribe to AI Assistant
-                    </Button>
-                    <p className="text-[10px] text-center text-muted-foreground mt-2">
-                      Available as an add-on to your Jiganto subscription
-                    </p>
-                  </div>
                 </div>
               ) : (
                 <>
@@ -332,7 +330,7 @@ export function AIAssistantButton() {
             </div>
           </ScrollArea>
 
-          {isSubscribed && (
+          {aiEnabled && (
             <div className="px-5 py-4 mt-auto border-t flex-shrink-0">
               <form onSubmit={handleSendMessage} className="flex gap-2">
                 <Input

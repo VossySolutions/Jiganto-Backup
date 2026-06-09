@@ -62,6 +62,19 @@ export async function registerExtendedChatRoutes(
     });
   });
 
+  app.post("/api/chat/ai-insights", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const tenantId = getApiTenantIdWithFallback(req);
+      const { generateChatAiInsights } = await import("./ai-insights");
+      res.json(await generateChatAiInsights(userId, tenantId));
+    } catch (err) {
+      console.error("Chat AI insights error:", err);
+      res.status(500).json({ message: "Failed to generate chat insights" });
+    }
+  });
+
   const multer = (await import("multer")).default;
   const uploadsDir = path.join(process.cwd(), "uploads", "chat");
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });

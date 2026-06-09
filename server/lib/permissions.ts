@@ -86,7 +86,7 @@ async function inferLegacyOrgRoles(
   orgId: number,
 ): Promise<{ orgId: number; platformRole: PlatformRole }[]> {
   const inferred: { orgId: number; platformRole: PlatformRole }[] = [];
-  const clientMembership = await storage.getClientMembershipByUserId(userId, orgId);
+  const clientMembership = await storage.getLockedClientMembershipByUserId(userId, orgId);
   if (clientMembership) {
     inferred.push({ orgId, platformRole: mapLegacyClientRole(clientMembership.role) });
     return inferred;

@@ -21,7 +21,16 @@ export interface SessionPermissions {
 export interface SessionWorkspace {
   mode: "master" | "client";
   clientId: number | null;
+  workspaceId?: number | null;
   canViewPmoMaster: boolean;
+  client?: {
+    id: number;
+    name: string;
+    slug?: string | null;
+    shortCode: string;
+    color: string;
+    status: string;
+  } | null;
 }
 
 type SessionPayload = {

@@ -22,6 +22,8 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import type { Notification } from "@shared/schema";
+import { useClientContext } from "@/hooks/use-client-context";
+import { isNotificationRelevantInWorkspace } from "@/lib/workspace-nav-filter";
 
 const WHATS_NEW_VERSION = "2026.01.31";
 const STORAGE_KEY = "jiganto-whats-new-seen";
@@ -107,6 +109,7 @@ export function NotificationBell() {
   const [activeTab, setActiveTab] = useState("notifications");
   const [hasUnseenWhatsNew, setHasUnseenWhatsNew] = useState(false);
   const [, navigate] = useLocation();
+  const { activeClient } = useClientContext();
 
   useEffect(() => {
     const seenVersion = localStorage.getItem(STORAGE_KEY);
@@ -115,13 +118,21 @@ export function NotificationBell() {
     }
   }, []);
 
-  const { data: notifications = [], isLoading } = useQuery<Notification[]>({
-    queryKey: ["/api/notifications?limit=20"],
+  const notifKey = activeClient
+    ? `/api/notifications?limit=20&clientId=${activeClient.id}`
+    : "/api/notifications?limit=20";
+
+  const { data: rawNotifications = [], isLoading } = useQuery<Notification[]>({
+    queryKey: [notifKey],
     refetchInterval: 30000,
   });
 
+  const unreadKey = activeClient
+    ? `/api/notifications/unread-count?clientId=${activeClient.id}`
+    : "/api/notifications/unread-count";
+
   const { data: unreadData } = useQuery<{ count: number }>({
-    queryKey: ["/api/notifications/unread-count"],
+    queryKey: [unreadKey],
     refetchInterval: 30000,
   });
 
@@ -129,6 +140,13 @@ export function NotificationBell() {
     queryKey: ["/api/signoff/my-pending"],
     refetchInterval: 60000,
   });
+
+  const notifications = rawNotifications.filter((n) =>
+    isNotificationRelevantInWorkspace(
+      { clientId: (n as Notification & { clientId?: number }).clientId, source: n.source },
+      activeClient?.id ?? null,
+    ),
+  );
 
   const unreadCount = unreadData?.count || 0;
   const alertNotifications = notifications.filter(n => n.type === "error" || n.type === "warning");
@@ -141,8 +159,7 @@ export function NotificationBell() {
       await apiRequest("POST", `/api/notifications/${id}/read`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications?limit=20"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/notifications") });
     },
   });
 
@@ -151,8 +168,7 @@ export function NotificationBell() {
       await apiRequest("POST", "/api/notifications/read-all");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications?limit=20"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/notifications") });
     },
   });
 
@@ -161,8 +177,7 @@ export function NotificationBell() {
       await apiRequest("DELETE", `/api/notifications/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications?limit=20"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/notifications") });
     },
   });
 

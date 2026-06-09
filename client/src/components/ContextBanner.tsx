@@ -1,15 +1,17 @@
 import { X } from "lucide-react";
 import { useClientContext } from "@/hooks/use-client-context";
 import { Button } from "@/components/ui/button";
+import { contrastSafeColor } from "@/lib/client-workspace-utils";
 
 export function ContextBanner() {
-  const { activeClient, setActiveClient } = useClientContext();
+  const { activeClient, setActiveClient, isArchivedWorkspace } = useClientContext();
 
   if (!activeClient) return null;
 
-  const bgColor = activeClient.color + "18";
-  const borderColor = activeClient.color + "55";
-  const textColor = activeClient.color;
+  const accent = contrastSafeColor(activeClient.color);
+  const bgColor = accent + "18";
+  const borderColor = accent + "55";
+  const textColor = accent;
 
   return (
     <div
@@ -29,7 +31,7 @@ export function ContextBanner() {
         {activeClient.name}
       </span>
       <span className="hidden sm:inline text-muted-foreground text-xs">
-        · All modules scoped to this workspace
+        · {isArchivedWorkspace ? "Read-only archived workspace" : "All modules scoped to this workspace"}
       </span>
       <Button
         variant="ghost"

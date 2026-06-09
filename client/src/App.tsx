@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useRoute } from "wouter";
 import { DASHBOARD_PATH } from "@shared/app-routes";
 import { getQueryFn, queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -26,6 +26,7 @@ import SigningPortalPage from "@/pages/SigningPortalPage";
 import SurveysPage from "@/pages/SurveysPage";
 import SurveyPortalPage from "@/pages/SurveyPortalPage";
 import ClientsPage from "@/pages/ClientsPage";
+import ClientDetailPage from "@/pages/ClientDetailPage";
 import CustomerManagementPage from "@/pages/CustomerManagementPage";
 import { useAuth } from "@/hooks/use-auth";
 import { SidebarStateProvider } from "@/hooks/use-sidebar-state";
@@ -35,14 +36,23 @@ import { CommandPaletteProvider } from "@/hooks/use-command-palette";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { ClientContextProvider } from "@/hooks/use-client-context";
 import { CommandPalette } from "@/components/CommandPalette";
+import { GlobalSearchDialog } from "@/components/GlobalSearchDialog";
 import { WhatsNewAutoPopup } from "@/components/WhatsNew";
 import { AIAssistantButton } from "@/components/AIAssistant";
+import { AIInsightsPanelProvider } from "@/hooks/use-ai-insights-panel";
+import { ModuleAIInsightsHost } from "@/components/ai/ModuleAIInsightsHost";
 import { Loader2 } from "lucide-react";
 import { AccessPendingPage } from "@/pages/AccessPendingPage";
 import { AcceptInvitationPage } from "@/pages/AcceptInvitationPage";
 import { SupabaseAuthSync } from "@/components/SupabaseAuthSync";
 import { OrgBrandingSync } from "@/hooks/use-org-branding";
 import { getPendingInviteToken, inviteAcceptPath } from "@/lib/pending-invite";
+
+function LegacyClientsDetailRedirect() {
+  const [, params] = useRoute("/modules/clients/:id");
+  return <Redirect to={params?.id ? `/clients/${params.id}` : "/clients"} />;
+}
+
 function PendingInviteRedirect() {
   useEffect(() => {
     const pending = getPendingInviteToken();
@@ -115,9 +125,10 @@ function Router() {
   }
 
   return (
-    <>
+    <AIInsightsPanelProvider>
       <WhatsNewAutoPopup />
       <AIAssistantButton />
+      <ModuleAIInsightsHost />
       <Switch>
         <Route path={DASHBOARD_PATH} component={Dashboard} />
         <Route path="/ws/:slug" component={Dashboard} />
@@ -137,7 +148,12 @@ function Router() {
         <Route path="/modules/resource-mgmt" component={ResourceManagementPage} />
         <Route path="/modules/bpm" component={BPMPage} />
         <Route path="/modules/test-mgmt" component={TestManagementPage} />
-        <Route path="/modules/clients" component={ClientsPage} />
+        <Route path="/modules/clients/:id" component={LegacyClientsDetailRedirect} />
+        <Route path="/modules/clients">
+          <Redirect to="/clients" />
+        </Route>
+        <Route path="/clients/:id" component={ClientDetailPage} />
+        <Route path="/clients" component={ClientsPage} />
         <Route path="/modules/customer-mgmt" component={CustomerManagementPage} />
         <Route path="/modules/e-sign" component={SignOffPage} />
         <Route path="/modules/surveys" component={SurveysPage} />
@@ -148,7 +164,7 @@ function Router() {
         <Route path="/modules/:key" component={ModulePage} />
         <Route component={NotFound} />
       </Switch>
-    </>
+    </AIInsightsPanelProvider>
   );
 }
 
@@ -170,6 +186,7 @@ function App() {
                   <CommandPaletteProvider>
                     <Toaster />
                     <CommandPalette />
+                    <GlobalSearchDialog />
                     <Router />
                   </CommandPaletteProvider>
                 </DashboardSelectorProvider>

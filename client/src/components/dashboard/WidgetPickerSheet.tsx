@@ -16,6 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import { isModuleLicensed, useModuleEntitlements } from "@/hooks/use-module-entitlements";
 import type { WidgetCatalogEntry } from "@shared/models/dashboard";
 import { invalidateDashboardDetail } from "./dashboard-utils";
+import { useClientContext } from "@/hooks/use-client-context";
+import { SI_DASHBOARD_MODULES, siModuleLabel } from "@/lib/workspace-nav-filter";
 
 const WIDGET_MODULE_TO_LICENSE_KEY: Record<string, string> = {
   helpdesk: "help-desk",
@@ -49,6 +51,8 @@ export function WidgetPickerSheet({
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const { data: entitlements } = useModuleEntitlements();
+  const { activeClient } = useClientContext();
+  const inClientWorkspace = !!activeClient;
 
   const { data: catalog = [], isLoading: catalogLoading } = useQuery({
     queryKey: ["/api/dashboard/widget-catalog"],
@@ -111,7 +115,14 @@ export function WidgetPickerSheet({
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Add widget</SheetTitle>
-          <SheetDescription>Pick a module widget to add to your dashboard.</SheetDescription>
+          <SheetDescription>
+            Pick a module widget to add to your dashboard.
+            {inClientWorkspace && (
+              <span className="block mt-1 text-amber-700 dark:text-amber-400">
+                SI module widgets (CRM, Finance, Business) are opt-in exceptions and show a source label on the dashboard.
+              </span>
+            )}
+          </SheetDescription>
         </SheetHeader>
         <div className="relative mt-4">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -145,6 +156,11 @@ export function WidgetPickerSheet({
                       <div className="min-w-0">
                         <p className="font-medium text-sm">{entry.name}</p>
                         <p className="text-xs text-muted-foreground truncate">{entry.description}</p>
+                        {inClientWorkspace && SI_DASHBOARD_MODULES.has(entry.module) && (
+                          <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5">
+                            Opt-in: Data from {siModuleLabel(entry.module)}
+                          </p>
+                        )}
                         {!licensed && (
                           <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
                             <Lock className="h-3 w-3" />

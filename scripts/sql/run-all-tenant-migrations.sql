@@ -6,3 +6,7 @@
 \i client-workspace-grants.sql
 \i documents-client-id.sql
 \i initiatives-client-id.sql
+-- Client workspace RLS (or: npm run db:clients-rls)
+\i clients-rls.sql
+-- Clients API indexes (or: npm run db:clients-indexes)
+\i clients-indexes.sql

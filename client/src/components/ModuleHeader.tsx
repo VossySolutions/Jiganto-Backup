@@ -6,6 +6,8 @@ import { HelpMenu } from "@/components/HelpMenu";
 import { NotificationBell } from "@/components/NotificationBell";
 import { QuickActionsDropdown } from "@/components/QuickActionsDropdown";
 import { cn } from "@/lib/utils";
+import { useAIInsightsPanelOptional } from "@/hooks/use-ai-insights-panel";
+import { useClientContext } from "@/hooks/use-client-context";
 
 interface ModuleHeaderProps {
   icon: LucideIcon | React.ComponentType<{ className?: string }>;
@@ -34,6 +36,17 @@ export function ModuleHeader({
   onAIInsightsClick,
   compact = false,
 }: ModuleHeaderProps) {
+  const aiInsightsPanel = useAIInsightsPanelOptional();
+  const { activeClient } = useClientContext();
+  const displayTitle = activeClient ? `${title} — ${activeClient.name}` : title;
+  const handleAiInsightsClick = () => {
+    if (onAIInsightsClick) {
+      onAIInsightsClick();
+      return;
+    }
+    aiInsightsPanel?.open();
+  };
+
   return (
     <div className={cn(compact ? "px-4 py-2" : "p-4")}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -51,7 +64,7 @@ export function ModuleHeader({
               className={cn("font-semibold font-display truncate", compact ? "text-base" : "text-xl")}
               data-testid={titleTestId}
             >
-              {title}
+              {displayTitle}
             </h1>
             {subtitle && (
               <p className={cn("text-muted-foreground truncate", compact ? "text-xs" : "text-sm")}>{subtitle}</p>
@@ -96,7 +109,7 @@ export function ModuleHeader({
                 variant="outline"
                 className={cn("rounded-xl gap-2", compact && "h-8 text-xs px-2.5")}
                 data-testid="button-ai-insights"
-                onClick={onAIInsightsClick}
+                onClick={handleAiInsightsClick}
               >
                 <Sparkles className={cn("text-primary", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
                 {!compact && "AI Insights"}

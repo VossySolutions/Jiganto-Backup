@@ -47,12 +47,15 @@ import { useSidebarState } from "@/hooks/use-sidebar-state";
 import { useShellLayout } from "@/hooks/use-shell-layout";
 import { useTheme } from "@/hooks/use-theme";
 import { useClientContext } from "@/hooks/use-client-context";
+import { useClientModuleVisibility } from "@/hooks/use-client-module-visibility";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useModuleAccess } from "@/hooks/use-module-access";
 import { DASHBOARD_PATH, isDashboardPath } from "@shared/app-routes";
+import { dashboardPathForClient } from "@/lib/workspace-scope";
 import { PLATFORM_ROLE_LABELS } from "@shared/models/permissions";
 import {
   CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS,
+  CLIENT_ROLE_EXTRA_BLOCKED_MODULE_KEYS,
   navPathToModuleKey,
 } from "@shared/models/module-access";
 import { ContextBanner } from "@/components/ContextBanner";
@@ -137,7 +140,7 @@ const moduleGroups: ModuleGroup[] = [
       {
         name: "Clients",
         icon: CRMIcon,
-        href: "/modules/clients",
+        href: "/clients",
         description: "Client workspace management",
         color: "#185FA5",
       },
@@ -313,10 +316,14 @@ export function Sidebar() {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const { clients, activeClient, setActiveClient, isClientUser, showContextSwitcher } =
     useClientContext();
+  const { isModuleVisibleInWorkspace } = useClientModuleVisibility(activeClient?.id);
 
-  const isClientWorkspaceView =
-    !!activeClient &&
-    (platformRole === "client_project_user" || platformRole === "client_executive");
+  /** Any user inside a client workspace — SI-internal modules must be hidden (Docs §5). */
+  const isClientWorkspaceView = !!activeClient;
+  const isClientRoleView =
+    platformRole === "client_project_user" || platformRole === "client_executive";
+  /** Standard client users must not see Settings in a client workspace (Docs §5.1). */
+  const hideSettingsInWorkspace = isClientWorkspaceView && isClientRoleView;
   const [showCustomizeDialog, setShowCustomizeDialog] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -361,6 +368,7 @@ export function Sidebar() {
     organisationDisplayName(organisation) ||
     (organisationLoading ? "Loading…" : "Organisation");
   const displayCompanyName = activeClient ? activeClient.name : orgName;
+  const dashboardHref = dashboardPathForClient(activeClient);
   const showOrgDropdown =
     showContextSwitcher && !isClientUser && clients.length > 0;
 
@@ -374,23 +382,26 @@ export function Sidebar() {
   }, [settingsAccess.tier]);
 
   const renderNavItem = (item: ModuleItem) => {
+    const href = item.href === DASHBOARD_PATH ? dashboardHref : item.href;
     const isActive =
       item.href === DASHBOARD_PATH
         ? isDashboardPath(location)
-        : location === item.href ||
-          (item.href !== DASHBOARD_PATH && location.startsWith(item.href));
+        : location === href ||
+          (href !== DASHBOARD_PATH && location.startsWith(href));
     if (isModuleHidden(item.href)) return null;
     if (!canAccessNavPath(item.href)) return null;
     if (isClientWorkspaceView) {
       const key = navPathToModuleKey(item.href);
       if (key && CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS.has(key)) return null;
+      if (key && !isModuleVisibleInWorkspace(key)) return null;
+      if (isClientRoleView && key && CLIENT_ROLE_EXTRA_BLOCKED_MODULE_KEYS.has(key)) return null;
     }
 
     if (showCollapsed) {
       return (
         <Tooltip key={item.href}>
           <TooltipTrigger asChild>
-            <Link href={item.href} onClick={closeMobileNav}>
+            <Link href={href} onClick={closeMobileNav}>
               <div
                 data-testid={`nav-${item.href.replace(/\//g, "-").slice(1) || "dashboard"}`}
                 className={cn(
@@ -410,7 +421,7 @@ export function Sidebar() {
     }
 
     return (
-      <Link key={item.href} href={item.href} onClick={closeMobileNav}>
+      <Link key={item.href} href={href} onClick={closeMobileNav}>
         <div
           data-testid={`nav-${item.href.replace(/\//g, "-").slice(1) || "dashboard"}`}
           className={cn(
@@ -569,7 +580,7 @@ export function Sidebar() {
                     </span>
                     <span
                       className="text-[10px] font-medium"
-                      style={{ color: activeClient.color }}
+                      style={{ color: "#0F6E56" }}
                     >
                       Client workspace
                     </span>
@@ -612,7 +623,7 @@ export function Sidebar() {
                           {activeClient ? (
                             <span
                               className="text-[10px] font-medium"
-                              style={{ color: activeClient.color }}
+                              style={{ color: "#0F6E56" }}
                             >
                               Client workspace
                             </span>
@@ -786,9 +797,17 @@ export function Sidebar() {
 
           <nav className="space-y-1">
             {navGroups.map((group, groupIndex) => {
-              const visibleItems = group.items.filter(
-                (item) => !isModuleHidden(item.href),
-              );
+              const visibleItems = group.items.filter((item) => {
+                if (isModuleHidden(item.href)) return false;
+                if (!canAccessNavPath(item.href)) return false;
+                if (isClientWorkspaceView) {
+                  const key = navPathToModuleKey(item.href);
+                  if (key && CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS.has(key)) return false;
+                  if (key && !isModuleVisibleInWorkspace(key)) return false;
+                  if (isClientRoleView && key && CLIENT_ROLE_EXTRA_BLOCKED_MODULE_KEYS.has(key)) return false;
+                }
+                return true;
+              });
               if (visibleItems.length === 0) return null;
 
               return (
@@ -934,15 +953,17 @@ export function Sidebar() {
                     )}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <Link href={settingsHref}>
-                    <DropdownMenuItem
-                      className="cursor-pointer"
-                      data-testid="menu-settings"
-                    >
-                      <Settings className="mr-2 h-4 w-4" />
-                      Settings
-                    </DropdownMenuItem>
-                  </Link>
+                  {!hideSettingsInWorkspace && (
+                    <Link href={settingsHref}>
+                      <DropdownMenuItem
+                        className="cursor-pointer"
+                        data-testid="menu-settings"
+                      >
+                        <Settings className="mr-2 h-4 w-4" />
+                        Settings
+                      </DropdownMenuItem>
+                    </Link>
+                  )}
                   <DropdownMenuItem
                     className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
                     onClick={() => logout()}
@@ -1001,17 +1022,19 @@ export function Sidebar() {
                 </button>
               </div>
 
-              <Link
-                href={settingsHref}
-                className={cn(
-                  "w-full flex items-center gap-2 px-3 h-8 text-sm rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
-                  isSettingsActive && "bg-primary/10 text-primary",
-                )}
-                data-testid="sidebar-settings-link"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
-              </Link>
+              {!hideSettingsInWorkspace && (
+                <Link
+                  href={settingsHref}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-3 h-8 text-sm rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
+                    isSettingsActive && "bg-primary/10 text-primary",
+                  )}
+                  data-testid="sidebar-settings-link"
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </Link>
+              )}
 
               <Button
                 variant="ghost"
@@ -1099,15 +1122,17 @@ export function Sidebar() {
                     )}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <Link href={settingsHref}>
-                    <DropdownMenuItem
-                      className="cursor-pointer"
-                      data-testid="menu-settings"
-                    >
-                      <Settings className="mr-2 h-4 w-4" />
-                      Settings
-                    </DropdownMenuItem>
-                  </Link>
+                  {!hideSettingsInWorkspace && (
+                    <Link href={settingsHref}>
+                      <DropdownMenuItem
+                        className="cursor-pointer"
+                        data-testid="menu-settings"
+                      >
+                        <Settings className="mr-2 h-4 w-4" />
+                        Settings
+                      </DropdownMenuItem>
+                    </Link>
+                  )}
                   <DropdownMenuItem
                     className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
                     onClick={() => logout()}

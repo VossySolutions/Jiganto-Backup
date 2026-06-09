@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
+import { DASHBOARD_PATH } from "@shared/app-routes";
+import { dashboardPathForClient } from "@/lib/workspace-scope";
 import { useAuth } from "@/hooks/use-auth";
 import { AppShell } from "@/components/AppShell";
 import { PmoDashboard } from "@/components/PmoDashboard";
@@ -18,6 +20,8 @@ import {
   type DashboardType,
 
 } from "@/hooks/use-dashboard-selector";
+
+import { useAIInsightsPanel } from "@/hooks/use-ai-insights-panel";
 
 import { QuickActionsDropdown } from "@/components/QuickActionsDropdown";
 
@@ -104,7 +108,7 @@ function GenericModuleDashboard({ title }: { title: string }) {
 
 export function Dashboard() {
   const { user } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { isMasterView, canViewPmoMaster, activeClient } = useClientContext();
 
   const {
@@ -130,6 +134,7 @@ export function Dashboard() {
     refreshCustomDashboards,
 
   } = useDashboardSelector();
+  const { open: openAiInsights } = useAIInsightsPanel();
 
 
 
@@ -142,22 +147,16 @@ export function Dashboard() {
   const [showAiDialog, setShowAiDialog] = useState(false);
   const [dashboardSearch, setDashboardSearch] = useState("");
   const CONTEXT_KEY = "jiganto-dashboard-context";
-  const [contextClientId, setContextClientId] = useState<number | null>(() => {
-    try {
-      const raw = sessionStorage.getItem(CONTEXT_KEY);
-      if (raw) return JSON.parse(raw).clientId ?? activeClient?.id ?? null;
-    } catch {}
-    return activeClient?.id ?? null;
-  });
-  const [contextProjectId, setContextProjectId] = useState<number | null>(() => {
-    try {
-      const raw = sessionStorage.getItem(CONTEXT_KEY);
-      if (raw) return JSON.parse(raw).projectId ?? null;
-    } catch {}
-    return null;
-  });
+  const [contextClientId, setContextClientId] = useState<number | null>(() => activeClient?.id ?? null);
+  const [contextProjectId, setContextProjectId] = useState<number | null>(null);
 
   const moduleShortcuts = useModuleDiscoveryShortcuts(hiddenModuleKeys);
+
+  useEffect(() => {
+    if (activeClient?.slug && location === DASHBOARD_PATH) {
+      setLocation(dashboardPathForClient(activeClient));
+    }
+  }, [activeClient, location, setLocation]);
 
   useEffect(() => {
     sessionStorage.setItem(
@@ -168,6 +167,7 @@ export function Dashboard() {
 
   useEffect(() => {
     setContextClientId(activeClient?.id ?? null);
+    if (activeClient) setContextProjectId(null);
   }, [activeClient?.id]);
 
   useEffect(() => {
@@ -631,6 +631,14 @@ export function Dashboard() {
                 <Plus className="h-4 w-4" />
 
                 New
+
+              </Button>
+
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={openAiInsights} data-testid="button-ai-insights">
+
+                <Sparkles className="h-4 w-4" />
+
+                AI Insights
 
               </Button>
 

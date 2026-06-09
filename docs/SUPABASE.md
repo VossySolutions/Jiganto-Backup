@@ -109,9 +109,22 @@ Every row in **Authentication → Users** should have a matching `public.users` 
 | Old `local-dev-user` data | Dev-only id; new Supabase users use UUIDs |
 | `db:push` hangs | Use focused SQL scripts instead |
 
+## Row Level Security (client workspaces)
+
+Client workspace isolation uses **defence in depth**:
+
+1. **Express middleware** — `setWorkspaceRlsContext` sets `app.client_id` per API request; module guards block SI routes in workspace mode.
+2. **Postgres RLS** — `jiganto_client_scope_allowed()` policies on all `client_id` tables: `pm_projects`, `crm_accounts`, `documents`, `document_folders`, `tasks`, `notifications`, `strategy_items`, `initiatives`, `governance_items` (see `scripts/sql/clients-rls.sql`).
+3. **Session workspace** — active workspace is stored in the Express session (`workspace_id` / `activeClientId`); not in `localStorage`. API scoping reads session first.
+
+Apply or refresh policies after schema changes:
+
+```bash
+# Supabase SQL Editor, or run scripts/sql/clients-rls.sql
+```
+
 ## What is not used (yet)
 
-- **Row Level Security** — app enforces access in Express middleware
 - **Supabase Storage** — local `uploads/` for files
 
 See also: [USER_GUIDE.md](./USER_GUIDE.md), [PERMISSIONS.md](./PERMISSIONS.md), [MULTI_TENANCY.md](./MULTI_TENANCY.md).

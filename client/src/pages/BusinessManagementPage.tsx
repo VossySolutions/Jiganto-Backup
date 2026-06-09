@@ -27,7 +27,6 @@ import {
   FileText, ExternalLink, ShieldCheck, MessageSquarePlus, Trash2, History,
   Bell, Send, Upload, Brain, X, RefreshCw, CheckCircle, TriangleAlert, Info, Zap
 } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { BusinessLoadingState } from "@/components/business/BusinessLoadingState";
 import { BusinessTableScroll } from "@/components/business/BusinessTableScroll";
@@ -49,6 +48,7 @@ import { MondayTable, type ColumnDef, defaultStatusColors } from "@/components/M
 import type { Document, DocumentInitiativeLink } from "@shared/models/documents";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import { useAIInsightsPanel } from "@/hooks/use-ai-insights-panel";
 import {
   EnhancedStrategyTab, EnhancedGoalsTab, EnhancedObjectivesTab,
   EnhancedInitiativesTab, EnhancedOkrsTab, EnhancedKpisTab, EnhancedGovernanceTab,
@@ -292,7 +292,7 @@ const statusColors: Record<string, string> = {
 export default function BusinessManagementPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [searchTerm, setSearchTerm] = useState("");
-  const [aiInsightsOpen, setAiInsightsOpen] = useState(false);
+  const { open: openAiInsights } = useAIInsightsPanel();
   const { toast } = useToast();
   const { mainOffset, mobileTopOffset } = useShellLayout();
   const { isAuthenticated, sessionReady } = useAuth();
@@ -441,7 +441,6 @@ export default function BusinessManagementPage() {
   return (
     <div className="h-screen overflow-hidden bg-background" data-testid="business-page">
       <Sidebar />
-      <AIInsightsPanel open={aiInsightsOpen} onClose={() => setAiInsightsOpen(false)} />
       <main className={cn("transition-all duration-300 h-full flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
         <div className="px-3 sm:px-4 pt-3 sm:pt-4">
           <ModuleWelcomeBanner moduleKey="business-mgmt" features={["Strategy mapping", "Governance layer", "RAG status rollup", "AI insights"]} />
@@ -456,6 +455,7 @@ export default function BusinessManagementPage() {
             onSearchChange={setSearchTerm}
             searchTestId="input-business-search"
             titleTestId="business-title"
+            onAIInsightsClick={openAiInsights}
           />
 
           <ScrollArea className="w-full">
@@ -541,8 +541,8 @@ export default function BusinessManagementPage() {
                 variant="outline"
                 size="sm"
                 className="gap-1.5 text-xs h-8 border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-900/30"
-                onClick={() => setAiInsightsOpen(true)}
-                data-testid="button-ai-insights"
+                onClick={openAiInsights}
+                data-testid="button-ai-insights-tab"
               >
                 <Brain className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">AI Insights</span>
@@ -2113,127 +2113,6 @@ function ReviewsTab({
         </div>
       )}
     </div>
-  );
-}
-
-// ─── AI INSIGHTS PANEL ───────────────────────────────────────────────────────
-
-type AiInsight = {
-  type: "anomaly" | "risk" | "recommendation" | "positive";
-  severity: "high" | "medium" | "low" | "info";
-  title: string;
-  description: string;
-};
-
-function AIInsightsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [generated, setGenerated] = useState(false);
-  const { toast } = useToast();
-
-  const { data, isFetching, refetch } = useQuery<{ insights: AiInsight[]; generatedAt: string; source: string; summary: Record<string, unknown> }>({
-    queryKey: ["/api/business/ai-insights"],
-    queryFn: () => apiRequest("POST", "/api/business/ai-insights", {}).then(r => r.json()),
-    enabled: false,
-  });
-
-  const handleGenerate = () => {
-    setGenerated(true);
-    refetch().catch(() => toast({ title: "AI generation failed", variant: "destructive" }));
-  };
-
-  const insightIcon = (type: string, severity: string) => {
-    if (type === "anomaly") return <TriangleAlert className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />;
-    if (type === "risk") return <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
-    if (type === "recommendation") return <Lightbulb className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
-    if (type === "positive") return <CheckCircle className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />;
-    return <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />;
-  };
-
-  const insightBg = (type: string) => {
-    if (type === "anomaly") return "border-red-200 bg-red-50 dark:border-red-800/30 dark:bg-red-900/10";
-    if (type === "risk") return "border-amber-200 bg-amber-50 dark:border-amber-800/30 dark:bg-amber-900/10";
-    if (type === "recommendation") return "border-blue-200 bg-blue-50 dark:border-blue-800/30 dark:bg-blue-900/10";
-    if (type === "positive") return "border-green-200 bg-green-50 dark:border-green-800/30 dark:bg-green-900/10";
-    return "border-border bg-muted/30";
-  };
-
-  const severityBadge = (s: string) => {
-    const cls = s === "high" ? "bg-red-100 text-red-700" : s === "medium" ? "bg-amber-100 text-amber-700" : s === "low" ? "bg-blue-100 text-blue-700" : "bg-muted text-muted-foreground";
-    return <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide", cls)}>{s}</span>;
-  };
-
-  return (
-    <Sheet open={open} onOpenChange={v => !v && onClose()}>
-      <SheetContent className="w-[420px] sm:max-w-[420px] p-0 flex flex-col" data-testid="ai-insights-panel">
-        <SheetHeader className="px-6 pt-6 pb-4 border-b">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-violet-500/10">
-              <Brain className="h-5 w-5 text-violet-500" />
-            </div>
-            <div>
-              <SheetTitle className="text-base">AI Strategy Insights</SheetTitle>
-              <p className="text-xs text-muted-foreground">Anomaly detection & recommendations</p>
-            </div>
-          </div>
-        </SheetHeader>
-
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {!generated ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-              <div className="w-16 h-16 rounded-full bg-violet-500/10 flex items-center justify-center">
-                <Brain className="h-8 w-8 text-violet-500" />
-              </div>
-              <div>
-                <p className="font-semibold">Strategy AI Advisor</p>
-                <p className="text-sm text-muted-foreground mt-1">Analyse your entire strategy portfolio for risks, anomalies, and improvement recommendations.</p>
-              </div>
-              <Button onClick={handleGenerate} className="gap-2">
-                <Sparkles className="h-4 w-4" /> Generate Insights
-              </Button>
-            </div>
-          ) : isFetching ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
-              <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
-              <p className="text-sm text-muted-foreground">Analysing your strategy data…</p>
-            </div>
-          ) : data ? (
-            <>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">{data.insights.length} insight{data.insights.length !== 1 ? "s" : ""}</Badge>
-                  {data.source === "ai" && <Badge variant="outline" className="text-xs text-violet-600"><Sparkles className="h-2.5 w-2.5 mr-1" />AI</Badge>}
-                </div>
-                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleGenerate}>
-                  <RefreshCw className="h-3 w-3" /> Refresh
-                </Button>
-              </div>
-
-              <div className="space-y-3">
-                {data.insights.map((insight, i) => (
-                  <div key={i} className={cn("rounded-xl border p-3 space-y-1.5", insightBg(insight.type))}>
-                    <div className="flex items-start gap-2">
-                      {insightIcon(insight.type, insight.severity)}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold">{insight.title}</p>
-                          {severityBadge(insight.severity)}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{insight.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {data.generatedAt && (
-                <p className="text-[10px] text-muted-foreground text-center">
-                  Generated {new Date(data.generatedAt).toLocaleString()}
-                </p>
-              )}
-            </>
-          ) : null}
-        </div>
-      </SheetContent>
-    </Sheet>
   );
 }
 

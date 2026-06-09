@@ -1,7 +1,10 @@
+import { CLIENT_WORKSPACE_ALWAYS_HIDDEN_KEYS } from "../client-workspace-modules";
+
 /** Modules configurable in Settings → Users / Module roles (legacy). */
 export const SETTINGS_MODULE_KEYS = [
   { key: "dashboard", name: "Dashboard" },
   { key: "chat", name: "Chat" },
+  { key: "clients", name: "Clients" },
   { key: "business-mgmt", name: "Business Management" },
   { key: "crm", name: "CRM" },
   { key: "documents", name: "Documents" },
@@ -25,7 +28,8 @@ export const NAV_PATH_TO_MODULE_KEY: Record<string, string> = {
   "/modules/chat": "chat",
   "/modules/documents": "documents",
   "/modules/business-mgmt": "business-mgmt",
-  "/modules/clients": "crm",
+  "/clients": "clients",
+  "/modules/clients": "clients",
   "/modules/crm": "crm",
   "/modules/finance-mgmt": "finance-mgmt",
   "/modules/resource-mgmt": "resource-mgmt",
@@ -50,6 +54,7 @@ export const API_PREFIX_TO_MODULE_KEY: readonly [string, string][] = [
   ["/api/org-charts", "org-chart"],
   ["/api/org-chart", "org-chart"],
   ["/api/business", "business-mgmt"],
+  ["/api/clients", "clients"],
   ["/api/portfolio", "portfolio-mgmt"],
   ["/api/pm", "project-mgmt"],
   ["/api/crm", "crm"],
@@ -69,10 +74,11 @@ export const API_PREFIX_TO_MODULE_KEY: readonly [string, string][] = [
   ["/api/customer-mgmt", "customer-mgmt"],
 ];
 
-/** Hidden in client workspace view for client_project_user / client_executive (Section 4). */
-export const CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS = new Set([
-  "business-mgmt",
-  "crm",
+/** Always hidden in client workspace for all users (Docs §5). */
+export const CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS = CLIENT_WORKSPACE_ALWAYS_HIDDEN_KEYS;
+
+/** Additional modules hidden for client-role users only. */
+export const CLIENT_ROLE_EXTRA_BLOCKED_MODULE_KEYS = new Set([
   "resource-mgmt",
   "bpm",
   "test-mgmt",
@@ -80,7 +86,6 @@ export const CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS = new Set([
   "surveys",
   "e-sign",
   "templates",
-  "customer-mgmt",
   "org-chart",
   "help-desk",
 ]);

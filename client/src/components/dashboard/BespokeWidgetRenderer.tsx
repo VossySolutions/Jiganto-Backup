@@ -25,6 +25,8 @@ import { fetchWithAuth } from "@/lib/queryClient";
 import type { BespokeDashboardPayload } from "@shared/models/dashboard";
 import { DASHBOARD_WIDGET_CATALOG } from "@shared/models/dashboard";
 import { AlertCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { SI_DASHBOARD_MODULES, siModuleLabel } from "@/lib/workspace-nav-filter";
 import { DashboardKpiStrip } from "./DashboardKpiStrip";
 import { CategoryBarChart } from "./CategoryBarChart";
 import { scopeQuery } from "./dashboard-utils";
@@ -109,10 +111,20 @@ function BespokeDataWidget({
     );
   }
 
+  const catalogEntry = DASHBOARD_WIDGET_CATALOG.find((w) => w.type === widget.widgetType);
+  const fromSiModule = catalogEntry && SI_DASHBOARD_MODULES.has(catalogEntry.module);
+
   return (
     <Card className="rounded-xl border-border/50 h-full flex flex-col shadow-sm">
       <CardHeader className="pb-2 shrink-0">
-        <CardTitle className="text-sm">{widgetDisplayName(widget.widgetType)}</CardTitle>
+        <div className="flex items-center gap-2 flex-wrap">
+          <CardTitle className="text-sm">{widgetDisplayName(widget.widgetType)}</CardTitle>
+          {fromSiModule && (
+            <Badge variant="outline" className="text-[10px] font-normal">
+              Data from {siModuleLabel(catalogEntry!.module)} module
+            </Badge>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 overflow-y-auto">
         <WidgetBody type={widget.widgetType} data={data} />

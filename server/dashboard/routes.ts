@@ -488,6 +488,19 @@ export function registerDashboardRoutes(app: Express): void {
     }
   });
 
+  app.post("/api/dashboard/ai-insights", async (req, res) => {
+    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
+    const scope = parseScope(req, res);
+    if (!scope) return res.status(403).json({ message: "Organisation context required." });
+    try {
+      const { generateDashboardAiInsights } = await import("./ai-insights");
+      res.json(await generateDashboardAiInsights(scope));
+    } catch (err) {
+      console.error("Dashboard AI insights error:", err);
+      res.status(500).json({ message: "Failed to generate dashboard insights" });
+    }
+  });
+
   app.get("/api/dashboard/preferences", async (req, res) => {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const userId = getUserId(req);
