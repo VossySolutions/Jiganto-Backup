@@ -74,7 +74,7 @@ interface DashboardSelectorContextType {
   defaultDashboard: DashboardType;
   hiddenModuleKeys: string[];
   toggleModuleVisibility: (key: string) => void;
-  refreshCustomDashboards: () => void;
+  refreshCustomDashboards: () => Promise<void>;
 }
 
 const DashboardSelectorContext = createContext<DashboardSelectorContextType | null>(null);
@@ -116,7 +116,8 @@ export function DashboardSelectorProvider({ children }: { children: ReactNode })
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        return mergeDashboards(parsed.dashboards || defaultDashboards);
+        const merged = mergeDashboards(parsed.dashboards || defaultDashboards);
+        return merged.map((d) => (d.id === "modules" ? { ...d, enabled: true } : d));
       }
     } catch {}
     return defaultDashboards;
@@ -141,10 +142,11 @@ export function DashboardSelectorProvider({ children }: { children: ReactNode })
       setHiddenModuleKeys(serverPrefs.hiddenModuleKeys);
     }
     if (serverPrefs.enabledDashboardIds?.length) {
+      const enabledSet = new Set(serverPrefs.enabledDashboardIds);
       setDashboards((prev) =>
         prev.map((d) => ({
           ...d,
-          enabled: serverPrefs.enabledDashboardIds.includes(d.id),
+          enabled: d.id === "modules" ? true : enabledSet.has(d.id) ? true : d.enabled,
         })),
       );
     }
@@ -183,7 +185,15 @@ export function DashboardSelectorProvider({ children }: { children: ReactNode })
   };
 
   const toggleDashboard = (id: BuiltInDashboardType) => {
-    setDashboards((prev) => prev.map((d) => (d.id === id ? { ...d, enabled: !d.enabled } : d)));
+    if (id === "modules") return;
+    setDashboards((prev) => {
+      const next = prev.map((d) => (d.id === id ? { ...d, enabled: !d.enabled } : d));
+      const enabledIds = next.filter((d) => d.enabled).map((d) => d.id);
+      void apiRequest("PATCH", "/api/dashboard/preferences", { enabledDashboardIds: enabledIds }).catch(
+        () => {},
+      );
+      return next;
+    });
   };
 
   const setDefaultDashboard = (id: DashboardType) => {
@@ -200,8 +210,8 @@ export function DashboardSelectorProvider({ children }: { children: ReactNode })
     );
   };
 
-  const refreshCustomDashboards = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
+  const refreshCustomDashboards = async () => {
+    await queryClient.refetchQueries({ queryKey: ["/api/dashboards"] });
   };
 
   return (

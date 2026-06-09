@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { HelpMenu } from "@/components/HelpMenu";
 import { NotificationBell } from "@/components/NotificationBell";
 import { QuickActionsDropdown } from "@/components/QuickActionsDropdown";
+import { cn } from "@/lib/utils";
 
 interface ModuleHeaderProps {
   icon: LucideIcon | React.ComponentType<{ className?: string }>;
@@ -17,6 +18,7 @@ interface ModuleHeaderProps {
   titleTestId?: string;
   actions?: React.ReactNode;
   onAIInsightsClick?: () => void;
+  compact?: boolean;
 }
 
 export function ModuleHeader({
@@ -30,20 +32,33 @@ export function ModuleHeader({
   titleTestId = "text-module-title",
   actions,
   onAIInsightsClick,
+  compact = false,
 }: ModuleHeaderProps) {
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/10">
-            <Icon className="h-6 w-6 text-primary" />
+    <div className={cn(compact ? "px-4 py-2" : "p-4")}>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className={cn(
+              "rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/10 shrink-0",
+              compact ? "p-1.5" : "p-2",
+            )}
+          >
+            <Icon className={cn("text-primary", compact ? "h-4 w-4" : "h-6 w-6")} />
           </div>
-          <div>
-            <h1 className="text-xl font-semibold font-display" data-testid={titleTestId}>{title}</h1>
-            <p className="text-sm text-muted-foreground">{subtitle}</p>
+          <div className="min-w-0">
+            <h1
+              className={cn("font-semibold font-display truncate", compact ? "text-base" : "text-xl")}
+              data-testid={titleTestId}
+            >
+              {title}
+            </h1>
+            {subtitle && (
+              <p className={cn("text-muted-foreground truncate", compact ? "text-xs" : "text-sm")}>{subtitle}</p>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-3 flex-wrap w-full sm:w-auto justify-end">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
           {onSearchChange && (
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -79,12 +94,13 @@ export function ModuleHeader({
             <TooltipTrigger asChild>
               <Button
                 variant="outline"
-                className="rounded-xl gap-2"
+                className={cn("rounded-xl gap-2", compact && "h-8 text-xs px-2.5")}
                 data-testid="button-ai-insights"
                 onClick={onAIInsightsClick}
               >
-                <Sparkles className="h-4 w-4 text-primary" />
-                AI Insights
+                <Sparkles className={cn("text-primary", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
+                {!compact && "AI Insights"}
+                {compact && <span className="hidden md:inline">AI Insights</span>}
               </Button>
             </TooltipTrigger>
             <TooltipContent>AI-powered insights and recommendations</TooltipContent>

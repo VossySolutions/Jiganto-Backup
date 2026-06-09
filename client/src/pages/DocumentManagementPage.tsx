@@ -1,7 +1,14 @@
-﻿import { useState, useCallback, useRef, useEffect } from "react";
+﻿import { useState, useCallback, useRef, useEffect, useMemo, Fragment } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
+import { DOCX_MAMMOTH_STYLE_MAP, prepareDocxImport, applyDocxStyles, isIgnorableMammothWarning } from "@/lib/docx-import";
+import {
+  ALLOW_UNCATEGORISED_DOCS,
+  UNCATEGORISED_FOLDER_VALUE,
+  folderSelectValue,
+  parseFolderSelectValue,
+} from "@/lib/document-folder-policy";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useShellLayout } from "@/hooks/use-shell-layout";
@@ -316,6 +323,9 @@ export default function DocumentManagementPage() {
   const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
   const [saveAsTitle, setSaveAsTitle] = useState("");
   const [saveAsFolderId, setSaveAsFolderId] = useState<number | null>(null);
+  const [newDocFolderId, setNewDocFolderId] = useState<number | null>(null);
+  const [isSaveLocationOpen, setIsSaveLocationOpen] = useState(false);
+  const [saveLocationFolderId, setSaveLocationFolderId] = useState<number | null>(null);
   const FOLDER_COLORS = ["#f97316", "#3b82f6", "#10b981", "#8b5cf6", "#ef4444", "#f59e0b", "#ec4899", "#6b7280"] as const;
 
   const [pendingAnchoredComment, setPendingAnchoredComment] = useState<{ id: string; text: string } | null>(null);
@@ -878,7 +888,9 @@ export default function DocumentManagementPage() {
             lastError.name === "AbortError" ||
             msg.includes("network") ||
             msg.includes("ECONNRESET") ||
-            msg.includes("TypeError");
+            msg.includes("TypeError") ||
+            msg.includes("500:") ||
+            msg.includes("Failed to save document content");
           if (attempt < maxAttempts - 1 && isRetryable) {
             await new Promise(r => setTimeout(r, delays[attempt] || 2000));
             continue;
@@ -890,6 +902,9 @@ export default function DocumentManagementPage() {
     },
     retry: false,
     onSuccess: (updatedDoc: Document, variables) => {
+      if ("content" in variables.updates && variables.updates.content !== undefined) {
+        lastAutoSavedContent.current = variables.updates.content ?? "";
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedFolderId] });
       queryClient.invalidateQueries({ queryKey: ["/api/documents/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedDocument?.id, "versions"] });
@@ -978,19 +993,18 @@ export default function DocumentManagementPage() {
       const mammoth = mammothModule.default || mammothModule;
       const pendingImages: Array<{ placeholder: string; buffer: any; contentType: string }> = [];
       let imgIndex = 0;
+
+      const importPrep = await prepareDocxImport(arrayBuffer);
+      const combinedStyleMap = [
+        ...(importPrep?.styleMapEntries ?? []),
+        ...DOCX_MAMMOTH_STYLE_MAP,
+      ];
+
       const result = await mammoth.convertToHtml(
         { arrayBuffer },
         {
-          styleMap: [
-            "p[style-name='Heading 1'] => h1:fresh",
-            "p[style-name='Heading 2'] => h2:fresh",
-            "p[style-name='Heading 3'] => h3:fresh",
-            "p[style-name='Heading 4'] => h4:fresh",
-            "b => strong",
-            "i => em",
-            "u => u",
-            "strike => s",
-          ],
+          styleMap: combinedStyleMap,
+          ...(importPrep?.transformDocument ? { transformDocument: importPrep.transformDocument } : {}),
           convertImage: mammoth.images.imgElement(async (image: any) => {
             try {
               const imageBuffer = await image.read();
@@ -1005,9 +1019,10 @@ export default function DocumentManagementPage() {
               return { src: "" };
             }
           }),
-        }
+        },
       );
-      let html = result.value || "";
+
+      let html = applyDocxStyles(result.value || "", importPrep);
       html = html.replace(/<img[^>]*src=["'](?:\s*)["'][^>]*\/?>/gi, '');
       let imageFailCount = 0;
       for (const img of pendingImages) {
@@ -1051,10 +1066,11 @@ export default function DocumentManagementPage() {
       const title = file.name.replace(/\.docx$/i, '');
       setImportTitle(title || "Imported Document");
       setImportContent(html);
-      setImportFolderId(selectedFolderId);
+      setImportFolderId(selectedFolderId ?? (ALLOW_UNCATEGORISED_DOCS ? null : folders[0]?.id ?? null));
       const warnings = result.messages
-        .filter((m: any) => m.type === 'warning')
-        .map((m: any) => m.message);
+        .filter((m: any) => m.type === "warning")
+        .map((m: any) => m.message as string)
+        .filter((msg: string) => !isIgnorableMammothWarning(msg));
       if (warnings.length > 0) {
         setImportWarnings(warnings);
       }
@@ -1065,7 +1081,7 @@ export default function DocumentManagementPage() {
       setIsImporting(false);
       if (docxInputRef.current) docxInputRef.current.value = "";
     }
-  }, [selectedFolderId, toast]);
+  }, [selectedFolderId, folders, toast]);
 
   const deleteDocMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/documents/${id}`),
@@ -1287,6 +1303,97 @@ export default function DocumentManagementPage() {
 
   const folderTree = buildFolderTree();
 
+  const flatFolderList = useMemo(() => {
+    const flat: { id: number; name: string; depth: number }[] = [];
+    const flatten = (items: FolderTreeItem[], depth: number) => {
+      for (const item of items) {
+        flat.push({ id: item.id, name: item.name, depth });
+        if (item.children?.length) flatten(item.children, depth + 1);
+      }
+    };
+    flatten(folderTree, 0);
+    return flat;
+  }, [folderTree]);
+
+  const defaultFolderId = selectedFolderId ?? flatFolderList[0]?.id ?? null;
+
+  /** Folder pre-selected when creating a doc from the current explorer context. */
+  const newDocDefaultFolderId = selectedFolderId ?? (ALLOW_UNCATEGORISED_DOCS ? null : defaultFolderId);
+
+  const openNewDocDialog = useCallback(() => {
+    setNewDocFolderId(newDocDefaultFolderId);
+    setIsNewDocOpen(true);
+  }, [newDocDefaultFolderId]);
+
+  const openNewDocInFolder = useCallback((folderId: number) => {
+    setSelectedFolderId(folderId);
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      next.add(folderId);
+      return next;
+    });
+    setNewDocFolderId(folderId);
+    setIsNewDocOpen(true);
+  }, []);
+
+  const promptSaveLocation = useCallback(() => {
+    setSaveLocationFolderId(
+      selectedDocumentRef.current?.folderId ??
+      selectedFolderId ??
+      (ALLOW_UNCATEGORISED_DOCS ? null : defaultFolderId),
+    );
+    setIsSaveLocationOpen(true);
+  }, [selectedFolderId, defaultFolderId]);
+
+  const saveDocumentContent = useCallback((doc: Document) => {
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = null;
+    }
+    if (doc.folderId != null) {
+      updateDocMutation.mutate({ id: doc.id, updates: { content: editContentRef.current }, silent: true });
+      return;
+    }
+    promptSaveLocation();
+  }, [promptSaveLocation, updateDocMutation]);
+
+  useEffect(() => {
+    if (isNewDocOpen) setNewDocFolderId(newDocDefaultFolderId);
+  }, [isNewDocOpen, newDocDefaultFolderId]);
+
+  useEffect(() => {
+    if (isImportOpen && importFolderId == null && !ALLOW_UNCATEGORISED_DOCS) {
+      setImportFolderId(defaultFolderId);
+    }
+  }, [isImportOpen, importFolderId, defaultFolderId]);
+
+  const renderFolderSelectItems = (
+    testIdPrefix: string,
+    options?: { includeUncategorised?: boolean },
+  ) => {
+    const showUncategorised = options?.includeUncategorised ?? ALLOW_UNCATEGORISED_DOCS;
+    return (
+      <Fragment>
+        {showUncategorised && (
+          <SelectItem value={UNCATEGORISED_FOLDER_VALUE} data-testid={`${testIdPrefix}-uncategorised`}>
+            <span className="flex items-center gap-1.5">
+              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+              Uncategorised
+            </span>
+          </SelectItem>
+        )}
+        {flatFolderList.map((f) => (
+          <SelectItem key={f.id} value={String(f.id)} data-testid={`${testIdPrefix}-${f.id}`}>
+            <span className="flex items-center gap-1.5" style={{ paddingLeft: `${f.depth * 16}px` }}>
+              <Folder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              {f.name}
+            </span>
+          </SelectItem>
+        ))}
+      </Fragment>
+    );
+  };
+
   // Keep refs in sync with state for use inside autosave closure
   useEffect(() => {
     // Flush any pending save for the PREVIOUS document before switching
@@ -1480,6 +1587,80 @@ export default function DocumentManagementPage() {
   const displayedDocs = getCategoryFilteredDocs(searchQuery.length > 2 ? searchResults : documents);
   const rootDocs = allDocuments.filter(d => d.folderId === null);
 
+  const renderExplorerDocMenu = (doc: Document, testIdPrefix: string) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 h-6 w-6 text-muted-foreground hover:text-foreground"
+          data-testid={`${testIdPrefix}-menu-${doc.id}`}
+        >
+          <MoreHorizontal className="h-3 w-3" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingDocument(doc); setRenameValue(doc.title); }}>
+          <Pencil className="h-4 w-4 mr-2" /> Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("document", doc.id, doc.title); }}>
+          <Share2 className="h-4 w-4 mr-2" /> Share Link
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownloadDocument(doc); }}>
+          <Download className="h-4 w-4 mr-2" /> Download
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedDocument(doc);
+            setMoveToFolderId(doc.folderId ?? defaultFolderId);
+            setIsMoveToFolderOpen(true);
+          }}
+          data-testid={`${testIdPrefix}-move-${doc.id}`}
+        >
+          <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-destructive"
+          onClick={(e) => { e.stopPropagation(); deleteDocMutation.mutate(doc.id); }}
+        >
+          <Trash2 className="h-4 w-4 mr-2" /> Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const renderExplorerFileMenu = (file: DocumentFile, testIdPrefix: string) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 h-6 w-6 text-muted-foreground hover:text-foreground"
+          data-testid={`${testIdPrefix}-menu-${file.id}`}
+        >
+          <MoreHorizontal className="h-3 w-3" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); window.open(`/api/document-files/${file.id}/download`, "_blank"); }}>
+          <Download className="h-4 w-4 mr-2" /> Download
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("document", file.id, file.originalName); }}>
+          <Share2 className="h-4 w-4 mr-2" /> Share Link
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-destructive"
+          onClick={(e) => { e.stopPropagation(); deleteFileMutation.mutate(file.id); }}
+        >
+          <Trash2 className="h-4 w-4 mr-2" /> Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   const renderFolderTreeItem = (folder: FolderTreeItem, depth: number = 0): React.ReactNode => {
     const hasChildren = (folder.children && folder.children.length > 0) || (folder.docs && folder.docs.length > 0) || (folder.files && folder.files.length > 0);
     const isExpanded = expandedFolders.has(folder.id);
@@ -1549,6 +1730,9 @@ export default function DocumentManagementPage() {
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openNewFolderDialog(folder.parentId); }}>
                 <FolderPlus className="h-4 w-4 mr-2" /> New Sibling Folder
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openNewDocInFolder(folder.id); }} data-testid={`tree-folder-new-doc-${folder.id}`}>
+                <FilePlus className="h-4 w-4 mr-2" /> New Document
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolder(folder); setRenameValue(folder.name); setRenamingFolderColor(folder.color || "#f97316"); }}>
                 <Pencil className="h-4 w-4 mr-2" /> Rename
@@ -1590,39 +1774,7 @@ export default function DocumentManagementPage() {
                 <span className="w-4" />
                 {getSmallDocTypeIcon(doc.type)}
                 <span className="text-xs truncate flex-1">{doc.title}</span>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                      data-testid={`tree-doc-menu-${doc.id}`}
-                    >
-                      <MoreHorizontal className="h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingDocument(doc); setRenameValue(doc.title); }}>
-                      <Pencil className="h-4 w-4 mr-2" /> Rename
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("document", doc.id, doc.title); }}>
-                      <Share2 className="h-4 w-4 mr-2" /> Share Link
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownloadDocument(doc); }}>
-                      <Download className="h-4 w-4 mr-2" /> Download
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedDocument(doc); setMoveToFolderId(doc.folderId ?? null); setIsMoveToFolderOpen(true); }} data-testid={`tree-doc-move-${doc.id}`}>
-                      <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      className="text-destructive"
-                      onClick={(e) => { e.stopPropagation(); deleteDocMutation.mutate(doc.id); }}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" /> Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {renderExplorerDocMenu(doc, "tree-doc")}
               </div>
             ))}
             {folder.files && folder.files.map(file => (
@@ -1639,33 +1791,7 @@ export default function DocumentManagementPage() {
                 <span className="w-4" />
                 {getFileIcon(file.mimeType, "sm")}
                 <span className="text-xs truncate flex-1">{file.originalName}</span>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                      data-testid={`tree-file-menu-${file.id}`}
-                    >
-                      <MoreHorizontal className="h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); window.open(`/api/document-files/${file.id}/download`, '_blank'); }}>
-                      <Download className="h-4 w-4 mr-2" /> Download
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("document", file.id, file.originalName); }}>
-                      <Share2 className="h-4 w-4 mr-2" /> Share Link
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      className="text-destructive"
-                      onClick={(e) => { e.stopPropagation(); deleteFileMutation.mutate(file.id); }}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" /> Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {renderExplorerFileMenu(file, "tree-file")}
               </div>
             ))}
           </div>
@@ -1784,7 +1910,7 @@ export default function DocumentManagementPage() {
                         <ContextMenuTrigger asChild>
                           <div
                             className={cn(
-                              "flex items-start gap-2 p-1.5 rounded-md cursor-pointer transition-colors",
+                              "flex items-start gap-2 p-1.5 rounded-md cursor-pointer transition-colors group",
                               isActive ? "bg-primary/10" : "hover:bg-muted"
                             )}
                             onClick={() => openDoc(doc as any)}
@@ -1805,6 +1931,7 @@ export default function DocumentManagementPage() {
                                 {status.charAt(0).toUpperCase() + status.slice(1)}
                               </span>
                             )}
+                            {renderExplorerDocMenu(doc as Document, "explorer-doc")}
                           </div>
                         </ContextMenuTrigger>
                         <ContextMenuContent className="w-48">
@@ -1817,7 +1944,7 @@ export default function DocumentManagementPage() {
                           <ContextMenuItem onClick={() => handleDownloadDocument(doc as any)}>
                             <Download className="h-4 w-4 mr-2" /> Download
                           </ContextMenuItem>
-                          <ContextMenuItem onClick={() => { setSelectedDocument(doc as any); setMoveToFolderId((doc as any).folderId ?? null); setIsMoveToFolderOpen(true); }}>
+                          <ContextMenuItem onClick={() => { setSelectedDocument(doc as any); setMoveToFolderId((doc as any).folderId ?? defaultFolderId); setIsMoveToFolderOpen(true); }}>
                             <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
                           </ContextMenuItem>
                           <ContextMenuSeparator />
@@ -1875,7 +2002,7 @@ export default function DocumentManagementPage() {
                             <ContextMenuTrigger asChild>
                               <div
                                 className={cn(
-                                  "flex items-center gap-1.5 py-1 px-1.5 rounded-md cursor-pointer transition-colors",
+                                  "flex items-center gap-1.5 py-1 px-1.5 rounded-md cursor-pointer transition-colors group",
                                   isActive ? "bg-primary/10 text-primary" : "hover:bg-muted"
                                 )}
                                 onClick={() => {
@@ -1887,6 +2014,7 @@ export default function DocumentManagementPage() {
                               >
                                 {getSmallDocTypeIcon(doc.type)}
                                 <span className="text-xs truncate flex-1">{doc.title}</span>
+                                {renderExplorerDocMenu(doc as Document, "tree-root-doc")}
                               </div>
                             </ContextMenuTrigger>
                             <ContextMenuContent className="w-48">
@@ -1899,7 +2027,7 @@ export default function DocumentManagementPage() {
                               <ContextMenuItem onClick={() => handleDownloadDocument(doc as any)}>
                                 <Download className="h-4 w-4 mr-2" /> Download
                               </ContextMenuItem>
-                              <ContextMenuItem onClick={() => { setSelectedDocument(doc as any); setMoveToFolderId((doc as any).folderId ?? null); setIsMoveToFolderOpen(true); }}>
+                              <ContextMenuItem onClick={() => { setSelectedDocument(doc as any); setMoveToFolderId((doc as any).folderId ?? defaultFolderId); setIsMoveToFolderOpen(true); }}>
                                 <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
                               </ContextMenuItem>
                               <ContextMenuSeparator />
@@ -1922,12 +2050,13 @@ export default function DocumentManagementPage() {
                       {allFiles.filter(f => f.folderId === null).map(file => (
                         <div
                           key={file.id}
-                          className={cn("flex items-center gap-1.5 py-1 px-1.5 rounded-md cursor-pointer hover:bg-muted", selectedFile?.id === file.id && "bg-primary/10")}
+                          className={cn("flex items-center gap-1.5 py-1 px-1.5 rounded-md cursor-pointer hover:bg-muted group", selectedFile?.id === file.id && "bg-primary/10")}
                           onClick={() => handleFileClick(file)}
                           data-testid={`tree-root-file-${file.id}`}
                         >
                           {getFileIcon(file.mimeType, "sm")}
                           <span className="text-xs truncate flex-1">{file.originalName}</span>
+                          {renderExplorerFileMenu(file, "tree-root-file")}
                         </div>
                       ))}
                     </div>
@@ -1970,7 +2099,7 @@ export default function DocumentManagementPage() {
           <Button
             size="sm"
             className="flex-1 gap-1.5 text-xs h-8 bg-indigo-600 hover:bg-indigo-700 text-white"
-            onClick={() => setIsNewDocOpen(true)}
+            onClick={() => openNewDocDialog()}
             data-testid="tree-new-doc"
           >
             <FilePlus className="h-3.5 w-3.5" /> New doc
@@ -1983,7 +2112,7 @@ export default function DocumentManagementPage() {
   const renderDocumentView = () => {
     if (!selectedDocument) return null;
     const docTags = ((selectedDocument.metadata as any)?.tags || []) as Array<{name: string; color: string}>;
-    const folderName = folders.find(f => f.id === selectedDocument.folderId)?.name || "Root";
+    const folderName = folders.find(f => f.id === selectedDocument.folderId)?.name || "Uncategorised";
     const statusColors: Record<string, string> = {
       draft: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
       published: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
@@ -2055,10 +2184,7 @@ export default function DocumentManagementPage() {
                 )}
                 <Button
                   size="sm"
-                  onClick={() => {
-                    lastAutoSavedContent.current = editContentRef.current;
-                    updateDocMutation.mutate({ id: selectedDocument.id, updates: { content: editContentRef.current } });
-                  }}
+                  onClick={() => saveDocumentContent(selectedDocument)}
                   disabled={updateDocMutation.isPending}
                   className="gap-1.5 shrink-0"
                   data-testid="button-save-document"
@@ -2071,7 +2197,7 @@ export default function DocumentManagementPage() {
                   size="sm"
                   onClick={() => {
                     setSaveAsTitle(selectedDocument.title + " (Copy)");
-                    setSaveAsFolderId(selectedDocument.folderId ?? selectedFolderId);
+                    setSaveAsFolderId(selectedDocument.folderId ?? selectedFolderId ?? (ALLOW_UNCATEGORISED_DOCS ? null : defaultFolderId));
                     setIsSaveAsOpen(true);
                   }}
                   className="gap-1.5 shrink-0 hidden md:inline-flex"
@@ -2159,7 +2285,7 @@ export default function DocumentManagementPage() {
                     className="md:hidden"
                     onClick={() => {
                       setSaveAsTitle(selectedDocument.title + " (Copy)");
-                      setSaveAsFolderId(selectedDocument.folderId ?? selectedFolderId);
+                      setSaveAsFolderId(selectedDocument.folderId ?? selectedFolderId ?? (ALLOW_UNCATEGORISED_DOCS ? null : defaultFolderId));
                       setIsSaveAsOpen(true);
                     }}
                     data-testid="button-save-as-mobile"
@@ -2177,7 +2303,7 @@ export default function DocumentManagementPage() {
                   <Download className="h-4 w-4 mr-2" /> Download
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => {
-                  setMoveToFolderId(selectedDocument.folderId ?? null);
+                  setMoveToFolderId(selectedDocument.folderId ?? defaultFolderId);
                   setIsMoveToFolderOpen(true);
                 }} data-testid="button-move-to-folder">
                   <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
@@ -2196,6 +2322,16 @@ export default function DocumentManagementPage() {
 
         <ScrollArea className="flex-1">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+            {selectedDocument.folderId == null && (
+              <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-4 py-3">
+                <p className="text-sm text-blue-900 dark:text-blue-200">
+                  This document is uncategorised. When you save, you can choose a folder or leave it uncategorised.
+                </p>
+                <Button size="sm" variant="outline" className="shrink-0" onClick={promptSaveLocation} data-testid="button-choose-folder-to-save">
+                  <FolderInput className="h-3.5 w-3.5 mr-1.5" /> Save location…
+                </Button>
+              </div>
+            )}
             <div className="mb-4">
               <div className="flex items-center gap-3 mb-2">
                 <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -3035,7 +3171,7 @@ export default function DocumentManagementPage() {
           Click a document to preview it, or double-click to start editing right away.
         </p>
         <div className="flex items-center justify-center gap-3 flex-wrap">
-          <Button size="sm" onClick={() => setIsNewDocOpen(true)} data-testid="button-create-doc-welcome">
+          <Button size="sm" onClick={() => openNewDocDialog()} data-testid="button-create-doc-welcome">
             <Plus className="h-4 w-4 mr-1.5" /> New Document
           </Button>
           <Button size="sm" variant="outline" onClick={() => openNewFolderDialog(selectedFolderId)} data-testid="button-create-folder-welcome">
@@ -3332,7 +3468,7 @@ export default function DocumentManagementPage() {
                     : "Create your first document to get started"}
                 </p>
                 {!searchQuery && (
-                  <Button onClick={() => setIsNewDocOpen(true)} data-testid="button-create-first-doc">
+                  <Button onClick={() => openNewDocDialog()} data-testid="button-create-first-doc">
                     <Plus className="h-4 w-4 mr-1.5" /> Create Document
                   </Button>
                 )}
@@ -3409,7 +3545,7 @@ export default function DocumentManagementPage() {
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("document", doc.id, doc.title); }}>
                                 <Link2 className="h-4 w-4 mr-2" /> Share Link
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedDocument(doc); setMoveToFolderId(doc.folderId ?? null); setIsMoveToFolderOpen(true); }} data-testid={`doc-list-move-${doc.id}`}>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedDocument(doc); setMoveToFolderId(doc.folderId ?? defaultFolderId); setIsMoveToFolderOpen(true); }} data-testid={`doc-list-move-${doc.id}`}>
                                 <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
@@ -3675,7 +3811,11 @@ export default function DocumentManagementPage() {
                 </DialogContent>
               </Dialog>
 
-              <Dialog open={isNewDocOpen} onOpenChange={(open) => { setIsNewDocOpen(open); if (!open) setSelectedTemplateId(null); }}>
+              <Dialog open={isNewDocOpen} onOpenChange={(open) => {
+                setIsNewDocOpen(open);
+                if (open) setNewDocFolderId(newDocDefaultFolderId);
+                if (!open) setSelectedTemplateId(null);
+              }}>
                 <DialogTrigger asChild>
                   <Button size="sm" className="gap-1.5" data-testid="button-new-document">
                     <Plus className="h-4 w-4" />
@@ -3756,23 +3896,47 @@ export default function DocumentManagementPage() {
                         </div>
                       </div>
                     )}
+
+                    <div className="space-y-2">
+                      <Label>Save location</Label>
+                      {selectedFolderId != null && (
+                        <p className="text-xs text-muted-foreground">
+                          Creating in folder: {folders.find(f => f.id === selectedFolderId)?.name}
+                        </p>
+                      )}
+                      <Select
+                        value={folderSelectValue(newDocFolderId)}
+                        onValueChange={(val) => setNewDocFolderId(parseFolderSelectValue(val))}
+                      >
+                        <SelectTrigger data-testid="select-new-doc-folder">
+                          <SelectValue placeholder="Choose save location" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-64">
+                          {renderFolderSelectItems("new-doc-folder")}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setIsNewDocOpen(false)}>Cancel</Button>
                     <Button
                       onClick={() => {
-                        const templateContent = selectedTemplateId 
+                        if (!ALLOW_UNCATEGORISED_DOCS && newDocFolderId == null) {
+                          toast({ title: "Folder required", description: "Please choose a folder for this document.", variant: "destructive" });
+                          return;
+                        }
+                        const templateContent = selectedTemplateId
                           ? templates.find(t => t.id === selectedTemplateId)?.content || ""
                           : "";
-                        createDocMutation.mutate({ 
-                          title: newDocTitle || "Untitled", 
-                          type: newDocType, 
-                          folderId: selectedFolderId,
+                        createDocMutation.mutate({
+                          title: newDocTitle || "Untitled",
+                          type: newDocType,
+                          folderId: newDocFolderId,
                           content: templateContent,
                         });
                         setSelectedTemplateId(null);
                       }}
-                      disabled={createDocMutation.isPending}
+                      disabled={createDocMutation.isPending || (!ALLOW_UNCATEGORISED_DOCS && newDocFolderId == null)}
                       data-testid="button-create-document"
                     >
                       Create
@@ -3956,39 +4120,16 @@ export default function DocumentManagementPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Save to Folder</Label>
+              <Label>Save location</Label>
               <Select
-                value={saveAsFolderId === null ? "__root__" : String(saveAsFolderId)}
-                onValueChange={(val) => setSaveAsFolderId(val === "__root__" ? null : Number(val))}
+                value={folderSelectValue(saveAsFolderId)}
+                onValueChange={(val) => setSaveAsFolderId(parseFolderSelectValue(val))}
               >
                 <SelectTrigger data-testid="select-save-as-folder">
-                  <SelectValue placeholder="Choose folder" />
+                  <SelectValue placeholder="Choose save location" />
                 </SelectTrigger>
                 <SelectContent className="max-h-64">
-                  <SelectItem value="__root__" data-testid="save-as-folder-root">
-                    <span className="flex items-center gap-1.5">
-                      <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                      Documents (Root)
-                    </span>
-                  </SelectItem>
-                  {(() => {
-                    const flatFolders: { id: number; name: string; depth: number }[] = [];
-                    const flatten = (items: FolderTreeItem[], depth: number) => {
-                      for (const item of items) {
-                        flatFolders.push({ id: item.id, name: item.name, depth });
-                        if (item.children && item.children.length > 0) flatten(item.children, depth + 1);
-                      }
-                    };
-                    flatten(folderTree, 0);
-                    return flatFolders.map((f) => (
-                      <SelectItem key={f.id} value={String(f.id)} data-testid={`save-as-folder-${f.id}`}>
-                        <span className="flex items-center gap-1.5" style={{ paddingLeft: `${f.depth * 16}px` }}>
-                          <Folder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          {f.name}
-                        </span>
-                      </SelectItem>
-                    ));
-                  })()}
+                  {renderFolderSelectItems("save-as-folder")}
                 </SelectContent>
               </Select>
             </div>
@@ -3997,22 +4138,25 @@ export default function DocumentManagementPage() {
             <Button variant="outline" onClick={() => setIsSaveAsOpen(false)}>Cancel</Button>
             <Button
               onClick={() => {
-                if (selectedDocument && saveAsTitle.trim()) {
-                  const targetFolderName = saveAsFolderId 
-                    ? folders.find(f => f.id === saveAsFolderId)?.name || "selected folder"
-                    : "Root";
-                  createDocMutation.mutate({
-                    title: saveAsTitle.trim(),
-                    type: selectedDocument.type || "document",
-                    folderId: saveAsFolderId,
-                    content: editContent || selectedDocument.content || "",
-                    openAfterCreate: false,
-                  });
-                  setIsSaveAsOpen(false);
-                  toast({ title: "Copy saved", description: `"${saveAsTitle.trim()}" saved to ${targetFolderName}` });
+                if (!selectedDocument || !saveAsTitle.trim()) return;
+                if (!ALLOW_UNCATEGORISED_DOCS && saveAsFolderId == null) {
+                  toast({ title: "Folder required", description: "Please choose a folder for the copy.", variant: "destructive" });
+                  return;
                 }
+                const targetFolderName = saveAsFolderId
+                  ? folders.find(f => f.id === saveAsFolderId)?.name || "selected folder"
+                  : "Uncategorised";
+                createDocMutation.mutate({
+                  title: saveAsTitle.trim(),
+                  type: selectedDocument.type || "document",
+                  folderId: saveAsFolderId,
+                  content: editContent || selectedDocument.content || "",
+                  openAfterCreate: false,
+                });
+                setIsSaveAsOpen(false);
+                toast({ title: "Copy saved", description: `"${saveAsTitle.trim()}" saved to ${targetFolderName}` });
               }}
-              disabled={!saveAsTitle.trim() || createDocMutation.isPending}
+              disabled={!saveAsTitle.trim() || (!ALLOW_UNCATEGORISED_DOCS && saveAsFolderId == null) || createDocMutation.isPending}
               data-testid="button-confirm-save-as"
             >
               {createDocMutation.isPending ? "Saving..." : "Save As"}
@@ -4026,44 +4170,21 @@ export default function DocumentManagementPage() {
           <DialogHeader>
             <DialogTitle>Move Document</DialogTitle>
             <DialogDescription>
-              Move "{selectedDocument?.title}" to a different folder
+              Move "{selectedDocument?.title}" to a different location
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Destination Folder</Label>
+              <Label>Destination</Label>
               <Select
-                value={moveToFolderId === null ? "__root__" : String(moveToFolderId)}
-                onValueChange={(val) => setMoveToFolderId(val === "__root__" ? null : Number(val))}
+                value={folderSelectValue(moveToFolderId)}
+                onValueChange={(val) => setMoveToFolderId(parseFolderSelectValue(val))}
               >
                 <SelectTrigger data-testid="select-move-to-folder">
-                  <SelectValue placeholder="Choose folder" />
+                  <SelectValue placeholder="Choose location" />
                 </SelectTrigger>
                 <SelectContent className="max-h-64">
-                  <SelectItem value="__root__" data-testid="move-to-folder-root">
-                    <span className="flex items-center gap-1.5">
-                      <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                      Documents (Root)
-                    </span>
-                  </SelectItem>
-                  {(() => {
-                    const flatFolders: { id: number; name: string; depth: number }[] = [];
-                    const flatten = (items: FolderTreeItem[], depth: number) => {
-                      for (const item of items) {
-                        flatFolders.push({ id: item.id, name: item.name, depth });
-                        if (item.children && item.children.length > 0) flatten(item.children, depth + 1);
-                      }
-                    };
-                    flatten(folderTree, 0);
-                    return flatFolders.map((f) => (
-                      <SelectItem key={f.id} value={String(f.id)} data-testid={`move-to-folder-${f.id}`}>
-                        <span className="flex items-center gap-1.5" style={{ paddingLeft: `${f.depth * 16}px` }}>
-                          <Folder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          {f.name}
-                        </span>
-                      </SelectItem>
-                    ));
-                  })()}
+                  {renderFolderSelectItems("move-to-folder")}
                 </SelectContent>
               </Select>
             </div>
@@ -4080,10 +4201,97 @@ export default function DocumentManagementPage() {
                   setIsMoveToFolderOpen(false);
                 }
               }}
-              disabled={updateDocMutation.isPending}
+              disabled={(!ALLOW_UNCATEGORISED_DOCS && moveToFolderId == null) || updateDocMutation.isPending}
               data-testid="button-confirm-move"
             >
               {updateDocMutation.isPending ? "Moving..." : "Move"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSaveLocationOpen} onOpenChange={setIsSaveLocationOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Where would you like to save?</DialogTitle>
+            <DialogDescription>
+              Choose a folder for "{selectedDocument?.title}", or leave it uncategorised.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Save location</Label>
+              <Select
+                value={folderSelectValue(saveLocationFolderId)}
+                onValueChange={(val) => setSaveLocationFolderId(parseFolderSelectValue(val))}
+              >
+                <SelectTrigger data-testid="select-save-to-folder">
+                  <SelectValue placeholder="Choose save location" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {renderFolderSelectItems("save-to-folder")}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setIsSaveLocationOpen(false)}>Cancel</Button>
+            {ALLOW_UNCATEGORISED_DOCS && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (!selectedDocument) return;
+                  if (autoSaveTimer.current) {
+                    clearTimeout(autoSaveTimer.current);
+                    autoSaveTimer.current = null;
+                  }
+                  updateDocMutation.mutate({
+                    id: selectedDocument.id,
+                    updates: { content: editContentRef.current },
+                    silent: true,
+                  });
+                  setIsSaveLocationOpen(false);
+                  toast({ title: "Saved", description: "Document saved as uncategorised." });
+                }}
+                disabled={updateDocMutation.isPending}
+                data-testid="button-save-uncategorised"
+              >
+                Leave uncategorised
+              </Button>
+            )}
+            <Button
+              onClick={() => {
+                if (!selectedDocument) return;
+                if (!ALLOW_UNCATEGORISED_DOCS && saveLocationFolderId == null) {
+                  toast({ title: "Folder required", description: "Please choose a folder.", variant: "destructive" });
+                  return;
+                }
+                if (autoSaveTimer.current) {
+                  clearTimeout(autoSaveTimer.current);
+                  autoSaveTimer.current = null;
+                }
+                const updates: Partial<Document> = { content: editContentRef.current };
+                if (saveLocationFolderId != null) {
+                  updates.folderId = saveLocationFolderId;
+                }
+                updateDocMutation.mutate({
+                  id: selectedDocument.id,
+                  updates,
+                  silent: true,
+                });
+                setIsSaveLocationOpen(false);
+                const folderName = saveLocationFolderId
+                  ? folders.find(f => f.id === saveLocationFolderId)?.name
+                  : null;
+                toast({
+                  title: "Document saved",
+                  description: folderName ? `Saved to ${folderName}` : "Saved as uncategorised.",
+                });
+              }}
+              disabled={(!ALLOW_UNCATEGORISED_DOCS && saveLocationFolderId == null) || updateDocMutation.isPending}
+              data-testid="button-confirm-save-to-folder"
+            >
+              {updateDocMutation.isPending ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4173,39 +4381,16 @@ export default function DocumentManagementPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Save to Folder</Label>
+              <Label>Save location</Label>
               <Select
-                value={importFolderId === null ? "__root__" : String(importFolderId)}
-                onValueChange={(val) => setImportFolderId(val === "__root__" ? null : Number(val))}
+                value={folderSelectValue(importFolderId)}
+                onValueChange={(val) => setImportFolderId(parseFolderSelectValue(val))}
               >
                 <SelectTrigger data-testid="select-import-folder">
-                  <SelectValue placeholder="Choose folder" />
+                  <SelectValue placeholder="Choose save location" />
                 </SelectTrigger>
                 <SelectContent className="max-h-64">
-                  <SelectItem value="__root__" data-testid="import-folder-root">
-                    <span className="flex items-center gap-1.5">
-                      <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                      Documents (Root)
-                    </span>
-                  </SelectItem>
-                  {(() => {
-                    const flatFolders: { id: number; name: string; depth: number }[] = [];
-                    const flatten = (items: FolderTreeItem[], depth: number) => {
-                      for (const item of items) {
-                        flatFolders.push({ id: item.id, name: item.name, depth });
-                        if (item.children && item.children.length > 0) flatten(item.children, depth + 1);
-                      }
-                    };
-                    flatten(folderTree, 0);
-                    return flatFolders.map((f) => (
-                      <SelectItem key={f.id} value={String(f.id)} data-testid={`import-folder-${f.id}`}>
-                        <span className="flex items-center gap-1.5" style={{ paddingLeft: `${f.depth * 16}px` }}>
-                          <Folder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          {f.name}
-                        </span>
-                      </SelectItem>
-                    ));
-                  })()}
+                  {renderFolderSelectItems("import-folder")}
                 </SelectContent>
               </Select>
             </div>
@@ -4228,6 +4413,10 @@ export default function DocumentManagementPage() {
             <Button
               onClick={async () => {
                 if (!importTitle.trim() || !importContent) return;
+                if (!ALLOW_UNCATEGORISED_DOCS && importFolderId == null) {
+                  toast({ title: "Folder required", description: "Please choose a folder for the imported document.", variant: "destructive" });
+                  return;
+                }
                 setIsImporting(true);
                 try {
                   const createRes = await apiRequest("POST", "/api/documents", {
@@ -4262,6 +4451,7 @@ export default function DocumentManagementPage() {
                     queryClient.invalidateQueries({ queryKey: ["/api/documents", importFolderId] });
                   }
                   const savedDoc = await contentRes.json();
+                  lastAutoSavedContent.current = importContent;
                   setSelectedDocument(savedDoc);
                   setIsEditing(true);
                   setIsPreviewMode(false);
@@ -4279,7 +4469,7 @@ export default function DocumentManagementPage() {
                   setIsImporting(false);
                 }
               }}
-              disabled={!importTitle.trim() || !importContent || isImporting}
+              disabled={!importTitle.trim() || !importContent || (!ALLOW_UNCATEGORISED_DOCS && importFolderId == null) || isImporting}
               data-testid="button-confirm-import"
             >
               {isImporting ? "Importing..." : "Import"}

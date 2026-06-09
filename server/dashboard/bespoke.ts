@@ -33,7 +33,12 @@ export async function listAccessibleDashboards(scope: DashboardScope) {
     .select({ dashboard: dashboards })
     .from(dashboardShares)
     .innerJoin(dashboards, eq(dashboardShares.dashboardId, dashboards.id))
-    .where(or(...shareConditions));
+    .where(
+      and(
+        eq(dashboards.orgId, scope.tenantId),
+        or(...shareConditions),
+      ),
+    );
 
   const map = new Map<number, typeof owned[0]>();
   for (const d of owned) map.set(d.id, d);
@@ -48,6 +53,7 @@ export async function loadBespokeDashboard(
 ): Promise<BespokeDashboardPayload | null> {
   const [row] = await db.select().from(dashboards).where(eq(dashboards.id, dashboardId));
   if (!row || row.type !== "bespoke") return null;
+  if (row.orgId !== scope.tenantId) return null;
   if (row.userId !== scope.userId && !row.isShared) {
     const shareConditions = [eq(dashboardShares.sharedWithUserId, scope.userId)];
     if (scope.clientId != null) {

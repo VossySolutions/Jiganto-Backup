@@ -15,6 +15,7 @@ import { fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isModuleLicensed, useModuleEntitlements } from "@/hooks/use-module-entitlements";
 import type { WidgetCatalogEntry } from "@shared/models/dashboard";
+import { invalidateDashboardDetail } from "./dashboard-utils";
 
 const WIDGET_MODULE_TO_LICENSE_KEY: Record<string, string> = {
   helpdesk: "help-desk",
@@ -49,7 +50,7 @@ export function WidgetPickerSheet({
   const [search, setSearch] = useState("");
   const { data: entitlements } = useModuleEntitlements();
 
-  const { data: catalog = [] } = useQuery({
+  const { data: catalog = [], isLoading: catalogLoading } = useQuery({
     queryKey: ["/api/dashboard/widget-catalog"],
     queryFn: async () => {
       const res = await fetchWithAuth("/api/dashboard/widget-catalog");
@@ -83,7 +84,7 @@ export function WidgetPickerSheet({
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/dashboards/${dashboardId}`] });
+      invalidateDashboardDetail(queryClient, dashboardId);
       toast({ title: "Widget added" });
     },
     onError: (err: Error) => toast({ title: "Could not add widget", description: err.message, variant: "destructive" }),
@@ -122,6 +123,14 @@ export function WidgetPickerSheet({
           />
         </div>
         <div className="mt-6 space-y-6">
+          {catalogLoading && (
+            <p className="text-sm text-muted-foreground text-center py-8">Loading widget catalog…</p>
+          )}
+          {!catalogLoading && filtered.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-8 border border-dashed rounded-xl">
+              No widgets match your search.
+            </p>
+          )}
           {Object.entries(grouped).map(([module, entries]) => (
             <div key={module}>
               <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">{module}</h4>

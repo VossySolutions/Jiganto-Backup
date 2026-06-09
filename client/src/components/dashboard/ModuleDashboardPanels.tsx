@@ -1,5 +1,4 @@
 import { Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
 import {
   Bar,
   BarChart,
@@ -15,7 +14,6 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -24,8 +22,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchWithAuth } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { CategoryBarChart } from "./CategoryBarChart";
+import { scopeQuery } from "./dashboard-utils";
+import {
+  DashboardEmptyTable,
+  DashboardTableWrap,
+  ModuleDashboardLoader,
+} from "./DashboardPanelState";
 import type {
   BusinessModuleDashboard,
   CrmModuleDashboard,
@@ -35,14 +39,6 @@ import type {
   TasksModuleDashboard,
 } from "@shared/models/dashboard";
 import { ArrowUpRight, FolderKanban, Headphones, Landmark, ListTodo, TrendingUp, Users } from "lucide-react";
-
-function scopeQuery(base: string, clientId?: number | null, projectId?: number | null) {
-  const params = new URLSearchParams();
-  if (clientId) params.set("clientId", String(clientId));
-  if (projectId) params.set("projectId", String(projectId));
-  const q = params.toString();
-  return q ? `${base}?${q}` : base;
-}
 
 function ragClass(rag: string) {
   const r = rag.toLowerCase();
@@ -77,10 +73,6 @@ function KpiRow({ items }: { items: { label: string; value: string | number }[] 
   );
 }
 
-function LoadingPanel() {
-  return <Skeleton className="h-64 w-full rounded-2xl" />;
-}
-
 export function ProjectsModulePanel({
   clientId,
   projectId,
@@ -89,19 +81,9 @@ export function ProjectsModulePanel({
   projectId?: number | null;
 }) {
   const url = scopeQuery("/api/dashboard/module/projects", clientId, projectId);
-  const { data, isLoading } = useQuery({
-    queryKey: [url],
-    queryFn: async () => {
-      const res = await fetchWithAuth(url);
-      if (!res.ok) throw new Error("Failed to load projects dashboard");
-      return (await res.json()) as ProjectsModuleDashboard;
-    },
-    staleTime: 5 * 60_000,
-  });
-
-  if (isLoading || !data) return <LoadingPanel />;
-
   return (
+    <ModuleDashboardLoader<ProjectsModuleDashboard> url={url}>
+      {(data) => (
     <div className="space-y-6">
       <KpiRow
         items={[
@@ -162,6 +144,7 @@ export function ProjectsModulePanel({
           <ModuleLink href="/modules/projects" label="View all" />
         </CardHeader>
         <CardContent>
+          <DashboardTableWrap>
           <Table>
             <TableHeader>
               <TableRow>
@@ -174,7 +157,14 @@ export function ProjectsModulePanel({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.activeProjects.map((p) => (
+              {data.activeProjects.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6}>
+                    <DashboardEmptyTable message="No active projects in this workspace." />
+                  </TableCell>
+                </TableRow>
+              ) : (
+              data.activeProjects.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell>{p.customer ?? "—"}</TableCell>
@@ -185,12 +175,16 @@ export function ProjectsModulePanel({
                   </TableCell>
                   <TableCell>{p.dueDate ?? "—"}</TableCell>
                 </TableRow>
-              ))}
+              ))
+              )}
             </TableBody>
           </Table>
+          </DashboardTableWrap>
         </CardContent>
       </Card>
     </div>
+      )}
+    </ModuleDashboardLoader>
   );
 }
 
@@ -202,19 +196,9 @@ export function TasksModulePanel({
   projectId?: number | null;
 }) {
   const url = scopeQuery("/api/dashboard/module/tasks", clientId, projectId);
-  const { data, isLoading } = useQuery({
-    queryKey: [url],
-    queryFn: async () => {
-      const res = await fetchWithAuth(url);
-      if (!res.ok) throw new Error("Failed to load tasks dashboard");
-      return (await res.json()) as TasksModuleDashboard;
-    },
-    staleTime: 5 * 60_000,
-  });
-
-  if (isLoading || !data) return <LoadingPanel />;
-
   return (
+    <ModuleDashboardLoader<TasksModuleDashboard> url={url}>
+      {(data) => (
     <div className="space-y-6">
       <KpiRow
         items={[
@@ -271,6 +255,7 @@ export function TasksModulePanel({
           <ModuleLink href="/modules/tasks" label="View full module" />
         </CardHeader>
         <CardContent>
+          <DashboardTableWrap>
           <Table>
             <TableHeader>
               <TableRow>
@@ -281,35 +266,38 @@ export function TasksModulePanel({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.dueSoon.map((t) => (
+              {data.dueSoon.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4}>
+                    <DashboardEmptyTable message="No tasks due in the next 7 days." />
+                  </TableCell>
+                </TableRow>
+              ) : (
+              data.dueSoon.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell className="font-medium">{t.title}</TableCell>
                   <TableCell>{t.dueDate ?? "—"}</TableCell>
                   <TableCell className="capitalize">{t.priority}</TableCell>
                   <TableCell className="capitalize">{t.status.replace("_", " ")}</TableCell>
                 </TableRow>
-              ))}
+              ))
+              )}
             </TableBody>
           </Table>
+          </DashboardTableWrap>
         </CardContent>
       </Card>
     </div>
+      )}
+    </ModuleDashboardLoader>
   );
 }
 
 export function HelpDeskModulePanel({ clientId, projectId }: { clientId?: number | null; projectId?: number | null }) {
   const url = scopeQuery("/api/dashboard/module/helpdesk", clientId, projectId);
-  const { data, isLoading } = useQuery({
-    queryKey: [url],
-    queryFn: async () => {
-      const res = await fetchWithAuth(url);
-      if (!res.ok) throw new Error("Failed to load help desk dashboard");
-      return (await res.json()) as HelpDeskModuleDashboard;
-    },
-    staleTime: 5 * 60_000,
-  });
-  if (isLoading || !data) return <LoadingPanel />;
   return (
+    <ModuleDashboardLoader<HelpDeskModuleDashboard> url={url}>
+      {(data) => (
     <div className="space-y-6">
       <KpiRow items={[
         { label: "Open Tickets", value: data.kpis.openTickets },
@@ -345,29 +333,27 @@ export function HelpDeskModulePanel({ clientId, projectId }: { clientId?: number
           <ModuleLink href="/modules/help-desk" label="View full module" />
         </CardHeader>
         <CardContent>
+          <DashboardTableWrap>
           <Table><TableHeader><TableRow><TableHead>Subject</TableHead><TableHead>Status</TableHead><TableHead>Priority</TableHead><TableHead>Due</TableHead></TableRow></TableHeader>
-            <TableBody>{data.recentTickets.map((t) => (
+            <TableBody>{data.recentTickets.length === 0 ? (
+              <TableRow><TableCell colSpan={4}><DashboardEmptyTable message="No recent tickets." /></TableCell></TableRow>
+            ) : data.recentTickets.map((t) => (
               <TableRow key={t.id}><TableCell className="font-medium">{t.subject}</TableCell><TableCell className="capitalize">{t.status}</TableCell><TableCell className="capitalize">{t.priority}</TableCell><TableCell>{t.dueDate ?? "—"}</TableCell></TableRow>
             ))}</TableBody></Table>
+          </DashboardTableWrap>
         </CardContent>
       </Card>
     </div>
+      )}
+    </ModuleDashboardLoader>
   );
 }
 
 export function FinanceModulePanel({ clientId, projectId }: { clientId?: number | null; projectId?: number | null }) {
   const url = scopeQuery("/api/dashboard/module/finance", clientId, projectId);
-  const { data, isLoading } = useQuery({
-    queryKey: [url],
-    queryFn: async () => {
-      const res = await fetchWithAuth(url);
-      if (!res.ok) throw new Error("Failed to load finance dashboard");
-      return (await res.json()) as FinanceModuleDashboard;
-    },
-    staleTime: 5 * 60_000,
-  });
-  if (isLoading || !data) return <LoadingPanel />;
   return (
+    <ModuleDashboardLoader<FinanceModuleDashboard> url={url}>
+      {(data) => (
     <div className="space-y-6">
       <KpiRow items={[
         { label: "Revenue YTD", value: data.kpis.revenueYtdLabel },
@@ -401,29 +387,27 @@ export function FinanceModulePanel({ clientId, projectId }: { clientId?: number 
           <ModuleLink href="/modules/finance-mgmt" label="View full module" />
         </CardHeader>
         <CardContent>
+          <DashboardTableWrap>
           <Table><TableHeader><TableRow><TableHead>Invoice</TableHead><TableHead>Amount</TableHead><TableHead>Due</TableHead><TableHead>Days overdue</TableHead></TableRow></TableHeader>
-            <TableBody>{data.unpaidInvoices.map((i) => (
+            <TableBody>{data.unpaidInvoices.length === 0 ? (
+              <TableRow><TableCell colSpan={4}><DashboardEmptyTable message="No unpaid invoices." /></TableCell></TableRow>
+            ) : data.unpaidInvoices.map((i) => (
               <TableRow key={i.id}><TableCell>{i.label}</TableCell><TableCell>£{(i.amountPence / 100).toLocaleString()}</TableCell><TableCell>{i.dueDate}</TableCell><TableCell>{i.daysOverdue}</TableCell></TableRow>
             ))}</TableBody></Table>
+          </DashboardTableWrap>
         </CardContent>
       </Card>
     </div>
+      )}
+    </ModuleDashboardLoader>
   );
 }
 
 export function BusinessModulePanel({ clientId, projectId }: { clientId?: number | null; projectId?: number | null }) {
   const url = scopeQuery("/api/dashboard/module/business", clientId, projectId);
-  const { data, isLoading } = useQuery({
-    queryKey: [url],
-    queryFn: async () => {
-      const res = await fetchWithAuth(url);
-      if (!res.ok) throw new Error("Failed to load business dashboard");
-      return (await res.json()) as BusinessModuleDashboard;
-    },
-    staleTime: 5 * 60_000,
-  });
-  if (isLoading || !data) return <LoadingPanel />;
   return (
+    <ModuleDashboardLoader<BusinessModuleDashboard> url={url}>
+      {(data) => (
     <div className="space-y-6">
       <KpiRow items={[
         { label: "Active Strategies", value: data.kpis.activeStrategies },
@@ -444,10 +428,8 @@ export function BusinessModulePanel({ clientId, projectId }: { clientId?: number
         </Card>
         <Card className="rounded-2xl border-border/50">
           <CardHeader><CardTitle className="text-base">Initiative Progress</CardTitle></CardHeader>
-          <CardContent className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.initiativeProgress} layout="vertical"><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" domain={[0, 100]} /><YAxis type="category" dataKey="name" width={100} /><Tooltip /><Bar dataKey="progress" fill="#6366f1" name="%" /></BarChart>
-            </ResponsiveContainer>
+          <CardContent className="min-h-64 max-h-[420px] overflow-y-auto">
+            <CategoryBarChart data={data.initiativeProgress} />
           </CardContent>
         </Card>
       </div>
@@ -457,13 +439,19 @@ export function BusinessModulePanel({ clientId, projectId }: { clientId?: number
           <ModuleLink href="/modules/business-mgmt" label="View full module" />
         </CardHeader>
         <CardContent>
+          <DashboardTableWrap>
           <Table><TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Owner</TableHead><TableHead>Layer</TableHead><TableHead>Days overdue</TableHead></TableRow></TableHeader>
-            <TableBody>{data.overdueGovernance.map((g, idx) => (
+            <TableBody>{data.overdueGovernance.length === 0 ? (
+              <TableRow><TableCell colSpan={4}><DashboardEmptyTable message="No overdue governance items." /></TableCell></TableRow>
+            ) : data.overdueGovernance.map((g, idx) => (
               <TableRow key={idx}><TableCell className="font-medium">{g.name}</TableCell><TableCell>{g.owner ?? "—"}</TableCell><TableCell>{g.layer}</TableCell><TableCell>{g.daysOverdue}</TableCell></TableRow>
             ))}</TableBody></Table>
+          </DashboardTableWrap>
         </CardContent>
       </Card>
     </div>
+      )}
+    </ModuleDashboardLoader>
   );
 }
 
@@ -475,19 +463,9 @@ export function CrmModulePanel({
   projectId?: number | null;
 }) {
   const url = scopeQuery("/api/dashboard/module/crm", clientId, projectId);
-  const { data, isLoading } = useQuery({
-    queryKey: [url],
-    queryFn: async () => {
-      const res = await fetchWithAuth(url);
-      if (!res.ok) throw new Error("Failed to load CRM dashboard");
-      return (await res.json()) as CrmModuleDashboard;
-    },
-    staleTime: 5 * 60_000,
-  });
-
-  if (isLoading || !data) return <LoadingPanel />;
-
   return (
+    <ModuleDashboardLoader<CrmModuleDashboard> url={url}>
+      {(data) => (
     <div className="space-y-6">
       <KpiRow
         items={[
@@ -542,6 +520,7 @@ export function CrmModulePanel({
           <ModuleLink href="/modules/crm" label="View full module" />
         </CardHeader>
         <CardContent>
+          <DashboardTableWrap>
           <Table>
             <TableHeader>
               <TableRow>
@@ -551,17 +530,28 @@ export function CrmModulePanel({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.hotOpportunities.map((o) => (
+              {data.hotOpportunities.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3}>
+                    <DashboardEmptyTable message="No hot opportunities right now." />
+                  </TableCell>
+                </TableRow>
+              ) : (
+              data.hotOpportunities.map((o) => (
                 <TableRow key={o.id}>
                   <TableCell className="font-medium">{o.name}</TableCell>
                   <TableCell>£{o.amount.toLocaleString()}</TableCell>
                   <TableCell>{o.closeDate ?? "—"}</TableCell>
                 </TableRow>
-              ))}
+              ))
+              )}
             </TableBody>
           </Table>
+          </DashboardTableWrap>
         </CardContent>
       </Card>
     </div>
+      )}
+    </ModuleDashboardLoader>
   );
 }

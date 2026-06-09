@@ -1727,6 +1727,35 @@ export async function registerRoutes(
     res.json(project);
   });
 
+  app.patch("/api/chat/projects/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const projectId = Number(req.params.id);
+    const project = await storage.getProject(projectId);
+    if (!project) return res.status(404).json({ message: "Team not found" });
+
+    const tenantId = getApiTenantIdWithFallback(req);
+    if (project.tenantId !== tenantId) return res.status(403).json({ message: "Access denied" });
+
+    const isMember = await storage.isProjectMember(projectId, userId);
+    if (!isMember) return res.status(403).json({ message: "Not a team member" });
+
+    const { name, description } = req.body as { name?: string; description?: string };
+    if (name !== undefined && !name.trim()) {
+      return res.status(400).json({ message: "Team name is required" });
+    }
+
+    try {
+      const updated = await storage.updateProject(projectId, {
+        ...(name !== undefined ? { name: name.trim() } : {}),
+        ...(description !== undefined ? { description: description?.trim() || null } : {}),
+      });
+      res.json(updated);
+    } catch {
+      res.status(400).json({ message: "Failed to update team" });
+    }
+  });
+
   // Project Members
   app.get("/api/chat/projects/:id/members", async (req, res) => {
     if (!isRequestAuthenticated(req)) {
@@ -5602,46 +5631,65 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   }, contentUpload.single("content"), async (req: any, res) => {
     try {
       const userId = getUserId(req);
+      const documentId = Number(req.params.id);
+      if (!Number.isFinite(documentId) || documentId <= 0) {
+        return res.status(400).json({ message: "Invalid document id" });
+      }
+
       let content = "";
       if (req.file) {
-        const isGzipped = req.file.originalname?.endsWith(".gz");
+        const buffer = req.file.buffer as Buffer;
+        const isGzipped =
+          req.file.originalname?.endsWith(".gz") ||
+          (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b);
         if (isGzipped) {
-          const zlib = await import("zlib");
-          content = zlib.gunzipSync(req.file.buffer).toString("utf-8");
+          try {
+            const zlib = await import("zlib");
+            content = zlib.gunzipSync(buffer).toString("utf-8");
+          } catch (gunzipErr) {
+            console.warn("Document content gunzip failed, using raw buffer:", gunzipErr);
+            content = buffer.toString("utf-8");
+          }
         } else {
-          content = req.file.buffer.toString("utf-8");
+          content = buffer.toString("utf-8");
         }
       } else {
         content = req.body?.content || "";
       }
-      
-      const existingDoc = await storage.getDocument(Number(req.params.id));
+
+      const existingDoc = await storage.getDocument(documentId);
       if (!existingDoc) return res.status(404).json({ message: "Document not found" });
-      
-      if (content !== existingDoc.content) {
-        await storage.createDocumentVersion({
-          documentId: existingDoc.id,
-          version: (existingDoc.currentVersion || 1) + 1,
-          title: existingDoc.title,
-          content: existingDoc.content,
-          changeDescription: "Content updated",
-          authorId: userId,
-        });
+
+      const existingContent = existingDoc.content ?? "";
+      const normalizedContent = content ?? "";
+
+      if (normalizedContent === existingContent) {
+        return res.json(existingDoc);
       }
-      
-      const doc = await storage.updateDocument(Number(req.params.id), {
-        content,
-        currentVersion: content !== existingDoc.content ? (existingDoc.currentVersion || 1) + 1 : existingDoc.currentVersion,
+
+      const nextVersion = await storage.getNextDocumentVersionNumber(documentId);
+      await storage.createDocumentVersion({
+        documentId: existingDoc.id,
+        version: nextVersion,
+        title: existingDoc.title,
+        content: existingContent,
+        changeDescription: "Content updated",
+        authorId: userId ?? existingDoc.ownerId ?? undefined,
       });
-      
+
+      const doc = await storage.updateDocument(documentId, {
+        content: normalizedContent,
+        currentVersion: nextVersion,
+      });
+
       await storage.createDocumentAuditLog({
         tenantId: existingDoc.tenantId,
         documentId: existingDoc.id,
-        userId,
+        userId: userId!,
         action: "update",
         details: { title: doc?.title },
       });
-      
+
       res.json(doc);
     } catch (err) {
       console.error("Document content save error:", err);

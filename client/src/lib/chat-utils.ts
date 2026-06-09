@@ -107,4 +107,34 @@ export function saveCollapsedTeams(collapsed: Set<string>): void {
   }
 }
 
+/** After renaming a team folder, keep its collapsed/expanded state under the new name. */
+export function renameCollapsedTeamKey(oldName: string, newName: string): void {
+  const collapsed = loadCollapsedTeams();
+  if (!collapsed.has(oldName)) return;
+  collapsed.delete(oldName);
+  collapsed.add(newName);
+  saveCollapsedTeams(collapsed);
+}
+
 export const QUICK_EMOJIS = ["👍", "❤️", "😂", "🎉", "👀", "✅"];
+
+/** Sidebar typography — section headers (sm) > company/folder (xs) > channel/chat (11px) */
+export const chatFont = {
+  sidebarTitle: "text-sm font-semibold text-foreground",
+  sectionHeader: "text-sm font-semibold text-foreground/90",
+  companyGroup: "text-xs font-semibold text-foreground/85",
+  teamFolder: "text-xs font-medium text-muted-foreground",
+  channelName: "text-[11px] font-normal leading-snug text-foreground/80",
+  channelPreview: "text-[10px] text-muted-foreground leading-snug",
+  channelMeta: "text-[10px] text-muted-foreground tabular-nums",
+  emptyHint: "text-[11px] text-muted-foreground leading-relaxed",
+  threadTitle: "text-sm font-semibold leading-tight",
+  threadSubtitle: "text-xs text-muted-foreground",
+  dateDivider: "text-xs font-medium text-muted-foreground",
+  messageAuthor: "text-xs font-semibold",
+  messageBody: "text-sm leading-relaxed",
+  messageMeta: "text-[11px] text-muted-foreground",
+  badge: "text-[10px] font-medium",
+  panelTitle: "text-sm font-semibold",
+  composeInput: "text-sm",
+} as const;

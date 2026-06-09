@@ -23,16 +23,16 @@ import {
 } from "@/components/ui/table";
 import { fetchWithAuth } from "@/lib/queryClient";
 import type { BespokeDashboardPayload } from "@shared/models/dashboard";
+import { DASHBOARD_WIDGET_CATALOG } from "@shared/models/dashboard";
+import { AlertCircle } from "lucide-react";
 import { DashboardKpiStrip } from "./DashboardKpiStrip";
+import { CategoryBarChart } from "./CategoryBarChart";
+import { scopeQuery } from "./dashboard-utils";
 
 type Widget = BespokeDashboardPayload["widgets"][number];
 
-function scopeQuery(base: string, clientId?: number | null, projectId?: number | null) {
-  const params = new URLSearchParams();
-  if (clientId) params.set("clientId", String(clientId));
-  if (projectId) params.set("projectId", String(projectId));
-  const q = params.toString();
-  return q ? `${base}?${q}` : base;
+function widgetDisplayName(type: string): string {
+  return DASHBOARD_WIDGET_CATALOG.find((w) => w.type === type)?.name ?? type.replace(/_/g, " ");
 }
 
 function KpiCards({ items }: { items: { label: string; value: string | number }[] }) {
@@ -64,17 +64,29 @@ export function BespokeWidgetRenderer({
   if (widget.widgetType === "text_note") {
     const text = String((widget.config as { text?: string }).text ?? "");
     return (
-      <Card className="rounded-xl border-border/50 h-full">
+      <Card className="rounded-xl border-border/50 h-full shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Note</CardTitle>
+          <CardTitle className="text-sm">{widgetDisplayName("text_note")}</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground whitespace-pre-wrap">{text || "Add a note in widget settings."}</CardContent>
       </Card>
     );
   }
 
+  return <BespokeDataWidget widget={widget} clientId={clientId} projectId={projectId} />;
+}
+
+function BespokeDataWidget({
+  widget,
+  clientId,
+  projectId,
+}: {
+  widget: Widget;
+  clientId?: number | null;
+  projectId?: number | null;
+}) {
   const url = scopeQuery(`/api/dashboard-data/${widget.widgetType}`, clientId, projectId);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: [url, widget.widgetType],
     queryFn: async () => {
       const res = await fetchWithAuth(url);
@@ -86,12 +98,23 @@ export function BespokeWidgetRenderer({
 
   if (isLoading) return <Skeleton className="h-full min-h-[160px] rounded-xl" />;
 
+  if (isError) {
+    return (
+      <Card className="rounded-xl border-destructive/30 h-full min-h-[160px] flex items-center justify-center">
+        <CardContent className="text-center py-6 text-sm text-muted-foreground">
+          <AlertCircle className="h-5 w-5 mx-auto mb-2 text-destructive/70" />
+          Could not load widget
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <Card className="rounded-xl border-border/50 h-full flex flex-col">
+    <Card className="rounded-xl border-border/50 h-full flex flex-col shadow-sm">
       <CardHeader className="pb-2 shrink-0">
-        <CardTitle className="text-sm capitalize">{widget.widgetType.replace(/_/g, " ")}</CardTitle>
+        <CardTitle className="text-sm">{widgetDisplayName(widget.widgetType)}</CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 min-h-0">
+      <CardContent className="flex-1 min-h-0 overflow-y-auto">
         <WidgetBody type={widget.widgetType} data={data} />
       </CardContent>
     </Card>
@@ -301,15 +324,9 @@ function WidgetBody({ type, data }: { type: string; data: unknown }) {
 
   if (type === "business_initiatives" && Array.isArray(d.initiativeProgress)) {
     return (
-      <ResponsiveContainer width="100%" height={180}>
-        <BarChart data={d.initiativeProgress as { name: string; progress: number }[]} layout="vertical">
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis type="number" domain={[0, 100]} />
-          <YAxis type="category" dataKey="name" width={90} />
-          <Tooltip />
-          <Bar dataKey="progress" fill="#6366f1" />
-        </BarChart>
-      </ResponsiveContainer>
+      <CategoryBarChart
+        data={d.initiativeProgress as { name: string; progress: number }[]}
+      />
     );
   }
 

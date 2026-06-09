@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import { AtSign, BarChart2, Bold, Italic, Link, List, ListOrdered, Paperclip, Quote, Send, Smile, Strikethrough, Type, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { CHAT_ACCENT, QUICK_EMOJIS } from "@/lib/chat-utils";
+import { cn } from "@/lib/utils";
+import { CHAT_ACCENT, QUICK_EMOJIS, chatFont } from "@/lib/chat-utils";
 import { fetchWithAuth } from "@/lib/queryClient";
 import { ChatButtonSpinner } from "@/components/chat/ChatLoading";
 import type { ChatInboxItem } from "@shared/models/chat";
@@ -257,7 +258,7 @@ export function MessageCompose({
                 }
               }}
               onPaste={handlePaste}
-              className="min-h-[44px] sm:min-h-[52px] max-h-32 sm:max-h-40 resize-none pr-3 sm:pr-48 border-0 focus-visible:ring-0 text-sm"
+              className={cn("min-h-[44px] sm:min-h-[52px] max-h-32 sm:max-h-40 resize-none pr-3 sm:pr-48 border-0 focus-visible:ring-0", chatFont.composeInput)}
               rows={1}
               disabled={disabled || readOnly}
               data-testid="input-message"

@@ -44,6 +44,19 @@ import { resolveWidgetData } from "./widget-data";
 import { loadModuleEntitlements } from "./entitlements";
 import { listDashboardHistory, restoreDashboardHistory } from "./history";
 
+function parseDashboardId(raw: string): number | null {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+function zodBadRequest(res: Response, err: unknown): boolean {
+  if (err instanceof z.ZodError) {
+    res.status(400).json({ message: err.errors[0]?.message ?? "Invalid input" });
+    return true;
+  }
+  return false;
+}
+
 function getUserId(req: Request): string | null {
   return effectiveUserId(req);
 }
@@ -193,7 +206,8 @@ export function registerDashboardRoutes(app: Express): void {
     res.json(await loadScopedProjects(scope));
   });
 
-  app.get("/api/dashboard/widget-catalog", (_req, res) => {
+  app.get("/api/dashboard/widget-catalog", (req, res) => {
+    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     res.json(DASHBOARD_WIDGET_CATALOG);
   });
 
@@ -226,7 +240,9 @@ export function registerDashboardRoutes(app: Express): void {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const scope = parseScope(req, res);
     if (!scope) return res.status(403).json({ message: "Organisation context required." });
-    const detail = await loadBespokeDashboard(Number(req.params.id), scope);
+    const dashboardId = parseDashboardId(String(req.params.id));
+    if (dashboardId == null) return res.status(400).json({ message: "Invalid dashboard id" });
+    const detail = await loadBespokeDashboard(dashboardId, scope);
     if (!detail) return res.status(404).json({ message: "Dashboard not found" });
     res.json(detail);
   });
@@ -257,23 +273,32 @@ export function registerDashboardRoutes(app: Express): void {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const scope = parseScope(req, res);
     if (!scope) return res.status(403).json({ message: "Organisation context required." });
-    const patch = z
-      .object({
-        name: z.string().min(2).optional(),
-        description: z.string().optional(),
-        layout: z.enum(["1-col", "2-col", "3-col"]).optional(),
-      })
-      .parse(req.body);
-    const updated = await updateBespokeDashboard(Number(req.params.id), scope, patch);
-    if (!updated) return res.status(404).json({ message: "Dashboard not found" });
-    res.json(updated);
+    const dashboardId = parseDashboardId(String(req.params.id));
+    if (dashboardId == null) return res.status(400).json({ message: "Invalid dashboard id" });
+    try {
+      const patch = z
+        .object({
+          name: z.string().min(2).optional(),
+          description: z.string().optional(),
+          layout: z.enum(["1-col", "2-col", "3-col"]).optional(),
+        })
+        .parse(req.body);
+      const updated = await updateBespokeDashboard(dashboardId, scope, patch);
+      if (!updated) return res.status(404).json({ message: "Dashboard not found" });
+      res.json(updated);
+    } catch (err) {
+      if (zodBadRequest(res, err)) return;
+      throw err;
+    }
   });
 
   app.delete("/api/dashboards/:id", async (req, res) => {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const scope = parseScope(req, res);
     if (!scope) return res.status(403).json({ message: "Organisation context required." });
-    const ok = await deleteBespokeDashboard(Number(req.params.id), scope);
+    const dashboardId = parseDashboardId(String(req.params.id));
+    if (dashboardId == null) return res.status(400).json({ message: "Invalid dashboard id" });
+    const ok = await deleteBespokeDashboard(dashboardId, scope);
     if (!ok) return res.status(404).json({ message: "Dashboard not found" });
     res.status(204).end();
   });
@@ -282,7 +307,9 @@ export function registerDashboardRoutes(app: Express): void {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const scope = parseScope(req, res);
     if (!scope) return res.status(403).json({ message: "Organisation context required." });
-    const copy = await duplicateBespokeDashboard(Number(req.params.id), scope);
+    const dashboardId = parseDashboardId(String(req.params.id));
+    if (dashboardId == null) return res.status(400).json({ message: "Invalid dashboard id" });
+    const copy = await duplicateBespokeDashboard(dashboardId, scope);
     if (!copy) return res.status(404).json({ message: "Dashboard not found" });
     res.status(201).json(copy);
   });
@@ -291,20 +318,23 @@ export function registerDashboardRoutes(app: Express): void {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const scope = parseScope(req, res);
     if (!scope) return res.status(403).json({ message: "Organisation context required." });
-    const detail = await loadBespokeDashboard(Number(req.params.id), scope);
+    const dashboardId = parseDashboardId(String(req.params.id));
+    if (dashboardId == null) return res.status(400).json({ message: "Invalid dashboard id" });
+    const detail = await loadBespokeDashboard(dashboardId, scope);
     if (!detail) return res.status(404).json({ message: "Dashboard not found" });
-    res.json(await listDashboardHistory(Number(req.params.id)));
+    res.json(await listDashboardHistory(dashboardId));
   });
 
   app.post("/api/dashboards/:id/history/:hid/restore", async (req, res) => {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const scope = parseScope(req, res);
     if (!scope) return res.status(403).json({ message: "Organisation context required." });
-    const restored = await restoreDashboardHistory(
-      Number(req.params.id),
-      Number(req.params.hid),
-      scope,
-    );
+    const dashboardId = parseDashboardId(String(req.params.id));
+    const historyId = parseDashboardId(String(req.params.hid));
+    if (dashboardId == null || historyId == null) {
+      return res.status(400).json({ message: "Invalid dashboard or history id" });
+    }
+    const restored = await restoreDashboardHistory(dashboardId, historyId, scope);
     if (!restored) return res.status(404).json({ message: "History version not found" });
     res.json(restored);
   });
@@ -313,55 +343,84 @@ export function registerDashboardRoutes(app: Express): void {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const scope = parseScope(req, res);
     if (!scope) return res.status(403).json({ message: "Organisation context required." });
-    const { widgetIds } = z.object({ widgetIds: z.array(z.number()) }).parse(req.body);
-    const updated = await reorderWidgets(Number(req.params.id), scope, widgetIds);
-    if (!updated) return res.status(404).json({ message: "Dashboard not found" });
-    res.json(updated);
+    const dashboardId = parseDashboardId(String(req.params.id));
+    if (dashboardId == null) return res.status(400).json({ message: "Invalid dashboard id" });
+    try {
+      const { widgetIds } = z.object({ widgetIds: z.array(z.number()) }).parse(req.body);
+      const updated = await reorderWidgets(dashboardId, scope, widgetIds);
+      if (!updated) return res.status(404).json({ message: "Dashboard not found" });
+      res.json(updated);
+    } catch (err) {
+      if (zodBadRequest(res, err)) return;
+      throw err;
+    }
   });
 
   app.post("/api/dashboards/:id/widgets", async (req, res) => {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const scope = parseScope(req, res);
     if (!scope) return res.status(403).json({ message: "Organisation context required." });
-    const input = z
-      .object({
-        widgetType: z.string(),
-        widgetModule: z.string().optional(),
-        positionX: z.number().optional(),
-        positionY: z.number().optional(),
-        width: z.number().optional(),
-        height: z.number().optional(),
-        config: z.record(z.unknown()).optional(),
-      })
-      .parse(req.body);
-    const updated = await addWidget(Number(req.params.id), scope, input);
-    if (!updated) return res.status(404).json({ message: "Dashboard not found" });
-    res.status(201).json(updated);
+    const dashboardId = parseDashboardId(String(req.params.id));
+    if (dashboardId == null) return res.status(400).json({ message: "Invalid dashboard id" });
+    try {
+      const input = z
+        .object({
+          widgetType: z.string(),
+          widgetModule: z.string().optional(),
+          positionX: z.number().optional(),
+          positionY: z.number().optional(),
+          width: z.number().optional(),
+          height: z.number().optional(),
+          config: z.record(z.unknown()).optional(),
+        })
+        .parse(req.body);
+      const updated = await addWidget(dashboardId, scope, input);
+      if (!updated) return res.status(404).json({ message: "Dashboard not found" });
+      res.status(201).json(updated);
+    } catch (err) {
+      if (zodBadRequest(res, err)) return;
+      throw err;
+    }
   });
 
   app.patch("/api/dashboards/:id/widgets/:wid", async (req, res) => {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const scope = parseScope(req, res);
     if (!scope) return res.status(403).json({ message: "Organisation context required." });
-    const patch = z
-      .object({
-        positionX: z.number().optional(),
-        positionY: z.number().optional(),
-        width: z.number().optional(),
-        height: z.number().optional(),
-        config: z.record(z.unknown()).optional(),
-      })
-      .parse(req.body);
-    const updated = await updateWidget(Number(req.params.id), Number(req.params.wid), scope, patch);
-    if (!updated) return res.status(404).json({ message: "Widget not found" });
-    res.json(updated);
+    const dashboardId = parseDashboardId(String(req.params.id));
+    const widgetId = parseDashboardId(String(req.params.wid));
+    if (dashboardId == null || widgetId == null) {
+      return res.status(400).json({ message: "Invalid dashboard or widget id" });
+    }
+    try {
+      const patch = z
+        .object({
+          positionX: z.number().optional(),
+          positionY: z.number().optional(),
+          width: z.number().optional(),
+          height: z.number().optional(),
+          config: z.record(z.unknown()).optional(),
+        })
+        .parse(req.body);
+      const updated = await updateWidget(dashboardId, widgetId, scope, patch);
+      if (!updated) return res.status(404).json({ message: "Widget not found" });
+      res.json(updated);
+    } catch (err) {
+      if (zodBadRequest(res, err)) return;
+      throw err;
+    }
   });
 
   app.delete("/api/dashboards/:id/widgets/:wid", async (req, res) => {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const scope = parseScope(req, res);
     if (!scope) return res.status(403).json({ message: "Organisation context required." });
-    const ok = await removeWidget(Number(req.params.id), Number(req.params.wid), scope);
+    const dashboardId = parseDashboardId(String(req.params.id));
+    const widgetId = parseDashboardId(String(req.params.wid));
+    if (dashboardId == null || widgetId == null) {
+      return res.status(400).json({ message: "Invalid dashboard or widget id" });
+    }
+    const ok = await removeWidget(dashboardId, widgetId, scope);
     if (!ok) return res.status(404).json({ message: "Widget not found" });
     res.status(204).end();
   });
@@ -370,41 +429,63 @@ export function registerDashboardRoutes(app: Express): void {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const scope = parseScope(req, res);
     if (!scope) return res.status(403).json({ message: "Organisation context required." });
-    const input = z
-      .object({
-        sharedWithUserId: z.string().optional(),
-        sharedWithWorkspaceId: z.number().optional(),
-        permission: z.enum(["view", "edit"]).optional(),
-      })
-      .parse(req.body);
-    const result = await shareDashboard(Number(req.params.id), scope, input);
-    if (!result) return res.status(404).json({ message: "Dashboard not found" });
-    res.json(result);
+    const dashboardId = parseDashboardId(String(req.params.id));
+    if (dashboardId == null) return res.status(400).json({ message: "Invalid dashboard id" });
+    try {
+      const input = z
+        .object({
+          sharedWithUserId: z.string().optional(),
+          sharedWithWorkspaceId: z.number().optional(),
+          permission: z.enum(["view", "edit"]).optional(),
+        })
+        .refine((v) => v.sharedWithUserId || v.sharedWithWorkspaceId, {
+          message: "Share with a user or workspace",
+        })
+        .parse(req.body);
+      const result = await shareDashboard(dashboardId, scope, input);
+      if (!result) return res.status(404).json({ message: "Dashboard not found" });
+      res.json(result);
+    } catch (err) {
+      if (zodBadRequest(res, err)) return;
+      throw err;
+    }
   });
 
   app.post("/api/dashboards/:id/digest", async (req, res) => {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const scope = parseScope(req, res);
     if (!scope) return res.status(403).json({ message: "Organisation context required." });
-    const input = z
-      .object({
-        frequency: z.enum(["daily", "weekly"]),
-        email: z.string().email().optional(),
-      })
-      .parse(req.body);
-    const result = await scheduleDashboardDigest(Number(req.params.id), scope, input);
-    if (!result) return res.status(404).json({ message: "Dashboard not found" });
-    res.json(result);
+    const dashboardId = parseDashboardId(String(req.params.id));
+    if (dashboardId == null) return res.status(400).json({ message: "Invalid dashboard id" });
+    try {
+      const input = z
+        .object({
+          frequency: z.enum(["daily", "weekly"]),
+          email: z.string().email().optional(),
+        })
+        .parse(req.body);
+      const result = await scheduleDashboardDigest(dashboardId, scope, input);
+      if (!result) return res.status(404).json({ message: "Dashboard not found" });
+      res.json(result);
+    } catch (err) {
+      if (zodBadRequest(res, err)) return;
+      throw err;
+    }
   });
 
   app.post("/api/dashboard/ai/generate", async (req, res) => {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     const scope = parseScope(req, res);
     if (!scope) return res.status(403).json({ message: "Organisation context required." });
-    const { prompt } = z.object({ prompt: z.string().min(8) }).parse(req.body);
-    const result = await generateAiDashboard(scope, prompt);
-    if ("error" in result) return res.status(503).json({ message: result.error });
-    res.status(201).json(result);
+    try {
+      const { prompt } = z.object({ prompt: z.string().min(8) }).parse(req.body);
+      const result = await generateAiDashboard(scope, prompt);
+      if ("error" in result) return res.status(503).json({ message: result.error });
+      res.status(201).json(result);
+    } catch (err) {
+      if (zodBadRequest(res, err)) return;
+      throw err;
+    }
   });
 
   app.get("/api/dashboard/preferences", async (req, res) => {

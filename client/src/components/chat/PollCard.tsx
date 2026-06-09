@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart2, Check, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { chatFont } from "@/lib/chat-utils";
 import { apiRequest } from "@/lib/queryClient";
 import { ChatButtonSpinner } from "@/components/chat/ChatLoading";
 
@@ -60,7 +61,7 @@ export function PollCard({ pollId }: { pollId: number }) {
             {poll.anonymous && <span>· Anonymous</span>}
           </p>
         </div>
-        {poll.isClosed && <Badge variant="secondary" className="text-[10px] shrink-0">Closed</Badge>}
+        {poll.isClosed && <Badge variant="secondary" className={cn("shrink-0", chatFont.badge)}>Closed</Badge>}
       </div>
       <div className="space-y-1.5">
         {poll.options.map((option, i) => {

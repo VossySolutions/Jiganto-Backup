@@ -11,7 +11,6 @@ import {
 import { motion } from "framer-motion";
 import { Sidebar } from "@/components/Sidebar";
 import { ModuleHeader } from "@/components/ModuleHeader";
-import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useShellLayout } from "@/hooks/use-shell-layout";
@@ -19,7 +18,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/hooks/use-permissions";
 import { apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import type { ChatInboxItem, ChatMessageWithMeta, Project } from "@shared/models/chat";
-import { loadChatSections, saveChatSections, type ChatSectionState } from "@/lib/chat-utils";
+import { loadChatSections, saveChatSections, renameCollapsedTeamKey, type ChatSectionState } from "@/lib/chat-utils";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { MessageCompose } from "@/components/chat/MessageCompose";
@@ -31,6 +30,7 @@ import {
   CreateTeamDialog,
   NewChatDialog,
   PollCreatorDialog,
+  RenameTeamDialog,
 } from "@/components/chat/ChatDialogs";
 
 export function ChatPage() {
@@ -61,6 +61,7 @@ export function ChatPage() {
   const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false);
   const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
   const [isPollOpen, setIsPollOpen] = useState(false);
+  const [renameTeamTarget, setRenameTeamTarget] = useState<{ projectId: number; name: string } | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -338,6 +339,17 @@ export function ChatPage() {
     },
   });
 
+  const renameTeam = useMutation({
+    mutationFn: async ({ projectId, name }: { projectId: number; name: string; oldName: string }) =>
+      apiRequest("PATCH", `/api/chat/projects/${projectId}`, { name }),
+    onSuccess: (_res, { name, oldName }) => {
+      renameCollapsedTeamKey(oldName, name);
+      setRenameTeamTarget(null);
+      void queryClient.invalidateQueries({ queryKey: inboxQueryKey });
+      void queryClient.invalidateQueries({ queryKey: projectsQueryKey });
+    },
+  });
+
   const loadMore = async () => {
     if (!selectedChannelId || !oldestLoadedId || loadingMore) return;
     setLoadingMore(true);
@@ -378,18 +390,13 @@ export function ChatPage() {
     <div className="min-h-screen bg-background" data-testid="chat-page">
       <Sidebar />
       <main className={cn("transition-all duration-300 h-screen flex flex-col", mainOffset, mobileTopOffset)}>
-        <div className="px-4 pt-4 shrink-0 hidden lg:block">
-          <ModuleWelcomeBanner
-            moduleKey="chat"
-            features={["Real-time messaging", "Threads & reactions", "Teams & channels", "Polls"]}
-          />
-        </div>
         <div className="border-b border-border/30 bg-card shrink-0">
           <ModuleHeader
             icon={MessageSquare}
             title="Chat"
-            subtitle={isMobile ? "Messages" : "Team messaging and collaboration"}
+            subtitle={isMobile ? undefined : "Team messaging and collaboration"}
             titleTestId="text-chat-title"
+            compact
             actions={
               <>
                 <Button variant="outline" size="sm" className="gap-1.5 hidden sm:inline-flex" onClick={() => setIsNewChatOpen(true)}>
@@ -441,6 +448,7 @@ export function ChatPage() {
               onNewChat={() => setIsNewChatOpen(true)}
               onCreateChannel={() => setIsCreateChannelOpen(true)}
               onCreateTeam={() => setIsCreateTeamOpen(true)}
+              onRenameTeam={(projectId, name) => setRenameTeamTarget({ projectId, name })}
               inboxLoading={inboxLoading}
               favoritingChannelId={favoritingChannelId}
               className={cn(isMobile && "w-full border-r-0")}
@@ -576,6 +584,23 @@ export function ChatPage() {
         onOpenChange={setIsPollOpen}
         onSubmit={(data) => createPoll.mutate(data)}
         pending={createPoll.isPending}
+      />
+      <RenameTeamDialog
+        open={renameTeamTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRenameTeamTarget(null);
+        }}
+        teamName={renameTeamTarget?.name ?? ""}
+        onRename={(name) => {
+          if (renameTeamTarget) {
+            renameTeam.mutate({
+              projectId: renameTeamTarget.projectId,
+              name,
+              oldName: renameTeamTarget.name,
+            });
+          }
+        }}
+        pending={renameTeam.isPending}
       />
     </div>
   );

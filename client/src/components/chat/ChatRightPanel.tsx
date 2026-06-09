@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { apiRequest, fetchWithAuth } from "@/lib/queryClient";
-import { displayPersonName, formatMessageTime, getUserInitials } from "@/lib/chat-utils";
+import { displayPersonName, formatMessageTime, getUserInitials, chatFont } from "@/lib/chat-utils";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, ChatSearchHit } from "@shared/models/chat";
 import { ChatButtonSpinner, ChatSpinner } from "@/components/chat/ChatLoading";
@@ -57,7 +57,7 @@ export function ChatRightPanel({
         )}
       >
       <div className="h-14 border-b flex items-center justify-between px-4 shrink-0">
-        <h3 className="font-semibold text-sm">
+        <h3 className={chatFont.panelTitle}>
           {panel.type === "thread" && "Thread"}
           {panel.type === "members" && "Members & notifications"}
           {panel.type === "search" && "Search"}
@@ -153,13 +153,13 @@ function ThreadPanel({
         </Button>
         {threadSummary && (
           <div className="rounded-lg border bg-violet-500/10 border-violet-500/20 px-3 py-2 text-xs text-foreground/90 leading-relaxed">
-            <p className="text-[10px] font-semibold text-violet-600 mb-1 flex items-center gap-1">
+            <p className={cn("font-semibold text-violet-600 mb-1 flex items-center gap-1", chatFont.badge)}>
               <Sparkles className="h-3 w-3" /> AI Summary
             </p>
             {threadSummary}
             <button
               type="button"
-              className="mt-1 text-[10px] text-muted-foreground hover:text-foreground block"
+              className={cn("mt-1 hover:text-foreground block", chatFont.messageMeta)}
               onClick={() => setThreadSummary(null)}
             >
               Dismiss
@@ -190,7 +190,7 @@ function ThreadPanel({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-medium">{displayPersonName(r.user)}</span>
-                  <span className="text-[10px] text-muted-foreground">{formatMessageTime(r.createdAt)}</span>
+                  <span className={chatFont.messageMeta}>{formatMessageTime(r.createdAt)}</span>
                 </div>
                 <p className="text-sm mt-0.5">{r.content}</p>
               </div>
@@ -289,7 +289,7 @@ function MembersPanel({
           </SelectContent>
         </Select>
         {savePref.isPending && (
-          <p className="text-[10px] text-muted-foreground">Saving…</p>
+          <p className={chatFont.messageMeta}>Saving…</p>
         )}
       </div>
       {isLoading ? (
@@ -310,7 +310,7 @@ function MembersPanel({
             </Avatar>
             <div>
               <p className="text-sm font-medium">{displayPersonName(m.user)}</p>
-              <p className="text-[10px] text-muted-foreground capitalize">{m.role}</p>
+              <p className={cn("capitalize", chatFont.messageMeta)}>{m.role}</p>
             </div>
           </div>
         ))}
@@ -366,7 +366,7 @@ function SearchPanel({
               className="w-full text-left p-2 rounded-lg hover:bg-muted/60 mb-2"
               onClick={() => onJump?.(h.messageId)}
             >
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+              <div className={cn("flex items-center justify-between mb-1", chatFont.messageMeta)}>
                 <span>{displayPersonName(h.user)}</span>
                 <span>{formatMessageTime(h.createdAt)}</span>
               </div>
@@ -407,7 +407,7 @@ function PinsPanel({ channelId }: { channelId: number }) {
       ) : (
         pins.map((p) => (
           <div key={p.message.id} className="mb-3 p-3 rounded-lg border">
-            <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-1">
+            <div className={cn("flex items-center gap-1 mb-1", chatFont.messageMeta)}>
               <Pin className="h-3 w-3" />
               {displayPersonName(p.message.user)} · {formatMessageTime(p.message.createdAt)}
             </div>
@@ -586,7 +586,7 @@ function BridgePanel({ channelId }: { channelId: number }) {
               href={meta.docsUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              className={cn("inline-flex items-center gap-1 hover:text-foreground transition-colors", chatFont.emptyHint)}
             >
               <ExternalLink className="h-3 w-3" />
               How to get your {provider === "teams" ? "webhook URL" : "channel ID"}
@@ -601,7 +601,7 @@ function BridgePanel({ channelId }: { channelId: number }) {
               </div>
               <div>
                 <p className="text-sm font-medium">Enable bridge</p>
-                <p className="text-[11px] text-muted-foreground">Forward new messages in real time</p>
+                <p className={chatFont.emptyHint}>Forward new messages in real time</p>
               </div>
             </div>
             <Switch checked={active} onCheckedChange={setActive} />
@@ -636,11 +636,11 @@ function BridgePanel({ channelId }: { channelId: number }) {
 
           {/* Env var hints */}
           <div className="space-y-2">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+            <p className={cn("font-semibold uppercase tracking-wide", chatFont.sectionHeader)}>
               Required environment variable
             </p>
             <div className="rounded-lg bg-muted/60 border p-2.5 flex items-center justify-between gap-2">
-              <code className="text-[11px] font-mono text-foreground">{meta.envVar}</code>
+              <code className={cn("font-mono text-foreground", chatFont.emptyHint)}>{meta.envVar}</code>
               <button
                 type="button"
                 onClick={() => copyEnvVar(meta.envVar)}
@@ -653,7 +653,7 @@ function BridgePanel({ channelId }: { channelId: number }) {
                 )}
               </button>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className={chatFont.emptyHint}>
               Set this in your <code className="bg-muted px-1 rounded">.env</code> file on the server, then restart to apply.
             </p>
           </div>

@@ -34,7 +34,6 @@ export function DashboardContextSelector({
     ["projects", "portfolio", "crm", "tasks", "finance", "resources", "helpdesk", "business"].includes(
       dashboardId,
     ) || dashboardId.startsWith("custom-");
-  if (!needsContext) return null;
 
   const projectsUrl =
     clientId != null ? `/api/dashboard/projects?clientId=${clientId}` : "/api/dashboard/projects";
@@ -46,9 +45,11 @@ export function DashboardContextSelector({
       if (!res.ok) return [];
       return (await res.json()) as { id: number; name: string }[];
     },
-    enabled: dashboardId === "projects",
+    enabled: needsContext && dashboardId === "projects",
     staleTime: 60_000,
   });
+
+  if (!needsContext) return null;
 
   const showClient =
     showContextSwitcher && !isClientUser && clients.length > 0 && isMasterView;

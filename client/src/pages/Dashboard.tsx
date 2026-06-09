@@ -207,22 +207,32 @@ export function Dashboard() {
 
 
   const groupedDashboards = useMemo(() => {
-    const system = enabledDashboards.filter((d) => d.group === "system");
+    const system = dashboards.filter((d) => d.group === "system");
     const module = enabledDashboards.filter((d) => d.group === "module");
     const custom = enabledDashboards.filter((d) => d.group === "custom");
     return { system, module, custom };
-  }, [enabledDashboards]);
+  }, [dashboards, enabledDashboards]);
 
   const filteredDashboards = useMemo(() => {
     const q = dashboardSearch.trim().toLowerCase();
     const match = (d: (typeof enabledDashboards)[number]) =>
       !q || d.name.toLowerCase().includes(q) || d.description.toLowerCase().includes(q);
+    const systemWithoutModules = groupedDashboards.system.filter((d) => d.id !== "modules");
     return {
-      system: groupedDashboards.system.filter(match),
+      system: systemWithoutModules.filter(match),
       module: groupedDashboards.module.filter(match),
       custom: groupedDashboards.custom.filter(match),
     };
   }, [groupedDashboards, dashboardSearch]);
+
+  const allModulesDashboard =
+    dashboards.find((d) => d.id === "modules") ?? {
+      id: "modules" as const,
+      name: "All Modules",
+      description: "Explore all platform modules",
+      enabled: true,
+      group: "system" as const,
+    };
 
 
 
@@ -230,21 +240,22 @@ export function Dashboard() {
 
 
 
-  const handleDashboardCreated = (id: DashboardType) => {
-
-    refreshCustomDashboards();
-
+  const handleDashboardCreated = async (id: DashboardType) => {
+    await refreshCustomDashboards();
     setCurrentDashboard(id);
-
   };
 
 
 
   const showBriefing =
     currentDashboard === "modules" ||
+    currentDashboard === "main" ||
     currentDashboard === "projects" ||
     currentDashboard === "tasks" ||
-    currentDashboard === "crm";
+    currentDashboard === "crm" ||
+    currentDashboard === "helpdesk" ||
+    currentDashboard === "finance" ||
+    currentDashboard === "business";
 
 
 
@@ -264,7 +275,13 @@ export function Dashboard() {
 
     if (customId != null) {
 
-      return <BespokeDashboardView dashboardId={customId} {...ctx} />;
+      return (
+        <BespokeDashboardView
+          dashboardId={customId}
+          {...ctx}
+          onOpenSettings={() => setShowConfigDialog(true)}
+        />
+      );
 
     }
 
@@ -381,6 +398,17 @@ export function Dashboard() {
               <DropdownMenuContent align="start" className="w-72 max-h-[70vh] overflow-y-auto">
 
                 <DropdownMenuLabel>Switch dashboard</DropdownMenuLabel>
+                <DropdownMenuItem
+                  onClick={() => setCurrentDashboard("modules")}
+                  className="flex items-center justify-between cursor-pointer font-medium"
+                >
+                  <div>
+                    <p className="font-medium">{allModulesDashboard.name}</p>
+                    <p className="text-xs text-muted-foreground">{allModulesDashboard.description}</p>
+                  </div>
+                  {currentDashboard === "modules" && <Check className="h-4 w-4 text-primary" />}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <div className="px-2 pb-2">
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -534,6 +562,15 @@ export function Dashboard() {
                 )}
 
                 <DropdownMenuSeparator />
+
+                {dashboardSearch.trim() &&
+                  filteredDashboards.system.length === 0 &&
+                  filteredDashboards.module.length === 0 &&
+                  filteredDashboards.custom.length === 0 && (
+                    <p className="px-3 py-4 text-xs text-muted-foreground text-center">
+                      No dashboards match &ldquo;{dashboardSearch.trim()}&rdquo;
+                    </p>
+                  )}
 
                 <DropdownMenuItem onClick={() => setShowCreateDialog(true)} className="gap-2 cursor-pointer">
 

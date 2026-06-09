@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Copy, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,14 +15,7 @@ import { fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { DashboardLayout } from "@shared/models/dashboard";
 import { customDashboardId, useDashboardSelector } from "@/hooks/use-dashboard-selector";
-
-function scopeQuery(base: string, clientId?: number | null, projectId?: number | null) {
-  const params = new URLSearchParams();
-  if (clientId) params.set("clientId", String(clientId));
-  if (projectId) params.set("projectId", String(projectId));
-  const q = params.toString();
-  return q ? `${base}?${q}` : base;
-}
+import { invalidateDashboardDetail, scopeQuery } from "./dashboard-utils";
 
 export function BespokeDashboardSettings({
   dashboardId,
@@ -40,9 +33,15 @@ export function BespokeDashboardSettings({
   onDeleted?: () => void;
 }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { setCurrentDashboard, refreshCustomDashboards } = useDashboardSelector();
   const [dashName, setDashName] = useState(name);
   const [dashLayout, setDashLayout] = useState(layout);
+
+  useEffect(() => {
+    setDashName(name);
+    setDashLayout(layout);
+  }, [dashboardId, name, layout]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -54,8 +53,15 @@ export function BespokeDashboardSettings({
       if (!res.ok) throw new Error("Update failed");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
       refreshCustomDashboards();
+      invalidateDashboardDetail(queryClient, dashboardId);
+      if (updated && typeof updated === "object" && "name" in updated) {
+        setDashName(String((updated as { name: string }).name));
+        if ("layout" in updated) {
+          setDashLayout((updated as { layout: DashboardLayout }).layout);
+        }
+      }
       toast({ title: "Dashboard updated" });
     },
   });
@@ -82,8 +88,8 @@ export function BespokeDashboardSettings({
       });
       if (!res.ok) throw new Error("Delete failed");
     },
-    onSuccess: () => {
-      refreshCustomDashboards();
+    onSuccess: async () => {
+      await refreshCustomDashboards();
       setCurrentDashboard("modules");
       onDeleted?.();
       toast({ title: "Dashboard deleted" });

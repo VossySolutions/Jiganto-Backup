@@ -63,6 +63,8 @@ export function DashboardConfigDialog({
       return (await res.json()) as BespokeDashboardPayload;
     },
     enabled: open && customDashboardId != null && !!bespokeUrl,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const savePrefs = useMutation({
@@ -108,6 +110,7 @@ export function DashboardConfigDialog({
           <TabsContent value="settings" className="overflow-y-auto max-h-80 mt-4 space-y-4">
             {customDashboardId != null && bespokeDetail && (
               <BespokeDashboardSettings
+                key={customDashboardId}
                 dashboardId={customDashboardId}
                 name={bespokeDetail.name}
                 layout={bespokeDetail.layout}

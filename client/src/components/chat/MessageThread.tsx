@@ -40,6 +40,7 @@ import {
   getUserInitials,
   shouldShowMessageHeader,
   QUICK_EMOJIS,
+  chatFont,
 } from "@/lib/chat-utils";
 import { PollCard } from "@/components/chat/PollCard";
 import { ChatButtonSpinner } from "@/components/chat/ChatLoading";
@@ -194,20 +195,20 @@ export function MessageThread({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-base truncate" data-testid="channel-name">
+              <h3 className={cn("truncate", chatFont.threadTitle)} data-testid="channel-name">
                 {channel.displayName}
               </h3>
               {bridgeActive && (
-                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded-full shrink-0">
+                <span className={cn("inline-flex items-center gap-1 text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded-full shrink-0", chatFont.badge)}>
                   <Link2 className="h-3 w-3" />
                   <span className="hidden sm:inline">{channel.bridge?.provider === "slack" ? "Slack" : "Teams"}</span>
                 </span>
               )}
             </div>
             {channel.description ? (
-              <p className="text-[11px] text-muted-foreground truncate max-w-[10rem] sm:max-w-xs hidden sm:block">{channel.description}</p>
+              <p className={cn("truncate max-w-[10rem] sm:max-w-xs hidden sm:block", chatFont.threadSubtitle)}>{channel.description}</p>
             ) : channel.type === "announcement" ? (
-              <p className="text-[11px] text-muted-foreground hidden sm:block">
+              <p className={cn("hidden sm:block", chatFont.threadSubtitle)}>
                 {channel.canPost === false
                   ? "Announcements only — admins can post"
                   : "Announcement channel"}
@@ -271,7 +272,7 @@ export function MessageThread({
       </div>
 
       {channel.type === "announcement" && channel.canPost === false && (
-        <div className="px-6 py-2 bg-amber-500/10 border-b text-xs text-amber-900 dark:text-amber-200 shrink-0">
+        <div className="px-4 sm:px-6 py-2 bg-amber-500/10 border-b text-xs sm:text-sm text-amber-900 dark:text-amber-200 shrink-0">
           This is an announcement channel. Only channel admins can send messages.
         </div>
       )}
@@ -287,7 +288,7 @@ export function MessageThread({
           {hasMore && (
             <div className="flex justify-center py-3">
               {loadingMore ? (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
                   <div className="h-4 w-4 border-2 border-[#4338CA] border-t-transparent rounded-full animate-spin" />
                   Loading older messages…
                 </div>
@@ -309,8 +310,8 @@ export function MessageThread({
           ) : messages.length === 0 ? (
             <div className="text-center py-16">
               <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
-              <p className="font-medium">No messages yet</p>
-              <p className="text-sm text-muted-foreground">Be the first to send a message.</p>
+              <p className={cn("font-medium", chatFont.channelName)}>No messages yet</p>
+              <p className={chatFont.channelPreview}>Be the first to send a message.</p>
             </div>
           ) : (
             messages.map((message, index) => {
@@ -332,7 +333,7 @@ export function MessageThread({
                   {showDate && (
                     <div className="flex items-center gap-4 my-6">
                       <div className="flex-1 h-px bg-border" />
-                      <span className="text-xs text-muted-foreground font-medium">
+                      <span className={chatFont.dateDivider}>
                         {formatDateDivider(message.createdAt)}
                       </span>
                       <div className="flex-1 h-px bg-border" />
@@ -341,7 +342,7 @@ export function MessageThread({
                   {isFirstUnread && (
                     <div className="flex items-center gap-3 my-3">
                       <div className="flex-1 h-px bg-blue-500/40" />
-                      <span className="text-[11px] font-semibold text-blue-500 shrink-0">New messages</span>
+                      <span className={cn("font-semibold text-blue-500 shrink-0", chatFont.badge)}>New messages</span>
                       <div className="flex-1 h-px bg-blue-500/40" />
                     </div>
                   )}
@@ -355,7 +356,7 @@ export function MessageThread({
                     {!isOwn && showHeader ? (
                       <Avatar className="h-8 w-8 shrink-0 mt-1">
                         <AvatarImage src={message.user.profileImageUrl || undefined} />
-                        <AvatarFallback className="text-[10px] bg-[#4338CA]/10 text-[#4338CA]">
+                        <AvatarFallback className={cn("bg-[#4338CA]/10 text-[#4338CA]", chatFont.badge)}>
                           {getUserInitials(message.user.firstName, message.user.lastName)}
                         </AvatarFallback>
                       </Avatar>
@@ -366,8 +367,8 @@ export function MessageThread({
                     <div className={cn("max-w-[88%] sm:max-w-[75%] min-w-0", isOwn && "items-end flex flex-col")}>
                       {!isOwn && showHeader && (
                         <div className="flex items-center gap-2 mb-1 px-1">
-                          <span className="text-xs font-semibold">{displayPersonName(message.user)}</span>
-                          <span className="text-[10px] text-muted-foreground">{formatMessageTime(message.createdAt)}</span>
+                          <span className={chatFont.messageAuthor}>{displayPersonName(message.user)}</span>
+                          <span className={chatFont.messageMeta}>{formatMessageTime(message.createdAt)}</span>
                         </div>
                       )}
 
@@ -376,7 +377,8 @@ export function MessageThread({
                       ) : (
                         <div
                           className={cn(
-                            "rounded-2xl px-4 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words",
+                            "rounded-2xl px-3.5 sm:px-4 py-2 whitespace-pre-wrap break-words",
+                            chatFont.messageBody,
                             message.authorSource === "jiganto" && !isOwn
                               ? "bg-violet-500/10 border border-violet-500/20 rounded-bl-md"
                               : isOwn
@@ -386,7 +388,7 @@ export function MessageThread({
                           style={isOwn ? { backgroundColor: CHAT_ACCENT } : undefined}
                         >
                           {message.authorSource === "jiganto" && !isOwn && (
-                            <span className="text-[10px] font-semibold text-violet-600 block mb-1">Jiganto AI</span>
+                            <span className={cn("font-semibold text-violet-600 block mb-1", chatFont.badge)}>Jiganto AI</span>
                           )}
                           {message.content}
                           {message.attachments?.length > 0 && (
@@ -396,13 +398,13 @@ export function MessageThread({
                       )}
 
                       {isOwn && (
-                        <span className="text-[10px] text-muted-foreground mt-0.5 px-1">
+                        <span className={cn("mt-0.5 px-1", chatFont.messageMeta)}>
                           {formatMessageTime(message.createdAt)}
                         </span>
                       )}
 
                       {message.isPinned && (
-                        <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5 px-1">
+                        <span className={cn("inline-flex items-center gap-1 mt-0.5 px-1", chatFont.messageMeta)}>
                           <Pin className="h-3 w-3" /> Pinned
                         </span>
                       )}
@@ -435,7 +437,7 @@ export function MessageThread({
                       {message.threadReplyCount > 0 && (
                         <button
                           type="button"
-                          className="text-xs text-[#4338CA] hover:underline mt-1 px-1 text-left"
+                          className={cn("hover:underline mt-1 px-1 text-left text-[#4338CA]", chatFont.badge)}
                           onClick={() => onOpenThread(message.id)}
                         >
                           {message.threadReplyCount} repl{message.threadReplyCount === 1 ? "y" : "ies"}
@@ -537,7 +539,7 @@ export function MessageThread({
       </div>
 
       {typingDisplay && (
-        <div className="px-6 py-1.5 text-xs text-muted-foreground italic border-t bg-card/50 shrink-0">
+        <div className={cn("px-4 sm:px-6 py-1.5 italic border-t bg-card/50 shrink-0", chatFont.messageMeta)}>
           {typingDisplay}
         </div>
       )}

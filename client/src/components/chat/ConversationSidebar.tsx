@@ -1,19 +1,25 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Hash, Link2, Lock, Megaphone, MessageSquare, Plus, Search, Star, StarOff, User, Building2, FolderKanban } from "lucide-react";
+import { ChevronDown, ChevronRight, Hash, Link2, Lock, Megaphone, MessageSquare, MoreHorizontal, Plus, Pencil, Search, Star, StarOff, User, Building2, FolderKanban } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { ChatInboxItem } from "@shared/models/chat";
-import { formatListTimestamp, getUserInitials, loadCollapsedTeams, saveCollapsedTeams, type ChatSectionState } from "@/lib/chat-utils";
+import { formatListTimestamp, getUserInitials, loadCollapsedTeams, saveCollapsedTeams, chatFont, type ChatSectionState } from "@/lib/chat-utils";
 import { ChatSidebarSkeleton } from "@/components/chat/ChatLoading";
 
 function UnreadBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="ml-auto shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-[#4338CA] text-white text-[10px] font-semibold flex items-center justify-center">
+    <span className={cn("ml-auto shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-[#4338CA] text-white flex items-center justify-center", chatFont.badge)}>
       {count > 99 ? "99+" : count}
     </span>
   );
@@ -48,7 +54,7 @@ function ConversationRow({
       onClick={onSelect}
       onKeyDown={(e) => e.key === "Enter" && onSelect()}
       className={cn(
-        "w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm transition-colors cursor-pointer group",
+        "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors cursor-pointer group",
         selected ? "bg-[#4338CA]/10 text-[#4338CA]" : "hover:bg-muted/60 text-foreground/90",
         item.unreadCount > 0 && !selected && "font-medium",
       )}
@@ -80,15 +86,15 @@ function ConversationRow({
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-1">
-          <span className="truncate text-sm font-medium leading-none">{item.displayName}</span>
-          <span className="text-[10px] text-muted-foreground shrink-0 ml-auto leading-none">
+        <div className="flex items-baseline gap-1.5 min-w-0">
+          <span className={cn("truncate", chatFont.channelName, selected && "font-semibold")}>{item.displayName}</span>
+          <span className={cn("shrink-0 ml-auto", chatFont.channelMeta)}>
             {formatListTimestamp(item.lastMessageAt)}
           </span>
         </div>
         <div className="flex items-center gap-1 mt-0.5">
           {item.lastMessagePreview && (
-            <p className="text-xs text-muted-foreground truncate flex-1">{item.lastMessagePreview}</p>
+            <p className={cn("truncate flex-1", chatFont.channelPreview)}>{item.lastMessagePreview}</p>
           )}
           <UnreadBadge count={item.unreadCount} />
         </div>
@@ -105,6 +111,81 @@ function ConversationRow({
       >
         {item.isFavorite ? <StarOff className="h-3 w-3" /> : <Star className="h-3 w-3" />}
       </Button>
+    </div>
+  );
+}
+
+function TeamFolderRow({
+  name,
+  icon,
+  unread,
+  collapsed,
+  onToggle,
+  onRename,
+  labelClass,
+}: {
+  name: string;
+  icon: React.ReactNode;
+  unread: number;
+  collapsed: boolean;
+  onToggle: () => void;
+  onRename?: () => void;
+  labelClass: string;
+}) {
+  return (
+    <div className="group flex items-center gap-0.5 rounded-lg hover:bg-muted/40">
+      <button
+        type="button"
+        className={cn("flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1.5 rounded-lg hover:text-foreground hover:bg-muted/30", labelClass)}
+        onClick={onToggle}
+      >
+        {collapsed ? (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        )}
+        {icon}
+        <span className="truncate">{name}</span>
+        {collapsed && unread > 0 && (
+          <Badge className={cn("ml-auto h-5 bg-[#4338CA]/15 text-[#4338CA] border-0 shrink-0", chatFont.badge)}>
+            {unread}
+          </Badge>
+        )}
+      </button>
+      {onRename && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+              onClick={(e) => e.stopPropagation()}
+              title="Team options"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenuItem onClick={onRename}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Rename team
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  );
+}
+
+function TreeBranch({ children, nested }: { children: React.ReactNode; nested?: boolean }) {
+  return (
+    <div
+      className={cn(
+        "space-y-0.5 border-l border-border/50",
+        nested ? "ml-2 pl-3" : "ml-3 pl-3",
+      )}
+    >
+      {children}
     </div>
   );
 }
@@ -131,16 +212,16 @@ function SectionHeader({
       <button
         type="button"
         onClick={onToggle}
-        className="flex items-center gap-2 flex-1 text-xs font-semibold text-foreground/80 uppercase tracking-wide hover:bg-muted/50 rounded-lg px-1 py-1"
+        className={cn("flex items-center gap-2 flex-1 hover:bg-muted/50 rounded-lg px-1.5 py-1.5", chatFont.sectionHeader)}
       >
-        {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        {icon}
+        {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+        <span className="[&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
         {label}
         {!expanded && unreadTotal > 0 && (
-          <Badge className="h-5 text-[10px] bg-[#4338CA]/15 text-[#4338CA] border-0">{unreadTotal}</Badge>
+          <Badge className={cn("h-5 bg-[#4338CA]/15 text-[#4338CA] border-0", chatFont.badge)}>{unreadTotal}</Badge>
         )}
-        {expanded && (
-          <Badge variant="secondary" className="ml-auto h-5 text-[10px]">
+        {expanded && count > 0 && (
+          <Badge variant="secondary" className={cn("ml-auto h-5", chatFont.badge)}>
             {count}
           </Badge>
         )}
@@ -163,6 +244,7 @@ export function ConversationSidebar({
   onNewChat,
   onCreateChannel,
   onCreateTeam,
+  onRenameTeam,
   inboxLoading,
   favoritingChannelId,
   className,
@@ -179,6 +261,7 @@ export function ConversationSidebar({
   onNewChat: () => void;
   onCreateChannel: () => void;
   onCreateTeam?: () => void;
+  onRenameTeam?: (projectId: number, currentName: string) => void;
   inboxLoading?: boolean;
   favoritingChannelId?: number | null;
   className?: string;
@@ -209,13 +292,20 @@ export function ConversationSidebar({
   const chats = filtered.filter((i) => i.type === "direct");
   const channels = filtered.filter((i) => i.type !== "direct");
   const companyChannels = channels.filter((c) => !c.projectId);
-  const projectGroups = channels.reduce<Record<string, ChatInboxItem[]>>((acc, ch) => {
-    if (!ch.projectId) return acc;
-    const key = ch.projectName ?? `Project ${ch.projectId}`;
-    acc[key] = acc[key] ?? [];
-    acc[key].push(ch);
-    return acc;
-  }, {});
+  const projectGroups = channels.reduce<Array<{ projectId: number; name: string; items: ChatInboxItem[] }>>(
+    (acc, ch) => {
+      if (!ch.projectId) return acc;
+      const existing = acc.find((g) => g.projectId === ch.projectId);
+      const name = ch.projectName ?? `Project ${ch.projectId}`;
+      if (existing) {
+        existing.items.push(ch);
+      } else {
+        acc.push({ projectId: ch.projectId, name, items: [ch] });
+      }
+      return acc;
+    },
+    [],
+  );
 
   const favUnread = favourites.reduce((s, i) => s + i.unreadCount, 0);
   const chatUnread = chats.reduce((s, i) => s + i.unreadCount, 0);
@@ -243,7 +333,7 @@ export function ConversationSidebar({
       data-testid="channel-sidebar"
     >
       <div className="h-14 border-b flex items-center px-4 justify-between">
-        <h2 className="font-semibold text-sm">Conversations</h2>
+        <h2 className={chatFont.sidebarTitle}>Conversations</h2>
         <Button size="icon" variant="ghost" onClick={onCreateChannel}>
           <Plus className="h-4 w-4" />
         </Button>
@@ -274,13 +364,13 @@ export function ConversationSidebar({
               onToggle={() => onToggleSection("favourites")}
             />
             {sections.favourites && (
-              <div className="mt-1">
+              <TreeBranch>
                 {favourites.length === 0 ? (
-                  <p className="text-xs text-muted-foreground px-2 py-2">Star a channel or chat to pin it here.</p>
+                  <p className={cn("px-1 py-1", chatFont.emptyHint)}>Star a channel or chat to pin it here.</p>
                 ) : (
                   renderList(favourites)
                 )}
-              </div>
+              </TreeBranch>
             )}
           </div>
           <div>
@@ -298,13 +388,13 @@ export function ConversationSidebar({
               }
             />
             {sections.chats && (
-              <div className="mt-1">
+              <TreeBranch>
                 {chats.length === 0 ? (
-                  <p className="text-xs text-muted-foreground px-2 py-2">No chats yet.</p>
+                  <p className={cn("px-1 py-1", chatFont.emptyHint)}>No chats yet.</p>
                 ) : (
                   renderList(chats)
                 )}
-              </div>
+              </TreeBranch>
             )}
           </div>
           <div>
@@ -324,50 +414,54 @@ export function ConversationSidebar({
               }
             />
             {sections.channels && (
-              <div className="mt-1 space-y-1">
+              <TreeBranch>
                 {companyChannels.length > 0 && (
                   <div>
-                    <button
-                      type="button"
-                      className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground px-2 py-1 w-full hover:text-foreground rounded"
-                      onClick={() => toggleTeam("__company__")}
-                    >
-                      {collapsedTeams.has("__company__") ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                      <Building2 className="h-3 w-3" /> Company
-                      {collapsedTeams.has("__company__") && companyChannels.reduce((s, i) => s + i.unreadCount, 0) > 0 && (
-                        <Badge className="ml-auto h-4 text-[9px] bg-[#4338CA]/15 text-[#4338CA] border-0">
-                          {companyChannels.reduce((s, i) => s + i.unreadCount, 0)}
-                        </Badge>
-                      )}
-                    </button>
-                    {!collapsedTeams.has("__company__") && renderList(companyChannels)}
+                    <TeamFolderRow
+                      name="Company"
+                      icon={<Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                      labelClass={chatFont.companyGroup}
+                      unread={companyChannels.reduce((s, i) => s + i.unreadCount, 0)}
+                      collapsed={collapsedTeams.has("__company__")}
+                      onToggle={() => toggleTeam("__company__")}
+                    />
+                    {!collapsedTeams.has("__company__") && (
+                      <TreeBranch nested>
+                        {renderList(companyChannels)}
+                      </TreeBranch>
+                    )}
                   </div>
                 )}
-                {Object.entries(projectGroups).map(([teamName, items]) => {
+                {projectGroups.map(({ projectId, name, items }) => {
                   const teamUnread = items.reduce((s, i) => s + i.unreadCount, 0);
-                  const isCollapsed = collapsedTeams.has(teamName);
+                  const isCollapsed = collapsedTeams.has(name);
                   return (
-                    <div key={teamName}>
-                      <button
-                        type="button"
-                        className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground px-2 py-1 w-full hover:text-foreground rounded"
-                        onClick={() => toggleTeam(teamName)}
-                      >
-                        {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        <FolderKanban className="h-3 w-3" />
-                        <span className="truncate">{teamName}</span>
-                        {isCollapsed && teamUnread > 0 && (
-                          <Badge className="ml-auto h-4 text-[9px] bg-[#4338CA]/15 text-[#4338CA] border-0 shrink-0">{teamUnread}</Badge>
-                        )}
-                      </button>
-                      {!isCollapsed && renderList(items)}
+                    <div key={projectId}>
+                      <TeamFolderRow
+                        name={name}
+                        icon={<FolderKanban className="h-3 w-3 shrink-0 text-muted-foreground" />}
+                        labelClass={chatFont.teamFolder}
+                        unread={teamUnread}
+                        collapsed={isCollapsed}
+                        onToggle={() => toggleTeam(name)}
+                        onRename={
+                          onRenameTeam
+                            ? () => onRenameTeam(projectId, name)
+                            : undefined
+                        }
+                      />
+                      {!isCollapsed && (
+                        <TreeBranch nested>
+                          {renderList(items)}
+                        </TreeBranch>
+                      )}
                     </div>
                   );
                 })}
                 {channels.length === 0 && (
-                  <p className="text-xs text-muted-foreground px-2 py-2">No channels yet.</p>
+                  <p className={cn("px-1 py-1", chatFont.emptyHint)}>No channels yet.</p>
                 )}
-              </div>
+              </TreeBranch>
             )}
           </div>
         </div>

@@ -237,6 +237,7 @@ export interface IStorage {
   getProjects(tenantId: number): Promise<Project[]>;
   getProject(id: number): Promise<Project | undefined>;
   createProject(project: InsertProject): Promise<Project>;
+  updateProject(id: number, updates: Partial<Pick<InsertProject, "name" | "description" | "status">>): Promise<Project | undefined>;
   getUserProjects(userId: string, tenantId: number): Promise<Project[]>;
 
   // Project Members
@@ -626,6 +627,7 @@ export interface IStorage {
   getDocumentVersions(documentId: number): Promise<DocumentVersion[]>;
   getDocumentVersion(id: number): Promise<DocumentVersion | undefined>;
   createDocumentVersion(version: InsertDocumentVersion): Promise<DocumentVersion>;
+  getNextDocumentVersionNumber(documentId: number): Promise<number>;
   restoreDocumentVersion(documentId: number, versionId: number): Promise<Document | undefined>;
 
   // Document Management - Tags
@@ -1536,6 +1538,18 @@ export class DatabaseStorage implements IStorage {
 
   async createProject(insertProject: InsertProject): Promise<Project> {
     const [project] = await db.insert(projects).values(insertProject).returning();
+    return project;
+  }
+
+  async updateProject(
+    id: number,
+    updates: Partial<Pick<InsertProject, "name" | "description" | "status">>,
+  ): Promise<Project | undefined> {
+    const [project] = await db
+      .update(projects)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(projects.id, id))
+      .returning();
     return project;
   }
 
@@ -4545,6 +4559,14 @@ export class DatabaseStorage implements IStorage {
   async createDocumentVersion(version: InsertDocumentVersion): Promise<DocumentVersion> {
     const [result] = await db.insert(documentVersions).values(version).returning();
     return result;
+  }
+
+  async getNextDocumentVersionNumber(documentId: number): Promise<number> {
+    const versions = await this.getDocumentVersions(documentId);
+    const maxFromRows = versions.reduce((max, v) => Math.max(max, v.version), 0);
+    const [doc] = await db.select({ currentVersion: documents.currentVersion }).from(documents).where(eq(documents.id, documentId));
+    const baseline = Math.max(maxFromRows, doc?.currentVersion ?? 0);
+    return baseline + 1;
   }
 
   async restoreDocumentVersion(documentId: number, versionId: number): Promise<Document | undefined> {

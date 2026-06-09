@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +46,7 @@ export function CreateBespokeDashboardDialog({
   projectId?: number | null;
 }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [layout, setLayout] = useState<DashboardLayout>("2-col");
 
@@ -63,6 +64,12 @@ export function CreateBespokeDashboardDialog({
       return res.json() as Promise<{ id: number }>;
     },
     onSuccess: (created) => {
+      void queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
+      void queryClient.invalidateQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" &&
+          query.queryKey[0].startsWith(`/api/dashboards/${created.id}`),
+      });
       toast({ title: "Dashboard created" });
       onCreated(customDashboardId(created.id));
       setName("");
@@ -137,6 +144,7 @@ export function AiDashboardDialog({
   projectId?: number | null;
 }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [prompt, setPrompt] = useState(
     "Executive overview with project health, open tasks, CRM pipeline, and finance KPIs.",
   );
@@ -155,6 +163,12 @@ export function AiDashboardDialog({
       return res.json() as Promise<{ dashboardId: number }>;
     },
     onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
+      void queryClient.invalidateQueries({
+        predicate: (query) =>
+          typeof query.queryKey[0] === "string" &&
+          query.queryKey[0].startsWith(`/api/dashboards/${result.dashboardId}`),
+      });
       toast({ title: "AI dashboard ready" });
       onCreated(customDashboardId(result.dashboardId));
       onOpenChange(false);

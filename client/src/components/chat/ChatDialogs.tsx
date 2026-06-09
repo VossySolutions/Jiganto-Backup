@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Hash, Lock, Megaphone, MessageSquare, Search, BarChart2, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -340,6 +340,67 @@ export function PollCreatorDialog({
           <Button type="submit" className="w-full gap-2" disabled={pending}>
             {pending ? <ChatButtonSpinner /> : <Check className="h-4 w-4" />}
             {pending ? "Posting poll…" : "Post poll"}
+          </Button>
+        </SubmitForm>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function RenameTeamDialog({
+  open,
+  onOpenChange,
+  teamName,
+  onRename,
+  pending,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  teamName: string;
+  onRename: (name: string) => void;
+  pending?: boolean;
+}) {
+  const [name, setName] = useState(teamName);
+
+  useEffect(() => {
+    if (open) setName(teamName);
+  }, [open, teamName]);
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        onOpenChange(v);
+        if (v) setName(teamName);
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Rename team</DialogTitle>
+          <DialogDescription>
+            Update the team folder name shown in Teams &amp; Channels (e.g. Finance Dept.).
+          </DialogDescription>
+        </DialogHeader>
+        <SubmitForm
+          onSubmit={() => {
+            const trimmed = name.trim();
+            if (trimmed) onRename(trimmed);
+          }}
+          className="space-y-4"
+          disabled={pending || !name.trim()}
+        >
+          <div className="space-y-2">
+            <Label htmlFor="team-rename">Team name</Label>
+            <Input
+              id="team-rename"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Finance Dept."
+              autoFocus
+            />
+          </div>
+          <Button type="submit" className="w-full" disabled={pending || !name.trim()}>
+            {pending ? <ChatButtonSpinner /> : "Save"}
           </Button>
         </SubmitForm>
       </DialogContent>

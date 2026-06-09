@@ -211,7 +211,7 @@ export async function loadFinanceModuleDashboard(
       .reduce((s, o) => s + parseMoney(o.amount), 0);
     revenueVsBudget.push({
       month: key,
-      budget: Math.round(totalBudget / 6),
+      budget: Math.round(totalBudget / 6 / 100),
       actual: Math.round(actual / 100),
     });
   }
