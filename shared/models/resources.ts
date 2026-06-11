@@ -173,6 +173,38 @@ export const timesheetEntriesRelations = relations(timesheetEntries, ({ one }) =
   }),
 }));
 
+/** Module 08 — single source of truth for rate cards (ADR-003). CRM has read-only access. */
+export const rateCards = pgTable("rate_cards", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  currency: text("currency").default("GBP"),
+  effectiveFrom: timestamp("effective_from"),
+  effectiveTo: timestamp("effective_to"),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const rateCardItems = pgTable("rate_card_items", {
+  id: serial("id").primaryKey(),
+  rateCardId: integer("rate_card_id").notNull().references(() => rateCards.id, { onDelete: "cascade" }),
+  roleName: text("role_name").notNull(),
+  level: text("level"),
+  dailyRate: decimal("daily_rate", { precision: 10, scale: 2 }).notNull(),
+  costRate: decimal("cost_rate", { precision: 10, scale: 2 }),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const rateCardRelations = relations(rateCards, ({ many }) => ({
+  items: many(rateCardItems),
+}));
+
+export const rateCardItemRelations = relations(rateCardItems, ({ one }) => ({
+  rateCard: one(rateCards, { fields: [rateCardItems.rateCardId], references: [rateCards.id] }),
+}));
+
 export const projectCodes = pgTable("project_codes", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
@@ -193,6 +225,8 @@ export const insertResourceAllocationSchema = createInsertSchema(resourceAllocat
 export const insertTimesheetPeriodSchema = createInsertSchema(timesheetPeriods).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTimesheetEntrySchema = createInsertSchema(timesheetEntries).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertProjectCodeSchema = createInsertSchema(projectCodes).omit({ id: true, createdAt: true });
+export const insertRateCardSchema = createInsertSchema(rateCards).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertRateCardItemSchema = createInsertSchema(rateCardItems).omit({ id: true, createdAt: true });
 
 export type Resource = typeof resources.$inferSelect;
 export type SkillCategory = typeof skillCategories.$inferSelect;
@@ -202,6 +236,8 @@ export type ResourceAllocation = typeof resourceAllocations.$inferSelect;
 export type TimesheetPeriod = typeof timesheetPeriods.$inferSelect;
 export type TimesheetEntry = typeof timesheetEntries.$inferSelect;
 export type ProjectCode = typeof projectCodes.$inferSelect;
+export type RateCard = typeof rateCards.$inferSelect;
+export type RateCardItem = typeof rateCardItems.$inferSelect;
 
 export type InsertResource = z.infer<typeof insertResourceSchema>;
 export type InsertSkillCategory = z.infer<typeof insertSkillCategorySchema>;
@@ -211,3 +247,5 @@ export type InsertResourceAllocation = z.infer<typeof insertResourceAllocationSc
 export type InsertTimesheetPeriod = z.infer<typeof insertTimesheetPeriodSchema>;
 export type InsertTimesheetEntry = z.infer<typeof insertTimesheetEntrySchema>;
 export type InsertProjectCode = z.infer<typeof insertProjectCodeSchema>;
+export type InsertRateCard = z.infer<typeof insertRateCardSchema>;
+export type InsertRateCardItem = z.infer<typeof insertRateCardItemSchema>;

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { UserCog } from "lucide-react";
 
@@ -8,7 +8,7 @@ export function ImpersonationBanner() {
   const { data } = useQuery({
     queryKey: ["/api/auth/impersonation/status"],
     queryFn: async () => {
-      const res = await fetch("/api/auth/impersonation/status", { credentials: "include" });
+      const res = await fetchWithAuth("/api/auth/impersonation/status");
       if (!res.ok) return { active: false };
       return res.json() as Promise<{
         active: boolean;
@@ -16,6 +16,8 @@ export function ImpersonationBanner() {
         targetEmail?: string | null;
       }>;
     },
+    retry: false,
+    staleTime: 30_000,
   });
 
   const endMutation = useMutation({

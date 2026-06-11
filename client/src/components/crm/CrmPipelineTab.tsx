@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -16,38 +17,24 @@ import { Separator } from "@/components/ui/separator";
 import { Plus, MoreHorizontal, CheckCircle2, XCircle, ArrowRight, Calendar, Settings2, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
+import { useCrmUsers } from "./CrmUsersProvider";
 
 type CrmAccount = { id: number; tenantId: number; name: string; type: string; industry: string | null; };
 type CrmPipeline = { id: number; tenantId: number; name: string; description: string | null; isDefault: boolean | null; color: string | null; };
 type CrmOpportunityStage = { id: number; tenantId: number; pipelineId: number | null; name: string; order: number; probability: number | null; color: string | null; isClosed: boolean | null; isWon: boolean | null; };
-type CrmOpportunity = { id: number; tenantId: number; accountId: number | null; stageId: number | null; name: string; amount: string | null; probability: number | null; expectedCloseDate: string | null; ownerUserId: string | null; createdAt: string; };
+type CrmOpportunity = { id: number; tenantId: number; accountId: number | null; stageId: number | null; name: string; amount: string | null; probability: number | null; expectedCloseDate: string | null; ownerUserId: string | null; isArchived?: boolean | null; createdAt: string; };
 
 interface CrmPipelineTabProps {
   opportunities: CrmOpportunity[];
   stages: CrmOpportunityStage[];
   accounts: CrmAccount[];
   pipelines: CrmPipeline[];
+  searchTerm?: string;
 }
 
 const STAGE_COLORS = [
   "#3b82f6", "#06b6d4", "#8b5cf6", "#f59e0b", "#f97316", "#22c55e", "#ec4899", "#ef4444", "#14b8a6", "#6366f1"
 ];
-
-const ownerData = [
-  { initials: "AL", name: "Alex Lee", color: "#3b82f6" },
-  { initials: "PV", name: "Priya Verma", color: "#8b5cf6" },
-  { initials: "SA", name: "Sarah Adams", color: "#22c55e" },
-  { initials: "JM", name: "James Miller", color: "#f97316" },
-  { initials: "RK", name: "Rachel Kim", color: "#ec4899" },
-  { initials: "DT", name: "David Taylor", color: "#06b6d4" },
-  { initials: "NB", name: "Nadia Brown", color: "#ef4444" },
-  { initials: "CM", name: "Chris Martin", color: "#eab308" },
-];
-
-function getOwnerForOpp(opp: CrmOpportunity) {
-  const hash = (opp.id * 7 + (opp.name?.charCodeAt(0) || 0)) % ownerData.length;
-  return ownerData[hash];
-}
 
 function formatCurrency(val: string | null): string {
   const num = parseFloat(val || "0");
@@ -128,14 +115,26 @@ const CARD_FIELDS: CardField[] = [
 
 const DEFAULT_VISIBLE_FIELDS = new Set(CARD_FIELDS.filter(f => f.defaultEnabled).map(f => f.id));
 
-export function CrmPipelineTab({ opportunities, stages, accounts, pipelines }: CrmPipelineTabProps) {
+export function CrmPipelineTab({ opportunities, stages, accounts, pipelines, searchTerm = "" }: CrmPipelineTabProps) {
+  const { users, resolveOwner } = useCrmUsers();
   const [isOpen, setIsOpen] = useState(false);
   const [isCreatePipelineOpen, setIsCreatePipelineOpen] = useState(false);
   const [selectedPipelineId, setSelectedPipelineId] = useState<number | null>(null);
   const [pipelineName, setPipelineName] = useState("");
   const [ownerFilter, setOwnerFilter] = useState<string | null>(null);
+  const [stageFilter, setStageFilter] = useState<string>("all");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [addDealStageId, setAddDealStageId] = useState<number | null>(null);
   const [cardFieldsOpen, setCardFieldsOpen] = useState(false);
+  const [stageMgmtOpen, setStageMgmtOpen] = useState(false);
+  const [newStageName, setNewStageName] = useState("");
+  const [newStageProbability, setNewStageProbability] = useState("50");
+  const [editingStageId, setEditingStageId] = useState<number | null>(null);
+  const [editStageName, setEditStageName] = useState("");
+  const [editStageProbability, setEditStageProbability] = useState("");
+  const [editStageColor, setEditStageColor] = useState("");
   const [visibleFields, setVisibleFields] = useState<Set<string>>(new Set(DEFAULT_VISIBLE_FIELDS));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({ name: "", amount: "", stageId: "", accountId: "", expectedCloseDate: "", probability: "" });
@@ -155,7 +154,7 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines }: C
   const pipelineStages = activePipelineId ? stages.filter(s => s.pipelineId === activePipelineId) : stages;
 
   const createPipelineMutation = useMutation({
-    mutationFn: (data: { name: string }) => apiRequest("POST", "/api/crm/pipelines", { ...data, tenantId: 1 }),
+    mutationFn: (data: { name: string }) => apiRequest("POST", "/api/crm/pipelines", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/pipelines"] });
       setIsCreatePipelineOpen(false);
@@ -182,16 +181,22 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines }: C
     onError: () => toast({ title: "Failed to create opportunity", variant: "destructive" }),
   });
 
+  const [closeReasonOpen, setCloseReasonOpen] = useState(false);
+  const [pendingClose, setPendingClose] = useState<{ oppId: number; stageId: number; isWon: boolean } | null>(null);
+  const [closeReason, setCloseReason] = useState("");
+
   const updateStageMutation = useMutation({
-    mutationFn: ({ id, stageId }: { id: number; stageId: number }) =>
-      apiRequest("PUT", `/api/crm/opportunities/${id}`, { stageId }),
+    mutationFn: ({ id, stageId, probability, winReason, lossReason, actualCloseDate }: {
+      id: number; stageId: number; probability?: number; winReason?: string; lossReason?: string; actualCloseDate?: string;
+    }) => apiRequest("PUT", `/api/crm/opportunities/${id}`, { stageId, probability, winReason, lossReason, actualCloseDate }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/opportunities"] });
       toast({ title: "Opportunity moved successfully" });
+      setCloseReasonOpen(false);
+      setPendingClose(null);
+      setCloseReason("");
     },
-    onError: () => {
-      toast({ title: "Failed to move opportunity", variant: "destructive" });
-    },
+    onError: () => toast({ title: "Failed to move opportunity", variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
@@ -202,6 +207,38 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines }: C
       toast({ title: "Opportunity updated" });
     },
     onError: () => toast({ title: "Failed to update opportunity", variant: "destructive" }),
+  });
+
+  const createStageMutation = useMutation({
+    mutationFn: (data: { name: string; pipelineId: number; order: number; probability: number; color: string; isClosed: boolean; isWon: boolean }) =>
+      apiRequest("POST", "/api/crm/stages", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/stages"] });
+      setNewStageName("");
+      setNewStageProbability("50");
+      toast({ title: "Stage created" });
+    },
+    onError: () => toast({ title: "Failed to create stage", variant: "destructive" }),
+  });
+
+  const updateStageMgmtMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: number; updates: Record<string, unknown> }) =>
+      apiRequest("PUT", `/api/crm/stages/${id}`, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/stages"] });
+      setEditingStageId(null);
+      toast({ title: "Stage updated" });
+    },
+    onError: () => toast({ title: "Failed to update stage", variant: "destructive" }),
+  });
+
+  const deleteStageMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/crm/stages/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/stages"] });
+      toast({ title: "Stage deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete stage", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -232,23 +269,68 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines }: C
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
     const opportunityId = parseInt(draggableId.replace("opp-", ""));
     const newStageId = parseInt(destination.droppableId.replace("stage-", ""));
-    updateStageMutation.mutate({ id: opportunityId, stageId: newStageId });
+    const newStage = stages.find(s => s.id === newStageId);
+    const probability = newStage?.probability ?? undefined;
+    if (newStage?.isClosed) {
+      setPendingClose({ oppId: opportunityId, stageId: newStageId, isWon: !!newStage.isWon });
+      setCloseReasonOpen(true);
+      return;
+    }
+    updateStageMutation.mutate({ id: opportunityId, stageId: newStageId, probability });
+  };
+
+  const confirmCloseReason = () => {
+    if (!pendingClose) return;
+    const stage = stages.find(s => s.id === pendingClose.stageId);
+    updateStageMutation.mutate({
+      id: pendingClose.oppId,
+      stageId: pendingClose.stageId,
+      probability: stage?.probability ?? (pendingClose.isWon ? 100 : 0),
+      winReason: pendingClose.isWon ? closeReason : undefined,
+      lossReason: !pendingClose.isWon ? closeReason : undefined,
+      actualCloseDate: new Date().toISOString().split("T")[0],
+    });
   };
 
   const activeStages = pipelineStages.filter(s => !s.isClosed).sort((a, b) => a.order - b.order);
   const closedStages = pipelineStages.filter(s => s.isClosed);
 
   let pipelineOpportunities = opportunities.filter(o => {
+    if (o.isArchived) return false;
     const stage = stages.find(s => s.id === o.stageId);
     return stage && stage.pipelineId === activePipelineId && !stage.isClosed;
   });
 
   if (ownerFilter) {
+    if (ownerFilter === "__unassigned__") {
+      pipelineOpportunities = pipelineOpportunities.filter(o => !o.ownerUserId);
+    } else {
+      pipelineOpportunities = pipelineOpportunities.filter(o => o.ownerUserId === ownerFilter);
+    }
+  }
+
+  if (stageFilter !== "all") {
+    pipelineOpportunities = pipelineOpportunities.filter(o => o.stageId === parseInt(stageFilter));
+  }
+
+  if (minAmount) {
+    const min = parseFloat(minAmount);
+    if (!isNaN(min)) pipelineOpportunities = pipelineOpportunities.filter(o => (parseFloat(o.amount || "0") || 0) >= min);
+  }
+  if (maxAmount) {
+    const max = parseFloat(maxAmount);
+    if (!isNaN(max)) pipelineOpportunities = pipelineOpportunities.filter(o => (parseFloat(o.amount || "0") || 0) <= max);
+  }
+
+  if (searchTerm) {
+    const s = searchTerm.toLowerCase();
     pipelineOpportunities = pipelineOpportunities.filter(o => {
-      const owner = getOwnerForOpp(o);
-      return owner.initials === ownerFilter;
+      const account = accounts.find(a => a.id === o.accountId);
+      return o.name.toLowerCase().includes(s) || (account?.name || "").toLowerCase().includes(s);
     });
   }
+
+  const activeFilterCount = [stageFilter !== "all", minAmount, maxAmount].filter(Boolean).length;
 
   const totalPipelineValue = pipelineOpportunities.reduce((sum, o) => sum + (parseFloat(o.amount || "0") || 0), 0);
   const weightedPipelineValue = pipelineOpportunities.reduce((sum, o) => {
@@ -270,7 +352,7 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines }: C
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-open-deals">
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
             <OpenDealsIcon className="h-5 w-5" />
@@ -342,19 +424,30 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines }: C
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Owners</SelectItem>
-            {ownerData.map(owner => (
-              <SelectItem key={owner.initials} value={owner.initials}>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-5 w-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0"
-                    style={{ backgroundColor: owner.color }}
-                  >
-                    {owner.initials}
-                  </div>
-                  {owner.name}
+            <SelectItem value="__unassigned__">
+              <div className="flex items-center gap-2">
+                <div className="h-5 w-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0 bg-muted-foreground/50">
+                  —
                 </div>
-              </SelectItem>
-            ))}
+                Unassigned
+              </div>
+            </SelectItem>
+            {users.map(user => {
+              const owner = resolveOwner(user.id);
+              return (
+                <SelectItem key={user.id} value={user.id}>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="h-5 w-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+                      style={{ backgroundColor: owner.color }}
+                    >
+                      {owner.initials}
+                    </div>
+                    {owner.name}
+                  </div>
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
 
@@ -377,15 +470,73 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines }: C
           </Select>
         )}
 
-        <button
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
-          data-testid="button-filter-pipeline"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-          </svg>
-          Filter
-        </button>
+        {activePipelineId && (
+          <button
+            onClick={() => setStageMgmtOpen(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
+            data-testid="button-manage-stages"
+          >
+            <Settings2 className="h-4 w-4" />
+            Manage Stages
+          </button>
+        )}
+
+        <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+          <PopoverTrigger asChild>
+            <button
+              className={cn(
+                "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                activeFilterCount > 0
+                  ? "bg-[#0ea5e9]/10 border-[#0ea5e9]/30 text-[#0ea5e9]"
+                  : "border-border bg-background text-foreground hover:bg-muted"
+              )}
+              data-testid="button-filter-pipeline"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+              </svg>
+              Filter
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{activeFilterCount}</Badge>
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-72 space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Stage</Label>
+              <Select value={stageFilter} onValueChange={setStageFilter}>
+                <SelectTrigger className="h-8" data-testid="filter-pipeline-stage">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All stages</SelectItem>
+                  {activeStages.map(stage => (
+                    <SelectItem key={stage.id} value={String(stage.id)}>{stage.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Min amount</Label>
+                <Input type="number" min={0} value={minAmount} onChange={(e) => setMinAmount(e.target.value)} placeholder="0" className="h-8" data-testid="filter-min-amount" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Max amount</Label>
+                <Input type="number" min={0} value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} placeholder="Any" className="h-8" data-testid="filter-max-amount" />
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => { setStageFilter("all"); setMinAmount(""); setMaxAmount(""); }}
+              data-testid="button-clear-pipeline-filters"
+            >
+              Clear filters
+            </Button>
+          </PopoverContent>
+        </Popover>
 
         <div className="flex-1" />
 
@@ -611,7 +762,7 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines }: C
                     >
                       {stageOpps.map((opp, index) => {
                         const account = accounts.find(a => a.id === opp.accountId);
-                        const owner = getOwnerForOpp(opp);
+                        const owner = resolveOwner(opp.ownerUserId);
                         const oppStage = stages.find(s => s.id === opp.stageId);
                         const probability = opp.probability ?? oppStage?.probability ?? 0;
 
@@ -915,6 +1066,91 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines }: C
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={stageMgmtOpen} onOpenChange={setStageMgmtOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" data-testid="stage-management-dialog">
+          <DialogHeader>
+            <DialogTitle>Manage Stages — {activePipeline?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {[...pipelineStages].sort((a, b) => a.order - b.order).map(stage => (
+              <div key={stage.id} className="flex items-center gap-2 p-2 border rounded-lg" data-testid={`stage-mgmt-row-${stage.id}`}>
+                {editingStageId === stage.id ? (
+                  <>
+                    <Input value={editStageName} onChange={e => setEditStageName(e.target.value)} className="h-8 flex-1" data-testid={`input-edit-stage-name-${stage.id}`} />
+                    <Input type="number" min={0} max={100} value={editStageProbability} onChange={e => setEditStageProbability(e.target.value)} className="h-8 w-16" data-testid={`input-edit-stage-prob-${stage.id}`} />
+                    <Input type="color" value={editStageColor || "#3b82f6"} onChange={e => setEditStageColor(e.target.value)} className="h-8 w-10 p-0.5" />
+                    <Button size="sm" onClick={() => updateStageMgmtMutation.mutate({ id: stage.id, updates: { name: editStageName, probability: parseInt(editStageProbability) || 0, color: editStageColor } })} data-testid={`button-save-stage-${stage.id}`}>Save</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditingStageId(null)}>Cancel</Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: stage.color || "#3b82f6" }} />
+                    <span className="text-sm font-medium flex-1">{stage.name}</span>
+                    <Badge variant="outline" className="text-[10px]">{stage.probability ?? 0}%</Badge>
+                    {stage.isClosed && <Badge variant="secondary" className="text-[10px]">Closed</Badge>}
+                    {!stage.isClosed && (
+                      <>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingStageId(stage.id); setEditStageName(stage.name); setEditStageProbability(String(stage.probability ?? 0)); setEditStageColor(stage.color || "#3b82f6"); }} data-testid={`button-edit-stage-${stage.id}`}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => deleteStageMutation.mutate(stage.id)} data-testid={`button-delete-stage-${stage.id}`}>
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex items-end gap-2 pt-2 border-t">
+            <div className="flex-1">
+              <Label className="text-xs">New stage name</Label>
+              <Input value={newStageName} onChange={e => setNewStageName(e.target.value)} placeholder="Stage name" data-testid="input-new-stage-name" />
+            </div>
+            <div className="w-20">
+              <Label className="text-xs">Prob %</Label>
+              <Input type="number" min={0} max={100} value={newStageProbability} onChange={e => setNewStageProbability(e.target.value)} data-testid="input-new-stage-prob" />
+            </div>
+            <Button
+              disabled={!newStageName.trim() || !activePipelineId || createStageMutation.isPending}
+              onClick={() => {
+                const openStages = pipelineStages.filter(s => !s.isClosed);
+                const maxOrder = openStages.reduce((m, s) => Math.max(m, s.order), 0);
+                createStageMutation.mutate({
+                  name: newStageName.trim(),
+                  pipelineId: activePipelineId!,
+                  order: maxOrder + 1,
+                  probability: parseInt(newStageProbability) || 50,
+                  color: STAGE_COLORS[openStages.length % STAGE_COLORS.length],
+                  isClosed: false,
+                  isWon: false,
+                });
+              }}
+              data-testid="button-add-stage"
+            >
+              <Plus className="h-4 w-4 mr-1" /> Add
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={closeReasonOpen} onOpenChange={setCloseReasonOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{pendingClose?.isWon ? "Win Reason" : "Loss Reason"}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Label>{pendingClose?.isWon ? "Why was this deal won?" : "Why was this deal lost?"}</Label>
+            <Input value={closeReason} onChange={e => setCloseReason(e.target.value)} className="mt-2" data-testid="input-close-reason" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setCloseReasonOpen(false); setPendingClose(null); }}>Cancel</Button>
+            <Button onClick={confirmCloseReason} disabled={!closeReason.trim()} data-testid="button-confirm-close-reason">Confirm</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

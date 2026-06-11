@@ -41,9 +41,10 @@ interface RateCardManagerProps {
   onClose: () => void;
   onSelectRateCard?: (cardId: number) => void;
   selectedRateCardId?: number | null;
+  readOnly?: boolean;
 }
 
-export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateCardId }: RateCardManagerProps) {
+export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateCardId, readOnly = false }: RateCardManagerProps) {
   const { toast } = useToast();
   const [editingCard, setEditingCard] = useState<RateCard | null>(null);
   const [createMode, setCreateMode] = useState(false);
@@ -60,7 +61,7 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
   const [newItemRate, setNewItemRate] = useState("");
 
   const { data: rateCards = [], isLoading } = useQuery<RateCard[]>({
-    queryKey: ["/api/crm/rate-cards"],
+    queryKey: ["/api/resources/rate-cards"],
   });
 
   const { data: skillsList = [] } = useQuery<Array<{ id: number; name: string }>>({
@@ -69,15 +70,14 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
 
   const createCardMutation = useMutation({
     mutationFn: async (data: { name: string; description: string; currency: string; effectiveFrom: string; effectiveTo: string; isDefault: boolean }) => {
-      return apiRequest("POST", "/api/crm/rate-cards", {
+      return apiRequest("POST", "/api/resources/rate-cards", {
         ...data,
         effectiveFrom: data.effectiveFrom || null,
         effectiveTo: data.effectiveTo || null,
-        tenantId: 1,
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/rate-cards"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/resources/rate-cards"] });
       toast({ title: "Rate card created" });
       resetForm();
     },
@@ -88,10 +88,10 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
 
   const updateCardMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Record<string, unknown> }) => {
-      return apiRequest("PUT", `/api/crm/rate-cards/${id}`, data);
+      return apiRequest("PUT", `/api/resources/rate-cards/${id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/rate-cards"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/resources/rate-cards"] });
       toast({ title: "Rate card updated" });
       setEditingCard(null);
       resetForm();
@@ -103,10 +103,10 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
 
   const deleteCardMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest("DELETE", `/api/crm/rate-cards/${id}`);
+      return apiRequest("DELETE", `/api/resources/rate-cards/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/rate-cards"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/resources/rate-cards"] });
       toast({ title: "Rate card deleted" });
       setExpandedCardId(null);
     },
@@ -117,10 +117,10 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
 
   const addItemMutation = useMutation({
     mutationFn: async ({ cardId, roleName, dailyRate }: { cardId: number; roleName: string; dailyRate: string }) => {
-      return apiRequest("POST", `/api/crm/rate-cards/${cardId}/items`, { roleName, dailyRate });
+      return apiRequest("POST", `/api/resources/rate-cards/${cardId}/items`, { roleName, dailyRate });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/rate-cards"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/resources/rate-cards"] });
       setNewItemRole("");
       setNewItemRate("");
       toast({ title: "Role rate added" });
@@ -132,10 +132,10 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
 
   const deleteItemMutation = useMutation({
     mutationFn: async (itemId: number) => {
-      return apiRequest("DELETE", `/api/crm/rate-card-items/${itemId}`);
+      return apiRequest("DELETE", `/api/resources/rate-card-items/${itemId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/rate-cards"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/resources/rate-cards"] });
       toast({ title: "Role rate removed" });
     },
   });
@@ -273,12 +273,17 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-[#0ea5e9]" />
-            Rate Card Management
+            {readOnly ? "Rate Cards (Read-Only)" : "Rate Card Management"}
           </DialogTitle>
+          {readOnly && (
+            <p className="text-xs text-muted-foreground">
+              Rate cards are managed in Resource Management (Module 08). Select a card to apply rates to this plan.
+            </p>
+          )}
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden flex flex-col gap-4">
-          {showForm ? (
+          {showForm && !readOnly ? (
             <SubmitForm
               onSubmit={handleSaveCard}
               disabled={createCardMutation.isPending || updateCardMutation.isPending}
@@ -380,49 +385,51 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
               <p className="text-xs text-muted-foreground">
                 {rateCards.length} rate card{rateCards.length !== 1 ? "s" : ""} available
               </p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <input
-                  type="file"
-                  ref={csvImportRef}
-                  accept=".csv"
-                  className="hidden"
-                  onChange={e => {
-                    const file = e.target.files?.[0];
-                    if (file) importCSV(file);
-                  }}
-                  data-testid="input-import-csv"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => csvImportRef.current?.click()}
-                  data-testid="button-import-csv"
-                >
-                  <Upload className="h-3.5 w-3.5" />
-                  Import CSV
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={exportCSV}
-                  disabled={allItems.length === 0}
-                  data-testid="button-export-csv"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Export CSV
-                </Button>
-                <Button
-                  size="sm"
-                  className="gap-1.5 bg-[#0ea5e9] hover:bg-[#0284c7]"
-                  onClick={startCreate}
-                  data-testid="button-create-card"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  New Rate Card
-                </Button>
-              </div>
+              {!readOnly && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="file"
+                    ref={csvImportRef}
+                    accept=".csv"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) importCSV(file);
+                    }}
+                    data-testid="input-import-csv"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => csvImportRef.current?.click()}
+                    data-testid="button-import-csv"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    Import CSV
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={exportCSV}
+                    disabled={allItems.length === 0}
+                    data-testid="button-export-csv"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Export CSV
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-[#0ea5e9] hover:bg-[#0284c7]"
+                    onClick={startCreate}
+                    data-testid="button-create-card"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    New Rate Card
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
@@ -436,10 +443,12 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
                 <div className="text-center py-12">
                   <CreditCard className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
                   <p className="text-sm text-muted-foreground mb-3">No rate cards yet</p>
-                  <Button size="sm" className="gap-1.5 bg-[#0ea5e9] hover:bg-[#0284c7]" onClick={startCreate}>
-                    <Plus className="h-3.5 w-3.5" />
-                    Create your first rate card
-                  </Button>
+                  {!readOnly && (
+                    <Button size="sm" className="gap-1.5 bg-[#0ea5e9] hover:bg-[#0284c7]" onClick={startCreate}>
+                      <Plus className="h-3.5 w-3.5" />
+                      Create your first rate card
+                    </Button>
+                  )}
                 </div>
               ) : (
                 rateCards.map(card => {
@@ -497,23 +506,38 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
                                 {isSelected ? "Selected" : "Select"}
                               </Button>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setExpandedCardId(isExpanded ? null : card.id)}
-                              data-testid={`button-expand-card-${card.id}`}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteCardMutation.mutate(card.id)}
-                              disabled={deleteCardMutation.isPending}
-                              data-testid={`button-delete-card-${card.id}`}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                            </Button>
+                            {!readOnly && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setExpandedCardId(isExpanded ? null : card.id)}
+                                  data-testid={`button-expand-card-${card.id}`}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => deleteCardMutation.mutate(card.id)}
+                                  disabled={deleteCardMutation.isPending}
+                                  data-testid={`button-delete-card-${card.id}`}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </Button>
+                              </>
+                            )}
+                            {readOnly && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs"
+                                onClick={() => setExpandedCardId(isExpanded ? null : card.id)}
+                                data-testid={`button-view-card-${card.id}`}
+                              >
+                                {isExpanded ? "Hide" : "View"} Rates
+                              </Button>
+                            )}
                           </div>
                         </div>
 
@@ -522,10 +546,12 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
                             <Separator />
                             <div className="flex items-center justify-between gap-2 flex-wrap">
                               <span className="text-xs font-bold text-muted-foreground uppercase">Role Rates</span>
-                              <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => startEdit(card)}>
-                                <Pencil className="h-3 w-3" />
-                                Edit Card Details
-                              </Button>
+                              {!readOnly && (
+                                <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => startEdit(card)}>
+                                  <Pencil className="h-3 w-3" />
+                                  Edit Card Details
+                                </Button>
+                              )}
                             </div>
 
                             {(card.items && card.items.length > 0) ? (
@@ -541,15 +567,17 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
                                       <span className="text-sm font-mono font-bold">
                                         {sym}{Number(item.dailyRate).toLocaleString("en-GB")}/day
                                       </span>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => deleteItemMutation.mutate(item.id)}
-                                        disabled={deleteItemMutation.isPending}
-                                        data-testid={`button-delete-item-${item.id}`}
-                                      >
-                                        <Trash2 className="h-3 w-3 text-destructive" />
-                                      </Button>
+                                      {!readOnly && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => deleteItemMutation.mutate(item.id)}
+                                          disabled={deleteItemMutation.isPending}
+                                          data-testid={`button-delete-item-${item.id}`}
+                                        >
+                                          <Trash2 className="h-3 w-3 text-destructive" />
+                                        </Button>
+                                      )}
                                     </div>
                                   </div>
                                 ))}
@@ -558,7 +586,7 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
                               <p className="text-xs text-muted-foreground py-2">No role rates defined yet.</p>
                             )}
 
-                            <div className="flex items-end gap-2 p-3 border border-dashed rounded-lg bg-muted/20" data-testid="add-item-form">
+                            {!readOnly && <div className="flex items-end gap-2 p-3 border border-dashed rounded-lg bg-muted/20" data-testid="add-item-form">
                               <div className="flex-1 space-y-1">
                                 <Label className="text-[10px] uppercase text-muted-foreground">Role / Skill</Label>
                                 <Input
@@ -594,7 +622,7 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
                                 {addItemMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                                 Add
                               </Button>
-                            </div>
+                            </div>}
                           </div>
                         )}
                       </div>

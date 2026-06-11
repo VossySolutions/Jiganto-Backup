@@ -1,4 +1,7 @@
 import { useState, useMemo } from "react";
+import { useCrmPagination } from "@/hooks/use-crm-pagination";
+import { CrmTablePagination } from "./CrmTablePagination";
+import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -14,12 +17,19 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   Plus, Download, Upload, Search, ArrowUpDown, Layers,
-  ChevronDown, X, Trash2, Paintbrush, Bookmark, MoreHorizontal, Pencil
+  ChevronDown, X, Trash2, Paintbrush, Bookmark, MoreHorizontal, Pencil, MapPin, Globe
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { CrmCustomFieldsForm } from "./CrmCustomFieldsForm";
+import { CrmCustomFieldTableHeaders, CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
+import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
 import { evaluateConditionalFormatting, type ConditionalFormatRule } from "@/lib/conditionalFormatting";
 import type { ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { resolveAccountGeo } from "@/lib/crm-geo";
+import { CrmOwnerSelect } from "./CrmOwnerSelect";
+import { useCrmUsers } from "./CrmUsersProvider";
 
 type CrmAccount = {
   id: number;
@@ -40,12 +50,20 @@ type CrmAccount = {
   description: string | null;
   annualRevenue: string | null;
   employeeCount: number | null;
+  customData?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 };
 
+type CrmOpportunity = { id: number; accountId: number | null; stageId: number | null };
+type CrmContract = { id: number; accountId: number | null; status: string | null; endDate: string | null };
+type CrmStage = { id: number; isClosed: boolean | null };
+
 interface CrmCustomersTabProps {
   accounts: CrmAccount[];
+  opportunities?: CrmOpportunity[];
+  contracts?: CrmContract[];
+  stages?: CrmStage[];
   searchTerm: string;
   onSelectAccount: (account: CrmAccount) => void;
 }
@@ -138,7 +156,29 @@ function GrowthIcon({ className }: { className?: string }) {
   );
 }
 
-export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCustomersTabProps) {
+export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], stages = [], searchTerm, onSelectAccount }: CrmCustomersTabProps) {
+  const { fields: customFields } = useCrmCustomFields("account");
+  const tableColSpan = 10 + customFields.length;
+  const openStageIds = useMemo(() => new Set(stages.filter(s => !s.isClosed).map(s => s.id)), [stages]);
+
+  const accountStats = useMemo(() => {
+    const map = new Map<number, { openOpps: number; activeContracts: number }>();
+    for (const o of opportunities) {
+      if (!o.accountId || !o.stageId || !openStageIds.has(o.stageId)) continue;
+      const cur = map.get(o.accountId) || { openOpps: 0, activeContracts: 0 };
+      cur.openOpps++;
+      map.set(o.accountId, cur);
+    }
+    for (const c of contracts) {
+      if (!c.accountId) continue;
+      const status = c.status === "draft" ? "draft" : (c.endDate && new Date(c.endDate) < new Date() ? "expired" : c.status);
+      if (status !== "active" && status !== "sent") continue;
+      const cur = map.get(c.accountId) || { openOpps: 0, activeContracts: 0 };
+      cur.activeContracts++;
+      map.set(c.accountId, cur);
+    }
+    return map;
+  }, [opportunities, contracts, openStageIds]);
   const [isOpen, setIsOpen] = useState(false);
   const [segmentFilter, setSegmentFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -151,7 +191,11 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
   const [formatPanelOpen, setFormatPanelOpen] = useState(false);
   const [formatRules, setFormatRules] = useState<ConditionalFormatRule[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [formData, setFormData] = useState({ name: "", type: "prospect", industry: "", email: "", phone: "", website: "" });
+  const [viewMode, setViewMode] = useState<"table" | "card" | "map">("table");
+  const EMPTY_CUSTOMER_FORM = { name: "", type: "prospect", industry: "", email: "", phone: "", website: "", address: "", city: "", state: "", country: "", postalCode: "", employeeCount: "", annualRevenue: "", description: "", parentAccountId: "", ownerUserId: "" };
+  const { resolveOwner } = useCrmUsers();
+  const [formData, setFormData] = useState(EMPTY_CUSTOMER_FORM);
+  const [customData, setCustomData] = useState<Record<string, unknown>>({});
   const [importOpen, setImportOpen] = useState(false);
   const { toast } = useToast();
 
@@ -166,11 +210,17 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: typeof formData) => apiRequest("POST", "/api/crm/accounts", data),
+    mutationFn: (data: typeof formData) => apiRequest("POST", "/api/crm/accounts", {
+      ...data,
+      employeeCount: data.employeeCount ? parseInt(data.employeeCount) : null,
+      parentAccountId: data.parentAccountId ? parseInt(data.parentAccountId) : null,
+      customData,
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/accounts"] });
       setIsOpen(false);
-      setFormData({ name: "", type: "prospect", industry: "", email: "", phone: "", website: "" });
+      setFormData(EMPTY_CUSTOMER_FORM);
+      setCustomData({});
       toast({ title: "Account created successfully" });
     },
     onError: () => toast({ title: "Failed to create account", variant: "destructive" }),
@@ -249,6 +299,38 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
 
     return result;
   }, [accounts, localSearch, searchTerm, segmentFilter, typeFilter, industryFilter, sortField, sortDir]);
+
+  const pagination = useCrmPagination(enrichedAccounts, {
+    resetKey: `${localSearch}|${searchTerm}|${segmentFilter}|${typeFilter}|${industryFilter}|${sortField}|${sortDir}|${groupBy}|${viewMode}`,
+    enabled: viewMode !== "map" && groupBy === "none",
+  });
+
+  const currentFilters = useMemo((): FilterConfig[] => {
+    const filters: FilterConfig[] = [];
+    if (segmentFilter !== "all") filters.push({ columnId: "segment", operator: "equals", value: segmentFilter });
+    if (typeFilter !== "all") filters.push({ columnId: "type", operator: "equals", value: typeFilter });
+    if (industryFilter !== "all") filters.push({ columnId: "industry", operator: "equals", value: industryFilter });
+    return filters;
+  }, [segmentFilter, typeFilter, industryFilter]);
+
+  const currentSorts = useMemo((): SortConfig[] => (
+    [{ columnId: sortField, direction: sortDir }]
+  ), [sortField, sortDir]);
+
+  const applySavedView = (filters: FilterConfig[], sorts?: SortConfig[]) => {
+    setSegmentFilter("all");
+    setTypeFilter("all");
+    setIndustryFilter("all");
+    for (const f of filters) {
+      if (f.columnId === "segment") setSegmentFilter(f.value);
+      if (f.columnId === "type") setTypeFilter(f.value);
+      if (f.columnId === "industry") setIndustryFilter(f.value);
+    }
+    if (sorts?.[0]) {
+      setSortField(sorts[0].columnId as typeof sortField);
+      setSortDir(sorts[0].direction);
+    }
+  };
 
   const formatColumns: MondayColumnDef<any>[] = [
     { id: "name", header: "Account", type: "text", accessor: "name" },
@@ -345,6 +427,16 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
       email: acc.email || "",
       phone: acc.phone || "",
       website: acc.website || "",
+      address: acc.address || "",
+      city: acc.city || "",
+      state: acc.state || "",
+      country: acc.country || "",
+      ownerUserId: acc.ownerUserId || "",
+      postalCode: acc.postalCode || "",
+      employeeCount: acc.employeeCount != null ? String(acc.employeeCount) : "",
+      annualRevenue: acc.annualRevenue || "",
+      description: acc.description || "",
+      parentAccountId: acc.parentAccountId != null ? String(acc.parentAccountId) : "",
     });
     setIsOpen(true);
   };
@@ -425,6 +517,7 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
         <td className="px-4 py-3 whitespace-nowrap">
           <span className="text-sm text-muted-foreground">{new Date(acc.createdAt).getFullYear()}</span>
         </td>
+        <CrmCustomFieldTableCells fields={customFields} customData={acc.customData} />
         <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -574,6 +667,7 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
             <SelectItem value="customer">Active</SelectItem>
             <SelectItem value="prospect">Prospect</SelectItem>
             <SelectItem value="partner">Partner</SelectItem>
+            <SelectItem value="vendor">Vendor</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
           </SelectContent>
         </Select>
@@ -681,16 +775,20 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
           onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
         />
 
-        <button
-          onClick={() => toast({ title: "View saved", description: "Current filters and layout saved" })}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
-          data-testid="button-save-view-customers"
-        >
-          <Bookmark className="h-3.5 w-3.5" />
-          Save View
-        </button>
+        <SavedViewsDropdown
+          entityType="accounts"
+          currentFilters={currentFilters}
+          currentSorts={currentSorts}
+          onApplyView={applySavedView}
+        />
 
-        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setEditingId(null); setFormData({ name: "", type: "prospect", industry: "", email: "", phone: "", website: "" }); } }}>
+        <div className="flex border rounded-lg overflow-hidden">
+          <button onClick={() => setViewMode("table")} className={cn("px-3 py-2 text-xs font-medium", viewMode === "table" ? "bg-[#0ea5e9] text-white" : "bg-background")} data-testid="view-table">Table</button>
+          <button onClick={() => setViewMode("card")} className={cn("px-3 py-2 text-xs font-medium border-l", viewMode === "card" ? "bg-[#0ea5e9] text-white" : "bg-background")} data-testid="view-card">Cards</button>
+          <button onClick={() => setViewMode("map")} className={cn("px-3 py-2 text-xs font-medium border-l", viewMode === "map" ? "bg-[#0ea5e9] text-white" : "bg-background")} data-testid="view-map">Map</button>
+        </div>
+
+        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setEditingId(null); setFormData(EMPTY_CUSTOMER_FORM); setCustomData({}); } }}>
           <DialogTrigger asChild>
             <button
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white transition-colors"
@@ -700,11 +798,17 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
               New Customer
             </button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <SubmitForm
               onSubmit={() => {
+                const payload = {
+                  ...formData,
+                  employeeCount: formData.employeeCount ? parseInt(formData.employeeCount) : null,
+                  parentAccountId: formData.parentAccountId ? parseInt(formData.parentAccountId) : null,
+                  customData,
+                };
                 if (editingId) {
-                  updateMutation.mutate({ id: editingId, updates: formData });
+                  updateMutation.mutate({ id: editingId, updates: payload });
                   setIsOpen(false);
                 } else {
                   createMutation.mutate(formData);
@@ -735,6 +839,7 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
                     <SelectItem value="prospect">Prospect</SelectItem>
                     <SelectItem value="customer">Customer</SelectItem>
                     <SelectItem value="partner">Partner</SelectItem>
+            <SelectItem value="vendor">Vendor</SelectItem>
                     <SelectItem value="inactive">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
@@ -751,24 +856,71 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    data-testid="input-customer-email"
-                  />
+                  <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))} data-testid="input-customer-email" />
                 </div>
                 <div>
                   <Label htmlFor="phone">Phone</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                    data-testid="input-customer-phone"
-                  />
+                  <Input id="phone" value={formData.phone} onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))} data-testid="input-customer-phone" />
                 </div>
               </div>
+              <div>
+                <Label htmlFor="website">Website</Label>
+                <Input id="website" value={formData.website} onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))} data-testid="input-customer-website" />
+              </div>
+              <div>
+                <Label htmlFor="address">Address</Label>
+                <Input id="address" value={formData.address} onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))} data-testid="input-customer-address" />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div>
+                  <Label htmlFor="city">City</Label>
+                  <Input id="city" value={formData.city} onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))} data-testid="input-customer-city" />
+                </div>
+                <div>
+                  <Label htmlFor="state">State / Region</Label>
+                  <Input id="state" value={formData.state} onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))} data-testid="input-customer-state" />
+                </div>
+                <div>
+                  <Label htmlFor="country">Country</Label>
+                  <Input id="country" value={formData.country} onChange={(e) => setFormData(prev => ({ ...prev, country: e.target.value }))} data-testid="input-customer-country" />
+                </div>
+                <div>
+                  <Label htmlFor="postalCode">Postal Code</Label>
+                  <Input id="postalCode" value={formData.postalCode} onChange={(e) => setFormData(prev => ({ ...prev, postalCode: e.target.value }))} data-testid="input-customer-postal" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="employeeCount">Employees</Label>
+                  <Input id="employeeCount" type="number" value={formData.employeeCount} onChange={(e) => setFormData(prev => ({ ...prev, employeeCount: e.target.value }))} data-testid="input-customer-employees" />
+                </div>
+                <div>
+                  <Label htmlFor="annualRevenue">Annual Revenue</Label>
+                  <Input id="annualRevenue" type="number" value={formData.annualRevenue} onChange={(e) => setFormData(prev => ({ ...prev, annualRevenue: e.target.value }))} data-testid="input-customer-revenue" />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="parentAccountId">Parent Account</Label>
+                <Select value={formData.parentAccountId || "none"} onValueChange={(v) => setFormData(prev => ({ ...prev, parentAccountId: v === "none" ? "" : v }))}>
+                  <SelectTrigger data-testid="select-parent-account"><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {accounts.filter(a => a.id !== editingId).map(a => (
+                      <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <CrmOwnerSelect
+                value={formData.ownerUserId}
+                onChange={(v) => setFormData(prev => ({ ...prev, ownerUserId: v }))}
+                testId="select-customer-owner"
+              />
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Textarea id="description" value={formData.description} onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))} rows={2} data-testid="input-customer-description" />
+              </div>
+              <CrmCustomFieldsForm entityType="account" values={customData} onChange={(k, v) => setCustomData(prev => ({ ...prev, [k]: v }))} />
             </div>
             <DialogFooter>
               <DialogClose asChild>
@@ -789,7 +941,104 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
         </Dialog>
       </div>
 
-      <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden max-w-[95%]" data-testid="customers-table">
+      {viewMode === "map" && (() => {
+        const mapAccounts = enrichedAccounts.filter(a => a.country || a.city);
+        const geoResolvedCount = mapAccounts.filter((a, i) =>
+          resolveAccountGeo(a.country, a.city, a.state, a.name, i).resolved
+        ).length;
+        return (
+        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 sm:p-6 shadow-sm" data-testid="customers-map-view">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2">
+              <Globe className="h-5 w-5 text-[#0ea5e9]" />
+              <h3 className="text-sm font-semibold">Customer Geography</h3>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {mapAccounts.length} accounts · {geoResolvedCount} geocoded from country/city data
+            </span>
+          </div>
+          <div className="relative bg-gradient-to-b from-sky-100/80 via-sky-50 to-emerald-50/60 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 rounded-xl h-[280px] sm:h-[400px] overflow-hidden border">
+            <svg className="absolute inset-0 w-full h-full opacity-20 dark:opacity-10 pointer-events-none" viewBox="0 0 1000 500" preserveAspectRatio="none">
+              <ellipse cx="500" cy="250" rx="480" ry="230" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-sky-600/40" />
+              <path d="M120,180 Q250,120 400,150 T700,140 T880,200" fill="none" stroke="currentColor" strokeWidth="1" className="text-emerald-600/30" />
+              <path d="M100,300 Q300,360 500,330 T900,310" fill="none" stroke="currentColor" strokeWidth="1" className="text-emerald-600/30" />
+            </svg>
+            {mapAccounts.map((a, i) => {
+              const geo = resolveAccountGeo(a.country, a.city, a.state, a.name, i);
+              const segment = getSegment(a.annualRevenue);
+              const pinColor = segment === "Enterprise" ? "#0ea5e9" : segment === "Mid-Market" ? "#8b5cf6" : "#22c55e";
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => onSelectAccount?.(a)}
+                  className="absolute group -translate-x-1/2 -translate-y-full z-10"
+                  style={{ left: `${geo.left}%`, top: `${geo.top}%` }}
+                  data-testid={`map-pin-${a.id}`}
+                >
+                  <MapPin className="h-5 w-5 sm:h-6 sm:w-6 drop-shadow-md group-hover:scale-125 transition-transform" style={{ color: pinColor }} />
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 hidden group-hover:block bg-card border rounded-lg px-2 py-1.5 text-xs shadow-lg whitespace-nowrap z-20">
+                    <div className="font-semibold">{a.name}</div>
+                    <div className="text-muted-foreground">{[a.city, a.state, a.country].filter(Boolean).join(", ")}</div>
+                    <div className="text-[10px] text-muted-foreground">{segment}{!geo.resolved ? " · approximate" : ""}</div>
+                  </div>
+                </button>
+              );
+            })}
+            {mapAccounts.length === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground px-6 text-center">
+                Add country and city to customer accounts to plot them on the map
+              </div>
+            )}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#0ea5e9]" /> Enterprise</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#8b5cf6]" /> Mid-Market</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#22c55e]" /> SMB</span>
+          </div>
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+            {Array.from(new Set(enrichedAccounts.filter(a => a.country).map(a => a.country))).map(country => (
+              <div key={country} className="text-xs px-3 py-2 rounded-lg bg-muted/50 flex items-center gap-2">
+                <MapPin className="h-3 w-3 text-[#0ea5e9]" />
+                <span className="font-medium truncate">{country}</span>
+                <span className="text-muted-foreground ml-auto shrink-0">{enrichedAccounts.filter(a => a.country === country).length}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        );
+      })()}
+
+      {viewMode === "card" && (
+        <div data-testid="customers-card-view">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {pagination.paginatedItems.map(a => (
+            <div key={a.id} className="border rounded-xl p-4 bg-card shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => onSelectAccount?.(a)} data-testid={`customer-card-${a.id}`}>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: getColorForName(a.name) }}>{getInitials(a.name)}</div>
+                <div><div className="font-semibold text-sm">{a.name}</div><div className="text-xs text-muted-foreground">{a.industry || "—"}</div></div>
+              </div>
+              <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                <span className="capitalize">{a.type}</span>
+                <span>{accountStats.get(a.id)?.openOpps ?? 0} open opps</span>
+                <span>{accountStats.get(a.id)?.activeContracts ?? 0} contracts</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <CrmTablePagination
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          total={pagination.total}
+          startIndex={pagination.startIndex}
+          endIndex={pagination.endIndex}
+          pageSize={pagination.pageSize}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+        />
+        </div>
+      )}
+
+      {viewMode === "table" && <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden w-full" data-testid="customers-table">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -825,7 +1074,7 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
             <tbody>
               {enrichedAccounts.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-16 text-muted-foreground">
+                  <td colSpan={tableColSpan} className="text-center py-16 text-muted-foreground">
                     <div className="flex flex-col items-center gap-2">
                       <CustomersIcon className="h-10 w-10 opacity-30" />
                       <p className="text-sm">No customers found. Create your first account to start managing relationships.</p>
@@ -843,7 +1092,7 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
               ) : groupedData ? (
                 Object.entries(groupedData).flatMap(([groupName, groupAccs]) => [
                   <tr key={`group-header-${groupName}`} className="bg-muted/40 border-b border-border/40" data-testid={`group-customers-header-${groupName}`}>
-                    <td colSpan={10} className="px-4 py-2">
+                    <td colSpan={tableColSpan} className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <div
                           className="h-2.5 w-2.5 rounded-full shrink-0"
@@ -862,18 +1111,31 @@ export function CrmCustomersTab({ accounts, searchTerm, onSelectAccount }: CrmCu
                   ...groupAccs.map(renderRow)
                 ])
               ) : (
-                enrichedAccounts.map(renderRow)
+                pagination.paginatedItems.map(renderRow)
               )}
             </tbody>
           </table>
         </div>
-        {enrichedAccounts.length > 0 && (
+        {groupBy !== "none" && enrichedAccounts.length > 0 && (
           <div className="px-4 py-2.5 border-t border-border/40 bg-muted/20 text-xs text-muted-foreground" data-testid="customers-count-footer">
             {enrichedAccounts.length} of {accounts.length} customers
             {selectedIds.size > 0 && <span className="ml-2 text-[#0ea5e9]">({selectedIds.size} selected)</span>}
           </div>
         )}
-      </div>
+        {groupBy === "none" && (
+          <CrmTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            extra={selectedIds.size > 0 ? <span className="text-[#0ea5e9]">({selectedIds.size} selected)</span> : undefined}
+          />
+        )}
+      </div>}
 
       <ConditionalFormattingPanel
         open={formatPanelOpen}

@@ -2318,6 +2318,9 @@ export async function registerRoutes(
   // === CRM MODULE ROUTES ===
 
   app.post("/api/crm/seed-demo-data", async (req, res) => {
+    if (process.env.NODE_ENV === "production") {
+      return res.status(403).json({ message: "Demo seed is disabled in production" });
+    }
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
@@ -2375,6 +2378,58 @@ export async function registerRoutes(
       const activeLeads = leads.filter((l: any) => l.status !== 'converted');
       const hotLeads = activeLeads.filter((l: any) => (l.score || 0) >= 80);
       const newLeads = activeLeads.filter((l: any) => l.status === 'new');
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const newLeadsThisMonth = leads.filter((l: any) => new Date(l.createdAt) >= startOfMonth).length;
+      const convertedLeads = leads.filter((l: any) => l.status === 'converted');
+      const leadConversionRate = leads.length > 0 ? Math.round((convertedLeads.length / leads.length) * 100) : 0;
+
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const recentWon = wonOpps.filter((o: any) => o.actualCloseDate && new Date(o.actualCloseDate) >= ninetyDaysAgo);
+      const recentLost = lostOpps.filter((o: any) => o.actualCloseDate && new Date(o.actualCloseDate) >= ninetyDaysAgo);
+      const closedRecent = recentWon.length + recentLost.length;
+      const winRate90d = closedRecent > 0 ? Math.round((recentWon.length / closedRecent) * 100) : 0;
+
+      const salesCycles = recentWon
+        .filter((o: any) => o.createdAt && o.actualCloseDate)
+        .map((o: any) => Math.ceil((new Date(o.actualCloseDate).getTime() - new Date(o.createdAt).getTime()) / (1000 * 60 * 60 * 24)));
+      const avgSalesCycle = salesCycles.length > 0 ? Math.round(salesCycles.reduce((a: number, b: number) => a + b, 0) / salesCycles.length) : 0;
+
+      const hotOpportunities = [...openOpps]
+        .sort((a: any, b: any) => (parseFloat(b.amount || "0") || 0) - (parseFloat(a.amount || "0") || 0))
+        .slice(0, 10)
+        .map((o: any) => {
+          const stage = stages.find((s: any) => s.id === o.stageId);
+          const account = accounts.find((a: any) => a.id === o.accountId);
+          return { id: o.id, name: o.name, accountName: account?.name || "—", stage: stage?.name || "—", amount: parseFloat(o.amount || "0") || 0, expectedCloseDate: o.expectedCloseDate };
+        });
+
+      const activities = await storage.getCrmActivities(tenantId, undefined, undefined, undefined, listClientId);
+      const recentActivity = activities
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 10)
+        .map((a: any) => ({ id: a.id, type: a.type, subject: a.subject, createdAt: a.createdAt }));
+
+      const ownerLeaderboard: Record<string, { ownerId: string; total: number; count: number }> = {};
+      for (const o of openOpps) {
+        const owner = o.ownerUserId || "unassigned";
+        if (!ownerLeaderboard[owner]) ownerLeaderboard[owner] = { ownerId: owner, total: 0, count: 0 };
+        ownerLeaderboard[owner].total += parseFloat(o.amount || "0") || 0;
+        ownerLeaderboard[owner].count += 1;
+      }
+      const leaderboard = Object.values(ownerLeaderboard).sort((a, b) => b.total - a.total).slice(0, 8);
+
+      const revenueForecast: { month: string; value: number }[] = [];
+      for (let i = 0; i < 6; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        const key = d.toLocaleString("en-US", { month: "short", year: "2-digit" });
+        const monthOpps = openOpps.filter((o: any) => {
+          if (!o.expectedCloseDate) return i === 0;
+          const cd = new Date(o.expectedCloseDate);
+          return cd.getMonth() === d.getMonth() && cd.getFullYear() === d.getFullYear();
+        });
+        const value = monthOpps.reduce((s: number, o: any) => s + (parseFloat(o.amount || "0") || 0) * ((o.probability || 0) / 100), 0);
+        revenueForecast.push({ month: key, value: Math.round(value) });
+      }
 
       const stageBreakdown = openStages.map((stage: any) => {
         const stageOpps = opportunities.filter((o: any) => o.stageId === stage.id);
@@ -2405,10 +2460,18 @@ export async function registerRoutes(
         activeLeads: activeLeads.length,
         hotLeads: hotLeads.length,
         newLeads: newLeads.length,
+        newLeadsThisMonth,
+        leadConversionRate,
+        winRate90d,
+        avgSalesCycle,
         activeContracts: activeContracts.length,
         expiringContracts: expiringContracts.length,
         stageBreakdown,
         topAccounts,
+        hotOpportunities,
+        recentActivity,
+        leaderboard,
+        revenueForecast,
       });
     } catch (error) {
       console.error("Dashboard stats error:", error);
@@ -2432,6 +2495,39 @@ export async function registerRoutes(
     if (!account) return res.status(404).json({ message: "Account not found" });
     if (!assertRecordInWorkspace(req, res, account.clientId)) return;
     res.json(account);
+  });
+
+  app.get("/api/crm/accounts/:id/tickets", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const account = await storage.getCrmAccount(Number(req.params.id));
+    if (!account) return res.status(404).json({ message: "Account not found" });
+    if (!assertRecordInWorkspace(req, res, account.clientId)) return;
+    const tenantId = getApiTenantIdWithFallback(req);
+    const tickets = await storage.getCrmAccountTickets(tenantId, account.id, resolveListClientId(req));
+    res.json(tickets);
+  });
+
+  app.get("/api/crm/accounts/:id/documents", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const account = await storage.getCrmAccount(Number(req.params.id));
+    if (!account) return res.status(404).json({ message: "Account not found" });
+    if (!assertRecordInWorkspace(req, res, account.clientId)) return;
+    const tenantId = getApiTenantIdWithFallback(req);
+    const clientId = account.clientId ?? resolveListClientId(req);
+    if (clientId === undefined) {
+      return res.json([]);
+    }
+    const docs = await storage.getDocumentsWithOwner(tenantId, undefined, clientId);
+    res.json(docs.map((d) => ({
+      id: d.id,
+      title: d.title,
+      type: d.type,
+      status: d.status,
+      updatedAt: d.updatedAt,
+      ownerName: d.ownerName,
+    })));
   });
 
   app.post("/api/crm/accounts", async (req, res) => {
@@ -2725,6 +2821,128 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  // CRM Custom Fields
+  app.get("/api/crm/custom-fields", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    const entityType = req.query.entityType as string | undefined;
+    const fields = await storage.getCrmCustomFields(tenantId, entityType);
+    res.json(fields);
+  });
+
+  app.post("/api/crm/custom-fields", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const tenantId = getApiTenantIdWithFallback(req);
+      const existing = await storage.getCrmCustomFields(tenantId, req.body.entityType);
+      if (existing.length >= 20) return res.status(400).json({ message: "Maximum 20 custom fields per entity" });
+      const field = await storage.createCrmCustomField({ ...req.body, tenantId });
+      res.status(201).json(field);
+    } catch (err) {
+      res.status(400).json({ message: "Failed to create custom field" });
+    }
+  });
+
+  app.put("/api/crm/custom-fields/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const field = await storage.updateCrmCustomField(Number(req.params.id), req.body);
+    if (!field) return res.status(404).json({ message: "Custom field not found" });
+    res.json(field);
+  });
+
+  app.delete("/api/crm/custom-fields/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    await storage.deleteCrmCustomField(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  app.get("/api/crm/forecast-matrix", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    const period = (req.query.period as string) || "monthly";
+    const scenario = (req.query.scenario as string) || "expected";
+    const pipelineId = req.query.pipelineId ? Number(req.query.pipelineId) : undefined;
+    const ownerUserId = req.query.ownerUserId as string | undefined;
+    const monthsAhead = req.query.monthsAhead ? Number(req.query.monthsAhead) : undefined;
+    const listClientId = resolveListClientId(req);
+    const [opportunities, stages, accounts] = await Promise.all([
+      storage.getCrmOpportunities(tenantId, undefined, undefined, listClientId),
+      storage.getCrmOpportunityStages(tenantId),
+      storage.getCrmAccounts(tenantId, listClientId),
+    ]);
+    const openStages = new Set(stages.filter((s: any) => !s.isClosed).map((s: any) => s.id));
+    let openOpps = opportunities.filter((o: any) => openStages.has(o.stageId));
+    if (pipelineId) {
+      const pipelineStageIds = new Set(stages.filter((s: any) => s.pipelineId === pipelineId).map((s: any) => s.id));
+      openOpps = openOpps.filter((o: any) => pipelineStageIds.has(o.stageId));
+    }
+    if (ownerUserId) {
+      if (ownerUserId === "unassigned") {
+        openOpps = openOpps.filter((o: any) => !o.ownerUserId);
+      } else {
+        openOpps = openOpps.filter((o: any) => o.ownerUserId === ownerUserId);
+      }
+    }
+    const now = new Date();
+    const columns: string[] = [];
+    const defaultColCount = period === "annual" ? 4 : period === "quarterly" ? 8 : period === "half-year" ? 6 : 12;
+    const colCount = monthsAhead && monthsAhead > 0 ? Math.min(monthsAhead, 24) : defaultColCount;
+    for (let i = 0; i < colCount; i++) {
+      if (period === "monthly") {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        columns.push(d.toLocaleString("en-US", { month: "short", year: "2-digit" }));
+      } else if (period === "quarterly") {
+        const q = Math.ceil((now.getMonth() + 1) / 3) + i;
+        const year = now.getFullYear() + Math.floor((q - 1) / 4);
+        const actualQ = ((q - 1) % 4) + 1;
+        columns.push(`Q${actualQ} ${year}`);
+      } else if (period === "half-year") {
+        const d = new Date(now.getFullYear(), now.getMonth() + i * 6, 1);
+        const h = Math.floor(d.getMonth() / 6) + 1;
+        columns.push(`H${h} ${d.getFullYear()}`);
+      } else {
+        columns.push(String(now.getFullYear() + i));
+      }
+    }
+    const rows = openOpps.map((o: any) => {
+      const account = accounts.find((a: any) => a.id === o.accountId);
+      const amount = parseFloat(o.amount || "0") || 0;
+      const prob = o.probability || 0;
+      const cellValues = columns.map((_, i) => {
+        if (!o.expectedCloseDate) return 0;
+        const cd = new Date(o.expectedCloseDate);
+        let match = false;
+        if (period === "monthly") {
+          const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+          match = cd.getMonth() === d.getMonth() && cd.getFullYear() === d.getFullYear();
+        } else if (period === "quarterly") {
+          const q = Math.ceil((now.getMonth() + 1) / 3) + i;
+          const year = now.getFullYear() + Math.floor((q - 1) / 4);
+          const actualQ = ((q - 1) % 4) + 1;
+          match = Math.ceil((cd.getMonth() + 1) / 3) === actualQ && cd.getFullYear() === year;
+        } else if (period === "half-year") {
+          const d = new Date(now.getFullYear(), now.getMonth() + i * 6, 1);
+          const h = Math.floor(d.getMonth() / 6) + 1;
+          match = Math.floor(cd.getMonth() / 6) + 1 === h && cd.getFullYear() === d.getFullYear();
+        } else if (period === "annual") {
+          match = cd.getFullYear() === now.getFullYear() + i;
+        }
+        if (!match) return 0;
+        if (scenario === "best") return amount;
+        if (scenario === "worst") return prob >= 70 ? amount : 0;
+        return amount * (prob / 100);
+      });
+      return { opportunityId: o.id, name: o.name, accountName: account?.name || "—", cells: cellValues };
+    });
+    const totals = columns.map((_, ci) => rows.reduce((s, r) => s + (r.cells[ci] || 0), 0));
+    res.json({ period, scenario, columns, rows, totals });
+  });
+
   // CRM Automation Rules
   app.get("/api/crm/automation-rules", async (req, res) => {
     const userId = getUserId(req);
@@ -2814,7 +3032,8 @@ export async function registerRoutes(
     const { rows, mode } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
     try {
-      const result = await storage.bulkImportCrmLeads(1, rows, mode || "append");
+      const tenantId = getApiTenantIdWithFallback(req);
+      const result = await storage.bulkImportCrmLeads(tenantId, rows, mode || "append");
       res.json(result);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2825,7 +3044,8 @@ export async function registerRoutes(
     const { rows, mode } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
     try {
-      const result = await storage.bulkImportCrmContacts(1, rows, mode || "append");
+      const tenantId = getApiTenantIdWithFallback(req);
+      const result = await storage.bulkImportCrmContacts(tenantId, rows, mode || "append");
       res.json(result);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2836,7 +3056,8 @@ export async function registerRoutes(
     const { rows, mode } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
     try {
-      const result = await storage.bulkImportCrmAccounts(1, rows, mode || "append");
+      const tenantId = getApiTenantIdWithFallback(req);
+      const result = await storage.bulkImportCrmAccounts(tenantId, rows, mode || "append");
       res.json(result);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2847,7 +3068,8 @@ export async function registerRoutes(
     const { rows, mode } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
     try {
-      const result = await storage.bulkImportCrmOpportunities(1, rows, mode || "append");
+      const tenantId = getApiTenantIdWithFallback(req);
+      const result = await storage.bulkImportCrmOpportunities(tenantId, rows, mode || "append");
       res.json(result);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2858,7 +3080,8 @@ export async function registerRoutes(
     const { rows, mode } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
     try {
-      const result = await storage.bulkImportCrmContracts(1, rows, mode || "append");
+      const tenantId = getApiTenantIdWithFallback(req);
+      const result = await storage.bulkImportCrmContracts(tenantId, rows, mode || "append");
       res.json(result);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2933,12 +3156,8 @@ export async function registerRoutes(
           website: lead.website || null,
           phone: lead.phone || null,
           email: lead.email || null,
-          address: lead.address || null,
-          city: lead.city || null,
-          state: lead.state || null,
-          country: lead.country || null,
-          postalCode: lead.postalCode || null,
           description: lead.description || null,
+          ownerUserId: userId,
         });
         accountId = account.id;
       }
@@ -2951,7 +3170,6 @@ export async function registerRoutes(
           lastName: lead.lastName,
           email: lead.email || null,
           phone: lead.phone || null,
-          mobile: lead.mobile || null,
           title: lead.title || null,
           isPrimary: true,
           ownerUserId: userId,
@@ -2969,7 +3187,7 @@ export async function registerRoutes(
           contactId: contactId || null,
           stageId: firstStage?.id || null,
           name: opportunityName || `${lead.company || lead.firstName} - Opportunity`,
-          amount: opportunityAmount || lead.estimatedValue || null,
+          amount: opportunityAmount || null,
           probability: 20,
           source: lead.source || null,
           ownerUserId: userId,
@@ -3023,7 +3241,19 @@ export async function registerRoutes(
   app.delete("/api/crm/pipelines/:id", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    await storage.deleteCrmPipeline(Number(req.params.id));
+    const tenantId = getApiTenantIdWithFallback(req);
+    const pipelineId = Number(req.params.id);
+    const stages = await storage.getCrmOpportunityStages(tenantId, pipelineId);
+    const stageIds = stages.map((s: any) => s.id);
+    if (stageIds.length > 0) {
+      const opps = await storage.getCrmOpportunities(tenantId);
+      const hasOpps = opps.some((o: any) => stageIds.includes(o.stageId));
+      if (hasOpps) {
+        await storage.updateCrmPipeline(pipelineId, { isArchived: true });
+        return res.json({ archived: true, message: "Pipeline archived (contains opportunities)" });
+      }
+    }
+    await storage.deleteCrmPipeline(pipelineId);
     res.status(204).send();
   });
 
@@ -3128,6 +3358,44 @@ export async function registerRoutes(
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     await storage.deleteCrmOpportunity(Number(req.params.id));
     res.status(204).send();
+  });
+
+  app.post("/api/crm/opportunities/:id/clone", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const cloned = await storage.cloneCrmOpportunity(Number(req.params.id));
+    if (!cloned) return res.status(404).json({ message: "Opportunity not found" });
+    res.status(201).json(cloned);
+  });
+
+  app.post("/api/crm/opportunities/:id/archive", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const opp = await storage.updateCrmOpportunity(Number(req.params.id), { isArchived: true });
+    if (!opp) return res.status(404).json({ message: "Opportunity not found" });
+    res.json(opp);
+  });
+
+  app.post("/api/crm/opportunities/:id/convert-to-project", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const opp = await storage.getCrmOpportunity(Number(req.params.id));
+      if (!opp) return res.status(404).json({ message: "Opportunity not found" });
+      const tenantId = getApiTenantIdWithFallback(req);
+      const project = await storage.createProject({
+        tenantId,
+        name: opp.name,
+        description: opp.description || undefined,
+        status: "planning",
+        createdByUserId: userId,
+      } as any);
+      const updated = await storage.updateCrmOpportunity(opp.id, { projectId: project.id });
+      res.json({ opportunity: updated, project });
+    } catch (err) {
+      console.error("Convert to project failed:", err);
+      res.status(400).json({ message: "Failed to convert opportunity to project" });
+    }
   });
 
   // CRM Activities
@@ -3374,31 +3642,16 @@ export async function registerRoutes(
     res.json(cardsWithItems);
   });
 
-  app.post("/api/crm/rate-cards", async (req, res) => {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const tenantId = getApiTenantIdWithFallback(req);
-      const card = await storage.createRateCard({ ...req.body, tenantId });
-      res.status(201).json(card);
-    } catch (err) {
-      res.status(400).json({ message: "Failed to create rate card" });
-    }
+  app.post("/api/crm/rate-cards", async (_req, res) => {
+    res.status(403).json({ message: "Rate cards are managed in the Resources module (read-only in CRM per ADR-003)" });
   });
 
-  app.put("/api/crm/rate-cards/:id", async (req, res) => {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const card = await storage.updateRateCard(Number(req.params.id), req.body);
-    if (!card) return res.status(404).json({ message: "Rate card not found" });
-    res.json(card);
+  app.put("/api/crm/rate-cards/:id", async (_req, res) => {
+    res.status(403).json({ message: "Rate cards are managed in the Resources module (read-only in CRM per ADR-003)" });
   });
 
-  app.delete("/api/crm/rate-cards/:id", async (req, res) => {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    await storage.deleteRateCard(Number(req.params.id));
-    res.status(204).send();
+  app.delete("/api/crm/rate-cards/:id", async (_req, res) => {
+    res.status(403).json({ message: "Rate cards are managed in the Resources module (read-only in CRM per ADR-003)" });
   });
 
   app.get("/api/crm/rate-cards/:id/items", async (req, res) => {
@@ -3408,22 +3661,12 @@ export async function registerRoutes(
     res.json(items);
   });
 
-  app.post("/api/crm/rate-cards/:id/items", async (req, res) => {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const item = await storage.createRateCardItem({ ...req.body, rateCardId: Number(req.params.id) });
-      res.status(201).json(item);
-    } catch (err) {
-      res.status(400).json({ message: "Failed to create rate card item" });
-    }
+  app.post("/api/crm/rate-cards/:id/items", async (_req, res) => {
+    res.status(403).json({ message: "Rate card items are managed in the Resources module (read-only in CRM per ADR-003)" });
   });
 
-  app.delete("/api/crm/rate-card-items/:id", async (req, res) => {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    await storage.deleteRateCardItem(Number(req.params.id));
-    res.status(204).send();
+  app.delete("/api/crm/rate-card-items/:id", async (_req, res) => {
+    res.status(403).json({ message: "Rate card items are managed in the Resources module (read-only in CRM per ADR-003)" });
   });
 
   // === Resource Plan Templates CRUD ===
@@ -3543,6 +3786,17 @@ export async function registerRoutes(
 
   // === Opportunity Resource Plans CRUD ===
 
+  app.get("/api/crm/opportunities/:oppId/resource-plans", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const plans = await storage.getOpportunityResourcePlans(Number(req.params.oppId));
+    const withRows = await Promise.all(plans.map(async (plan) => {
+      const rows = await storage.getOpportunityResourceRows(plan.id);
+      return { ...plan, rows };
+    }));
+    res.json(withRows);
+  });
+
   app.get("/api/crm/opportunities/:oppId/resource-plan", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
@@ -3552,35 +3806,87 @@ export async function registerRoutes(
     res.json({ ...plan, rows });
   });
 
+  app.get("/api/crm/resource-plans/:planId", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const plan = await storage.getOpportunityResourcePlanById(Number(req.params.planId));
+    if (!plan) return res.status(404).json({ message: "Resource plan not found" });
+    const rows = await storage.getOpportunityResourceRows(plan.id);
+    res.json({ ...plan, rows });
+  });
+
+  app.post("/api/crm/resource-plans/:planId/clone", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const cloned = await storage.cloneOpportunityResourcePlan(Number(req.params.planId), req.body.planName);
+      if (!cloned) return res.status(404).json({ message: "Resource plan not found" });
+      const rows = await storage.getOpportunityResourceRows(cloned.id);
+      res.status(201).json({ ...cloned, rows });
+    } catch (err) {
+      console.error("Failed to clone resource plan:", err);
+      res.status(400).json({ message: "Failed to clone resource plan" });
+    }
+  });
+
   app.post("/api/crm/opportunities/:oppId/resource-plan", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
       const tenantId = getApiTenantIdWithFallback(req);
       const oppId = Number(req.params.oppId);
-      const { rows, ...planData } = req.body;
+      const { rows, planId, createNew, planName, ...planData } = req.body;
 
-      let plan = await storage.getOpportunityResourcePlan(oppId);
-      if (plan) {
-        plan = (await storage.updateOpportunityResourcePlan(plan.id, {
+      let plan: Awaited<ReturnType<typeof storage.getOpportunityResourcePlanById>>;
+      if (createNew) {
+        plan = await storage.createOpportunityResourcePlan({
+          tenantId,
+          opportunityId: oppId,
+          planName: planName || `Scenario ${Date.now()}`,
           rateCardId: planData.rateCardId || null,
           currency: planData.currency || "GBP",
           notes: planData.notes || null,
           templateName: planData.templateName || null,
+        });
+      } else if (planId) {
+        plan = await storage.getOpportunityResourcePlanById(Number(planId));
+        if (!plan) return res.status(404).json({ message: "Resource plan not found" });
+        plan = (await storage.updateOpportunityResourcePlan(plan.id, {
+          rateCardId: planData.rateCardId ?? plan.rateCardId,
+          currency: planData.currency || plan.currency || "GBP",
+          notes: planData.notes ?? plan.notes,
+          templateName: planData.templateName ?? plan.templateName,
+          planName: planName ?? plan.planName,
         }))!;
         const existingRows = await storage.getOpportunityResourceRows(plan.id);
         for (const er of existingRows) {
           await storage.deleteOpportunityResourceRow(er.id);
         }
       } else {
-        plan = await storage.createOpportunityResourcePlan({
-          tenantId,
-          opportunityId: oppId,
-          rateCardId: planData.rateCardId || null,
-          currency: planData.currency || "GBP",
-          notes: planData.notes || null,
-          templateName: planData.templateName || null,
-        });
+        plan = await storage.getOpportunityResourcePlan(oppId);
+        if (plan) {
+          plan = (await storage.updateOpportunityResourcePlan(plan.id, {
+            rateCardId: planData.rateCardId || null,
+            currency: planData.currency || "GBP",
+            notes: planData.notes || null,
+            templateName: planData.templateName || null,
+            planName: planName || plan.planName,
+          }))!;
+          const existingRows = await storage.getOpportunityResourceRows(plan.id);
+          for (const er of existingRows) {
+            await storage.deleteOpportunityResourceRow(er.id);
+          }
+        } else {
+          plan = await storage.createOpportunityResourcePlan({
+            tenantId,
+            opportunityId: oppId,
+            planName: planName || "Base Plan",
+            rateCardId: planData.rateCardId || null,
+            currency: planData.currency || "GBP",
+            notes: planData.notes || null,
+            templateName: planData.templateName || null,
+          });
+        }
       }
 
       const savedRows = [];
@@ -3708,10 +4014,13 @@ export async function registerRoutes(
   });
 
   app.post("/api/crm/seed-resource-plan-data", async (req, res) => {
+    if (process.env.NODE_ENV === "production") {
+      return res.status(403).json({ message: "Demo seed is disabled in production" });
+    }
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = 1;
+      const tenantId = getApiTenantIdWithFallback(req);
       const existing = await storage.getResourcePlanTemplates(tenantId);
       if (existing.length > 0) return res.json({ message: "Seed data already exists", count: existing.length });
 
@@ -7646,6 +7955,64 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   });
 
   // === RESOURCE MANAGEMENT ROUTES ===
+
+  // Resources — Rate Cards (ADR-003: single source of truth)
+  app.get("/api/resources/rate-cards", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    const cards = await storage.getRateCards(tenantId);
+    const cardsWithItems = await Promise.all(cards.map(async (card) => {
+      const items = await storage.getRateCardItems(card.id);
+      return { ...card, items };
+    }));
+    res.json(cardsWithItems);
+  });
+
+  app.post("/api/resources/rate-cards", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const tenantId = getApiTenantIdWithFallback(req);
+      const card = await storage.createRateCard({ ...req.body, tenantId });
+      res.status(201).json(card);
+    } catch (err) {
+      res.status(400).json({ message: "Failed to create rate card" });
+    }
+  });
+
+  app.put("/api/resources/rate-cards/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const card = await storage.updateRateCard(Number(req.params.id), req.body);
+    if (!card) return res.status(404).json({ message: "Rate card not found" });
+    res.json(card);
+  });
+
+  app.delete("/api/resources/rate-cards/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    await storage.deleteRateCard(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  app.post("/api/resources/rate-cards/:id/items", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const item = await storage.createRateCardItem({ ...req.body, rateCardId: Number(req.params.id) });
+      res.status(201).json(item);
+    } catch (err) {
+      res.status(400).json({ message: "Failed to create rate card item" });
+    }
+  });
+
+  app.delete("/api/resources/rate-card-items/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    await storage.deleteRateCardItem(Number(req.params.id));
+    res.status(204).send();
+  });
 
   // Resources (People)
   app.get("/api/resources", async (req, res) => {

@@ -1,4 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useCrmPagination } from "@/hooks/use-crm-pagination";
+import { CrmTablePagination } from "./CrmTablePagination";
+import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -20,6 +23,11 @@ import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
 import { evaluateConditionalFormatting, type ConditionalFormatRule } from "@/lib/conditionalFormatting";
 import type { ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { ContactOrgChartView } from "@/components/crm/ContactOrgChartView";
+import { ContactRelationshipsPanel } from "@/components/crm/ContactRelationshipsPanel";
+import { CrmCustomFieldsForm } from "./CrmCustomFieldsForm";
+import { CrmCustomFieldTableHeaders, CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
+import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
 
 type CrmAccount = {
   id: number;
@@ -54,6 +62,7 @@ type CrmContact = {
   phone: string | null;
   title: string | null;
   role: string | null;
+  customData?: Record<string, unknown> | null;
   createdAt: string;
 };
 
@@ -135,6 +144,8 @@ function RecentIcon({ className }: { className?: string }) {
 }
 
 export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTabProps) {
+  const { fields: customFields } = useCrmCustomFields("contact");
+  const tableColSpan = 8 + customFields.length;
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [roleFilter, setRoleFilter] = useState<string>("all");
@@ -146,11 +157,20 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
   const [groupBy, setGroupBy] = useState<"none" | "role" | "account">("none");
   const [formatPanelOpen, setFormatPanelOpen] = useState(false);
   const [formatRules, setFormatRules] = useState<ConditionalFormatRule[]>([]);
-  const [formData, setFormData] = useState({
-    firstName: "", lastName: "", email: "", phone: "", title: "", accountId: "", role: "contact",
-  });
+  const EMPTY_CONTACT_FORM = { firstName: "", lastName: "", email: "", phone: "", title: "", accountId: "", role: "contact" };
+  const [formData, setFormData] = useState(EMPTY_CONTACT_FORM);
+  const [customData, setCustomData] = useState<Record<string, unknown>>({});
   const [importOpen, setImportOpen] = useState(false);
+  const [subView, setSubView] = useState<"list" | "orgchart">("list");
+  const [orgChartAccountId, setOrgChartAccountId] = useState<number | null>(null);
+  const [detailContactId, setDetailContactId] = useState<number | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (accounts.length > 0 && orgChartAccountId == null) {
+      setOrgChartAccountId(accounts[0].id);
+    }
+  }, [accounts, orgChartAccountId]);
 
   const importMutation = useMutation({
     mutationFn: ({ rows, mode }: { rows: Record<string, string>[]; mode: ImportMode }) =>
@@ -167,12 +187,14 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
       apiRequest("POST", "/api/crm/contacts", {
         ...data,
         accountId: data.accountId ? parseInt(data.accountId) : null,
+        customData,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts"] });
       setIsOpen(false);
       setEditingId(null);
-      setFormData({ firstName: "", lastName: "", email: "", phone: "", title: "", accountId: "", role: "contact" });
+      setFormData(EMPTY_CONTACT_FORM);
+      setCustomData({});
       toast({ title: "Contact created successfully" });
     },
     onError: () => toast({ title: "Failed to create contact", variant: "destructive" }),
@@ -209,7 +231,8 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
 
   const resetForm = () => {
     setEditingId(null);
-    setFormData({ firstName: "", lastName: "", email: "", phone: "", title: "", accountId: "", role: "contact" });
+    setFormData(EMPTY_CONTACT_FORM);
+    setCustomData({});
   };
 
   const accountNames = useMemo(() => {
@@ -262,6 +285,35 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
 
     return result;
   }, [contacts, accounts, localSearch, searchTerm, roleFilter, accountFilter, sortField, sortDir]);
+
+  const pagination = useCrmPagination(enrichedContacts, {
+    resetKey: `${localSearch}|${searchTerm}|${roleFilter}|${accountFilter}|${sortField}|${sortDir}|${groupBy}`,
+    enabled: subView === "list" && groupBy === "none",
+  });
+
+  const currentFilters = useMemo((): FilterConfig[] => {
+    const filters: FilterConfig[] = [];
+    if (roleFilter !== "all") filters.push({ columnId: "role", operator: "equals", value: roleFilter });
+    if (accountFilter !== "all") filters.push({ columnId: "account", operator: "equals", value: accountFilter });
+    return filters;
+  }, [roleFilter, accountFilter]);
+
+  const currentSorts = useMemo((): SortConfig[] => (
+    [{ columnId: sortField, direction: sortDir }]
+  ), [sortField, sortDir]);
+
+  const applySavedView = (filters: FilterConfig[], sorts?: SortConfig[]) => {
+    setRoleFilter("all");
+    setAccountFilter("all");
+    for (const f of filters) {
+      if (f.columnId === "role") setRoleFilter(f.value);
+      if (f.columnId === "account") setAccountFilter(f.value);
+    }
+    if (sorts?.[0]) {
+      setSortField(sorts[0].columnId as typeof sortField);
+      setSortDir(sorts[0].direction);
+    }
+  };
 
   const formatColumns: MondayColumnDef<any>[] = [
     { id: "fullName", header: "Name", type: "text", accessor: "fullName" },
@@ -379,6 +431,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
       accountId: c.accountId ? String(c.accountId) : "",
       role: c.role || "contact",
     });
+    setCustomData((c.customData as Record<string, unknown>) || {});
     setIsOpen(true);
   };
 
@@ -395,6 +448,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
           selectedIds.has(c.id) && "bg-blue-50/50 dark:bg-blue-950/20"
         )}
         data-testid={`contact-row-${c.id}`}
+        onClick={() => setDetailContactId(c.id)}
       >
         <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
           <Checkbox
@@ -439,6 +493,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
             {new Date(c.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
           </span>
         </td>
+        <CrmCustomFieldTableCells fields={customFields} customData={c.customData} />
         <td className="px-4 py-3 text-right whitespace-nowrap">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -498,6 +553,37 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
           <div className="text-2xl font-bold text-[#f97316]" data-testid="text-recent-contacts">{recentCount}</div>
         </div>
       </div>
+
+      <div className="flex gap-2">
+        <button onClick={() => setSubView("list")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border", subView === "list" ? "bg-[#0ea5e9] text-white border-[#0ea5e9]" : "border-border")} data-testid="contacts-list-view">List</button>
+        <button onClick={() => setSubView("orgchart")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border", subView === "orgchart" ? "bg-[#0ea5e9] text-white border-[#0ea5e9]" : "border-border")} data-testid="contacts-orgchart-view">Org Chart</button>
+      </div>
+
+      {subView === "orgchart" && accounts.length > 0 && orgChartAccountId != null && (
+        <div className="border rounded-xl p-4 bg-card space-y-4">
+          <div className="flex items-center gap-3">
+            <Label className="text-xs font-semibold text-muted-foreground shrink-0">Account</Label>
+            <Select value={String(orgChartAccountId)} onValueChange={(v) => setOrgChartAccountId(parseInt(v))}>
+              <SelectTrigger className="w-64 h-8 text-xs" data-testid="select-orgchart-account">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map(a => (
+                  <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <ContactOrgChartView accountId={orgChartAccountId} contacts={contacts} />
+        </div>
+      )}
+
+      {detailContactId && (
+        <div className="border rounded-xl p-4 bg-card">
+          <ContactRelationshipsPanel contactId={detailContactId} contacts={contacts} />
+          <Button variant="ghost" size="sm" className="mt-2" onClick={() => setDetailContactId(null)}>Close</Button>
+        </div>
+      )}
 
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl" data-testid="bulk-actions-contacts">
@@ -671,14 +757,12 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
           onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
         />
 
-        <button
-          onClick={() => toast({ title: "View saved", description: "Current filters and layout saved" })}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
-          data-testid="button-save-view-contacts"
-        >
-          <Bookmark className="h-3.5 w-3.5" />
-          Save View
-        </button>
+        <SavedViewsDropdown
+          entityType="contacts"
+          currentFilters={currentFilters}
+          currentSorts={currentSorts}
+          onApplyView={applySavedView}
+        />
 
         <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
@@ -699,6 +783,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
                     updates: {
                       ...formData,
                       accountId: formData.accountId ? parseInt(formData.accountId) : null,
+                      customData,
                     },
                   });
                   setIsOpen(false);
@@ -790,6 +875,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
                   </SelectContent>
                 </Select>
               </div>
+              <CrmCustomFieldsForm entityType="contact" values={customData} onChange={(k, v) => setCustomData(prev => ({ ...prev, [k]: v }))} />
             </div>
             <DialogFooter>
               <DialogClose asChild>
@@ -810,7 +896,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
         </Dialog>
       </div>
 
-      <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden max-w-[95%]" data-testid="contacts-table">
+      {subView === "list" && <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden w-full" data-testid="contacts-table">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -840,6 +926,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("created")}>
                   Created {sortField === "created" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
+                <CrmCustomFieldTableHeaders fields={customFields} />
                 <th className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Actions</th>
               </tr>
             </thead>
@@ -864,7 +951,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
               ) : groupedData ? (
                 Object.entries(groupedData).flatMap(([groupName, groupContacts]) => [
                   <tr key={`group-header-${groupName}`} className="bg-muted/40 border-b border-border/40" data-testid={`group-contacts-header-${groupName}`}>
-                    <td colSpan={8} className="px-4 py-2">
+                    <td colSpan={tableColSpan} className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <div
                           className="h-2.5 w-2.5 rounded-full shrink-0"
@@ -880,18 +967,31 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
                   ...groupContacts.map(renderRow)
                 ])
               ) : (
-                enrichedContacts.map(renderRow)
+                pagination.paginatedItems.map(renderRow)
               )}
             </tbody>
           </table>
         </div>
-        {enrichedContacts.length > 0 && (
+        {groupBy !== "none" && enrichedContacts.length > 0 && (
           <div className="px-4 py-2.5 border-t border-border/40 bg-muted/20 text-xs text-muted-foreground" data-testid="contacts-count-footer">
             {enrichedContacts.length} of {contacts.length} contacts
             {selectedIds.size > 0 && <span className="ml-2 text-[#0ea5e9]">({selectedIds.size} selected)</span>}
           </div>
         )}
-      </div>
+        {groupBy === "none" && (
+          <CrmTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            extra={selectedIds.size > 0 ? <span className="text-[#0ea5e9]">({selectedIds.size} selected)</span> : undefined}
+          />
+        )}
+      </div>}
 
       <ConditionalFormattingPanel
         open={formatPanelOpen}

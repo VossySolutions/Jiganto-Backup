@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
+import { useCrmPagination } from "@/hooks/use-crm-pagination";
+import { CrmTablePagination } from "./CrmTablePagination";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +16,10 @@ import { cn } from "@/lib/utils";
 import {
   Search, Mail, Phone, Plus, MoreHorizontal, Globe, MapPin, Users,
   Clock, AlertTriangle, ChevronRight, ExternalLink, Pencil, Trash2,
-  MessageSquare, CalendarDays, FileText, Briefcase
+  MessageSquare, CalendarDays, FileText, Briefcase, Headphones
 } from "lucide-react";
+import { useCrmUsers } from "./CrmUsersProvider";
+import { CrmOwnerSelect } from "./CrmOwnerSelect";
 
 type CrmAccount = {
   id: number;
@@ -100,6 +104,7 @@ type CrmLead = {
   source: string | null;
   status: string;
   score: number | null;
+  convertedAccountId: number | null;
   createdAt: string;
 };
 
@@ -238,25 +243,42 @@ const SUB_TABS = [
   { value: "forecast", label: "Forecast" },
   { value: "notes", label: "Notes" },
   { value: "activities", label: "Activities" },
+  { value: "projects", label: "Projects" },
+  { value: "tasks", label: "Tasks" },
+  { value: "tickets", label: "Tickets" },
+  { value: "documents", label: "Documents" },
 ];
 
 const SUB_TAB_COLORS: Record<string, string> = {
   overview: "#3b82f6", leads: "#ef4444", opportunities: "#f97316",
   pipeline: "#22c55e", contracts: "#8b5cf6", contacts: "#06b6d4",
   forecast: "#eab308", notes: "#ec4899", activities: "#14b8a6",
+  projects: "#6366f1", tasks: "#f97316", tickets: "#ef4444", documents: "#06b6d4",
 };
 
 export function Crm360ViewTab({
   accounts, contacts, opportunities, stages, contracts, leads, searchTerm,
 }: Crm360ViewTabProps) {
-  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(() => {
+    const saved = sessionStorage.getItem("crm-360-account-id");
+    return saved ? parseInt(saved) : null;
+  });
+
+  const selectAccount = (id: number | null) => {
+    setSelectedAccountId(id);
+    if (id) sessionStorage.setItem("crm-360-account-id", String(id));
+    else sessionStorage.removeItem("crm-360-account-id");
+  };
   const [sidebarSearch, setSidebarSearch] = useState("");
   const [subTab, setSubTab] = useState("overview");
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState("");
   const [newNoteTag, setNewNoteTag] = useState("");
   const [newNoteSentiment, setNewNoteSentiment] = useState("");
+  const [editingAccount, setEditingAccount] = useState(false);
+  const [accountEditForm, setAccountEditForm] = useState({ name: "", type: "customer", industry: "", website: "", city: "", country: "", ownerUserId: "" });
   const { toast } = useToast();
+  const { resolveOwner } = useCrmUsers();
 
   const sortedAccounts = useMemo(() => {
     let filtered = [...accounts];
@@ -295,30 +317,134 @@ export function Crm360ViewTab({
   const accountLeads = useMemo(() => {
     if (!selectedAccount) return [];
     return leads.filter(l =>
+      l.convertedAccountId === selectedAccount.id ||
       l.company?.toLowerCase() === selectedAccount.name.toLowerCase()
     );
   }, [leads, selectedAccount]);
 
   const { data: accountNotes = [] } = useQuery<CrmNote[]>({
-    queryKey: ["/api/crm/notes", "account", selectedAccount?.id],
-    queryFn: async () => {
-      if (!selectedAccount) return [];
-      const res = await fetch(`/api/crm/notes?entityType=account&entityId=${selectedAccount.id}`);
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryKey: selectedAccount
+      ? [`/api/crm/notes?entityType=account&entityId=${selectedAccount.id}`]
+      : ["/api/crm/notes?disabled=1"],
     enabled: !!selectedAccount,
   });
 
   const { data: accountActivities = [] } = useQuery<CrmActivity[]>({
-    queryKey: ["/api/crm/activities", "account", selectedAccount?.id],
+    queryKey: selectedAccount
+      ? [`/api/crm/activities?entityType=account&entityId=${selectedAccount.id}`]
+      : ["/api/crm/activities?disabled=1"],
+    enabled: !!selectedAccount,
+  });
+
+  const { data: accountProjects = [] } = useQuery<Array<{ id: number; name: string; status: string | null }>>({
+    queryKey: ["/api/projects", "account", selectedAccount?.id],
     queryFn: async () => {
       if (!selectedAccount) return [];
-      const res = await fetch(`/api/crm/activities?entityType=account&entityId=${selectedAccount.id}`);
+      const res = await fetchWithAuth("/api/projects");
       if (!res.ok) return [];
-      return res.json();
+      const all = await res.json();
+      const acctOpps = opportunities.filter(o => o.accountId === selectedAccount.id);
+      const oppProjectIds = new Set(acctOpps.map(o => (o as CrmOpportunity & { projectId?: number }).projectId).filter(Boolean));
+      return all.filter((p: { id: number }) => oppProjectIds.has(p.id));
     },
     enabled: !!selectedAccount,
+  });
+
+  const { data: accountTasks = [] } = useQuery<Array<{ id: number; subject: string; status: string | null; priority: string | null; dueDate: string | null; createdAt: string }>>({
+    queryKey: selectedAccount
+      ? [`/api/crm/tasks?accountId=${selectedAccount.id}`]
+      : ["/api/crm/tasks?disabled=1"],
+    enabled: !!selectedAccount,
+  });
+
+  const { data: accountTickets = [] } = useQuery<Array<{
+    id: number;
+    subject: string;
+    status: string | null;
+    priority: string | null;
+    createdAt: string;
+    dueDate: string | null;
+    source: "task" | "activity";
+  }>>({
+    queryKey: selectedAccount
+      ? [`/api/crm/accounts/${selectedAccount.id}/tickets`]
+      : ["/api/crm/accounts/0/tickets?disabled=1"],
+    enabled: !!selectedAccount,
+  });
+
+  const { data: accountDocuments = [] } = useQuery<Array<{
+    id: number;
+    title: string;
+    type: string | null;
+    status: string | null;
+    updatedAt: string;
+    ownerName: string | null;
+  }>>({
+    queryKey: selectedAccount
+      ? [`/api/crm/accounts/${selectedAccount.id}/documents`]
+      : ["/api/crm/accounts/0/documents?disabled=1"],
+    enabled: !!selectedAccount,
+  });
+
+  const primaryContact = useMemo(() => {
+    if (!accountContacts.length) return null;
+    return accountContacts.find(c => c.role === "primary") || accountContacts[0];
+  }, [accountContacts]);
+
+  const contactEmail = primaryContact?.email || selectedAccount?.email || null;
+  const contactPhone = primaryContact?.phone || selectedAccount?.phone || null;
+
+  const logActivityMutation = useMutation({
+    mutationFn: (data: { type: string; subject: string; contactId?: number | null }) =>
+      apiRequest("POST", "/api/crm/activities", {
+        type: data.type,
+        subject: data.subject,
+        accountId: selectedAccount?.id,
+        contactId: data.contactId ?? primaryContact?.id ?? null,
+        status: "completed",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/activities", "account", selectedAccount?.id] });
+    },
+  });
+
+  const handleEmail = () => {
+    if (!contactEmail) {
+      toast({ title: "No email address", description: "Add an email to the account or a primary contact.", variant: "destructive" });
+      return;
+    }
+    window.location.href = `mailto:${contactEmail}`;
+    logActivityMutation.mutate({
+      type: "email",
+      subject: `Email to ${selectedAccount?.name}`,
+      contactId: primaryContact?.id,
+    });
+    toast({ title: "Opening email client" });
+  };
+
+  const handleCall = () => {
+    if (!contactPhone) {
+      toast({ title: "No phone number", description: "Add a phone number to the account or a primary contact.", variant: "destructive" });
+      return;
+    }
+    window.location.href = `tel:${contactPhone.replace(/\s/g, "")}`;
+    logActivityMutation.mutate({
+      type: "call",
+      subject: `Call with ${selectedAccount?.name}`,
+      contactId: primaryContact?.id,
+    });
+    toast({ title: "Initiating call" });
+  };
+
+  const updateAccountMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: number; updates: Record<string, unknown> }) =>
+      apiRequest("PUT", `/api/crm/accounts/${id}`, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/accounts"] });
+      setEditingAccount(false);
+      toast({ title: "Account updated" });
+    },
+    onError: () => toast({ title: "Failed to update account", variant: "destructive" }),
   });
 
   const createNoteMutation = useMutation({
@@ -329,7 +455,6 @@ export function Crm360ViewTab({
         data.sentiment ? `[SENTIMENT:${data.sentiment}]` : "",
       ].filter(Boolean).join("\n");
       return apiRequest("POST", "/api/crm/notes", {
-        tenantId: 1,
         entityType: "account",
         entityId: selectedAccount?.id,
         content: noteContent,
@@ -440,9 +565,28 @@ export function Crm360ViewTab({
 
   const typeInfo = getTypeInfo(selectedAccount.type);
 
+  const sidebarPagination = useCrmPagination(sortedAccounts, {
+    resetKey: `${sidebarSearch}|${searchTerm}|${sortedAccounts.length}`,
+  });
+
   return (
-    <div className="flex h-[calc(100vh-160px)]" data-testid="crm-360-view">
-      <div className="w-[240px] border-r border-border/40 flex flex-col bg-white dark:bg-card shrink-0" data-testid="360-account-sidebar">
+    <div className="flex flex-col md:flex-row h-[calc(100vh-160px)] min-h-0" data-testid="crm-360-view">
+      <div className="md:hidden p-3 border-b border-border/40 bg-card shrink-0">
+        <Select
+          value={selectedAccount?.id ? String(selectedAccount.id) : ""}
+          onValueChange={(v) => { selectAccount(parseInt(v)); setSubTab("overview"); }}
+        >
+          <SelectTrigger className="w-full" data-testid="select-360-account-mobile">
+            <SelectValue placeholder="Select customer" />
+          </SelectTrigger>
+          <SelectContent>
+            {sortedAccounts.map(account => (
+              <SelectItem key={account.id} value={String(account.id)}>{account.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="hidden md:flex w-[240px] border-r border-border/40 flex-col bg-white dark:bg-card shrink-0" data-testid="360-account-sidebar">
         <div className="p-3 border-b border-border/30">
           <h3 className="text-sm font-semibold mb-2">All Customers</h3>
           <div className="relative">
@@ -457,8 +601,8 @@ export function Crm360ViewTab({
             />
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          {sortedAccounts.map(account => {
+        <div className="flex-1 overflow-y-auto lg:overflow-y-auto overflow-x-auto lg:overflow-x-hidden min-h-0">
+          {sidebarPagination.paginatedItems.map(account => {
             const color = getColorForName(account.name);
             const initials = getInitials(account.name);
             const accRevenue = opportunities.filter(o => o.accountId === account.id).reduce((s, o) => s + parseFloat(o.amount || "0"), 0);
@@ -466,7 +610,7 @@ export function Crm360ViewTab({
             return (
               <button
                 key={account.id}
-                onClick={() => { setSelectedAccountId(account.id); setSubTab("overview"); }}
+                onClick={() => { selectAccount(account.id); setSubTab("overview"); }}
                 className={cn(
                   "w-full flex items-center gap-2.5 px-3 py-2.5 text-left border-l-3 transition-colors hover:bg-muted/40",
                   isSelected ? "bg-blue-50/50 dark:bg-blue-950/20 border-l-[#3b82f6]" : "border-l-transparent"
@@ -492,11 +636,22 @@ export function Crm360ViewTab({
             );
           })}
         </div>
+        <CrmTablePagination
+          page={sidebarPagination.page}
+          totalPages={sidebarPagination.totalPages}
+          total={sidebarPagination.total}
+          startIndex={sidebarPagination.startIndex}
+          endIndex={sidebarPagination.endIndex}
+          pageSize={sidebarPagination.pageSize}
+          onPageChange={sidebarPagination.setPage}
+          onPageSizeChange={sidebarPagination.setPageSize}
+          className="border-t border-border/30"
+        />
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-[#f8f9fc] dark:bg-background">
-        <div className="px-6 pt-5 pb-4 bg-white dark:bg-card border-b border-border/30" data-testid="360-account-header">
-          <div className="flex items-start gap-5">
+      <div className="flex-1 overflow-y-auto bg-[#f8f9fc] dark:bg-background min-h-0 min-w-0">
+        <div className="px-3 sm:px-6 pt-4 sm:pt-5 pb-4 bg-white dark:bg-card border-b border-border/30" data-testid="360-account-header">
+          <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
             <div
               className="h-16 w-16 rounded-2xl flex items-center justify-center text-white font-bold text-xl shrink-0"
               style={{ backgroundColor: getColorForName(selectedAccount.name) }}
@@ -504,43 +659,109 @@ export function Crm360ViewTab({
               {getInitials(selectedAccount.name)}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 flex-wrap">
-                <h2 className="text-2xl font-bold" data-testid="text-360-account-name">{selectedAccount.name}</h2>
-              </div>
-              <div className="flex items-center gap-4 mt-1.5 flex-wrap text-sm text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <Briefcase className="h-3.5 w-3.5" />
-                  {typeInfo.label}
-                </span>
-                {selectedAccount.website && (
-                  <a href={selectedAccount.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
-                    <Globe className="h-3.5 w-3.5" />
-                    {selectedAccount.website.replace(/^https?:\/\//, "")}
-                  </a>
-                )}
-                {(selectedAccount.city || selectedAccount.country) && (
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin className="h-3.5 w-3.5 text-red-400" />
-                    {[selectedAccount.city, selectedAccount.country].filter(Boolean).join(", ")}
-                  </span>
-                )}
-                <span className="inline-flex items-center gap-1">
-                  <Users className="h-3.5 w-3.5" />
-                  {accountContacts.length} contacts
-                </span>
-                <span
-                  className="text-xs font-medium px-2 py-0.5 rounded-full"
-                  style={{ backgroundColor: typeInfo.bg, color: typeInfo.color }}
-                >
-                  {selectedAccount.type === "customer" ? "Active" : typeInfo.label}
-                </span>
-              </div>
+              {editingAccount ? (
+                <div className="space-y-3" data-testid="360-account-inline-edit">
+                  <Input value={accountEditForm.name} onChange={e => setAccountEditForm(p => ({ ...p, name: e.target.value }))} className="text-lg font-bold h-10" data-testid="input-360-edit-name" />
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <Select value={accountEditForm.type} onValueChange={v => setAccountEditForm(p => ({ ...p, type: v }))}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="select-360-edit-type"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="customer">Customer</SelectItem>
+                        <SelectItem value="prospect">Prospect</SelectItem>
+                        <SelectItem value="partner">Partner</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input value={accountEditForm.industry} onChange={e => setAccountEditForm(p => ({ ...p, industry: e.target.value }))} placeholder="Industry" className="h-8 text-xs" data-testid="input-360-edit-industry" />
+                    <Input value={accountEditForm.website} onChange={e => setAccountEditForm(p => ({ ...p, website: e.target.value }))} placeholder="Website" className="h-8 text-xs" data-testid="input-360-edit-website" />
+                    <Input value={accountEditForm.city} onChange={e => setAccountEditForm(p => ({ ...p, city: e.target.value }))} placeholder="City" className="h-8 text-xs" data-testid="input-360-edit-city" />
+                    <Input value={accountEditForm.country} onChange={e => setAccountEditForm(p => ({ ...p, country: e.target.value }))} placeholder="Country" className="h-8 text-xs" data-testid="input-360-edit-country" />
+                    <CrmOwnerSelect value={accountEditForm.ownerUserId} onChange={v => setAccountEditForm(p => ({ ...p, ownerUserId: v }))} testId="select-360-edit-owner" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => updateAccountMutation.mutate({ id: selectedAccount.id, updates: accountEditForm })} disabled={!accountEditForm.name.trim() || updateAccountMutation.isPending} data-testid="button-360-save-account">Save</Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingAccount(false)} data-testid="button-360-cancel-edit">Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h2 className="text-2xl font-bold" data-testid="text-360-account-name">{selectedAccount.name}</h2>
+                  </div>
+                  <div className="flex items-center gap-4 mt-1.5 flex-wrap text-sm text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <Briefcase className="h-3.5 w-3.5" />
+                      {typeInfo.label}
+                    </span>
+                    {selectedAccount.website && (
+                      <a href={selectedAccount.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+                        <Globe className="h-3.5 w-3.5" />
+                        {selectedAccount.website.replace(/^https?:\/\//, "")}
+                      </a>
+                    )}
+                    {(selectedAccount.city || selectedAccount.country) && (
+                      <span className="inline-flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5 text-red-400" />
+                        {[selectedAccount.city, selectedAccount.country].filter(Boolean).join(", ")}
+                      </span>
+                    )}
+                    {selectedAccount.ownerUserId && (
+                      <span className="inline-flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5" />
+                        {resolveOwner(selectedAccount.ownerUserId).name}
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" />
+                      {accountContacts.length} contacts
+                    </span>
+                    <span
+                      className="text-xs font-medium px-2 py-0.5 rounded-full"
+                      style={{ backgroundColor: typeInfo.bg, color: typeInfo.color }}
+                    >
+                      {selectedAccount.type === "customer" ? "Active" : typeInfo.label}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-background hover:bg-muted transition-colors" data-testid="button-360-email">
+            <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
+              {!editingAccount && (
+                <button
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-background hover:bg-muted transition-colors"
+                  onClick={() => {
+                    setAccountEditForm({
+                      name: selectedAccount.name,
+                      type: selectedAccount.type,
+                      industry: selectedAccount.industry || "",
+                      website: selectedAccount.website || "",
+                      city: selectedAccount.city || "",
+                      country: selectedAccount.country || "",
+                      ownerUserId: selectedAccount.ownerUserId || "",
+                    });
+                    setEditingAccount(true);
+                  }}
+                  data-testid="button-360-edit-account"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleEmail}
+                disabled={!contactEmail}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-background hover:bg-muted transition-colors disabled:opacity-50"
+                data-testid="button-360-email"
+              >
                 <Mail className="h-3.5 w-3.5" /> Email
               </button>
-              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-background hover:bg-muted transition-colors" data-testid="button-360-call">
+              <button
+                type="button"
+                onClick={handleCall}
+                disabled={!contactPhone}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-background hover:bg-muted transition-colors disabled:opacity-50"
+                data-testid="button-360-call"
+              >
                 <Phone className="h-3.5 w-3.5" /> Call
               </button>
               <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
@@ -655,13 +876,13 @@ export function Crm360ViewTab({
             )}
           </div>
 
-          <div className="flex items-center gap-1 mt-4 border-t border-border/30 pt-3" data-testid="360-sub-tabs">
+          <div className="flex items-center gap-1 mt-4 border-t border-border/30 pt-3 overflow-x-auto scrollbar-none -mx-1 px-1" data-testid="360-sub-tabs">
             {SUB_TABS.map(tab => (
               <button
                 key={tab.value}
                 onClick={() => setSubTab(tab.value)}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors relative",
+                  "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors relative shrink-0 whitespace-nowrap",
                   subTab === tab.value
                     ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -680,7 +901,7 @@ export function Crm360ViewTab({
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-3 sm:p-6">
           {subTab === "overview" && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1156,13 +1377,128 @@ export function Crm360ViewTab({
                             )}
                             <div className="text-[10px] text-muted-foreground mt-1">
                               {new Date(activity.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                              {activity.ownerUserId && <span className="ml-2">by {activity.ownerUserId}</span>}
+                              {activity.ownerUserId && <span className="ml-2">by {resolveOwner(activity.ownerUserId).name}</span>}
                             </div>
                           </div>
                         </div>
                       );
                     })}
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {subTab === "projects" && (
+            <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-5 shadow-sm" data-testid="360-projects-tab">
+              <h3 className="text-sm font-semibold mb-4">Projects — {selectedAccount.name}</h3>
+              {accountProjects.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-6">No linked projects</p>
+              ) : (
+                <div className="space-y-2">
+                  {accountProjects.map(p => (
+                    <div key={p.id} className="flex justify-between text-sm border-b border-border/30 pb-2">
+                      <span className="font-medium">{p.name}</span>
+                      <span className="text-xs text-muted-foreground">{p.status || "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {subTab === "tasks" && (
+            <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-5 shadow-sm" data-testid="360-tasks-tab">
+              <h3 className="text-sm font-semibold mb-4">Tasks — {selectedAccount.name}</h3>
+              {accountTasks.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-6">No open tasks</p>
+              ) : (
+                <div className="space-y-2">
+                  {accountTasks.map(t => (
+                    <div key={t.id} className="flex justify-between text-sm border-b border-border/30 pb-2">
+                      <span className="font-medium">{t.subject}</span>
+                      <span className="text-xs text-muted-foreground">{t.status} {t.dueDate ? `· ${new Date(t.dueDate).toLocaleDateString()}` : ""}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {subTab === "tickets" && (
+            <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-5 shadow-sm" data-testid="360-tickets-tab">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold">Support Tickets — {selectedAccount.name}</h3>
+                <a href="/modules/help-desk" className="text-xs text-[#0ea5e9] hover:underline">Open Help Desk</a>
+              </div>
+              {accountTickets.length === 0 ? (
+                <div className="text-center py-8">
+                  <Headphones className="h-8 w-8 mx-auto text-muted-foreground opacity-30 mb-2" />
+                  <p className="text-xs text-muted-foreground">No support tickets linked to this account</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Ticket activities and open high-priority support tasks linked to this account</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {accountTickets.map(ticket => (
+                    <div key={`${ticket.source}-${ticket.id}`} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg border border-border/30 hover:bg-muted/20" data-testid={`360-ticket-${ticket.id}`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Headphones className="h-4 w-4 text-[#ef4444] shrink-0" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{ticket.subject}</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {new Date(ticket.createdAt).toLocaleDateString()}
+                            {ticket.dueDate && <span className="ml-1">· due {new Date(ticket.dueDate).toLocaleDateString()}</span>}
+                            <span className="ml-1 text-muted-foreground">· {ticket.source === "task" ? "Help desk task" : "Ticket activity"}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {ticket.priority && (
+                          <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full",
+                            ticket.priority === "high" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"
+                          )}>{ticket.priority}</span>
+                        )}
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 capitalize">{ticket.status || "open"}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {subTab === "documents" && (
+            <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-5 shadow-sm" data-testid="360-documents-tab">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold">Documents — {selectedAccount.name}</h3>
+                <a href="/modules/documents" className="text-xs text-[#0ea5e9] hover:underline">Open Documents</a>
+              </div>
+              {accountDocuments.length === 0 ? (
+                <div className="text-center py-8">
+                  <FileText className="h-8 w-8 mx-auto text-muted-foreground opacity-30 mb-2" />
+                  <p className="text-xs text-muted-foreground">No documents in this account&apos;s workspace</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {accountDocuments.map(doc => (
+                    <a
+                      key={doc.id}
+                      href={`/modules/documents?doc=${doc.id}`}
+                      className="flex items-center justify-between p-3 rounded-lg border border-border/30 hover:bg-muted/20 transition-colors"
+                      data-testid={`360-document-${doc.id}`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <FileText className="h-4 w-4 text-[#06b6d4] shrink-0" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{doc.title}</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {doc.type || "Document"} · {doc.ownerName || "Unknown owner"} · {new Date(doc.updatedAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted capitalize shrink-0">{doc.status || "draft"}</span>
+                    </a>
+                  ))}
                 </div>
               )}
             </div>

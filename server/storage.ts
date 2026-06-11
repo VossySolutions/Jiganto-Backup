@@ -9,7 +9,7 @@ import {
   projects, customers, projectMembers, channels, channelMembers, chatMessages, messageReactions, userFavorites, channelFavorites, messageAttachments, pinnedMessages,
   crmAccounts, crmContacts, crmContactRelationships, crmLeads, crmPipelines, crmOpportunityStages, crmOpportunities,
   crmResourceRequirements, crmActivities, crmTasks, crmNotes, crmContracts, crmCustomerSystems, crmAttachments,
-  crmSavedViews, crmEmailTemplates, crmEmailLogs, crmForecasts, crmTerritories, crmAutomationRules,
+  crmSavedViews, crmEmailTemplates, crmEmailLogs, crmForecasts, crmTerritories, crmAutomationRules, crmCustomFields,
   strategyItems, risks, departments, processes, tools, goals, objectives, okrs, keyResults, kpis, initiatives, businessTasks, meetings, documentLinks,
   governanceItems, strategyDocumentLinks, strategyKpiValues, strategyReviewNotes, strategyRagHistory,
   strategyRefCounters, strategyEntityRefs,
@@ -36,6 +36,7 @@ import {
   type CrmSavedView, type InsertCrmSavedView, type CrmEmailTemplate, type InsertCrmEmailTemplate,
   type CrmEmailLog, type InsertCrmEmailLog, type CrmForecast, type InsertCrmForecast,
   type CrmTerritory, type InsertCrmTerritory, type CrmAutomationRule, type InsertCrmAutomationRule,
+  type CrmCustomField, type InsertCrmCustomField,
   type StrategyItem, type InsertStrategyItem, type Risk, type InsertRisk,
   type Department, type InsertDepartment, type Process, type InsertProcess, type Tool, type InsertTool,
   type Goal, type InsertGoal, type Objective, type InsertObjective, type Okr, type InsertOkr,
@@ -381,6 +382,12 @@ export interface IStorage {
   updateCrmAutomationRule(id: number, updates: Partial<InsertCrmAutomationRule>): Promise<CrmAutomationRule | undefined>;
   deleteCrmAutomationRule(id: number): Promise<void>;
 
+  // CRM Custom Fields
+  getCrmCustomFields(tenantId: number, entityType?: string): Promise<CrmCustomField[]>;
+  createCrmCustomField(field: InsertCrmCustomField): Promise<CrmCustomField>;
+  updateCrmCustomField(id: number, updates: Partial<InsertCrmCustomField>): Promise<CrmCustomField | undefined>;
+  deleteCrmCustomField(id: number): Promise<void>;
+
   // Rate Cards
   getRateCards(tenantId: number): Promise<RateCard[]>;
   getRateCard(id: number): Promise<RateCard | undefined>;
@@ -403,7 +410,10 @@ export interface IStorage {
 
   // Opportunity Resource Plans
   getOpportunityResourcePlan(opportunityId: number): Promise<OpportunityResourcePlan | undefined>;
+  getOpportunityResourcePlans(opportunityId: number): Promise<OpportunityResourcePlan[]>;
   getOpportunityResourcePlanById(id: number): Promise<OpportunityResourcePlan | undefined>;
+  cloneOpportunityResourcePlan(planId: number, planName?: string): Promise<OpportunityResourcePlan | undefined>;
+  cloneCrmOpportunity(id: number): Promise<CrmOpportunity | undefined>;
   createOpportunityResourcePlan(plan: InsertOpportunityResourcePlan): Promise<OpportunityResourcePlan>;
   updateOpportunityResourcePlan(id: number, updates: Partial<InsertOpportunityResourcePlan>): Promise<OpportunityResourcePlan | undefined>;
 
@@ -444,6 +454,15 @@ export interface IStorage {
 
   // CRM Tasks
   getCrmTasks(tenantId: number, entityType?: string, entityId?: number, accountId?: number, clientId?: number): Promise<CrmTask[]>;
+  getCrmAccountTickets(tenantId: number, accountId: number, clientId?: number): Promise<{
+    id: number;
+    subject: string;
+    status: string | null;
+    priority: string | null;
+    createdAt: Date;
+    dueDate: Date | null;
+    source: "task" | "activity";
+  }[]>;
   getCrmTask(id: number): Promise<CrmTask | undefined>;
   createCrmTask(task: InsertCrmTask): Promise<CrmTask>;
   updateCrmTask(id: number, updates: Partial<InsertCrmTask>): Promise<CrmTask | undefined>;
@@ -2775,6 +2794,26 @@ export class DatabaseStorage implements IStorage {
     await db.delete(crmAutomationRules).where(eq(crmAutomationRules.id, id));
   }
 
+  async getCrmCustomFields(tenantId: number, entityType?: string): Promise<CrmCustomField[]> {
+    const conditions = [eq(crmCustomFields.tenantId, tenantId)];
+    if (entityType) conditions.push(eq(crmCustomFields.entityType, entityType));
+    return await db.select().from(crmCustomFields).where(and(...conditions)).orderBy(crmCustomFields.position);
+  }
+
+  async createCrmCustomField(field: InsertCrmCustomField): Promise<CrmCustomField> {
+    const [created] = await db.insert(crmCustomFields).values(field).returning();
+    return created;
+  }
+
+  async updateCrmCustomField(id: number, updates: Partial<InsertCrmCustomField>): Promise<CrmCustomField | undefined> {
+    const [updated] = await db.update(crmCustomFields).set(updates).where(eq(crmCustomFields.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCrmCustomField(id: number): Promise<void> {
+    await db.delete(crmCustomFields).where(eq(crmCustomFields.id, id));
+  }
+
   // Rate Cards
   async getRateCards(tenantId: number): Promise<RateCard[]> {
     return await db.select().from(rateCards).where(eq(rateCards.tenantId, tenantId)).orderBy(desc(rateCards.createdAt));
@@ -2851,8 +2890,12 @@ export class DatabaseStorage implements IStorage {
 
   // Opportunity Resource Plans
   async getOpportunityResourcePlan(opportunityId: number): Promise<OpportunityResourcePlan | undefined> {
-    const [plan] = await db.select().from(opportunityResourcePlans).where(eq(opportunityResourcePlans.opportunityId, opportunityId));
-    return plan;
+    const plans = await db.select().from(opportunityResourcePlans).where(eq(opportunityResourcePlans.opportunityId, opportunityId)).orderBy(desc(opportunityResourcePlans.createdAt));
+    return plans[0];
+  }
+
+  async getOpportunityResourcePlans(opportunityId: number): Promise<OpportunityResourcePlan[]> {
+    return await db.select().from(opportunityResourcePlans).where(eq(opportunityResourcePlans.opportunityId, opportunityId)).orderBy(desc(opportunityResourcePlans.createdAt));
   }
 
   async getOpportunityResourcePlanById(id: number): Promise<OpportunityResourcePlan | undefined> {
@@ -2863,6 +2906,41 @@ export class DatabaseStorage implements IStorage {
   async createOpportunityResourcePlan(plan: InsertOpportunityResourcePlan): Promise<OpportunityResourcePlan> {
     const [created] = await db.insert(opportunityResourcePlans).values(plan).returning();
     return created;
+  }
+
+  async cloneOpportunityResourcePlan(planId: number, planName?: string): Promise<OpportunityResourcePlan | undefined> {
+    const plan = await this.getOpportunityResourcePlanById(planId);
+    if (!plan) return undefined;
+    const rows = await this.getOpportunityResourceRows(planId);
+    const newPlan = await this.createOpportunityResourcePlan({
+      tenantId: plan.tenantId,
+      opportunityId: plan.opportunityId,
+      planName: planName || `${plan.planName || "Plan"} (Copy)`,
+      templateName: plan.templateName,
+      rateCardId: plan.rateCardId,
+      currency: plan.currency,
+      notes: plan.notes,
+    });
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      await this.createOpportunityResourceRow({
+        planId: newPlan.id,
+        phase: r.phase,
+        roleName: r.roleName,
+        resourceId: r.resourceId,
+        namedResourceLabel: r.namedResourceLabel,
+        startDate: r.startDate,
+        endDate: r.endDate,
+        daysPerWeek: r.daysPerWeek,
+        dailyRate: r.dailyRate,
+        discountPercent: r.discountPercent,
+        status: r.status,
+        sortOrder: i,
+        breaks: r.breaks,
+        weekOverrides: r.weekOverrides,
+      });
+    }
+    return newPlan;
   }
 
   async updateOpportunityResourcePlan(id: number, updates: Partial<InsertOpportunityResourcePlan>): Promise<OpportunityResourcePlan | undefined> {
@@ -2912,13 +2990,27 @@ export class DatabaseStorage implements IStorage {
   // CRM Leads
   async getCrmLeads(tenantId: number, clientId?: number): Promise<CrmLead[]> {
     if (clientId !== undefined) {
+      const clientAccounts = await db
+        .select({ id: crmAccounts.id })
+        .from(crmAccounts)
+        .where(and(eq(crmAccounts.tenantId, tenantId), eq(crmAccounts.clientId, clientId)));
+      const accountIds = clientAccounts.map((a) => a.id);
+      const conditions = [eq(crmLeads.tenantId, tenantId)];
+      if (accountIds.length > 0) {
+        conditions.push(
+          or(
+            isNull(crmLeads.convertedAccountId),
+            inArray(crmLeads.convertedAccountId, accountIds),
+          )!,
+        );
+      } else {
+        conditions.push(isNull(crmLeads.convertedAccountId));
+      }
       return await db
-        .select({ lead: crmLeads })
+        .select()
         .from(crmLeads)
-        .innerJoin(crmAccounts, eq(crmLeads.convertedAccountId, crmAccounts.id))
-        .where(and(eq(crmLeads.tenantId, tenantId), eq(crmAccounts.clientId, clientId)))
-        .orderBy(desc(crmLeads.createdAt))
-        .then((rows) => rows.map((r) => r.lead));
+        .where(and(...conditions))
+        .orderBy(desc(crmLeads.createdAt));
     }
     return await db.select().from(crmLeads).where(eq(crmLeads.tenantId, tenantId)).orderBy(desc(crmLeads.createdAt));
   }
@@ -3031,6 +3123,18 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async cloneCrmOpportunity(id: number): Promise<CrmOpportunity | undefined> {
+    const source = await this.getCrmOpportunity(id);
+    if (!source) return undefined;
+    const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = source;
+    const [cloned] = await db.insert(crmOpportunities).values({
+      ...rest,
+      name: `${source.name} (Copy)`,
+      isArchived: false,
+    }).returning();
+    return cloned;
+  }
+
   async deleteCrmOpportunity(id: number): Promise<void> {
     await db.delete(crmOpportunities).where(eq(crmOpportunities.id, id));
   }
@@ -3101,6 +3205,48 @@ export class DatabaseStorage implements IStorage {
         .then((rows) => rows.map((r) => r.task));
     }
     return await db.select().from(crmTasks).where(and(...conditions)).orderBy(crmTasks.dueDate);
+  }
+
+  async getCrmAccountTickets(tenantId: number, accountId: number, clientId?: number): Promise<{
+    id: number;
+    subject: string;
+    status: string | null;
+    priority: string | null;
+    createdAt: Date;
+    dueDate: Date | null;
+    source: "task" | "activity";
+  }[]> {
+    const [tasks, activities] = await Promise.all([
+      this.getCrmTasks(tenantId, undefined, undefined, accountId, clientId),
+      this.getCrmActivities(tenantId, "account", accountId, accountId, clientId),
+    ]);
+    const ticketActivities = activities.filter((a) => a.type === "ticket");
+    const supportTasks = tasks.filter(
+      (t) =>
+        t.status !== "completed" &&
+        (t.priority === "high" || t.priority === "urgent" || /ticket|support/i.test(t.subject)),
+    );
+    const merged = [
+      ...supportTasks.map((t) => ({
+        id: t.id,
+        subject: t.subject,
+        status: t.status,
+        priority: t.priority,
+        createdAt: t.createdAt,
+        dueDate: t.dueDate,
+        source: "task" as const,
+      })),
+      ...ticketActivities.map((a) => ({
+        id: a.id,
+        subject: a.subject,
+        status: a.status,
+        priority: a.priority,
+        createdAt: a.createdAt,
+        dueDate: a.dueDate,
+        source: "activity" as const,
+      })),
+    ];
+    return merged.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   async getCrmTaskClientId(taskId: number): Promise<number | null | undefined> {

@@ -10,6 +10,8 @@ import { SubmitForm } from "@/components/ui/submit-form";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, MoreHorizontal } from "lucide-react";
+import { ForecastMatrix } from "@/components/crm/ForecastMatrix";
+import { useCrmUsers } from "./CrmUsersProvider";
 
 type Forecast = {
   id: number;
@@ -48,9 +50,12 @@ type Stage = {
   isWon: boolean | null;
 };
 
+type CrmPipeline = { id: number; name: string; isDefault: boolean | null };
+
 interface SalesForecastDashboardProps {
   opportunities: Opportunity[];
   stages: Stage[];
+  pipelines?: CrmPipeline[];
 }
 
 const VIBRANT_LOGO_COLORS = [
@@ -93,7 +98,8 @@ function formatCurrencyFull(value: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(value);
 }
 
-export function SalesForecastDashboard({ opportunities, stages }: SalesForecastDashboardProps) {
+export function SalesForecastDashboard({ opportunities, stages, pipelines = [] }: SalesForecastDashboardProps) {
+  const { resolveOwner } = useCrmUsers();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingForecast, setEditingForecast] = useState<Forecast | null>(null);
@@ -140,11 +146,9 @@ export function SalesForecastDashboard({ opportunities, stages }: SalesForecastD
   const activePeriodLabel = periods.find(p => p.value === activePeriod)?.label || `Q${currentQuarter} ${currentYear}`;
 
   const openOpps = useMemo(() => {
-    return opportunities.filter(o => {
-      const prob = o.probability ?? 0;
-      return prob > 0 && prob < 100;
-    });
-  }, [opportunities]);
+    const closedStageIds = new Set(stages.filter(s => s.isClosed).map(s => s.id));
+    return opportunities.filter(o => !o.stageId || !closedStageIds.has(o.stageId));
+  }, [opportunities, stages]);
 
   const totalPipeline = useMemo(() => openOpps.reduce((s, o) => s + parseFloat(o.amount || "0"), 0), [openOpps]);
   const weightedForecast = useMemo(() => openOpps.reduce((s, o) => s + (parseFloat(o.amount || "0") * ((o.probability ?? 0) / 100)), 0), [openOpps]);
@@ -182,15 +186,16 @@ export function SalesForecastDashboard({ opportunities, stages }: SalesForecastD
   const repData = useMemo(() => {
     const reps: Record<string, { name: string; weighted: number }> = {};
     for (const o of openOpps) {
-      const owner = o.ownerUserId || "Unassigned";
-      if (!reps[owner]) reps[owner] = { name: owner, weighted: 0 };
-      reps[owner].weighted += parseFloat(o.amount || "0") * ((o.probability ?? 0) / 100);
+      const ownerId = o.ownerUserId || "unassigned";
+      const ownerName = resolveOwner(o.ownerUserId).name;
+      if (!reps[ownerId]) reps[ownerId] = { name: ownerName, weighted: 0 };
+      reps[ownerId].weighted += parseFloat(o.amount || "0") * ((o.probability ?? 0) / 100);
     }
     return Object.entries(reps)
       .map(([id, data]) => ({ id, ...data }))
       .sort((a, b) => b.weighted - a.weighted)
       .slice(0, 6);
-  }, [openOpps]);
+  }, [openOpps, resolveOwner]);
 
   const getDefaultDates = (period: string) => {
     const year = currentYear;
@@ -213,7 +218,6 @@ export function SalesForecastDashboard({ opportunities, stages }: SalesForecastD
     mutationFn: async (data: typeof newForecast) => {
       const defaults = getDefaultDates(data.forecastPeriod);
       return apiRequest("POST", "/api/crm/forecasts", {
-        tenantId: 1,
         forecastPeriod: data.forecastPeriod,
         periodStart: data.periodStart || defaults.start,
         periodEnd: data.periodEnd || defaults.end,
@@ -631,6 +635,11 @@ export function SalesForecastDashboard({ opportunities, stages }: SalesForecastD
           </SubmitForm>
         </DialogContent>
       </Dialog>
+
+      <div className="mt-8 pt-6 border-t">
+        <h3 className="text-base font-semibold mb-4">Time-Period Forecast Matrix</h3>
+        <ForecastMatrix pipelines={pipelines} />
+      </div>
     </div>
   );
 }

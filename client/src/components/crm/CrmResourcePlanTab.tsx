@@ -18,10 +18,11 @@ import {
   LayoutList, CalendarDays, ChevronRight, Users, Briefcase,
   DollarSign, Target, TrendingUp, CheckCircle2, AlertTriangle,
   Scissors, MoreHorizontal, GripVertical, Loader2, FileText,
-  CreditCard, ArrowLeft, Filter, Save, Building2
+  CreditCard, ArrowLeft, Filter, Save, Building2, GitCompare, Copy
 } from "lucide-react";
 import { RateCardManager } from "./RateCardManager";
 import { CapacityBoard } from "./CapacityBoard";
+import { useCrmUsers } from "./CrmUsersProvider";
 
 const PHASE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   Discovery: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-800 dark:text-blue-300", border: "border-blue-300 dark:border-blue-700" },
@@ -175,6 +176,7 @@ type Opportunity = {
 type ResourcePlan = {
   id: number;
   opportunityId: number;
+  planName: string | null;
   templateName: string | null;
   rateCardId: number | null;
   currency: string;
@@ -273,6 +275,7 @@ function getWeekStarts(startDate: string, endDate: string): Date[] {
 
 export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }: CrmResourcePlanTabProps) {
   const { toast } = useToast();
+  const { users, resolveOwner } = useCrmUsers();
   const [selectedOppId, setSelectedOppId] = useState<number | null>(null);
   const [planView, setPlanView] = useState<"table" | "timeline">("table");
   const [rows, setRows] = useState<ResourceRow[]>([]);
@@ -289,24 +292,43 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [saveAsNewOpen, setSaveAsNewOpen] = useState(false);
+  const [newPlanName, setNewPlanName] = useState("");
 
   const selectedOpp = opportunities.find(o => o.id === selectedOppId);
   const selectedAccount = selectedOpp?.accountId ? accounts.find(a => a.id === selectedOpp.accountId) : null;
   const selectedStage = selectedOpp?.stageId ? stages.find(s => s.id === selectedOpp.stageId) : null;
 
-  const { data: planData, isLoading: planLoading } = useQuery<ResourcePlan>({
-    queryKey: ["/api/crm/opportunities", selectedOppId, "resource-plan"],
-    queryFn: async () => {
-      const res = await fetch(`/api/crm/opportunities/${selectedOppId}/resource-plan`, { credentials: "include" });
-      if (res.status === 404) return null;
-      if (!res.ok) throw new Error("Failed to load plan");
-      return res.json();
-    },
+  const { data: allPlans = [] } = useQuery<ResourcePlan[]>({
+    queryKey: selectedOppId
+      ? [`/api/crm/opportunities/${selectedOppId}/resource-plans`]
+      : ["/api/crm/opportunities/0/resource-plans?disabled=1"],
     enabled: !!selectedOppId,
   });
 
+  const { data: planData, isLoading: planLoading } = useQuery<ResourcePlan | null>({
+    queryKey: selectedPlanId
+      ? [`/api/crm/resource-plans/${selectedPlanId}`]
+      : ["/api/crm/resource-plans/0?disabled=1"],
+    enabled: !!selectedPlanId,
+  });
+
+  useEffect(() => {
+    if (allPlans.length > 0 && !selectedPlanId) {
+      setSelectedPlanId(allPlans[0].id);
+    } else if (allPlans.length === 0) {
+      setSelectedPlanId(null);
+    }
+  }, [allPlans, selectedPlanId]);
+
+  useEffect(() => {
+    setSelectedPlanId(null);
+  }, [selectedOppId]);
+
   const { data: rateCards = [] } = useQuery<RateCard[]>({
-    queryKey: ["/api/crm/rate-cards"],
+    queryKey: ["/api/resources/rate-cards"],
   });
 
   const { data: templates = [] } = useQuery<Template[]>({
@@ -340,20 +362,38 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
   }, [planData]);
 
   const savePlanMutation = useMutation({
-    mutationFn: async (data: { rows: ResourceRow[] }) => {
+    mutationFn: async (data: { rows: ResourceRow[]; createNew?: boolean; planName?: string }) => {
       if (!selectedOppId) throw new Error("No opportunity selected");
-      return apiRequest("POST", `/api/crm/opportunities/${selectedOppId}/resource-plan`, {
+      const res = await apiRequest("POST", `/api/crm/opportunities/${selectedOppId}/resource-plan`, {
+        planId: data.createNew ? undefined : selectedPlanId,
+        createNew: data.createNew,
+        planName: data.planName,
         rateCardId: selectedRateCardId,
         rows: data.rows,
       });
+      return res.json() as Promise<ResourcePlan>;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/opportunities", selectedOppId, "resource-plan"] });
+    onSuccess: (result: ResourcePlan) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/crm/opportunities/${selectedOppId}/resource-plans`] });
+      if (result?.id) setSelectedPlanId(result.id);
       toast({ title: "Resource plan saved" });
     },
     onError: () => {
       toast({ title: "Failed to save plan", variant: "destructive" });
     },
+  });
+
+  const clonePlanMutation = useMutation({
+    mutationFn: async (planId: number) => {
+      const res = await apiRequest("POST", `/api/crm/resource-plans/${planId}/clone`, { planName: `${allPlans.find(p => p.id === planId)?.planName || "Plan"} (Copy)` });
+      return res.json() as Promise<ResourcePlan>;
+    },
+    onSuccess: (result: ResourcePlan) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/crm/opportunities/${selectedOppId}/resource-plans`] });
+      if (result?.id) setSelectedPlanId(result.id);
+      toast({ title: "Plan cloned" });
+    },
+    onError: () => toast({ title: "Failed to clone plan", variant: "destructive" }),
   });
 
   const notifyMutation = useMutation({
@@ -488,9 +528,10 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
   const totalCost = rows.reduce((s, r) => s + calcCost(r), 0);
   const confirmedCount = rows.filter(r => r.status === "Confirmed").length;
   const uniqueOwners = useMemo(() => {
-    const owners = [...new Set(opportunities.map(o => o.ownerUserId).filter(Boolean))] as string[];
-    return owners;
-  }, [opportunities]);
+    const ownerIds = Array.from(new Set(opportunities.map(o => o.ownerUserId).filter(Boolean))) as string[];
+    if (ownerIds.length > 0) return ownerIds;
+    return users.map(u => u.id);
+  }, [opportunities, users]);
 
   const filteredOpps = useMemo(() => {
     let list = [...opportunities];
@@ -506,7 +547,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
   const allTablePhases = useMemo(() => {
     const set = new Set(DEFAULT_PHASES);
     rows.forEach(r => { if (r.phase) set.add(r.phase); });
-    return [...set];
+    return Array.from(set);
   }, [rows]);
 
   const timelineRange = useMemo(() => {
@@ -570,7 +611,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
             >
               <option value="all">All Owners</option>
               {uniqueOwners.map(o => (
-                <option key={o} value={o}>{o}</option>
+                <option key={o} value={o}>{resolveOwner(o).name}</option>
               ))}
             </select>
           </div>
@@ -622,7 +663,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
                 </div>
                 {opp.ownerUserId && (
                   <div className="mt-2 text-[10px] text-muted-foreground truncate">
-                    Owner: {opp.ownerUserId}
+                    Owner: {resolveOwner(opp.ownerUserId).name}
                   </div>
                 )}
               </button>
@@ -663,6 +704,12 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
           </button>
         </div>
         <div className="flex items-center gap-2">
+          {allPlans.length > 1 && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setCompareOpen(true)} data-testid="button-compare-plans">
+              <GitCompare className="h-3.5 w-3.5" />
+              Compare Plans
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setRateCardOpen(true)}
             data-testid="button-manage-rate-cards">
             <CreditCard className="h-3.5 w-3.5" />
@@ -704,12 +751,36 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
                 clickable
                 onClick={() => setRateCardOpen(true)}
               />
-              <HeaderField label="Owner" value={selectedOpp?.ownerUserId || "—"} />
+              <HeaderField label="Owner" value={selectedOpp?.ownerUserId ? resolveOwner(selectedOpp.ownerUserId).name : "—"} />
             </div>
           </div>
 
-          {/* Template Picker */}
+          {/* Plan & Template Picker */}
           <div className="flex items-center gap-2 px-4 py-3 border-b flex-wrap">
+            {allPlans.length > 0 && (
+              <>
+                <span className="text-xs font-semibold text-muted-foreground">Plan:</span>
+                <select
+                  value={selectedPlanId?.toString() || ""}
+                  onChange={e => setSelectedPlanId(parseInt(e.target.value))}
+                  className="px-3 py-1.5 rounded border text-xs font-semibold bg-card outline-none focus:border-[#0ea5e9] min-w-[160px]"
+                  data-testid="select-resource-plan"
+                >
+                  {allPlans.map(p => (
+                    <option key={p.id} value={p.id}>{p.planName || `Plan #${p.id}`}</option>
+                  ))}
+                </select>
+                {selectedPlanId && (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => clonePlanMutation.mutate(selectedPlanId)} disabled={clonePlanMutation.isPending}>
+                    <Copy className="h-3 w-3" /> Clone
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => setSaveAsNewOpen(true)}>
+                  <Plus className="h-3 w-3" /> New Scenario
+                </Button>
+                <Separator orientation="vertical" className="h-5" />
+              </>
+            )}
             <span className="text-xs font-semibold text-muted-foreground">Template:</span>
             {templates.length > 0 ? (
               <select
@@ -737,22 +808,9 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
                 ))}
               </select>
             ) : (
-              <button
-                className="px-3 py-1 rounded-full border border-dashed text-xs font-semibold text-purple-600 hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center gap-1"
-                onClick={async () => {
-                  try {
-                    await apiRequest("POST", "/api/crm/seed-resource-plan-data");
-                    queryClient.invalidateQueries({ queryKey: ["/api/crm/resource-plan-templates"] });
-                    queryClient.invalidateQueries({ queryKey: ["/api/crm/rate-cards"] });
-                    toast({ title: "Demo templates & rate card loaded" });
-                  } catch (err) {
-                    toast({ title: "Failed to load demo data", variant: "destructive" });
-                  }
-                }}
-                data-testid="button-load-demo-data"
-              >
-                <FileText className="h-3 w-3" /> Load Demo Data
-              </button>
+              <span className="text-xs text-muted-foreground italic" data-testid="no-templates-hint">
+                No saved templates — use Start Fresh or save your first plan as a template
+              </span>
             )}
             <button
               className="px-3 py-1 rounded-full border border-dashed text-xs font-semibold text-muted-foreground hover:border-[#0ea5e9] hover:text-[#0ea5e9]"
@@ -1107,7 +1165,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
         skillsList={skillsList}
         resourcesList={resourcesList}
         rateCardItems={selectedRateCardId ? (rateCards.find(rc => rc.id === selectedRateCardId)?.items || []) : []}
-        existingPhases={[...new Set(rows.map(r => r.phase))]}
+        existingPhases={Array.from(new Set(rows.map(r => r.phase)))}
         onAdd={(row) => {
           setRows(prev => [...prev, { ...row, sortOrder: prev.length }]);
           setAddRowOpen(false);
@@ -1136,7 +1194,73 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
         onClose={() => setRateCardOpen(false)}
         selectedRateCardId={selectedRateCardId}
         onSelectRateCard={(id) => { handleRateCardSelect(id); }}
+        readOnly
       />
+
+      {/* Compare Plans Modal */}
+      <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
+        <DialogContent className="max-w-3xl" data-testid="compare-plans-modal">
+          <DialogHeader>
+            <DialogTitle>Compare Resource Plans</DialogTitle>
+            <DialogDescription>Side-by-side comparison of all scenarios for {selectedOpp?.name}</DialogDescription>
+          </DialogHeader>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2 px-3 text-xs font-bold text-muted-foreground">Metric</th>
+                  {allPlans.map(p => (
+                    <th key={p.id} className="text-right py-2 px-3 text-xs font-bold">{p.planName || `Plan #${p.id}`}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: "Roles", fn: (p: ResourcePlan) => (p.rows?.length || 0).toString() },
+                  { label: "Total Days", fn: (p: ResourcePlan) => (p.rows || []).reduce((s, r) => s + calcDays({ ...r, daysPerWeek: Number(r.daysPerWeek) || 5, dailyRate: Number(r.dailyRate) || 0, discountPercent: Number(r.discountPercent) || 0, breaks: r.breaks || [], weekOverrides: r.weekOverrides || {} }), 0).toString() },
+                  { label: "Total Cost", fn: (p: ResourcePlan) => fmtCurrency((p.rows || []).reduce((s, r) => s + calcCost({ ...r, daysPerWeek: Number(r.daysPerWeek) || 5, dailyRate: Number(r.dailyRate) || 0, discountPercent: Number(r.discountPercent) || 0, breaks: r.breaks || [], weekOverrides: r.weekOverrides || {} }), 0)) },
+                  { label: "Weighted Value", fn: (p: ResourcePlan) => {
+                    const cost = (p.rows || []).reduce((s, r) => s + calcCost({ ...r, daysPerWeek: Number(r.daysPerWeek) || 5, dailyRate: Number(r.dailyRate) || 0, discountPercent: Number(r.discountPercent) || 0, breaks: r.breaks || [], weekOverrides: r.weekOverrides || {} }), 0);
+                    return fmtCurrency(Math.round(cost * probability / 100));
+                  }},
+                  { label: "Confirmed", fn: (p: ResourcePlan) => `${(p.rows || []).filter(r => r.status === "Confirmed").length} / ${p.rows?.length || 0}` },
+                ].map(row => (
+                  <tr key={row.label} className="border-b hover:bg-muted/30">
+                    <td className="py-2 px-3 font-medium text-muted-foreground">{row.label}</td>
+                    {allPlans.map(p => (
+                      <td key={p.id} className="py-2 px-3 text-right font-mono text-xs">{row.fn(p)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCompareOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save as New Scenario Modal */}
+      <Dialog open={saveAsNewOpen} onOpenChange={setSaveAsNewOpen}>
+        <DialogContent className="max-w-sm" data-testid="save-as-new-plan-modal">
+          <SubmitForm onSubmit={() => {
+            savePlanMutation.mutate({ rows, createNew: true, planName: newPlanName || `Scenario ${allPlans.length + 1}` });
+            setSaveAsNewOpen(false);
+            setNewPlanName("");
+          }}>
+            <DialogHeader><DialogTitle>Save as New Scenario</DialogTitle></DialogHeader>
+            <div className="py-4">
+              <Label>Scenario Name</Label>
+              <Input value={newPlanName} onChange={e => setNewPlanName(e.target.value)} placeholder={`Scenario ${allPlans.length + 1}`} autoFocus />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setSaveAsNewOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={savePlanMutation.isPending}>Save Scenario</Button>
+            </DialogFooter>
+          </SubmitForm>
+        </DialogContent>
+      </Dialog>
 
       {/* Save Template Modal */}
       <SaveTemplateModal
@@ -1412,14 +1536,14 @@ function AddRowModal({ open, onClose, skillsList, resourcesList, rateCardItems, 
 
   const allPhases = useMemo(() => {
     const set = new Set([...DEFAULT_PHASES, ...existingPhases]);
-    return [...set];
+    return Array.from(set);
   }, [existingPhases]);
 
   const mergedRoles = useMemo(() => {
     const map = new Map<string, string>();
     for (const item of rateCardItems) map.set(item.roleName, item.dailyRate);
     for (const s of skillsList) if (!map.has(s.name)) map.set(s.name, "");
-    return [...map.entries()].map(([name, dailyRate]) => ({ name, dailyRate }));
+    return Array.from(map.entries()).map(([name, dailyRate]) => ({ name, dailyRate }));
   }, [rateCardItems, skillsList]);
 
   const handleRoleSelect = (roleName: string) => {

@@ -10,6 +10,8 @@
     "start": "cross-env NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
+    "db:patch-crm": "node scripts/patch-crm-columns.mjs",
+    "db:seed-crm": "tsx server/seed-crm-demo.ts",
     "db:reset": "tsx script/db-reset.ts",
     "db:clients-rls": "tsx script/apply-clients-rls.ts",
     "db:clients-indexes": "tsx script/apply-clients-indexes.ts"

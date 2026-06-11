@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { useCrmPagination } from "@/hooks/use-crm-pagination";
+import { CrmTablePagination } from "./CrmTablePagination";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -15,23 +17,37 @@ import { cn } from "@/lib/utils";
 import {
   Plus, Download, Upload, Search, ArrowUpDown, Layers,
   ChevronDown, X, Trash2, UserCheck, Paintbrush, Calendar,
-  MoreHorizontal, Pencil
+  MoreHorizontal, Pencil, Copy, Archive, Briefcase
 } from "lucide-react";
+import { OpportunityFormFields } from "@/components/crm/OpportunityFormFields";
+import {
+  EMPTY_OPPORTUNITY_FORM,
+  opportunityToForm,
+  formToOpportunityPayload,
+  type OpportunityFormData,
+} from "@/lib/crm-form";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
 import { evaluateConditionalFormatting, type ConditionalFormatRule } from "@/lib/conditionalFormatting";
 import type { ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { useCrmUsers } from "./CrmUsersProvider";
+import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
+import { CrmCustomFieldTableHeaders, CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
+import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
 
 type CrmAccount = { id: number; tenantId: number; name: string; type: string; industry: string | null; };
 type CrmPipeline = { id: number; tenantId: number; name: string; description: string | null; isDefault: boolean | null; color: string | null; };
 type CrmOpportunityStage = { id: number; tenantId: number; pipelineId: number | null; name: string; order: number; probability: number | null; color: string | null; isClosed: boolean | null; isWon: boolean | null; };
-type CrmOpportunity = { id: number; tenantId: number; accountId: number | null; stageId: number | null; name: string; amount: string | null; probability: number | null; expectedCloseDate: string | null; ownerUserId: string | null; createdAt: string; };
+type CrmOpportunity = { id: number; tenantId: number; accountId: number | null; contactId?: number | null; stageId: number | null; name: string; amount: string | null; probability: number | null; expectedCloseDate: string | null; ownerUserId: string | null; isArchived?: boolean | null; customData?: Record<string, unknown> | null; createdAt: string; };
+type CrmContact = { id: number; firstName: string; lastName: string; accountId: number | null };
 
 interface CrmOpportunitiesTabProps {
   opportunities: CrmOpportunity[];
   stages: CrmOpportunityStage[];
   accounts: CrmAccount[];
   pipelines: CrmPipeline[];
+  contacts: CrmContact[];
+  searchTerm?: string;
 }
 
 const VIBRANT_LOGO_COLORS = [
@@ -146,7 +162,10 @@ function StageBadge({ stage }: { stage: { name: string; color: string | null } |
   );
 }
 
-export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines }: CrmOpportunitiesTabProps) {
+export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines, contacts, searchTerm = "" }: CrmOpportunitiesTabProps) {
+  const { resolveOwner } = useCrmUsers();
+  const { fields: customFields } = useCrmCustomFields("opportunity");
+  const tableColSpan = 10 + customFields.length;
   const [isOpen, setIsOpen] = useState(false);
   const [isCreatePipelineOpen, setIsCreatePipelineOpen] = useState(false);
   const [selectedPipelineId, setSelectedPipelineId] = useState<number | null>(null);
@@ -157,13 +176,32 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   const [sortField, setSortField] = useState<"name" | "amount" | "probability" | "closeDate" | "created">("created");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [groupBy, setGroupBy] = useState<"none" | "stage" | "account" | "probability">("none");
+  const [groupBy, setGroupBy] = useState<"none" | "stage" | "account" | "probability" | "owner">("none");
   const [formatPanelOpen, setFormatPanelOpen] = useState(false);
   const [formatRules, setFormatRules] = useState<ConditionalFormatRule[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [formData, setFormData] = useState({ name: "", amount: "", stageId: "", accountId: "", expectedCloseDate: "", probability: "" });
+  const [formData, setFormData] = useState<OpportunityFormData>(EMPTY_OPPORTUNITY_FORM);
+  const [customData, setCustomData] = useState<Record<string, unknown>>({});
   const [importOpen, setImportOpen] = useState(false);
   const { toast } = useToast();
+
+  const runOppAction = async (request: () => Promise<Response>, successTitle: string) => {
+    try {
+      const res = await request();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message || "Request failed");
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/opportunities"] });
+      toast({ title: successTitle });
+    } catch (e: unknown) {
+      toast({
+        title: "Action failed",
+        description: e instanceof Error ? e.message : "Please try again",
+        variant: "destructive",
+      });
+    }
+  };
 
   const importMutation = useMutation({
     mutationFn: ({ rows, mode }: { rows: Record<string, string>[]; mode: ImportMode }) =>
@@ -179,7 +217,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   const pipelineStages = activePipelineId ? stages.filter(s => s.pipelineId === activePipelineId) : stages;
 
   const createPipelineMutation = useMutation({
-    mutationFn: (data: { name: string }) => apiRequest("POST", "/api/crm/pipelines", { ...data, tenantId: 1 }),
+    mutationFn: (data: { name: string }) => apiRequest("POST", "/api/crm/pipelines", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/pipelines"] });
       setIsCreatePipelineOpen(false);
@@ -190,16 +228,12 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: typeof formData) => apiRequest("POST", "/api/crm/opportunities", {
-      ...data,
-      stageId: data.stageId ? parseInt(data.stageId) : null,
-      accountId: data.accountId ? parseInt(data.accountId) : null,
-      probability: data.probability ? parseInt(data.probability) : null,
-    }),
+    mutationFn: (data: OpportunityFormData) => apiRequest("POST", "/api/crm/opportunities", formToOpportunityPayload(data, customData)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/opportunities"] });
       setIsOpen(false);
-      setFormData({ name: "", amount: "", stageId: "", accountId: "", expectedCloseDate: "", probability: "" });
+      setFormData(EMPTY_OPPORTUNITY_FORM);
+      setCustomData({});
       toast({ title: "Opportunity created successfully" });
     },
     onError: () => toast({ title: "Failed to create opportunity", variant: "destructive" }),
@@ -235,14 +269,8 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   });
 
   const handleEdit = (opp: typeof enrichedOpportunities[0]) => {
-    setFormData({
-      name: opp.name,
-      amount: opp.amount || "",
-      stageId: opp.stageId ? String(opp.stageId) : "",
-      accountId: opp.accountId ? String(opp.accountId) : "",
-      expectedCloseDate: opp.expectedCloseDate ? opp.expectedCloseDate.split("T")[0] : "",
-      probability: opp.probability ? String(opp.probability) : "",
-    });
+    setFormData(opportunityToForm(opp as Record<string, unknown>));
+    setCustomData((opp.customData as Record<string, unknown>) || {});
     setEditingId(opp.id);
     setIsOpen(true);
   };
@@ -252,6 +280,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   };
 
   let pipelineOpportunities = opportunities.filter(o => {
+    if (o.isArchived) return false;
     const stage = stages.find(s => s.id === o.stageId);
     return stage && stage.pipelineId === activePipelineId;
   });
@@ -284,8 +313,9 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
       };
     });
 
-    if (localSearch) {
-      const s = localSearch.toLowerCase();
+    const effectiveSearch = searchTerm || localSearch;
+    if (effectiveSearch) {
+      const s = effectiveSearch.toLowerCase();
       result = result.filter(o =>
         o.name.toLowerCase().includes(s) ||
         o.accountName.toLowerCase().includes(s) ||
@@ -307,7 +337,12 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
     });
 
     return result;
-  }, [pipelineOpportunities, accounts, stages, localSearch, sortField, sortDir]);
+  }, [pipelineOpportunities, accounts, stages, localSearch, searchTerm, sortField, sortDir]);
+
+  const pagination = useCrmPagination(enrichedOpportunities, {
+    resetKey: `${searchTerm}|${localSearch}|${stageFilter}|${selectedStageId}|${sortField}|${sortDir}|${groupBy}|${activePipelineId}`,
+    enabled: groupBy === "none",
+  });
 
   const formatColumns: MondayColumnDef<any>[] = [
     { id: "name", header: "Opportunity", type: "text", accessor: "name" },
@@ -353,14 +388,6 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   const weightedValue = enrichedOpportunities.reduce((sum, o) => sum + (o.amountNum * o.probabilityNum / 100), 0);
   const avgDeal = enrichedOpportunities.length > 0 ? Math.round(totalValue / enrichedOpportunities.length) : 0;
 
-  const ownerInitials = ["AL", "PV", "SA", "JM", "RK", "DT", "NB", "CM"];
-  const ownerColors = ["#3b82f6", "#8b5cf6", "#22c55e", "#f97316", "#ec4899", "#06b6d4", "#ef4444", "#eab308"];
-
-  function getOwnerForOpp(opp: CrmOpportunity) {
-    const hash = (opp.id * 7 + (opp.name?.charCodeAt(0) || 0)) % ownerInitials.length;
-    return { initials: ownerInitials[hash], color: ownerColors[hash] };
-  }
-
   const groupedData = useMemo(() => {
     if (groupBy === "none") return null;
     const groups: Record<string, typeof enrichedOpportunities> = {};
@@ -370,6 +397,8 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
         key = opp.stageName;
       } else if (groupBy === "account") {
         key = opp.accountName;
+      } else if (groupBy === "owner") {
+        key = resolveOwner(opp.ownerUserId).name;
       } else {
         if (opp.probabilityNum >= 75) key = "High (75%+)";
         else if (opp.probabilityNum >= 50) key = "Medium (50-74%)";
@@ -380,7 +409,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
       groups[key].push(opp);
     }
     return groups;
-  }, [enrichedOpportunities, groupBy]);
+  }, [enrichedOpportunities, groupBy, resolveOwner]);
 
   const groupColors: Record<string, string> = {
     "High (75%+)": "#22c55e", "Medium (50-74%)": "#f59e0b", "Low (25-49%)": "#f97316", "Very Low (<25%)": "#ef4444",
@@ -391,6 +420,33 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   const handleSort = (field: typeof sortField) => {
     if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortField(field); setSortDir("desc"); }
+  };
+
+  const currentFilters = useMemo((): FilterConfig[] => {
+    const filters: FilterConfig[] = [];
+    if (selectedStageId !== null) filters.push({ columnId: "stage", operator: "equals", value: String(selectedStageId) });
+    if (stageFilter === "closing-this-month") filters.push({ columnId: "closing", operator: "equals", value: "this-month" });
+    if (activePipelineId) filters.push({ columnId: "pipeline", operator: "equals", value: String(activePipelineId) });
+    return filters;
+  }, [selectedStageId, stageFilter, activePipelineId]);
+
+  const currentSorts = useMemo((): SortConfig[] => (
+    [{ columnId: sortField, direction: sortDir }]
+  ), [sortField, sortDir]);
+
+  const applySavedView = (filters: FilterConfig[], sorts?: SortConfig[]) => {
+    setSelectedStageId(null);
+    setStageFilter("all");
+    setSelectedPipelineId(null);
+    for (const f of filters) {
+      if (f.columnId === "stage") setSelectedStageId(parseInt(f.value));
+      if (f.columnId === "closing") setStageFilter("closing-this-month");
+      if (f.columnId === "pipeline") setSelectedPipelineId(parseInt(f.value));
+    }
+    if (sorts?.[0]) {
+      setSortField(sorts[0].columnId as typeof sortField);
+      setSortDir(sorts[0].direction);
+    }
   };
 
   const toggleSelectAll = () => {
@@ -425,7 +481,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   const renderRow = (opp: typeof enrichedOpportunities[0]) => {
     const companyColor = getColorForName(opp.name);
     const companyInitials = getInitials(opp.name);
-    const owner = getOwnerForOpp(opp);
+    const owner = resolveOwner(opp.ownerUserId);
 
     return (
       <tr
@@ -480,11 +536,14 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
           </div>
         </td>
         <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "expectedCloseDate"))} style={getCellStyle(opp.id, "expectedCloseDate")}>
-          <span className="text-sm text-muted-foreground">{formatDate(opp.expectedCloseDate)}</span>
+          <span className={cn("text-sm", opp.expectedCloseDate && new Date(opp.expectedCloseDate) < new Date() ? "text-red-500 font-medium" : "text-muted-foreground")}>
+            {formatDate(opp.expectedCloseDate)}
+          </span>
         </td>
         <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "createdAt"))} style={getCellStyle(opp.id, "createdAt")}>
           <span className="text-sm text-muted-foreground">{formatDate(opp.createdAt)}</span>
         </td>
+        <CrmCustomFieldTableCells fields={customFields} customData={opp.customData} />
         <td className="px-4 py-3 text-right whitespace-nowrap">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -494,16 +553,19 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => handleEdit(opp)} data-testid={`action-edit-opp-${opp.id}`}>
-                <Pencil className="h-3.5 w-3.5 mr-2" />
-                Edit
+                <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => deleteMutation.mutate(opp.id)}
-                className="text-red-600 focus:text-red-600"
-                data-testid={`action-delete-opp-${opp.id}`}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-2" />
-                Delete
+              <DropdownMenuItem onClick={() => runOppAction(() => apiRequest("POST", `/api/crm/opportunities/${opp.id}/clone`), "Opportunity cloned")} data-testid={`action-clone-opp-${opp.id}`}>
+                <Copy className="h-3.5 w-3.5 mr-2" /> Clone
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => runOppAction(() => apiRequest("POST", `/api/crm/opportunities/${opp.id}/convert-to-project`), "Converted to project")} data-testid={`action-convert-opp-${opp.id}`}>
+                <Briefcase className="h-3.5 w-3.5 mr-2" /> Convert to Project
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => runOppAction(() => apiRequest("POST", `/api/crm/opportunities/${opp.id}/archive`), "Opportunity archived")} data-testid={`action-archive-opp-${opp.id}`}>
+                <Archive className="h-3.5 w-3.5 mr-2" /> Archive
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => deleteMutation.mutate(opp.id)} className="text-red-600 focus:text-red-600" data-testid={`action-delete-opp-${opp.id}`}>
+                <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -514,7 +576,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="rounded-xl border border-border/60 bg-card p-4" data-testid="card-opp-count">
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
             <OpportunityIcon className="h-5 w-5" />
@@ -559,13 +621,17 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               {pipelineStages.map(stage => (
-                <DropdownMenuItem key={stage.id} onClick={() => {
+                <DropdownMenuItem key={stage.id} onClick={async () => {
                   const ids = Array.from(selectedIds);
-                  Promise.all(ids.map(id => apiRequest("PUT", `/api/crm/opportunities/${id}`, { stageId: stage.id }))).then(() => {
+                  try {
+                    const results = await Promise.all(ids.map(id => apiRequest("PUT", `/api/crm/opportunities/${id}`, { stageId: stage.id })));
+                    if (results.some(r => !r.ok)) throw new Error("Some updates failed");
                     queryClient.invalidateQueries({ queryKey: ["/api/crm/opportunities"] });
                     setSelectedIds(new Set());
                     toast({ title: `${ids.length} opportunities moved to ${stage.name}` });
-                  });
+                  } catch {
+                    toast({ title: "Failed to update stages", variant: "destructive" });
+                  }
                 }}>
                   {stage.name}
                 </DropdownMenuItem>
@@ -668,16 +734,34 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
           </Select>
         )}
 
+        <SavedViewsDropdown
+          entityType="opportunities"
+          currentFilters={currentFilters}
+          currentSorts={currentSorts}
+          onApplyView={applySavedView}
+        />
+
         <div className="h-6 w-px bg-border mx-1" />
 
-        <button
-          onClick={() => handleSort("amount")}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
-          data-testid="button-sort-opp"
-        >
-          <ArrowUpDown className="h-3.5 w-3.5" />
-          Sort: {sortField === "name" ? "Name" : sortField === "amount" ? "Amount" : sortField === "probability" ? "Probability" : sortField === "closeDate" ? "Close Date" : "Created"}
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
+              data-testid="button-sort-opp"
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              Sort: {sortField === "name" ? "Name" : sortField === "amount" ? "Amount" : sortField === "probability" ? "Probability" : sortField === "closeDate" ? "Close Date" : "Created"}
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => handleSort("created")}>Created {sortField === "created" ? `(${sortDir})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleSort("name")}>Name {sortField === "name" ? `(${sortDir})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleSort("amount")}>Amount {sortField === "amount" ? `(${sortDir})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleSort("probability")}>Probability {sortField === "probability" ? `(${sortDir})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleSort("closeDate")}>Close Date {sortField === "closeDate" ? `(${sortDir})` : ""}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -700,6 +784,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
             <DropdownMenuItem onClick={() => setGroupBy("stage")} data-testid="group-opp-stage">Stage</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setGroupBy("account")} data-testid="group-opp-account">Account</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setGroupBy("probability")} data-testid="group-opp-probability">Probability</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setGroupBy("owner")} data-testid="group-opp-owner">Owner</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -792,26 +877,22 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
           </DialogContent>
         </Dialog>
 
-        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setEditingId(null); setFormData({ name: "", amount: "", stageId: "", accountId: "", expectedCloseDate: "", probability: "" }); } }}>
+        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setEditingId(null); setFormData(EMPTY_OPPORTUNITY_FORM); setCustomData({}); } }}>
           <DialogTrigger asChild>
             <Button className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white gap-1.5" data-testid="button-add-opportunity-table">
               <Plus className="h-4 w-4" />
               New Opportunity
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <SubmitForm
               onSubmit={() => {
                 if (editingId) {
-                  updateMutation.mutate({ id: editingId, updates: {
-                    ...formData,
-                    stageId: formData.stageId ? parseInt(formData.stageId) : null,
-                    accountId: formData.accountId ? parseInt(formData.accountId) : null,
-                    probability: formData.probability ? parseInt(formData.probability) : null,
-                  }});
+                  updateMutation.mutate({ id: editingId, updates: formToOpportunityPayload(formData, customData) });
                   setIsOpen(false);
                   setEditingId(null);
-                  setFormData({ name: "", amount: "", stageId: "", accountId: "", expectedCloseDate: "", probability: "" });
+                  setFormData(EMPTY_OPPORTUNITY_FORM);
+                  setCustomData({});
                 } else {
                   createMutation.mutate(formData);
                 }
@@ -821,76 +902,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
             <DialogHeader>
               <DialogTitle>{editingId ? "Edit Opportunity" : "Create New Opportunity"}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div>
-                <Label htmlFor="oppName">Opportunity Name *</Label>
-                <Input
-                  id="oppName"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  data-testid="input-opp-name"
-                />
-              </div>
-              <div>
-                <Label htmlFor="oppAmount">Deal Value ($)</Label>
-                <Input
-                  id="oppAmount"
-                  type="number"
-                  value={formData.amount}
-                  onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                  data-testid="input-opp-amount"
-                />
-              </div>
-              <div>
-                <Label htmlFor="oppStage">Stage</Label>
-                <Select value={formData.stageId} onValueChange={(v) => setFormData(prev => ({ ...prev, stageId: v }))}>
-                  <SelectTrigger data-testid="select-opp-stage">
-                    <SelectValue placeholder="Select stage" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pipelineStages.map(stage => (
-                      <SelectItem key={stage.id} value={stage.id.toString()}>{stage.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="oppAccount">Account</Label>
-                <Select value={formData.accountId} onValueChange={(v) => setFormData(prev => ({ ...prev, accountId: v }))}>
-                  <SelectTrigger data-testid="select-opp-account">
-                    <SelectValue placeholder="Select account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map(account => (
-                      <SelectItem key={account.id} value={account.id.toString()}>{account.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="oppProbability">Win Probability (%)</Label>
-                <Input
-                  id="oppProbability"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={formData.probability}
-                  onChange={(e) => setFormData(prev => ({ ...prev, probability: e.target.value }))}
-                  placeholder="e.g., 50"
-                  data-testid="input-opp-probability"
-                />
-              </div>
-              <div>
-                <Label htmlFor="oppCloseDate">Expected Close Date</Label>
-                <Input
-                  id="oppCloseDate"
-                  type="date"
-                  value={formData.expectedCloseDate}
-                  onChange={(e) => setFormData(prev => ({ ...prev, expectedCloseDate: e.target.value }))}
-                  data-testid="input-opp-close-date"
-                />
-              </div>
-            </div>
+            <OpportunityFormFields formData={formData} setFormData={setFormData} stages={pipelineStages} accounts={accounts} contacts={contacts} customData={customData} onCustomDataChange={(k, v) => setCustomData(prev => ({ ...prev, [k]: v }))} />
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="outline" data-testid="button-cancel-opp">Cancel</Button>
@@ -908,7 +920,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
         </Dialog>
       </div>
 
-      <div className="rounded-xl border border-border/60 bg-card overflow-x-auto max-w-[95%]" data-testid="opp-table">
+      <div className="rounded-xl border border-border/60 bg-card overflow-x-auto w-full" data-testid="opp-table">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border/60">
@@ -933,7 +945,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
           <tbody>
             {enrichedOpportunities.length === 0 ? (
               <tr>
-                <td colSpan={10} className="text-center py-16 text-muted-foreground">
+                <td colSpan={tableColSpan} className="text-center py-16 text-muted-foreground">
                   <div className="flex flex-col items-center gap-2">
                     <OpportunityIcon className="h-10 w-10 opacity-30" />
                     <p className="text-sm">No opportunities found. Create your first deal to start tracking.</p>
@@ -951,7 +963,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
             ) : groupedData ? (
               Object.entries(groupedData).flatMap(([groupName, groupOpps]) => [
                 <tr key={`group-header-${groupName}`} className="bg-muted/40 border-b border-border/40" data-testid={`group-opp-${groupName}`}>
-                  <td colSpan={10} className="px-4 py-2">
+                  <td colSpan={tableColSpan} className="px-4 py-2">
                     <div className="flex items-center gap-2">
                       <div
                         className="h-2.5 w-2.5 rounded-full shrink-0"
@@ -970,15 +982,28 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
                 ...groupOpps.map(renderRow)
               ])
             ) : (
-              enrichedOpportunities.map(renderRow)
+              pagination.paginatedItems.map(renderRow)
             )}
           </tbody>
         </table>
-        {enrichedOpportunities.length > 0 && (
+        {groupBy !== "none" && enrichedOpportunities.length > 0 && (
           <div className="px-4 py-2.5 border-t border-border/40 bg-muted/20 text-xs text-muted-foreground" data-testid="opp-count-footer">
             {enrichedOpportunities.length} of {opportunities.length} opportunities
             {selectedIds.size > 0 && <span className="ml-2 text-[#0ea5e9]">({selectedIds.size} selected)</span>}
           </div>
+        )}
+        {groupBy === "none" && (
+          <CrmTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            extra={selectedIds.size > 0 ? <span className="text-[#0ea5e9]">({selectedIds.size} selected)</span> : undefined}
+          />
         )}
       </div>
 

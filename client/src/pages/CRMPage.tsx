@@ -1,5 +1,10 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { Redirect } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { DASHBOARD_PATH } from "@shared/app-routes";
+import { CLIENT_WORKSPACE_ALWAYS_HIDDEN_KEYS } from "@shared/client-workspace-modules";
+import { useClientContext } from "@/hooks/use-client-context";
+import { CrmUsersProvider } from "@/components/crm/CrmUsersProvider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -98,6 +103,15 @@ function TabIconForecasting() {
     </svg>
   );
 }
+
+function TabIconSettings() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="2.5" fill="#6b7280"/>
+      <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
+}
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { AccountDetailPanel } from "@/components/crm/AccountDetailPanel";
@@ -111,6 +125,16 @@ import { CrmContactsTab } from "@/components/crm/CrmContactsTab";
 import { SalesForecastDashboard } from "@/components/crm/SalesForecastDashboard";
 import { Crm360ViewTab } from "@/components/crm/Crm360ViewTab";
 import { CrmResourcePlanTab } from "@/components/crm/CrmResourcePlanTab";
+import { CrmCustomFieldsSettings } from "@/components/crm/CrmCustomFieldsSettings";
+import { ActivityAnalytics } from "@/components/crm/ActivityAnalytics";
+import {
+  countCrmContacts,
+  countCrmContracts,
+  countCrmCustomers,
+  countCrmLeads,
+  countCrmOpportunities,
+  countCrmPipelineDeals,
+} from "@/lib/crm-tab-counts";
 
 function TabIconResourcePlan() {
   return (
@@ -182,6 +206,8 @@ type CrmLead = {
   source: string | null;
   status: string;
   score: number | null;
+  ownerUserId: string | null;
+  convertedAccountId: number | null;
   createdAt: string;
 };
 
@@ -260,9 +286,19 @@ interface DashboardStats {
 }
 
 export default function CRMPage() {
+  return (
+    <CrmUsersProvider>
+      <CRMPageContent />
+    </CrmUsersProvider>
+  );
+}
+
+function CRMPageContent() {
+  const { activeClient } = useClientContext();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAccount, setSelectedAccount] = useState<CrmAccount | null>(null);
+  const tabsListRef = useRef<HTMLDivElement>(null);
   const { mainOffset, mobileTopOffset } = useShellLayout();
 
   const { data: dashboardStats, isLoading: statsLoading } = useQuery<DashboardStats>({
@@ -297,7 +333,27 @@ export default function CRMPage() {
     queryKey: ["/api/crm/contracts"],
   });
 
+  const { data: activities = [] } = useQuery<Array<{ id: number; type: string; subject: string; description: string | null; dueDate: string | null; startTime: string | null; endTime: string | null; duration: number | null; location: string | null; outcome: string | null; completedAt: string | null; status: string | null; priority: string | null; createdAt: string }>>({
+    queryKey: ["/api/crm/activities"],
+  });
+
   const isLoading = accountsLoading || contactsLoading || leadsLoading || pipelinesLoading || stagesLoading || opportunitiesLoading || contractsLoading;
+
+  useEffect(() => {
+    if (isLoading) return;
+    const list = tabsListRef.current;
+    if (!list) return;
+    if (activeTab === "dashboard") {
+      list.scrollLeft = 0;
+      return;
+    }
+    const activeEl = list.querySelector<HTMLElement>(`[data-testid="tab-${activeTab}"]`);
+    activeEl?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [activeTab, isLoading]);
+
+  if (activeClient && CLIENT_WORKSPACE_ALWAYS_HIDDEN_KEYS.has("crm")) {
+    return <Redirect to={DASHBOARD_PATH} />;
+  }
 
   if (isLoading) {
     return (
@@ -315,25 +371,26 @@ export default function CRMPage() {
 
   const tabItems = [
     { value: "dashboard", label: "Dashboard", svgIcon: <TabIconDashboard />, count: null },
-    { value: "leads", label: "Leads", svgIcon: <TabIconLeads />, count: leads.filter(l => l.status !== 'converted').length },
-    { value: "opportunities", label: "Opportunities", svgIcon: <TabIconOpportunities />, count: opportunities.length },
-    { value: "pipeline", label: "Pipeline", svgIcon: <TabIconPipeline />, count: null },
-    { value: "customers", label: "Customers", svgIcon: <TabIconCustomers />, count: accounts.filter(a => a.type === 'customer').length },
-    { value: "contracts", label: "Contracts", svgIcon: <TabIconContracts />, count: contracts.length },
-    { value: "contacts", label: "Contacts", svgIcon: <TabIconContacts />, count: contacts.length },
+    { value: "leads", label: "Leads", svgIcon: <TabIconLeads />, count: countCrmLeads(leads) },
+    { value: "opportunities", label: "Opportunities", svgIcon: <TabIconOpportunities />, count: countCrmOpportunities(opportunities, stages, pipelines) },
+    { value: "pipeline", label: "Pipeline", svgIcon: <TabIconPipeline />, count: countCrmPipelineDeals(opportunities, stages, pipelines) },
+    { value: "customers", label: "Customers", svgIcon: <TabIconCustomers />, count: countCrmCustomers(accounts) },
+    { value: "contracts", label: "Contracts", svgIcon: <TabIconContracts />, count: countCrmContracts(contracts) },
+    { value: "contacts", label: "Contacts", svgIcon: <TabIconContacts />, count: countCrmContacts(contacts) },
     { value: "forecasting", label: "Forecasting", svgIcon: <TabIconForecasting />, count: null },
     { value: "360view", label: "360° View", svgIcon: <TabIcon360View />, count: null },
     { value: "resourceplan", label: "Resource Plan", svgIcon: <TabIconResourcePlan />, count: null },
+    { value: "settings", label: "Settings", svgIcon: <TabIconSettings />, count: null },
   ];
 
   return (
     <div className="h-screen overflow-hidden bg-background" data-testid="crm-page">
       <Sidebar />
       <main className={cn("transition-all duration-300 h-full flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
-        <div className="px-4 pt-4">
+        <div className="px-3 sm:px-4 pt-3 sm:pt-4 hidden md:block">
           <ModuleWelcomeBanner moduleKey="crm" features={["Pipeline management", "Lead tracking", "Sales forecasting", "Activity analytics"]} />
         </div>
-        <div className="border-b border-border/30 bg-card backdrop-blur-sm sticky top-0 z-50">
+        <div className="border-b border-border/30 bg-card backdrop-blur-sm sticky top-0 z-50 shrink-0">
           <ModuleHeader
             icon={Building2}
             title="CRM"
@@ -345,19 +402,22 @@ export default function CRMPage() {
             titleTestId="crm-title"
           />
 
-          <Tabs value={activeTab} onValueChange={(tab) => { setActiveTab(tab); setSelectedAccount(null); }} className="px-4">
-            <TabsList className="h-12 bg-transparent border-0 gap-1">
+          <Tabs value={activeTab} onValueChange={(tab) => { setActiveTab(tab); setSelectedAccount(null); }} className="px-3 sm:px-4">
+            <TabsList
+              ref={tabsListRef}
+              className="h-11 sm:h-12 bg-transparent border-0 gap-0.5 sm:gap-1 flex w-full max-w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-none scroll-smooth"
+            >
               {tabItems.map(tab => (
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
-                  className="gap-2 rounded-lg data-[state=active]:bg-[#0ea5e9]/10 data-[state=active]:text-[#0ea5e9]"
+                  className="gap-1.5 sm:gap-2 shrink-0 px-2 sm:px-3 text-xs sm:text-sm rounded-lg whitespace-nowrap data-[state=active]:bg-[#0ea5e9]/10 data-[state=active]:text-[#0ea5e9]"
                   data-testid={`tab-${tab.value}`}
                 >
                   {tab.svgIcon}
-                  {tab.label}
+                  <span className="hidden sm:inline">{tab.label}</span>
                   {tab.count !== null && tab.count > 0 && (
-                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] font-medium">
+                    <Badge variant="secondary" className="ml-0.5 sm:ml-1 h-5 px-1.5 text-[10px] font-medium">
                       {tab.count}
                     </Badge>
                   )}
@@ -367,39 +427,42 @@ export default function CRMPage() {
           </Tabs>
         </div>
 
-        <div className="flex-1 overflow-hidden flex">
-          <div className={cn("flex-1 overflow-auto transition-all duration-300", selectedAccount && "mr-[650px]")}>
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <div className={cn(
+            "flex-1 overflow-auto transition-all duration-300 min-w-0",
+            selectedAccount && "lg:mr-[min(650px,40vw)]"
+          )}>
             <Tabs value={activeTab} className="flex-1">
-              <TabsContent value="dashboard" className="p-6 m-0">
+              <TabsContent value="dashboard" className="p-3 sm:p-4 md:p-6 m-0">
                 <CrmDashboardTab stats={dashboardStats} isLoading={statsLoading} onNavigateToTab={(tab) => setActiveTab(tab)} />
               </TabsContent>
 
-              <TabsContent value="leads" className="p-6 m-0">
+              <TabsContent value="leads" className="p-3 sm:p-4 md:p-6 m-0">
                 <CrmLeadsTab leads={leads} searchTerm={searchTerm} />
               </TabsContent>
 
-              <TabsContent value="opportunities" className="p-6 m-0">
-                <CrmOpportunitiesTab opportunities={opportunities} stages={stages} accounts={accounts} pipelines={pipelines} />
+              <TabsContent value="opportunities" className="p-3 sm:p-4 md:p-6 m-0">
+                <CrmOpportunitiesTab opportunities={opportunities} stages={stages} accounts={accounts} pipelines={pipelines} contacts={contacts} searchTerm={searchTerm} />
               </TabsContent>
 
-              <TabsContent value="pipeline" className="p-6 m-0">
-                <CrmPipelineTab opportunities={opportunities} stages={stages} accounts={accounts} pipelines={pipelines} />
+              <TabsContent value="pipeline" className="p-3 sm:p-4 md:p-6 m-0">
+                <CrmPipelineTab opportunities={opportunities} stages={stages} accounts={accounts} pipelines={pipelines} searchTerm={searchTerm} />
               </TabsContent>
 
-              <TabsContent value="customers" className="p-6 m-0">
-                <CrmCustomersTab accounts={accounts} searchTerm={searchTerm} onSelectAccount={setSelectedAccount} />
+              <TabsContent value="customers" className="p-3 sm:p-4 md:p-6 m-0">
+                <CrmCustomersTab accounts={accounts} opportunities={opportunities} contracts={contracts} stages={stages} searchTerm={searchTerm} onSelectAccount={setSelectedAccount} />
               </TabsContent>
 
-              <TabsContent value="contracts" className="p-6 m-0">
+              <TabsContent value="contracts" className="p-3 sm:p-4 md:p-6 m-0">
                 <CrmContractsTab contracts={contracts} accounts={accounts} searchTerm={searchTerm} />
               </TabsContent>
 
-              <TabsContent value="contacts" className="p-6 m-0">
+              <TabsContent value="contacts" className="p-3 sm:p-4 md:p-6 m-0">
                 <CrmContactsTab contacts={contacts} accounts={accounts} searchTerm={searchTerm} />
               </TabsContent>
 
-              <TabsContent value="forecasting" className="p-6 m-0">
-                <SalesForecastDashboard opportunities={opportunities} stages={stages} />
+              <TabsContent value="forecasting" className="p-3 sm:p-4 md:p-6 m-0">
+                <SalesForecastDashboard opportunities={opportunities} stages={stages} pipelines={pipelines} />
               </TabsContent>
 
               <TabsContent value="360view" className="m-0">
@@ -414,8 +477,15 @@ export default function CRMPage() {
                 />
               </TabsContent>
 
-              <TabsContent value="resourceplan" className="p-6 m-0">
+              <TabsContent value="resourceplan" className="p-3 sm:p-4 md:p-6 m-0">
                 <CrmResourcePlanTab opportunities={opportunities} accounts={accounts} stages={stages} />
+              </TabsContent>
+
+              <TabsContent value="settings" className="m-0">
+                <CrmCustomFieldsSettings />
+                <div className="border-t border-border/40 p-3 sm:p-4 md:p-6">
+                  <ActivityAnalytics activities={activities} />
+                </div>
               </TabsContent>
             </Tabs>
           </div>
@@ -427,7 +497,7 @@ export default function CRMPage() {
                 onClick={() => setSelectedAccount(null)}
                 data-testid="overlay-close-detail"
               />
-              <div className="fixed top-0 right-0 w-[650px] h-full z-[70] shadow-2xl border-l border-border/30 bg-background">
+              <div className="fixed inset-y-0 right-0 w-full sm:w-[min(650px,100vw)] h-full z-[70] shadow-2xl border-l border-border/30 bg-background">
                 <AccountDetailPanel
                   account={selectedAccount}
                   onClose={() => setSelectedAccount(null)}

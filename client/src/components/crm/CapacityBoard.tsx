@@ -170,6 +170,53 @@ function getUtilTextColor(pct: number): string {
   return "text-muted-foreground/50";
 }
 
+type AllocationLine = {
+  id: string;
+  name: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  breaks?: Array<{ start: string; end: string; reason: string }>;
+};
+
+function buildAllocationLines(
+  resourceId: number,
+  allocations: Allocation[],
+  oppRows: OppResourceRow[]
+): AllocationLine[] {
+  const lines: AllocationLine[] = [];
+  for (const a of allocations.filter(x => x.resourceId === resourceId)) {
+    lines.push({
+      id: `alloc-${a.id}`,
+      name: a.projectName || `Project #${a.projectId}`,
+      status: "Confirmed",
+      startDate: a.startDate,
+      endDate: a.endDate,
+    });
+  }
+  for (const r of oppRows.filter(x => x.resourceId === resourceId)) {
+    lines.push({
+      id: `opp-${r.id}`,
+      name: r.namedResourceLabel || r.roleName,
+      status: r.status,
+      startDate: r.startDate,
+      endDate: r.endDate,
+      breaks: r.breaks,
+    });
+  }
+  return lines;
+}
+
+function buildLineWeekActiveMap(line: AllocationLine, weekStarts: Date[]): Set<string> {
+  const weeks = new Set<string>();
+  for (const ws of weekStarts) {
+    if (!isDateInRange(ws, line.startDate, line.endDate)) continue;
+    if (line.breaks?.length && isInBreak(ws, line.breaks)) continue;
+    weeks.add(weekKey(ws));
+  }
+  return weeks;
+}
+
 export function CapacityBoard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -395,19 +442,10 @@ export function CapacityBoard() {
                   const isExpanded = expandedResources.has(resource.id);
                   const initials = `${resource.firstName?.[0] || ""}${resource.lastName?.[0] || ""}`.toUpperCase();
 
-                  const allProjects = new Map<string, { days: number; status: string; weeks: Set<string> }>();
+                  const allocationLines = buildAllocationLines(resource.id, allocations, oppRows);
                   const breakWeeks: Array<{ weekKey: string; reasons: string[] }> = [];
                   if (wm) {
                     wm.forEach((wa, wk) => {
-                      wa.projects.forEach((p: { name: string; days: number; status: string }) => {
-                        const existing = allProjects.get(p.name);
-                        if (existing) {
-                          existing.days += p.days;
-                          existing.weeks.add(wk);
-                        } else {
-                          allProjects.set(p.name, { days: p.days, status: p.status, weeks: new Set([wk]) });
-                        }
-                      });
                       if (wa.breakDays > 0) {
                         breakWeeks.push({ weekKey: wk, reasons: wa.breakReasons });
                       }
@@ -424,7 +462,7 @@ export function CapacityBoard() {
                       weekStarts={weekStarts}
                       weekMap={wm}
                       displayMode={displayMode}
-                      allProjects={allProjects}
+                      allocationLines={allocationLines}
                       breakWeeks={breakWeeks}
                       cellW={CELL_W}
                     />
@@ -460,7 +498,7 @@ export function CapacityBoard() {
 
 function ResourceRows({
   resource, initials, isExpanded, onToggle, weekStarts, weekMap,
-  displayMode, allProjects, breakWeeks, cellW,
+  displayMode, allocationLines, breakWeeks, cellW,
 }: {
   resource: ResourceEntry;
   initials: string;
@@ -469,11 +507,11 @@ function ResourceRows({
   weekStarts: Date[];
   weekMap: Map<string, WeekAlloc> | undefined;
   displayMode: "percent" | "days";
-  allProjects: Map<string, { days: number; status: string; weeks: Set<string> }>;
+  allocationLines: AllocationLine[];
   breakWeeks: Array<{ weekKey: string; reasons: string[] }>;
   cellW: number;
 }) {
-  const hasChildren = allProjects.size > 0 || breakWeeks.length > 0;
+  const hasChildren = allocationLines.length > 0 || breakWeeks.length > 0;
 
   return (
     <>
@@ -582,34 +620,37 @@ function ResourceRows({
         })}
       </tr>
 
-      {isExpanded && Array.from(allProjects.entries()).map(([projName, proj]) => (
-        <tr key={`${resource.id}-proj-${projName}`} className="bg-muted/10" data-testid={`subrow-project-${resource.id}`}>
-          <td className="sticky left-0 z-10 bg-muted/10 pl-12 pr-3 py-1 min-w-[220px]">
-            <div className="flex items-center gap-1.5">
-              <div className={cn("w-1.5 h-1.5 rounded-full shrink-0",
-                proj.status === "Confirmed" ? "bg-emerald-500" : "bg-amber-400")} />
-              <span className="text-[10px] text-muted-foreground truncate">{projName}</span>
-            </div>
-          </td>
-          {weekStarts.map((ws, wi) => {
-            const key = weekKey(ws);
-            const isActive = proj.weeks.has(key);
-            return (
-              <td key={wi} className="border-l p-0" style={{ width: cellW, minWidth: cellW }}>
-                <div className="h-5 flex items-center justify-center">
-                  {isActive && (
-                    <div className={cn("h-2.5 mx-0.5 rounded-sm w-full",
-                      proj.status === "Confirmed" ? "bg-emerald-400/60 dark:bg-emerald-600/40" : "bg-amber-300/60 dark:bg-amber-500/40"
-                    )} />
-                  )}
-                </div>
-              </td>
-            );
-          })}
-        </tr>
-      ))}
+      {allocationLines.map(line => {
+        const activeWeeks = buildLineWeekActiveMap(line, weekStarts);
+        return (
+          <tr key={`${resource.id}-${line.id}`} className="bg-muted/10" data-testid={`subrow-allocation-${line.id}`}>
+            <td className="sticky left-0 z-10 bg-muted/10 pl-12 pr-3 py-1 min-w-[220px]">
+              <div className="flex items-center gap-1.5">
+                <div className={cn("w-1.5 h-1.5 rounded-full shrink-0",
+                  line.status === "Confirmed" ? "bg-emerald-500" : "bg-amber-400")} />
+                <span className="text-[10px] text-muted-foreground truncate">{line.name}</span>
+              </div>
+            </td>
+            {weekStarts.map((ws, wi) => {
+              const key = weekKey(ws);
+              const isActive = activeWeeks.has(key);
+              return (
+                <td key={wi} className="border-l p-0" style={{ width: cellW, minWidth: cellW }}>
+                  <div className="h-5 flex items-center justify-center">
+                    {isActive && (
+                      <div className={cn("h-2.5 mx-0.5 rounded-sm w-full",
+                        line.status === "Confirmed" ? "bg-emerald-400/60 dark:bg-emerald-600/40" : "bg-amber-300/60 dark:bg-amber-500/40"
+                      )} />
+                    )}
+                  </div>
+                </td>
+              );
+            })}
+          </tr>
+        );
+      })}
 
-      {isExpanded && breakWeeks.length > 0 && (
+      {breakWeeks.length > 0 && (
         <tr className="bg-muted/10" data-testid={`subrow-break-${resource.id}`}>
           <td className="sticky left-0 z-10 bg-muted/10 pl-12 pr-3 py-1 min-w-[220px]">
             <div className="flex items-center gap-1.5">

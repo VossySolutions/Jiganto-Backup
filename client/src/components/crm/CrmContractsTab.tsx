@@ -1,4 +1,7 @@
 import { useState, useMemo } from "react";
+import { useCrmPagination } from "@/hooks/use-crm-pagination";
+import { CrmTablePagination } from "./CrmTablePagination";
+import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -22,6 +25,7 @@ import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
 import { evaluateConditionalFormatting, type ConditionalFormatRule } from "@/lib/conditionalFormatting";
 import type { ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { useCrmUsers } from "./CrmUsersProvider";
 
 type CrmAccount = {
   id: number;
@@ -79,11 +83,6 @@ const VIBRANT_LOGO_COLORS = [
   "#14b8a6", "#6366f1",
 ];
 
-const OWNER_NAMES = [
-  "Alex Morgan", "Jordan Lee", "Sam Taylor", "Chris Rivera",
-  "Pat Quinn", "Drew Blake", "Jamie West", "Morgan Chen"
-];
-
 function getColorForName(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -105,7 +104,7 @@ function getContractStatus(status: string | null, endDate: string | null): strin
   if (status === "draft") return "draft";
   const days = getDaysUntilExpiry(endDate);
   if (days !== null && days < 0) return "expired";
-  if (days !== null && days < 90) return "expiring_soon";
+  if (days !== null && days <= 30) return "expiring_soon";
   if (status === "active") return "active";
   return status || "draft";
 }
@@ -138,14 +137,6 @@ function formatDate(dateStr: string | null): string {
   const d = new Date(dateStr);
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${months[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-function getOwnerForContract(contract: CrmContract): { name: string; color: string; initials: string } {
-  let hash = 0;
-  for (let i = 0; i < contract.name.length; i++) hash = contract.name.charCodeAt(i) + ((hash << 5) - hash);
-  const idx = Math.abs(hash) % OWNER_NAMES.length;
-  const name = OWNER_NAMES[idx];
-  return { name, color: getColorForName(name), initials: getInitials(name) };
 }
 
 function ContractIcon({ className }: { className?: string }) {
@@ -190,6 +181,7 @@ function RenewalIcon({ className }: { className?: string }) {
 }
 
 export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContractsTabProps) {
+  const { resolveOwner } = useCrmUsers();
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -282,7 +274,7 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
       const account = accounts.find(a => a.id === c.accountId);
       const computedStatus = getContractStatus(c.status, c.endDate);
       const daysUntilExpiry = getDaysUntilExpiry(c.endDate);
-      const owner = getOwnerForContract(c);
+      const owner = resolveOwner(c.ownerUserId);
       const valueNum = parseFloat(c.value || c.recurringValue || "0");
       return {
         ...c,
@@ -310,6 +302,8 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
         if (statusFilter === "expiring") return c.computedStatus === "expiring_soon";
         if (statusFilter === "expired") return c.computedStatus === "expired";
         if (statusFilter === "draft") return c.computedStatus === "draft";
+        if (statusFilter === "sent") return c.status === "sent";
+        if (statusFilter === "terminated") return c.status === "terminated";
         return true;
       });
     }
@@ -329,7 +323,36 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
     });
 
     return result;
-  }, [contracts, accounts, localSearch, searchTerm, statusFilter, typeFilter, sortField, sortDir]);
+  }, [contracts, accounts, localSearch, searchTerm, statusFilter, typeFilter, sortField, sortDir, resolveOwner]);
+
+  const pagination = useCrmPagination(enrichedContracts, {
+    resetKey: `${localSearch}|${searchTerm}|${statusFilter}|${typeFilter}|${sortField}|${sortDir}|${groupBy}`,
+    enabled: groupBy === "none",
+  });
+
+  const currentFilters = useMemo((): FilterConfig[] => {
+    const filters: FilterConfig[] = [];
+    if (statusFilter !== "all") filters.push({ columnId: "status", operator: "equals", value: statusFilter });
+    if (typeFilter !== "all") filters.push({ columnId: "type", operator: "equals", value: typeFilter });
+    return filters;
+  }, [statusFilter, typeFilter]);
+
+  const currentSorts = useMemo((): SortConfig[] => (
+    [{ columnId: sortField, direction: sortDir }]
+  ), [sortField, sortDir]);
+
+  const applySavedView = (filters: FilterConfig[], sorts?: SortConfig[]) => {
+    setStatusFilter("all");
+    setTypeFilter("all");
+    for (const f of filters) {
+      if (f.columnId === "status") setStatusFilter(f.value);
+      if (f.columnId === "type") setTypeFilter(f.value);
+    }
+    if (sorts?.[0]) {
+      setSortField(sorts[0].columnId as typeof sortField);
+      setSortDir(sorts[0].direction);
+    }
+  };
 
   const formatColumns: MondayColumnDef<any>[] = [
     { id: "name", header: "Contract", type: "text", accessor: "name" },
@@ -379,6 +402,8 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
     expiring: expiringCount,
     expired: contracts.filter(c => getContractStatus(c.status, c.endDate) === "expired").length,
     draft: draftCount,
+    sent: contracts.filter(c => c.status === "sent").length,
+    terminated: contracts.filter(c => c.status === "terminated").length,
   };
 
   const groupedData = useMemo(() => {
@@ -601,7 +626,7 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
         <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-expiring-contracts">
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
             <ExpiringIcon className="h-5 w-5" />
-            Expiring Soon
+            Expiring (30 days)
           </div>
           <div className="text-2xl font-bold text-[#f97316]" data-testid="text-expiring-contracts">{expiringCount}</div>
         </div>
@@ -660,6 +685,8 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
             <SelectItem value="expiring">Expiring Soon ({statusCounts.expiring})</SelectItem>
             <SelectItem value="expired">Expired ({statusCounts.expired})</SelectItem>
             <SelectItem value="draft">Draft ({statusCounts.draft})</SelectItem>
+            <SelectItem value="sent">Sent ({statusCounts.sent})</SelectItem>
+            <SelectItem value="terminated">Terminated ({statusCounts.terminated})</SelectItem>
           </SelectContent>
         </Select>
 
@@ -790,14 +817,12 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
           onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
         />
 
-        <button
-          onClick={() => toast({ title: "View saved", description: "Current filters and layout saved" })}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
-          data-testid="button-save-view-contracts"
-        >
-          <Bookmark className="h-3.5 w-3.5" />
-          Save View
-        </button>
+        <SavedViewsDropdown
+          entityType="contracts"
+          currentFilters={currentFilters}
+          currentSorts={currentSorts}
+          onApplyView={applySavedView}
+        />
 
         <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setEditingId(null); setFormData({ name: "", accountId: "", type: "service", status: "draft", startDate: "", endDate: "", value: "" }); } }}>
           <DialogTrigger asChild>
@@ -940,7 +965,7 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
         </Dialog>
       </div>
 
-      <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden max-w-[95%]" data-testid="contracts-table">
+      <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden w-full" data-testid="contracts-table">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -1019,16 +1044,29 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
                   ...groupContracts.map(renderRow)
                 ])
               ) : (
-                enrichedContracts.map(renderRow)
+                pagination.paginatedItems.map(renderRow)
               )}
             </tbody>
           </table>
         </div>
-        {enrichedContracts.length > 0 && (
+        {groupBy !== "none" && enrichedContracts.length > 0 && (
           <div className="px-4 py-2.5 border-t border-border/40 bg-muted/20 text-xs text-muted-foreground" data-testid="contracts-count-footer">
             {enrichedContracts.length} of {contracts.length} contracts
             {selectedIds.size > 0 && <span className="ml-2 text-[#0ea5e9]">({selectedIds.size} selected)</span>}
           </div>
+        )}
+        {groupBy === "none" && (
+          <CrmTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            extra={selectedIds.size > 0 ? <span className="text-[#0ea5e9]">({selectedIds.size} selected)</span> : undefined}
+          />
         )}
       </div>
 

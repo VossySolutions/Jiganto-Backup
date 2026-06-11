@@ -1,4 +1,7 @@
 import { useState, useMemo } from "react";
+import { useCrmPagination } from "@/hooks/use-crm-pagination";
+import { CrmTablePagination } from "./CrmTablePagination";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -18,6 +21,12 @@ import {
   UserCheck, ChevronDown, X, MoreHorizontal, Pencil
 } from "lucide-react";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
+import { Textarea } from "@/components/ui/textarea";
+import { CrmCustomFieldsForm } from "./CrmCustomFieldsForm";
+import { CrmCustomFieldTableHeaders, CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
+import { useCrmUsers } from "./CrmUsersProvider";
+import { CrmOwnerSelect } from "./CrmOwnerSelect";
+import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
 
 type CrmLead = {
   id: number;
@@ -26,9 +35,13 @@ type CrmLead = {
   lastName: string;
   email: string | null;
   company: string | null;
+  title?: string | null;
   source: string | null;
   status: string;
   score: number | null;
+  rating?: string | null;
+  ownerUserId: string | null;
+  customData?: Record<string, unknown> | null;
   createdAt: string;
 };
 
@@ -42,6 +55,20 @@ function getTemperature(score: number | null): "hot" | "warm" | "cold" {
   if (score >= 80) return "hot";
   if (score >= 40) return "warm";
   return "cold";
+}
+
+function RatingBadge({ rating }: { rating?: string | null }) {
+  if (!rating) return <span className="text-muted-foreground">—</span>;
+  const styles: Record<string, string> = {
+    hot: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400",
+    warm: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400",
+    cold: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400",
+  };
+  return (
+    <Badge variant="outline" className={cn("text-[10px] capitalize border-0", styles[rating] || "")}>
+      {rating}
+    </Badge>
+  );
 }
 
 const VIBRANT_LOGO_COLORS = [
@@ -143,6 +170,7 @@ function StatusDot({ status }: { status: string }) {
     new: "#22c55e",
     contacted: "#f59e0b",
     qualified: "#22c55e",
+    unqualified: "#6b7280",
     converted: "#8b5cf6",
     lost: "#ef4444",
   };
@@ -157,11 +185,18 @@ function StatusDot({ status }: { status: string }) {
 }
 
 export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
+  const { users, resolveOwner } = useCrmUsers();
+  const { fields: customFields } = useCrmCustomFields("lead");
+  const tableColSpan = 11 + customFields.length;
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isConvertOpen, setIsConvertOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<CrmLead | null>(null);
   const [temperatureFilter, setTemperatureFilter] = useState<"all" | "hot" | "warm" | "cold">("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [ownerFilter, setOwnerFilter] = useState("all");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState("");
   const [sortField, setSortField] = useState<"date" | "score" | "name">("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -175,7 +210,9 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
     opportunityName: "",
     opportunityAmount: ""
   });
-  const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", company: "", source: "", status: "new" });
+  const EMPTY_LEAD_FORM = { firstName: "", lastName: "", email: "", phone: "", company: "", title: "", industry: "", website: "", description: "", source: "", status: "new", score: "", rating: "", ownerUserId: "" };
+  const [formData, setFormData] = useState(EMPTY_LEAD_FORM);
+  const [customData, setCustomData] = useState<Record<string, unknown>>({});
   const [importOpen, setImportOpen] = useState(false);
   const { toast } = useToast();
 
@@ -190,11 +227,12 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: typeof formData) => apiRequest("POST", "/api/crm/leads", data),
+    mutationFn: (data: typeof formData) => apiRequest("POST", "/api/crm/leads", { ...data, score: data.score ? parseInt(data.score) : 0, rating: data.rating || null, customData }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/leads"] });
       setIsOpen(false);
-      setFormData({ firstName: "", lastName: "", email: "", company: "", source: "", status: "new" });
+      setFormData(EMPTY_LEAD_FORM);
+      setCustomData({});
       toast({ title: "Lead created successfully" });
     },
     onError: () => toast({ title: "Failed to create lead", variant: "destructive" }),
@@ -251,10 +289,19 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
       firstName: lead.firstName,
       lastName: lead.lastName,
       email: lead.email || "",
+      phone: (lead as CrmLead & { phone?: string }).phone || "",
       company: lead.company || "",
+      title: (lead as CrmLead & { title?: string }).title || "",
+      industry: (lead as CrmLead & { industry?: string }).industry || "",
+      website: (lead as CrmLead & { website?: string }).website || "",
+      description: (lead as CrmLead & { description?: string }).description || "",
       source: lead.source || "",
       status: lead.status,
+      score: lead.score != null ? String(lead.score) : "",
+      rating: lead.rating || "",
+      ownerUserId: lead.ownerUserId || "",
     });
+    setCustomData((lead.customData as Record<string, unknown>) || {});
     setIsOpen(true);
   };
 
@@ -277,6 +324,13 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
 
   const effectiveSearch = searchTerm || localSearch;
 
+  const leadSources = useMemo(
+    () => Array.from(new Set(leads.map(l => l.source).filter((s): s is string => !!s))),
+    [leads]
+  );
+
+  const activeFilterCount = [statusFilter, sourceFilter, ownerFilter].filter(f => f !== "all").length;
+
   const filteredLeads = useMemo(() => {
     let result = leads.filter(l => {
       const matchesSearch =
@@ -284,8 +338,12 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
         l.company?.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
         l.email?.toLowerCase().includes(effectiveSearch.toLowerCase());
       if (!matchesSearch) return false;
-      if (temperatureFilter === "all") return true;
-      return getTemperature(l.score) === temperatureFilter;
+      if (temperatureFilter !== "all" && getTemperature(l.score) !== temperatureFilter) return false;
+      if (statusFilter !== "all" && l.status !== statusFilter) return false;
+      if (sourceFilter !== "all" && l.source !== sourceFilter) return false;
+      if (ownerFilter === "__unassigned__" && l.ownerUserId) return false;
+      if (ownerFilter !== "all" && ownerFilter !== "__unassigned__" && l.ownerUserId !== ownerFilter) return false;
+      return true;
     });
 
     result.sort((a, b) => {
@@ -296,20 +354,16 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
     });
 
     return result;
-  }, [leads, effectiveSearch, temperatureFilter, sortField, sortDir]);
+  }, [leads, effectiveSearch, temperatureFilter, statusFilter, sourceFilter, ownerFilter, sortField, sortDir]);
+
+  const pagination = useCrmPagination(filteredLeads, {
+    resetKey: `${effectiveSearch}|${temperatureFilter}|${statusFilter}|${sourceFilter}|${ownerFilter}|${sortField}|${sortDir}|${groupBy}`,
+    enabled: groupBy === "none",
+  });
 
   const hotCount = leads.filter(l => getTemperature(l.score) === "hot").length;
   const warmCount = leads.filter(l => getTemperature(l.score) === "warm").length;
   const coldCount = leads.filter(l => getTemperature(l.score) === "cold").length;
-
-  const ownerInitials = ["AL", "PV", "SA", "JM", "RK", "DT", "NB", "CM"];
-  const ownerNames = ["Alex Liu", "Priya Verma", "Sam Adams", "Julie Mason", "Ryan Kim", "Dan Torres", "Nina Brooks", "Chris Moore"];
-  const ownerColors = ["#3b82f6", "#8b5cf6", "#22c55e", "#f97316", "#ec4899", "#06b6d4", "#ef4444", "#eab308"];
-
-  function getOwnerForLead(lead: CrmLead) {
-    const hash = (lead.id * 7 + (lead.firstName?.charCodeAt(0) || 0)) % ownerInitials.length;
-    return { initials: ownerInitials[hash], color: ownerColors[hash], name: ownerNames[hash] };
-  }
 
   const groupedLeads = useMemo(() => {
     if (groupBy === "none") return null;
@@ -318,7 +372,7 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
     for (const lead of filteredLeads) {
       let key: string;
       if (groupBy === "owner") {
-        key = getOwnerForLead(lead).name;
+        key = resolveOwner(lead.ownerUserId).name;
       } else if (groupBy === "status") {
         key = lead.status.charAt(0).toUpperCase() + lead.status.slice(1);
       } else if (groupBy === "source") {
@@ -330,7 +384,7 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
       groups[key].push(lead);
     }
     return groups;
-  }, [filteredLeads, groupBy]);
+  }, [filteredLeads, groupBy, resolveOwner]);
 
   const groupColors: Record<string, string> = {
     Hot: "#ef4444", Warm: "#f59e0b", Cold: "#3b82f6",
@@ -398,7 +452,7 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
     const companyName = lead.company || `${lead.firstName} ${lead.lastName}`;
     const companyColor = getColorForName(companyName);
     const companyInitials = getInitials(companyName);
-    const owner = getOwnerForLead(lead);
+    const owner = resolveOwner(lead.ownerUserId);
 
     return (
       <tr
@@ -433,11 +487,17 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
         <td className="px-4 py-3 whitespace-nowrap">
           <span className="text-sm">{lead.firstName} {lead.lastName}</span>
         </td>
+        <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
+          {lead.title || "—"}
+        </td>
         <td className="px-4 py-3 whitespace-nowrap">
           <StatusDot status={lead.status} />
         </td>
         <td className="px-4 py-3 whitespace-nowrap">
           <TemperatureDisplay score={lead.score} temperature={temp} />
+        </td>
+        <td className="px-4 py-3 whitespace-nowrap">
+          <RatingBadge rating={lead.rating} />
         </td>
         <td className="px-4 py-3 whitespace-nowrap">
           <span className="text-sm text-foreground capitalize">{lead.source || "—"}</span>
@@ -456,6 +516,7 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
         <td className="px-4 py-3 whitespace-nowrap">
           <span className="text-sm text-muted-foreground">{formatDate(lead.createdAt)}</span>
         </td>
+        <CrmCustomFieldTableCells fields={customFields} customData={lead.customData} />
         <td className="px-4 py-3 text-right whitespace-nowrap">
           <div className="flex items-center justify-end gap-1">
             {lead.status !== "converted" && (
@@ -594,21 +655,100 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
 
         <div className="h-6 w-px bg-border mx-1" />
 
-        <button
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
-          data-testid="button-filter"
-        >
-          <SlidersHorizontal className="h-3.5 w-3.5" />
-          Filter
-        </button>
-        <button
-          onClick={() => handleSort("date")}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
-          data-testid="button-sort"
-        >
-          <ArrowUpDown className="h-3.5 w-3.5" />
-          Sort: {sortField === "date" ? "Date" : sortField === "score" ? "Score" : "Name"}
-        </button>
+        <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+          <PopoverTrigger asChild>
+            <button
+              className={cn(
+                "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                activeFilterCount > 0
+                  ? "bg-[#0ea5e9]/10 border-[#0ea5e9]/30 text-[#0ea5e9]"
+                  : "border-border bg-background text-foreground hover:bg-muted"
+              )}
+              data-testid="button-filter"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              Filter
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{activeFilterCount}</Badge>
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-72 space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Status</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-8" data-testid="filter-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="new">New</SelectItem>
+                  <SelectItem value="contacted">Contacted</SelectItem>
+                  <SelectItem value="qualified">Qualified</SelectItem>
+                  <SelectItem value="unqualified">Unqualified</SelectItem>
+                  <SelectItem value="converted">Converted</SelectItem>
+                  <SelectItem value="lost">Lost</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Source</Label>
+              <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                <SelectTrigger className="h-8" data-testid="filter-source">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All sources</SelectItem>
+                  {leadSources.map(source => (
+                    <SelectItem key={source} value={source}>{source}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Owner</Label>
+              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                <SelectTrigger className="h-8" data-testid="filter-owner">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All owners</SelectItem>
+                  <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                  {users.map(user => (
+                    <SelectItem key={user.id} value={user.id}>{resolveOwner(user.id).name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => { setStatusFilter("all"); setSourceFilter("all"); setOwnerFilter("all"); }}
+              data-testid="button-clear-filters"
+            >
+              Clear filters
+            </Button>
+          </PopoverContent>
+        </Popover>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
+              data-testid="button-sort"
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              Sort: {sortField === "date" ? "Date" : sortField === "score" ? "Score" : "Name"}
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => handleSort("date")}>Date {sortField === "date" ? `(${sortDir})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleSort("score")}>Score {sortField === "score" ? `(${sortDir})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleSort("name")}>Name {sortField === "name" ? `(${sortDir})` : ""}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -676,7 +816,7 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
           onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
         />
 
-        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setEditingId(null); setFormData({ firstName: "", lastName: "", email: "", company: "", source: "", status: "new" }); } }}>
+        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setEditingId(null); setFormData(EMPTY_LEAD_FORM); setCustomData({}); } }}>
           <DialogTrigger asChild>
             <Button className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white gap-1.5" data-testid="button-add-lead">
               <Plus className="h-4 w-4" />
@@ -687,10 +827,11 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
             <SubmitForm
               onSubmit={() => {
                 if (editingId) {
-                  updateMutation.mutate({ id: editingId, updates: formData });
+                  updateMutation.mutate({ id: editingId, updates: { ...formData, score: formData.score ? parseInt(formData.score) : 0, rating: formData.rating || null, customData } });
                   setIsOpen(false);
                   setEditingId(null);
-                  setFormData({ firstName: "", lastName: "", email: "", company: "", source: "", status: "new" });
+                  setFormData(EMPTY_LEAD_FORM);
+                  setCustomData({});
                 } else {
                   createMutation.mutate(formData);
                 }
@@ -731,14 +872,47 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
                   data-testid="input-lead-email"
                 />
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="company">Company</Label>
+                  <Input id="company" value={formData.company} onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))} data-testid="input-lead-company" />
+                </div>
+                <div>
+                  <Label htmlFor="title">Title</Label>
+                  <Input id="title" value={formData.title} onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))} data-testid="input-lead-title" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input id="phone" value={formData.phone} onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))} data-testid="input-lead-phone" />
+                </div>
+                <div>
+                  <Label htmlFor="score">Lead Score</Label>
+                  <Input id="score" type="number" min={0} max={100} value={formData.score} onChange={(e) => setFormData(prev => ({ ...prev, score: e.target.value }))} data-testid="input-lead-score" />
+                </div>
+              </div>
               <div>
-                <Label htmlFor="company">Company</Label>
-                <Input
-                  id="company"
-                  value={formData.company}
-                  onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-                  data-testid="input-lead-company"
-                />
+                <Label>Rating</Label>
+                <Select value={formData.rating || "none"} onValueChange={(v) => setFormData(prev => ({ ...prev, rating: v === "none" ? "" : v }))}>
+                  <SelectTrigger data-testid="select-lead-rating"><SelectValue placeholder="Select rating" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="hot">Hot</SelectItem>
+                    <SelectItem value="warm">Warm</SelectItem>
+                    <SelectItem value="cold">Cold</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="industry">Industry</Label>
+                  <Input id="industry" value={formData.industry} onChange={(e) => setFormData(prev => ({ ...prev, industry: e.target.value }))} data-testid="input-lead-industry" />
+                </div>
+                <div>
+                  <Label htmlFor="website">Website</Label>
+                  <Input id="website" value={formData.website} onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))} data-testid="input-lead-website" />
+                </div>
               </div>
               <div>
                 <Label htmlFor="source">Lead Source</Label>
@@ -758,6 +932,30 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label>Status</Label>
+                <Select value={formData.status} onValueChange={(v) => setFormData(prev => ({ ...prev, status: v }))}>
+                  <SelectTrigger data-testid="select-lead-status"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new">New</SelectItem>
+                    <SelectItem value="contacted">Contacted</SelectItem>
+                    <SelectItem value="qualified">Qualified</SelectItem>
+                    <SelectItem value="unqualified">Unqualified</SelectItem>
+                    <SelectItem value="converted">Converted</SelectItem>
+                    <SelectItem value="lost">Lost</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <CrmOwnerSelect
+                value={formData.ownerUserId}
+                onChange={(v) => setFormData(prev => ({ ...prev, ownerUserId: v }))}
+                testId="select-lead-owner"
+              />
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Textarea id="description" value={formData.description} onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))} rows={2} data-testid="input-lead-description" />
+              </div>
+              <CrmCustomFieldsForm entityType="lead" values={customData} onChange={(k, v) => setCustomData(prev => ({ ...prev, [k]: v }))} />
             </div>
             <DialogFooter>
               <DialogClose asChild>
@@ -778,7 +976,7 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
         </Dialog>
       </div>
 
-      <div className="rounded-xl border border-border/60 bg-card overflow-x-auto max-w-[95%]" data-testid="leads-table">
+      <div className="rounded-xl border border-border/60 bg-card overflow-x-auto w-full" data-testid="leads-table">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border/60">
@@ -791,18 +989,21 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
               </th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Company</th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Contact</th>
+              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Title</th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Status</th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Score</th>
+              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Rating</th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Source</th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Owner</th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Created</th>
+              <CrmCustomFieldTableHeaders fields={customFields} />
               <th className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredLeads.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center py-16 text-muted-foreground">
+                <td colSpan={tableColSpan} className="text-center py-16 text-muted-foreground">
                   <div className="flex flex-col items-center gap-2">
                     <FlameIcon className="h-10 w-10 opacity-30" />
                     <p className="text-sm">No leads yet. Capture leads to grow your sales pipeline.</p>
@@ -820,7 +1021,7 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
             ) : groupedLeads ? (
               Object.entries(groupedLeads).flatMap(([groupName, groupLeads]) => [
                 <tr key={`group-header-${groupName}`} className="bg-muted/40 border-b border-border/40" data-testid={`group-${groupName}`}>
-                  <td colSpan={9} className="px-4 py-2">
+                  <td colSpan={tableColSpan} className="px-4 py-2">
                     <div className="flex items-center gap-2">
                       <div
                         className="h-2.5 w-2.5 rounded-full shrink-0"
@@ -836,15 +1037,28 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
                 ...groupLeads.map(renderRow)
               ])
             ) : (
-              filteredLeads.map(renderRow)
+              pagination.paginatedItems.map(renderRow)
             )}
           </tbody>
         </table>
-        {filteredLeads.length > 0 && (
+        {groupBy !== "none" && filteredLeads.length > 0 && (
           <div className="px-4 py-2.5 border-t border-border/40 bg-muted/20 text-xs text-muted-foreground" data-testid="leads-count-footer">
             {filteredLeads.length} of {leads.length} leads
             {selectedIds.size > 0 && <span className="ml-2 text-[#0ea5e9]">({selectedIds.size} selected)</span>}
           </div>
+        )}
+        {groupBy === "none" && (
+          <CrmTablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            extra={selectedIds.size > 0 ? <span className="text-[#0ea5e9]">({selectedIds.size} selected)</span> : undefined}
+          />
         )}
       </div>
 

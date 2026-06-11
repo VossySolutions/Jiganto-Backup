@@ -445,7 +445,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       // ── Second key after prefix ───────────────────────────────────────
       if (prefixKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const hotkey = `${prefixKey} ${e.key.toLowerCase()}`;
-        const action = actions.find(a => a.enabled && a.hotkey === hotkey);
+        const action = effectiveActions.find(a => a.enabled && a.hotkey === hotkey);
         if (action) {
           e.preventDefault();
           executeAction(action.id);
@@ -457,7 +457,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       // ── Ctrl+/ for search ─────────────────────────────────────────────
       if ((e.ctrlKey || e.metaKey) && e.key === "/") {
         e.preventDefault();
-        const action = actions.find(a => a.enabled && a.hotkey === "ctrl+/");
+        const action = effectiveActions.find(a => a.enabled && a.hotkey === "ctrl+/");
         if (action) executeAction(action.id);
         return;
       }
@@ -470,7 +470,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("keydown", handleKeyDown);
       clearTimeout(prefixTimeout);
     };
-  }, [actions, isOpen, togglePalette, closePalette, executeAction]);
+  }, [effectiveActions, isOpen, togglePalette, closePalette, executeAction]);
 
   return (
     <CommandPaletteContext.Provider value={{

@@ -4,6 +4,23 @@ import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
 import { tenants } from "../schema";
 import { users } from "./auth";
+import {
+  rateCards,
+  rateCardItems,
+  rateCardRelations,
+  rateCardItemRelations,
+  insertRateCardSchema,
+  insertRateCardItemSchema,
+} from "./resources";
+
+export {
+  rateCards,
+  rateCardItems,
+  rateCardRelations,
+  rateCardItemRelations,
+  insertRateCardSchema,
+  insertRateCardItemSchema,
+};
 
 export const crmAccounts = pgTable("crm_accounts", {
   id: serial("id").primaryKey(),
@@ -25,6 +42,7 @@ export const crmAccounts = pgTable("crm_accounts", {
   annualRevenue: decimal("annual_revenue", { precision: 15, scale: 2 }),
   employeeCount: integer("employee_count"),
   clientId: integer("client_id"),
+  customData: jsonb("custom_data").default(sql`'{}'::jsonb`),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -60,6 +78,7 @@ export const crmContacts = pgTable("crm_contacts", {
   linkedInUrl: text("linkedin_url"),
   notes: text("notes"),
   ownerUserId: varchar("owner_user_id"),
+  customData: jsonb("custom_data").default(sql`'{}'::jsonb`),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -120,6 +139,7 @@ export const crmLeads = pgTable("crm_leads", {
   convertedContactId: integer("converted_contact_id").references(() => crmContacts.id),
   convertedOpportunityId: integer("converted_opportunity_id"),
   convertedAt: timestamp("converted_at"),
+  customData: jsonb("custom_data").default(sql`'{}'::jsonb`),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -146,6 +166,7 @@ export const crmPipelines = pgTable("crm_pipelines", {
   name: text("name").notNull(),
   description: text("description"),
   isDefault: boolean("is_default").default(false),
+  isArchived: boolean("is_archived").default(false),
   color: text("color").default("#6366f1"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -197,6 +218,10 @@ export const crmOpportunities = pgTable("crm_opportunities", {
   competitorId: integer("competitor_id"),
   ownerUserId: varchar("owner_user_id"),
   projectId: integer("project_id"),
+  revenue: decimal("revenue", { precision: 15, scale: 2 }),
+  grossProfit: decimal("gross_profit", { precision: 15, scale: 2 }),
+  isArchived: boolean("is_archived").default(false),
+  customData: jsonb("custom_data").default(sql`'{}'::jsonb`),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -580,6 +605,20 @@ export const crmTerritoriesRelations = relations(crmTerritories, ({ one, many })
   }),
 }));
 
+// User-defined custom fields per CRM entity
+export const crmCustomFields = pgTable("crm_custom_fields", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  entityType: text("entity_type").notNull(),
+  fieldName: text("field_name").notNull(),
+  fieldLabel: text("field_label").notNull(),
+  fieldType: text("field_type").notNull(),
+  options: jsonb("options"),
+  position: integer("position").default(0),
+  isRequired: boolean("is_required").default(false),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // Workflow Automation Rules
 export const crmAutomationRules = pgTable("crm_automation_rules", {
   id: serial("id").primaryKey(),
@@ -602,36 +641,6 @@ export const crmAutomationRulesRelations = relations(crmAutomationRules, ({ one 
     fields: [crmAutomationRules.createdByUserId],
     references: [users.id],
   }),
-}));
-
-// ═══ RATE CARDS ═══
-export const rateCards = pgTable("rate_cards", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").notNull(),
-  name: text("name").notNull(),
-  description: text("description"),
-  currency: text("currency").default("GBP"),
-  effectiveFrom: timestamp("effective_from"),
-  effectiveTo: timestamp("effective_to"),
-  isDefault: boolean("is_default").default(false),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-export const rateCardItems = pgTable("rate_card_items", {
-  id: serial("id").primaryKey(),
-  rateCardId: integer("rate_card_id").notNull().references(() => rateCards.id, { onDelete: "cascade" }),
-  roleName: text("role_name").notNull(),
-  dailyRate: decimal("daily_rate", { precision: 10, scale: 2 }).notNull(),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-export const rateCardRelations = relations(rateCards, ({ many }) => ({
-  items: many(rateCardItems),
-}));
-
-export const rateCardItemRelations = relations(rateCardItems, ({ one }) => ({
-  rateCard: one(rateCards, { fields: [rateCardItems.rateCardId], references: [rateCards.id] }),
 }));
 
 // ═══ RESOURCE PLAN TEMPLATES ═══
@@ -669,6 +678,7 @@ export const opportunityResourcePlans = pgTable("opportunity_resource_plans", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   opportunityId: integer("opportunity_id").notNull().references(() => crmOpportunities.id, { onDelete: "cascade" }),
+  planName: text("plan_name"),
   templateName: text("template_name"),
   rateCardId: integer("rate_card_id").references(() => rateCards.id, { onDelete: "set null" }),
   currency: text("currency").default("GBP"),
@@ -727,8 +737,7 @@ export const insertCrmEmailLogSchema = createInsertSchema(crmEmailLogs).omit({ i
 export const insertCrmForecastSchema = createInsertSchema(crmForecasts).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCrmTerritorySchema = createInsertSchema(crmTerritories).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertCrmAutomationRuleSchema = createInsertSchema(crmAutomationRules).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertRateCardSchema = createInsertSchema(rateCards).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertRateCardItemSchema = createInsertSchema(rateCardItems).omit({ id: true, createdAt: true });
+export const insertCrmCustomFieldSchema = createInsertSchema(crmCustomFields).omit({ id: true, createdAt: true });
 export const insertResourcePlanTemplateSchema = createInsertSchema(resourcePlanTemplates).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertResourcePlanTemplateRowSchema = createInsertSchema(resourcePlanTemplateRows).omit({ id: true });
 export const insertOpportunityResourcePlanSchema = createInsertSchema(opportunityResourcePlans).omit({ id: true, createdAt: true, updatedAt: true });
@@ -754,6 +763,7 @@ export type CrmEmailLog = typeof crmEmailLogs.$inferSelect;
 export type CrmForecast = typeof crmForecasts.$inferSelect;
 export type CrmTerritory = typeof crmTerritories.$inferSelect;
 export type CrmAutomationRule = typeof crmAutomationRules.$inferSelect;
+export type CrmCustomField = typeof crmCustomFields.$inferSelect;
 
 export type InsertCrmAccount = z.infer<typeof insertCrmAccountSchema>;
 export type InsertCrmContact = z.infer<typeof insertCrmContactSchema>;
@@ -775,14 +785,12 @@ export type InsertCrmEmailLog = z.infer<typeof insertCrmEmailLogSchema>;
 export type InsertCrmForecast = z.infer<typeof insertCrmForecastSchema>;
 export type InsertCrmTerritory = z.infer<typeof insertCrmTerritorySchema>;
 export type InsertCrmAutomationRule = z.infer<typeof insertCrmAutomationRuleSchema>;
-export type RateCard = typeof rateCards.$inferSelect;
-export type RateCardItem = typeof rateCardItems.$inferSelect;
+export type InsertCrmCustomField = z.infer<typeof insertCrmCustomFieldSchema>;
+export type { RateCard, RateCardItem, InsertRateCard, InsertRateCardItem } from "./resources";
 export type ResourcePlanTemplate = typeof resourcePlanTemplates.$inferSelect;
 export type ResourcePlanTemplateRow = typeof resourcePlanTemplateRows.$inferSelect;
 export type OpportunityResourcePlan = typeof opportunityResourcePlans.$inferSelect;
 export type OpportunityResourceRow = typeof opportunityResourceRows.$inferSelect;
-export type InsertRateCard = z.infer<typeof insertRateCardSchema>;
-export type InsertRateCardItem = z.infer<typeof insertRateCardItemSchema>;
 export type InsertResourcePlanTemplate = z.infer<typeof insertResourcePlanTemplateSchema>;
 export type InsertResourcePlanTemplateRow = z.infer<typeof insertResourcePlanTemplateRowSchema>;
 export type InsertOpportunityResourcePlan = z.infer<typeof insertOpportunityResourcePlanSchema>;
