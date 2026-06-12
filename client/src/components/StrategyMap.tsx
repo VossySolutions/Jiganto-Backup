@@ -15,6 +15,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { EntityDetailPanel } from "@/components/EntityDetailPanel";
 import { BusinessTableScroll } from "@/components/business/BusinessTableScroll";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from "xlsx";
 import { 
@@ -867,6 +869,7 @@ function TableView({ rows, onCellClick, showIds, groupBy = "none", entityRefs }:
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   useEffect(() => { setCollapsedGroups(new Set()); }, [groupBy]);
+  const pagination = useTablePagination(rows, { resetKey: groupBy });
 
   const toggleGroup = (label: string) =>
     setCollapsedGroups(prev => {
@@ -892,10 +895,10 @@ function TableView({ rows, onCellClick, showIds, groupBy = "none", entityRefs }:
   // Build sorted rows + group metadata, then flat tableEntries respecting collapse
   const { tableEntries, visibleDataRows } = useMemo(() => {
     if (groupBy === "none") {
-      const entries: TableEntry[] = rows.map((row, visIdx) => ({ type: "data", row, visIdx }));
-      return { tableEntries: entries, visibleDataRows: rows };
+      const entries: TableEntry[] = pagination.paginatedItems.map((row, visIdx) => ({ type: "data", row, visIdx }));
+      return { tableEntries: entries, visibleDataRows: pagination.paginatedItems };
     }
-    const withKeys = rows.map(r => ({ row: r, key: getGroupKey(r) }));
+    const withKeys = pagination.paginatedItems.map(r => ({ row: r, key: getGroupKey(r) }));
     const groupOrder = Array.from(new Set(withKeys.map(x => x.key)));
     const counts = new Map<string, number>();
     groupOrder.forEach(k => counts.set(k, withKeys.filter(x => x.key === k).length));
@@ -915,7 +918,7 @@ function TableView({ rows, onCellClick, showIds, groupBy = "none", entityRefs }:
     }
     return { tableEntries: entries, visibleDataRows: visible };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, groupBy, collapsedGroups]);
+  }, [pagination.paginatedItems, groupBy, collapsedGroups]);
 
   // Build ancestor key for span calculations on visible data rows only
   const ancestorKey = (row: StrategyMapRow, ci: number) =>
@@ -1096,6 +1099,16 @@ function TableView({ rows, onCellClick, showIds, groupBy = "none", entityRefs }:
         </span>
         <span className="text-xs text-muted-foreground">Click any cell to open details</span>
       </div>
+      <TablePagination
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        total={pagination.total}
+        startIndex={pagination.startIndex}
+        endIndex={pagination.endIndex}
+        pageSize={pagination.pageSize}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+      />
     </div>
   );
 }

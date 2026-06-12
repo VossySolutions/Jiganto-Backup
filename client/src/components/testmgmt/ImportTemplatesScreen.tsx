@@ -1,4 +1,6 @@
 import { useState, useRef } from "react";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { TmTestSuite } from "@shared/schema";
@@ -73,6 +75,11 @@ export function ImportTemplatesScreen() {
   const [importing, setImporting] = useState(false);
 
   const { activeProjectId, qsParam } = useTmProject();
+  const previewPagination = useTablePagination(parsed ?? [], {
+    resetKey: parsed?.length ?? 0,
+    enabled: !!parsed?.length,
+  });
+
   const { data: suites = [] } = useQuery<TmTestSuite[]>({
     queryKey: ["/api/tm/suites", activeProjectId],
     queryFn: async () => { const r = await fetch(qsParam("/api/tm/suites")); return r.ok ? r.json() : []; },
@@ -198,6 +205,16 @@ export function ImportTemplatesScreen() {
                     </tbody>
                   </table>
                 </div>
+                <TablePagination
+                  page={previewPagination.page}
+                  totalPages={previewPagination.totalPages}
+                  total={previewPagination.total}
+                  startIndex={previewPagination.startIndex}
+                  endIndex={previewPagination.endIndex}
+                  pageSize={previewPagination.pageSize}
+                  onPageChange={previewPagination.setPage}
+                  onPageSizeChange={previewPagination.setPageSize}
+                />
               </div>
 
               {/* Suite Selector */}

@@ -15,6 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TablePagination } from "@/components/TablePagination";
+import { useTablePagination } from "@/hooks/use-table-pagination";
 
 type ApiKeyRow = {
   id: string;
@@ -63,6 +65,11 @@ export default function SettingsApiKeysSection() {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/api-keys"] });
       toast({ title: "API key revoked" });
     },
+  });
+
+  const keys = data?.keys ?? [];
+  const keysPagination = useTablePagination(keys, {
+    resetKey: keys.length,
   });
 
   return (
@@ -124,14 +131,14 @@ export default function SettingsApiKeysSection() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {!data?.keys?.length ? (
+            {keys.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="text-muted-foreground text-sm">
                   No API keys yet
                 </TableCell>
               </TableRow>
             ) : (
-              data.keys.map((k) => (
+              keysPagination.paginatedItems.map((k) => (
                 <TableRow key={k.id}>
                   <TableCell>{k.name}</TableCell>
                   <TableCell className="font-mono text-xs">{k.prefix}…</TableCell>
@@ -151,6 +158,16 @@ export default function SettingsApiKeysSection() {
             )}
           </TableBody>
         </Table>
+        <TablePagination
+          page={keysPagination.page}
+          totalPages={keysPagination.totalPages}
+          total={keysPagination.total}
+          startIndex={keysPagination.startIndex}
+          endIndex={keysPagination.endIndex}
+          pageSize={keysPagination.pageSize}
+          onPageChange={keysPagination.setPage}
+          onPageSizeChange={keysPagination.setPageSize}
+        />
       </CardContent>
     </Card>
   );

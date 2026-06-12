@@ -906,7 +906,16 @@ async function applyRatesToPeriodEntries(tenantId: number, periodId: number): Pr
   }
 }
 
+async function recomputePeriodEntryStatus(periodId: number): Promise<boolean> {
+  const entries = await listTimesheetEntries(periodId);
+  if (entries.length === 0) return true;
+  return entries.every((e) => e.approvalStatus === "approved" || e.approvalStatus == null);
+}
+
 async function finalizeTimesheetApproval(tenantId: number, periodId: number): Promise<TimesheetPeriod | null> {
+  const entriesApproved = await recomputePeriodEntryStatus(periodId);
+  if (!entriesApproved) return null;
+
   await applyRatesToPeriodEntries(tenantId, periodId);
 
   const [updated] = await db
@@ -928,6 +937,25 @@ async function finalizeTimesheetApproval(tenantId: number, periodId: number): Pr
     for (const pid of projectIds) {
       await recalculateBudgetActuals(tenantId, pid);
     }
+
+    try {
+      const { deliverOnTimesheetApproval } = await import("../resources/jobs");
+      await deliverOnTimesheetApproval(tenantId, periodId);
+    } catch (err) {
+      console.warn("[timesheet] integration delivery failed:", err);
+    }
+
+    try {
+      const { dispatchTenantWebhook } = await import("../lib/integration-webhook");
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+      await dispatchTenantWebhook(tenant?.brandingConfig, "timesheet.approved", {
+        tenantId,
+        periodId,
+        resourceId: updated.resourceId,
+      });
+    } catch (err) {
+      console.warn("[timesheet] webhook dispatch failed:", err);
+    }
   }
 
   return updated ?? null;
@@ -936,6 +964,11 @@ async function finalizeTimesheetApproval(tenantId: number, periodId: number): Pr
 export async function submitTimesheetPeriod(tenantId: number, periodId: number): Promise<TimesheetPeriod | null> {
   const period = await getTimesheetPeriod(tenantId, periodId);
   if (!period) return null;
+
+  await db
+    .update(timesheetEntries)
+    .set({ approvalStatus: "pending", rejectionReason: null, approvedById: null, approvedAt: null })
+    .where(eq(timesheetEntries.timesheetPeriodId, periodId));
 
   const [updated] = await db
     .update(timesheetPeriods)
@@ -1033,6 +1066,75 @@ export async function rejectTimesheetPeriod(
     .returning();
 
   return updated ?? null;
+}
+
+export async function approveTimesheetEntry(
+  tenantId: number,
+  entryId: number,
+  approverId: string,
+): Promise<TimesheetEntry | null> {
+  const [entry] = await db.select().from(timesheetEntries).where(eq(timesheetEntries.id, entryId)).limit(1);
+  if (!entry) return null;
+
+  const period = await getTimesheetPeriod(tenantId, entry.timesheetPeriodId);
+  if (!period) return null;
+
+  const [updated] = await db
+    .update(timesheetEntries)
+    .set({
+      approvalStatus: "approved",
+      rejectionReason: null,
+      approvedById: approverId,
+      approvedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(timesheetEntries.id, entryId))
+    .returning();
+
+  return updated ?? null;
+}
+
+export async function rejectTimesheetEntry(
+  tenantId: number,
+  entryId: number,
+  reason: string,
+  approverId: string,
+): Promise<TimesheetEntry | null> {
+  const [entry] = await db.select().from(timesheetEntries).where(eq(timesheetEntries.id, entryId)).limit(1);
+  if (!entry) return null;
+
+  const period = await getTimesheetPeriod(tenantId, entry.timesheetPeriodId);
+  if (!period) return null;
+
+  const [updated] = await db
+    .update(timesheetEntries)
+    .set({
+      approvalStatus: "rejected",
+      rejectionReason: reason,
+      approvedById: approverId,
+      approvedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(timesheetEntries.id, entryId))
+    .returning();
+
+  return updated ?? null;
+}
+
+export async function bulkApproveTimesheets(
+  tenantId: number,
+  periodIds: number[],
+  role: "pm" | "rm",
+  approverId: string,
+): Promise<TimesheetPeriod[]> {
+  const results: TimesheetPeriod[] = [];
+  for (const periodId of periodIds) {
+    const period = role === "pm"
+      ? await approveTimesheetPm(tenantId, periodId, approverId)
+      : await approveTimesheetRm(tenantId, periodId, approverId);
+    if (period) results.push(period);
+  }
+  return results;
 }
 
 function weekDateFromStart(weekStart: Date, dayOfWeek: number): string {

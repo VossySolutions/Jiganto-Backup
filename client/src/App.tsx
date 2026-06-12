@@ -7,7 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { LandingPage } from "@/pages/LandingPage";
-import { Dashboard } from "@/pages/Dashboard";
+import { DashboardRoute, RootRedirect } from "@/components/resources/ContractorPortalRedirect";
 import { ModulePage } from "@/pages/ModulePage";
 import { ChatPage } from "@/pages/ChatPage";
 import CRMPage from "@/pages/CRMPage";
@@ -131,10 +131,10 @@ function Router() {
       <AIAssistantButton />
       <ModuleAIInsightsHost />
       <Switch>
-        <Route path={DASHBOARD_PATH} component={Dashboard} />
-        <Route path="/ws/:slug" component={Dashboard} />
+        <Route path={DASHBOARD_PATH} component={DashboardRoute} />
+        <Route path="/ws/:slug" component={DashboardRoute} />
         <Route path="/">
-          <Redirect to={DASHBOARD_PATH} />
+          <RootRedirect />
         </Route>
         <Route path="/modules/chat/:channelId?" component={ChatPage} />
         <Route path="/modules/crm" component={CRMPage} />

@@ -274,6 +274,9 @@ export async function registerRoutes(
   const { registerFinanceRoutes } = await import("./finance/routes");
   registerFinanceRoutes(app);
 
+  const { registerResourcesRoutes } = await import("./resources/routes");
+  registerResourcesRoutes(app);
+
   const { registerClientRoutes } = await import("./clients/routes");
   registerClientRoutes(app);
 
@@ -8030,37 +8033,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const tenantId = getApiTenantIdWithFallback(req);
-    const resourcesList = await storage.getResources(tenantId);
-    const allocationsList = await storage.getAllocations(tenantId);
-    const timesheetPeriodsList = await storage.getTimesheetPeriods(tenantId);
-
-    const now = new Date();
-    const activeAllocations = allocationsList.filter(a =>
-      a.status === 'active' && new Date(a.startDate) <= now && new Date(a.endDate) >= now
-    );
-
-    const resourceUtilization: Record<number, number> = {};
-    activeAllocations.forEach(a => {
-      const pct = Number(a.allocationPercentage) || 0;
-      resourceUtilization[a.resourceId] = (resourceUtilization[a.resourceId] || 0) + pct;
-    });
-
-    const overAllocated = Object.values(resourceUtilization).filter(u => u > 100).length;
-    const totalUtilization = resourcesList.length > 0
-      ? Object.values(resourceUtilization).reduce((sum, u) => sum + Math.min(u, 100), 0) / resourcesList.length
-      : 0;
-
-    const pendingTimesheets = timesheetPeriodsList.filter(t => t.status === 'submitted').length;
-    const availableResources = resourcesList.filter(r => r.status === 'available').length;
-
-    res.json({
-      totalResources: resourcesList.length,
-      availableResources,
-      overAllocated,
-      avgUtilization: Math.round(totalUtilization),
-      pendingTimesheetApprovals: pendingTimesheets,
-      activeAllocations: activeAllocations.length,
-    });
+    const { getExtendedResourceStats } = await import("./resources/service");
+    res.json(await getExtendedResourceStats(tenantId));
   });
 
   // Skill Categories (must be before /api/resources/:id)

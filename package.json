@@ -13,6 +13,7 @@
     "db:patch-crm": "node scripts/patch-crm-columns.mjs",
     "db:seed-crm": "tsx server/seed-crm-demo.ts",
     "db:seed-finance": "tsx server/seed-finance-demo.ts",
+    "db:seed-resources": "tsx server/seed-resources-demo.ts",
     "db:reset": "tsx script/db-reset.ts",
     "db:clients-rls": "tsx script/apply-clients-rls.ts",
     "db:clients-indexes": "tsx script/apply-clients-indexes.ts"

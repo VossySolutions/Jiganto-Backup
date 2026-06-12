@@ -12,6 +12,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useShellLayout } from "@/hooks/use-shell-layout";
+import { useTablePagination } from "@/hooks/use-table-pagination";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/Sidebar";
 import { ModuleHeader } from "@/components/ModuleHeader";
@@ -31,6 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { TablePagination } from "@/components/TablePagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1585,6 +1587,16 @@ export default function DocumentManagementPage() {
   };
 
   const displayedDocs = getCategoryFilteredDocs(searchQuery.length > 2 ? searchResults : documents);
+  const subfolders = useMemo(() => getSubfolders(), [folders, selectedFolderId]);
+  const displayedDocsPagination = useTablePagination(displayedDocs ?? [], {
+    resetKey: `${selectedFolderId ?? "root"}|${documentCategory}|${searchQuery}`,
+  });
+  const folderFilesPagination = useTablePagination(folderFiles ?? [], {
+    resetKey: `${selectedFolderId ?? "root"}|${searchQuery}`,
+  });
+  const subfoldersPagination = useTablePagination(subfolders ?? [], {
+    resetKey: `${selectedFolderId ?? "root"}|${folderViewMode}`,
+  });
   const rootDocs = allDocuments.filter(d => d.folderId === null);
 
   const renderExplorerDocMenu = (doc: Document, testIdPrefix: string) => (
@@ -3213,7 +3225,7 @@ export default function DocumentManagementPage() {
           </div>
         )}
 
-        {getSubfolders().length > 0 && !searchQuery && (
+        {subfolders.length > 0 && !searchQuery && (
           <div className="mb-8">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
@@ -3269,7 +3281,7 @@ export default function DocumentManagementPage() {
 
             {folderViewMode === "tile" ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {getSubfolders().map((folder) => (
+                {subfoldersPagination.paginatedItems.map((folder) => (
                   <button
                     key={folder.id}
                     onClick={() => setSelectedFolderId(folder.id)}
@@ -3341,7 +3353,7 @@ export default function DocumentManagementPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {getSubfolders().map((folder) => (
+                    {subfoldersPagination.paginatedItems.map((folder) => (
                       <TableRow 
                         key={folder.id} 
                         className="cursor-pointer hover:bg-muted/30"
@@ -3403,10 +3415,22 @@ export default function DocumentManagementPage() {
                 </Table>
               </div>
             )}
+            <div className="mt-3 rounded-md border">
+              <TablePagination
+                page={subfoldersPagination.page}
+                totalPages={subfoldersPagination.totalPages}
+                total={subfoldersPagination.total}
+                startIndex={subfoldersPagination.startIndex}
+                endIndex={subfoldersPagination.endIndex}
+                pageSize={subfoldersPagination.pageSize}
+                onPageChange={subfoldersPagination.setPage}
+                onPageSizeChange={subfoldersPagination.setPageSize}
+              />
+            </div>
           </div>
         )}
 
-        {getSubfolders().length === 0 && !searchQuery && (
+        {subfolders.length === 0 && !searchQuery && (
           <div className="mb-8">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
@@ -3475,6 +3499,7 @@ export default function DocumentManagementPage() {
               </CardContent>
             </Card>
           ) : (
+            <>
             <div className="border rounded-md overflow-hidden">
               <Table>
                 <TableHeader>
@@ -3489,14 +3514,14 @@ export default function DocumentManagementPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {displayedDocs.map((doc, index) => (
+                  {displayedDocsPagination.paginatedItems.map((doc, index) => (
                     <TableRow 
                       key={doc.id}
                       className="cursor-pointer hover:bg-accent/50 transition-colors group"
                       onClick={() => { setSelectedDocument(doc); setEditContent(doc.content || ""); }}
                       data-testid={`document-row-${doc.id}`}
                     >
-                      <TableCell className="text-center text-muted-foreground text-sm py-2">{index + 1}</TableCell>
+                      <TableCell className="text-center text-muted-foreground text-sm py-2">{displayedDocsPagination.startIndex + index}</TableCell>
                       <TableCell className="py-2">
                         <div className="flex items-center gap-2">
                           <div className="h-6 w-6 rounded bg-primary/10 flex items-center justify-center shrink-0">
@@ -3564,6 +3589,19 @@ export default function DocumentManagementPage() {
                 </TableBody>
               </Table>
             </div>
+            <div className="mt-3 rounded-md border">
+              <TablePagination
+                page={displayedDocsPagination.page}
+                totalPages={displayedDocsPagination.totalPages}
+                total={displayedDocsPagination.total}
+                startIndex={displayedDocsPagination.startIndex}
+                endIndex={displayedDocsPagination.endIndex}
+                pageSize={displayedDocsPagination.pageSize}
+                onPageChange={displayedDocsPagination.setPage}
+                onPageSizeChange={displayedDocsPagination.setPageSize}
+              />
+            </div>
+            </>
           )}
 
         {folderFilesLoading && !searchQuery ? (
@@ -3593,14 +3631,14 @@ export default function DocumentManagementPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {folderFiles.map((file, index) => (
+                  {folderFilesPagination.paginatedItems.map((file, index) => (
                     <TableRow
                       key={file.id}
                       className="cursor-pointer hover:bg-accent/50 transition-colors group"
                       onClick={() => handleFileClick(file)}
                       data-testid={`file-row-${file.id}`}
                     >
-                      <TableCell className="text-center text-muted-foreground text-sm py-2">{index + 1}</TableCell>
+                      <TableCell className="text-center text-muted-foreground text-sm py-2">{folderFilesPagination.startIndex + index}</TableCell>
                       <TableCell className="py-2">
                         <div className="flex items-center gap-2">
                           <div className="h-6 w-6 rounded bg-muted flex items-center justify-center shrink-0">
@@ -3644,6 +3682,18 @@ export default function DocumentManagementPage() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+            <div className="mt-3 rounded-md border">
+              <TablePagination
+                page={folderFilesPagination.page}
+                totalPages={folderFilesPagination.totalPages}
+                total={folderFilesPagination.total}
+                startIndex={folderFilesPagination.startIndex}
+                endIndex={folderFilesPagination.endIndex}
+                pageSize={folderFilesPagination.pageSize}
+                onPageChange={folderFilesPagination.setPage}
+                onPageSizeChange={folderFilesPagination.setPageSize}
+              />
             </div>
           </div>
         )}

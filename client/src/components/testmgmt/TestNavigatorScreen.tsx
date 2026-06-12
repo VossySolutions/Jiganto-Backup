@@ -11,6 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useTmProject } from "@/contexts/TmProjectContext";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 
 const STATUS_ICON: Record<string, JSX.Element> = {
   pass:    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />,
@@ -150,6 +152,8 @@ export function TestNavigatorScreen() {
         new Date(b.executedAt ?? 0).getTime() - new Date(a.executedAt ?? 0).getTime()
       )
     : [];
+
+  const historyPagination = useTablePagination(caseHistory, { resetKey: selectedCaseId ?? 0 });
 
   function addEditStep() {
     setEditSteps(s => [...s, { stepOrder: s.length + 1, action: "", expectedResult: "", testData: "" }]);
@@ -441,7 +445,7 @@ export function TestNavigatorScreen() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {caseHistory.slice(0, 10).map(r => (
+                      {historyPagination.paginatedItems.map(r => (
                         <tr key={r.id} className="hover:bg-muted/20">
                           <td className="px-4 py-2">
                             <div className="flex items-center gap-1.5">
@@ -456,6 +460,16 @@ export function TestNavigatorScreen() {
                       ))}
                     </tbody>
                   </table>
+                  <TablePagination
+                    page={historyPagination.page}
+                    totalPages={historyPagination.totalPages}
+                    total={historyPagination.total}
+                    startIndex={historyPagination.startIndex}
+                    endIndex={historyPagination.endIndex}
+                    pageSize={historyPagination.pageSize}
+                    onPageChange={historyPagination.setPage}
+                    onPageSizeChange={historyPagination.setPageSize}
+                  />
                 </div>
               </div>
             )}

@@ -22,6 +22,8 @@ import {
   styleToClassAndInline,
 } from "@/lib/conditionalFormatting";
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 
 export type ColumnType = 
   | "text" 
@@ -104,6 +106,8 @@ export interface MondayTableProps<T extends { id: number | string }> {
   conditionalFormatRules?: ConditionalFormatRule[];
   defaultConditionalFormatRules?: ConditionalFormatRule[];
   onConditionalFormatRulesChange?: (rules: ConditionalFormatRule[]) => void;
+  /** Client-side pagination (default: enabled). Pass false to show all rows. */
+  pagination?: boolean | { defaultPageSize?: number; resetKey?: string | number };
 }
 
 const columnTypeIcons: Record<ColumnType, typeof Text> = {
@@ -889,6 +893,7 @@ export function MondayTable<T extends { id: number | string }>({
   conditionalFormatRules: controlledRules,
   defaultConditionalFormatRules,
   onConditionalFormatRulesChange,
+  pagination = true,
 }: MondayTableProps<T>) {
   const [selectedIds, setSelectedIds] = useState<Set<number | string>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -1116,6 +1121,21 @@ export function MondayTable<T extends { id: number | string }>({
     return data;
   }, [groups, data]);
 
+  const paginationEnabled = pagination !== false;
+  const paginationOpts = typeof pagination === "object" ? pagination : {};
+  const tablePagination = useTablePagination(allItems, {
+    defaultPageSize: paginationOpts.defaultPageSize,
+    resetKey: paginationOpts.resetKey ?? `${allItems.length}-${groups?.length ?? 0}`,
+    enabled: paginationEnabled,
+  });
+
+  const visibleItemIds = useMemo(() => {
+    if (!paginationEnabled) return null;
+    return new Set(tablePagination.paginatedItems.map((item) => item.id));
+  }, [paginationEnabled, tablePagination.paginatedItems]);
+
+  const displayData = paginationEnabled ? tablePagination.paginatedItems : data;
+
   const isAllSelected = allItems.length > 0 && selectedIds.size === allItems.length;
   const isSomeSelected = selectedIds.size > 0 && selectedIds.size < allItems.length;
 
@@ -1126,10 +1146,16 @@ export function MondayTable<T extends { id: number | string }>({
 
   const flatRowIds = useMemo(() => {
     if (groups) {
-      return groups.flatMap(g => collapsedGroups.has(g.id) ? [] : g.items.map(item => item.id));
+      return groups.flatMap((g) => {
+        if (collapsedGroups.has(g.id)) return [];
+        const items = visibleItemIds
+          ? g.items.filter((item) => visibleItemIds.has(item.id))
+          : g.items;
+        return items.map((item) => item.id);
+      });
     }
-    return data.map(item => item.id);
-  }, [groups, data, collapsedGroups]);
+    return displayData.map((item) => item.id);
+  }, [groups, data, collapsedGroups, displayData, visibleItemIds]);
 
   const editableColumnIds = useMemo(() => {
     return visibleColumns.filter(c => c.editable).map(c => c.id);
@@ -1463,7 +1489,11 @@ export function MondayTable<T extends { id: number | string }>({
 
   const renderGroup = (group: GroupDef<T>) => {
     const isCollapsed = collapsedGroups.has(group.id);
-    
+    const pageItems = visibleItemIds
+      ? group.items.filter((item) => visibleItemIds.has(item.id))
+      : group.items;
+    if (visibleItemIds && pageItems.length === 0) return null;
+
     return (
       <div key={group.id} className="mb-4" data-testid={`table-group-${group.id}`}>
         <button
@@ -1481,7 +1511,7 @@ export function MondayTable<T extends { id: number | string }>({
           )}
           <span>{group.title}</span>
           <Badge variant="secondary" className="ml-2">
-            {group.count ?? group.items.length}
+            {visibleItemIds ? pageItems.length : (group.count ?? group.items.length)}
           </Badge>
           {group.summary && (
             <span className="text-muted-foreground ml-auto text-xs">{group.summary}</span>
@@ -1490,7 +1520,7 @@ export function MondayTable<T extends { id: number | string }>({
         
         {!isCollapsed && (
           <div className="mt-1">
-            {group.items.map((item, idx) => renderRow(item, idx))}
+            {pageItems.map((item, idx) => renderRow(item, idx))}
             {onAddItem && (
               <button
                 onClick={() => onAddItem(group.id)}
@@ -1688,7 +1718,7 @@ export function MondayTable<T extends { id: number | string }>({
             </div>
           ) : (
             <div>
-              {data.map((item, idx) => renderRow(item, idx))}
+              {displayData.map((item, idx) => renderRow(item, idx))}
               {onAddItem && (
                 <button
                   onClick={() => onAddItem()}
@@ -1704,7 +1734,28 @@ export function MondayTable<T extends { id: number | string }>({
         </div>
       </div>
 
-      {allItems.length > 0 && (
+      {allItems.length > 0 && paginationEnabled ? (
+        <TablePagination
+          page={tablePagination.page}
+          totalPages={tablePagination.totalPages}
+          total={tablePagination.total}
+          startIndex={tablePagination.startIndex}
+          endIndex={tablePagination.endIndex}
+          pageSize={tablePagination.pageSize}
+          onPageChange={tablePagination.setPage}
+          onPageSizeChange={tablePagination.setPageSize}
+          extra={
+            <>
+              {totalCount != null && totalCount !== allItems.length && (
+                <span className="text-muted-foreground/80">({allItems.length} of {totalCount} filtered)</span>
+              )}
+              {selectedIds.size > 0 && (
+                <span data-testid="table-selected-count">{selectedIds.size} selected</span>
+              )}
+            </>
+          }
+        />
+      ) : allItems.length > 0 ? (
         <div className="flex items-center justify-between px-3 py-1.5 text-xs text-muted-foreground border-t border-border/20" data-testid="table-record-count">
           <span>
             {totalCount != null && totalCount !== allItems.length ? (
@@ -1717,7 +1768,7 @@ export function MondayTable<T extends { id: number | string }>({
             <span data-testid="table-selected-count">{selectedIds.size} selected</span>
           )}
         </div>
-      )}
+      ) : null}
 
       <ConditionalFormattingPanel
         open={cfPanelOpen}

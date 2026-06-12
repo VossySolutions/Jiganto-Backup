@@ -20,6 +20,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, Upload, CheckCircle2, XCircle, Receipt } from "lucide-react";
 import { FinanceTableSkeleton, FinanceEmptyState, FinanceTableWrap, FinanceButtonSpinner } from "./FinanceUi";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import type { ExpenseReportRow } from "./types";
 
 function statusBadge(status: string) {
@@ -173,6 +175,10 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
     });
   }, [reports, searchTerm, statusFilter]);
 
+  const pagination = useTablePagination(filtered, {
+    resetKey: `${searchTerm}-${statusFilter}`,
+  });
+
   return (
     <div className="space-y-4" data-testid="finance-expenses-tab">
       <div className="flex flex-wrap items-center gap-3">
@@ -221,7 +227,7 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((r) => (
+                {pagination.paginatedItems.map((r) => (
                   <TableRow key={r.id} data-testid={`expense-row-${r.id}`}>
                     <TableCell className="font-medium">{r.name}</TableCell>
                     <TableCell>{r.projectName ?? `Project #${r.projectId}`}</TableCell>
@@ -272,6 +278,16 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
               </TableBody>
             </Table>
           </FinanceTableWrap>
+          <TablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
         </Card>
       )}
 

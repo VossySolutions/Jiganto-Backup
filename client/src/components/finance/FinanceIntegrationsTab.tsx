@@ -21,6 +21,8 @@ import {
   Loader2, Plus, RefreshCw, Link2, CheckCircle2, XCircle, Settings2,
 } from "lucide-react";
 import { FinanceTabLoading, FinanceButtonSpinner } from "./FinanceUi";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import type { ErpIntegrationRow, ErpSyncLogRow } from "./types";
 
 const ERP_SYSTEMS = [
@@ -69,6 +71,8 @@ export function FinanceIntegrationsTab({ integrations: integrationsProp, isLoadi
   const { data: syncLog = [], isLoading: logLoading } = useQuery<ErpSyncLogRow[]>({
     queryKey: ["/api/finance/erp/sync-log"],
   });
+
+  const logPagination = useTablePagination(syncLog, { resetKey: syncLog.length });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/finance/erp/integrations"] });
@@ -246,7 +250,7 @@ export function FinanceIntegrationsTab({ integrations: integrationsProp, isLoadi
                     <TableRow>
                       <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No sync activity yet</TableCell>
                     </TableRow>
-                  ) : syncLog.map((log) => (
+                  ) : logPagination.paginatedItems.map((log) => (
                     <TableRow key={log.id} data-testid={`sync-log-${log.id}`}>
                       <TableCell>{log.entityType} #{log.entityId}</TableCell>
                       <TableCell className="capitalize">{log.direction}</TableCell>
@@ -257,6 +261,18 @@ export function FinanceIntegrationsTab({ integrations: integrationsProp, isLoadi
                   ))}
                 </TableBody>
               </Table>
+              {syncLog.length > 0 && (
+                <TablePagination
+                  page={logPagination.page}
+                  totalPages={logPagination.totalPages}
+                  total={logPagination.total}
+                  startIndex={logPagination.startIndex}
+                  endIndex={logPagination.endIndex}
+                  pageSize={logPagination.pageSize}
+                  onPageChange={logPagination.setPage}
+                  onPageSizeChange={logPagination.setPageSize}
+                />
+              )}
             </div>
           )}
         </CardContent>

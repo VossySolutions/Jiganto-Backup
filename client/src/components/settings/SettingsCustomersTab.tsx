@@ -20,6 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MondayTable, type ColumnDef, type StatusOption } from "@/components/MondayTable";
+import { TablePagination } from "@/components/TablePagination";
+import { useTablePagination } from "@/hooks/use-table-pagination";
 import {
   Plus, Trash2, UserPlus, Save, RefreshCw, Search,
   AlertTriangle, FolderKanban, Upload, FileSpreadsheet, Building2,
@@ -541,6 +543,15 @@ export default function SettingsCustomersTab({ profiles, roles, tenantId }: Sett
     }
   }, [updateProfileMutation]);
 
+  const assignmentsPagination = useTablePagination(userAssignments, {
+    resetKey: `${selectedProfile?.id ?? 0}-${userAssignments.length}`,
+    enabled: !!selectedProfile,
+  });
+  const modulePermissionsPagination = useTablePagination(availableModules, {
+    resetKey: availableModules.length,
+    enabled: !!selectedProfile,
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -935,6 +946,7 @@ export default function SettingsCustomersTab({ profiles, roles, tenantId }: Sett
                     })()}
 
                     {userAssignments.length > 0 ? (
+                      <>
                       <div className="border rounded-md">
                         <Table>
                           <TableHeader>
@@ -947,7 +959,7 @@ export default function SettingsCustomersTab({ profiles, roles, tenantId }: Sett
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {userAssignments.map((assignment) => (
+                            {assignmentsPagination.paginatedItems.map((assignment) => (
                               <TableRow key={assignment.id} data-testid={`assignment-row-${assignment.id}`}>
                                 <TableCell>
                                   <Badge variant="secondary" className="text-xs">
@@ -992,6 +1004,17 @@ export default function SettingsCustomersTab({ profiles, roles, tenantId }: Sett
                           </TableBody>
                         </Table>
                       </div>
+                      <TablePagination
+                        page={assignmentsPagination.page}
+                        totalPages={assignmentsPagination.totalPages}
+                        total={assignmentsPagination.total}
+                        startIndex={assignmentsPagination.startIndex}
+                        endIndex={assignmentsPagination.endIndex}
+                        pageSize={assignmentsPagination.pageSize}
+                        onPageChange={assignmentsPagination.setPage}
+                        onPageSizeChange={assignmentsPagination.setPageSize}
+                      />
+                      </>
                     ) : (
                       <p className="text-sm text-muted-foreground">No assignments yet. Add project or programme assignments to control this customer's access.</p>
                     )}
@@ -1158,7 +1181,7 @@ export default function SettingsCustomersTab({ profiles, roles, tenantId }: Sett
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {availableModules.map((mod) => {
+                          {modulePermissionsPagination.paginatedItems.map((mod) => {
                             const perms = detailPermissions.length > 0 ? detailPermissions : initPermissionsFromData(userPermissions);
                             const perm = perms.find(p => p.moduleKey === mod.key) || { moduleKey: mod.key, canCreate: false, canRead: true, canUpdate: false, canDelete: false };
                             return (
@@ -1198,6 +1221,16 @@ export default function SettingsCustomersTab({ profiles, roles, tenantId }: Sett
                         </TableBody>
                       </Table>
                     </div>
+                    <TablePagination
+                      page={modulePermissionsPagination.page}
+                      totalPages={modulePermissionsPagination.totalPages}
+                      total={modulePermissionsPagination.total}
+                      startIndex={modulePermissionsPagination.startIndex}
+                      endIndex={modulePermissionsPagination.endIndex}
+                      pageSize={modulePermissionsPagination.pageSize}
+                      onPageChange={modulePermissionsPagination.setPage}
+                      onPageSizeChange={modulePermissionsPagination.setPageSize}
+                    />
                   </div>
                 </div>
               </ScrollArea>

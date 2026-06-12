@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
+import { TablePagination } from "@/components/TablePagination";
+import { useTablePagination } from "@/hooks/use-table-pagination";
 import { Plus, Shield, Edit, Trash2, ChevronDown, Layers } from "lucide-react";
 import type { UserRole, ModulePermissions } from "@shared/schema";
 import SettingsModulePermissionsMatrix from "@/components/settings/SettingsModulePermissionsMatrix";
@@ -68,6 +70,10 @@ export default function SettingsModuleRolesTab({ tenantId }: Props) {
 
   const { data: roles = [], isLoading } = useQuery<UserRole[]>({
     queryKey: [`/api/settings/roles?tenantId=${tenantId}`],
+  });
+  const rolesPagination = useTablePagination(roles, {
+    resetKey: roles.length,
+    enabled: !isLoading,
   });
 
   const createRoleMutation = useMutation({
@@ -314,7 +320,7 @@ export default function SettingsModuleRolesTab({ tenantId }: Props) {
           <p className="text-sm text-muted-foreground">Loading module roles…</p>
         ) : (
           <div className="grid gap-4">
-            {roles.map((role) => (
+            {rolesPagination.paginatedItems.map((role) => (
               <Card key={role.id} data-testid={`role-card-${role.id}`}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -396,6 +402,16 @@ export default function SettingsModuleRolesTab({ tenantId }: Props) {
                 </CardContent>
               </Card>
             ))}
+            <TablePagination
+              page={rolesPagination.page}
+              totalPages={rolesPagination.totalPages}
+              total={rolesPagination.total}
+              startIndex={rolesPagination.startIndex}
+              endIndex={rolesPagination.endIndex}
+              pageSize={rolesPagination.pageSize}
+              onPageChange={rolesPagination.setPage}
+              onPageSizeChange={rolesPagination.setPageSize}
+            />
           </div>
         )}
       </CollapsibleContent>

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Link, CheckCircle2, XCircle, MinusCircle, Clock, Loader2, Pencil, Save, X, Bug } from "lucide-react";
 import { useTmProject } from "@/contexts/TmProjectContext";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 
 const PRI_BADGE: Record<string, string> = {
   critical: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
@@ -154,6 +156,10 @@ export function TraceabilityScreen() {
     return true;
   });
 
+  const reqPagination = useTablePagination(filtered, {
+    resetKey: `${filterArea}-${filterImpl}-${search}`,
+  });
+
   return (
     <div className="flex h-full overflow-hidden">
       {/* Requirements List */}
@@ -211,7 +217,7 @@ export function TraceabilityScreen() {
             <div className="p-4 text-xs text-muted-foreground">
               {reqs.length === 0 ? "No requirements yet. Click Add to create your first requirement." : "No requirements match your filters."}
             </div>
-          ) : filtered.map(req => {
+          ) : reqPagination.paginatedItems.map(req => {
             const linked = req.linkedCaseIds?.length ?? 0;
             const isSelected = selectedId === req.id;
             const implSt = (req as any).implementationStatus ?? "draft";
@@ -241,6 +247,18 @@ export function TraceabilityScreen() {
               </div>
             );
           })}
+          {filtered.length > 0 && (
+            <TablePagination
+              page={reqPagination.page}
+              totalPages={reqPagination.totalPages}
+              total={reqPagination.total}
+              startIndex={reqPagination.startIndex}
+              endIndex={reqPagination.endIndex}
+              pageSize={reqPagination.pageSize}
+              onPageChange={reqPagination.setPage}
+              onPageSizeChange={reqPagination.setPageSize}
+            />
+          )}
         </div>
       </div>
 

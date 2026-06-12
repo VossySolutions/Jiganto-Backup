@@ -13,6 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import {
   Search, ChevronRight, Settings, Upload, Download, Plus, Trash2,
   Pencil, ClipboardList, X, GripVertical, FileText, BarChart3,
@@ -919,70 +921,23 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
 
               {/* Table */}
               {!isCollapsed && (
-                <div className="bg-background overflow-x-auto">
-                  <table className="w-full border-collapse min-w-[900px]">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="w-9 px-3 py-2 text-left">
-                          <input
-                            type="checkbox"
-                            className="accent-blue-600 cursor-pointer"
-                            onChange={e => togglePhaseSelect(phaseName, e.target.checked)}
-                            data-testid={`checkbox-phase-all-${phaseName}`}
-                          />
-                        </th>
-                        <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left">Deliverable</th>
-                        <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[100px]">Type</th>
-                        <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[100px]">Due</th>
-                        <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[110px]">Status</th>
-                        <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[86px]">RAG</th>
-                        <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[96px]">Progress</th>
-                        <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-center w-[54px]">Ver</th>
-                        <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-center w-[130px]">Approvals</th>
-                        <th className="w-[68px]" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.length === 0 && (
-                        <tr>
-                          <td colSpan={10} className="text-center py-8 text-muted-foreground">
-                            <div className="text-2xl mb-1">🔍</div>
-                            <p className="text-sm">No deliverables match filters</p>
-                          </td>
-                        </tr>
-                      )}
-                      {items.map(d => {
-                        const isSel = selectedIds.has(d.id);
-                        const isDrawerOpen = openDrawerId === d.id;
-                        const ai = approvalInfo(d);
-                        const TypeIcon = TYPE_ICONS[d.type] || FileText;
-                        const dateInfo = formatDate(d.dueDate);
-                        const dateDisplay = typeof dateInfo === "string" ? { text: dateInfo, className: "" } : dateInfo;
-
-                        return (
-                          <PhaseRow
-                            key={d.id}
-                            d={d}
-                            isSel={isSel}
-                            isDrawerOpen={isDrawerOpen}
-                            ai={ai}
-                            TypeIcon={TypeIcon}
-                            dateDisplay={dateDisplay}
-                            onToggleSelect={toggleSelect}
-                            onCycleStatus={() => cycleStatus(d)}
-                            onCycleRag={() => cycleRag(d)}
-                            onToggleDrawer={() => setOpenDrawerId(prev => prev === d.id ? null : d.id)}
-                            onEdit={() => openEditModal(d)}
-                            onAudit={() => openAuditModal(d.id)}
-                            onDelete={() => deleteDeliverable(d.id)}
-                            onReview={(prefill) => openReviewModal(d.id)}
-                            deliverables={deliverables}
-                          />
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <PhaseGroupTable
+                  phaseName={phaseName}
+                  items={items}
+                  selectedIds={selectedIds}
+                  openDrawerId={openDrawerId}
+                  deliverables={deliverables}
+                  onToggleSelect={toggleSelect}
+                  onCycleStatus={cycleStatus}
+                  onCycleRag={cycleRag}
+                  onToggleDrawer={(id) => setOpenDrawerId(prev => prev === id ? null : id)}
+                  onEdit={openEditModal}
+                  onAudit={openAuditModal}
+                  onDelete={deleteDeliverable}
+                  onReview={openReviewModal}
+                  onTogglePhaseSelect={togglePhaseSelect}
+                  paginationResetKey={`${phaseName}|${searchQuery}|${phaseFilter}|${ragFilter}|${statusFilter}|${activeKpi}`}
+                />
               )}
             </div>
           );
@@ -1335,6 +1290,119 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function PhaseGroupTable({
+  phaseName,
+  items,
+  selectedIds,
+  openDrawerId,
+  deliverables,
+  onToggleSelect,
+  onCycleStatus,
+  onCycleRag,
+  onToggleDrawer,
+  onEdit,
+  onAudit,
+  onDelete,
+  onReview,
+  onTogglePhaseSelect,
+  paginationResetKey,
+}: {
+  phaseName: string;
+  items: PmDeliverable[];
+  selectedIds: Set<number>;
+  openDrawerId: number | null;
+  deliverables: PmDeliverable[];
+  onToggleSelect: (id: number) => void;
+  onCycleStatus: (del: PmDeliverable) => Promise<void>;
+  onCycleRag: (del: PmDeliverable) => Promise<void>;
+  onToggleDrawer: (id: number) => void;
+  onEdit: (del: PmDeliverable) => void;
+  onAudit: (id: number) => void;
+  onDelete: (id: number) => Promise<void>;
+  onReview: (id: number) => void;
+  onTogglePhaseSelect: (phaseName: string, checked: boolean) => void;
+  paginationResetKey: string;
+}) {
+  const pagination = useTablePagination(items, { resetKey: paginationResetKey });
+
+  return (
+    <div className="bg-background overflow-x-auto">
+      <table className="w-full border-collapse min-w-[900px]">
+        <thead>
+          <tr className="border-b">
+            <th className="w-9 px-3 py-2 text-left">
+              <input
+                type="checkbox"
+                className="accent-blue-600 cursor-pointer"
+                onChange={e => onTogglePhaseSelect(phaseName, e.target.checked)}
+                data-testid={`checkbox-phase-all-${phaseName}`}
+              />
+            </th>
+            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left">Deliverable</th>
+            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[100px]">Type</th>
+            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[100px]">Due</th>
+            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[110px]">Status</th>
+            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[86px]">RAG</th>
+            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[96px]">Progress</th>
+            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-center w-[54px]">Ver</th>
+            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-center w-[130px]">Approvals</th>
+            <th className="w-[68px]" />
+          </tr>
+        </thead>
+        <tbody>
+          {items.length === 0 && (
+            <tr>
+              <td colSpan={10} className="text-center py-8 text-muted-foreground">
+                <div className="text-2xl mb-1">🔍</div>
+                <p className="text-sm">No deliverables match filters</p>
+              </td>
+            </tr>
+          )}
+          {pagination.paginatedItems.map(d => {
+            const isSel = selectedIds.has(d.id);
+            const isDrawerOpen = openDrawerId === d.id;
+            const ai = approvalInfo(d);
+            const TypeIcon = TYPE_ICONS[d.type] || FileText;
+            const dateInfo = formatDate(d.dueDate);
+            const dateDisplay = typeof dateInfo === "string" ? { text: dateInfo, className: "" } : dateInfo;
+
+            return (
+              <PhaseRow
+                key={d.id}
+                d={d}
+                isSel={isSel}
+                isDrawerOpen={isDrawerOpen}
+                ai={ai}
+                TypeIcon={TypeIcon}
+                dateDisplay={dateDisplay}
+                onToggleSelect={onToggleSelect}
+                onCycleStatus={() => onCycleStatus(d)}
+                onCycleRag={() => onCycleRag(d)}
+                onToggleDrawer={() => onToggleDrawer(d.id)}
+                onEdit={() => onEdit(d)}
+                onAudit={() => onAudit(d.id)}
+                onDelete={() => onDelete(d.id)}
+                onReview={() => onReview(d.id)}
+                deliverables={deliverables}
+              />
+            );
+          })}
+        </tbody>
+      </table>
+      <TablePagination
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        total={pagination.total}
+        startIndex={pagination.startIndex}
+        endIndex={pagination.endIndex}
+        pageSize={pagination.pageSize}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+      />
     </div>
   );
 }

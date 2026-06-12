@@ -12,10 +12,14 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   Loader2, CheckCircle2, XCircle, Clock, UserCheck, Users, Plus, Copy, Calendar, BarChart3,
+  ChevronDown, ChevronRight, PenLine, CheckSquare,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { FinanceTabLoading, FinanceTableSkeleton, FinanceEmptyState, FinanceButtonSpinner } from "./FinanceUi";
 import type { FinanceTimesheetPeriod } from "./types";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const TIME_TYPES = ["billable", "non_billable", "internal", "leave", "training"] as const;
@@ -48,6 +52,56 @@ interface FinanceTimesheetsTabProps {
   pendingPeriods?: FinanceTimesheetPeriod[];
   isLoading?: boolean;
   searchTerm?: string;
+  canApprove?: boolean;
+  ownResourceId?: number | null;
+  initialViewMode?: "entry" | "approval" | "reports";
+}
+
+type TimesheetEntryRow = {
+  id: number;
+  projectName: string | null;
+  entryDate: string | null;
+  dayOfWeek: number;
+  hours: string | null;
+  approvalStatus?: string | null;
+  role?: string | null;
+};
+
+function PeriodEntriesPanel({ periodId, canApprove }: { periodId: number; canApprove: boolean }) {
+  const { data: entries = [], refetch } = useQuery<TimesheetEntryRow[]>({
+    queryKey: [`/api/resources/timesheets/periods/${periodId}/entries`],
+  });
+
+  const approveEntry = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/resources/timesheets/entries/${id}/approve`),
+    onSuccess: () => refetch(),
+  });
+
+  const rejectEntry = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/resources/timesheets/entries/${id}/reject`, { reason: "Needs revision" }),
+    onSuccess: () => refetch(),
+  });
+
+  if (entries.length === 0) return <p className="text-xs text-muted-foreground pl-6">No line entries</p>;
+
+  return (
+    <div className="mt-2 pl-6 space-y-1 border-l-2 border-orange-500/20 ml-2">
+      {entries.map((e) => (
+        <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 text-xs p-2 rounded bg-muted/30">
+          <span>{e.projectName ?? "General"} · Day {e.dayOfWeek} · {e.hours ?? 0}h</span>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-[10px]">{e.approvalStatus ?? "pending"}</Badge>
+            {canApprove && e.approvalStatus !== "approved" && (
+              <>
+                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => approveEntry.mutate(e.id)}>Approve</Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive" onClick={() => rejectEntry.mutate(e.id)}>Reject</Button>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function FinanceTimesheetsTab({
@@ -55,15 +109,23 @@ export function FinanceTimesheetsTab({
   pendingPeriods: pendingProp,
   isLoading: isLoadingProp,
   searchTerm = "",
+  canApprove = true,
+  ownResourceId = null,
+  initialViewMode = "entry",
 }: FinanceTimesheetsTabProps) {
   const { toast } = useToast();
-  const [viewMode, setViewMode] = useState<"entry" | "approval" | "reports">("entry");
+  const [viewMode, setViewMode] = useState<"entry" | "approval" | "reports">(initialViewMode);
   const [gridMode, setGridMode] = useState<"weekly" | "daily">("weekly");
   const [selectedDay, setSelectedDay] = useState(1);
   const [useHhMm, setUseHhMm] = useState(false);
   const [selectedResourceId, setSelectedResourceId] = useState<string>("");
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
   const [newProjectName, setNewProjectName] = useState("");
+  const [selectedForBulk, setSelectedForBulk] = useState<number[]>([]);
+  const [expandedPeriodId, setExpandedPeriodId] = useState<number | null>(null);
+  const [signoffPeriodId, setSignoffPeriodId] = useState<number | null>(null);
+  const [signoffEmail, setSignoffEmail] = useState("");
+  const [signoffName, setSignoffName] = useState("");
 
   const { data: fetchedPeriods = [], isLoading: fetchLoading } = useQuery<FinanceTimesheetPeriod[]>({
     queryKey: ["/api/finance/timesheets/periods"],
@@ -82,6 +144,10 @@ export function FinanceTimesheetsTab({
   const { data: resources = [] } = useQuery<Array<{ id: number; firstName: string; lastName: string }>>({
     queryKey: ["/api/resources"],
   });
+
+  const visibleResources = ownResourceId
+    ? resources.filter((r) => r.id === ownResourceId)
+    : resources;
 
   const { data: projects = [] } = useQuery<Array<{ id: number; name: string }>>({
     queryKey: ["/api/pm/projects"],
@@ -107,8 +173,12 @@ export function FinanceTimesheetsTab({
   });
 
   useEffect(() => {
-    if (!selectedResourceId && resources[0]) setSelectedResourceId(String(resources[0].id));
-  }, [resources, selectedResourceId]);
+    if (ownResourceId) {
+      setSelectedResourceId(String(ownResourceId));
+    } else if (!selectedResourceId && visibleResources[0]) {
+      setSelectedResourceId(String(visibleResources[0].id));
+    }
+  }, [visibleResources, selectedResourceId, ownResourceId]);
 
   const resourceName = (resourceId: number) => {
     const r = resources.find((res) => res.id === resourceId);
@@ -177,6 +247,29 @@ export function FinanceTimesheetsTab({
     onError: () => toast({ title: "Failed to return timesheet", variant: "destructive" }),
   });
 
+  const bulkApproveMutation = useMutation({
+    mutationFn: ({ periodIds, role }: { periodIds: number[]; role: "pm" | "rm" }) =>
+      apiRequest("POST", "/api/resources/timesheets/periods/bulk-approve", { periodIds, role }),
+    onSuccess: () => { invalidate(); setSelectedForBulk([]); toast({ title: "Bulk approval complete" }); },
+    onError: () => toast({ title: "Bulk approval failed", variant: "destructive" }),
+  });
+
+  const signoffMutation = useMutation({
+    mutationFn: ({ periodId, signerEmail, signerName }: { periodId: number; signerEmail: string; signerName: string }) =>
+      apiRequest("POST", `/api/resources/timesheets/periods/${periodId}/request-signoff`, { signerEmail, signerName }),
+    onSuccess: async (res) => {
+      const data = await res.json();
+      invalidate();
+      toast({ title: "E-sign request sent", description: data.signUrl ? `Sign at ${data.signUrl}` : undefined });
+      setSignoffPeriodId(null);
+    },
+    onError: () => toast({ title: "E-sign request failed", variant: "destructive" }),
+  });
+
+  const toggleBulk = (id: number) => {
+    setSelectedForBulk((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
   const selectedPeriod = periodDetail;
   const isDraft = selectedPeriod?.status === "draft";
 
@@ -218,6 +311,17 @@ export function FinanceTimesheetsTab({
   }, [hoursGrid]);
 
   const grandTotal = dayTotals.reduce((s, h) => s + h, 0);
+  const entryRows = useMemo(() => Object.entries(hoursGrid), [hoursGrid]);
+  const entryPagination = useTablePagination(entryRows, {
+    resetKey: `${activePeriodId ?? "none"}|${gridMode}|${selectedDay}|${useHhMm}`,
+  });
+  const pendingResetKey = useMemo(
+    () => pendingPeriods.map((p) => `${p.id}:${p.approvalStatus ?? p.status}`).join("|"),
+    [pendingPeriods]
+  );
+  const approvalPagination = useTablePagination(pendingPeriods ?? [], {
+    resetKey: pendingResetKey,
+  });
 
   const handleHourChange = (project: string, dayIdx: number, value: string) => {
     if (!activePeriodId || !selectedResourceId || !isDraft) return;
@@ -267,22 +371,26 @@ export function FinanceTimesheetsTab({
         <Button variant={viewMode === "entry" ? "default" : "outline"} size="sm" className="flex-1 sm:flex-none" onClick={() => setViewMode("entry")}>
           <Clock className="h-4 w-4 mr-1" /><span className="hidden xs:inline">Time </span>Entry
         </Button>
+        {canApprove && (
         <Button variant={viewMode === "approval" ? "default" : "outline"} size="sm" className="flex-1 sm:flex-none" onClick={() => setViewMode("approval")}>
           <UserCheck className="h-4 w-4 mr-1" /> Approvals
           {pendingPeriods.length > 0 && <Badge variant="secondary" className="ml-2">{pendingPeriods.length}</Badge>}
         </Button>
+        )}
+        {(canApprove || ownResourceId == null) && (
         <Button variant={viewMode === "reports" ? "default" : "outline"} size="sm" className="flex-1 sm:flex-none" onClick={() => setViewMode("reports")}>
           <BarChart3 className="h-4 w-4 mr-1" /> Reports
         </Button>
+        )}
       </div>
 
       {viewMode === "entry" && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <Select value={selectedResourceId} onValueChange={(v) => { setSelectedResourceId(v); setSelectedPeriodId(null); }}>
+            <Select value={selectedResourceId} onValueChange={(v) => { setSelectedResourceId(v); setSelectedPeriodId(null); }} disabled={!!ownResourceId}>
               <SelectTrigger className="w-56"><SelectValue placeholder="Team member" /></SelectTrigger>
               <SelectContent>
-                {resources.map((r) => (
+                {visibleResources.map((r) => (
                   <SelectItem key={r.id} value={String(r.id)}>{r.firstName} {r.lastName}</SelectItem>
                 ))}
               </SelectContent>
@@ -338,7 +446,7 @@ export function FinanceTimesheetsTab({
                       </tr>
                     </thead>
                     <tbody>
-                      {Object.entries(hoursGrid).map(([project, row]) => {
+                      {entryPagination.paginatedItems.map(([project, row]) => {
                         const cols = gridMode === "weekly" ? row.days : [row.days[selectedDay - 1] ?? 0];
                         const total = row.days.reduce((s, h) => s + h, 0);
                         return (
@@ -382,6 +490,16 @@ export function FinanceTimesheetsTab({
                   </table>
                 </CardContent>
               </Card>
+              <TablePagination
+                page={entryPagination.page}
+                totalPages={entryPagination.totalPages}
+                total={entryPagination.total}
+                startIndex={entryPagination.startIndex}
+                endIndex={entryPagination.endIndex}
+                pageSize={entryPagination.pageSize}
+                onPageChange={entryPagination.setPage}
+                onPageSizeChange={entryPagination.setPageSize}
+              />
 
               {isDraft && (
                 <div className="flex items-center gap-2">
@@ -403,56 +521,103 @@ export function FinanceTimesheetsTab({
 
       {viewMode === "approval" && (
         <div className="space-y-3">
+          {canApprove && pendingPeriods.length > 0 && (
+            <div className="flex flex-wrap gap-2 p-3 rounded-lg border bg-muted/20">
+              <Checkbox
+                checked={selectedForBulk.length === pendingPeriods.length}
+                onCheckedChange={(v) => setSelectedForBulk(v ? pendingPeriods.map((p) => p.id) : [])}
+              />
+              <span className="text-sm text-muted-foreground self-center">{selectedForBulk.length} selected</span>
+              <Button size="sm" variant="outline" disabled={!selectedForBulk.length || bulkApproveMutation.isPending}
+                onClick={() => bulkApproveMutation.mutate({ periodIds: selectedForBulk, role: "pm" })}>
+                <CheckSquare className="h-4 w-4 mr-1" /> Bulk PM Approve
+              </Button>
+              <Button size="sm" disabled={!selectedForBulk.length || bulkApproveMutation.isPending}
+                onClick={() => bulkApproveMutation.mutate({ periodIds: selectedForBulk, role: "rm" })}>
+                Bulk RM Approve
+              </Button>
+            </div>
+          )}
           {pendingPeriods.length === 0 ? (
             <Card><CardContent className="py-12 text-center text-muted-foreground">No timesheets pending approval</CardContent></Card>
-          ) : pendingPeriods.map((p) => (
+          ) : approvalPagination.paginatedItems.map((p) => (
             <Card key={p.id}>
-              <CardContent className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div>
-                  <p className="font-medium">{resourceName(p.resourceId)}</p>
-                  <p className="text-sm text-muted-foreground">{formatWeekRange(String(p.weekStartDate), String(p.weekEndDate))}</p>
-                  <div className="text-sm mt-1 flex flex-wrap items-center gap-1.5">
-                    <span>{p.totalHours ?? "0"} hrs</span>
-                    <Badge variant="outline">{p.approvalStatus ?? p.status}</Badge>
+              <CardContent className="p-4 flex flex-col gap-3">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    {canApprove && (
+                      <Checkbox checked={selectedForBulk.includes(p.id)} onCheckedChange={() => toggleBulk(p.id)} className="mt-1" />
+                    )}
+                    <button type="button" className="text-left" onClick={() => setExpandedPeriodId(expandedPeriodId === p.id ? null : p.id)}>
+                      <div className="flex items-center gap-2">
+                        {expandedPeriodId === p.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        <p className="font-medium">{resourceName(p.resourceId)}</p>
+                      </div>
+                      <p className="text-sm text-muted-foreground pl-6">{formatWeekRange(String(p.weekStartDate), String(p.weekEndDate))}</p>
+                      <div className="text-sm mt-1 flex flex-wrap items-center gap-1.5 pl-6">
+                        <span>{p.totalHours ?? "0"} hrs</span>
+                        <Badge variant="outline">{p.approvalStatus ?? p.status}</Badge>
+                      </div>
+                    </button>
                   </div>
+                  {canApprove && (
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setSignoffPeriodId(p.id)}>
+                        <PenLine className="h-4 w-4 mr-1" /> E-Sign
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => rejectMutation.mutate({ id: p.id, reason: "Needs revision" })}
+                        disabled={rejectMutation.isPending && rejectMutation.variables?.id === p.id}>
+                        {rejectMutation.isPending && rejectMutation.variables?.id === p.id ? <FinanceButtonSpinner className="mr-1" /> : <XCircle className="h-4 w-4 mr-1" />}
+                        Return
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => approvePmMutation.mutate(p.id)}
+                        disabled={!!p.approvedByPmAt || (approvePmMutation.isPending && approvePmMutation.variables === p.id)}>
+                        {approvePmMutation.isPending && approvePmMutation.variables === p.id ? <FinanceButtonSpinner className="mr-1" /> : <Users className="h-4 w-4 mr-1" />}
+                        PM Approve
+                      </Button>
+                      <Button size="sm" onClick={() => approveRmMutation.mutate(p.id)}
+                        disabled={!!p.approvedByRmAt || (approveRmMutation.isPending && approveRmMutation.variables === p.id)}>
+                        {approveRmMutation.isPending && approveRmMutation.variables === p.id ? <FinanceButtonSpinner className="mr-1" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+                        RM Approve
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => rejectMutation.mutate({ id: p.id, reason: "Needs revision" })}
-                    disabled={rejectMutation.isPending && rejectMutation.variables?.id === p.id}
-                  >
-                    {rejectMutation.isPending && rejectMutation.variables?.id === p.id
-                      ? <FinanceButtonSpinner className="mr-1" />
-                      : <XCircle className="h-4 w-4 mr-1" />}
-                    Return
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => approvePmMutation.mutate(p.id)}
-                    disabled={!!p.approvedByPmAt || (approvePmMutation.isPending && approvePmMutation.variables === p.id)}
-                  >
-                    {approvePmMutation.isPending && approvePmMutation.variables === p.id
-                      ? <FinanceButtonSpinner className="mr-1" />
-                      : <Users className="h-4 w-4 mr-1" />}
-                    PM Approve
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => approveRmMutation.mutate(p.id)}
-                    disabled={!!p.approvedByRmAt || (approveRmMutation.isPending && approveRmMutation.variables === p.id)}
-                  >
-                    {approveRmMutation.isPending && approveRmMutation.variables === p.id
-                      ? <FinanceButtonSpinner className="mr-1" />
-                      : <CheckCircle2 className="h-4 w-4 mr-1" />}
-                    RM Approve
+                {expandedPeriodId === p.id && <PeriodEntriesPanel periodId={p.id} canApprove={canApprove} />}
+              </CardContent>
+            </Card>
+          ))}
+          {pendingPeriods.length > 0 && (
+            <TablePagination
+              page={approvalPagination.page}
+              totalPages={approvalPagination.totalPages}
+              total={approvalPagination.total}
+              startIndex={approvalPagination.startIndex}
+              endIndex={approvalPagination.endIndex}
+              pageSize={approvalPagination.pageSize}
+              onPageChange={approvalPagination.setPage}
+              onPageSizeChange={approvalPagination.setPageSize}
+            />
+          )}
+
+          {signoffPeriodId && (
+            <Card className="border-orange-500/30">
+              <CardContent className="p-4 space-y-3">
+                <p className="font-medium text-sm">Request e-sign for timesheet #{signoffPeriodId}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div><Label className="text-xs">Signer name</Label><Input value={signoffName} onChange={(e) => setSignoffName(e.target.value)} /></div>
+                  <div><Label className="text-xs">Signer email</Label><Input type="email" value={signoffEmail} onChange={(e) => setSignoffEmail(e.target.value)} /></div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setSignoffPeriodId(null)}>Cancel</Button>
+                  <Button size="sm" disabled={!signoffEmail || !signoffName || signoffMutation.isPending}
+                    onClick={() => signoffMutation.mutate({ periodId: signoffPeriodId, signerEmail: signoffEmail, signerName: signoffName })}>
+                    Send e-sign request
                   </Button>
                 </div>
               </CardContent>
             </Card>
-          ))}
+          )}
         </div>
       )}
 

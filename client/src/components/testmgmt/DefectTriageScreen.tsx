@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Loader2, Filter } from "lucide-react";
 import { useTmProject } from "@/contexts/TmProjectContext";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 
 const SEV_BADGE: Record<string, string> = {
   critical: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
@@ -95,6 +97,10 @@ export function DefectTriageScreen() {
     (sevOrder[a.severity ?? "medium"] ?? 9) - (sevOrder[b.severity ?? "medium"] ?? 9)
   );
 
+  const pagination = useTablePagination(sorted, {
+    resetKey: `${filterSev}-${filterStatus}-${search}`,
+  });
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Toolbar */}
@@ -174,7 +180,7 @@ export function DefectTriageScreen() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {sorted.map(d => (
+              {pagination.paginatedItems.map(d => (
                 <tr key={d.id} className="hover:bg-muted/30 transition-colors group" data-testid={`defect-row-${d.id}`}>
                   <td className="px-4 py-2.5">
                     <span className="font-mono text-xs text-muted-foreground">DEF-{String(d.id).padStart(3, "0")}</span>
@@ -233,6 +239,18 @@ export function DefectTriageScreen() {
               ))}
             </tbody>
           </table>
+        )}
+        {!isLoading && sorted.length > 0 && (
+          <TablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
         )}
       </div>
     </div>

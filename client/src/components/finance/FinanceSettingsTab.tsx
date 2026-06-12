@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Settings } from "lucide-react";
 import { FinanceTabLoading, FinanceButtonSpinner } from "./FinanceUi";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import type { FinanceSettings } from "./types";
 
 interface FinanceSettingsTabProps {
@@ -143,6 +145,8 @@ function ExchangeRatesSection() {
     onSuccess: () => { refetch(); toast({ title: "Exchange rate added" }); setRate(""); },
   });
 
+  const ratesPagination = useTablePagination(rates, { resetKey: rates.length });
+
   return (
     <Card>
       <CardHeader>
@@ -160,11 +164,23 @@ function ExchangeRatesSection() {
           {addMutation.isPending ? <FinanceButtonSpinner /> : "Add rate"}
         </Button>
         {rates.length > 0 && (
-          <ul className="text-sm space-y-1">
-            {rates.slice(0, 5).map((r) => (
-              <li key={r.id}>{r.rateDate}: 1 {r.fromCurrency} = {r.rate} {r.toCurrency}</li>
-            ))}
-          </ul>
+          <div className="rounded-lg border border-border/50 overflow-hidden">
+            <ul className="text-sm divide-y divide-border/40">
+              {ratesPagination.paginatedItems.map((r) => (
+                <li key={r.id} className="px-3 py-2">{r.rateDate}: 1 {r.fromCurrency} = {r.rate} {r.toCurrency}</li>
+              ))}
+            </ul>
+            <TablePagination
+              page={ratesPagination.page}
+              totalPages={ratesPagination.totalPages}
+              total={ratesPagination.total}
+              startIndex={ratesPagination.startIndex}
+              endIndex={ratesPagination.endIndex}
+              pageSize={ratesPagination.pageSize}
+              onPageChange={ratesPagination.setPage}
+              onPageSizeChange={ratesPagination.setPageSize}
+            />
+          </div>
         )}
       </CardContent>
     </Card>

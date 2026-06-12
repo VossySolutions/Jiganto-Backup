@@ -1,9 +1,11 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { ImportModal } from "@/components/ImportModal";
+import { TablePagination } from "@/components/TablePagination";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { useTablePagination } from "@/hooks/use-table-pagination";
 import {
   Dialog,
   DialogContent,
@@ -469,6 +471,10 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
   });
 
   const uniqueOwners = [...new Set(items.filter(i => i.ownerName).map(i => i.ownerName!))];
+
+  const tablePagination = useTablePagination(filteredItems, {
+    resetKey: `${activeView}|${searchQuery}|${priorityFilter}|${categoryFilter}|${ownerFilter}|${statFilter}|${showArchived}|${escalatedOnly}`,
+  });
 
   const saveField = useCallback((item: RaiddItem, field: string, value: any) => {
     const activity = item.activityLog || [];
@@ -1024,7 +1030,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
                       </td>
                     </tr>
                   ) : (
-                    filteredItems.map(item => (
+                    tablePagination.paginatedItems.map(item => (
                       <tr key={item.id} className={`border-b last:border-b-0 cursor-pointer transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-500/5 ${item.escalated ? "bg-amber-50 dark:bg-amber-500/5 border-l-[3px] border-l-amber-500" : ""} ${selectedIds.has(item.id) ? "bg-primary/5" : ""} ${item.archived ? "opacity-50" : ""}`} data-testid={`row-raidd-${item.id}`}>
                         {visibleCols.map(c => {
                           if (c.key === "cb") {
@@ -1067,6 +1073,16 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
             <div className="flex items-center justify-between px-3.5 py-2.5 border-t bg-muted/30 text-[11.5px] text-muted-foreground">
               <span>Showing {filteredItems.length} of {items.filter(i => !i.archived).length} items</span>
             </div>
+            <TablePagination
+              page={tablePagination.page}
+              totalPages={tablePagination.totalPages}
+              total={tablePagination.total}
+              startIndex={tablePagination.startIndex}
+              endIndex={tablePagination.endIndex}
+              pageSize={tablePagination.pageSize}
+              onPageChange={tablePagination.setPage}
+              onPageSizeChange={tablePagination.setPageSize}
+            />
           </div>
         )}
 
@@ -1078,7 +1094,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
                 <p className="text-[13px]">No items match your filters. <span className="text-primary cursor-pointer" onClick={clearFilters}>Clear filters</span></p>
               </div>
             ) : (
-              filteredItems.map(item => (
+              tablePagination.paginatedItems.map(item => (
                 <div key={item.id} className={`bg-background border rounded-lg p-3.5 cursor-pointer transition-all hover:border-primary hover:shadow-sm ${item.escalated ? "border-l-[3px] border-l-amber-500 bg-amber-50 dark:bg-amber-500/5" : ""} ${selectedIds.has(item.id) ? "border-primary shadow-[0_0_0_2px] shadow-primary/20" : ""}`} onClick={() => setDrawerItem(item)} data-testid={`card-raidd-${item.id}`}>
                   <div className="flex items-center justify-between mb-2.5 gap-2">
                     <span className="text-[11px] font-semibold font-mono text-indigo-600 bg-indigo-500/10 px-1.5 py-0.5 rounded">{item.code || item.id}</span>
@@ -1096,6 +1112,20 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
                 </div>
               ))
             )}
+          </div>
+        )}
+        {activeView === "cards" && filteredItems.length > 0 && (
+          <div className="bg-background border rounded-lg">
+            <TablePagination
+              page={tablePagination.page}
+              totalPages={tablePagination.totalPages}
+              total={tablePagination.total}
+              startIndex={tablePagination.startIndex}
+              endIndex={tablePagination.endIndex}
+              pageSize={tablePagination.pageSize}
+              onPageChange={tablePagination.setPage}
+              onPageSizeChange={tablePagination.setPageSize}
+            />
           </div>
         )}
 

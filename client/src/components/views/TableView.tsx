@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import { 
   useReactTable, 
   getCoreRowModel, 
-  getFilteredRowModel,
   flexRender,
   createColumnHelper,
   type ColumnFiltersState,
@@ -61,13 +62,30 @@ export function TableView({ columns: columnsData, items: itemsData, onItemClick,
   }, [JSON.stringify(initialFilters)]);
   
   const columnHelper = createColumnHelper<Item>();
+
+  const filteredItems = useMemo(() => {
+    const items = itemsData || [];
+    if (columnFilters.length === 0) return items;
+    return items.filter((item) => {
+      const values = item.values as Record<string, unknown>;
+      return columnFilters.every((filter) => {
+        if (!filter.value) return true;
+        const strValue = String(values[filter.id] || "").toLowerCase();
+        return strValue.includes(String(filter.value).toLowerCase());
+      });
+    });
+  }, [itemsData, columnFilters]);
+
+  const pagination = useTablePagination(filteredItems, {
+    resetKey: JSON.stringify(columnFilters),
+  });
   
   const columns = useMemo(() => [
     columnHelper.display({
       id: "rowNum",
       header: () => <span className="text-xs text-muted-foreground">#</span>,
       cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground font-mono">{row.index + 1}</span>
+        <span className="text-xs text-muted-foreground font-mono">{pagination.startIndex + row.index}</span>
       ),
       size: 40,
     }),
@@ -179,13 +197,12 @@ export function TableView({ columns: columnsData, items: itemsData, onItemClick,
       cell: () => null,
       size: 100,
     })] : [])
-  ], [columnsData, activeFilters, onAddColumn]);
+  ], [columnsData, activeFilters, onAddColumn, pagination.startIndex]);
 
   const table = useReactTable({
-    data: itemsData || [],
+    data: pagination.paginatedItems,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     onColumnFiltersChange: setColumnFilters,
     state: {
       columnFilters,
@@ -297,6 +314,16 @@ export function TableView({ columns: columnsData, items: itemsData, onItemClick,
             )}
           </TableBody>
         </Table>
+        <TablePagination
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          total={pagination.total}
+          startIndex={pagination.startIndex}
+          endIndex={pagination.endIndex}
+          pageSize={pagination.pageSize}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+        />
       </div>
     </div>
   );

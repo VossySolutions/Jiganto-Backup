@@ -3,6 +3,7 @@ import type { PlatformRole, PermissionLevel } from "@shared/models/permissions";
 import { useAuth } from "@/hooks/use-auth";
 import { getSupabaseAccessToken } from "@/lib/supabase-session";
 import { getStaffOrgOverride } from "@/lib/staff-org-scope";
+import type { ResourceScope } from "@/types/resources-scope";
 
 export interface SessionPermissions {
   userId: string;
@@ -36,11 +37,13 @@ export interface SessionWorkspace {
 type SessionPayload = {
   permissions: SessionPermissions;
   workspace?: SessionWorkspace;
+  resourceScope?: ResourceScope;
 };
 
-async function fetchSessionPermissions(): Promise<SessionPayload | null> {
+async function fetchSessionPermissions(staffOrg?: number | null): Promise<SessionPayload | null> {
   const token = await getSupabaseAccessToken();
-  const res = await fetch("/api/auth/session", {
+  const url = staffOrg != null ? `/api/auth/session?orgId=${staffOrg}` : "/api/auth/session";
+  const res = await fetch(url, {
     credentials: "include",
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
@@ -50,6 +53,7 @@ async function fetchSessionPermissions(): Promise<SessionPayload | null> {
   return {
     permissions: data.permissions as SessionPermissions,
     workspace: data.workspace as SessionWorkspace | undefined,
+    resourceScope: data.resourceScope,
   };
 }
 
@@ -76,6 +80,7 @@ export function usePermissions() {
   return {
     permissions,
     workspace: data?.workspace,
+    resourceScope: data?.resourceScope,
     isLoading: isLoading || !sessionReady,
     sessionReady,
     isAuthenticated,

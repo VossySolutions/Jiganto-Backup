@@ -13,6 +13,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { TablePagination } from "@/components/TablePagination";
+import { useTablePagination } from "@/hooks/use-table-pagination";
 import { ClipboardList, Activity } from "lucide-react";
 import {
   ORG_AUDIT_ACTION_LABELS,
@@ -113,6 +115,14 @@ export default function SettingsStaffAuditTab({ tenantId }: Props) {
 
   const impersonationLogs = impersonationQuery.data?.logs ?? [];
   const orgEvents = orgEventsQuery.data?.events ?? [];
+  const orgEventsPagination = useTablePagination(orgEvents, {
+    resetKey: orgEvents.length,
+    enabled: !orgEventsQuery.isLoading && !orgEventsQuery.error,
+  });
+  const impersonationPagination = useTablePagination(impersonationLogs, {
+    resetKey: `${tenantId}-${impersonationLogs.length}`,
+    enabled: showImpersonation && !impersonationQuery.isLoading,
+  });
 
   return (
     <div className="space-y-6" data-testid="settings-audit-tab">
@@ -139,38 +149,50 @@ export default function SettingsStaffAuditTab({ tenantId }: Props) {
           ) : orgEvents.length === 0 ? (
             <p className="text-sm text-muted-foreground">No organisation events recorded yet.</p>
           ) : (
-            <ScrollArea className="h-[min(360px,45vh)]">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>When</TableHead>
-                      <TableHead>Actor</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Details</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orgEvents.map((row) => (
-                      <TableRow key={row.id} data-testid={`org-audit-${row.id}`}>
-                        <TableCell className="text-sm whitespace-nowrap">
-                          {formatWhen(row.createdAt)}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {row.actorName || row.actorEmail || "—"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{actionLabel(row.action)}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-[240px] truncate">
-                          {eventDetail(row)}
-                        </TableCell>
+            <>
+              <ScrollArea className="h-[min(360px,45vh)]">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>When</TableHead>
+                        <TableHead>Actor</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead>Details</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </ScrollArea>
+                    </TableHeader>
+                    <TableBody>
+                      {orgEventsPagination.paginatedItems.map((row) => (
+                        <TableRow key={row.id} data-testid={`org-audit-${row.id}`}>
+                          <TableCell className="text-sm whitespace-nowrap">
+                            {formatWhen(row.createdAt)}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {row.actorName || row.actorEmail || "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{actionLabel(row.action)}</Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-[240px] truncate">
+                            {eventDetail(row)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </ScrollArea>
+              <TablePagination
+                page={orgEventsPagination.page}
+                totalPages={orgEventsPagination.totalPages}
+                total={orgEventsPagination.total}
+                startIndex={orgEventsPagination.startIndex}
+                endIndex={orgEventsPagination.endIndex}
+                pageSize={orgEventsPagination.pageSize}
+                onPageChange={orgEventsPagination.setPage}
+                onPageSizeChange={orgEventsPagination.setPageSize}
+              />
+            </>
           )}
         </CardContent>
       </Card>
@@ -192,40 +214,52 @@ export default function SettingsStaffAuditTab({ tenantId }: Props) {
             ) : impersonationLogs.length === 0 ? (
               <p className="text-sm text-muted-foreground">No impersonation events recorded yet.</p>
             ) : (
-              <ScrollArea className="h-[min(320px,40vh)]">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>When</TableHead>
-                        <TableHead>Staff</TableHead>
-                        <TableHead>Target</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Reason</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {impersonationLogs.map((row) => (
-                        <TableRow key={row.id}>
-                          <TableCell className="text-sm whitespace-nowrap">
-                            {formatWhen(row.startedAt ?? row.createdAt)}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {row.staffName || row.staffEmail || row.staffUserId}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {row.targetName || row.targetEmail || row.targetUserId}
-                          </TableCell>
-                          <TableCell>{statusBadge(row.approvalStatus)}</TableCell>
-                          <TableCell className="text-sm max-w-[180px] truncate">
-                            {row.reason || "—"}
-                          </TableCell>
+              <>
+                <ScrollArea className="h-[min(320px,40vh)]">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>When</TableHead>
+                          <TableHead>Staff</TableHead>
+                          <TableHead>Target</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Reason</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </ScrollArea>
+                      </TableHeader>
+                      <TableBody>
+                        {impersonationPagination.paginatedItems.map((row) => (
+                          <TableRow key={row.id}>
+                            <TableCell className="text-sm whitespace-nowrap">
+                              {formatWhen(row.startedAt ?? row.createdAt)}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {row.staffName || row.staffEmail || row.staffUserId}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {row.targetName || row.targetEmail || row.targetUserId}
+                            </TableCell>
+                            <TableCell>{statusBadge(row.approvalStatus)}</TableCell>
+                            <TableCell className="text-sm max-w-[180px] truncate">
+                              {row.reason || "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </ScrollArea>
+                <TablePagination
+                  page={impersonationPagination.page}
+                  totalPages={impersonationPagination.totalPages}
+                  total={impersonationPagination.total}
+                  startIndex={impersonationPagination.startIndex}
+                  endIndex={impersonationPagination.endIndex}
+                  pageSize={impersonationPagination.pageSize}
+                  onPageChange={impersonationPagination.setPage}
+                  onPageSizeChange={impersonationPagination.setPageSize}
+                />
+              </>
             )}
           </CardContent>
         </Card>

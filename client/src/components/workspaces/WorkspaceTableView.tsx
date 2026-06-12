@@ -1,4 +1,6 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { getSelectColors, getSelectChoices } from "@/lib/selectColors";
@@ -966,58 +968,68 @@ export function WorkspaceTableView({
     }
   };
 
-  let processedRows = [...rows];
+  const processedRows = useMemo(() => {
+    let result = [...rows];
 
-  if (searchQuery) {
-    processedRows = processedRows.filter((row) => {
-      const rowData = (row.data as Record<string, unknown>) || {};
-      return Object.values(rowData).some((v) =>
-        String(v || "").toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    });
-  }
-
-  if (filterRules.length > 0) {
-    processedRows = processedRows.filter((row) => {
-      const rowData = (row.data as Record<string, unknown>) || {};
-      return filterRules.every((rule) => {
-        const val = String(rowData[String(rule.columnId)] || "").toLowerCase();
-        const target = rule.value.toLowerCase();
-        switch (rule.operator) {
-          case "is": return val === target;
-          case "is_not": return val !== target;
-          case "contains": return val.includes(target);
-          case "not_contains": return !val.includes(target);
-          case "is_empty": return !val;
-          case "is_not_empty": return !!val;
-          default: return true;
-        }
+    if (searchQuery) {
+      result = result.filter((row) => {
+        const rowData = (row.data as Record<string, unknown>) || {};
+        return Object.values(rowData).some((v) =>
+          String(v || "").toLowerCase().includes(searchQuery.toLowerCase())
+        );
       });
-    });
-  }
+    }
 
-  if (sortColumn !== null) {
-    processedRows.sort((a, b) => {
-      const aData = (a.data as Record<string, unknown>) || {};
-      const bData = (b.data as Record<string, unknown>) || {};
-      const aVal = String(aData[String(sortColumn)] || "");
-      const bVal = String(bData[String(sortColumn)] || "");
-      const cmp = aVal.localeCompare(bVal);
-      return sortDirection === "asc" ? cmp : -cmp;
-    });
-  }
+    if (filterRules.length > 0) {
+      result = result.filter((row) => {
+        const rowData = (row.data as Record<string, unknown>) || {};
+        return filterRules.every((rule) => {
+          const val = String(rowData[String(rule.columnId)] || "").toLowerCase();
+          const target = rule.value.toLowerCase();
+          switch (rule.operator) {
+            case "is": return val === target;
+            case "is_not": return val !== target;
+            case "contains": return val.includes(target);
+            case "not_contains": return !val.includes(target);
+            case "is_empty": return !val;
+            case "is_not_empty": return !!val;
+            default: return true;
+          }
+        });
+      });
+    }
 
-  const groupedRows = (() => {
+    if (sortColumn !== null) {
+      result = [...result].sort((a, b) => {
+        const aData = (a.data as Record<string, unknown>) || {};
+        const bData = (b.data as Record<string, unknown>) || {};
+        const aVal = String(aData[String(sortColumn)] || "");
+        const bVal = String(bData[String(sortColumn)] || "");
+        const cmp = aVal.localeCompare(bVal);
+        return sortDirection === "asc" ? cmp : -cmp;
+      });
+    }
+
+    return result;
+  }, [rows, searchQuery, filterRules, sortColumn, sortDirection]);
+
+  const rowPagination = useTablePagination(processedRows, {
+    resetKey: `${searchQuery}-${JSON.stringify(filterRules)}-${sortColumn}-${sortDirection}`,
+  });
+
+  const displayRows = rowPagination.paginatedItems;
+
+  const groupedRows = useMemo(() => {
     if (groupByColumn === null) return null;
     const groups: Record<string, WorkspaceDatabaseRow[]> = {};
-    processedRows.forEach((row) => {
+    displayRows.forEach((row) => {
       const rowData = (row.data as Record<string, unknown>) || {};
       const groupVal = String(rowData[String(groupByColumn)] || "") || "(empty)";
       if (!groups[groupVal]) groups[groupVal] = [];
       groups[groupVal].push(row);
     });
     return groups;
-  })();
+  }, [displayRows, groupByColumn]);
 
   const toggleGroupCollapse = (groupKey: string) => {
     setCollapsedGroups((prev) => {
@@ -1468,17 +1480,29 @@ export function WorkspaceTableView({
                       );
                     })
                   ) : (
-                    processedRows.map(renderTableRow)
+                    displayRows.map(renderTableRow)
                   )}
                 </tbody>
               </table>
+            )}
+            {processedRows.length > 0 && (
+              <TablePagination
+                page={rowPagination.page}
+                totalPages={rowPagination.totalPages}
+                total={rowPagination.total}
+                startIndex={rowPagination.startIndex}
+                endIndex={rowPagination.endIndex}
+                pageSize={rowPagination.pageSize}
+                onPageChange={rowPagination.setPage}
+                onPageSizeChange={rowPagination.setPageSize}
+              />
             )}
           </div>
         )}
 
         {activeView === "list" && (
           <div className="p-3 space-y-1">
-            {processedRows.map((row) => {
+            {displayRows.map((row) => {
               const rowData = (row.data as Record<string, unknown>) || {};
               const firstCol = columns[0];
               const title = firstCol ? String(rowData[String(firstCol.id)] || "Untitled") : "Untitled";
@@ -1515,7 +1539,7 @@ export function WorkspaceTableView({
 
         {activeView === "gallery" && (
           <div className="p-3 grid grid-cols-3 gap-3">
-            {processedRows.map((row) => {
+            {displayRows.map((row) => {
               const rowData = (row.data as Record<string, unknown>) || {};
               const firstCol = columns[0];
               const title = firstCol ? String(rowData[String(firstCol.id)] || "Untitled") : "Untitled";

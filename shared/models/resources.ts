@@ -17,14 +17,28 @@ export const resources = pgTable("resources", {
   jobTitle: text("job_title"),
   department: text("department"),
   location: text("location"),
+  personType: text("person_type").default("employee"),
   employmentType: text("employment_type").default("full-time"),
-  status: text("status").default("available"),
+  status: text("status").default("active"),
+  fte: decimal("fte", { precision: 3, scale: 2 }).default("1.0"),
+  reportsToId: integer("reports_to_id"),
+  timeZone: text("time_zone"),
   costRate: decimal("cost_rate", { precision: 10, scale: 2 }),
   billRate: decimal("bill_rate", { precision: 10, scale: 2 }),
+  currency: text("currency").default("GBP"),
+  rateCardId: integer("rate_card_id"),
+  costCentre: text("cost_centre"),
+  payrollId: text("payroll_id"),
+  workingDaysPerWeek: decimal("working_days_per_week", { precision: 3, scale: 1 }).default("5"),
+  dailyHours: decimal("daily_hours", { precision: 4, scale: 1 }).default("8"),
   weeklyCapacityHours: decimal("weekly_capacity_hours", { precision: 5, scale: 1 }).default("40"),
+  holidayEntitlement: integer("holiday_entitlement"),
+  noticePeriodDays: integer("notice_period_days"),
+  rightToWorkStatus: text("right_to_work_status").default("incomplete"),
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
   notes: text("notes"),
+  internalNotes: text("internal_notes"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -62,6 +76,7 @@ export const skills = pgTable("skills", {
   categoryId: integer("category_id").references(() => skillCategories.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   description: text("description"),
+  isCertification: boolean("is_certification").default(false),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -77,8 +92,14 @@ export const resourceSkills = pgTable("resource_skills", {
   id: serial("id").primaryKey(),
   resourceId: integer("resource_id").notNull().references(() => resources.id, { onDelete: "cascade" }),
   skillId: integer("skill_id").notNull().references(() => skills.id, { onDelete: "cascade" }),
-  proficiencyLevel: text("proficiency_level").default("intermediate"),
+  proficiencyLevel: text("proficiency_level").default("practitioner"),
+  skillLevel: integer("skill_level").default(3),
   yearsExperience: decimal("years_experience", { precision: 4, scale: 1 }),
+  lastUsed: timestamp("last_used"),
+  certificationName: text("certification_name"),
+  certificationExpiry: timestamp("certification_expiry"),
+  certificateDocumentId: integer("certificate_document_id"),
+  verifiedById: varchar("verified_by_id").references(() => users.id),
   notes: text("notes"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -100,8 +121,9 @@ export const resourceAllocations = pgTable("resource_allocations", {
   resourceId: integer("resource_id").notNull().references(() => resources.id, { onDelete: "cascade" }),
   projectId: integer("project_id"),
   projectName: text("project_name"),
-  allocationType: text("allocation_type").default("hard"),
+  allocationType: text("allocation_type").default("confirmed"),
   allocationPercentage: decimal("allocation_percentage", { precision: 5, scale: 1 }).default("100"),
+  daysPerWeek: decimal("days_per_week", { precision: 4, scale: 1 }),
   hoursPerWeek: decimal("hours_per_week", { precision: 5, scale: 1 }),
   role: text("role"),
   startDate: timestamp("start_date").notNull(),
@@ -136,6 +158,8 @@ export const timesheetPeriods = pgTable("timesheet_periods", {
   approvedByRmId: varchar("approved_by_rm_id").references(() => users.id),
   approvedByRmAt: timestamp("approved_by_rm_at"),
   rejectionReason: text("rejection_reason"),
+  submittedByUserId: varchar("submitted_by_user_id").references(() => users.id),
+  managerSubmitted: boolean("manager_submitted").default(false),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -161,6 +185,7 @@ export const timesheetEntries = pgTable("timesheet_entries", {
   activityType: text("activity_type").default("billable"),
   role: text("role"),
   departmentCode: text("department_code"),
+  costCentreCode: text("cost_centre_code"),
   entryDate: date("entry_date"),
   dayOfWeek: integer("day_of_week").notNull(),
   hours: decimal("hours", { precision: 4, scale: 1 }).default("0"),
@@ -172,6 +197,10 @@ export const timesheetEntries = pgTable("timesheet_entries", {
   description: text("description"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  approvalStatus: text("approval_status").default("pending"),
+  rejectionReason: text("rejection_reason"),
+  approvedById: varchar("approved_by_id").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
 });
 
 export const timesheetEntriesRelations = relations(timesheetEntries, ({ one }) => ({
@@ -223,6 +252,59 @@ export const rateCardItemRelations = relations(rateCardItems, ({ one }) => ({
   rateCard: one(rateCards, { fields: [rateCardItems.rateCardId], references: [rateCards.id] }),
 }));
 
+export const resourceLeaves = pgTable("resource_leaves", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  resourceId: integer("resource_id").notNull().references(() => resources.id, { onDelete: "cascade" }),
+  leaveType: text("leave_type").default("annual"),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  notes: text("notes"),
+  approvedById: varchar("approved_by_id").references(() => users.id),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const resourceLeavesRelations = relations(resourceLeaves, ({ one }) => ({
+  resource: one(resources, { fields: [resourceLeaves.resourceId], references: [resources.id] }),
+}));
+
+export const timesheetIntegrations = pgTable("timesheet_integrations", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  name: text("name").notNull(),
+  endpointUrl: text("endpoint_url").notNull(),
+  authType: text("auth_type").default("bearer"),
+  authConfig: jsonb("auth_config"),
+  trigger: text("trigger").default("on_approval"),
+  scheduleCron: text("schedule_cron"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const timesheetIntegrationLog = pgTable("timesheet_integration_log", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  integrationId: integer("integration_id").references(() => timesheetIntegrations.id, { onDelete: "cascade" }),
+  recordsSent: integer("records_sent").default(0),
+  status: text("status").default("pending"),
+  errorMessage: text("error_message"),
+  payload: jsonb("payload"),
+  retryCount: integer("retry_count").default(0),
+  nextRetryAt: timestamp("next_retry_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const timesheetAuditLog = pgTable("timesheet_audit_log", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  timesheetPeriodId: integer("timesheet_period_id").references(() => timesheetPeriods.id, { onDelete: "cascade" }),
+  action: text("action").notNull(),
+  actorUserId: varchar("actor_user_id").references(() => users.id),
+  details: text("details"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 export const projectCodes = pgTable("project_codes", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
@@ -235,7 +317,22 @@ export const projectCodes = pgTable("project_codes", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const insertResourceSchema = createInsertSchema(resources).omit({ id: true, createdAt: true, updatedAt: true });
+export const documentResourceLinks = pgTable("document_resource_links", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  documentId: integer("document_id").notNull(),
+  resourceId: integer("resource_id").notNull().references(() => resources.id, { onDelete: "cascade" }),
+  linkType: text("link_type").default("general"),
+  notes: text("notes"),
+  createdById: varchar("created_by_id").references(() => users.id),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const documentResourceLinksRelations = relations(documentResourceLinks, ({ one }) => ({
+  resource: one(resources, { fields: [documentResourceLinks.resourceId], references: [resources.id] }),
+}));
+
+export const insertDocumentResourceLinkSchema = createInsertSchema(documentResourceLinks).omit({ id: true, createdAt: true });
 export const insertSkillCategorySchema = createInsertSchema(skillCategories).omit({ id: true, createdAt: true });
 export const insertSkillSchema = createInsertSchema(skills).omit({ id: true, createdAt: true });
 export const insertResourceSkillSchema = createInsertSchema(resourceSkills).omit({ id: true, createdAt: true });
@@ -245,6 +342,9 @@ export const insertTimesheetEntrySchema = createInsertSchema(timesheetEntries).o
 export const insertProjectCodeSchema = createInsertSchema(projectCodes).omit({ id: true, createdAt: true });
 export const insertRateCardSchema = createInsertSchema(rateCards).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertRateCardItemSchema = createInsertSchema(rateCardItems).omit({ id: true, createdAt: true });
+export const insertResourceLeaveSchema = createInsertSchema(resourceLeaves).omit({ id: true, createdAt: true });
+export const insertTimesheetIntegrationSchema = createInsertSchema(timesheetIntegrations).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertTimesheetAuditLogSchema = createInsertSchema(timesheetAuditLog).omit({ id: true, createdAt: true });
 
 export type Resource = typeof resources.$inferSelect;
 export type SkillCategory = typeof skillCategories.$inferSelect;
@@ -267,3 +367,26 @@ export type InsertTimesheetEntry = z.infer<typeof insertTimesheetEntrySchema>;
 export type InsertProjectCode = z.infer<typeof insertProjectCodeSchema>;
 export type InsertRateCard = z.infer<typeof insertRateCardSchema>;
 export type InsertRateCardItem = z.infer<typeof insertRateCardItemSchema>;
+export type ResourceLeave = typeof resourceLeaves.$inferSelect;
+export type TimesheetIntegration = typeof timesheetIntegrations.$inferSelect;
+export type TimesheetIntegrationLog = typeof timesheetIntegrationLog.$inferSelect;
+export type TimesheetAuditLog = typeof timesheetAuditLog.$inferSelect;
+export type DocumentResourceLink = typeof documentResourceLinks.$inferSelect;
+export type InsertDocumentResourceLink = z.infer<typeof insertDocumentResourceLinkSchema>;
+
+export const insertResourceSchema = createInsertSchema(resources).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertTimesheetIntegration = z.infer<typeof insertTimesheetIntegrationSchema>;
+export type InsertTimesheetAuditLog = z.infer<typeof insertTimesheetAuditLogSchema>;
+
+/** Spec skill levels 1–5 */
+export const SKILL_LEVELS = [
+  { level: 1, value: "awareness", label: "Awareness" },
+  { level: 2, value: "foundation", label: "Foundation" },
+  { level: 3, value: "practitioner", label: "Practitioner" },
+  { level: 4, value: "expert", label: "Expert" },
+  { level: 5, value: "thought-leader", label: "Thought Leader" },
+] as const;
+
+export const PERSON_TYPES = ["employee", "contractor", "third-party", "customer"] as const;
+export const RESOURCE_STATUSES = ["active", "on-leave", "inactive", "bench"] as const;
+export const UTILISATION_TARGET_PCT = 75;

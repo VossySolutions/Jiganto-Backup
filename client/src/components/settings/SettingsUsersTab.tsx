@@ -34,6 +34,8 @@ import BulkAssignmentDialog from "@/components/settings/BulkAssignmentDialog";
 import SettingsUserModulePermissionsGrid, {
   type PermissionRow,
 } from "@/components/settings/SettingsUserModulePermissionsGrid";
+import { TablePagination } from "@/components/TablePagination";
+import { useTablePagination } from "@/hooks/use-table-pagination";
 import { SETTINGS_MODULE_KEYS } from "@shared/models/module-access";
 import type { Profile, UserRole, UserInvitation, UserModulePermission, OrgUnit, UserProjectAssignment } from "@shared/schema";
 import { PLATFORM_ROLE_LABELS, PLATFORM_ROLES, type PlatformRole } from "@shared/models/permissions";
@@ -1281,6 +1283,18 @@ export default function SettingsUsersTab({
     }
   }, [updateProfileMutation]);
 
+  const pendingInvitations = useMemo(
+    () => invitations.filter((inv) => inv.status === "pending"),
+    [invitations],
+  );
+  const bulkUploadPreviewPagination = useTablePagination(bulkUploadUsers, {
+    resetKey: `${bulkUploadUsers.length}-${bulkSendInvite ? "invite" : "import"}`,
+    enabled: isBulkUploadOpen,
+  });
+  const pendingInvitationsPagination = useTablePagination(pendingInvitations, {
+    resetKey: pendingInvitations.length,
+  });
+
 
   return (
     <div className="space-y-6 min-w-0 w-full max-w-full">
@@ -1762,7 +1776,7 @@ export default function SettingsUsersTab({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {bulkUploadUsers.map((user, idx) => (
+                  {bulkUploadPreviewPagination.paginatedItems.map((user, idx) => (
                     <TableRow key={idx}>
                       <TableCell className="font-mono text-sm">{user.email}</TableCell>
                       <TableCell className="text-sm">
@@ -1787,6 +1801,16 @@ export default function SettingsUsersTab({
                 </TableBody>
               </Table>
             </ScrollArea>
+            <TablePagination
+              page={bulkUploadPreviewPagination.page}
+              totalPages={bulkUploadPreviewPagination.totalPages}
+              total={bulkUploadPreviewPagination.total}
+              startIndex={bulkUploadPreviewPagination.startIndex}
+              endIndex={bulkUploadPreviewPagination.endIndex}
+              pageSize={bulkUploadPreviewPagination.pageSize}
+              onPageChange={bulkUploadPreviewPagination.setPage}
+              onPageSizeChange={bulkUploadPreviewPagination.setPageSize}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsBulkUploadOpen(false)} data-testid="button-cancel-bulk">
@@ -1886,7 +1910,7 @@ export default function SettingsUsersTab({
           </CardHeader>
           <CardContent className="p-0">
             <div className="md:hidden divide-y">
-              {invitations.filter((inv) => inv.status === "pending").map((inv) => (
+              {pendingInvitationsPagination.paginatedItems.map((inv) => (
                 <div
                   key={inv.id}
                   className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
@@ -1935,7 +1959,7 @@ export default function SettingsUsersTab({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invitations.filter((inv) => inv.status === "pending").map((inv) => (
+                  {pendingInvitationsPagination.paginatedItems.map((inv) => (
                     <TableRow key={inv.id}>
                       <TableCell>{inv.email}</TableCell>
                       <TableCell>{invitationPlatformLabel(inv) ?? "—"}</TableCell>
@@ -1966,6 +1990,16 @@ export default function SettingsUsersTab({
                 </TableBody>
               </Table>
             </div>
+            <TablePagination
+              page={pendingInvitationsPagination.page}
+              totalPages={pendingInvitationsPagination.totalPages}
+              total={pendingInvitationsPagination.total}
+              startIndex={pendingInvitationsPagination.startIndex}
+              endIndex={pendingInvitationsPagination.endIndex}
+              pageSize={pendingInvitationsPagination.pageSize}
+              onPageChange={pendingInvitationsPagination.setPage}
+              onPageSizeChange={pendingInvitationsPagination.setPageSize}
+            />
           </CardContent>
         </Card>
       )}

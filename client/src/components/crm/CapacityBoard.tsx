@@ -19,6 +19,7 @@ type ResourceEntry = {
   firstName: string;
   lastName: string;
   jobTitle: string | null;
+  department?: string | null;
   status: string;
   photoUrl?: string | null;
   weeklyCapacityHours?: string | null;
@@ -217,9 +218,22 @@ function buildLineWeekActiveMap(line: AllocationLine, weekStarts: Date[]): Set<s
   return weeks;
 }
 
-export function CapacityBoard() {
+export type CapacityBoardProps = {
+  scope?: "org" | "crm";
+  weeks?: number;
+  pageSize?: number;
+  onNewAllocation?: () => void;
+};
+
+export function CapacityBoard({ scope = "org", weeks = 12, pageSize = 50, onNewAllocation }: CapacityBoardProps = {}) {
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [deptFilter, setDeptFilter] = useState("all");
+  const [availableOnly, setAvailableOnly] = useState(false);
+  const [showConfirmed, setShowConfirmed] = useState(true);
+  const [showPipeline, setShowPipeline] = useState(true);
+  const [showLeave, setShowLeave] = useState(true);
+  const [page, setPage] = useState(0);
   const [displayMode, setDisplayMode] = useState<"percent" | "days">("percent");
   const [expandedResources, setExpandedResources] = useState<Set<number>>(new Set());
   const [allExpanded, setAllExpanded] = useState(false);
@@ -246,8 +260,8 @@ export function CapacityBoard() {
   }));
 
   const today = new Date();
-  const TOTAL_WEEKS = 52;
-  const weekStarts = useMemo(() => getWeekStarts(today, TOTAL_WEEKS), []);
+  const TOTAL_WEEKS = weeks;
+  const weekStarts = useMemo(() => getWeekStarts(today, TOTAL_WEEKS), [TOTAL_WEEKS]);
 
   const monthGroups = useMemo(() => {
     const groups: Array<{ label: string; span: number }> = [];
@@ -266,6 +280,12 @@ export function CapacityBoard() {
     return Array.from(roles).sort();
   }, [resources]);
 
+  const departments = useMemo(() => {
+    const d = new Set<string>();
+    resources.forEach((r) => { if (r.department) d.add(r.department); });
+    return Array.from(d).sort();
+  }, [resources]);
+
   const filteredResources = useMemo(() => {
     let filtered = resources;
     if (searchQuery) {
@@ -278,16 +298,35 @@ export function CapacityBoard() {
     if (roleFilter !== "all") {
       filtered = filtered.filter(r => r.jobTitle === roleFilter);
     }
+    if (deptFilter !== "all") {
+      filtered = filtered.filter(r => r.department === deptFilter);
+    }
+    if (availableOnly) {
+      filtered = filtered.filter((r) => {
+        const wm = buildResourceWeekMap(r.id, allocations, showPipeline ? oppRows : [], weekStarts);
+        const firstWeek = weekStarts[0] ? weekKey(weekStarts[0]) : "";
+        const alloc = wm.get(firstWeek);
+        return (alloc?.total ?? 0) < 5;
+      });
+    }
     return filtered;
-  }, [resources, searchQuery, roleFilter]);
+  }, [resources, searchQuery, roleFilter, deptFilter, availableOnly, allocations, oppRows, weekStarts, showPipeline]);
+
+  const pagedResources = useMemo(() => {
+    const start = page * pageSize;
+    return filteredResources.slice(start, start + pageSize);
+  }, [filteredResources, page, pageSize]);
+
+  const hasMore = (page + 1) * pageSize < filteredResources.length;
 
   const weekMaps = useMemo(() => {
     const maps = new Map<number, Map<string, WeekAlloc>>();
-    filteredResources.forEach(r => {
-      maps.set(r.id, buildResourceWeekMap(r.id, allocations, oppRows, weekStarts));
+    const rows = showPipeline ? oppRows : [];
+    pagedResources.forEach(r => {
+      maps.set(r.id, buildResourceWeekMap(r.id, allocations, rows, weekStarts));
     });
     return maps;
-  }, [filteredResources, allocations, oppRows, weekStarts]);
+  }, [pagedResources, allocations, oppRows, weekStarts, showPipeline]);
 
   const toggleExpand = useCallback((id: number) => {
     setExpandedResources(prev => {
@@ -351,6 +390,21 @@ export function CapacityBoard() {
               ))}
             </SelectContent>
           </Select>
+          {departments.length > 0 && (
+            <Select value={deptFilter} onValueChange={setDeptFilter}>
+              <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="Department" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All departments</SelectItem>
+                {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          <Button variant={availableOnly ? "default" : "outline"} size="sm" className="h-8 text-xs" onClick={() => setAvailableOnly(!availableOnly)}>
+            Available only
+          </Button>
+          {onNewAllocation && (
+            <Button size="sm" className="h-8 text-xs" onClick={onNewAllocation}>+ New allocation</Button>
+          )}
           <div className="flex border rounded-md overflow-hidden">
             <button
               onClick={() => setDisplayMode("percent")}
@@ -437,7 +491,7 @@ export function CapacityBoard() {
                   </td>
                 </tr>
               ) : (
-                filteredResources.map(resource => {
+                pagedResources.map(resource => {
                   const wm = weekMaps.get(resource.id);
                   const isExpanded = expandedResources.has(resource.id);
                   const initials = `${resource.firstName?.[0] || ""}${resource.lastName?.[0] || ""}`.toUpperCase();
@@ -471,7 +525,7 @@ export function CapacityBoard() {
               )}
               <TotalsRow
                 weekStarts={weekStarts}
-                filteredResources={filteredResources}
+                filteredResources={pagedResources}
                 weekMaps={weekMaps}
                 displayMode={displayMode}
                 cellW={CELL_W}
@@ -485,11 +539,16 @@ export function CapacityBoard() {
       {filteredResources.length > 0 && (
         <div className="flex items-center gap-4 px-4 py-2.5 border-t bg-muted/20 flex-wrap">
           <span className="text-[11px] font-semibold text-muted-foreground">
-            {filteredResources.length} resource{filteredResources.length !== 1 ? "s" : ""}
+            Showing {pagedResources.length} of {filteredResources.length} resources
           </span>
           <span className="text-[11px] text-muted-foreground">
             {allocations.length} active allocation{allocations.length !== 1 ? "s" : ""}
           </span>
+          {hasMore && (
+            <Button variant="outline" size="sm" className="ml-auto h-8 text-xs" onClick={() => setPage((p) => p + 1)}>
+              Load more ({filteredResources.length - (page + 1) * pageSize} remaining)
+            </Button>
+          )}
         </div>
       )}
     </div>

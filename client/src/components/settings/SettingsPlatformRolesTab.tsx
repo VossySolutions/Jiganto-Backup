@@ -29,6 +29,8 @@ import {
 } from "@/components/ui/dialog";
 import { SubmitForm } from "@/components/ui/submit-form";
 import { Badge } from "@/components/ui/badge";
+import { TablePagination } from "@/components/TablePagination";
+import { useTablePagination } from "@/hooks/use-table-pagination";
 import { Plus, Trash2, Shield } from "lucide-react";
 import type { PlatformRole } from "@shared/models/permissions";
 import {
@@ -102,6 +104,9 @@ export default function SettingsPlatformRolesTab({ tenantId, clients }: Props) {
 
   const memberships = data?.memberships ?? [];
   const roles = data?.platformRoles ?? (Object.keys(PLATFORM_ROLE_LABELS) as PlatformRole[]);
+  const membershipsPagination = useTablePagination(memberships, {
+    resetKey: memberships.length,
+  });
 
   const usersWithoutMembership = users.filter(
     (p) => !memberships.some((m) => m.userId === p.user.id),
@@ -129,6 +134,7 @@ export default function SettingsPlatformRolesTab({ tenantId, clients }: Props) {
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow>
@@ -139,7 +145,7 @@ export default function SettingsPlatformRolesTab({ tenantId, clients }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {memberships.map((m) => {
+              {membershipsPagination.paginatedItems.map((m) => {
                 const protectedRole = isImmutablePlatformRole(m.platformRole);
                 return (
                 <TableRow key={m.id} data-testid={`membership-${m.id}`}>
@@ -186,6 +192,17 @@ export default function SettingsPlatformRolesTab({ tenantId, clients }: Props) {
               })}
             </TableBody>
           </Table>
+          <TablePagination
+            page={membershipsPagination.page}
+            totalPages={membershipsPagination.totalPages}
+            total={membershipsPagination.total}
+            startIndex={membershipsPagination.startIndex}
+            endIndex={membershipsPagination.endIndex}
+            pageSize={membershipsPagination.pageSize}
+            onPageChange={membershipsPagination.setPage}
+            onPageSizeChange={membershipsPagination.setPageSize}
+          />
+          </>
         )}
       </CardContent>
 

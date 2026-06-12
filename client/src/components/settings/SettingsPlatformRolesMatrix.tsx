@@ -18,6 +18,8 @@ import {
   canViewPmoMasterForRole,
   type PlatformRole,
 } from "@shared/models/permissions";
+import { TablePagination } from "@/components/TablePagination";
+import { useTablePagination } from "@/hooks/use-table-pagination";
 
 function BoolCell({ value }: { value: boolean }) {
   return value ? (
@@ -32,6 +34,10 @@ function isOrgAdminRole(role: PlatformRole): boolean {
 }
 
 export default function SettingsPlatformRolesMatrix() {
+  const rolesPagination = useTablePagination(PLATFORM_ROLES, {
+    resetKey: PLATFORM_ROLES.length,
+  });
+
   return (
     <Card data-testid="platform-roles-matrix">
       <CardHeader>
@@ -57,7 +63,7 @@ export default function SettingsPlatformRolesMatrix() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {PLATFORM_ROLES.map((role) => (
+            {rolesPagination.paginatedItems.map((role) => (
               <TableRow key={role}>
                 <TableCell className="font-medium">{PLATFORM_ROLE_LABELS[role]}</TableCell>
                 <TableCell className="text-center">
@@ -81,6 +87,16 @@ export default function SettingsPlatformRolesMatrix() {
             ))}
           </TableBody>
         </Table>
+        <TablePagination
+          page={rolesPagination.page}
+          totalPages={rolesPagination.totalPages}
+          total={rolesPagination.total}
+          startIndex={rolesPagination.startIndex}
+          endIndex={rolesPagination.endIndex}
+          pageSize={rolesPagination.pageSize}
+          onPageChange={rolesPagination.setPage}
+          onPageSizeChange={rolesPagination.setPageSize}
+        />
       </CardContent>
     </Card>
   );

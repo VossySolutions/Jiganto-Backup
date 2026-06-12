@@ -40,8 +40,16 @@ export function registerPermissionsRoutes(app: Express): void {
       }
 
       const permissions = await resolveUserPermissions(userId, orgId);
+      let resourceScope: Awaited<ReturnType<typeof import("../resources/permissions").resolveResourceScope>> | undefined;
+      try {
+        const { resolveResourceScope } = await import("../resources/permissions");
+        resourceScope = await resolveResourceScope(userId, orgId, permissions.platformRole);
+      } catch {
+        /* resources tables may not exist yet */
+      }
       res.json({
         permissions,
+        resourceScope,
         workspace: req.workspace
           ? {
               mode: req.workspace.mode,

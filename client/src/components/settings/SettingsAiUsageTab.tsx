@@ -13,8 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TablePagination } from "@/components/TablePagination";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useTablePagination } from "@/hooks/use-table-pagination";
 import { Sparkles, Download, Plus, Trash2 } from "lucide-react";
 
 type UsageRow = {
@@ -107,6 +109,17 @@ export default function SettingsAiUsageTab({ tenantId }: Props) {
     URL.revokeObjectURL(url);
   };
 
+  const usageRows = data?.usage ?? [];
+  const limitRows = limitsData?.limits ?? [];
+  const usagePagination = useTablePagination(usageRows, {
+    resetKey: `${tenantId}-${usageRows.length}`,
+    enabled: !isLoading && !isError && !data?.tableMissing,
+  });
+  const limitsPagination = useTablePagination(limitRows, {
+    resetKey: `${tenantId}-${limitRows.length}`,
+    enabled: !isLoading && !isError && !data?.tableMissing,
+  });
+
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading AI usage…</p>;
   }
@@ -168,39 +181,51 @@ export default function SettingsAiUsageTab({ tenantId }: Props) {
           </Button>
         </CardHeader>
         <CardContent>
-          {!data?.usage?.length ? (
+          {usageRows.length === 0 ? (
             <p className="text-sm text-muted-foreground">No AI usage recorded yet.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Module</TableHead>
-                  <TableHead>Feature</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead className="text-right">Tokens</TableHead>
-                  <TableHead>When</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.usage.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>
-                      <Badge variant="outline">{row.module}</Badge>
-                    </TableCell>
-                    <TableCell className="text-sm">{row.featureName}</TableCell>
-                    <TableCell className="text-sm">{row.userLabel}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {row.tokensConsumed.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {row.createdAt
-                        ? new Date(row.createdAt).toLocaleString()
-                        : "—"}
-                    </TableCell>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Module</TableHead>
+                    <TableHead>Feature</TableHead>
+                    <TableHead>User</TableHead>
+                    <TableHead className="text-right">Tokens</TableHead>
+                    <TableHead>When</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {usagePagination.paginatedItems.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>
+                        <Badge variant="outline">{row.module}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">{row.featureName}</TableCell>
+                      <TableCell className="text-sm">{row.userLabel}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {row.tokensConsumed.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {row.createdAt
+                          ? new Date(row.createdAt).toLocaleString()
+                          : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <TablePagination
+                page={usagePagination.page}
+                totalPages={usagePagination.totalPages}
+                total={usagePagination.total}
+                startIndex={usagePagination.startIndex}
+                endIndex={usagePagination.endIndex}
+                pageSize={usagePagination.pageSize}
+                onPageChange={usagePagination.setPage}
+                onPageSizeChange={usagePagination.setPageSize}
+              />
+            </>
           )}
         </CardContent>
       </Card>
@@ -247,43 +272,55 @@ export default function SettingsAiUsageTab({ tenantId }: Props) {
               Add limit
             </Button>
           </div>
-          {!limitsData?.limits?.length ? (
+          {limitRows.length === 0 ? (
             <p className="text-sm text-muted-foreground">No custom limits configured.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Scope</TableHead>
-                  <TableHead className="text-right">Monthly limit</TableHead>
-                  <TableHead className="w-12" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {limitsData.limits.map((lim) => (
-                  <TableRow key={lim.id}>
-                    <TableCell className="text-sm">
-                      {lim.userId
-                        ? `User ${lim.userId.slice(0, 8)}…`
-                        : lim.module
-                          ? `Module: ${lim.module}`
-                          : "Organisation (global)"}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {lim.monthlyLimit.toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteLimitMut.mutate(lim.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Scope</TableHead>
+                    <TableHead className="text-right">Monthly limit</TableHead>
+                    <TableHead className="w-12" />
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {limitsPagination.paginatedItems.map((lim) => (
+                    <TableRow key={lim.id}>
+                      <TableCell className="text-sm">
+                        {lim.userId
+                          ? `User ${lim.userId.slice(0, 8)}…`
+                          : lim.module
+                            ? `Module: ${lim.module}`
+                            : "Organisation (global)"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {lim.monthlyLimit.toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteLimitMut.mutate(lim.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <TablePagination
+                page={limitsPagination.page}
+                totalPages={limitsPagination.totalPages}
+                total={limitsPagination.total}
+                startIndex={limitsPagination.startIndex}
+                endIndex={limitsPagination.endIndex}
+                pageSize={limitsPagination.pageSize}
+                onPageChange={limitsPagination.setPage}
+                onPageSizeChange={limitsPagination.setPageSize}
+              />
+            </>
           )}
         </CardContent>
       </Card>

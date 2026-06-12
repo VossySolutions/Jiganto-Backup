@@ -9,6 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import {
   Search, Plus, Upload, Download, LayoutList, Clock, CalendarDays,
   Target, AlertTriangle, CheckCircle2, XCircle, Loader2, Trash2, X,
@@ -202,6 +204,10 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
 
   const clearAll = () => { setFProject(""); setFPhase(""); setFWS(""); setFRAG(""); setFDateFrom(""); setFDateTo(""); setActiveKpi(null); };
 
+  const tablePagination = useTablePagination(filtered, {
+    resetKey: `${view}|${fProject}|${fPhase}|${fWS}|${fRAG}|${fDateFrom}|${fDateTo}|${activeKpi}|${sortKey}|${sortDir}`,
+  });
+
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("asc"); }
@@ -391,7 +397,7 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
                     No milestones match the current filters
                   </td></tr>
                 )}
-                {filtered.map(m => {
+                {tablePagination.paginatedItems.map(m => {
                   const od = isOverdue(m.targetDate, m.ragStatus || "Green");
                   const cfg = RAG_CONFIG[m.ragStatus || "Green"] || RAG_CONFIG.Green;
                   return (
@@ -583,6 +589,16 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
               </tbody>
             </table>
           </div>
+          <TablePagination
+            page={tablePagination.page}
+            totalPages={tablePagination.totalPages}
+            total={tablePagination.total}
+            startIndex={tablePagination.startIndex}
+            endIndex={tablePagination.endIndex}
+            pageSize={tablePagination.pageSize}
+            onPageChange={tablePagination.setPage}
+            onPageSizeChange={tablePagination.setPageSize}
+          />
         </div>
       )}
 

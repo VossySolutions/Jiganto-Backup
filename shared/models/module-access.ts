@@ -77,6 +77,15 @@ export const API_PREFIX_TO_MODULE_KEY: readonly [string, string][] = [
 /** Always hidden in client workspace for all users (Docs §5). */
 export const CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS = CLIENT_WORKSPACE_ALWAYS_HIDDEN_KEYS;
 
+/** Modules visible in contractor portal (limited sidebar). */
+export const CONTRACTOR_PORTAL_ALLOWED_MODULE_KEYS = new Set([
+  "dashboard",
+  "resource-mgmt",
+  "documents",
+  "tasks",
+  "chat",
+]);
+
 /** Additional modules hidden for client-role users only. */
 export const CLIENT_ROLE_EXTRA_BLOCKED_MODULE_KEYS = new Set([
   "resource-mgmt",

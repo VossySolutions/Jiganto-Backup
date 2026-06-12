@@ -30,6 +30,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { BusinessLoadingState } from "@/components/business/BusinessLoadingState";
 import { BusinessTableScroll } from "@/components/business/BusinessTableScroll";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import {
   BizDashboardIcon,
   BizStrategyMapIcon,
@@ -2213,11 +2215,7 @@ function StrategyLinksPanel() {
     });
   };
 
-  if (isLoading) {
-    return <BusinessLoadingState variant="inline" label="Loading strategy links…" />;
-  }
-
-  const filtered = links.filter(link => {
+  const filtered = useMemo(() => links.filter(link => {
     if (filterLayer !== "all" && link.layerType !== filterLayer) return false;
     if (filterSource !== "all" && link.docType !== filterSource) return false;
     if (searchTerm) {
@@ -2226,7 +2224,16 @@ function StrategyLinksPanel() {
       if (!text.includes(sl)) return false;
     }
     return true;
+  }), [links, filterLayer, filterSource, searchTerm]);
+
+  const linksPagination = useTablePagination(filtered, {
+    resetKey: `${filterLayer}-${filterSource}-${searchTerm}`,
+    enabled: !isLoading,
   });
+
+  if (isLoading) {
+    return <BusinessLoadingState variant="inline" label="Loading strategy links…" />;
+  }
 
   const sourceLabel = (t: string) => DOC_SOURCE_TYPES.find(s => s.value === t)?.label ?? t;
   const sourceCls = (t: string) => DOC_SOURCE_TYPES.find(s => s.value === t)?.color ?? "bg-muted text-muted-foreground";
@@ -2325,7 +2332,7 @@ function StrategyLinksPanel() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((link, i) => (
+              {linksPagination.paginatedItems.map((link, i) => (
                 <tr key={link.id} className={cn("border-b border-border last:border-0", i % 2 === 0 ? "bg-background" : "bg-muted/20")}>
                   <td className="px-3 py-2">
                     <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", sourceCls(link.docType))}>
@@ -2364,6 +2371,16 @@ function StrategyLinksPanel() {
             </tbody>
           </table>
           </BusinessTableScroll>
+          <TablePagination
+            page={linksPagination.page}
+            totalPages={linksPagination.totalPages}
+            total={linksPagination.total}
+            startIndex={linksPagination.startIndex}
+            endIndex={linksPagination.endIndex}
+            pageSize={linksPagination.pageSize}
+            onPageChange={linksPagination.setPage}
+            onPageSizeChange={linksPagination.setPageSize}
+          />
         </div>
       )}
     </div>
@@ -2726,8 +2743,23 @@ function GovernanceTab({ tenantId }: { tenantId: number }) {
     onError: () => toast({ title: "Error", description: "Failed to delete note.", variant: "destructive" }),
   });
 
-  const filteredHistory = ragFilter === "all" ? ragHistory : ragHistory.filter(h => h.entityType === ragFilter);
-  const filteredNotes = historyFilter === "all" ? notes : notes.filter(n => n.entityType === historyFilter);
+  const filteredHistory = useMemo(
+    () => (ragFilter === "all" ? ragHistory : ragHistory.filter(h => h.entityType === ragFilter)),
+    [ragHistory, ragFilter],
+  );
+  const filteredNotes = useMemo(
+    () => (historyFilter === "all" ? notes : notes.filter(n => n.entityType === historyFilter)),
+    [notes, historyFilter],
+  );
+
+  const historyPagination = useTablePagination(filteredHistory, {
+    resetKey: `${ragFilter}-${filteredHistory.length}`,
+    enabled: !historyLoading,
+  });
+  const notesPagination = useTablePagination(filteredNotes, {
+    resetKey: `${historyFilter}-${filteredNotes.length}`,
+    enabled: !notesLoading,
+  });
 
   const saveNote = () => {
     if (!noteForm.content.trim() || !noteForm.entityId) return;
@@ -2916,7 +2948,7 @@ function GovernanceTab({ tenantId }: { tenantId: number }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredHistory.slice(0, 50).map((entry, i) => (
+                  {historyPagination.paginatedItems.map((entry, i) => (
                     <tr key={entry.id} className={`border-t border-border/30 hover:bg-muted/30 transition-colors ${i % 2 !== 0 ? "bg-muted/10" : ""}`}
                       data-testid={`rag-history-row-${entry.id}`}>
                       <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{formatDate(entry.changedAt)}</td>
@@ -2934,11 +2966,16 @@ function GovernanceTab({ tenantId }: { tenantId: number }) {
                 </tbody>
               </table>
             </BusinessTableScroll>
-            {filteredHistory.length > 50 && (
-              <div className="px-4 py-2 border-t border-border bg-muted/20 text-xs text-muted-foreground">
-                Showing 50 of {filteredHistory.length} entries
-              </div>
-            )}
+            <TablePagination
+              page={historyPagination.page}
+              totalPages={historyPagination.totalPages}
+              total={historyPagination.total}
+              startIndex={historyPagination.startIndex}
+              endIndex={historyPagination.endIndex}
+              pageSize={historyPagination.pageSize}
+              onPageChange={historyPagination.setPage}
+              onPageSizeChange={historyPagination.setPageSize}
+            />
           </div>
         )}
       </div>
@@ -2970,7 +3007,7 @@ function GovernanceTab({ tenantId }: { tenantId: number }) {
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredNotes.map(note => (
+            {notesPagination.paginatedItems.map(note => (
               <div key={note.id}
                 className="rounded-xl border border-border bg-card p-4 space-y-2 hover:border-border/80 transition-colors"
                 data-testid={`review-note-${note.id}`}
@@ -3005,6 +3042,16 @@ function GovernanceTab({ tenantId }: { tenantId: number }) {
                 </div>
               </div>
             ))}
+            <TablePagination
+              page={notesPagination.page}
+              totalPages={notesPagination.totalPages}
+              total={notesPagination.total}
+              startIndex={notesPagination.startIndex}
+              endIndex={notesPagination.endIndex}
+              pageSize={notesPagination.pageSize}
+              onPageChange={notesPagination.setPage}
+              onPageSizeChange={notesPagination.setPageSize}
+            />
           </div>
         )}
       </div>

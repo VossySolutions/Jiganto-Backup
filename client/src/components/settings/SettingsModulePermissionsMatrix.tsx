@@ -9,9 +9,15 @@ import {
 } from "@/components/ui/table";
 import { Grid3x3 } from "lucide-react";
 import { SETTINGS_MODULE_KEYS } from "@shared/models/module-access";
+import { TablePagination } from "@/components/TablePagination";
+import { useTablePagination } from "@/hooks/use-table-pagination";
 
 /** Reference for legacy module role permission keys. */
 export default function SettingsModulePermissionsMatrix() {
+  const moduleRowsPagination = useTablePagination(SETTINGS_MODULE_KEYS, {
+    resetKey: SETTINGS_MODULE_KEYS.length,
+  });
+
   return (
     <Card data-testid="module-permissions-matrix">
       <CardHeader>
@@ -34,7 +40,7 @@ export default function SettingsModulePermissionsMatrix() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {SETTINGS_MODULE_KEYS.map((mod) => (
+            {moduleRowsPagination.paginatedItems.map((mod) => (
               <TableRow key={mod.key}>
                 <TableCell className="font-medium">{mod.name}</TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{mod.key}</TableCell>
@@ -42,6 +48,16 @@ export default function SettingsModulePermissionsMatrix() {
             ))}
           </TableBody>
         </Table>
+        <TablePagination
+          page={moduleRowsPagination.page}
+          totalPages={moduleRowsPagination.totalPages}
+          total={moduleRowsPagination.total}
+          startIndex={moduleRowsPagination.startIndex}
+          endIndex={moduleRowsPagination.endIndex}
+          pageSize={moduleRowsPagination.pageSize}
+          onPageChange={moduleRowsPagination.setPage}
+          onPageSizeChange={moduleRowsPagination.setPageSize}
+        />
       </CardContent>
     </Card>
   );

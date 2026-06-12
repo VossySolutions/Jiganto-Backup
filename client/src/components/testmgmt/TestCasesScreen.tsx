@@ -15,6 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { SubmitForm } from "@/components/ui/submit-form";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 
 const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 const STATUSES = ["draft", "active", "deprecated"] as const;
@@ -96,6 +98,10 @@ export function TestCasesScreen() {
     if (filterStatus !== "all" && tc.status !== filterStatus) return false;
     if (searchText && !tc.title.toLowerCase().includes(searchText.toLowerCase())) return false;
     return true;
+  });
+
+  const pagination = useTablePagination(filtered, {
+    resetKey: `${filterSuite}-${filterPriority}-${filterStatus}-${searchText}`,
   });
 
   const createMutation = useMutation({
@@ -320,7 +326,7 @@ export function TestCasesScreen() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map(tc => (
+                {pagination.paginatedItems.map(tc => (
                   <tr key={tc.id} className="hover:bg-muted/30 group" data-testid={`case-row-${tc.id}`}>
                     <td className="px-4 py-3 font-medium max-w-[240px]">
                       <div className="truncate">{tc.title}</div>
@@ -360,6 +366,16 @@ export function TestCasesScreen() {
                 ))}
               </tbody>
             </table>
+            <TablePagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              total={pagination.total}
+              startIndex={pagination.startIndex}
+              endIndex={pagination.endIndex}
+              pageSize={pagination.pageSize}
+              onPageChange={pagination.setPage}
+              onPageSizeChange={pagination.setPageSize}
+            />
           </div>
         )}
       </div>

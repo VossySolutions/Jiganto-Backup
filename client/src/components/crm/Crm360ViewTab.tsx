@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
 import { useCrmPagination } from "@/hooks/use-crm-pagination";
 import { CrmTablePagination } from "./CrmTablePagination";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
@@ -308,6 +310,10 @@ export function Crm360ViewTab({
     selectedAccount ? opportunities.filter(o => o.accountId === selectedAccount.id) : [],
     [opportunities, selectedAccount]
   );
+
+  const oppsPagination = useTablePagination(accountOpps, {
+    resetKey: `${selectedAccount?.id ?? 0}-${accountOpps.length}`,
+  });
 
   const accountContracts = useMemo(() =>
     selectedAccount ? contracts.filter(c => c.accountId === selectedAccount.id) : [],
@@ -1079,6 +1085,7 @@ export function Crm360ViewTab({
               {accountOpps.length === 0 ? (
                 <p className="text-xs text-muted-foreground py-8 text-center">No opportunities for this account</p>
               ) : (
+                <>
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border/30">
@@ -1090,7 +1097,7 @@ export function Crm360ViewTab({
                     </tr>
                   </thead>
                   <tbody>
-                    {accountOpps.map(opp => {
+                    {oppsPagination.paginatedItems.map(opp => {
                       const stage = stages.find(s => s.id === opp.stageId);
                       return (
                         <tr key={opp.id} className="border-b border-border/20 hover:bg-muted/20" data-testid={`360-opp-row-${opp.id}`}>
@@ -1110,6 +1117,17 @@ export function Crm360ViewTab({
                     })}
                   </tbody>
                 </table>
+                <TablePagination
+                  page={oppsPagination.page}
+                  totalPages={oppsPagination.totalPages}
+                  total={oppsPagination.total}
+                  startIndex={oppsPagination.startIndex}
+                  endIndex={oppsPagination.endIndex}
+                  pageSize={oppsPagination.pageSize}
+                  onPageChange={oppsPagination.setPage}
+                  onPageSizeChange={oppsPagination.setPageSize}
+                />
+                </>
               )}
             </div>
           )}

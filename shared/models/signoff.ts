@@ -7,7 +7,7 @@ import { tenants } from "../schema";
 import { documents } from "./documents";
 
 export const signoffStatusEnum = ["draft", "pending", "completed", "declined", "cancelled", "expired"] as const;
-export const signoffSourceTypeEnum = ["upload", "jiganto_doc", "crm_contract"] as const;
+export const signoffSourceTypeEnum = ["upload", "jiganto_doc", "crm_contract", "timesheet_period"] as const;
 export const signerStatusEnum = ["pending", "viewed", "signed", "declined"] as const;
 
 export const signoffRequests = pgTable("signoff_requests", {
@@ -17,6 +17,7 @@ export const signoffRequests = pgTable("signoff_requests", {
   sourceType: text("source_type").notNull().default("upload"),
   sourceDocumentId: integer("source_document_id").references(() => documents.id, { onDelete: "set null" }),
   crmContractId: integer("crm_contract_id"),
+  timesheetPeriodId: integer("timesheet_period_id"),
   fileName: text("file_name"),
   fileType: text("file_type"),
   fileData: text("file_data"),

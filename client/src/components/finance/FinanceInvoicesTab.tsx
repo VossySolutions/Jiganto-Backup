@@ -20,6 +20,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, Download, Send, CreditCard, FileText } from "lucide-react";
 import { FinanceTableSkeleton, FinanceEmptyState, FinanceTableWrap, FinanceButtonSpinner } from "./FinanceUi";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import type { FinanceInvoiceRow } from "./types";
 
 function invoiceStatusBadge(status: string) {
@@ -178,6 +180,10 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
     });
   }, [invoices, searchTerm, statusFilter]);
 
+  const pagination = useTablePagination(filtered, {
+    resetKey: `${searchTerm}-${statusFilter}`,
+  });
+
   return (
     <div className="space-y-4" data-testid="finance-invoices-tab">
       <div className="flex flex-wrap items-center gap-3">
@@ -226,7 +232,7 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((inv) => (
+                {pagination.paginatedItems.map((inv) => (
                   <TableRow key={inv.id} data-testid={`invoice-row-${inv.id}`}>
                     <TableCell className="font-medium">{inv.invoiceNumber}</TableCell>
                     <TableCell>{inv.projectName ?? `Project #${inv.projectId}`}</TableCell>
@@ -289,6 +295,16 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
               </TableBody>
             </Table>
           </FinanceTableWrap>
+          <TablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
         </Card>
       )}
 

@@ -23,6 +23,8 @@ import {
 import { RateCardManager } from "./RateCardManager";
 import { CapacityBoard } from "./CapacityBoard";
 import { useCrmUsers } from "./CrmUsersProvider";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 
 const PHASE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   Discovery: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-800 dark:text-blue-300", border: "border-blue-300 dark:border-blue-700" },
@@ -550,6 +552,11 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
     return Array.from(set);
   }, [rows]);
 
+  const indexedRows = useMemo(() => rows.map((row, idx) => ({ row, idx })), [rows]);
+  const planRowsPagination = useTablePagination(indexedRows, {
+    resetKey: `${selectedPlanId ?? "none"}|${planView}`,
+  });
+
   const timelineRange = useMemo(() => {
     if (rows.length === 0) return { weekStarts: [], monthGroups: [] as Array<{ label: string; span: number }> };
     const allDates = rows.flatMap(r => [r.startDate, r.endDate]).filter(Boolean);
@@ -916,6 +923,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
 
           {/* Table View */}
           {planView === "table" && (
+            <>
             <div className="overflow-x-auto" data-testid="table-view">
               <table className="w-full text-[13px]">
                 <thead>
@@ -937,7 +945,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row, idx) => {
+                  {planRowsPagination.paginatedItems.map(({ row, idx }) => {
                     const days = calcDays(row);
                     const cost = calcCost(row);
                     const breakCount = (row.breaks || []).length;
@@ -1083,6 +1091,17 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
                 )}
               </table>
             </div>
+            <TablePagination
+              page={planRowsPagination.page}
+              totalPages={planRowsPagination.totalPages}
+              total={planRowsPagination.total}
+              startIndex={planRowsPagination.startIndex}
+              endIndex={planRowsPagination.endIndex}
+              pageSize={planRowsPagination.pageSize}
+              onPageChange={planRowsPagination.setPage}
+              onPageSizeChange={planRowsPagination.setPageSize}
+            />
+            </>
           )}
 
           {/* Timeline View */}

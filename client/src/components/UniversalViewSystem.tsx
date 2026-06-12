@@ -27,6 +27,8 @@ import {
   ArrowUpDown, SortAsc, SortDesc, Group, FolderOpen, LayoutGrid, Clock
 } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, addDays } from "date-fns";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 
 export type ViewType = 
   | "table" 
@@ -1410,19 +1412,22 @@ function TableView<T extends { id: number | string }>({
 
   const visibleColumns = columns.filter(c => !c.hidden);
 
+  const pagination = useTablePagination(data, { resetKey: data.length });
+
   const groupedData = useMemo(() => {
+    const pageData = pagination.paginatedItems;
     if (groups.length === 0) {
-      return [{ groupKey: null, groupLabel: null, items: data }];
+      return [{ groupKey: null, groupLabel: null, items: pageData }];
     }
 
     const firstGroup = groups[0];
     const groupColumn = columns.find(c => c.id === firstGroup.columnId);
     if (!groupColumn) {
-      return [{ groupKey: null, groupLabel: null, items: data }];
+      return [{ groupKey: null, groupLabel: null, items: pageData }];
     }
 
     const groupMap = new Map<string, T[]>();
-    data.forEach(item => {
+    pageData.forEach(item => {
       const val = getCellValue(item, groupColumn.accessor);
       const key = String(val || "Ungrouped");
       if (!groupMap.has(key)) {
@@ -1436,7 +1441,7 @@ function TableView<T extends { id: number | string }>({
       groupLabel: key,
       items,
     }));
-  }, [data, groups, columns]);
+  }, [pagination.paginatedItems, groups, columns]);
 
   const handleCellEdit = (rowId: number | string, columnId: string, value: unknown) => {
     onCellEdit?.(rowId, columnId, value);
@@ -1638,6 +1643,16 @@ function TableView<T extends { id: number | string }>({
           </tbody>
         </table>
       </div>
+      <TablePagination
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        total={pagination.total}
+        startIndex={pagination.startIndex}
+        endIndex={pagination.endIndex}
+        pageSize={pagination.pageSize}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+      />
     </div>
   );
 }

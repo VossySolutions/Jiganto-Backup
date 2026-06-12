@@ -48,6 +48,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ModuleHeader } from "@/components/ModuleHeader";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { FinanceIcon } from "@/components/icons/ModuleIcons";
 import {
@@ -365,6 +367,22 @@ export default function CustomerManagementPage() {
     if (csmFilter !== "all") rows = rows.filter((c) => c.csmName === csmFilter);
     return rows;
   }, [dashboard, search, statusFilter, planFilter, csmFilter]);
+
+  const customersPagination = useTablePagination(filteredCustomers, {
+    resetKey: `${search}-${statusFilter}-${planFilter}-${csmFilter}`,
+  });
+  const attentionPagination = useTablePagination(dashboard?.health.attentionRows ?? [], {
+    resetKey: dashboard?.health.attentionRows.length ?? 0,
+    enabled: !!dashboard,
+  });
+  const trialsPagination = useTablePagination(dashboard?.trials.rows ?? [], {
+    resetKey: dashboard?.trials.rows.length ?? 0,
+    enabled: !!dashboard,
+  });
+  const renewalsPagination = useTablePagination(dashboard?.renewals.rows ?? [], {
+    resetKey: dashboard?.renewals.rows.length ?? 0,
+    enabled: !!dashboard,
+  });
 
   const navItems = useMemo(() => buildNavItems(dashboard), [dashboard]);
 
@@ -828,7 +846,7 @@ export default function CustomerManagementPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredCustomers.map((c) => (
+                        {customersPagination.paginatedItems.map((c) => (
                           <TableRow key={c.id} className={rowHighlightClass(c.rowHighlight)}>
                             <TableCell>
                               <CustomerOrgCell customer={c} />
@@ -900,6 +918,16 @@ export default function CustomerManagementPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    <TablePagination
+                      page={customersPagination.page}
+                      totalPages={customersPagination.totalPages}
+                      total={customersPagination.total}
+                      startIndex={customersPagination.startIndex}
+                      endIndex={customersPagination.endIndex}
+                      pageSize={customersPagination.pageSize}
+                      onPageChange={customersPagination.setPage}
+                      onPageSizeChange={customersPagination.setPageSize}
+                    />
                     </ResponsiveTableWrap>
                     )}
                   </SectionCard>
@@ -1146,7 +1174,7 @@ export default function CustomerManagementPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {dashboard.health.attentionRows.map((r) => (
+                        {attentionPagination.paginatedItems.map((r) => (
                           <TableRow key={r.customerId} className={rowHighlightClass(r.rowHighlight)}>
                             <TableCell>
                               <div className="flex items-center gap-2">
@@ -1186,6 +1214,16 @@ export default function CustomerManagementPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    <TablePagination
+                      page={attentionPagination.page}
+                      totalPages={attentionPagination.totalPages}
+                      total={attentionPagination.total}
+                      startIndex={attentionPagination.startIndex}
+                      endIndex={attentionPagination.endIndex}
+                      pageSize={attentionPagination.pageSize}
+                      onPageChange={attentionPagination.setPage}
+                      onPageSizeChange={attentionPagination.setPageSize}
+                    />
                     </ResponsiveTableWrap>
                   </SectionCard>
                 </>
@@ -1237,7 +1275,7 @@ export default function CustomerManagementPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {dashboard.trials.rows.map((r) => (
+                        {trialsPagination.paginatedItems.map((r) => (
                           <TableRow key={r.id} className={rowHighlightClass(r.rowHighlight)}>
                             <TableCell>
                               <div className="flex items-center gap-2">
@@ -1294,6 +1332,16 @@ export default function CustomerManagementPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    <TablePagination
+                      page={trialsPagination.page}
+                      totalPages={trialsPagination.totalPages}
+                      total={trialsPagination.total}
+                      startIndex={trialsPagination.startIndex}
+                      endIndex={trialsPagination.endIndex}
+                      pageSize={trialsPagination.pageSize}
+                      onPageChange={trialsPagination.setPage}
+                      onPageSizeChange={trialsPagination.setPageSize}
+                    />
                     </ResponsiveTableWrap>
                   </SectionCard>
                   <SectionCard title="Trial defaults & permission controls">
@@ -1403,7 +1451,7 @@ export default function CustomerManagementPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {dashboard.renewals.rows.map((r) => (
+                        {renewalsPagination.paginatedItems.map((r) => (
                           <TableRow key={r.id} className={rowHighlightClass(r.rowHighlight)}>
                             <TableCell>
                               <div className="flex items-center gap-2">
@@ -1462,6 +1510,16 @@ export default function CustomerManagementPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    <TablePagination
+                      page={renewalsPagination.page}
+                      totalPages={renewalsPagination.totalPages}
+                      total={renewalsPagination.total}
+                      startIndex={renewalsPagination.startIndex}
+                      endIndex={renewalsPagination.endIndex}
+                      pageSize={renewalsPagination.pageSize}
+                      onPageChange={renewalsPagination.setPage}
+                      onPageSizeChange={renewalsPagination.setPageSize}
+                    />
                     </ResponsiveTableWrap>
                   </SectionCard>
                 </>

@@ -19,6 +19,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, Trash2, Pencil, Download, Upload, ChevronDown, ChevronRight, Star, CreditCard } from "lucide-react";
 import { FinanceTableSkeleton, FinanceEmptyState, FinanceButtonSpinner } from "./FinanceUi";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import type { FinanceRateCard, FinanceRateCardItem } from "./types";
 
 interface FinanceRateCardsTabProps {
@@ -202,7 +204,7 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
         />
       ) : (
         <div className="space-y-2">
-          {filtered.map((card) => {
+          {pagination.paginatedItems.map((card) => {
             const expanded = expandedId === card.id;
             return (
               <Card key={card.id} className="rounded-xl border-border/50" data-testid={`rate-card-${card.id}`}>
@@ -275,6 +277,16 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
               </Card>
             );
           })}
+          <TablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
         </div>
       )}
 

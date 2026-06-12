@@ -50,12 +50,14 @@ import { useClientContext } from "@/hooks/use-client-context";
 import { useClientModuleVisibility } from "@/hooks/use-client-module-visibility";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useModuleAccess } from "@/hooks/use-module-access";
+import { useResourceScope } from "@/hooks/use-resource-scope";
 import { DASHBOARD_PATH, isDashboardPath } from "@shared/app-routes";
 import { dashboardPathForClient } from "@/lib/workspace-scope";
 import { PLATFORM_ROLE_LABELS } from "@shared/models/permissions";
 import {
   CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS,
   CLIENT_ROLE_EXTRA_BLOCKED_MODULE_KEYS,
+  CONTRACTOR_PORTAL_ALLOWED_MODULE_KEYS,
   navPathToModuleKey,
 } from "@shared/models/module-access";
 import { ContextBanner } from "@/components/ContextBanner";
@@ -295,6 +297,16 @@ export function Sidebar() {
   const isSettingsActive =
     location === settingsHref || location.startsWith("/settings");
   const { canAccessNavPath } = useModuleAccess();
+  const { data: resourceScope } = useResourceScope();
+  const isContractorPortal = resourceScope?.isContractorPortal ?? false;
+
+  const isContractorNavAllowed = useCallback((href: string) => {
+    if (!isContractorPortal) return true;
+    if (href === DASHBOARD_PATH || isDashboardPath(href)) return true;
+    const key = navPathToModuleKey(href);
+    return key != null && CONTRACTOR_PORTAL_ALLOWED_MODULE_KEYS.has(key);
+  }, [isContractorPortal]);
+
   const { data: organisation, isLoading: organisationLoading } = useCurrentOrganisation();
   const {
     isCollapsed,
@@ -390,6 +402,7 @@ export function Sidebar() {
           (href !== DASHBOARD_PATH && location.startsWith(href));
     if (isModuleHidden(item.href)) return null;
     if (!canAccessNavPath(item.href)) return null;
+    if (!isContractorNavAllowed(href)) return null;
     if (isClientWorkspaceView) {
       const key = navPathToModuleKey(item.href);
       if (key && CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS.has(key)) return null;
@@ -800,6 +813,7 @@ export function Sidebar() {
               const visibleItems = group.items.filter((item) => {
                 if (isModuleHidden(item.href)) return false;
                 if (!canAccessNavPath(item.href)) return false;
+                if (!isContractorNavAllowed(item.href === DASHBOARD_PATH ? dashboardHref : item.href)) return false;
                 if (isClientWorkspaceView) {
                   const key = navPathToModuleKey(item.href);
                   if (key && CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS.has(key)) return false;

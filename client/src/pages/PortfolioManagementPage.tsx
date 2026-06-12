@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -415,6 +417,10 @@ function ActivePortfolioTable({ items, searchQuery, filter }: { items: WorkItem[
     });
   }, [items, filter, searchQuery]);
 
+  const pagination = useTablePagination(filteredItems, {
+    resetKey: `${filter}-${searchQuery}`,
+  });
+
   const visibleCount = filteredItems.reduce((acc, item) => {
     let count = 1;
     if (item.isParent && item.children && openMap[item.id]) {
@@ -445,7 +451,7 @@ function ActivePortfolioTable({ items, searchQuery, filter }: { items: WorkItem[
             </tr>
           </thead>
           <tbody>
-            {filteredItems.map(item => (
+            {pagination.paginatedItems.map(item => (
               <PortfolioTableGroup key={item.id} item={item} isOpen={!!openMap[item.id]} onToggle={() => toggle(item.id)} />
             ))}
             {filteredItems.length === 0 && (
@@ -459,9 +465,21 @@ function ActivePortfolioTable({ items, searchQuery, filter }: { items: WorkItem[
           </tbody>
         </table>
       </div>
-      <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/30 bg-muted/30">
-        <span className="text-xs text-muted-foreground font-mono" data-testid="portfolio-info">Showing {visibleCount} of {items.reduce((a, i) => a + 1 + (i.children?.length || 0), 0)} work items</span>
-      </div>
+      <TablePagination
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        total={pagination.total}
+        startIndex={pagination.startIndex}
+        endIndex={pagination.endIndex}
+        pageSize={pagination.pageSize}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+        extra={
+          <span className="text-xs font-mono" data-testid="portfolio-info">
+            ({visibleCount} visible with expanded children)
+          </span>
+        }
+      />
     </Card>
   );
 }

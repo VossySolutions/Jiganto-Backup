@@ -20,6 +20,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TablePagination } from "@/components/TablePagination";
+import { useTablePagination } from "@/hooks/use-table-pagination";
 import { Plus, Trash2, Building2 } from "lucide-react";
 import type { PlatformRole } from "@shared/models/permissions";
 
@@ -85,6 +87,9 @@ export default function SettingsClientWorkspaceGrants({ tenantId, clients }: Pro
   const grants = data?.workspaceGrants ?? [];
   const siUsers =
     data?.memberships.filter((m) => GRANTABLE_ROLES.includes(m.platformRole)) ?? [];
+  const grantsPagination = useTablePagination(grants, {
+    resetKey: grants.length,
+  });
 
   const userLabel = (uid: string) => {
     const m = siUsers.find((u) => u.userId === uid);
@@ -166,6 +171,7 @@ export default function SettingsClientWorkspaceGrants({ tenantId, clients }: Pro
         ) : grants.length === 0 ? (
           <p className="text-sm text-muted-foreground">No workspace grants — all SI users see every client.</p>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow>
@@ -175,7 +181,7 @@ export default function SettingsClientWorkspaceGrants({ tenantId, clients }: Pro
               </TableRow>
             </TableHeader>
             <TableBody>
-              {grants.map((g) => (
+              {grantsPagination.paginatedItems.map((g) => (
                 <TableRow key={g.id}>
                   <TableCell className="text-sm">{userLabel(g.userId)}</TableCell>
                   <TableCell>
@@ -195,6 +201,17 @@ export default function SettingsClientWorkspaceGrants({ tenantId, clients }: Pro
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            page={grantsPagination.page}
+            totalPages={grantsPagination.totalPages}
+            total={grantsPagination.total}
+            startIndex={grantsPagination.startIndex}
+            endIndex={grantsPagination.endIndex}
+            pageSize={grantsPagination.pageSize}
+            onPageChange={grantsPagination.setPage}
+            onPageSizeChange={grantsPagination.setPageSize}
+          />
+          </>
         )}
       </CardContent>
     </Card>

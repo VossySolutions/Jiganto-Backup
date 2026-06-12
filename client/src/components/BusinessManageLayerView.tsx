@@ -17,6 +17,8 @@ import { useToast } from "@/hooks/use-toast";
 import { LayoutList, LayoutGrid, Upload, Download, FileText, Edit2, Loader2, Search, Target, Flag, Crosshair, Zap, TrendingUp, BarChart3, Layers, ChevronDown, ChevronRight, MessageSquare, Send, Trash2, ShieldCheck } from "lucide-react";
 import { BusinessLoadingState } from "@/components/business/BusinessLoadingState";
 import { BusinessTableScroll } from "@/components/business/BusinessTableScroll";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import * as XLSX from "xlsx";
 
@@ -462,6 +464,9 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
       return textMatch && filterMatch;
     });
   }, [items, search, activeFilters, searchKeys]);
+  const pagination = useTablePagination(filtered, {
+    resetKey: `${view}|${search}|${groupBy}|${Object.values(activeFilters).join("|")}`,
+  });
 
   const getGroupLabel = (item: T): string => {
     if (groupBy === "none") return "";
@@ -499,11 +504,11 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
   type TableRow<U> = { type: "header"; label: string; count: number; collapsed: boolean } | { type: "data"; item: U; rowIndex: number };
 
   const tableRows: TableRow<T>[] = useMemo(() => {
-    if (groupBy === "none") return filtered.map((item, i) => ({ type: "data" as const, item, rowIndex: i }));
-    const groupOrder = Array.from(new Set(filtered.map(item => getGroupLabel(item))));
+    if (groupBy === "none") return pagination.paginatedItems.map((item, i) => ({ type: "data" as const, item, rowIndex: i }));
+    const groupOrder = Array.from(new Set(pagination.paginatedItems.map(item => getGroupLabel(item))));
     const result: TableRow<T>[] = [];
     for (const label of groupOrder) {
-      const groupItems = filtered.filter(item => getGroupLabel(item) === label);
+      const groupItems = pagination.paginatedItems.filter(item => getGroupLabel(item) === label);
       const isCollapsed = collapsedGroups.has(label);
       result.push({ type: "header", label, count: groupItems.length, collapsed: isCollapsed });
       if (!isCollapsed) {
@@ -512,7 +517,7 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
     }
     return result;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, groupBy, collapsedGroups]);
+  }, [pagination.paginatedItems, groupBy, collapsedGroups]);
 
   const importMutation = useMutation({
     mutationFn: (rows: Record<string, unknown>[]) => apiRequest("POST", "/api/business/bulk-import", { rows }),
@@ -836,6 +841,16 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
             <span className="text-xs text-muted-foreground">{filtered.length} of {items.length} records shown</span>
             <span className="text-xs text-muted-foreground">Click <Edit2 className="h-2.5 w-2.5 inline mx-0.5" /> to edit any row</span>
           </div>
+          <TablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
         </div>
       )}
 
@@ -844,10 +859,24 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
         filtered.length === 0
           ? <div className="text-center py-16 text-muted-foreground text-sm">No records match the current filters</div>
           : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filtered.map(item => defaultCard ? defaultCard(item, setEditItem) : (
+              {pagination.paginatedItems.map(item => defaultCard ? defaultCard(item, setEditItem) : (
                 <DefaultCard key={item.id} item={item} refPrefix={refPrefix} accent={accent} onEdit={() => setEditItem(item)} entityRefs={entityRefs} entityType={entityType} />
               ))}
             </div>
+      )}
+      {view === "card" && filtered.length > 0 && (
+        <div className="rounded-xl border border-border bg-card">
+          <TablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
+        </div>
       )}
 
       {/* ── Check-in Sheet ──────────────────────────────────────────────── */}

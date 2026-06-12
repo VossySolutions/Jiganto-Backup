@@ -23,6 +23,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Search, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FinanceTableSkeleton, FinanceEmptyState, FinanceTableWrap, FinanceButtonSpinner } from "./FinanceUi";
+import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
 import type { BudgetDetail, BudgetListItem } from "./types";
 
 function parseMoney(v: string | number | null | undefined): number {
@@ -123,6 +125,10 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
     });
   }, [enrichedBudgets, searchTerm, ragFilter, contractFilter]);
 
+  const pagination = useTablePagination(filteredBudgets, {
+    resetKey: `${searchTerm}-${ragFilter}-${contractFilter}`,
+  });
+
   return (
     <div className="space-y-4" data-testid="finance-budgets-tab">
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
@@ -182,7 +188,7 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredBudgets.map((b) => (
+                {pagination.paginatedItems.map((b) => (
                   <TableRow
                     key={b.id}
                     className="cursor-pointer hover:bg-muted/50"
@@ -208,6 +214,16 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
               </TableBody>
             </Table>
           </FinanceTableWrap>
+          <TablePagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            pageSize={pagination.pageSize}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
         </Card>
       )}
 

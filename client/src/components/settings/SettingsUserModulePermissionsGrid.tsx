@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SETTINGS_MODULE_KEYS } from "@shared/models/module-access";
+import { TablePagination } from "@/components/TablePagination";
+import { useTablePagination } from "@/hooks/use-table-pagination";
 import type { UserRole, ModulePermissions } from "@shared/schema";
 
 export type PermissionRow = {
@@ -116,6 +118,10 @@ export default function SettingsUserModulePermissionsGrid({
     );
   };
 
+  const moduleRowsPagination = useTablePagination(SETTINGS_MODULE_KEYS, {
+    resetKey: SETTINGS_MODULE_KEYS.length,
+  });
+
   return (
     <div className="space-y-3" data-testid="user-module-permissions-grid">
       <div className="flex flex-wrap items-end gap-2 justify-between">
@@ -165,7 +171,7 @@ export default function SettingsUserModulePermissionsGrid({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {SETTINGS_MODULE_KEYS.map((mod) => {
+            {moduleRowsPagination.paginatedItems.map((mod) => {
               const perm = rowFor(mod.key);
               return (
                 <TableRow key={mod.key}>
@@ -208,6 +214,16 @@ export default function SettingsUserModulePermissionsGrid({
           </TableBody>
         </Table>
       </div>
+      <TablePagination
+        page={moduleRowsPagination.page}
+        totalPages={moduleRowsPagination.totalPages}
+        total={moduleRowsPagination.total}
+        startIndex={moduleRowsPagination.startIndex}
+        endIndex={moduleRowsPagination.endIndex}
+        pageSize={moduleRowsPagination.pageSize}
+        onPageChange={moduleRowsPagination.setPage}
+        onPageSizeChange={moduleRowsPagination.setPageSize}
+      />
     </div>
   );
 }
