@@ -28,6 +28,7 @@ import SurveyPortalPage from "@/pages/SurveyPortalPage";
 import ClientsPage from "@/pages/ClientsPage";
 import ClientDetailPage from "@/pages/ClientDetailPage";
 import CustomerManagementPage from "@/pages/CustomerManagementPage";
+import FinanceManagementPage from "@/pages/FinanceManagementPage";
 import { useAuth } from "@/hooks/use-auth";
 import { SidebarStateProvider } from "@/hooks/use-sidebar-state";
 import { DashboardSelectorProvider } from "@/hooks/use-dashboard-selector";
@@ -158,6 +159,10 @@ function Router() {
         <Route path="/clients/:id" component={ClientDetailPage} />
         <Route path="/clients" component={ClientsPage} />
         <Route path="/modules/customer-mgmt" component={CustomerManagementPage} />
+        <Route path="/modules/finance-mgmt" component={FinanceManagementPage} />
+        <Route path="/finance">
+          <Redirect to="/modules/finance-mgmt" />
+        </Route>
         <Route path="/modules/e-sign" component={SignOffPage} />
         <Route path="/modules/surveys" component={SurveysPage} />
         <Route path="/settings/system" component={SettingsPage} />

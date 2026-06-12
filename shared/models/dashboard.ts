@@ -133,8 +133,14 @@ export interface FinanceModuleDashboard {
     outstandingPence: number;
     budgetUtilisationPercent: number;
     overduePayments: number;
+    revenueThisMonth?: number;
+    revenueThisMonthLabel?: string;
+    totalBilledYtdYoYPct?: number;
+    avgProjectMarginPct?: number;
+    unapprovedTimesheets?: number;
+    unapprovedExpenses?: number;
   };
-  revenueVsBudget: { month: string; budget: number; actual: number }[];
+  revenueVsBudget: { month: string; budget: number; actual: number; isFuture?: boolean }[];
   expenseBreakdown: DashboardHealthSlice[];
   unpaidInvoices: {
     id: number;
@@ -144,6 +150,23 @@ export interface FinanceModuleDashboard {
     dueDate: string;
     daysOverdue: number;
   }[];
+  projectFinancialHealth?: {
+    projectId: number;
+    projectName: string;
+    clientName: string | null;
+    budget: number;
+    actualCost: number;
+    billedToDate: number;
+    marginPct: number;
+    ragStatus: "green" | "amber" | "red";
+  }[];
+  invoiceAgeing?: { bucket: string; count: number; amount: number }[];
+  utilisation?: {
+    billableHours: number;
+    nonBillableHours: number;
+    availableHours: number;
+    pct: number;
+  };
 }
 
 export interface BusinessModuleDashboard {

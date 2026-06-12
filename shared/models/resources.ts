@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar, decimal, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
@@ -126,10 +126,15 @@ export const timesheetPeriods = pgTable("timesheet_periods", {
   weekStartDate: timestamp("week_start_date").notNull(),
   weekEndDate: timestamp("week_end_date").notNull(),
   status: text("status").default("draft"),
+  approvalStatus: text("approval_status").default("draft"),
   totalHours: decimal("total_hours", { precision: 6, scale: 1 }).default("0"),
   submittedAt: timestamp("submitted_at"),
   approvedAt: timestamp("approved_at"),
   approvedBy: varchar("approved_by"),
+  approvedByPmId: varchar("approved_by_pm_id").references(() => users.id),
+  approvedByPmAt: timestamp("approved_by_pm_at"),
+  approvedByRmId: varchar("approved_by_rm_id").references(() => users.id),
+  approvedByRmAt: timestamp("approved_by_rm_at"),
   rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -154,9 +159,16 @@ export const timesheetEntries = pgTable("timesheet_entries", {
   projectId: integer("project_id"),
   projectName: text("project_name"),
   activityType: text("activity_type").default("billable"),
+  role: text("role"),
   departmentCode: text("department_code"),
+  entryDate: date("entry_date"),
   dayOfWeek: integer("day_of_week").notNull(),
   hours: decimal("hours", { precision: 4, scale: 1 }).default("0"),
+  chargeRate: decimal("charge_rate", { precision: 10, scale: 2 }),
+  costRate: decimal("cost_rate", { precision: 10, scale: 2 }),
+  calculatedCharge: decimal("calculated_charge", { precision: 15, scale: 2 }),
+  calculatedCost: decimal("calculated_cost", { precision: 15, scale: 2 }),
+  isInvoiced: boolean("is_invoiced").default(false),
   description: text("description"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -179,10 +191,14 @@ export const rateCards = pgTable("rate_cards", {
   tenantId: integer("tenant_id").notNull(),
   name: text("name").notNull(),
   description: text("description"),
+  cardType: text("card_type").default("standard"),
+  clientId: integer("client_id"),
+  projectId: integer("project_id"),
   currency: text("currency").default("GBP"),
   effectiveFrom: timestamp("effective_from"),
   effectiveTo: timestamp("effective_to"),
   isDefault: boolean("is_default").default(false),
+  notes: text("notes"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -194,6 +210,8 @@ export const rateCardItems = pgTable("rate_card_items", {
   level: text("level"),
   dailyRate: decimal("daily_rate", { precision: 10, scale: 2 }).notNull(),
   costRate: decimal("cost_rate", { precision: 10, scale: 2 }),
+  hourlyChargeRate: decimal("hourly_charge_rate", { precision: 10, scale: 2 }),
+  hourlyCostRate: decimal("hourly_cost_rate", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

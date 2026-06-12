@@ -271,6 +271,9 @@ export async function registerRoutes(
   const { registerDashboardRoutes } = await import("./dashboard/routes");
   registerDashboardRoutes(app);
 
+  const { registerFinanceRoutes } = await import("./finance/routes");
+  registerFinanceRoutes(app);
+
   const { registerClientRoutes } = await import("./clients/routes");
   registerClientRoutes(app);
 

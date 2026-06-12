@@ -139,102 +139,58 @@ export async function loadHelpDeskModuleDashboard(
 export async function loadFinanceModuleDashboard(
   scope: DashboardScope,
 ): Promise<FinanceModuleDashboard> {
-  const [contracts, opportunities, projects] = await Promise.all([
-    storage.getCrmContracts(scope.tenantId, undefined, scope.clientId),
-    storage.getCrmOpportunities(scope.tenantId, undefined, undefined, scope.clientId),
-    db
-      .select({
-        budget: pmProjects.budget,
-        spentBudget: pmProjects.spentBudget,
-        clientId: pmProjects.clientId,
-        status: pmProjects.status,
-      })
-      .from(pmProjects)
-      .where(
-        and(
-          eq(pmProjects.tenantId, scope.tenantId),
-          scope.clientId != null ? eq(pmProjects.clientId, scope.clientId) : sql`true`,
-        ),
-      ),
-  ]);
+  const { loadFinanceDashboard } = await import("../finance/repository");
+  const dash = await loadFinanceDashboard(scope.tenantId, scope.clientId ?? undefined);
 
-  const yearStart = new Date(new Date().getFullYear(), 0, 1);
-  const wonRecent = opportunities.filter(
-    (o) => o.actualCloseDate && o.actualCloseDate >= yearStart,
-  );
-  const revenueYtdPence = wonRecent.reduce((s, o) => s + parseMoney(o.amount), 0);
+  const sym = "£";
+  const fmt = (v: number) => `${sym}${v.toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
 
-  const activeContracts = contracts.filter((c) => c.status === "active");
-  const outstandingPence = activeContracts.reduce((s, c) => s + parseMoney(c.value), 0);
-
-  let totalBudget = 0;
-  let totalSpent = 0;
-  for (const p of projects) {
-    if (p.status === "completed" || p.status === "cancelled") continue;
-    totalBudget += parseMoney(p.budget);
-    totalSpent += parseMoney(p.spentBudget);
-  }
-  const budgetUtilisationPercent =
-    totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
-
-  const today = new Date().toISOString().slice(0, 10);
-  const unpaidInvoices: FinanceModuleDashboard["unpaidInvoices"] = [];
-  let overduePayments = 0;
-  for (const c of contracts) {
-    if (c.status === "paid" || c.status === "cancelled") continue;
-    const end = c.endDate?.toISOString().slice(0, 10) ?? today;
-    const amountPence = parseMoney(c.value);
-    if (amountPence <= 0) continue;
-    const daysOverdue =
-      end < today ? Math.ceil((Date.now() - Date.parse(end)) / 86400000) : 0;
-    if (daysOverdue > 0) overduePayments++;
-    unpaidInvoices.push({
-      id: c.id,
-      label: c.name,
-      client: `Contract #${c.id}`,
-      amountPence,
-      dueDate: end,
-      daysOverdue,
-    });
-  }
-  unpaidInvoices.sort((a, b) => b.daysOverdue - a.daysOverdue);
-
-  const revenueVsBudget: FinanceModuleDashboard["revenueVsBudget"] = [];
-  for (let m = 0; m < 6; m++) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - (5 - m));
-    const key = d.toLocaleString("en-GB", { month: "short" });
-    const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
-    const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
-    const actual = wonRecent
-      .filter((o) => o.actualCloseDate && o.actualCloseDate >= monthStart && o.actualCloseDate <= monthEnd)
-      .reduce((s, o) => s + parseMoney(o.amount), 0);
-    revenueVsBudget.push({
-      month: key,
-      budget: Math.round(totalBudget / 6 / 100),
-      actual: Math.round(actual / 100),
-    });
-  }
+  const unpaidInvoices: FinanceModuleDashboard["unpaidInvoices"] = dash.invoiceAgeing
+    .filter((b) => b.bucket !== "current" && b.count > 0)
+    .flatMap((b) =>
+      Array.from({ length: Math.min(b.count, 3) }, (_, i) => ({
+        id: i,
+        label: `Overdue (${b.bucket} days)`,
+        client: "—",
+        amountPence: Math.round((b.amount / Math.max(b.count, 1)) * 100),
+        dueDate: b.bucket,
+        daysOverdue: b.bucket === "60+" ? 61 : b.bucket === "31-60" ? 45 : 15,
+      })),
+    )
+    .slice(0, 10);
 
   const expenseBreakdown: FinanceModuleDashboard["expenseBreakdown"] = [
-    { label: "Labour", count: Math.round(totalSpent * 0.55), color: "#6366f1" },
-    { label: "Software", count: Math.round(totalSpent * 0.25), color: "#22c55e" },
-    { label: "Travel", count: Math.round(totalSpent * 0.12), color: "#f59e0b" },
-    { label: "Other", count: Math.round(totalSpent * 0.08), color: "#94a3b8" },
+    { label: "Billable", count: dash.utilisation.billableHours, color: "#22c55e" },
+    { label: "Non-Billable", count: dash.utilisation.nonBillableHours, color: "#94a3b8" },
+    { label: "Available", count: Math.max(0, dash.utilisation.availableHours - dash.utilisation.billableHours - dash.utilisation.nonBillableHours), color: "#6366f1" },
   ];
 
   return {
     kpis: {
-      revenueYtdPence,
-      revenueYtdLabel: formatDashboardCurrency(revenueYtdPence),
-      outstandingPence,
-      outstandingInvoicesLabel: formatDashboardCurrency(outstandingPence),
-      budgetUtilisationPercent,
-      overduePayments,
+      revenueYtdPence: Math.round(dash.kpis.totalBilledYtd * 100),
+      revenueYtdLabel: fmt(dash.kpis.totalBilledYtd),
+      outstandingPence: Math.round(dash.kpis.outstandingInvoices * 100),
+      outstandingInvoicesLabel: fmt(dash.kpis.outstandingInvoices),
+      budgetUtilisationPercent: dash.kpis.avgProjectMarginPct,
+      overduePayments: dash.invoiceAgeing.filter((b) => b.bucket !== "current").reduce((s, b) => s + b.count, 0),
+      revenueThisMonth: dash.kpis.revenueThisMonth,
+      revenueThisMonthLabel: fmt(dash.kpis.revenueThisMonth),
+      totalBilledYtdYoYPct: dash.kpis.totalBilledYtdYoYPct,
+      avgProjectMarginPct: dash.kpis.avgProjectMarginPct,
+      unapprovedTimesheets: dash.kpis.unapprovedTimesheets,
+      unapprovedExpenses: dash.kpis.unapprovedExpenses,
     },
-    revenueVsBudget,
+    revenueVsBudget: dash.revenueVsBudget.map((r) => ({
+      month: r.month,
+      budget: r.budget,
+      actual: r.actual,
+      isFuture: r.isFuture,
+    })),
     expenseBreakdown,
-    unpaidInvoices: unpaidInvoices.slice(0, 10),
+    unpaidInvoices,
+    projectFinancialHealth: dash.projectFinancialHealth,
+    invoiceAgeing: dash.invoiceAgeing,
+    utilisation: dash.utilisation,
   };
 }
 

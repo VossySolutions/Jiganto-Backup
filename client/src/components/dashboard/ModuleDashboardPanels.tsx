@@ -356,10 +356,12 @@ export function FinanceModulePanel({ clientId, projectId }: { clientId?: number 
       {(data) => (
     <div className="space-y-6">
       <KpiRow items={[
-        { label: "Revenue YTD", value: data.kpis.revenueYtdLabel },
+        { label: "Revenue (Month)", value: data.kpis.revenueThisMonthLabel ?? data.kpis.revenueYtdLabel },
         { label: "Outstanding", value: data.kpis.outstandingInvoicesLabel },
-        { label: "Budget Utilisation", value: `${data.kpis.budgetUtilisationPercent}%` },
-        { label: "Overdue Payments", value: data.kpis.overduePayments },
+        { label: "Billed YTD", value: data.kpis.revenueYtdLabel },
+        { label: "Avg Margin", value: `${data.kpis.avgProjectMarginPct ?? data.kpis.budgetUtilisationPercent}%` },
+        { label: "Unapproved TS", value: data.kpis.unapprovedTimesheets ?? 0 },
+        { label: "Unapproved Exp", value: data.kpis.unapprovedExpenses ?? 0 },
       ]} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="rounded-2xl border-border/50">
