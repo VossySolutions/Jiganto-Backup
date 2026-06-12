@@ -54,6 +54,18 @@ export function startPlatformBackgroundJobs(): void {
     } catch (err) {
       console.warn("[platform-jobs] Timesheet integration jobs error:", err);
     }
+
+    try {
+      const { runPortfolioReportSchedules, runWeeklyHealthMatrixSnapshots } = await import("../portfolio/jobs");
+      const reports = await runPortfolioReportSchedules();
+      if (reports > 0) console.log(`[platform-jobs] Ran ${reports} portfolio report schedule(s)`);
+      if (new Date().getDay() === 1) {
+        const snapshots = await runWeeklyHealthMatrixSnapshots();
+        if (snapshots > 0) console.log(`[platform-jobs] Captured ${snapshots} health matrix snapshot(s)`);
+      }
+    } catch (err) {
+      console.warn("[platform-jobs] Portfolio report jobs error:", err);
+    }
   };
 
   setTimeout(() => void runDaily(), 60_000);

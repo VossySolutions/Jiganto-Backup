@@ -56,6 +56,8 @@ export const API_PREFIX_TO_MODULE_KEY: readonly [string, string][] = [
   ["/api/business", "business-mgmt"],
   ["/api/clients", "clients"],
   ["/api/portfolio", "portfolio-mgmt"],
+  ["/api/pm/portfolios", "portfolio-mgmt"],
+  ["/api/pm/programs", "portfolio-mgmt"],
   ["/api/pm", "project-mgmt"],
   ["/api/crm", "crm"],
   ["/api/documents", "documents"],

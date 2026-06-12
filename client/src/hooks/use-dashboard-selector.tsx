@@ -52,7 +52,7 @@ const defaultDashboards: DashboardOption[] = [
   { id: "helpdesk", name: "Help Desk Dashboard", description: "Support tickets and SLA", enabled: true, group: "module" },
   { id: "finance", name: "Finance Dashboard", description: "Revenue, budgets, invoices", enabled: true, group: "module" },
   { id: "business", name: "Business Dashboard", description: "Strategy, OKRs, governance", enabled: true, group: "module" },
-  { id: "portfolio", name: "Portfolio Dashboard", description: "Portfolio health", enabled: false, group: "module" },
+  { id: "portfolio", name: "Portfolio Dashboard", description: "Portfolio health", enabled: true, group: "module" },
   { id: "chat", name: "Chat Dashboard", description: "Team communication", enabled: false, group: "module" },
   { id: "resources", name: "Resources Dashboard", description: "Team capacity", enabled: false, group: "module" },
   { id: "documents", name: "Documents Dashboard", description: "Document activity", enabled: false, group: "module" },

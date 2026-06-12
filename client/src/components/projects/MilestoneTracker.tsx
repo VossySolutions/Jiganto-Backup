@@ -89,7 +89,11 @@ interface MilestoneTrackerProps {
   portfolioId?: number;
 }
 
+type EnrichedMilestone = PmMilestone & { ref?: string; programme?: string | null; portfolio?: string | null; client?: string | null };
+
 export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerProps) {
+  const showProjectCol = mode !== "project";
+  const showPortfolioCols = mode === "portfolio";
   const { toast } = useToast();
   const [view, setView] = useState<"table" | "timeline">("table");
   const [sortKey, setSortKey] = useState("targetDate");
@@ -121,6 +125,8 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
 
   const queryKey = mode === "project" && projectId
     ? ["/api/pm/projects", projectId, "milestones"]
+    : mode === "portfolio"
+    ? ["/api/portfolio/milestones"]
     : ["/api/pm/milestones"];
 
   const { data: milestones = [], isLoading } = useQuery<PmMilestone[]>({
@@ -230,9 +236,16 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
   }, [deleteMut]);
 
   const exportCSV = () => {
-    const headers = ["Project", "Phase", "Workstream", "Milestone", "Target Date", "RAG", "Commentary"];
-    const lines = filtered.map(r =>
-      [r.projectName || "", r.phase || "", r.workstream || "", r.name, r.targetDate || "", r.ragStatus || "", r.commentary || ""]
+    const headers = showPortfolioCols
+      ? ["Ref", "Client", "Portfolio", "Programme", "Project", "Phase", "Workstream", "Milestone", "Target Date", "RAG", "Commentary"]
+      : ["Project", "Phase", "Workstream", "Milestone", "Target Date", "RAG", "Commentary"];
+    const lines = filtered.map(r => {
+      const em = r as EnrichedMilestone;
+      return showPortfolioCols
+        ? [em.ref || `MS-${r.id}`, em.client || "", em.portfolio || "", em.programme || "", r.projectName || "", r.phase || "", r.workstream || "", r.name, r.targetDate || "", r.ragStatus || "", r.commentary || ""]
+        : [r.projectName || "", r.phase || "", r.workstream || "", r.name, r.targetDate || "", r.ragStatus || "", r.commentary || ""];
+    }).map(fields =>
+      fields
         .map(v => `"${(v || "").replace(/"/g, '""')}"`)
         .join(",")
     );
@@ -260,8 +273,6 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
       </div>
     );
   }
-
-  const showProjectCol = mode !== "project";
 
   return (
     <div className="space-y-4" data-testid="milestone-tracker">
@@ -372,6 +383,18 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-muted/50 border-b">
+                  {showPortfolioCols && (
+                    <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ref</th>
+                  )}
+                  {showPortfolioCols && (
+                    <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Client</th>
+                  )}
+                  {showPortfolioCols && (
+                    <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Portfolio</th>
+                  )}
+                  {showPortfolioCols && (
+                    <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Programme</th>
+                  )}
                   {showProjectCol && (
                     <th className={`px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider cursor-pointer hover:text-foreground ${sortKey === "projectName" ? "text-primary" : "text-muted-foreground"}`} onClick={() => handleSort("projectName")}>
                       Project {sortKey === "projectName" ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
@@ -392,16 +415,29 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
               </thead>
               <tbody>
                 {filtered.length === 0 && (
-                  <tr><td colSpan={showProjectCol ? 8 : 7} className="text-center py-12 text-muted-foreground">
+                  <tr><td colSpan={(showProjectCol ? 1 : 0) + (showPortfolioCols ? 4 : 0) + 7} className="text-center py-12 text-muted-foreground">
                     <Search className="h-8 w-8 mx-auto mb-2 opacity-40" />
                     No milestones match the current filters
                   </td></tr>
                 )}
                 {tablePagination.paginatedItems.map(m => {
+                  const em = m as EnrichedMilestone;
                   const od = isOverdue(m.targetDate, m.ragStatus || "Green");
                   const cfg = RAG_CONFIG[m.ragStatus || "Green"] || RAG_CONFIG.Green;
                   return (
                     <tr key={m.id} className="border-b last:border-b-0 hover:bg-muted/50 transition group" data-testid={`milestone-row-${m.id}`}>
+                      {showPortfolioCols && (
+                        <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{em.ref || `MS-${String(m.id).padStart(3, "0")}`}</td>
+                      )}
+                      {showPortfolioCols && (
+                        <td className="px-3 py-2.5 text-xs text-muted-foreground">{em.client || "—"}</td>
+                      )}
+                      {showPortfolioCols && (
+                        <td className="px-3 py-2.5 text-xs text-muted-foreground">{em.portfolio || "—"}</td>
+                      )}
+                      {showPortfolioCols && (
+                        <td className="px-3 py-2.5 text-xs text-muted-foreground">{em.programme || "—"}</td>
+                      )}
                       {showProjectCol && (
                         <td className="px-3 py-2.5">
                           {editingCell?.id === m.id && editingCell.field === "projectName" ? (

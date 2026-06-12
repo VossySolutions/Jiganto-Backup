@@ -52,11 +52,25 @@ export const pmPortfolios = pgTable("pm_portfolios", {
   ragStatus: text("rag_status").default("green"),
   budget: decimal("budget"),
   spentBudget: decimal("spent_budget").default("0"),
+  colour: text("colour").default("#7C3AED"),
   startDate: date("start_date"),
   endDate: date("end_date"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+/** Many-to-many: projects can belong to multiple portfolios (spec §2). */
+export const pmProjectPortfolios = pgTable("pm_project_portfolios", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").notNull().references(() => pmProjects.id, { onDelete: "cascade" }),
+  portfolioId: integer("portfolio_id").notNull().references(() => pmPortfolios.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const pmProjectPortfoliosRelations = relations(pmProjectPortfolios, ({ one }) => ({
+  project: one(pmProjects, { fields: [pmProjectPortfolios.projectId], references: [pmProjects.id] }),
+  portfolio: one(pmPortfolios, { fields: [pmProjectPortfolios.portfolioId], references: [pmPortfolios.id] }),
+}));
 
 export const pmPortfoliosRelations = relations(pmPortfolios, ({ one, many }) => ({
   tenant: one(tenants, {
@@ -69,6 +83,7 @@ export const pmPortfoliosRelations = relations(pmPortfolios, ({ one, many }) => 
   }),
   programs: many(pmPrograms),
   projects: many(pmProjects),
+  projectLinks: many(pmProjectPortfolios),
 }));
 
 // Programs - Container for related projects within a portfolio
@@ -269,6 +284,7 @@ export const pmMilestones = pgTable("pm_milestones", {
   tenantId: integer("tenant_id").notNull().references(() => tenants.id),
   projectId: integer("project_id").references(() => pmProjects.id, { onDelete: "cascade" }),
   phaseId: integer("phase_id").references(() => pmProjectPhases.id),
+  ref: text("ref"),
   name: text("name").notNull(),
   description: text("description"),
   dueDate: date("due_date"),
@@ -1070,6 +1086,78 @@ export const pmDeliverablesRelations = relations(pmDeliverables, ({ one }) => ({
 export const insertPmDeliverablePhaseSchema = createInsertSchema(pmDeliverablePhases).omit({ id: true, createdAt: true });
 export const insertPmDeliverableSchema = createInsertSchema(pmDeliverables).omit({ id: true, createdAt: true, updatedAt: true });
 
+/** Scheduled portfolio / project reports (spec §8.2, §9.1). */
+export const pmReportSchedules = pgTable("pm_report_schedules", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  reportType: text("report_type").notNull(),
+  projectId: integer("project_id").references(() => pmProjects.id, { onDelete: "cascade" }),
+  portfolioId: integer("portfolio_id").references(() => pmPortfolios.id, { onDelete: "cascade" }),
+  frequency: text("frequency").notNull().default("weekly"),
+  dayOfWeek: integer("day_of_week"),
+  timeOfDay: text("time_of_day").default("09:00"),
+  recipientIds: jsonb("recipient_ids").$type<string[]>().default([]),
+  format: text("format").default("pdf"),
+  lastRunAt: timestamp("last_run_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const pmReportSnapshots = pgTable("pm_report_snapshots", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  reportType: text("report_type").notNull(),
+  projectId: integer("project_id").references(() => pmProjects.id, { onDelete: "set null" }),
+  portfolioId: integer("portfolio_id").references(() => pmPortfolios.id, { onDelete: "set null" }),
+  contentJson: jsonb("content_json").notNull(),
+  generatedAt: timestamp("generated_at").defaultNow(),
+  generatedBy: varchar("generated_by").references(() => users.id),
+});
+
+export const insertPmReportScheduleSchema = createInsertSchema(pmReportSchedules).omit({ id: true, createdAt: true, updatedAt: true, lastRunAt: true });
+export const insertPmReportSnapshotSchema = createInsertSchema(pmReportSnapshots).omit({ id: true, generatedAt: true });
+export const insertPmProjectPortfolioSchema = createInsertSchema(pmProjectPortfolios).omit({ id: true, createdAt: true });
+
+/** Weekly health matrix snapshots for trend charts (spec §6.2). */
+export const pmHealthMatrixSnapshots = pgTable("pm_health_matrix_snapshots", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  projectId: integer("project_id").notNull().references(() => pmProjects.id, { onDelete: "cascade" }),
+  snapshotWeek: date("snapshot_week").notNull(),
+  overall: text("overall").default("green"),
+  schedule: text("schedule").default("green"),
+  budget: text("budget").default("green"),
+  quality: text("quality").default("green"),
+  delivery: text("delivery").default("green"),
+  risk: text("risk").default("green"),
+  resources: text("resources").default("green"),
+  stakeholders: text("stakeholders").default("green"),
+  healthScore: integer("health_score").default(100),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+/** Saved custom report definitions (spec §8.3). */
+export const pmCustomReports = pgTable("pm_custom_reports", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  dataSource: text("data_source").notNull().default("projects"),
+  config: jsonb("config").notNull().$type<{
+    fields: string[];
+    filters?: Record<string, string>;
+    groupBy?: string | null;
+    sortBy?: { field: string; direction: "asc" | "desc" };
+  }>(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertPmHealthMatrixSnapshotSchema = createInsertSchema(pmHealthMatrixSnapshots).omit({ id: true, createdAt: true });
+export const insertPmCustomReportSchema = createInsertSchema(pmCustomReports).omit({ id: true, createdAt: true, updatedAt: true });
+
 // Project Tools Insert Schema
 export const insertPmProjectToolSchema = createInsertSchema(pmProjectTools).omit({ id: true, createdAt: true });
 
@@ -1106,6 +1194,16 @@ export type InsertPmPhaseTemplate = z.infer<typeof insertPmPhaseTemplateSchema>;
 export type InsertPmWorkstream = z.infer<typeof insertPmWorkstreamSchema>;
 export type InsertPmSprint = z.infer<typeof insertPmSprintSchema>;
 export type InsertPmBacklogItem = z.infer<typeof insertPmBacklogItemSchema>;
+export type PmProjectPortfolio = typeof pmProjectPortfolios.$inferSelect;
+export type PmReportSchedule = typeof pmReportSchedules.$inferSelect;
+export type PmReportSnapshot = typeof pmReportSnapshots.$inferSelect;
+export type InsertPmReportSchedule = z.infer<typeof insertPmReportScheduleSchema>;
+export type InsertPmReportSnapshot = z.infer<typeof insertPmReportSnapshotSchema>;
+export type InsertPmProjectPortfolio = z.infer<typeof insertPmProjectPortfolioSchema>;
+export type PmHealthMatrixSnapshot = typeof pmHealthMatrixSnapshots.$inferSelect;
+export type PmCustomReport = typeof pmCustomReports.$inferSelect;
+export type InsertPmHealthMatrixSnapshot = z.infer<typeof insertPmHealthMatrixSnapshotSchema>;
+export type InsertPmCustomReport = z.infer<typeof insertPmCustomReportSchema>;
 
 export type PmDeliverablePhase = typeof pmDeliverablePhases.$inferSelect;
 export type PmDeliverable = typeof pmDeliverables.$inferSelect;

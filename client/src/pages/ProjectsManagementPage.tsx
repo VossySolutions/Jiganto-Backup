@@ -19,6 +19,7 @@ import AgileDashboard from "@/components/projects/AgileDashboard";
 import RaiddLogTool from "@/components/projects/RaiddLogTool";
 import DeliverablesTracker from "@/components/projects/DeliverablesTracker";
 import MilestoneTracker from "@/components/projects/MilestoneTracker";
+import { Portfolio360ReportView } from "@/components/portfolio/Portfolio360ReportView";
 import { ReactGanttChart } from "@/components/projects/ReactGanttChart";
 import type { GanttTask, GanttResource, GanttDependency } from "@/components/projects/gantt.types";
 import {
@@ -2163,6 +2164,8 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
         return <RaiddLogTool logType="dependencies" projectId={project.id} />;
       case "decisions_log":
         return <RaiddLogTool logType="decisions" projectId={project.id} />;
+      case "360_report":
+        return <Portfolio360ReportView projectId={project.id} />;
       case "milestone_plan":
         return <MilestoneTracker mode="project" projectId={project.id} />;
       case "deliverables_tracker":

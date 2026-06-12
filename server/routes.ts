@@ -280,6 +280,9 @@ export async function registerRoutes(
   const { registerClientRoutes } = await import("./clients/routes");
   registerClientRoutes(app);
 
+  const { registerPortfolioRoutes } = await import("./portfolio/routes");
+  registerPortfolioRoutes(app);
+
   // === Application Routes ===
 
   // Tenants
@@ -7151,7 +7154,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/pm/milestones", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const milestones = await storage.getAllPmMilestones();
+    const tenantId = getApiTenantIdWithFallback(req);
+    const milestones = await storage.getAllPmMilestones(tenantId);
     res.json(milestones);
   });
 

@@ -5,6 +5,7 @@ import { dashboardPathForClient } from "@/lib/workspace-scope";
 import { useAuth } from "@/hooks/use-auth";
 import { AppShell } from "@/components/AppShell";
 import { PmoDashboard } from "@/components/PmoDashboard";
+import { PortfolioDashboardTab } from "@/components/portfolio/PortfolioDashboardTab";
 import { useClientContext } from "@/hooks/use-client-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -339,7 +340,7 @@ export function Dashboard() {
 
       case "portfolio":
 
-        return <GenericModuleDashboard title="Portfolio Dashboard" />;
+        return <PortfolioDashboardTab />;
 
       default:
 

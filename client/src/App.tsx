@@ -147,6 +147,9 @@ function Router() {
         <Route path="/documents" component={DocumentManagementPage} />
         <Route path="/modules/tasks" component={TaskManagementPage} />
         <Route path="/modules/portfolio" component={PortfolioManagementPage} />
+        <Route path="/portfolio">
+          <Redirect to="/modules/portfolio" />
+        </Route>
         <Route path="/modules/projects/:projectId" component={ProjectsManagementPage} />
         <Route path="/modules/projects" component={ProjectsManagementPage} />
         <Route path="/modules/resource-mgmt" component={ResourceManagementPage} />

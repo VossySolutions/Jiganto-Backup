@@ -14,6 +14,9 @@
     "db:seed-crm": "tsx server/seed-crm-demo.ts",
     "db:seed-finance": "tsx server/seed-finance-demo.ts",
     "db:seed-resources": "tsx server/seed-resources-demo.ts",
+    "db:seed-portfolio": "tsx server/seed-portfolio-demo.ts",
+    "db:patch-portfolio": "node scripts/patch-portfolio-schema.mjs",
+    "smoke:portfolio": "tsx scripts/smoke-portfolio-apis.mjs",
     "db:reset": "tsx script/db-reset.ts",
     "db:clients-rls": "tsx script/apply-clients-rls.ts",
     "db:clients-indexes": "tsx script/apply-clients-indexes.ts"
