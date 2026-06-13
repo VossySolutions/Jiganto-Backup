@@ -785,6 +785,10 @@ export interface IStorage {
   deletePmTask(id: number): Promise<void>;
   deleteAllPmTasksByProject(projectId: number): Promise<void>;
   bulkImportPmTasks(projectId: number, tasks: { tempId: string; parentTempId: string | null; data: InsertPmTask }[]): Promise<{ tempId: string; dbId: number }[]>;
+  bulkImportGanttPlan(projectId: number, tenantId: number, mode: "append" | "overwrite", items: {
+    wbs: string; name: string; type: number; parentWbs?: string | null; predecessorWbs?: string | null;
+    owner?: string; start: string; end?: string; progress?: number; rag?: string; notes?: string;
+  }[]): Promise<{ imported: number }>;
 
   // Projects Module - Team Members
   getPmTeamMembers(projectId: number): Promise<(PmTeamMember & { user: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]>;
@@ -908,6 +912,19 @@ export interface IStorage {
   createPmAgileDefect(data: InsertPmAgileDefect): Promise<PmAgileDefect>;
   updatePmAgileDefect(id: number, updates: Partial<InsertPmAgileDefect>): Promise<PmAgileDefect | undefined>;
   deletePmAgileDefect(id: number): Promise<void>;
+  getPmAgileDashboard(projectId: number): Promise<{
+    kpis: { label: string; value: string | number; change: string; trend: string; color: string }[];
+    workstreams: {
+      id: number; name: string; color: string; sprintName: string; sprintProgress: number;
+      velocity: number; storyPoints: { done: number; total: number };
+      defects: { open: number; closed: number }; epics: number; stories: number; team: number; health: string;
+    }[];
+    velocityData: { sprint: string; planned: number; delivered: number }[];
+    burndownData: { day: string; ideal: number; actual: number | null }[];
+    epicProgress: { id: string; title: string; ws: string; color: string; progress: number; stories: number; done: number; status: string }[];
+    recentActivity: { time: string; user: string; action: string; ws: string; color: string }[];
+    risks: { id: string; title: string; severity: string; ws: string; color: string }[];
+  }>;
 
   // Resources
   getResources(tenantId: number): Promise<Resource[]>;
@@ -935,11 +952,18 @@ export interface IStorage {
   removeResourceSkill(id: number): Promise<void>;
 
   // Resource Allocations
-  getAllocations(tenantId: number): Promise<ResourceAllocation[]>;
+  getAllocations(tenantId: number, projectId?: number): Promise<(ResourceAllocation & { resourceName?: string | null })[]>;
   getAllocation(id: number): Promise<ResourceAllocation | undefined>;
   createAllocation(allocation: InsertResourceAllocation): Promise<ResourceAllocation>;
   updateAllocation(id: number, updates: Partial<InsertResourceAllocation>): Promise<ResourceAllocation | undefined>;
   deleteAllocation(id: number): Promise<void>;
+
+  getTimesheetEntriesByProject(tenantId: number, projectId: number): Promise<{
+    id: number; entryDate: string | null; hours: string | null; description: string | null;
+    personName: string | null; status: string | null;
+  }[]>;
+
+  getDocumentsForProject(tenantId: number, projectId: number, linkedIds?: number[]): Promise<(Document & { ownerName: string | null })[]>;
 
   // Timesheet Periods
   getTimesheetPeriods(tenantId: number, resourceId?: number): Promise<TimesheetPeriod[]>;
@@ -5417,6 +5441,123 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
+  async bulkImportGanttPlan(projectId: number, tenantId: number, mode: "append" | "overwrite", items: {
+    wbs: string; name: string; type: number; parentWbs?: string | null; predecessorWbs?: string | null;
+    owner?: string; start: string; end?: string; progress?: number; rag?: string; notes?: string;
+  }[]): Promise<{ imported: number }> {
+    const ragMap: Record<string, string> = { g: "green", a: "amber", r: "red", green: "green", amber: "amber", red: "red" };
+    if (mode === "overwrite") {
+      await this.deleteAllPmTasksByProject(projectId);
+      const milestones = await this.getPmMilestones(projectId);
+      for (const m of milestones) await this.deletePmMilestone(m.id);
+      const workstreams = await this.getPmWorkstreams(projectId);
+      for (const w of workstreams) await this.deletePmWorkstream(w.id);
+      const phases = await this.getPmProjectPhases(projectId);
+      for (const p of phases) await this.deletePmProjectPhase(p.id);
+    }
+
+    type WbsRef = { kind: "phase" | "ws" | "task" | "ms"; id: number; phaseId?: number | null };
+    const wbsMap = new Map<string, WbsRef>();
+    const sorted = [...items]
+      .filter((i) => i.type >= 2 && i.type <= 6 && i.name && i.start)
+      .sort((a, b) => a.type - b.type || a.wbs.localeCompare(b.wbs, undefined, { numeric: true }));
+
+    let phaseOrder = 0;
+    let wsOrder = 0;
+    let taskOrder = 0;
+    let msOrder = 0;
+
+    for (const item of sorted) {
+      const parent = item.parentWbs ? wbsMap.get(item.parentWbs) : undefined;
+      const rag = ragMap[(item.rag || "g").toLowerCase()] || "green";
+      const end = item.end || item.start;
+
+      if (item.type === 2) {
+        phaseOrder++;
+        const phase = await this.createPmProjectPhase({
+          tenantId,
+          projectId,
+          name: item.name,
+          phaseNumber: phaseOrder,
+          plannedStartDate: item.start,
+          plannedEndDate: end,
+          progress: item.progress ?? 0,
+          ragStatus: rag,
+          description: item.notes || null,
+          order: phaseOrder,
+        });
+        wbsMap.set(item.wbs, { kind: "phase", id: phase.id });
+      } else if (item.type === 3) {
+        wsOrder++;
+        const phaseId = parent?.kind === "phase" ? parent.id : null;
+        const ws = await this.createPmWorkstream({
+          tenantId,
+          projectId,
+          phaseId,
+          name: item.name,
+          plannedStartDate: item.start,
+          plannedEndDate: end,
+          progress: item.progress ?? 0,
+          ragStatus: rag,
+          description: item.notes || null,
+          wbsCode: item.wbs,
+          order: wsOrder,
+        });
+        wbsMap.set(item.wbs, { kind: "ws", id: ws.id, phaseId });
+      } else if (item.type === 4 || item.type === 5) {
+        taskOrder++;
+        let phaseId: number | null = null;
+        let parentTaskId: number | null = null;
+        if (parent?.kind === "phase") phaseId = parent.id;
+        else if (parent?.kind === "ws") phaseId = parent.phaseId ?? null;
+        else if (parent?.kind === "task") {
+          parentTaskId = parent.id;
+          phaseId = parent.phaseId ?? null;
+        }
+        const predRef = item.predecessorWbs ? wbsMap.get(item.predecessorWbs) : undefined;
+        const predecessorIds = predRef?.kind === "task" ? [predRef.id] : undefined;
+        const task = await this.createPmTask({
+          tenantId,
+          projectId,
+          phaseId,
+          parentTaskId,
+          name: item.name,
+          plannedStartDate: item.start,
+          plannedEndDate: end,
+          progress: item.progress ?? 0,
+          status: "todo",
+          description: item.notes || null,
+          wbsCode: item.wbs,
+          isSummary: item.type === 4,
+          ganttType: item.type === 4 ? "summary" : "task",
+          predecessorIds,
+          order: taskOrder,
+        });
+        wbsMap.set(item.wbs, { kind: "task", id: task.id, phaseId });
+      } else if (item.type === 6) {
+        msOrder++;
+        const phaseId = parent?.kind === "phase"
+          ? parent.id
+          : parent?.kind === "ws"
+            ? parent.phaseId ?? null
+            : null;
+        const ms = await this.createPmMilestone({
+          tenantId,
+          projectId,
+          phaseId,
+          name: item.name,
+          dueDate: item.start,
+          status: (item.progress ?? 0) >= 100 ? "completed" : "pending",
+          ragStatus: rag,
+          order: msOrder,
+        });
+        wbsMap.set(item.wbs, { kind: "ms", id: ms.id, phaseId });
+      }
+    }
+
+    return { imported: sorted.length };
+  }
+
   // Projects Module - Team Members
   async getPmTeamMembers(projectId: number): Promise<(PmTeamMember & { user: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]> {
     const result = await db
@@ -5971,6 +6112,173 @@ export class DatabaseStorage implements IStorage {
     await db.delete(pmAgileDefects).where(eq(pmAgileDefects.id, id));
   }
 
+  async getPmAgileDashboard(projectId: number) {
+    const workstreams = await this.getPmAgileWorkstreams(projectId);
+    let totalPoints = 0;
+    let donePoints = 0;
+    let openDefects = 0;
+    let activeEpics = 0;
+    let storyCount = 0;
+    const assignees = new Set<string>();
+    const wsSummaries: {
+      id: number; name: string; color: string; sprintName: string; sprintProgress: number;
+      velocity: number; storyPoints: { done: number; total: number };
+      defects: { open: number; closed: number }; epics: number; stories: number; team: number; health: string;
+      velocityChart: { sprint: string; planned: number; delivered: number }[];
+      burndownChart: { day: string; ideal: number; actual: number | null }[];
+      epicItems: { id: string; title: string; ws: string; color: string; progress: number; stories: number; done: number; status: string }[];
+    }[] = [];
+    const velocityData: { sprint: string; planned: number; delivered: number }[] = [];
+    const epicProgress: { id: string; title: string; ws: string; color: string; progress: number; stories: number; done: number; status: string }[] = [];
+    const recentActivity: { time: string; user: string; action: string; ws: string; color: string }[] = [];
+    const risks: { id: string; title: string; severity: string; ws: string; color: string }[] = [];
+    let burndownData: { day: string; ideal: number; actual: number | null }[] = [];
+
+    for (const ws of workstreams) {
+      const epics = await this.getPmEpics(ws.id);
+      const stories = await this.getPmAgileStories(ws.id);
+      const sprints = await this.getPmAgileSprints(ws.id);
+      const defects = await this.getPmAgileDefects(ws.id);
+
+      const wsTotal = stories.reduce((a, s) => a + (s.points || 0), 0);
+      const wsDone = stories.filter((s) => s.status === "Done").reduce((a, s) => a + (s.points || 0), 0);
+      totalPoints += wsTotal;
+      donePoints += wsDone;
+      storyCount += stories.length;
+      activeEpics += epics.filter((e) => (e.status || "").toLowerCase() === "active").length;
+      openDefects += defects.filter((d) => !["Fixed", "Verified", "Closed"].includes(d.status || "")).length;
+
+      stories.forEach((s) => { if (s.assignee) assignees.add(s.assignee); });
+
+      const activeSprint = sprints.find((s) => (s.status || "").toLowerCase() === "active")
+        || sprints.find((s) => (s.status || "").toLowerCase() === "planned");
+      const sprintProgress = activeSprint?.totalPoints
+        ? Math.round(((activeSprint.donePoints || 0) / activeSprint.totalPoints) * 100)
+        : wsTotal ? Math.round((wsDone / wsTotal) * 100) : 0;
+
+      const closedSprints = sprints.filter((s) => (s.status || "").toLowerCase() === "closed");
+      const velocity = closedSprints.length
+        ? Math.round(closedSprints.reduce((a, s) => a + (s.donePoints || 0), 0) / closedSprints.length)
+        : 0;
+
+      const openDef = defects.filter((d) => !["Fixed", "Verified", "Closed"].includes(d.status || "")).length;
+      const closedDef = defects.length - openDef;
+      let health = "green";
+      if (openDef >= 3 || sprintProgress < 40) health = "red";
+      else if (openDef >= 1 || sprintProgress < 65) health = "amber";
+
+      wsSummaries.push({
+        id: ws.id,
+        name: ws.name,
+        color: ws.color || "#2563EB",
+        sprintName: activeSprint?.name || "—",
+        sprintProgress,
+        velocity,
+        storyPoints: { done: wsDone, total: wsTotal },
+        defects: { open: openDef, closed: closedDef },
+        epics: epics.length,
+        stories: stories.length,
+        team: new Set(stories.map((s) => s.assignee).filter(Boolean)).size,
+        health,
+        velocityChart: [] as { sprint: string; planned: number; delivered: number }[],
+        burndownChart: [] as { day: string; ideal: number; actual: number | null }[],
+        epicItems: [] as { id: string; title: string; ws: string; color: string; progress: number; stories: number; done: number; status: string }[],
+      });
+      const wsSummary = wsSummaries[wsSummaries.length - 1];
+
+      const wsVelocityChart: { sprint: string; planned: number; delivered: number }[] = [];
+      for (const sp of sprints.slice(-4)) {
+        const entry = {
+          sprint: sp.name.replace("Sprint ", "S"),
+          planned: sp.totalPoints || 0,
+          delivered: sp.donePoints || 0,
+        };
+        velocityData.push(entry);
+        wsVelocityChart.push(entry);
+      }
+
+      const wsEpicItems: { id: string; title: string; ws: string; color: string; progress: number; stories: number; done: number; status: string }[] = [];
+      for (const e of epics) {
+        const eStories = stories.filter((s) => s.epicId === e.id);
+        const done = eStories.filter((s) => s.status === "Done").length;
+        const progress = eStories.length ? Math.round((done / eStories.length) * 100) : (e.progress || 0);
+        const item = {
+          id: String(e.id),
+          title: e.title,
+          ws: ws.name,
+          color: e.color || ws.color || "#2563EB",
+          progress,
+          stories: eStories.length,
+          done,
+          status: e.status || "planning",
+        };
+        epicProgress.push(item);
+        wsEpicItems.push(item);
+        if (progress < 30 && (e.status || "").toLowerCase() === "active") {
+          risks.push({
+            id: `R-${e.id}`,
+            title: `${e.title} behind schedule (${progress}%)`,
+            severity: progress < 15 ? "High" : "Medium",
+            ws: ws.name,
+            color: ws.color || "#2563EB",
+          });
+        }
+      }
+
+      if (activeSprint) {
+        const total = activeSprint.totalPoints || wsTotal || 1;
+        const remaining = Math.max(0, total - (activeSprint.donePoints || wsDone));
+        const wsBurndown: { day: string; ideal: number; actual: number | null }[] = [];
+        for (let i = 0; i < 14; i++) {
+          wsBurndown.push({
+            day: `D${i + 1}`,
+            ideal: Math.round((total - (total / 13) * i) * 10) / 10,
+            actual: i <= 8 ? Math.round(total - ((total - remaining) / 8) * i) : (i === 9 ? remaining : null),
+          });
+        }
+        wsSummary.burndownChart = wsBurndown;
+        if (burndownData.length === 0) burndownData = wsBurndown;
+      }
+      wsSummary.velocityChart = wsVelocityChart;
+      wsSummary.epicItems = wsEpicItems;
+
+      const sortedStories = [...stories].sort((a, b) =>
+        new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime(),
+      );
+      for (const s of sortedStories.slice(0, 3)) {
+        recentActivity.push({
+          time: "Recently",
+          user: s.assignee || s.creator || "Team",
+          action: `${s.id}: ${s.status} — ${s.title.slice(0, 50)}`,
+          ws: ws.name,
+          color: ws.color || "#2563EB",
+        });
+      }
+    }
+
+    const sprintCompletion = totalPoints ? Math.round((donePoints / totalPoints) * 100) : 0;
+    const avgVelocity = velocityData.length
+      ? Math.round(velocityData.reduce((a, v) => a + v.delivered, 0) / velocityData.length)
+      : 0;
+
+    return {
+      kpis: [
+        { label: "Total Story Points", value: String(totalPoints), change: `${storyCount} stories`, trend: "neutral", color: "#2563EB" },
+        { label: "Velocity (avg)", value: String(avgVelocity), change: "Last sprints", trend: avgVelocity > 0 ? "up" : "neutral", color: "#0EA5E9" },
+        { label: "Open Defects", value: String(openDefects), change: openDefects > 0 ? "Needs attention" : "Clear", trend: openDefects > 0 ? "down" : "up", color: "#DC2626" },
+        { label: "Sprint Completion", value: `${sprintCompletion}%`, change: sprintCompletion >= 50 ? "On track" : "At risk", trend: sprintCompletion >= 50 ? "up" : "down", color: "#16A34A" },
+        { label: "Team Members", value: String(assignees.size), change: `${workstreams.length} workstreams`, trend: "neutral", color: "#7C3AED" },
+        { label: "Active Epics", value: String(activeEpics), change: `${epicProgress.filter((e) => e.progress < 40).length} at risk`, trend: "neutral", color: "#D97706" },
+      ],
+      workstreams: wsSummaries,
+      velocityData: velocityData.slice(-4),
+      burndownData,
+      epicProgress,
+      recentActivity: recentActivity.slice(0, 8),
+      risks: risks.slice(0, 5),
+    };
+  }
+
   // === Resource Management ===
 
   async getResources(tenantId: number): Promise<Resource[]> {
@@ -6054,8 +6362,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Resource Allocations
-  async getAllocations(tenantId: number): Promise<ResourceAllocation[]> {
-    return await db.select().from(resourceAllocations).where(eq(resourceAllocations.tenantId, tenantId));
+  async getAllocations(tenantId: number, projectId?: number): Promise<(ResourceAllocation & { resourceName?: string | null })[]> {
+    const conditions = [eq(resourceAllocations.tenantId, tenantId)];
+    if (projectId) conditions.push(eq(resourceAllocations.projectId, projectId));
+    return await db
+      .select({
+        id: resourceAllocations.id,
+        tenantId: resourceAllocations.tenantId,
+        resourceId: resourceAllocations.resourceId,
+        projectId: resourceAllocations.projectId,
+        projectName: resourceAllocations.projectName,
+        allocationType: resourceAllocations.allocationType,
+        allocationPercentage: resourceAllocations.allocationPercentage,
+        daysPerWeek: resourceAllocations.daysPerWeek,
+        hoursPerWeek: resourceAllocations.hoursPerWeek,
+        role: resourceAllocations.role,
+        startDate: resourceAllocations.startDate,
+        endDate: resourceAllocations.endDate,
+        notes: resourceAllocations.notes,
+        status: resourceAllocations.status,
+        createdAt: resourceAllocations.createdAt,
+        updatedAt: resourceAllocations.updatedAt,
+        resourceName: sql<string | null>`${resources.firstName} || ' ' || ${resources.lastName}`,
+      })
+      .from(resourceAllocations)
+      .leftJoin(resources, eq(resourceAllocations.resourceId, resources.id))
+      .where(and(...conditions));
   }
 
   async getAllocation(id: number): Promise<ResourceAllocation | undefined> {
@@ -6075,6 +6407,59 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAllocation(id: number): Promise<void> {
     await db.delete(resourceAllocations).where(eq(resourceAllocations.id, id));
+  }
+
+  async getTimesheetEntriesByProject(tenantId: number, projectId: number) {
+    const rows = await db
+      .select({
+        id: timesheetEntries.id,
+        entryDate: timesheetEntries.entryDate,
+        hours: timesheetEntries.hours,
+        description: timesheetEntries.description,
+        personName: sql<string | null>`${resources.firstName} || ' ' || ${resources.lastName}`,
+        status: timesheetPeriods.status,
+      })
+      .from(timesheetEntries)
+      .innerJoin(timesheetPeriods, eq(timesheetEntries.timesheetPeriodId, timesheetPeriods.id))
+      .innerJoin(resources, eq(timesheetEntries.resourceId, resources.id))
+      .where(and(
+        eq(timesheetPeriods.tenantId, tenantId),
+        eq(timesheetEntries.projectId, projectId),
+      ))
+      .orderBy(desc(timesheetEntries.entryDate));
+    return rows;
+  }
+
+  async getDocumentsForProject(tenantId: number, projectId: number, linkedIds: number[] = []) {
+    const metaMatch = sql`(${documents.metadata}->>'projectId')::int = ${projectId}`;
+    const idMatch = linkedIds.length > 0 ? inArray(documents.id, linkedIds) : undefined;
+    const projectFilter = idMatch ? or(metaMatch, idMatch) : metaMatch;
+
+    return await db.select({
+      id: documents.id,
+      tenantId: documents.tenantId,
+      clientId: documents.clientId,
+      folderId: documents.folderId,
+      title: documents.title,
+      description: documents.description,
+      content: documents.content,
+      type: documents.type,
+      status: documents.status,
+      ownerId: documents.ownerId,
+      currentVersion: documents.currentVersion,
+      isFavorite: documents.isFavorite,
+      isPinned: documents.isPinned,
+      viewCount: documents.viewCount,
+      lastViewedAt: documents.lastViewedAt,
+      metadata: documents.metadata,
+      createdAt: documents.createdAt,
+      updatedAt: documents.updatedAt,
+      ownerName: sql<string | null>`COALESCE(${users.firstName} || ' ' || ${users.lastName}, ${users.email}, ${documents.ownerId})`,
+    })
+      .from(documents)
+      .leftJoin(users, eq(documents.ownerId, users.id))
+      .where(and(eq(documents.tenantId, tenantId), projectFilter))
+      .orderBy(desc(documents.updatedAt));
   }
 
   // Timesheet Periods

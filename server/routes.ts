@@ -6937,12 +6937,43 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     res.status(204).send();
   });
 
+  app.get("/api/pm/projects/:projectId/documents", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    const projectId = Number(req.params.projectId);
+    const project = await storage.getPmProject(projectId);
+    const meta = (project?.metadata as Record<string, unknown>) || {};
+    const linkedIds = Array.isArray(meta.linkedDocumentIds)
+      ? (meta.linkedDocumentIds as number[]).filter((id) => typeof id === "number")
+      : [];
+    const docs = await storage.getDocumentsForProject(tenantId, projectId, linkedIds);
+    res.json(docs);
+  });
+
+  app.get("/api/finance/timesheet-entries", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = getApiTenantIdWithFallback(req);
+    const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
+    if (!projectId) return res.status(400).json({ message: "projectId is required" });
+    const entries = await storage.getTimesheetEntriesByProject(tenantId, projectId);
+    res.json(entries);
+  });
+
   // ── Agile Workstreams ────────────────────────────────────────────────────
   app.get("/api/pm/projects/:projectId/agile/workstreams", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const workstreams = await storage.getPmAgileWorkstreams(Number(req.params.projectId));
     res.json(workstreams);
+  });
+
+  app.get("/api/pm/projects/:projectId/agile/dashboard", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const dashboard = await storage.getPmAgileDashboard(Number(req.params.projectId));
+    res.json(dashboard);
   });
 
   app.post("/api/pm/projects/:projectId/agile/workstreams", async (req, res) => {
@@ -7298,6 +7329,48 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     } catch (err: any) {
       console.error("POST bulk-import error:", err?.message || err);
       res.status(500).json({ message: err?.message || "Bulk import failed" });
+    }
+  });
+
+  app.post("/api/pm/projects/:projectId/gantt/import", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const projectId = Number(req.params.projectId);
+    const project = await storage.getPmProject(projectId);
+    if (!project) return res.status(404).json({ message: "Project not found" });
+    try {
+      const { mode, items } = req.body as {
+        mode?: "append" | "overwrite";
+        items: {
+          wbs: string; name: string; type: number; parentWbs?: string | null; predecessorWbs?: string | null;
+          owner?: string; start: string; end?: string; progress?: number; rag?: string; notes?: string;
+        }[];
+      };
+      if (!Array.isArray(items)) return res.status(400).json({ message: "items array required" });
+      const result = await storage.bulkImportGanttPlan(
+        projectId,
+        project.tenantId,
+        mode === "overwrite" ? "overwrite" : "append",
+        items,
+      );
+      res.json(result);
+    } catch (err: any) {
+      console.error("POST gantt import error:", err?.message || err);
+      res.status(500).json({ message: err?.message || "Gantt import failed" });
+    }
+  });
+
+  app.get("/api/test-mgmt/test-cases", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const tenantId = getApiTenantIdWithFallback(req);
+      const suiteId = req.query.suiteId ? Number(req.query.suiteId) : undefined;
+      const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
+      const cases = await storage.getTmTestCases(tenantId, suiteId, projectId);
+      res.json(cases);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 
@@ -7783,7 +7856,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const role = await storage.createPmRaciRole(req.body);
+      const tenant = await storage.getDefaultTenant();
+      const role = await storage.createPmRaciRole({ ...req.body, tenantId: req.body.tenantId || tenant?.id || 1 });
       res.status(201).json(role);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -7826,7 +7900,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const activity = await storage.createPmRaciActivity(req.body);
+      const tenant = await storage.getDefaultTenant();
+      const activity = await storage.createPmRaciActivity({ ...req.body, tenantId: req.body.tenantId || tenant?.id || 1 });
       res.status(201).json(activity);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -8140,7 +8215,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const tenantId = getApiTenantIdWithFallback(req);
-    const allocationsList = await storage.getAllocations(tenantId);
+    const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
+    const allocationsList = await storage.getAllocations(tenantId, projectId);
     res.json(allocationsList);
   });
 

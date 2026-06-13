@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { PmDashboardSkeleton, PmErrorState } from "@/components/projects/PmLoadingShell";
+import "./agile-responsive.css";
 
 const C = {
   navy: "#1B3A6B", blue: "#2563EB", blueMid: "#3B82F6", blueLight: "#DBEAFE",
@@ -10,7 +13,7 @@ const C = {
   grey800: "#1E293B", white: "#FFFFFF",
 };
 
-interface Workstream { id: string; name: string; color: string; sprintName: string; sprintProgress: number; velocity: number; storyPoints: { done: number; total: number }; defects: { open: number; closed: number }; epics: number; stories: number; team: number; health: string; }
+interface Workstream { id: string; name: string; color: string; sprintName: string; sprintProgress: number; velocity: number; storyPoints: { done: number; total: number }; defects: { open: number; closed: number }; epics: number; stories: number; team: number; health: string; velocityChart?: VelocityPoint[]; burndownChart?: BurndownPoint[]; epicItems?: typeof EPIC_PROGRESS; }
 interface KPIData { label: string; value: string | number; change: string; trend: string; color: string; icon: string; }
 interface VelocityPoint { sprint: string; planned: number; delivered: number; }
 interface BurndownPoint { day: string; ideal: number; actual: number | null; }
@@ -100,7 +103,8 @@ function VelocityChart({ data, width=460, height=200 }: { data: VelocityPoint[];
   return (
     <div style={{ background:C.white, border:`1px solid ${C.grey200}`, borderRadius:10, padding:"12px 16px" }}>
       <div style={{ fontWeight:700, fontSize:13, color:C.grey700, marginBottom:8 }}>Velocity Trend</div>
-      <svg width={width} height={height} style={{ display:"block" }}>
+      <div style={{ width:"100%", overflowX:"auto" }}>
+      <svg width={width} height={height} style={{ display:"block", minWidth:280 }}>
         {[0,0.25,0.5,0.75,1].map(t=>{
           const yv=pad.top+H*t; const val=Math.round(maxY*(1-t));
           return (
@@ -129,6 +133,7 @@ function VelocityChart({ data, width=460, height=200 }: { data: VelocityPoint[];
           <text x={76} y={11} fontSize={9} fill={C.grey500}>Delivered</text>
         </g>
       </svg>
+      </div>
     </div>
   );
 }
@@ -151,7 +156,8 @@ function DashBurndownChart({ data, width=460, height=200 }: { data: BurndownPoin
   return (
     <div style={{ background:C.white, border:`1px solid ${C.grey200}`, borderRadius:10, padding:"12px 16px" }}>
       <div style={{ fontWeight:700, fontSize:13, color:C.grey700, marginBottom:8 }}>Sprint Burndown (AI CUI Engine)</div>
-      <svg width={width} height={height} style={{ display:"block", overflow:"visible" }}>
+      <div style={{ width:"100%", overflowX:"auto" }}>
+      <svg width={width} height={height} style={{ display:"block", overflow:"visible", minWidth:280 }}>
         {[0,0.25,0.5,0.75,1].map(t=>{
           const yv=pad.top+H*t;
           return (
@@ -174,6 +180,7 @@ function DashBurndownChart({ data, width=460, height=200 }: { data: BurndownPoin
           return <circle key={i} cx={xs[xi]} cy={y(d.actual!)} r={3.5} fill={C.white} stroke={C.blue} strokeWidth={2}/>;
         })}
       </svg>
+      </div>
     </div>
   );
 }
@@ -212,7 +219,13 @@ function WorkstreamCard({ ws, onClick }: { ws: Workstream; onClick: () => void }
   );
 }
 
-function WorkstreamDetail({ ws, onBack }: { ws: Workstream; onBack: () => void }) {
+function WorkstreamDetail({ ws, onBack, velocityData, burndownData, epicProgress }: {
+  ws: Workstream;
+  onBack: () => void;
+  velocityData: VelocityPoint[];
+  burndownData: BurndownPoint[];
+  epicProgress: typeof EPIC_PROGRESS;
+}) {
   return (
     <div style={{ padding:20 }}>
       <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:4, background:"none", border:"none", cursor:"pointer", fontSize:13, color:C.blue, fontWeight:600, marginBottom:16 }} data-testid="button-back-dashboard">
@@ -224,7 +237,7 @@ function WorkstreamDetail({ ws, onBack }: { ws: Workstream; onBack: () => void }
         <DashBadge label={healthLabel(ws.health)} bg={healthBg(ws.health)} color={healthColor(ws.health)} dot/>
         <DashBadge label={ws.sprintName} bg={C.blueLight} color={C.blue}/>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:20 }}>
+      <div className="agile-detail-stats" style={{ marginBottom:20 }}>
         {([
           ["Story Points",`${ws.storyPoints.done}/${ws.storyPoints.total}`,C.blue,C.blueLight],
           ["Velocity",ws.velocity,C.teal,C.tealLight],
@@ -243,13 +256,13 @@ function WorkstreamDetail({ ws, onBack }: { ws: Workstream; onBack: () => void }
         <span style={{ fontWeight:800, fontSize:16, color:ws.color }}>{ws.sprintProgress}%</span>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-        <VelocityChart data={VELOCITY_DATA} width={420} height={200}/>
-        <DashBurndownChart data={BURNDOWN_DATA} width={420} height={200}/>
+        <VelocityChart data={velocityData} width={420} height={200}/>
+        <DashBurndownChart data={burndownData} width={420} height={200}/>
       </div>
       <div style={{ marginTop:20 }}>
         <div style={{ fontWeight:700, fontSize:14, color:C.grey700, marginBottom:10 }}>Epic Progress</div>
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-          {EPIC_PROGRESS.filter(e=>e.ws===ws.name).map(ep=>(
+          {epicProgress.map(ep=>(
             <div key={ep.id} style={{ background:C.white, border:`1px solid ${C.grey200}`, borderLeft:`4px solid ${ep.color}`, borderRadius:8, padding:"10px 14px", display:"flex", alignItems:"center", gap:12 }}>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:10, color:C.grey400 }}>{ep.id}</div>
@@ -269,15 +282,98 @@ function WorkstreamDetail({ ws, onBack }: { ws: Workstream; onBack: () => void }
   );
 }
 
-export default function AgileDashboard() {
+export default function AgileDashboard({ projectId }: { projectId?: number }) {
   const [selectedWs, setSelectedWs] = useState<string|null>(null);
 
-  const ws = selectedWs ? WORKSTREAMS.find(w=>w.id===selectedWs) : null;
+  const { data, isLoading, isError, refetch } = useQuery<{
+    kpis: KPIData[];
+    workstreams: Workstream[];
+    velocityData: VelocityPoint[];
+    burndownData: BurndownPoint[];
+    epicProgress: typeof EPIC_PROGRESS;
+    recentActivity: typeof RECENT_ACTIVITY;
+    risks: typeof RISKS;
+  }>({
+    queryKey: ["/api/pm/projects", projectId, "agile/dashboard"],
+    enabled: !!projectId,
+  });
+
+  const kpis = projectId ? (data?.kpis ?? []) : (data?.kpis ?? KPIS);
+  const workstreamList: Workstream[] = projectId
+    ? (data?.workstreams?.map((w) => ({
+        id: String(w.id),
+        name: w.name,
+        color: w.color,
+        sprintName: w.sprintName,
+        sprintProgress: w.sprintProgress,
+        velocity: w.velocity,
+        storyPoints: w.storyPoints,
+        defects: w.defects,
+        epics: w.epics,
+        stories: w.stories,
+        team: w.team,
+        health: w.health,
+        velocityChart: (w as any).velocityChart,
+        burndownChart: (w as any).burndownChart,
+        epicItems: (w as any).epicItems,
+      })) ?? [])
+    : (data?.workstreams?.map((w) => ({
+        id: String(w.id),
+        name: w.name,
+        color: w.color,
+        sprintName: w.sprintName,
+        sprintProgress: w.sprintProgress,
+        velocity: w.velocity,
+        storyPoints: w.storyPoints,
+        defects: w.defects,
+        epics: w.epics,
+        stories: w.stories,
+        team: w.team,
+        health: w.health,
+        velocityChart: (w as any).velocityChart,
+        burndownChart: (w as any).burndownChart,
+        epicItems: (w as any).epicItems,
+      })) ?? WORKSTREAMS);
+  const velocityData = projectId ? (data?.velocityData ?? []) : (data?.velocityData ?? VELOCITY_DATA);
+  const burndownData = projectId ? (data?.burndownData ?? []) : (data?.burndownData ?? BURNDOWN_DATA);
+  const epicProgress = projectId ? (data?.epicProgress ?? []) : (data?.epicProgress ?? EPIC_PROGRESS);
+  const recentActivity = projectId ? (data?.recentActivity ?? []) : (data?.recentActivity ?? RECENT_ACTIVITY);
+  const risks = projectId ? (data?.risks ?? []) : (data?.risks ?? RISKS);
+
+  const ws = selectedWs ? workstreamList.find(w=>w.id===selectedWs) : null;
+
+  if (projectId && isLoading) {
+    return (
+      <div style={{ background:C.grey50, borderRadius:10, border:`1px solid ${C.grey200}`, overflow:"hidden" }} data-testid="agile-dashboard-loading">
+        <PmDashboardSkeleton />
+      </div>
+    );
+  }
+
+  if (projectId && isError) {
+    return (
+      <div style={{ background:C.grey50, borderRadius:10, border:`1px solid ${C.grey200}`, overflow:"hidden" }}>
+        <PmErrorState message="Failed to load agile dashboard." onRetry={() => refetch()} />
+      </div>
+    );
+  }
+
+  if (projectId && !isLoading && workstreamList.length === 0) {
+    return (
+      <div style={{ background:C.grey50, borderRadius:10, border:`1px solid ${C.grey200}`, overflow:"hidden", padding:48, textAlign:"center" }}>
+        <div style={{ fontWeight:700, fontSize:16, color:C.grey700, marginBottom:8 }}>No agile data yet</div>
+        <div style={{ fontSize:13, color:C.grey500 }}>Add workstreams and stories in the Sprint Board to populate this dashboard.</div>
+      </div>
+    );
+  }
 
   if (ws) {
+    const wsVelocity = ws.velocityChart ?? velocityData.filter(() => true).slice(0, 4);
+    const wsBurndown = ws.burndownChart ?? burndownData;
+    const wsEpics = ws.epicItems ?? epicProgress.filter(e => e.ws === ws.name);
     return (
       <div style={{ background:C.grey50, borderRadius:10, border:`1px solid ${C.grey200}`, overflow:"hidden" }} data-testid="agile-dashboard">
-        <WorkstreamDetail ws={ws} onBack={()=>setSelectedWs(null)}/>
+        <WorkstreamDetail ws={ws} onBack={()=>setSelectedWs(null)} velocityData={wsVelocity} burndownData={wsBurndown} epicProgress={wsEpics}/>
       </div>
     );
   }
@@ -293,7 +389,7 @@ export default function AgileDashboard() {
         </div>
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:12, marginBottom:24 }} data-testid="section-kpis">
-          {KPIS.map((kpi, index)=>(
+          {kpis.map((kpi, index)=>(
             <div key={kpi.label} style={{ background:C.white, border:`1px solid ${C.grey200}`, borderRadius:10, padding:"14px 16px", borderLeft:`4px solid ${kpi.color}` }} data-testid={`kpi-card-${index}`}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", marginBottom:6 }}>
                 <span style={{ fontSize:10, color: kpi.trend==="up"?C.green:kpi.trend==="down"?C.red:C.grey400, fontWeight:600 }}>
@@ -308,21 +404,21 @@ export default function AgileDashboard() {
 
         <div style={{ fontWeight:700, fontSize:16, color:C.grey800, marginBottom:12 }}>Workstreams</div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:14, marginBottom:24 }} data-testid="section-workstreams">
-          {WORKSTREAMS.map(w=>(
+          {workstreamList.map(w=>(
             <WorkstreamCard key={w.id} ws={w} onClick={()=>setSelectedWs(w.id)}/>
           ))}
         </div>
 
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:24 }} data-testid="section-charts">
-          <div data-testid="chart-velocity"><VelocityChart data={VELOCITY_DATA}/></div>
-          <div data-testid="chart-burndown"><DashBurndownChart data={BURNDOWN_DATA}/></div>
+        <div className="agile-dashboard-charts" style={{ marginBottom:24 }} data-testid="section-charts">
+          <div data-testid="chart-velocity"><VelocityChart data={velocityData}/></div>
+          <div data-testid="chart-burndown"><DashBurndownChart data={burndownData}/></div>
         </div>
 
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:24 }}>
+        <div className="agile-dashboard-panels" style={{ marginBottom:24 }}>
           <div style={{ background:C.white, border:`1px solid ${C.grey200}`, borderRadius:10, padding:16 }}>
             <div style={{ fontWeight:700, fontSize:14, color:C.grey700, marginBottom:12 }}>Epic Progress</div>
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              {EPIC_PROGRESS.map(ep=>(
+              {epicProgress.map(ep=>(
                 <div key={ep.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"6px 0", borderBottom:`1px solid ${C.grey100}` }} data-testid={`epic-progress-${ep.id}`}>
                   <span style={{ width:6, height:6, borderRadius:"50%", background:ep.color, flexShrink:0 }}/>
                   <div style={{ flex:1, minWidth:0 }}>
@@ -339,7 +435,7 @@ export default function AgileDashboard() {
           <div style={{ background:C.white, border:`1px solid ${C.grey200}`, borderRadius:10, padding:16 }}>
             <div style={{ fontWeight:700, fontSize:14, color:C.grey700, marginBottom:12 }}>Risks & Blockers</div>
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              {RISKS.map(r=>(
+              {risks.map(r=>(
                 <div key={r.id} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"8px 12px", background:r.severity==="High"?C.redLight:r.severity==="Medium"?C.amberLight:C.blueLight, borderRadius:8, border:`1px solid ${r.color}22` }} data-testid={`risk-item-${r.id}`}>
                   <span style={{ width:10, height:10, borderRadius:"50%", background:r.severity==="High"?C.red:r.severity==="Medium"?C.amber:C.blue, flexShrink:0, marginTop:3 }}/>
                   <div style={{ flex:1 }}>
@@ -355,8 +451,8 @@ export default function AgileDashboard() {
         <div style={{ background:C.white, border:`1px solid ${C.grey200}`, borderRadius:10, padding:16 }}>
           <div style={{ fontWeight:700, fontSize:14, color:C.grey700, marginBottom:12 }}>Recent Activity</div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-            {RECENT_ACTIVITY.map((a,i)=>(
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"6px 0", borderBottom:i<RECENT_ACTIVITY.length-1?`1px solid ${C.grey100}`:"none" }} data-testid={`activity-item-${i}`}>
+            {recentActivity.map((a,i)=>(
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"6px 0", borderBottom:i<recentActivity.length-1?`1px solid ${C.grey100}`:"none" }} data-testid={`activity-item-${i}`}>
                 <span style={{ width:8, height:8, borderRadius:"50%", background:a.color, flexShrink:0 }}/>
                 <div style={{ flex:1 }}>
                   <span style={{ fontSize:12, fontWeight:600, color:C.grey800 }}>{a.user}</span>

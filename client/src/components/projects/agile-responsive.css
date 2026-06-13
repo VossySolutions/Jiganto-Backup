@@ -1,0 +1,132 @@
+/* Agile Board & Dashboard — responsive layout helpers */
+
+.agile-root {
+  min-width: 0;
+  width: 100%;
+}
+
+.agile-content {
+  position: relative;
+  min-width: 0;
+}
+
+.agile-kanban-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+
+.agile-kanban-col {
+  flex: 1 1 0;
+  min-width: 200px;
+  scroll-snap-align: start;
+}
+
+.agile-backlog-layout {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  flex-wrap: wrap;
+}
+
+.agile-backlog-main {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.agile-backlog-sidebar {
+  width: 300px;
+  flex-shrink: 0;
+}
+
+.agile-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.agile-h-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  min-width: 0;
+}
+
+.agile-defect-table {
+  min-width: 720px;
+}
+
+.agile-dashboard-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.agile-dashboard-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.agile-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.agile-modal-body {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.agile-modal-main {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.agile-modal-side {
+  width: 200px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .agile-dashboard-charts,
+  .agile-dashboard-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .agile-detail-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .agile-backlog-sidebar {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .agile-kanban-col {
+    min-width: 82vw;
+    flex: 0 0 82vw;
+  }
+
+  .agile-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .agile-modal-side {
+    width: 100%;
+  }
+
+  .agile-sprint-info-bar {
+    padding: 10px 12px !important;
+    margin: 8px 10px 0 !important;
+  }
+
+  .agile-view-padding {
+    padding: 12px !important;
+  }
+}

@@ -1,6 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { usePmAgileMutations } from "@/hooks/use-pm-agile-mutations";
+import { PmLoadingSpinner, PmLoadingOverlay, PmAgileSkeleton, PmErrorState } from "@/components/projects/PmLoadingShell";
+import "./agile-responsive.css";
+import {
+  dbWorkstreamToLocal, dbEpicToLocal, dbStoryToLocal, dbSprintToLocal, dbDefectToLocal,
+  buildSprintMap, computeBurnUp, computeBurndown, computeRoadmapTimeline, isNumericId,
+} from "@/lib/pm-agile-mappers";
 
 const C = {
   navy: "#1B3A6B", blue: "#2563EB", blueMid: "#3B82F6", blueLight: "#DBEAFE",
@@ -13,7 +20,7 @@ const C = {
 };
 
 interface Workstream { id: string; name: string; color: string; }
-interface Epic { id: string; wsId: string; title: string; initiative: string; status: string; tshirt: string; priority: string; progress: number; owner: string; creator: string; createdAt: string; color: string; stories: number; storiesDone: number; tags: string[]; description: string; }
+interface Epic { id: string; wsId: string; title: string; initiative: string; status: string; tshirt: string; priority: string; progress: number; owner: string; creator: string; createdAt: string; color: string; stories: number; storiesDone: number; tags: string[]; description: string; startDate?: string | null; endDate?: string | null; }
 interface Story { id: string; epicId: string; wsId: string; title: string; status: string; points: number | null; tshirt: string; priority: string; assignee: string | null; creator: string; createdAt: string; sprint: string | null; tags: string[]; tasks: number; tasksDone: number; ac: string[]; }
 interface Defect { id: string; storyId: string; wsId: string; title: string; severity: string; priority: string; status: string; assignee: string | null; creator: string; createdAt: string; environment: string; sprint: string | null; }
 interface Sprint { id: string; wsId: string; name: string; status: string; start: string; end: string; points: number; done: number; goal?: string; }
@@ -309,11 +316,15 @@ const TABS = [
   { id:"bestpractice", label:"Best Practice" },
 ];
 
-function BoardView({ stories, epics, onDrop, dragItem, setDragItem, dragOver, setDragOver, activeSprint, onSelectStory, allSprintStories }: {
+function BoardView({ stories, epics, onDrop, dragItem, setDragItem, dragOver, setDragOver, activeSprint, onSelectStory, allSprintStories, burndownData, onCompleteSprint, boardMode = "sprint" }: {
   stories: Story[]; epics: Epic[]; onDrop: (e: React.DragEvent, col: string) => void; dragItem: string | null;
   setDragItem: (id: string | null) => void; dragOver: string | null; setDragOver: (col: string | null) => void;
   activeSprint: Sprint | undefined; onSelectStory: (s: Story) => void; allSprintStories?: Story[];
+  burndownData?: BurndownPoint[]; onCompleteSprint?: () => void;
+  boardMode?: "sprint" | "scrum" | "kanban";
 }) {
+  const isKanban = boardMode === "kanban";
+  const boardTitle = isKanban ? "Kanban Board" : boardMode === "scrum" ? "Scrum Board" : (activeSprint?.name || "Sprint Board");
   const [showChart, setShowChart] = useState(true);
   const [assigneeFilter, setAssigneeFilter] = useState("All");
   const [priorityFilter, setPriorityFilter] = useState("All");
@@ -333,12 +344,13 @@ function BoardView({ stories, epics, onDrop, dragItem, setDragItem, dragOver, se
   });
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", height:"100%" }} data-testid="sprint-board-view">
-      <div style={{ background:C.white, border:`1px solid ${C.grey200}`, borderRadius:10, margin:"12px 16px 0", padding:"12px 18px", flexShrink:0 }} data-testid="sprint-info-bar">
+    <div style={{ display:"flex", flexDirection:"column", height:"100%" }} data-testid={isKanban ? "kanban-board-view" : "sprint-board-view"}>
+      {!isKanban && (
+      <div style={{ background:C.white, border:`1px solid ${C.grey200}`, borderRadius:10, margin:"12px 16px 0", padding:"12px 18px", flexShrink:0 }} className="agile-sprint-info-bar" data-testid="sprint-info-bar">
         <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
           <div style={{ display:"flex", flexDirection:"column", gap:2, marginRight:8 }}>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontWeight:700, fontSize:15, color:C.grey800 }}>{activeSprint?.name || "Sprint Board"}</span>
+              <span style={{ fontWeight:700, fontSize:15, color:C.grey800 }}>{boardTitle}</span>
               {activeSprint?.status === "Active" && <AgileBadge label="Active" color={C.greenLight} textColor={C.green} dot small />}
             </div>
             {activeSprint && (
@@ -371,22 +383,38 @@ function BoardView({ stories, epics, onDrop, dragItem, setDragItem, dragOver, se
           <AgileSelect value={assigneeFilter} onChange={setAssigneeFilter} options={[{value:"All",label:"All Assignees"},...assignees.map(a=>({value:a,label:a}))]} small testId="filter-board-assignee"/>
           <AgileSelect value={priorityFilter} onChange={setPriorityFilter} options={[{value:"All",label:"All Priorities"},{value:"Critical",label:"Critical"},{value:"High",label:"High"},{value:"Medium",label:"Medium"},{value:"Low",label:"Low"}]} small testId="filter-board-priority"/>
           <AgileBtn label={showChart ? "Hide Chart" : "Show Chart"} onClick={() => setShowChart(!showChart)} testId="button-toggle-chart"/>
-          {activeSprint?.status === "Active" && <AgileBtn label="Complete Sprint" variant="primary" testId="button-complete-sprint"/>}
+          {activeSprint?.status === "Active" && <AgileBtn label="Complete Sprint" variant="primary" onClick={onCompleteSprint} testId="button-complete-sprint"/>}
         </div>
       </div>
+      )}
 
-      {showChart && (
+      {isKanban && (
+        <div style={{ background:C.white, border:`1px solid ${C.grey200}`, borderRadius:10, margin:"12px 16px 0", padding:"10px 18px", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+            <span style={{ fontWeight:700, fontSize:15, color:C.grey800 }}>Kanban Board</span>
+            <span style={{ fontSize:12, color:C.grey500 }}>Continuous flow — all active stories</span>
+            <div style={{ flex:1 }}/>
+            <AgileSelect value={assigneeFilter} onChange={setAssigneeFilter} options={[{value:"All",label:"All Assignees"},...assignees.map(a=>({value:a,label:a}))]} small testId="filter-board-assignee"/>
+            <AgileSelect value={priorityFilter} onChange={setPriorityFilter} options={[{value:"All",label:"All Priorities"},{value:"Critical",label:"Critical"},{value:"High",label:"High"},{value:"Medium",label:"Medium"},{value:"Low",label:"Low"}]} small testId="filter-board-priority"/>
+          </div>
+        </div>
+      )}
+
+      {!isKanban && showChart && (
         <div style={{ margin:"12px 16px 0" }}>
-          <BurndownChart data={BURNDOWN_DATA} title={`Sprint Burndown — ${activeSprint?.name || "Sprint"}`} height={220} sprint={activeSprint}/>
+          <BurndownChart data={burndownData || BURNDOWN_DATA} title={`Sprint Burndown — ${activeSprint?.name || "Sprint"}`} height={220} sprint={activeSprint}/>
         </div>
       )}
 
       <div style={{ padding:"12px 16px", flex:1, overflowY:"auto" }}>
-        <div style={{ display:"flex", gap:10, overflowX:"auto", paddingBottom:10 }}>
+        <div className="agile-kanban-scroll">
           {BOARD_COLUMNS.map(col => {
-            const cols = filtered.filter(s => s.status === col && s.sprint === activeSprint?.name);
+            const cols = isKanban
+              ? filtered.filter(s => s.status === col && s.status !== "Backlog")
+              : filtered.filter(s => s.status === col && s.sprint === activeSprint?.name);
             return (
               <div key={col}
+                className="agile-kanban-col"
                 onDragOver={e => { e.preventDefault(); setDragOver(col); }}
                 onDragLeave={() => setDragOver(null)}
                 onDrop={e => onDrop(e, col)}
@@ -439,10 +467,11 @@ function BoardCard({ story, epics, onDragStart, onClick }: { story: Story; epics
   );
 }
 
-function BacklogView({ stories, epics, onSelectStory, sprints, setStories, activeSprint, ws, onAddStory }: {
+function BacklogView({ stories, epics, onSelectStory, sprints, setStories, activeSprint, ws, onAddStory, onDeleteStory, onAssignToSprint }: {
   stories: Story[]; epics: Epic[]; onSelectStory: (s: Story) => void; sprints: Sprint[];
   setStories: React.Dispatch<React.SetStateAction<Story[]>>; activeSprint: Sprint | undefined; ws: Workstream;
-  onAddStory?: (data: any) => void;
+  onAddStory?: (data: any) => void; onDeleteStory?: (id: string) => void | Promise<void>;
+  onAssignToSprint?: (storyId: string, sprint: Sprint | null) => void | Promise<void>;
 }) {
   const [dragId, setDragId] = useState<string|null>(null);
   const [dropActive, setDropActive] = useState(false);
@@ -462,6 +491,7 @@ function BacklogView({ stories, epics, onSelectStory, sprints, setStories, activ
     e.preventDefault();
     if (!dragId) return;
     setStories(p=>p.map(s=>s.id===dragId?{...s,sprint:activeSprint?.name||null,status:"To Do"}:s));
+    if (onAssignToSprint && activeSprint) onAssignToSprint(dragId, activeSprint);
     setDragId(null); setDropActive(false);
   }
   function handleAddStory(data: any) {
@@ -475,13 +505,14 @@ function BacklogView({ stories, epics, onSelectStory, sprints, setStories, activ
     }
   }
   function handleDelete(id: string) {
-    setStories(p=>p.filter(s=>s.id!==id));
+    if (onDeleteStory) onDeleteStory(id);
+    else setStories(p=>p.filter(s=>s.id!==id));
     setDeleteId(null);
   }
 
   return (
-    <div style={{ padding:20, display:"flex", gap:16 }}>
-      <div style={{ flex:1 }}>
+    <div className="agile-backlog-layout">
+      <div className="agile-backlog-main">
         <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14, flexWrap:"wrap" }}>
           <span style={{ fontWeight:700, fontSize:15, color:C.grey800 }}>Product Backlog</span>
           <AgileBadge label={`${backlogItems.length}`} color={C.blueLight} textColor={C.blue}/>
@@ -518,7 +549,7 @@ function BacklogView({ stories, epics, onSelectStory, sprints, setStories, activ
         </div>
       </div>
 
-      <div style={{ width:300, flexShrink:0 }}>
+      <div className="agile-backlog-sidebar">
         <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
           <span style={{ fontWeight:700, fontSize:14, color:C.grey800 }}>{activeSprint?.name||"No Active Sprint"}</span>
           {activeSprint && <AgileBadge label="Active" color={C.greenLight} textColor={C.green} dot small/>}
@@ -598,10 +629,11 @@ function AddStoryForm({ epics, onSave, onCancel, initial={} }: { epics: Epic[]; 
   );
 }
 
-function EpicsView({ epics, stories, onSelect, setEpics, ws, onAddEpic }: {
+function EpicsView({ epics, stories, onSelect, setEpics, ws, onAddEpic, onUpdateEpic, onDeleteEpic }: {
   epics: Epic[]; stories: Story[]; onSelect: (e: Epic) => void;
   setEpics: React.Dispatch<React.SetStateAction<Epic[]>>; ws: Workstream;
-  onAddEpic?: (data: any) => void;
+  onAddEpic?: (data: any) => void; onUpdateEpic?: (id: string, data: any) => void | Promise<void>;
+  onDeleteEpic?: (id: string) => void | Promise<void>;
 }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editEpic, setEditEpic] = useState<Epic|null>(null);
@@ -616,16 +648,29 @@ function EpicsView({ epics, stories, onSelect, setEpics, ws, onAddEpic }: {
 
   function handleSave(data: any) {
     if (editEpic) {
-      setEpics(p=>p.map(e=>e.id===editEpic.id?{...e,...data}:e));
+      if (onUpdateEpic) {
+        onUpdateEpic(editEpic.id, {
+          title: data.title, initiative: data.initiative, description: data.description,
+          status: data.status?.toLowerCase(), priority: data.priority?.toLowerCase(),
+          tshirt: data.tshirt, owner: data.owner,
+          startDate: data.startDate || null, endDate: data.endDate || null,
+        });
+      } else {
+        setEpics(p=>p.map(e=>e.id===editEpic.id?{...e,...data}:e));
+      }
     } else if (onAddEpic) {
       onAddEpic(data);
     } else {
-      const id=`EP-${String(epics.length+1).padStart(3,"0")}`;
+      const id = `EP-${String(epics.length+1).padStart(3,"0")}`;
       setEpics(p=>[...p,{id,wsId:ws.id,color:ws.color,stories:0,storiesDone:0,progress:0,tags:[],description:data.description||"",creator:data.creator||"Current User",createdAt:new Date().toISOString().slice(0,10),...data}]);
     }
     setShowAdd(false); setEditEpic(null);
   }
-  function handleDelete(id: string) { setEpics(p=>p.filter(e=>e.id!==id)); setDeleteId(null); }
+  function handleDelete(id: string) {
+    if (onDeleteEpic) onDeleteEpic(id);
+    else setEpics(p=>p.filter(e=>e.id!==id));
+    setDeleteId(null);
+  }
 
   return (
     <div style={{ padding:20 }}>
@@ -642,7 +687,8 @@ function EpicsView({ epics, stories, onSelect, setEpics, ws, onAddEpic }: {
         {filtered.map(epic=>{
           const epicStories = stories.filter(s=>s.epicId===epic.id);
           const done = epicStories.filter(s=>s.status==="Done").length;
-          const buData = BURNUP_DATA[epic.id];
+          const buData = computeBurnUp(stories as Parameters<typeof computeBurnUp>[0], epic.id);
+          const progressPct = epicStories.length ? Math.round((done / epicStories.length) * 100) : epic.progress;
           return (
             <div key={epic.id} data-testid={`epic-card-${epic.id}`} style={{ background:C.white, border:`1.5px solid ${C.grey200}`, borderTop:`4px solid ${epic.color}`, borderRadius:10, overflow:"hidden" }}>
               <div style={{ padding:16 }}>
@@ -665,9 +711,9 @@ function EpicsView({ epics, stories, onSelect, setEpics, ws, onAddEpic }: {
                 </div>
                 <div style={{ marginBottom:8 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.grey400, marginBottom:3 }}>
-                    <span>Progress</span><span>{done}/{epicStories.length} stories {"·"} {epic.progress}%</span>
+                    <span>Progress</span><span>{done}/{epicStories.length} stories {"·"} {progressPct}%</span>
                   </div>
-                  <AgileProgressBar pct={epic.progress} color={epic.color} height={6}/>
+                  <AgileProgressBar pct={progressPct} color={epic.color} height={6}/>
                 </div>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                   <AgileAvatar name={epic.owner} size={22}/>
@@ -695,13 +741,17 @@ function EpicsView({ epics, stories, onSelect, setEpics, ws, onAddEpic }: {
 }
 
 function EpicForm({ initial={}, onSave, onCancel }: { initial?: any; onSave: (d: any) => void; onCancel: () => void }) {
-  const [form,setForm] = useState({ title:"", initiative:"", owner:"", status:"Planning", tshirt:"L", priority:"High", description:"", ...initial });
+  const [form,setForm] = useState({ title:"", initiative:"", owner:"", status:"Planning", tshirt:"L", priority:"High", description:"", startDate:"", endDate:"", ...initial });
   const set=(k: string,v: string)=>setForm((p: Record<string, string>)=>({...p,[k]:v}));
   return (
     <div>
       <FormField label="Epic Title" required><input style={inputStyle} value={form.title} onChange={e=>set("title",e.target.value)} placeholder="e.g. Customer Order Management" data-testid="input-epic-title"/></FormField>
       <FormField label="Initiative"><input style={inputStyle} value={form.initiative} onChange={e=>set("initiative",e.target.value)} placeholder="e.g. ERP Phase 1"/></FormField>
       <FormField label="Description"><textarea style={textareaStyle as any} value={form.description} onChange={e=>set("description",e.target.value)} placeholder="Describe what this epic delivers…"/></FormField>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+        <FormField label="Start Date"><input style={inputStyle} type="date" value={form.startDate||""} onChange={e=>set("startDate",e.target.value)}/></FormField>
+        <FormField label="End Date"><input style={inputStyle} type="date" value={form.endDate||""} onChange={e=>set("endDate",e.target.value)}/></FormField>
+      </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:10 }}>
         <FormField label="Status"><select style={inputStyle} value={form.status} onChange={e=>set("status",e.target.value)}>{["Planning","Active","Done","Cancelled"].map(s=><option key={s}>{s}</option>)}</select></FormField>
         <FormField label="T-Shirt"><select style={inputStyle} value={form.tshirt} onChange={e=>set("tshirt",e.target.value)}>{["XS","S","M","L","XL","XXL"].map(t=><option key={t}>{t}</option>)}</select></FormField>
@@ -715,10 +765,10 @@ function EpicForm({ initial={}, onSave, onCancel }: { initial?: any; onSave: (d:
   );
 }
 
-function StoriesView({ stories, epics, onSelect, setStories, ws, onAddStory }: {
+function StoriesView({ stories, epics, onSelect, setStories, ws, onAddStory, onDeleteStory }: {
   stories: Story[]; epics: Epic[]; onSelect: (s: Story) => void;
   setStories: React.Dispatch<React.SetStateAction<Story[]>>; ws: Workstream;
-  onAddStory?: (data: any) => void;
+  onAddStory?: (data: any) => void; onDeleteStory?: (id: string) => void | Promise<void>;
 }) {
   const [epicFilter, setEpicFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -742,7 +792,11 @@ function StoriesView({ stories, epics, onSelect, setStories, ws, onAddStory }: {
       setShowAdd(false);
     }
   }
-  function handleDelete(id: string) { setStories(p=>p.filter(s=>s.id!==id)); setDeleteId(null); }
+  function handleDelete(id: string) {
+    if (onDeleteStory) onDeleteStory(id);
+    else setStories(p=>p.filter(s=>s.id!==id));
+    setDeleteId(null);
+  }
 
   return (
     <div style={{ padding:20 }}>
@@ -796,12 +850,15 @@ function StoriesView({ stories, epics, onSelect, setStories, ws, onAddStory }: {
   );
 }
 
-function SprintsView({ sprints, stories, setSprints, ws, onAddSprint }: {
+function SprintsView({ sprints, stories, setSprints, ws, onAddSprint, burndownData, onActivateSprint, onDeleteSprint }: {
   sprints: Sprint[]; stories: Story[];
   setSprints: React.Dispatch<React.SetStateAction<Sprint[]>>; ws: Workstream;
-  onAddSprint?: (data: any) => void;
+  onAddSprint?: (data: any) => void; burndownData?: BurndownPoint[];
+  onActivateSprint?: (id: string, allIds: string[]) => void | Promise<void>;
+  onDeleteSprint?: (id: string) => void | Promise<void>;
 }) {
   const [showAdd, setShowAdd] = useState(false);
+  const [deleteId, setDeleteId] = useState<string|null>(null);
 
   function handleAdd(data: any) {
     if (onAddSprint) {
@@ -812,6 +869,20 @@ function SprintsView({ sprints, stories, setSprints, ws, onAddSprint }: {
       setSprints(p=>[...p, { id, wsId:ws.id, name:data.name, status:"Planned", start:data.start, end:data.end, points:Number(data.points)||0, done:0, goal:data.goal }]);
       setShowAdd(false);
     }
+  }
+
+  function handleActivate(id: string) {
+    if (onActivateSprint) {
+      onActivateSprint(id, sprints.map(s => s.id));
+    } else {
+      setSprints(p => p.map(s => ({ ...s, status: s.id === id ? "Active" : (s.status === "Active" ? "Planned" : s.status) })));
+    }
+  }
+
+  function handleDelete(id: string) {
+    if (onDeleteSprint) onDeleteSprint(id);
+    else setSprints(p => p.filter(s => s.id !== id));
+    setDeleteId(null);
   }
 
   return (
@@ -846,18 +917,27 @@ function SprintsView({ sprints, stories, setSprints, ws, onAddSprint }: {
               </div>
               <AgileProgressBar pct={pct} color={statusColor(sp.status)} height={6}/>
               <div style={{ fontSize:10, color:C.grey400, marginTop:6 }}>{spStories.length} stories assigned</div>
+              <div style={{ display:"flex", gap:6, marginTop:10, flexWrap:"wrap" }}>
+                {sp.status !== "Active" && sp.status !== "Closed" && (
+                  <AgileBtn label="Activate" variant="primary" small onClick={()=>handleActivate(sp.id)} testId={`button-activate-${sp.id}`}/>
+                )}
+                {sp.status !== "Closed" && (
+                  <AgileBtn label="Delete" danger small onClick={()=>setDeleteId(sp.id)} testId={`button-delete-sprint-${sp.id}`}/>
+                )}
+              </div>
             </div>
           );
         })}
       </div>
 
-      <BurndownChart data={BURNDOWN_DATA} title="Sprint 3 — Burndown Chart" width={600} height={220}/>
+      <BurndownChart data={burndownData || BURNDOWN_DATA} title={`${sprints.find(s=>s.status==="Active")?.name || "Sprint"} — Burndown Chart`} width={600} height={220}/>
 
       {showAdd && (
         <AgileModal title="New Sprint" onClose={()=>setShowAdd(false)}>
           <SprintForm onSave={handleAdd} onCancel={()=>setShowAdd(false)}/>
         </AgileModal>
       )}
+      {deleteId && <ConfirmDelete label={sprints.find(s=>s.id===deleteId)?.name||""} onConfirm={()=>handleDelete(deleteId)} onCancel={()=>setDeleteId(null)}/>}
     </div>
   );
 }
@@ -881,14 +961,16 @@ function SprintForm({ onSave, onCancel }: { onSave: (d: any) => void; onCancel: 
   );
 }
 
-function DefectsView({ defects, stories, setDefects, ws, onAddDefect }: {
+function DefectsView({ defects, stories, setDefects, ws, onAddDefect, onUpdateDefect, onDeleteDefect }: {
   defects: Defect[]; stories: Story[];
   setDefects: React.Dispatch<React.SetStateAction<Defect[]>>; ws: Workstream;
-  onAddDefect?: (data: any) => void;
+  onAddDefect?: (data: any) => void; onUpdateDefect?: (id: string, data: any) => void | Promise<void>;
+  onDeleteDefect?: (id: string) => void | Promise<void>;
 }) {
   const [sevFilter, setSevFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [showAdd, setShowAdd] = useState(false);
+  const [editDefect, setEditDefect] = useState<Defect|null>(null);
   const [deleteId, setDeleteId] = useState<string|null>(null);
 
   const filtered = defects.filter(d=>
@@ -910,7 +992,27 @@ function DefectsView({ defects, stories, setDefects, ws, onAddDefect }: {
       setShowAdd(false);
     }
   }
-  function handleDelete(id: string) { setDefects(p=>p.filter(d=>d.id!==id)); setDeleteId(null); }
+  function handleDelete(id: string) {
+    if (onDeleteDefect) onDeleteDefect(id);
+    else setDefects(p=>p.filter(d=>d.id!==id));
+    setDeleteId(null);
+  }
+  function handleSaveDefect(data: any) {
+    if (editDefect) {
+      if (onUpdateDefect) {
+        onUpdateDefect(editDefect.id, {
+          title: data.title, storyId: data.storyId ? Number(data.storyId) : null,
+          severity: data.severity, priority: data.priority, environment: data.environment,
+          assignee: data.assignee || null, status: data.status || editDefect.status,
+        });
+      } else {
+        setDefects(p=>p.map(d=>d.id===editDefect.id?{...d,...data}:d));
+      }
+      setEditDefect(null);
+    } else {
+      handleAdd(data);
+    }
+  }
 
   return (
     <div style={{ padding:20 }}>
@@ -923,7 +1025,7 @@ function DefectsView({ defects, stories, setDefects, ws, onAddDefect }: {
         <AgileBtn label="+ Raise Defect" variant="primary" onClick={()=>setShowAdd(true)} testId="button-add-defect"/>
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:16 }}>
+      <div className="agile-stat-grid" style={{ marginBottom:16 }}>
         {([["Total",defects.length,C.grey700,C.grey100],["Critical",defects.filter(d=>d.severity==="Critical").length,C.red,C.redLight],["Major",defects.filter(d=>d.severity==="Major").length,C.amber,C.amberLight],["Open",defects.filter(d=>!["Fixed","Verified","Closed"].includes(d.status)).length,C.blue,C.blueLight]] as [string,number,string,string][]).map(([l,v,c,bg])=>(
           <div key={l} style={{ background:bg, borderRadius:8, padding:"12px 0", textAlign:"center" }}>
             <div style={{ fontWeight:800, fontSize:22, color:c }}>{v}</div>
@@ -932,7 +1034,8 @@ function DefectsView({ defects, stories, setDefects, ws, onAddDefect }: {
         ))}
       </div>
 
-      <div style={{ background:C.white, border:`1px solid ${C.grey200}`, borderRadius:10, overflow:"hidden" }}>
+      <div className="agile-h-scroll">
+      <div className="agile-defect-table" style={{ background:C.white, border:`1px solid ${C.grey200}`, borderRadius:10, overflow:"hidden" }}>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 100px 90px 80px 110px 60px 50px 70px", padding:"8px 14px", background:C.grey50, borderBottom:`1px solid ${C.grey200}`, fontSize:10, fontWeight:700, color:C.grey500, gap:10 }}>
           <span>Defect</span><span>Story</span><span>Severity</span><span>Priority</span><span>Status</span><span>Env</span><span>Owner</span><span>Actions</span>
         </div>
@@ -951,17 +1054,18 @@ function DefectsView({ defects, stories, setDefects, ws, onAddDefect }: {
             <span style={{ fontSize:11, fontWeight:700, color:envColor(d.environment) }}>{d.environment}</span>
             <AgileAvatar name={d.assignee} size={22}/>
             <div style={{ display:"flex", gap:3 }}>
-              <AgileBtn label="✎" variant="ghost" small testId={`button-edit-${d.id}`}/>
+              <AgileBtn label="✎" variant="ghost" small onClick={()=>setEditDefect(d)} testId={`button-edit-${d.id}`}/>
               <AgileBtn label="✕" danger small onClick={()=>setDeleteId(d.id)} testId={`button-delete-${d.id}`}/>
             </div>
           </div>
         ))}
         {filtered.length===0 && <div style={{ padding:40, textAlign:"center", color:C.grey300, fontSize:13 }}>No defects found</div>}
       </div>
+      </div>
 
-      {showAdd && (
-        <AgileModal title="Raise Defect" onClose={()=>setShowAdd(false)}>
-          <DefectForm stories={stories} onSave={handleAdd} onCancel={()=>setShowAdd(false)}/>
+      {(showAdd||editDefect) && (
+        <AgileModal title={editDefect?"Edit Defect":"Raise Defect"} onClose={()=>{setShowAdd(false);setEditDefect(null);}}>
+          <DefectForm stories={stories} initial={editDefect||undefined} onSave={handleSaveDefect} onCancel={()=>{setShowAdd(false);setEditDefect(null);}}/>
         </AgileModal>
       )}
       {deleteId && <ConfirmDelete label={defects.find(d=>d.id===deleteId)?.id||""} onConfirm={()=>handleDelete(deleteId)} onCancel={()=>setDeleteId(null)}/>}
@@ -969,8 +1073,12 @@ function DefectsView({ defects, stories, setDefects, ws, onAddDefect }: {
   );
 }
 
-function DefectForm({ stories, onSave, onCancel }: { stories: Story[]; onSave: (d: any) => void; onCancel: () => void }) {
-  const [form,setForm]=useState({ title:"", storyId:"", severity:"Major", priority:"High", environment:"Dev", assignee:"" });
+function DefectForm({ stories, initial, onSave, onCancel }: { stories: Story[]; initial?: Defect; onSave: (d: any) => void; onCancel: () => void }) {
+  const [form,setForm]=useState({
+    title: initial?.title||"", storyId: initial?.storyId||"", severity: initial?.severity||"Major",
+    priority: initial?.priority||"High", environment: initial?.environment||"Dev",
+    assignee: initial?.assignee||"", status: initial?.status||"New",
+  });
   const set=(k: string,v: string)=>setForm(p=>({...p,[k]:v}));
   return (
     <div>
@@ -1007,18 +1115,19 @@ function DefectForm({ stories, onSave, onCancel }: { stories: Story[]; onSave: (
 }
 
 function RoadmapView({ epics, sprints }: { epics: Epic[]; sprints: Sprint[] }) {
-  const months=["Jan 26","Feb 26","Mar 26","Apr 26","May 26","Jun 26","Jul 26","Aug 26","Sep 26","Oct 26"];
-  const epicTimelines: Record<string, {start:number;width:number}> = { "EP-001":{start:0,width:4}, "EP-002":{start:0,width:2}, "EP-003":{start:2,width:5}, "EP-004":{start:1,width:4}, "EP-005":{start:3,width:4} };
+  const { months, epicBars } = computeRoadmapTimeline(epics);
   return (
     <div style={{ padding:20 }}>
       <div style={{ fontWeight:700, fontSize:16, color:C.grey800, marginBottom:16 }}>Epic Roadmap</div>
       <div style={{ background:C.white, border:`1px solid ${C.grey200}`, borderRadius:10, overflow:"hidden", marginBottom:20 }}>
         <div style={{ display:"grid", gridTemplateColumns:`190px repeat(${months.length},1fr)`, borderBottom:`1px solid ${C.grey200}` }}>
           <div style={{ padding:"8px 14px", background:C.grey50, fontSize:10, fontWeight:700, color:C.grey500 }}>EPIC</div>
-          {months.map(m=><div key={m} style={{ padding:"8px 4px", background:C.grey50, fontSize:10, fontWeight:600, color:C.grey500, textAlign:"center", borderLeft:`1px solid ${C.grey200}` }}>{m}</div>)}
+          {months.map(m=><div key={m.label} style={{ padding:"8px 4px", background:C.grey50, fontSize:10, fontWeight:600, color:C.grey500, textAlign:"center", borderLeft:`1px solid ${C.grey200}` }}>{m.label}</div>)}
         </div>
-        {epics.map(epic=>{
-          const tl=epicTimelines[epic.id]||{start:0,width:2};
+        {epics.length === 0 ? (
+          <div style={{ padding:40, textAlign:"center", color:C.grey400, fontSize:13 }}>No epics yet. Create epics with start/end dates to populate the roadmap.</div>
+        ) : epics.map(epic=>{
+          const tl=epicBars[epic.id]||{start:0,width:Math.min(2, months.length)};
           return (
             <div key={epic.id} style={{ display:"grid", gridTemplateColumns:`190px repeat(${months.length},1fr)`, borderBottom:`1px solid ${C.grey100}` }}>
               <div style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:8 }}>
@@ -1323,12 +1432,35 @@ function EpicDetailPanel({ epic, stories, onClose, onEdit }: { epic: Epic; stori
   );
 }
 
-function StoryDetailPanel({ story, epics, onClose }: { story: Story; epics: Epic[]; onClose: () => void }) {
+function StoryDetailPanel({ story, epics, sprints, onClose, onUpdate }: {
+  story: Story; epics: Epic[]; sprints?: Sprint[];
+  onClose: () => void;
+  onUpdate?: (id: string, data: Record<string, unknown>) => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
   const epic = epics.find(e=>e.id===story.epicId);
+
+  if (editing && onUpdate) {
+    return (
+      <AgileModal title={`Edit ${story.id}`} onClose={()=>setEditing(false)} wide>
+        <StoryEditForm
+          story={story}
+          epics={epics}
+          sprints={sprints||[]}
+          onSave={async (data) => { await onUpdate(story.id, data); setEditing(false); onClose(); }}
+          onCancel={()=>setEditing(false)}
+        />
+      </AgileModal>
+    );
+  }
+
   return (
     <AgileModal title={`${story.id} — Story Detail`} onClose={onClose} wide>
-      <div style={{ display:"flex", gap:20 }}>
-        <div style={{ flex:1 }}>
+      <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
+        {onUpdate && <AgileBtn label="Edit" variant="primary" small onClick={()=>setEditing(true)} testId="button-edit-story-detail"/>}
+      </div>
+      <div className="agile-modal-body">
+        <div className="agile-modal-main">
           <div style={{ fontSize:16, fontWeight:700, color:C.grey800, marginBottom:12, lineHeight:1.4 }}>{story.title}</div>
           <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:16 }}>
             <AgileBadge label={story.status} color={statusBg(story.status)} textColor={statusColor(story.status)} dot/>
@@ -1355,7 +1487,7 @@ function StoryDetailPanel({ story, epics, onClose }: { story: Story; epics: Epic
             </div>
           )}
         </div>
-        <div style={{ width:200, flexShrink:0 }}>
+        <div className="agile-modal-side">
           <div style={{ background:C.grey50, borderRadius:8, padding:14 }}>
             {([["Epic", epic?.title||"—", epic?.color],["Sprint", story.sprint||"Unassigned", C.grey500],["Assignee", story.assignee||"Unassigned", C.grey500],["Creator", story.creator, C.grey500],["Created", story.createdAt, C.grey500]] as [string,string,string|undefined][]).map(([l,v,c])=>(
               <div key={l} style={{ marginBottom:12 }}>
@@ -1378,26 +1510,98 @@ function StoryDetailPanel({ story, epics, onClose }: { story: Story; epics: Epic
   );
 }
 
+function StoryEditForm({ story, epics, sprints, onSave, onCancel }: {
+  story: Story; epics: Epic[]; sprints: Sprint[];
+  onSave: (data: Record<string, unknown>) => void | Promise<void>;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState({
+    title: story.title,
+    epicId: story.epicId,
+    priority: story.priority,
+    tshirt: story.tshirt,
+    points: story.points != null ? String(story.points) : "",
+    assignee: story.assignee || "",
+    status: story.status,
+    sprintId: sprints.find(s => s.name === story.sprint)?.id || "",
+    ac: story.ac.join("\n"),
+  });
+  const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+
+  return (
+    <div>
+      <FormField label="Story Title" required>
+        <input style={inputStyle} value={form.title} onChange={e=>set("title", e.target.value)}/>
+      </FormField>
+      <FormField label="Epic">
+        <select style={inputStyle} value={form.epicId} onChange={e=>set("epicId", e.target.value)}>
+          {epics.map(e=><option key={e.id} value={e.id}>{e.id} — {e.title}</option>)}
+        </select>
+      </FormField>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+        <FormField label="Status">
+          <select style={inputStyle} value={form.status} onChange={e=>set("status", e.target.value)}>
+            {["Backlog","To Do","In Progress","In Review","Done"].map(s=><option key={s}>{s}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Priority">
+          <select style={inputStyle} value={form.priority} onChange={e=>set("priority", e.target.value)}>
+            {["Critical","High","Medium","Low"].map(p=><option key={p}>{p}</option>)}
+          </select>
+        </FormField>
+        <FormField label="T-Shirt">
+          <select style={inputStyle} value={form.tshirt} onChange={e=>set("tshirt", e.target.value)}>
+            {["XS","S","M","L","XL","XXL"].map(t=><option key={t}>{t}</option>)}
+          </select>
+        </FormField>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+        <FormField label="Story Points">
+          <input style={inputStyle} type="number" value={form.points} onChange={e=>set("points", e.target.value)}/>
+        </FormField>
+        <FormField label="Sprint">
+          <select style={inputStyle} value={form.sprintId} onChange={e=>set("sprintId", e.target.value)}>
+            <option value="">Unassigned</option>
+            {sprints.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </FormField>
+      </div>
+      <FormField label="Assignee">
+        <input style={inputStyle} value={form.assignee} onChange={e=>set("assignee", e.target.value)}/>
+      </FormField>
+      <FormField label="Acceptance Criteria (one per line)">
+        <textarea style={{ ...inputStyle, minHeight:80, resize:"vertical" }} value={form.ac} onChange={e=>set("ac", e.target.value)}/>
+      </FormField>
+      <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+        <AgileBtn label="Cancel" onClick={onCancel}/>
+        <AgileBtn label="Save Changes" variant="primary" onClick={()=>{
+          const sprint = sprints.find(s => s.id === form.sprintId);
+          onSave({
+            title: form.title,
+            epicId: form.epicId ? Number(form.epicId) : null,
+            priority: form.priority,
+            tshirt: form.tshirt,
+            points: form.points ? Number(form.points) : null,
+            assignee: form.assignee || null,
+            status: form.status,
+            sprintId: sprint && /^\d+$/.test(sprint.id) ? Number(sprint.id) : null,
+            sprintName: sprint?.name ?? null,
+            acceptanceCriteria: form.ac.split("\n").map(l=>l.trim()).filter(Boolean),
+          });
+        }}/>
+      </div>
+    </div>
+  );
+}
+
 interface AgileBoardProps {
   initialTab?: string;
   view?: "board" | "backlog" | "epics" | "stories" | "sprints" | "defects" | "roadmap" | "bestpractice";
+  boardMode?: "sprint" | "scrum" | "kanban";
   projectId?: number;
 }
 
-function dbStoryToLocal(s: any, ws: { id: string }): Story {
-  return { id: String(s.id), epicId: s.epicId ? String(s.epicId) : "", wsId: ws.id, title: s.title, status: s.status || "Backlog", points: s.points ?? null, tshirt: s.tshirt || "M", priority: s.priority || "Medium", assignee: s.assignee || null, creator: s.creator || "", createdAt: s.createdAt ? String(s.createdAt).slice(0, 10) : "", sprint: s.sprintName || null, tags: s.tags || [], tasks: 0, tasksDone: 0, ac: s.acceptanceCriteria || [] };
-}
-function dbEpicToLocal(e: any, ws: { id: string }): Epic {
-  return { id: String(e.id), wsId: ws.id, title: e.title, initiative: e.initiative || "", status: e.status || "planning", tshirt: e.tshirt || "M", priority: e.priority || "Medium", progress: e.progress || 0, owner: e.owner || "", creator: "", createdAt: e.createdAt ? String(e.createdAt).slice(0, 10) : "", color: e.color || C.blue, stories: 0, storiesDone: 0, tags: e.tags || [], description: e.description || "" };
-}
-function dbSprintToLocal(s: any, ws: { id: string }): Sprint {
-  return { id: String(s.id), wsId: ws.id, name: s.name, status: s.status || "Planned", start: s.startDate || "", end: s.endDate || "", points: s.totalPoints || 0, done: s.donePoints || 0, goal: s.goal || "" };
-}
-function dbDefectToLocal(d: any, ws: { id: string }): Defect {
-  return { id: String(d.id), wsId: ws.id, storyId: d.storyId ? String(d.storyId) : "", title: d.title, severity: d.severity || "Minor", priority: d.priority || "Medium", status: d.status || "New", assignee: d.assignee || null, creator: d.reporter || "", createdAt: d.createdAt ? String(d.createdAt).slice(0, 10) : "", environment: d.environment || "Dev", sprint: null };
-}
-
-export default function AgileBoard({ initialTab = "board", view, projectId }: AgileBoardProps) {
+export default function AgileBoard({ initialTab = "board", view, boardMode = "sprint", projectId }: AgileBoardProps) {
   const isDbMode = !!projectId;
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -1409,111 +1613,136 @@ export default function AgileBoard({ initialTab = "board", view, projectId }: Ag
   const [sprints, setSprints] = useState<Sprint[]>(isDbMode ? [] : SPRINTS_INIT);
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
   const [selectedEpic, setSelectedEpic] = useState<Epic | null>(null);
+  const [editingEpic, setEditingEpic] = useState<Epic | null>(null);
+  const [wsAdmin, setWsAdmin] = useState<{ mode: "create" | "rename" | "delete"; ws?: Workstream; name: string } | null>(null);
   const [dragItem, setDragItem] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const seedAttempted = useRef(false);
 
-  const { data: wsData } = useQuery<any[]>({
-    queryKey: ['/api/pm/projects', projectId, 'agile/workstreams'],
-    queryFn: () => fetch(`/api/pm/projects/${projectId}/agile/workstreams`).then(r => r.json()),
+  const mutations = usePmAgileMutations(projectId, activeWs);
+
+  const { data: wsData, isLoading: wsLoading, isError: wsError, refetch: refetchWs } = useQuery<any[]>({
+    queryKey: ["/api/pm/projects", projectId, "agile/workstreams"],
     enabled: isDbMode,
   });
-  const { data: epicsData } = useQuery<any[]>({
-    queryKey: ['/api/pm/agile/workstreams', activeWs, 'epics'],
-    queryFn: () => fetch(`/api/pm/agile/workstreams/${activeWs}/epics`).then(r => r.json()),
+  const { data: epicsData, isLoading: epicsLoading, isFetching: epicsFetching } = useQuery<any[]>({
+    queryKey: ["/api/pm/agile/workstreams", activeWs, "epics"],
     enabled: isDbMode && /^\d+$/.test(activeWs),
   });
-  const { data: storiesData } = useQuery<any[]>({
-    queryKey: ['/api/pm/agile/workstreams', activeWs, 'stories'],
-    queryFn: () => fetch(`/api/pm/agile/workstreams/${activeWs}/stories`).then(r => r.json()),
+  const { data: storiesData, isLoading: storiesLoading, isFetching: storiesFetching } = useQuery<any[]>({
+    queryKey: ["/api/pm/agile/workstreams", activeWs, "stories"],
     enabled: isDbMode && /^\d+$/.test(activeWs),
   });
-  const { data: sprintsData } = useQuery<any[]>({
-    queryKey: ['/api/pm/agile/workstreams', activeWs, 'sprints'],
-    queryFn: () => fetch(`/api/pm/agile/workstreams/${activeWs}/sprints`).then(r => r.json()),
+  const { data: sprintsData, isLoading: sprintsLoading, isFetching: sprintsFetching } = useQuery<any[]>({
+    queryKey: ["/api/pm/agile/workstreams", activeWs, "sprints"],
     enabled: isDbMode && /^\d+$/.test(activeWs),
   });
-  const { data: defectsData } = useQuery<any[]>({
-    queryKey: ['/api/pm/agile/workstreams', activeWs, 'defects'],
-    queryFn: () => fetch(`/api/pm/agile/workstreams/${activeWs}/defects`).then(r => r.json()),
+  const { data: defectsData, isLoading: defectsLoading, isFetching: defectsFetching } = useQuery<any[]>({
+    queryKey: ["/api/pm/agile/workstreams", activeWs, "defects"],
     enabled: isDbMode && /^\d+$/.test(activeWs),
   });
 
+  const wsDetailLoading = isDbMode && /^\d+$/.test(activeWs) && (epicsLoading || storiesLoading || sprintsLoading || defectsLoading);
+  const wsDetailFetching = isDbMode && /^\d+$/.test(activeWs) && !wsDetailLoading && (epicsFetching || storiesFetching || sprintsFetching || defectsFetching);
+
   useEffect(() => {
-    if (wsData && wsData.length > 0) {
-      const mapped = wsData.map(w => ({ id: String(w.id), name: w.name, color: w.color }));
+    if (wsData) {
+      const mapped = wsData.map((w) => dbWorkstreamToLocal(w));
       setWorkstreams(mapped);
-      setActiveWs(prev => (prev === "" || !mapped.find(m => m.id === prev)) ? mapped[0].id : prev);
+      if (mapped.length > 0) {
+        setActiveWs((prev) => (prev === "" || !mapped.find((m) => m.id === prev)) ? mapped[0].id : prev);
+      }
     }
   }, [wsData]);
 
   useEffect(() => {
-    if (epicsData && activeWs) {
-      const currentWs = workstreams.find(w => w.id === activeWs) || { id: activeWs };
-      setEpics(prev => [...prev.filter(e => e.wsId !== activeWs), ...epicsData.map(e => dbEpicToLocal(e, currentWs))]);
+    if (sprintsData && activeWs) {
+      const currentWs = workstreams.find((w) => w.id === activeWs) || { id: activeWs, name: "", color: C.blue };
+      setSprints((prev) => [...prev.filter((s) => s.wsId !== activeWs), ...sprintsData.map((s) => dbSprintToLocal(s, currentWs) as Sprint)]);
     }
-  }, [epicsData, activeWs]);
+  }, [sprintsData, activeWs, workstreams]);
 
   useEffect(() => {
     if (storiesData && activeWs) {
-      const currentWs = workstreams.find(w => w.id === activeWs) || { id: activeWs };
-      setStories(prev => [...prev.filter(s => s.wsId !== activeWs), ...storiesData.map(s => dbStoryToLocal(s, currentWs))]);
+      const currentWs = workstreams.find((w) => w.id === activeWs) || { id: activeWs, name: "", color: C.blue };
+      const wsSprints = sprints.filter((s) => s.wsId === activeWs);
+      const sprintMap = buildSprintMap(wsSprints);
+      setStories((prev) => [...prev.filter((s) => s.wsId !== activeWs), ...storiesData.map((s) => dbStoryToLocal(s, currentWs, sprintMap) as Story)]);
     }
-  }, [storiesData, activeWs]);
+  }, [storiesData, activeWs, workstreams, sprints]);
 
   useEffect(() => {
-    if (sprintsData && activeWs) {
-      const currentWs = workstreams.find(w => w.id === activeWs) || { id: activeWs };
-      setSprints(prev => [...prev.filter(s => s.wsId !== activeWs), ...sprintsData.map(s => dbSprintToLocal(s, currentWs))]);
+    if (epicsData && activeWs) {
+      const currentWs = workstreams.find((w) => w.id === activeWs) || { id: activeWs, name: "", color: C.blue };
+      const wsStories = stories.filter((s) => s.wsId === activeWs);
+      setEpics((prev) => [...prev.filter((e) => e.wsId !== activeWs), ...epicsData.map((e) => dbEpicToLocal(e, currentWs, wsStories as Parameters<typeof dbEpicToLocal>[2]) as Epic)]);
     }
-  }, [sprintsData, activeWs]);
+  }, [epicsData, activeWs, workstreams, stories]);
 
   useEffect(() => {
     if (defectsData && activeWs) {
-      const currentWs = workstreams.find(w => w.id === activeWs) || { id: activeWs };
-      setDefects(prev => [...prev.filter(d => d.wsId !== activeWs), ...defectsData.map(d => dbDefectToLocal(d, currentWs))]);
+      const currentWs = workstreams.find((w) => w.id === activeWs) || { id: activeWs, name: "", color: C.blue };
+      setDefects((prev) => [...prev.filter((d) => d.wsId !== activeWs), ...defectsData.map((d) => dbDefectToLocal(d, currentWs) as Defect)]);
     }
-  }, [defectsData, activeWs]);
+  }, [defectsData, activeWs, workstreams]);
 
   const createStoryMutation = useMutation({
     mutationFn: (payload: any) => apiRequest('POST', `/api/pm/agile/workstreams/${activeWs}/stories`, payload),
-    onSuccess: (newStory: any) => {
-      const currentWs = workstreams.find(w => w.id === activeWs) || { id: activeWs };
-      setStories(prev => [...prev, dbStoryToLocal(newStory, currentWs)]);
-    },
+    onSuccess: () => mutations.invalidateWs(),
   });
   const createEpicMutation = useMutation({
     mutationFn: (payload: any) => apiRequest('POST', `/api/pm/agile/workstreams/${activeWs}/epics`, payload),
-    onSuccess: (newEpic: any) => {
-      const currentWs = workstreams.find(w => w.id === activeWs) || { id: activeWs };
-      setEpics(prev => [...prev, dbEpicToLocal(newEpic, currentWs)]);
-    },
+    onSuccess: () => mutations.invalidateWs(),
   });
   const createSprintMutation = useMutation({
     mutationFn: (payload: any) => apiRequest('POST', `/api/pm/agile/workstreams/${activeWs}/sprints`, payload),
-    onSuccess: (newSprint: any) => {
-      const currentWs = workstreams.find(w => w.id === activeWs) || { id: activeWs };
-      setSprints(prev => [...prev, dbSprintToLocal(newSprint, currentWs)]);
-    },
+    onSuccess: () => mutations.invalidateWs(),
   });
   const createDefectMutation = useMutation({
     mutationFn: (payload: any) => apiRequest('POST', `/api/pm/agile/workstreams/${activeWs}/defects`, payload),
-    onSuccess: (newDefect: any) => {
-      const currentWs = workstreams.find(w => w.id === activeWs) || { id: activeWs };
-      setDefects(prev => [...prev, dbDefectToLocal(newDefect, currentWs)]);
-    },
+    onSuccess: () => mutations.invalidateWs(),
   });
   const createWorkstreamMutation = useMutation({
     mutationFn: (name: string) => apiRequest('POST', `/api/pm/projects/${projectId}/agile/workstreams`, { name, color: C.blue, sortOrder: workstreams.length }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/pm/projects', projectId, 'agile/workstreams'] }),
   });
+  const updateWorkstreamMutation = useMutation({
+    mutationFn: ({ id, name, color }: { id: string; name?: string; color?: string }) =>
+      apiRequest('PUT', `/api/pm/agile/workstreams/${id}`, { ...(name ? { name } : {}), ...(color ? { color } : {}) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/pm/projects', projectId, 'agile/workstreams'] }),
+  });
+  const deleteWorkstreamMutation = useMutation({
+    mutationFn: (id: string) => apiRequest('DELETE', `/api/pm/agile/workstreams/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/pm/projects', projectId, 'agile/workstreams'] }),
+  });
+
+  const handleEpicEditSave = (data: any) => {
+    if (!editingEpic) return;
+    mutations.updateEpic(editingEpic.id, {
+      title: data.title, initiative: data.initiative, description: data.description,
+      status: data.status?.toLowerCase(), priority: data.priority?.toLowerCase(),
+      tshirt: data.tshirt, owner: data.owner,
+      startDate: data.startDate || null, endDate: data.endDate || null,
+    });
+    setEditingEpic(null);
+    setSelectedEpic(null);
+  };
+
+  useEffect(() => {
+    if (!isDbMode || !projectId || seedAttempted.current) return;
+    if (wsData && wsData.length === 0 && !createWorkstreamMutation.isPending) {
+      seedAttempted.current = true;
+      createWorkstreamMutation.mutate("Default Workstream");
+    }
+  }, [isDbMode, projectId, wsData, createWorkstreamMutation.isPending]);
 
   const currentWsObj = workstreams.find(w => w.id === activeWs) || workstreams[0] || WORKSTREAMS[0];
 
   const handleAddStory = isDbMode ? (data: any) => {
-    createStoryMutation.mutate({ projectId, title: data.title, epicId: data.epicId ? Number(data.epicId) : null, points: data.points ? Number(data.points) : null, tshirt: data.tshirt || "M", priority: data.priority || "Medium", assignee: data.assignee || null, status: "Backlog", creator: "Current User", tags: [], acceptanceCriteria: [] });
+    createStoryMutation.mutate({ projectId, title: data.title, epicId: data.epicId ? Number(data.epicId) : null, points: data.points ? Number(data.points) : null, tshirt: data.tshirt || "M", priority: data.priority || "Medium", assignee: data.assignee || null, status: "Backlog", creator: "Current User", tags: [], acceptanceCriteria: data.ac ? data.ac.split("\n").map((l: string) => l.trim()).filter(Boolean) : [] });
   } : undefined;
   const handleAddEpic = isDbMode ? (data: any) => {
-    createEpicMutation.mutate({ projectId, title: data.title, initiative: data.initiative || "", status: data.status || "planning", priority: data.priority || "Medium", tshirt: data.tshirt || "M", owner: data.owner || "", color: currentWsObj?.color || C.blue, description: data.description || "", tags: [] });
+    createEpicMutation.mutate({ projectId, title: data.title, initiative: data.initiative || "", status: (data.status || "planning").toLowerCase(), priority: (data.priority || "Medium").toLowerCase(), tshirt: data.tshirt || "M", owner: data.owner || "", color: currentWsObj?.color || C.blue, description: data.description || "", tags: [], startDate: data.startDate || null, endDate: data.endDate || null });
   } : undefined;
   const handleAddSprint = isDbMode ? (data: any) => {
     createSprintMutation.mutate({ projectId, name: data.name, goal: data.goal || "", status: "Planned", startDate: data.start || null, endDate: data.end || null, totalPoints: Number(data.points) || 0, donePoints: 0 });
@@ -1522,35 +1751,46 @@ export default function AgileBoard({ initialTab = "board", view, projectId }: Ag
     createDefectMutation.mutate({ projectId, title: data.title, storyId: data.storyId ? Number(data.storyId) : null, severity: data.severity || "Minor", priority: data.priority || "Medium", status: "New", assignee: data.assignee || null, reporter: "Current User", environment: data.environment || "Dev" });
   } : undefined;
 
-  const displayWorkstreams = workstreams.length > 0 ? workstreams : WORKSTREAMS;
+  const displayWorkstreams = workstreams.length > 0 ? workstreams : (isDbMode ? [] : WORKSTREAMS);
   const ws = currentWsObj;
   const wsEpics = epics.filter(e=>e.wsId===activeWs);
   const wsStories = stories.filter(s=>s.wsId===activeWs);
   const wsSprints = sprints.filter(s=>s.wsId===activeWs);
-  const activeSprint = wsSprints.find(s=>s.status==="Active");
+  const activeSprint = wsSprints.find(s=>s.status==="Active") || wsSprints.find(s=>s.status==="Planned");
   const sprintStories = wsStories.filter(s=>s.sprint===activeSprint?.name);
+  const liveBurndown = computeBurndown(activeSprint, wsStories as Parameters<typeof computeBurndown>[1]);
 
   function handleDrop(e: React.DragEvent, toCol: string) {
     e.preventDefault();
     if (!dragItem) return;
     setStories(prev => prev.map(s => s.id === dragItem ? { ...s, status: toCol } : s));
-    if (isDbMode && /^\d+$/.test(dragItem)) {
-      apiRequest('PUT', `/api/pm/agile/stories/${dragItem}`, { status: toCol }).catch(() => {});
+    if (isDbMode && isNumericId(dragItem)) {
+      mutations.updateStory(dragItem, { status: toCol });
     }
     setDragItem(null);
     setDragOver(null);
   }
 
+  const handleCompleteSprint = async () => {
+    if (!activeSprint) return;
+    const donePts = sprintStories.filter(s => s.status === "Done").reduce((a, s) => a + (s.points || 0), 0);
+    if (isDbMode && isNumericId(activeSprint.id)) {
+      await mutations.completeSprint(activeSprint.id, donePts);
+    } else {
+      setSprints(prev => prev.map(s => s.id === activeSprint.id ? { ...s, status: "Closed", done: donePts } : s));
+    }
+  };
+
   const currentView = view || activeTab;
 
   const renderView = () => {
     switch (currentView) {
-      case "board": return <BoardView stories={sprintStories} epics={wsEpics} onDrop={handleDrop} dragItem={dragItem} setDragItem={setDragItem} dragOver={dragOver} setDragOver={setDragOver} activeSprint={activeSprint} onSelectStory={setSelectedStory} allSprintStories={sprintStories}/>;
-      case "backlog": return <BacklogView stories={wsStories} epics={wsEpics} onSelectStory={setSelectedStory} sprints={wsSprints} setStories={setStories} activeSprint={activeSprint} ws={ws} onAddStory={handleAddStory}/>;
-      case "epics": return <EpicsView epics={wsEpics} stories={wsStories} onSelect={setSelectedEpic as any} setEpics={setEpics} ws={ws} onAddEpic={handleAddEpic}/>;
-      case "stories": return <StoriesView stories={wsStories} epics={wsEpics} onSelect={setSelectedStory} setStories={setStories} ws={ws} onAddStory={handleAddStory}/>;
-      case "sprints": return <SprintsView sprints={wsSprints} stories={wsStories} setSprints={setSprints} ws={ws} onAddSprint={handleAddSprint}/>;
-      case "defects": return <DefectsView defects={defects.filter(d=>d.wsId===activeWs)} stories={wsStories} setDefects={setDefects} ws={ws} onAddDefect={handleAddDefect}/>;
+      case "board": return <BoardView stories={boardMode === "kanban" ? wsStories : sprintStories} epics={wsEpics} onDrop={handleDrop} dragItem={dragItem} setDragItem={setDragItem} dragOver={dragOver} setDragOver={setDragOver} activeSprint={activeSprint} onSelectStory={setSelectedStory} allSprintStories={boardMode === "kanban" ? wsStories : sprintStories} burndownData={liveBurndown} onCompleteSprint={handleCompleteSprint} boardMode={boardMode}/>;
+      case "backlog": return <BacklogView stories={wsStories} epics={wsEpics} onSelectStory={setSelectedStory} sprints={wsSprints} setStories={setStories} activeSprint={activeSprint} ws={ws} onAddStory={handleAddStory} onDeleteStory={(id) => mutations.deleteStory(id)} onAssignToSprint={(id, sp) => mutations.assignStoryToSprint(id, sp)}/>;
+      case "epics": return <EpicsView epics={wsEpics} stories={wsStories} onSelect={setSelectedEpic as any} setEpics={setEpics} ws={ws} onAddEpic={handleAddEpic} onUpdateEpic={(id, d) => mutations.updateEpic(id, d)} onDeleteEpic={(id) => mutations.deleteEpic(id)}/>;
+      case "stories": return <StoriesView stories={wsStories} epics={wsEpics} onSelect={setSelectedStory} setStories={setStories} ws={ws} onAddStory={handleAddStory} onDeleteStory={(id) => mutations.deleteStory(id)}/>;
+      case "sprints": return <SprintsView sprints={wsSprints} stories={wsStories} setSprints={setSprints} ws={ws} onAddSprint={handleAddSprint} burndownData={liveBurndown} onActivateSprint={(id, all) => mutations.activateSprint(id, all)} onDeleteSprint={(id) => mutations.deleteSprint(id)}/>;
+      case "defects": return <DefectsView defects={defects.filter(d=>d.wsId===activeWs)} stories={wsStories} setDefects={setDefects} ws={ws} onAddDefect={handleAddDefect} onUpdateDefect={(id, d) => mutations.updateDefect(id, d)} onDeleteDefect={(id) => mutations.deleteDefect(id)}/>;
       case "roadmap": return <RoadmapView epics={wsEpics} sprints={wsSprints}/>;
       case "bestpractice": return <BestPracticeView/>;
       default: return null;
@@ -1560,36 +1800,114 @@ export default function AgileBoard({ initialTab = "board", view, projectId }: Ag
   const WorkstreamTabs = () => (
     <div style={{ background:C.navy, display:"flex", alignItems:"center", gap:2, padding:"0 12px", height:40, flexShrink:0, overflowX:"auto" }}>
       {displayWorkstreams.map(w=>(
-        <button key={w.id} onClick={()=>setActiveWs(w.id)}
-          style={{ padding:"6px 14px", borderRadius:"6px 6px 0 0", border:"none", cursor:"pointer", fontSize:12, fontWeight:activeWs===w.id?700:500, background:activeWs===w.id?C.white:"transparent", color:activeWs===w.id?w.color:"#CBD5E1", transition:"all 0.15s", whiteSpace:"nowrap", marginTop:4 }}
-          data-testid={`ws-tab-${w.id}`}>
-          <span style={{ width:6, height:6, borderRadius:"50%", background:w.color, display:"inline-block", marginRight:6 }}/>
-          {w.name}
-        </button>
+        <div key={w.id} style={{ display:"flex", alignItems:"center", marginTop:4 }}>
+          <button onClick={()=>setActiveWs(w.id)}
+            style={{ padding:"6px 14px", borderRadius:"6px 6px 0 0", border:"none", cursor:"pointer", fontSize:12, fontWeight:activeWs===w.id?700:500, background:activeWs===w.id?C.white:"transparent", color:activeWs===w.id?w.color:"#CBD5E1", transition:"all 0.15s", whiteSpace:"nowrap" }}
+            data-testid={`ws-tab-${w.id}`}>
+            <span style={{ width:6, height:6, borderRadius:"50%", background:w.color, display:"inline-block", marginRight:6 }}/>
+            {w.name}
+          </button>
+          {isDbMode && isNumericId(w.id) && activeWs===w.id && (
+            <button onClick={()=>setWsAdmin({ mode:"rename", ws:w, name:w.name })}
+              style={{ padding:"2px 6px", marginLeft:2, border:"none", background:"transparent", color:"#CBD5E1", cursor:"pointer", fontSize:10 }}
+              title="Manage workstream">⚙</button>
+          )}
+        </div>
       ))}
       {isDbMode && (
-        <button onClick={()=>{ const name=prompt("Workstream name:"); if(name) createWorkstreamMutation.mutate(name); }}
-          style={{ padding:"4px 10px", borderRadius:6, border:"1px solid #CBD5E1", cursor:"pointer", fontSize:11, color:"#CBD5E1", background:"transparent", marginLeft:4, marginTop:4 }}
+        <button onClick={()=>setWsAdmin({ mode:"create", name:"" })}
+          disabled={createWorkstreamMutation.isPending}
+          style={{ padding:"4px 10px", borderRadius:6, border:"1px solid #CBD5E1", cursor:"pointer", fontSize:11, color:"#CBD5E1", background:"transparent", marginLeft:4, marginTop:4, opacity:createWorkstreamMutation.isPending?0.6:1 }}
           data-testid="button-add-workstream">+ WS</button>
       )}
     </div>
   );
 
+  const handleWsAdminSave = () => {
+    if (!wsAdmin) return;
+    const trimmed = wsAdmin.name.trim();
+    if (wsAdmin.mode === "create" && trimmed) {
+      createWorkstreamMutation.mutate(trimmed);
+    } else if (wsAdmin.mode === "rename" && wsAdmin.ws && trimmed) {
+      updateWorkstreamMutation.mutate({ id: wsAdmin.ws.id, name: trimmed });
+    } else if (wsAdmin.mode === "delete" && wsAdmin.ws) {
+      deleteWorkstreamMutation.mutate(wsAdmin.ws.id);
+    }
+    setWsAdmin(null);
+  };
+
+  const WsAdminModal = wsAdmin ? (
+    <AgileModal title={wsAdmin.mode === "create" ? "New Workstream" : wsAdmin.mode === "rename" ? "Rename Workstream" : "Delete Workstream"} onClose={()=>setWsAdmin(null)}>
+      {wsAdmin.mode === "delete" ? (
+        <div>
+          <p style={{ fontSize:13, color:C.grey600, marginBottom:16 }}>Delete workstream &quot;{wsAdmin.ws?.name}&quot;? This cannot be undone.</p>
+          <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+            <AgileBtn label="Cancel" onClick={()=>setWsAdmin(null)}/>
+            <AgileBtn label="Delete" variant="primary" danger onClick={handleWsAdminSave} testId="button-confirm-delete-ws"/>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <FormField label="Workstream Name" required>
+            <input style={inputStyle} value={wsAdmin.name} onChange={e=>setWsAdmin({...wsAdmin, name:e.target.value})} placeholder="e.g. Platform Team" data-testid="input-workstream-name"/>
+          </FormField>
+          <div style={{ display:"flex", gap:8, justifyContent:"space-between", marginTop:12 }}>
+            {wsAdmin.mode === "rename" && wsAdmin.ws && displayWorkstreams.length > 1 && (
+              <AgileBtn label="Delete…" danger onClick={()=>setWsAdmin({ mode:"delete", ws:wsAdmin.ws, name:wsAdmin.ws!.name })}/>
+            )}
+            <div style={{ flex:1 }}/>
+            <AgileBtn label="Cancel" onClick={()=>setWsAdmin(null)}/>
+            <AgileBtn label="Save" variant="primary" onClick={handleWsAdminSave} testId="button-save-workstream"/>
+          </div>
+        </div>
+      )}
+    </AgileModal>
+  ) : null;
+
+  const renderAgileContent = () => {
+    if (isDbMode && wsError) {
+      return <PmErrorState message="Failed to load agile workstreams." onRetry={() => refetchWs()} />;
+    }
+    if (isDbMode && (wsLoading || (createWorkstreamMutation.isPending && displayWorkstreams.length === 0))) {
+      return <PmAgileSkeleton />;
+    }
+    if (isDbMode && displayWorkstreams.length === 0) {
+      return (
+        <div style={{ padding:48, textAlign:"center", color:C.grey400 }}>
+          <div style={{ fontSize:15, fontWeight:600, color:C.grey600, marginBottom:8 }}>Setting up agile workspace…</div>
+          <div style={{ fontSize:13 }}>Creating a default workstream for this project.</div>
+        </div>
+      );
+    }
+    return (
+      <div className="agile-content" style={{ position:"relative", minHeight:200 }}>
+        {wsDetailFetching && <PmLoadingOverlay label="Refreshing workstream data…" />}
+        {renderView()}
+      </div>
+    );
+  };
+
   if (view) {
     return (
-      <div style={{ display:"flex", flexDirection:"column", height:"100%", background:C.grey50, borderRadius:10, border:`1px solid ${C.grey200}`, overflow:"hidden" }} data-testid={`agile-${view}`}>
+      <div className="agile-root" style={{ display:"flex", flexDirection:"column", height:"100%", background:C.grey50, borderRadius:10, border:`1px solid ${C.grey200}`, overflow:"hidden" }} data-testid={`agile-${view}`}>
         <WorkstreamTabs />
         <div style={{ flex:1, overflowY:"auto" }}>
-          {renderView()}
+          {renderAgileContent()}
         </div>
-        {selectedStory && <StoryDetailPanel story={selectedStory} epics={wsEpics} onClose={()=>setSelectedStory(null)}/>}
-        {selectedEpic && <EpicDetailPanel epic={selectedEpic} stories={wsStories} onClose={()=>setSelectedEpic(null)} onEdit={()=>{ setSelectedEpic(null); }}/>}
+        {selectedStory && <StoryDetailPanel story={selectedStory} epics={wsEpics} sprints={wsSprints} onClose={()=>setSelectedStory(null)} onUpdate={isDbMode ? (id, data) => mutations.updateStory(id, data) : undefined}/>}
+        {selectedEpic && <EpicDetailPanel epic={selectedEpic} stories={wsStories} onClose={()=>setSelectedEpic(null)} onEdit={()=>{ setEditingEpic(selectedEpic); setSelectedEpic(null); }}/>}
+        {editingEpic && (
+          <AgileModal title="Edit Epic" onClose={()=>setEditingEpic(null)}>
+            <EpicForm initial={editingEpic} onSave={handleEpicEditSave} onCancel={()=>setEditingEpic(null)}/>
+          </AgileModal>
+        )}
+        {WsAdminModal}
       </div>
     );
   }
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", height:"100%", background:C.grey50, borderRadius:10, border:`1px solid ${C.grey200}`, overflow:"hidden" }} data-testid="agile-board">
+    <div className="agile-root" style={{ display:"flex", flexDirection:"column", height:"100%", background:C.grey50, borderRadius:10, border:`1px solid ${C.grey200}`, overflow:"hidden" }} data-testid="agile-board">
       <WorkstreamTabs />
 
       <div style={{ display:"flex", alignItems:"center", gap:4, padding:"0 14px", height:38, borderBottom:`1px solid ${C.grey200}`, background:C.white, overflowX:"auto", flexShrink:0 }}>
@@ -1603,11 +1921,17 @@ export default function AgileBoard({ initialTab = "board", view, projectId }: Ag
       </div>
 
       <div style={{ flex:1, overflowY:"auto" }}>
-        {renderView()}
+        {renderAgileContent()}
       </div>
 
-      {selectedStory && <StoryDetailPanel story={selectedStory} epics={wsEpics} onClose={()=>setSelectedStory(null)}/>}
-      {selectedEpic && <EpicDetailPanel epic={selectedEpic} stories={wsStories} onClose={()=>setSelectedEpic(null)} onEdit={()=>{ setSelectedEpic(null); }}/>}
+      {selectedStory && <StoryDetailPanel story={selectedStory} epics={wsEpics} sprints={wsSprints} onClose={()=>setSelectedStory(null)} onUpdate={isDbMode ? (id, data) => mutations.updateStory(id, data) : undefined}/>}
+      {selectedEpic && <EpicDetailPanel epic={selectedEpic} stories={wsStories} onClose={()=>setSelectedEpic(null)} onEdit={()=>{ setEditingEpic(selectedEpic); setSelectedEpic(null); }}/>}
+      {editingEpic && (
+        <AgileModal title="Edit Epic" onClose={()=>setEditingEpic(null)}>
+          <EpicForm initial={editingEpic} onSave={handleEpicEditSave} onCancel={()=>setEditingEpic(null)}/>
+        </AgileModal>
+      )}
+      {WsAdminModal}
     </div>
   );
 }

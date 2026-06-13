@@ -39,6 +39,9 @@ let customCols=[];
 let ccNextId=1;
 let depDrawMode=false;
 let depSourceId=null;
+let selectedTaskId=null;
+let insertAfterId=null;
+let scrollSyncing=false;
 
 // ── UTILS ────────────────────────────────────────────────────
 const D=(s)=>{ const dt=new Date(s+'T00:00:00'); return dt; };
@@ -144,6 +147,9 @@ function toggleCP(){
 // ═══════════════════════════════════════════════════════════════
 function renderAll(){
   if(mainView==='list'){renderListView();return;}
+  const ts=document.getElementById('taskScroll');
+  const tw=document.getElementById('tlWrap');
+  const prevScrollTop=ts?ts.scrollTop:0;
   calcWBS();
   computeCriticalPath();
   const {start,end}=getRange();
@@ -152,6 +158,12 @@ function renderAll(){
   renderTaskPanel();
   renderTimeline(start,end,totalW);
   positionTodayLine(start);
+  if(ts&&tw&&!scrollSyncing){
+    scrollSyncing=true;
+    ts.scrollTop=prevScrollTop;
+    tw.scrollTop=prevScrollTop;
+    requestAnimationFrame(()=>{scrollSyncing=false;});
+  }
 }
 
 // ── TASK PANEL ───────────────────────────────────────────────
@@ -237,16 +249,96 @@ function nameKey(e,id,el){
   if(e.key==='Escape'){el.contentEditable='false';renderAll();}
 }
 function selectTask(id){
+  selectedTaskId=id;
   document.querySelectorAll('.task-row').forEach(r=>r.classList.remove('selected'));
+  document.querySelectorAll('.tl-grid-row').forEach(r=>r.classList.remove('selected'));
   const r=document.getElementById('tr-'+id);
   if(r) r.classList.add('selected');
+  const gr=document.getElementById('gr-'+id);
+  if(gr) gr.classList.add('selected');
+}
+function getSelectedTask(){
+  return selectedTaskId?tasks.find(t=>t.id===selectedTaskId)||null:null;
 }
 function toggleCollapse(id){
-  collapsed[id]=!collapsed[id];
+  if(collapsed[id]) collapsed[id]=false;
+  else collapsed[id]=true;
   renderAll();
 }
 function collapseAll(){tasks.forEach(t=>{if(tasks.some(c=>c.parent===t.id))collapsed[t.id]=true;});renderAll();}
-function expandAll(){tasks.forEach(t=>{collapsed[t.id]=false;});renderAll();}
+function expandAll(){collapsed={};renderAll();}
+
+function indentTask(){
+  const t=getSelectedTask();
+  if(!t||t.type===1) return;
+  const idx=tasks.findIndex(x=>x.id===t.id);
+  if(idx<=0) return;
+  const prev=tasks[idx-1];
+  if(prev.type>=6) return;
+  t.parent=prev.id;
+  if(collapsed[prev.id]) collapsed[prev.id]=false;
+  calcWBS();
+  renderAll();
+  if(t.id<5000) persistSave(t);
+}
+function outdentTask(){
+  const t=getSelectedTask();
+  if(!t||t.parent===null) return;
+  const parent=tasks.find(x=>x.id===t.parent);
+  t.parent=parent?parent.parent:null;
+  calcWBS();
+  renderAll();
+  if(t.id<5000) persistSave(t);
+}
+function resetPanelLayout(){
+  document.documentElement.style.setProperty('--task-col','570px');
+  localStorage.removeItem('gantt-task-col-width');
+  renderAll();
+}
+function setupPanelSplitter(){
+  const saved=localStorage.getItem('gantt-task-col-width');
+  if(saved) document.documentElement.style.setProperty('--task-col',saved+'px');
+  const splitter=document.getElementById('panelSplitter');
+  if(!splitter) return;
+  splitter.addEventListener('mousedown',e=>{
+    e.preventDefault();
+    const startX=e.clientX;
+    const panel=document.getElementById('taskPanel');
+    const startW=panel?panel.offsetWidth:570;
+    splitter.classList.add('dragging');
+    const move=e2=>{
+      const w=Math.max(320,Math.min(900,startW+(e2.clientX-startX)));
+      document.documentElement.style.setProperty('--task-col',w+'px');
+    };
+    const up=()=>{
+      document.removeEventListener('mousemove',move);
+      document.removeEventListener('mouseup',up);
+      splitter.classList.remove('dragging');
+      const val=getComputedStyle(document.documentElement).getPropertyValue('--task-col').trim();
+      const w=parseInt(val)||570;
+      localStorage.setItem('gantt-task-col-width',String(w));
+    };
+    document.addEventListener('mousemove',move);
+    document.addEventListener('mouseup',up);
+  });
+}
+function setupScrollSync(){
+  const ts=document.getElementById('taskScroll');
+  const tw=document.getElementById('tlWrap');
+  if(!ts||!tw) return;
+  ts.addEventListener('scroll',()=>{
+    if(scrollSyncing) return;
+    scrollSyncing=true;
+    tw.scrollTop=ts.scrollTop;
+    requestAnimationFrame(()=>{scrollSyncing=false;});
+  });
+  tw.addEventListener('scroll',()=>{
+    if(scrollSyncing) return;
+    scrollSyncing=true;
+    ts.scrollTop=tw.scrollTop;
+    requestAnimationFrame(()=>{scrollSyncing=false;});
+  });
+}
 
 // ── TIMELINE ─────────────────────────────────────────────────
 function renderTimeline(start,end,totalW){
@@ -570,8 +662,9 @@ function openEdit(id){
   document.getElementById('modalEdit').classList.add('open');
 }
 
-function addItem(parentId){
+function addItem(parentId,afterId){
   editingId=null;
+  insertAfterId=afterId??null;
   calcWBS();
   document.getElementById('editTitle').textContent='Add Work Item';
   document.getElementById('m-name').value='';
@@ -595,18 +688,27 @@ function addItem(parentId){
   if(fsOpt) fsOpt.classList.add('sel');
   populatePredDropdown(null);
   populateParentDropdown(null);
-  if(parentId) document.getElementById('m-parent').value=parentId;
+  const sel=getSelectedTask();
+  const defaultParent=parentId??(sel?sel.parent:null);
+  if(defaultParent) document.getElementById('m-parent').value=defaultParent;
   document.getElementById('modalEdit').classList.add('open');
 }
 
+function addItemAfterSelected(){
+  const sel=getSelectedTask();
+  addItem(sel?sel.parent:null,sel?sel.id:null);
+}
 function addItemOfType(type){
   const typeMap={phase:2,milestone:6,task:5};
-  addItem(null);
+  addItemAfterSelected();
   document.getElementById('m-type').value=String(typeMap[type]||5);
   if(type==='milestone'){
     const today=fmt(new Date());
     document.getElementById('m-end').value=today;
   }
+}
+function addItemOfTypeAfterSelected(type){
+  addItemOfType(type);
 }
 
 function saveItem(){
@@ -647,21 +749,31 @@ function saveItem(){
       color:LEVEL_COLORS[typeVal]||'#64748b',
       wbs:''
     };
-    tasks.push(newTask);
+    if(insertAfterId!==null){
+      const idx=tasks.findIndex(t=>t.id===insertAfterId);
+      if(idx>=0) tasks.splice(idx+1,0,newTask);
+      else tasks.push(newTask);
+    } else {
+      tasks.push(newTask);
+    }
+    insertAfterId=null;
     closeModal('modalEdit');
     renderAll();
-    // New items from UI are local-only (no DB row yet — Phase 2)
+    persistCreate(newTask);
   }
 }
 
 function deleteItem(){
   if(!editingId) return;
   if(!confirm('Delete this item and all its children?')) return;
+  const target=tasks.find(t=>t.id===editingId);
   function removeWithChildren(id){
     tasks=tasks.filter(t=>t.id!==id);
     tasks.filter(t=>t.parent===id).forEach(c=>removeWithChildren(c.id));
   }
   removeWithChildren(editingId);
+  if(target) persistDelete(target);
+  if(selectedTaskId===editingId) selectedTaskId=null;
   closeModal('modalEdit');
   renderAll();
 }
@@ -746,30 +858,81 @@ function setupDropZone(){
   dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag-over');const file=e.dataTransfer.files[0];if(file)parseCSV(file);});
 }
 function handleFileSelect(input){const file=input.files[0];if(file)parseCSV(file);}
+async function persistBulkImport(rows,mode){
+  const {projectId}=ganttMeta();
+  if(!projectId||!rows.length) return false;
+  try{
+    const res=await fetch('/api/pm/projects/'+projectId+'/gantt/import',{
+      method:'POST',credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mode:mode||'append',items:rows}),
+    });
+    if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.message||'Import failed');}
+    return true;
+  }catch(e){console.error('Gantt bulk import failed:',e);return false;}
+}
+function notifyGanttRefresh(){
+  const {projectId}=ganttMeta();
+  try{window.parent.postMessage({type:'gantt-saved',projectId},'*');}catch(e){}
+}
 function parseCSV(file){
   const reader=new FileReader();
-  reader.onload=e=>{
+  reader.onload=async e=>{
     const text=e.target.result;
     const lines=text.split('\n').map(l=>l.trim()).filter(l=>l);
     if(lines.length<2){showImportResult('error','File appears empty.');return;}
     const headers=parseCSVLine(lines[0]).map(h=>h.trim().toLowerCase().replace(/\s/g,'_'));
-    const imported=[];let errors=0;
-    lines.slice(1).forEach(line=>{
+    const rows=[];let errors=0;
+    lines.slice(1).forEach((line,idx)=>{
       const cols=parseCSVLine(line);
       if(cols.length<6){errors++;return;}
-      const get=col=>{const idx=headers.indexOf(col);return idx>=0?(cols[idx]||'').trim():'';}; 
+      const get=col=>{const i=headers.indexOf(col);return i>=0?(cols[i]||'').trim():'';};
       const name=get('name');const start=get('start');const end=get('end')||start;
       if(!name||!start){errors++;return;}
-      const parentWBS=get('parent_wbs');
-      const parentId=parentWBS?tasks.find(t=>t.wbs===parentWBS)?.id||null:null;
-      const predWBS=get('predecessor_wbs');
-      const predId=predWBS?tasks.find(t=>t.wbs===predWBS)?.id||null:null;
-      imported.push({id:nextId++,name,type:parseInt(get('type'))||5,owner:get('owner')||'',start,end,prog:parseInt(get('progress'))||0,rag:get('rag')||'g',notes:get('notes')||'',parent:parentId,predId,depType:get('dep_type')||'FS',color:'#4f46e5',wbs:''});
+      rows.push({
+        wbs:get('wbs')||('IMP-'+(idx+1)),
+        name,
+        type:parseInt(get('type'))||5,
+        parentWbs:get('parent_wbs')||null,
+        predecessorWbs:get('predecessor_wbs')||null,
+        owner:get('owner')||'',
+        start,end,
+        progress:parseInt(get('progress'))||0,
+        rag:get('rag')||'g',
+        notes:get('notes')||'',
+        depType:get('dep_type')||'FS',
+      });
     });
-    if(importMode==='overwrite') tasks=imported;
-    else tasks=[...tasks,...imported];
+    const {projectId}=ganttMeta();
+    if(projectId){
+      showImportResult('success','⏳ Saving '+rows.length+' items to database…');
+      const ok=await persistBulkImport(rows,importMode);
+      if(ok){
+        showImportResult('success','✅ Imported '+rows.length+' items to project.'+(errors>0?' ('+errors+' rows skipped)':''));
+        notifyGanttRefresh();
+        return;
+      }
+      showImportResult('error','Database import failed — loaded locally only.');
+    }
+    const imported=rows.map((r,i)=>({
+      id:nextId++,name:r.name,type:r.type,owner:r.owner||'',start:r.start,end:r.end,
+      prog:r.progress,rag:r.rag,notes:r.notes,parent:null,predId:null,depType:r.depType,color:'#4f46e5',wbs:r.wbs,
+    }));
+    imported.forEach(t=>{
+      const row=rows.find(r=>r.wbs===t.wbs);
+      if(row?.parentWbs){
+        const p=imported.find(x=>x.wbs===row.parentWbs)||tasks.find(x=>x.wbs===row.parentWbs);
+        if(p) t.parent=p.id;
+      }
+      if(row?.predecessorWbs){
+        const p=imported.find(x=>x.wbs===row.predecessorWbs)||tasks.find(x=>x.wbs===row.predecessorWbs);
+        if(p) t.predId=p.id;
+      }
+    });
+    if(importMode==='overwrite') tasks=tasks.filter(t=>t.type===1);
+    tasks=[...tasks,...imported];
     calcWBS();
-    showImportResult('success','✅ Imported '+imported.length+' items.'+(errors>0?' ('+errors+' rows skipped)':''));
+    showImportResult('success','✅ Imported '+imported.length+' items locally.'+(errors>0?' ('+errors+' rows skipped)':''));
     renderAll();
   };
   reader.readAsText(file);
@@ -793,12 +956,8 @@ function showImportResult(type,msg){
 
 // ── SCROLL SYNC ───────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded',()=>{
-  const ts=document.getElementById('taskScroll');
-  const tw=document.getElementById('tlWrap');
-  if(!ts||!tw) return;
-  let syncLock=false;
-  ts.addEventListener('scroll',function(){if(syncLock)return;syncLock=true;tw.scrollTop=this.scrollTop;syncLock=false;});
-  tw.addEventListener('scroll',function(){if(syncLock)return;syncLock=true;ts.scrollTop=this.scrollTop;syncLock=false;});
+  setupScrollSync();
+  setupPanelSplitter();
   document.querySelectorAll('.modal-bg').forEach(bg=>{
     bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('open');});
   });
@@ -969,26 +1128,134 @@ function handleBarClickForDep(barEl,taskId){
 // Items with id>=5000 are locally added and not yet in the DB (Phase 2)
 // ══════════════════════════════════════════════════════════════
 const RAG_TO_STATUS={g:'green',a:'amber',r:'red'};
+const ID_PFX={project:1,phase:1000,ws:2000,task:3000,ms:4000};
+
+function ganttMeta(){
+  const d=window.GANTT_INIT_DATA||{};
+  return {projectId:d.projectId,tenantId:d.tenantId};
+}
+
+function resolvePhaseId(parentId){
+  if(!parentId||parentId===ID_PFX.project) return null;
+  if(parentId>ID_PFX.phase&&parentId<ID_PFX.ws) return parentId-ID_PFX.phase;
+  const p=tasks.find(t=>t.id===parentId);
+  return p?resolvePhaseId(p.parent):null;
+}
+
+function resolveParentTaskId(parentId){
+  if(parentId>ID_PFX.task&&parentId<ID_PFX.ms) return parentId-ID_PFX.task;
+  return null;
+}
+
+function countPhases(){
+  return tasks.filter(t=>t.type===2&&t.id<ID_PFX.ws).length;
+}
+
+async function persistCreate(t){
+  const {projectId,tenantId}=ganttMeta();
+  if(!projectId||!tenantId) return;
+  const h={'Content-Type':'application/json'};
+  const post=(url,body)=>fetch(url,{method:'POST',credentials:'include',headers:h,body:JSON.stringify(body)});
+  const rag=RAG_TO_STATUS[t.rag]||'green';
+  const phaseId=resolvePhaseId(t.parent);
+  const parentTaskId=resolveParentTaskId(t.parent);
+  try{
+    if(t.type===2){
+      const created=await post('/api/pm/phases',{tenantId,projectId,name:t.name,phaseNumber:countPhases()+1,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:rag,order:countPhases()}).then(r=>r.json());
+      if(created?.id){
+        const oldId=t.id;
+        t.id=ID_PFX.phase+created.id;
+        tasks.filter(x=>x.parent===oldId).forEach(c=>{c.parent=t.id;});
+        if(selectedTaskId===oldId) selectedTaskId=t.id;
+      }
+    } else if(t.type===3){
+      const created=await post('/api/pm/workstreams',{tenantId,projectId,phaseId,name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:rag,order:tasks.filter(x=>x.type===3).length}).then(r=>r.json());
+      if(created?.id){
+        const oldId=t.id;
+        t.id=ID_PFX.ws+created.id;
+        tasks.filter(x=>x.parent===oldId).forEach(c=>{c.parent=t.id;});
+        if(selectedTaskId===oldId) selectedTaskId=t.id;
+      }
+    } else if(t.type===4||t.type===5){
+      const created=await post('/api/pm/tasks',{tenantId,projectId,phaseId,parentTaskId,name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:rag,isSummary:t.type===4,ganttType:t.type===4?'summary':'task',order:tasks.filter(x=>x.type===4||x.type===5).length}).then(r=>r.json());
+      if(created?.id){
+        const oldId=t.id;
+        t.id=ID_PFX.task+created.id;
+        tasks.filter(x=>x.parent===oldId||x.predId===oldId).forEach(c=>{
+          if(c.parent===oldId) c.parent=t.id;
+          if(c.predId===oldId) c.predId=t.id;
+        });
+        if(selectedTaskId===oldId) selectedTaskId=t.id;
+      }
+    } else if(t.type===6){
+      const created=await post('/api/pm/milestones',{tenantId,projectId,phaseId,name:t.name,dueDate:t.start,status:t.prog>=100?'completed':'pending',ragStatus:rag,order:tasks.filter(x=>x.type===6).length}).then(r=>r.json());
+      if(created?.id){
+        const oldId=t.id;
+        t.id=ID_PFX.ms+created.id;
+        if(selectedTaskId===oldId) selectedTaskId=t.id;
+      }
+    }
+    calcWBS();
+    renderAll();
+    showSaveIndicator();
+  } catch(e){ console.error('Gantt create failed:',e); }
+}
+
+async function persistDelete(t){
+  if(!t||t.id>=5000) return;
+  const del=(url)=>fetch(url,{method:'DELETE',credentials:'include'});
+  try{
+    if(t.type===2&&t.id>ID_PFX.phase&&t.id<ID_PFX.ws) await del('/api/pm/phases/'+(t.id-ID_PFX.phase));
+    else if(t.type===3&&t.id>ID_PFX.ws&&t.id<ID_PFX.task) await del('/api/pm/workstreams/'+(t.id-ID_PFX.ws));
+    else if((t.type===4||t.type===5)&&t.id>ID_PFX.task&&t.id<ID_PFX.ms) await del('/api/pm/tasks/'+(t.id-ID_PFX.task));
+    else if(t.type===6&&t.id>ID_PFX.ms&&t.id<5000) await del('/api/pm/milestones/'+(t.id-ID_PFX.ms));
+  } catch(e){ console.error('Gantt delete failed:',e); }
+}
 
 async function persistSave(t){
   if(!t||t.id>=5000) return; // local-only items
   const h={'Content-Type':'application/json'};
   const put=(url,body)=>fetch(url,{method:'PUT',credentials:'include',headers:h,body:JSON.stringify(body)});
+  const ownerMap=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.ownerIdMap)||{};
+  const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
+  function mapParent(parent){
+    if(!parent||parent===1) return {phaseId:null,parentTaskId:null,parentPhaseId:null};
+    if(parent>=3000&&parent<4000) return {phaseId:null,parentTaskId:parent-3000,parentPhaseId:null};
+    if(parent>=2000&&parent<3000) return {phaseId:null,parentTaskId:null,parentPhaseId:null,workstreamPhase:null};
+    if(parent>=1000&&parent<2000) return {phaseId:parent-1000,parentTaskId:null,parentPhaseId:parent-1000};
+    return {phaseId:null,parentTaskId:null,parentPhaseId:null};
+  }
+  function notifyParent(){
+    try{ window.parent.postMessage({type:'gantt-saved',projectId},'*'); }catch(e){}
+  }
   try{
     if(t.type===2&&t.id>1000&&t.id<2000){
       const id=t.id-1000;
-      await put('/api/pm/phases/'+id,{name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:RAG_TO_STATUS[t.rag]||'green'});
+      await put('/api/pm/phases/'+id,{name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:RAG_TO_STATUS[t.rag]||'green',description:t.notes||undefined,wbsCode:t.wbs||undefined});
     } else if(t.type===3&&t.id>2000&&t.id<3000){
       const id=t.id-2000;
-      await put('/api/pm/workstreams/'+id,{name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:RAG_TO_STATUS[t.rag]||'green'});
+      const parent=mapParent(t.parent);
+      await put('/api/pm/workstreams/'+id,{name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:RAG_TO_STATUS[t.rag]||'green',description:t.notes||undefined,wbsCode:t.wbs||undefined,...(parent.phaseId?{phaseId:parent.phaseId}:{})});
     } else if((t.type===4||t.type===5)&&t.id>3000&&t.id<4000){
       const id=t.id-3000;
-      await put('/api/pm/tasks/'+id,{name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:RAG_TO_STATUS[t.rag]||'green'});
+      const parent=mapParent(t.parent);
+      const predIds=t.predId&&t.predId>=3000&&t.predId<4000?[t.predId-3000]:null;
+      const assigneeId=t.owner?ownerMap[t.owner]||null:null;
+      await put('/api/pm/tasks/'+id,{
+        name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,
+        status:RAG_TO_STATUS[t.rag]||'todo',description:t.notes||undefined,
+        wbsCode:t.wbs||undefined,phaseId:parent.phaseId||undefined,
+        parentTaskId:parent.parentTaskId||undefined,
+        predecessorIds:predIds||undefined,assigneeId:assigneeId||undefined,
+        isSummary:t.type===4,
+      });
     } else if(t.type===6&&t.id>4000&&t.id<5000){
       const id=t.id-4000;
-      await put('/api/pm/milestones/'+id,{name:t.name,dueDate:t.start,status:t.prog>=100?'completed':'pending'});
+      const parent=mapParent(t.parent);
+      await put('/api/pm/milestones/'+id,{name:t.name,dueDate:t.start,status:t.prog>=100?'completed':'pending',notes:t.notes||undefined,...(parent.phaseId?{phaseId:parent.phaseId}:{})});
     }
     showSaveIndicator();
+    notifyParent();
   } catch(e){ console.error('Gantt persist failed:',e); }
 }
 
@@ -1033,5 +1300,7 @@ function loadFromInitData(){
 
 // ── INIT ─────────────────────────────────────────────────────
 loadFromInitData();
+setupScrollSync();
+setupPanelSplitter();
 renderAll();
 setTimeout(()=>jumpToToday(),200);

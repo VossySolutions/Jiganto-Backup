@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useEffect, useCallback, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import type {
   PmProject,
@@ -51,7 +51,10 @@ interface V4Task {
 interface GanttInitData {
   tasks: V4Task[];
   owners: string[];
+  ownerIdMap: Record<string, string>;
   nextId: number;
+  projectId: number;
+  tenantId: number;
 }
 
 interface TeamMember {
@@ -75,10 +78,14 @@ function buildGanttData(
 
   // Build owner name map
   const ownerMap = new Map<string, string>();
+  const ownerIdMap: Record<string, string> = {};
   team.forEach((m) => {
     if (!m.id) return;
     const name = m.name || [m.firstName, m.lastName].filter(Boolean).join(" ").trim();
-    if (name) ownerMap.set(m.id, name);
+    if (name) {
+      ownerMap.set(m.id, name);
+      ownerIdMap[name] = m.id;
+    }
   });
 
   // Project (type 1)
@@ -115,7 +122,7 @@ function buildGanttData(
       depType: "FS",
       notes: (ph as any).description ?? "",
       color: "#0891b2",
-      wbs: "",
+      wbs: ph.wbsCode || "",
     });
   });
 
@@ -142,7 +149,7 @@ function buildGanttData(
       depType: "FS",
       notes: (ws as any).description ?? "",
       color: "#059669",
-      wbs: "",
+      wbs: ws.wbsCode || "",
     });
   });
 
@@ -177,13 +184,13 @@ function buildGanttData(
       start,
       end,
       prog: t.progress ?? 0,
-      rag: mapRag(t.ragStatus ?? t.status),
+      rag: mapRag(t.status),
       parent: parentId,
       predId,
       depType: "FS",
       notes: t.description ?? "",
       color: "#64748b",
-      wbs: "",
+      wbs: t.wbsCode || "",
     });
   });
 
@@ -205,12 +212,19 @@ function buildGanttData(
       depType: "FS",
       notes: (ms as any).notes ?? "",
       color: "#f59e0b",
-      wbs: "",
+      wbs: (ms as any).wbsCode || "",
     });
   });
 
-  const owners = [...new Set(items.map((t) => t.owner).filter(Boolean))];
-  return { tasks: items, owners, nextId: 5000 };
+  const owners = Array.from(new Set(items.map((t) => t.owner).filter(Boolean)));
+  return {
+    tasks: items,
+    owners,
+    ownerIdMap,
+    nextId: 5000,
+    projectId: project.id,
+    tenantId: project.tenantId,
+  };
 }
 
 // ── Build the srcdoc HTML (links to public/ files, injects data JSON) ─────────
@@ -251,12 +265,15 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
   <div class="dep-draw-btn" id="depDrawBtn" onclick="toggleDepDraw()" title="Click two bars to draw a dependency">🔗 Draw Dep</div>
   <div style="margin-left:auto;display:flex;gap:5px;align-items:center;flex-shrink:0;">
     <button class="btn btn-ghost" onclick="jumpToToday()" title="Scroll to today">📍 Today</button>
+    <button class="btn btn-ghost" onclick="indentTask()" title="Indent selected row">→ Indent</button>
+    <button class="btn btn-ghost" onclick="outdentTask()" title="Outdent selected row">← Outdent</button>
     <button class="btn btn-ghost" onclick="collapseAll()" title="Collapse all groups">⊟ Collapse</button>
     <button class="btn btn-ghost" onclick="expandAll()" title="Expand all groups">⊞ Expand</button>
+    <button class="btn btn-ghost" onclick="resetPanelLayout()" title="Reset task panel width">↺ Reset layout</button>
     <div style="width:1px;height:16px;background:var(--g200);"></div>
     <button class="btn btn-excel" onclick="openImportExport('export')">↓ Export</button>
     <button class="btn btn-green" onclick="openImportExport('import')">↑ Import</button>
-    <button class="btn btn-p" onclick="addItem(null)">＋ Add</button>
+    <button class="btn btn-p" onclick="addItemAfterSelected()">＋ Add</button>
     <div class="view-group">
       <div class="vb on" onclick="setView('gantt',this)">📅 Gantt</div>
       <div class="vb" onclick="setView('list',this)">≡ List</div>
@@ -278,11 +295,12 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
     </div>
     <div class="tp-scroll" id="taskScroll"></div>
     <div class="add-row">
-      <button class="add-btn-mini" onclick="addItem(null)">＋ Task</button>
-      <button class="add-btn-mini" onclick="addItemOfType('phase')">＋ Phase</button>
-      <button class="add-btn-mini" onclick="addItemOfType('milestone')">◆ Milestone</button>
+      <button class="add-btn-mini" onclick="addItemAfterSelected()">＋ Task</button>
+      <button class="add-btn-mini" onclick="addItemOfTypeAfterSelected('phase')">＋ Phase</button>
+      <button class="add-btn-mini" onclick="addItemOfTypeAfterSelected('milestone')">◆ Milestone</button>
     </div>
   </div>
+  <div class="panel-splitter" id="panelSplitter" title="Drag to resize columns"></div>
   <div class="timeline-panel">
     <div class="tl-scroll-wrap" id="tlWrap">
       <div class="tl-inner" id="tlInner">
@@ -422,6 +440,27 @@ interface ReactGanttChartProps {
 }
 
 export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
+  const queryClient = useQueryClient();
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const invalidateGantt = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: [`/api/pm/projects/${projectId}`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/pm/projects/${projectId}/phases`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/pm/workstreams?projectId=${projectId}`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/pm/projects/${projectId}/tasks`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/pm/projects/${projectId}/milestones`] });
+    setRefreshKey((k) => k + 1);
+  }, [queryClient, projectId]);
+
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === "gantt-saved" && e.data?.projectId === projectId) {
+        invalidateGantt();
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [projectId, invalidateGantt]);
   const { data: project, isLoading: pjL } = useQuery<PmProject>({
     queryKey: [`/api/pm/projects/${projectId}`],
     enabled: !!projectId,
@@ -438,16 +477,16 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
     queryKey: [`/api/pm/projects/${projectId}/tasks`],
     enabled: !!projectId,
   });
-  const { data: milestones = [] } = useQuery<PmMilestone[]>({
+  const { data: milestones = [], isLoading: msL } = useQuery<PmMilestone[]>({
     queryKey: [`/api/pm/projects/${projectId}/milestones`],
     enabled: !!projectId,
   });
-  const { data: team = [] } = useQuery<TeamMember[]>({
+  const { data: team = [], isLoading: tmL } = useQuery<TeamMember[]>({
     queryKey: [`/api/pm/projects/${projectId}/team`],
     enabled: !!projectId,
   });
 
-  const isLoading = pjL || phL || wsL || tkL;
+  const isLoading = pjL || phL || wsL || tkL || msL || tmL;
 
   const srcDoc = useMemo(() => {
     if (!project) return null;
@@ -482,7 +521,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
 
   return (
     <iframe
-      key={projectId}
+      key={`${projectId}-${refreshKey}`}
       title={`Gantt — ${project.name}`}
       srcDoc={srcDoc ?? undefined}
       style={{ width: "100%", height: "100%", minHeight: 400, border: "none", display: "block" }}

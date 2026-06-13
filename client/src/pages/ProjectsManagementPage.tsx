@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,11 @@ import RaiddLogTool from "@/components/projects/RaiddLogTool";
 import DeliverablesTracker from "@/components/projects/DeliverablesTracker";
 import MilestoneTracker from "@/components/projects/MilestoneTracker";
 import { Portfolio360ReportView } from "@/components/portfolio/Portfolio360ReportView";
+import {
+  PmTeamOrgTool, PmRaciTool, PmResourceTrackerTool, PmTimesheetsTool,
+  PmFinanceTrackerTool, PmStatusReportingTool, PmChangeLogTool, PmDocumentationTool,
+  PmTestTrackerTool, PmStakeholderTool, PmBpmTool, PmSowTrackerTool, PmWbsTool,
+} from "@/components/projects/PmSecondaryTools";
 import { ReactGanttChart } from "@/components/projects/ReactGanttChart";
 import type { GanttTask, GanttResource, GanttDependency } from "@/components/projects/gantt.types";
 import {
@@ -208,6 +213,7 @@ const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
       { id: "status_reporting", name: "Status Reporting", hint: "Weekly/monthly reports", icon: PmStatusReportingIcon },
       { id: "project_dashboard", name: "Agile Dashboard", hint: "KPIs & health overview", icon: PmProjectDashboardIcon },
       { id: "360_report", name: "360\u00B0 Report", hint: "Full project health view", icon: Pm360ReportIcon },
+      { id: "best_practice", name: "Best Practice", hint: "Agile delivery guides", icon: PmBestPracticeIcon },
     ],
   },
   raid_governance: {
@@ -229,6 +235,7 @@ const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
     tools: [
       { id: "resource_tracker", name: "Resource Tracker", hint: "Allocation & capacity", icon: PmResourceTrackerIcon },
       { id: "timesheets", name: "Timesheets", hint: "Time logging", icon: PmTimesheetsIcon },
+      { id: "finance_tracker", name: "Finance Tracker", hint: "Budget & spend", icon: PmFinanceTrackerIcon },
     ],
   },
   documentation_delivery: {
@@ -238,6 +245,8 @@ const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
       { id: "documentation", name: "Documentation", hint: "Project docs & specs", icon: PmDocumentationIcon },
       { id: "deliverables_tracker", name: "Deliverables Tracker", hint: "Track project outputs", icon: PmDeliverablesTrackerIcon },
       { id: "test_tracker", name: "Test Tracker", hint: "QA test management", icon: PmTestTrackerIcon },
+      { id: "sow_tracker", name: "Statement of Work", hint: "Scope & deliverables", icon: PmSowTrackerIcon },
+      { id: "wbs", name: "WBS", hint: "Work breakdown structure", icon: PmWbsIcon },
     ],
   },
   people_organisation: {
@@ -257,12 +266,13 @@ const MASTER_TOOL_ORDER: string[] = [
   "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log",
   "dependencies_log", "decisions_log", "change_log", "documentation", "org_chart",
   "stakeholder_map", "business_process_model", "deliverables_tracker", "kanban_board",
-  "raci_model", "resource_tracker", "test_tracker", "timesheets",
+  "raci_model", "resource_tracker", "test_tracker", "timesheets", "finance_tracker",
+  "sow_tracker", "wbs",
   "scrum_board", "epics_stories",
 ];
 
 const DEFAULT_TOOLS: Record<string, string[]> = {
-  project: ["gantt_chart", "milestone_plan", "project_dashboard", "sprint_board", "backlog", "epics", "stories", "sprints", "defects", "roadmap", "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log", "dependencies_log", "decisions_log", "change_log", "documentation", "org_chart", "stakeholder_map", "business_process_model", "deliverables_tracker", "kanban_board", "raci_model", "resource_tracker", "test_tracker", "timesheets"],
+  project: ["gantt_chart", "milestone_plan", "project_dashboard", "sprint_board", "backlog", "epics", "stories", "sprints", "defects", "roadmap", "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log", "dependencies_log", "decisions_log", "change_log", "documentation", "org_chart", "stakeholder_map", "business_process_model", "deliverables_tracker", "kanban_board", "raci_model", "resource_tracker", "test_tracker", "timesheets", "finance_tracker", "sow_tracker", "wbs"],
   programme: ["gantt_chart", "milestone_plan", "status_reporting", "project_dashboard", "risk_log", "issues_log"],
   initiative: ["milestone_plan", "status_reporting", "project_dashboard", "risk_log"],
   campaign: ["kanban_board", "milestone_plan", "status_reporting"],
@@ -1280,7 +1290,7 @@ function ProjectDetailView({
     queryKey: ["/api/pm/projects", projectId],
   });
 
-  const { data: projectTools = [] } = useQuery<any[]>({
+  const { data: projectTools = [], isLoading: toolsLoading } = useQuery<any[]>({
     queryKey: ["/api/pm/projects", projectId, "tools"],
   });
 
@@ -1317,8 +1327,7 @@ function ProjectDetailView({
     setTimeout(() => nameInputRef.current?.focus(), 50);
   };
 
-  const REMOVED_TOOLS = ["best_practice", "finance_tracker", "sow_tracker", "wbs"];
-  const enabledToolsRaw = projectTools.filter((t: any) => t.isEnabled !== false && !REMOVED_TOOLS.includes(t.toolType));
+  const enabledToolsRaw = projectTools.filter((t: any) => t.isEnabled !== false);
 
   const getLocalOrder = (): string[] | null => {
     try {
@@ -1435,6 +1444,16 @@ function ProjectDetailView({
     },
   });
 
+  const removeToolMutation = useMutation({
+    mutationFn: async (toolRecord: any) => {
+      await apiRequest("DELETE", `/api/pm/project-tools/${toolRecord.id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "tools"] });
+      toast({ title: "Tool removed" });
+    },
+  });
+
   if (projectLoading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -1511,38 +1530,52 @@ function ProjectDetailView({
           className="flex items-center overflow-x-auto flex-1 px-4"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none", minWidth: 0, width: 0 } as React.CSSProperties}
         >
-          {enabledTools.map((tool: any, idx: number) => {
+          {toolsLoading ? (
+            <div className="flex items-center gap-2 py-2 px-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Loading tools…</span>
+            </div>
+          ) : enabledTools.map((tool: any, idx: number) => {
             const def = findToolDefinition(tool.toolType);
             const Icon = def?.icon || PmDocumentationIcon;
             const isActive = currentActiveTool === tool.toolType;
             const isDragging = dragTabIdx === idx;
             const isDragOver = dragOverTabIdx === idx && dragTabIdx !== idx;
             return (
-              <button
-                key={tool.toolType}
-                draggable
-                onDragStart={() => handleTabDragStart(idx)}
-                onDragOver={(e) => handleTabDragOver(e, idx)}
-                onDrop={() => handleTabDrop(idx)}
-                onDragEnd={handleTabDragEnd}
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium whitespace-nowrap border-b-2 transition-colors bg-transparent border-0 cursor-grab -mb-px select-none flex-shrink-0",
-                  isActive
-                    ? "border-b-[#2563eb] text-[#2563eb] font-semibold"
-                    : "border-b-transparent text-muted-foreground hover:text-foreground",
-                  isDragging && "opacity-40",
-                  isDragOver && "border-b-[#2563eb]/50"
-                )}
-                style={isDragOver ? { borderLeftWidth: 2, borderLeftColor: "#2563eb", borderLeftStyle: "solid" } : undefined}
-                onClick={() => setActiveTool(tool.toolType)}
-                data-testid={`tool-tab-${tool.toolType}`}
-              >
-                <Icon className="h-3.5 w-3.5 flex-shrink-0" />
-                {def?.name || tool.label || tool.toolType}
-              </button>
+              <div key={tool.toolType} className="relative flex-shrink-0 group">
+                <button
+                  draggable
+                  onDragStart={() => handleTabDragStart(idx)}
+                  onDragOver={(e) => handleTabDragOver(e, idx)}
+                  onDrop={() => handleTabDrop(idx)}
+                  onDragEnd={handleTabDragEnd}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium whitespace-nowrap border-b-2 transition-colors bg-transparent border-0 cursor-grab -mb-px select-none",
+                    isActive
+                      ? "border-b-[#2563eb] text-[#2563eb] font-semibold"
+                      : "border-b-transparent text-muted-foreground hover:text-foreground",
+                    isDragging && "opacity-40",
+                    isDragOver && "border-b-[#2563eb]/50"
+                  )}
+                  style={isDragOver ? { borderLeftWidth: 2, borderLeftColor: "#2563eb", borderLeftStyle: "solid" } : undefined}
+                  onClick={() => setActiveTool(tool.toolType)}
+                  data-testid={`tool-tab-${tool.toolType}`}
+                >
+                  <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                  {def?.name || tool.label || tool.toolType}
+                </button>
+                <button
+                  className="absolute -top-1 -right-1 hidden group-hover:flex items-center justify-center w-4 h-4 rounded-full bg-muted text-muted-foreground hover:bg-destructive hover:text-destructive-foreground text-[10px] border-0 cursor-pointer"
+                  title="Remove tool"
+                  onClick={(e) => { e.stopPropagation(); removeToolMutation.mutate(tool); }}
+                  data-testid={`button-remove-tool-${tool.toolType}`}
+                >
+                  ×
+                </button>
+              </div>
             );
           })}
-          {enabledTools.length === 0 && (
+          {enabledTools.length === 0 && !toolsLoading && (
             <span className="text-xs text-muted-foreground py-2">No tools enabled. Add tools to get started.</span>
           )}
         </div>
@@ -1565,7 +1598,7 @@ function ProjectDetailView({
           </button>
           <button
             className="flex items-center gap-1 text-xs font-semibold text-[#2563eb] hover:text-[#1d4ed8] bg-transparent border-0 cursor-pointer whitespace-nowrap py-2"
-            onClick={() => setShowMoreTools(!showMoreTools)}
+            onClick={() => setShowMoreTools(true)}
             data-testid="button-add-tool"
           >
             <Plus className="h-3 w-3" /> Add
@@ -2129,15 +2162,15 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
   const renderPlaceholder = () => {
     switch (toolId) {
       case "project_dashboard":
-        return <AgileDashboard />;
+        return <AgileDashboard projectId={project.id} />;
       case "gantt_chart":
         return <ProjectGanttWrapper project={project} />;
       case "sprint_board":
-        return <AgileBoard view="board" projectId={project.id} />;
+        return <AgileBoard view="board" boardMode="sprint" projectId={project.id} />;
       case "scrum_board":
-        return <AgileBoard view="board" projectId={project.id} />;
+        return <AgileBoard view="board" boardMode="scrum" projectId={project.id} />;
       case "kanban_board":
-        return <AgileBoard view="board" projectId={project.id} />;
+        return <AgileBoard view="board" boardMode="kanban" projectId={project.id} />;
       case "backlog":
         return <AgileBoard view="backlog" projectId={project.id} />;
       case "epics":
@@ -2171,107 +2204,31 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
       case "deliverables_tracker":
         return <DeliverablesTracker projectId={project.id} />;
       case "change_log":
-        return (
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <PmRaidGovernanceIcon className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm font-semibold">{name}</span>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead>Owner</TableHead>
-                    <TableHead>Due Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      No items yet. Add your first {name.toLowerCase()} entry.
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        );
+        return <PmChangeLogTool projectId={project.id} />;
       case "finance_tracker":
-        return (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { label: "Budget", value: project?.budget ? `$${Number(project.budget).toLocaleString()}` : "$0" },
-                { label: "Spent", value: project?.spentBudget ? `$${Number(project.spentBudget).toLocaleString()}` : "$0" },
-                { label: "Remaining", value: project?.budget && project?.spentBudget ? `$${(Number(project.budget) - Number(project.spentBudget)).toLocaleString()}` : "$0" },
-                { label: "Burn Rate", value: "N/A" },
-              ].map((item) => (
-                <Card key={item.label}>
-                  <CardContent className="p-4">
-                    <div className="text-xs font-semibold text-muted-foreground uppercase">{item.label}</div>
-                    <div className="text-lg font-bold text-foreground mt-1">{item.value}</div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            <Card>
-              <CardContent className="p-6 text-center">
-                <PmFinanceTrackerIcon className="h-12 w-12 mx-auto text-muted-foreground/20 mb-2" />
-                <p className="text-sm text-muted-foreground">Finance tracking table will appear here</p>
-              </CardContent>
-            </Card>
-          </div>
-        );
+        return <PmFinanceTrackerTool projectId={project.id} project={project} />;
+      case "sow_tracker":
+        return <PmSowTrackerTool projectId={project.id} project={project} />;
+      case "wbs":
+        return <PmWbsTool projectId={project.id} />;
       case "status_reporting":
-        return (
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <PmStatusReportingIcon className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm font-semibold">Status Reports</span>
-              </div>
-              <div className="text-center py-8">
-                <PmStatusReportingIcon className="h-12 w-12 mx-auto text-muted-foreground/20 mb-2" />
-                <p className="text-sm text-muted-foreground">No status reports yet</p>
-                <Button variant="outline" size="sm" className="mt-3" data-testid="button-create-report">
-                  <Plus className="h-3.5 w-3.5 mr-1" /> Create Report
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        );
+        return <PmStatusReportingTool projectId={project.id} project={project} />;
       case "documentation":
-        return (
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <PmDocumentationIcon className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm font-semibold">Documentation</span>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Document</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Last Updated</TableHead>
-                    <TableHead>Author</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                      No documents yet. Upload or create your first document.
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        );
+        return <PmDocumentationTool projectId={project.id} />;
+      case "org_chart":
+        return <PmTeamOrgTool projectId={project.id} />;
+      case "stakeholder_map":
+        return <PmStakeholderTool projectId={project.id} project={project} />;
+      case "business_process_model":
+        return <PmBpmTool projectId={project.id} />;
+      case "raci_model":
+        return <PmRaciTool projectId={project.id} />;
+      case "resource_tracker":
+        return <PmResourceTrackerTool projectId={project.id} />;
+      case "timesheets":
+        return <PmTimesheetsTool projectId={project.id} />;
+      case "test_tracker":
+        return <PmTestTrackerTool projectId={project.id} />;
       default:
         return (
           <Card>
@@ -2327,8 +2284,11 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
 
 export default function ProjectsManagementPage() {
   const { mainMargin, mobileTopOffset } = useShellLayout();
-  const tenantId = 1;
+  const [, setLocation] = useLocation();
   const params = useParams<{ projectId?: string }>();
+
+  const { data: tenants } = useQuery<{ id: number }[]>({ queryKey: ["/api/tenants"] });
+  const tenantId = tenants?.[0]?.id ?? 1;
 
   const [currentView, setCurrentView] = useState<ViewMode>(() =>
     params.projectId ? "project" : "dashboard"
@@ -2344,16 +2304,27 @@ export default function ProjectsManagementPage() {
         setSelectedProjectId(id);
         setCurrentView("project");
       }
+    } else if (!params.projectId && currentView === "project") {
+      setCurrentView("dashboard");
+      setSelectedProjectId(null);
     }
   }, [params.projectId]);
 
   const { data: projects = [], isLoading } = useQuery<any[]>({
     queryKey: [`/api/pm/projects?tenantId=${tenantId}`],
+    enabled: !!tenantId,
   });
 
   const handleOpenProject = (id: number) => {
     setSelectedProjectId(id);
     setCurrentView("project");
+    setLocation(`/modules/projects/${id}`);
+  };
+
+  const handleBackFromProject = () => {
+    setCurrentView("dashboard");
+    setSelectedProjectId(null);
+    setLocation("/modules/projects");
   };
 
   return (
@@ -2399,7 +2370,7 @@ export default function ProjectsManagementPage() {
               <ProjectDetailView
                 projectId={selectedProjectId}
                 tenantId={tenantId}
-                onBack={() => setCurrentView("dashboard")}
+                onBack={handleBackFromProject}
               />
             )}
           </div>
