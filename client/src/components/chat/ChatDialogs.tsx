@@ -294,7 +294,7 @@ export function PollCreatorDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <BarChart2 className="h-5 w-5 text-[#4338CA]" /> Create poll
+            <BarChart2 className="h-5 w-5 text-indigo-500" /> Create poll
           </DialogTitle>
         </DialogHeader>
         <SubmitForm onSubmit={submit} className="space-y-4" disabled={pending}>

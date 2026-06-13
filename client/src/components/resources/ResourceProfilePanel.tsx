@@ -240,7 +240,7 @@ export function ResourceProfilePanel({ resource, skills, resourceSkills, onClose
                   </div>
                   <div className="flex gap-1 shrink-0">
                     <Button variant="ghost" size="icon" asChild>
-                      <a href={`/modules/documents?doc=${doc.documentId}`}><ExternalLink className="h-4 w-4" /></a>
+                      <a href={`/modules/documents?document=${doc.documentId}`}><ExternalLink className="h-4 w-4" /></a>
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => unlinkMutation.mutate(doc.id)}>
                       <Trash2 className="h-4 w-4" />

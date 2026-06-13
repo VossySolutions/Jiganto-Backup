@@ -331,6 +331,9 @@ export function EntityDetailPanel({ open, onClose, entityType, entity }: EntityD
   const progress = (data?.progress || 0) as number;
   const currentOwnerId = (data?.[ownerField] || "") as string;
   const ownerName = (data?.ownerName || data?.assigneeName || "") as string;
+  const createdByLabel =
+    (data?.createdByName as string | undefined) ??
+    (data?.ownerName as string | undefined);
   const createdAt = data?.createdAt ? new Date(data.createdAt as string) : null;
 
   const currentOwnerProfile = usersData?.find(u => u.userId === currentOwnerId);
@@ -536,7 +539,10 @@ export function EntityDetailPanel({ open, onClose, entityType, entity }: EntityD
                   {createdAt && (
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Calendar className="h-4 w-4" />
-                      <span>Created: {format(createdAt, "MMM d, yyyy")}</span>
+                      <span>
+                        Created: {format(createdAt, "MMM d, yyyy")}
+                        {createdByLabel ? ` · by ${createdByLabel}` : ""}
+                      </span>
                     </div>
                   )}
                 </div>

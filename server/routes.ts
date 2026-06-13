@@ -4852,6 +4852,16 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  app.put("/api/business/review-notes/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const content = String(req.body.content ?? "").trim();
+    if (!content) return res.status(400).json({ message: "Content is required" });
+    const note = await storage.updateStrategyReviewNote(Number(req.params.id), userId, content);
+    if (!note) return res.status(403).json({ message: "Not allowed to edit this note" });
+    res.json(note);
+  });
+
   // RAG History
   app.get("/api/business/rag-history", async (req, res) => {
     const userId = getUserId(req);

@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 export function ChatSpinner({ className, label }: { className?: string; label?: string }) {
   return (
     <div className={cn("flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground", className)}>
-      <Loader2 className="h-5 w-5 animate-spin text-[#4338CA]" />
+      <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
       {label ? <p className="text-xs">{label}</p> : null}
     </div>
   );

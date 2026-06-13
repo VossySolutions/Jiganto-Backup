@@ -123,12 +123,32 @@ export function DashboardSelectorProvider({ children }: { children: ReactNode })
     return defaultDashboards;
   });
 
-  const [defaultDashboard, setDefaultDashboardState] = useState<DashboardType>("modules");
-  const [hiddenModuleKeys, setHiddenModuleKeys] = useState<string[]>([]);
+  const [defaultDashboard, setDefaultDashboardState] = useState<DashboardType>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.defaultDashboard) return parsed.defaultDashboard as DashboardType;
+      }
+    } catch {}
+    return "modules";
+  });
+  const [hiddenModuleKeys, setHiddenModuleKeys] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed.hiddenModuleKeys)) return parsed.hiddenModuleKeys as string[];
+      }
+    } catch {}
+    return [];
+  });
   const [currentDashboard, setCurrentDashboardState] = useState<DashboardType>("modules");
+  const prefsHydratedRef = useRef(false);
 
   useEffect(() => {
-    if (!serverPrefs) return;
+    if (!serverPrefs || prefsHydratedRef.current) return;
+    prefsHydratedRef.current = true;
     if (serverPrefs.defaultDashboard) {
       setDefaultDashboardState(serverPrefs.defaultDashboard as DashboardType);
     }
@@ -205,9 +225,11 @@ export function DashboardSelectorProvider({ children }: { children: ReactNode })
   };
 
   const toggleModuleVisibility = (key: string) => {
-    setHiddenModuleKeys((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
-    );
+    setHiddenModuleKeys((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      void apiRequest("PATCH", "/api/dashboard/preferences", { hiddenModuleKeys: next }).catch(() => {});
+      return next;
+    });
   };
 
   const refreshCustomDashboards = async () => {

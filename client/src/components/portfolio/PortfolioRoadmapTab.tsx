@@ -146,7 +146,9 @@ export function PortfolioRoadmapTab() {
                         if (!m.date) return null;
                         const mp = pct(new Date(m.date + "T00:00:00"));
                         return (
-                          <Diamond key={m.id} className="absolute h-3 w-3 text-primary z-20" style={{ left: `${mp}%`, top: "50%", transform: "translate(-50%, -50%)" }} title={m.name} />
+                          <span key={m.id} className="absolute z-20" style={{ left: `${mp}%`, top: "50%", transform: "translate(-50%, -50%)" }} title={m.name}>
+                            <Diamond className="h-3 w-3 text-primary" />
+                          </span>
                         );
                       })}
                     </div>

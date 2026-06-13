@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 import { z } from "zod";
-import { commercialCustomers } from "@shared/schema";
+import { commercialCustomers, commercialActivityLog } from "@shared/schema";
 import { db } from "../db";
 import { isOrgEmailConfigured } from "../lib/org-email";
 import { isRequestAuthenticated } from "../auth/supabaseAuth";
@@ -334,6 +334,36 @@ export function registerCustomerMgmtRoutes(app: Express): void {
       const slug = String(req.params.slug);
       const detail = await addContactInDb(slug, input);
       if (!detail) return res.status(404).json({ message: "Customer not found" });
+      res.status(201).json({ detail });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message ?? "Invalid input" });
+      }
+      throw err;
+    }
+  });
+
+  app.post("/api/customer-mgmt/customers/:slug/notes", async (req, res) => {
+    if (!requireCommercialAdmin(req, res)) return;
+    try {
+      const { content } = z.object({ content: z.string().min(1) }).parse(req.body);
+      const slug = String(req.params.slug);
+      const [row] = await db.select().from(commercialCustomers).where(eq(commercialCustomers.slug, slug)).limit(1);
+      if (!row) return res.status(404).json({ message: "Customer not found" });
+      const claims = (req.user as { claims?: { first_name?: string; last_name?: string; email?: string } })?.claims;
+      const authorName = claims?.first_name && claims?.last_name
+        ? `${claims.first_name} ${claims.last_name}`.trim()
+        : claims?.email ?? "Staff";
+      const now = new Date();
+      await db.insert(commercialActivityLog).values({
+        customerId: row.id,
+        entryType: "note",
+        title: authorName,
+        detail: content.trim(),
+        entryDate: now.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+        dotColor: "#6366F1",
+      });
+      const detail = await getCustomerDetail(slug);
       res.status(201).json({ detail });
     } catch (err) {
       if (err instanceof z.ZodError) {

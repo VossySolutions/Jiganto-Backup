@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
-import { GripVertical, Pencil, Share2, Trash2, Mail, Settings2 } from "lucide-react";
+import { GripVertical, Pencil, Share2, Trash2, Mail, Cog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -143,7 +143,7 @@ export function BespokeDashboardView({
               </Button>
               {onOpenSettings && (
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={onOpenSettings}>
-                  <Settings2 className="h-4 w-4" />
+                  <Cog className="h-4 w-4" />
                   Settings
                 </Button>
               )}
@@ -159,7 +159,11 @@ export function BespokeDashboardView({
               <DragDropContext onDragEnd={handleDragEnd}>
                 <Droppable droppableId="bespoke-widgets" direction="vertical">
                   {(provided) => (
-                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-4">
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={cn("grid gap-4", bespokeGridClass(data.layout))}
+                    >
                       {sorted.map((widget, index) => (
                         <Draggable key={widget.id} draggableId={String(widget.id)} index={index}>
                           {(dragProvided, snapshot) => (
@@ -167,7 +171,8 @@ export function BespokeDashboardView({
                               ref={dragProvided.innerRef}
                               {...dragProvided.draggableProps}
                               className={cn(
-                                "rounded-xl border bg-card",
+                                "rounded-xl border bg-card min-h-[160px]",
+                                widgetSpanClass(widget.width, columns),
                                 snapshot.isDragging ? "border-primary shadow-lg" : "border-border/50",
                               )}
                             >

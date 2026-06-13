@@ -784,6 +784,8 @@ export function TipTapEditor({
     { title: 'Math / LaTeX',     description: 'Mathematical formula',        icon: Sigma,         keywords: ['math','latex','formula'],  command: (ed, range) => ed.chain().focus().deleteRange(range).insertMathBlock().run() },
   ], []);
 
+  const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -808,8 +810,10 @@ export function TipTapEditor({
         },
       }),
       Image.configure({
+        inline: false,
+        allowBase64: true,
         HTMLAttributes: {
-          class: 'max-w-full h-auto rounded-lg',
+          class: 'max-w-full h-auto rounded-lg cursor-pointer',
         },
       }),
       Extension.create({
@@ -1001,9 +1005,21 @@ export function TipTapEditor({
     ],
     content: content || '',
     editable: true,
+    onCreate: ({ editor: ed }) => {
+      editorRef.current = ed;
+    },
     editorProps: {
       attributes: {
         spellcheck: 'true',
+      },
+      handleKeyDown: (_view, event) => {
+        const ed = editorRef.current;
+        if (!ed) return false;
+        if ((event.key === 'Backspace' || event.key === 'Delete') && ed.isActive('image')) {
+          ed.chain().focus().deleteSelection().run();
+          return true;
+        }
+        return false;
       },
     },
     onUpdate: ({ editor }) => {

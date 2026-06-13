@@ -289,7 +289,7 @@ export function MessageThread({
             <div className="flex justify-center py-3">
               {loadingMore ? (
                 <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
-                  <div className="h-4 w-4 border-2 border-[#4338CA] border-t-transparent rounded-full animate-spin" />
+                  <div className="h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                   Loading older messages…
                 </div>
               ) : (
@@ -305,7 +305,7 @@ export function MessageThread({
           )}
           {messagesLoading ? (
             <div className="flex justify-center py-12">
-              <div className="h-6 w-6 border-2 border-[#4338CA] border-t-transparent rounded-full animate-spin" />
+              <div className="h-6 w-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : messages.length === 0 ? (
             <div className="text-center py-16">
@@ -356,7 +356,7 @@ export function MessageThread({
                     {!isOwn && showHeader ? (
                       <Avatar className="h-8 w-8 shrink-0 mt-1">
                         <AvatarImage src={message.user.profileImageUrl || undefined} />
-                        <AvatarFallback className={cn("bg-[#4338CA]/10 text-[#4338CA]", chatFont.badge)}>
+                        <AvatarFallback className={cn("bg-indigo-100 text-indigo-600", chatFont.badge)}>
                           {getUserInitials(message.user.firstName, message.user.lastName)}
                         </AvatarFallback>
                       </Avatar>
@@ -382,10 +382,9 @@ export function MessageThread({
                             message.authorSource === "jiganto" && !isOwn
                               ? "bg-violet-500/10 border border-violet-500/20 rounded-bl-md"
                               : isOwn
-                                ? "text-white rounded-br-md"
-                                : "bg-card border border-border/60 rounded-bl-md",
+                                ? "bg-indigo-100 text-indigo-950 border border-indigo-200/80 rounded-br-md dark:bg-indigo-950/40 dark:text-indigo-50 dark:border-indigo-800/60"
+                                : "bg-muted/50 border border-border/60 rounded-bl-md",
                           )}
-                          style={isOwn ? { backgroundColor: CHAT_ACCENT } : undefined}
                         >
                           {message.authorSource === "jiganto" && !isOwn && (
                             <span className={cn("font-semibold text-violet-600 block mb-1", chatFont.badge)}>Jiganto AI</span>
@@ -417,7 +416,7 @@ export function MessageThread({
                               type="button"
                               className={cn(
                                 "text-xs rounded-full border px-2 py-0.5 hover:bg-muted/60 transition-colors",
-                                r.reactedByMe && "border-[#4338CA] bg-[#4338CA]/10",
+                                r.reactedByMe && "border-indigo-500 bg-indigo-100",
                               )}
                               onClick={() =>
                                 react.mutate({
@@ -437,7 +436,7 @@ export function MessageThread({
                       {message.threadReplyCount > 0 && (
                         <button
                           type="button"
-                          className={cn("hover:underline mt-1 px-1 text-left text-[#4338CA]", chatFont.badge)}
+                          className={cn("hover:underline mt-1 px-1 text-left text-indigo-600", chatFont.badge)}
                           onClick={() => onOpenThread(message.id)}
                         >
                           {message.threadReplyCount} repl{message.threadReplyCount === 1 ? "y" : "ies"}

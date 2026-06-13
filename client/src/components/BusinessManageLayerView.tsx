@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { LayoutList, LayoutGrid, Upload, Download, FileText, Edit2, Loader2, Search, Target, Flag, Crosshair, Zap, TrendingUp, BarChart3, Layers, ChevronDown, ChevronRight, MessageSquare, Send, Trash2, ShieldCheck } from "lucide-react";
 import { BusinessLoadingState } from "@/components/business/BusinessLoadingState";
 import { BusinessTableScroll } from "@/components/business/BusinessTableScroll";
@@ -293,7 +294,7 @@ type FilterDef = { key: string; label: string; options: {value:string;label:stri
 
 type ReviewNote = {
   id: number; entityType: string; entityId: number; content: string;
-  ragSnapshot: string | null; authorName: string; createdAt: string;
+  ragSnapshot: string | null; authorName: string; authorId?: string | null; createdAt: string;
 };
 
 interface ManageLayerViewProps<T extends {id:number}> {
@@ -353,6 +354,9 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
   parentItems, parentKey, parentLabel = "Parent", entityType, loading = false,
 }: ManageLayerViewProps<T>) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState("");
 
   const { data: entityRefs } = useQuery<Record<string, number>>({
     queryKey: ["/api/business/entity-refs"],
@@ -413,6 +417,18 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
   const deleteNoteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/business/review-notes/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/business/review-notes"] }),
+  });
+
+  const updateNoteMutation = useMutation({
+    mutationFn: ({ id, content }: { id: number; content: string }) =>
+      apiRequest("PUT", `/api/business/review-notes/${id}`, { content }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/business/review-notes"] });
+      setEditingNoteId(null);
+      setEditingNoteText("");
+      toast({ title: "Check-in updated" });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to update check-in.", variant: "destructive" }),
   });
 
   const saveCheckin = async () => {
@@ -673,7 +689,7 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
           <Select key={f.key} value={activeFilters[f.key] ?? "all"} onValueChange={v => setActiveFilters(p => ({ ...p, [f.key]: v }))}>
             <SelectTrigger className="h-8 w-[130px] text-xs"><SelectValue placeholder={f.label} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All {f.label}s</SelectItem>
+              <SelectItem value="all">{filterAllLabel(f.label)}</SelectItem>
               {f.options.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -753,11 +769,11 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
 
       {/* Table View */}
       {view === "table" && (
-        <div className="rounded-xl border border-border bg-card w-full min-w-0 max-w-full">
+        <div className="rounded-xl border border-border bg-card w-full min-w-0 max-w-full max-h-[min(70vh,720px)] overflow-y-auto">
           <BusinessTableScroll minWidth={1100}>
             <table className="text-xs border-collapse w-max min-w-full table-auto">
-              <thead>
-                <tr className="border-b-2 border-border bg-muted/60">
+              <thead className="sticky top-0 z-10">
+                <tr className="border-b-2 border-border bg-muted/95 backdrop-blur-sm">
                   <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap w-[80px]">Ref</th>
                   {columns.map(c => (
                     <th key={c.key} className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap" style={{ width: c.width }}>
@@ -962,6 +978,15 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <span className="text-[10px] text-muted-foreground">{formatCheckinDate(note.createdAt)}</span>
+                      {user?.id === note.authorId && editingNoteId !== note.id && (
+                        <button
+                          onClick={() => { setEditingNoteId(note.id); setEditingNoteText(note.content); }}
+                          className="text-muted-foreground/50 hover:text-primary p-0.5 rounded transition-colors"
+                          title="Edit note"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </button>
+                      )}
                       <button
                         onClick={() => deleteNoteMutation.mutate(note.id)}
                         disabled={deleteNoteMutation.isPending}
@@ -971,7 +996,17 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
                       </button>
                     </div>
                   </div>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{note.content}</p>
+                  {editingNoteId === note.id ? (
+                    <div className="space-y-2">
+                      <Textarea value={editingNoteText} onChange={e => setEditingNoteText(e.target.value)} rows={3} className="text-sm" />
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => updateNoteMutation.mutate({ id: note.id, content: editingNoteText.trim() })} disabled={!editingNoteText.trim() || updateNoteMutation.isPending}>Save</Button>
+                        <Button size="sm" variant="outline" onClick={() => { setEditingNoteId(null); setEditingNoteText(""); }}>Cancel</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{note.content}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -1064,17 +1099,25 @@ function DefaultCard({ item, refPrefix, accent, onEdit, entityRefs, entityType }
   );
 }
 
-// ── Shared filter options ─────────────────────────────────────────────────────
+function filterAllLabel(label: string): string {
+  if (label === "Status") return "All Statuses";
+  if (label === "RAG") return "All RAG";
+  if (label === "Type") return "All Types";
+  return `All ${label}`;
+}
 
 const STATUS_FILTER: FilterDef = {
   key: "status", label: "Status",
   options: [
     { value: "on_track", label: "On Track" },
     { value: "at_risk",  label: "At Risk" },
-    { value: "off_track",label: "Off Track" },
+    { value: "off_track",label: "Behind" },
+    { value: "on_hold",  label: "On Hold" },
+    { value: "not_started", label: "Not Started" },
     { value: "active",   label: "Active" },
     { value: "in_progress", label: "In Progress" },
     { value: "completed",label: "Completed" },
+    { value: "cancelled",label: "Cancelled" },
     { value: "draft",    label: "Draft" },
   ],
 };
@@ -1289,7 +1332,24 @@ export function EnhancedInitiativesTab({
 }: { initiatives: InitiativeEx[]; goals: GoalEx[]; addButton?: React.ReactNode; loading?: boolean }) {
   const goalMap = useMemo(() => Object.fromEntries(goals.map(g => [g.id, g])), [goals]);
   const goalOptions = useMemo(() => goals.map(g => ({ value: String(g.id), label: g.title })), [goals]);
-  const fieldsWithGoal = [...INITIATIVES_EDIT_FIELDS, { key:"goalId", label:"Parent Goal", type:"select" as const, options: goalOptions }];
+  const { data: projects = [] } = useQuery<Array<{ id: number; name: string; workType?: string | null; code?: string | null }>>({
+    queryKey: ["/api/pm/projects?tenantId=1"],
+  });
+  const linkedRecordOptions = useMemo(() => [
+    { value: "", label: "None" },
+    ...projects.map(p => ({
+      value: `project:${p.id}`,
+      label: `${p.name}${p.workType ? ` (${p.workType.replace(/_/g, " ")})` : ""}${p.code ? ` · ${p.code}` : ""}`,
+    })),
+  ], [projects]);
+  const fieldsWithGoal = useMemo(() => [
+    ...INITIATIVES_EDIT_FIELDS.map(f =>
+      f.key === "linkedRecordRef"
+        ? { ...f, type: "select" as const, options: linkedRecordOptions }
+        : f,
+    ),
+    { key:"goalId", label:"Parent Goal", type:"select" as const, options: goalOptions },
+  ], [goalOptions, linkedRecordOptions]);
 
   const columns: ColDef<InitiativeEx>[] = [
     { key:"title",         label:"Title",         width:"18%", render:r=><TitleCell text={r.title} /> },
@@ -1400,7 +1460,7 @@ export function EnhancedKpisTab({
     <ManageLayerView
       items={kpis} refPrefix="KPI" title="KPIs" subtitle="Key performance indicators"
       icon={BarChart3} accent="#f472b6" columns={columns} editFields={fieldsWithGoal}
-      filters={[STATUS_FILTER,
+      filters={[STATUS_FILTER, RAG_FILTER,
         { key:"indicatorType", label:"Type", options:[{value:"leading",label:"Leading"},{value:"lagging",label:"Lagging"},{value:"process",label:"Process"},{value:"output",label:"Output"},{value:"outcome",label:"Outcome"}] },
       ]}
       apiBase="/api/business/kpis" queryKey="/api/business/kpis"

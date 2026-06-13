@@ -1501,7 +1501,7 @@ export function Crm360ViewTab({
                   {accountDocuments.map(doc => (
                     <a
                       key={doc.id}
-                      href={`/modules/documents?doc=${doc.id}`}
+                      href={`/modules/documents?document=${doc.id}`}
                       className="flex items-center justify-between p-3 rounded-lg border border-border/30 hover:bg-muted/20 transition-colors"
                       data-testid={`360-document-${doc.id}`}
                     >

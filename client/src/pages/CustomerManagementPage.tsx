@@ -30,7 +30,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -213,6 +222,23 @@ export default function CustomerManagementPage() {
   const [changePlanOpen, setChangePlanOpen] = useState(false);
   const [addDiscountOpen, setAddDiscountOpen] = useState(false);
   const [addContactOpen, setAddContactOpen] = useState(false);
+  const [followUpPending, setFollowUpPending] = useState<{
+    action: "health_follow_up" | "renewal_follow_up";
+    customerExternalId: string;
+    customerName: string;
+    defaultNote: string;
+  } | null>(null);
+  const [followUpNote, setFollowUpNote] = useState("");
+
+  const openFollowUpDialog = (input: {
+    action: "health_follow_up" | "renewal_follow_up";
+    customerExternalId: string;
+    customerName: string;
+    defaultNote: string;
+  }) => {
+    setFollowUpNote("");
+    setFollowUpPending(input);
+  };
 
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
     queryKey: ["/api/customer-mgmt/dashboard"],
@@ -292,6 +318,23 @@ export default function CustomerManagementPage() {
       return (await res.json()) as CustomerDetail;
     },
     enabled: allowed && view === "detail",
+  });
+
+  const [customerNote, setCustomerNote] = useState("");
+
+  const addCustomerNoteMut = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await apiRequest("POST", `/api/customer-mgmt/customers/${selectedSlug}/notes`, { content });
+      return res.json();
+    },
+    onSuccess: () => {
+      setCustomerNote("");
+      void queryClient.invalidateQueries({ queryKey: ["/api/customer-mgmt/customers", selectedSlug] });
+      toast({ title: "Note added" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Could not save note", description: err.message, variant: "destructive" });
+    },
   });
 
   const saveSettingsMut = useMutation({
@@ -1117,6 +1160,33 @@ export default function CustomerManagementPage() {
                       tone="amber"
                     />
                   </SectionCard>
+                  <SectionCard title="Customer notes">
+                    <div className="space-y-3">
+                      <Textarea
+                        value={customerNote}
+                        onChange={(e) => setCustomerNote(e.target.value)}
+                        placeholder="Record arrangements, conversations, or follow-ups…"
+                        rows={3}
+                        className="text-sm"
+                      />
+                      <Button
+                        size="sm"
+                        disabled={!customerNote.trim() || addCustomerNoteMut.isPending}
+                        onClick={() => addCustomerNoteMut.mutate(customerNote.trim())}
+                      >
+                        Add note
+                      </Button>
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {detail.activityLog.filter(a => a.type === "note").map((a) => (
+                          <div key={a.id} className="rounded-lg border border-border/60 p-2.5 text-xs">
+                            <p className="font-medium text-foreground">{a.title}</p>
+                            <p className="text-muted-foreground mt-0.5 whitespace-pre-wrap">{a.detail}</p>
+                            <p className="text-[10px] text-muted-foreground/70 mt-1">{a.date}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </SectionCard>
                   <SectionCard title="Access & extension history">
                     <div className="space-y-3">
                       {detail.activityLog.map((a) => (
@@ -1199,10 +1269,11 @@ export default function CustomerManagementPage() {
                                 variant={r.actionVariant === "danger" ? "destructive" : "outline"}
                                 className="h-7 text-xs"
                                 onClick={() =>
-                                  customerActionMut.mutate({
+                                  openFollowUpDialog({
                                     action: "health_follow_up",
                                     customerExternalId: r.customerId,
-                                    note: r.actionLabel,
+                                    customerName: r.customerName,
+                                    defaultNote: r.actionLabel,
                                   })
                                 }
                                 disabled={customerActionMut.isPending}
@@ -1495,10 +1566,11 @@ export default function CustomerManagementPage() {
                                 }
                                 className="h-7 text-xs"
                                 onClick={() =>
-                                  customerActionMut.mutate({
+                                  openFollowUpDialog({
                                     action: "renewal_follow_up",
                                     customerExternalId: r.customerId,
-                                    note: r.actionLabel,
+                                    customerName: r.customerName,
+                                    defaultNote: r.actionLabel,
                                   })
                                 }
                                 disabled={customerActionMut.isPending}
@@ -2030,6 +2102,67 @@ export default function CustomerManagementPage() {
         onOpenChange={(open) => !open && setDiscountRule(null)}
         rule={discountRule === "new" ? null : discountRule}
       />
+      <Dialog open={followUpPending !== null} onOpenChange={(open) => !open && setFollowUpPending(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {followUpPending?.action === "health_follow_up"
+                ? "Schedule customer check-in"
+                : "Schedule renewal follow-up"}
+            </DialogTitle>
+            <DialogDescription>
+              Logs a follow-up on the customer timeline and updates last-contact tracking. Add a note
+              describing the planned outreach or meeting.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm">
+              <span className="text-muted-foreground">Customer: </span>
+              <span className="font-medium">{followUpPending?.customerName}</span>
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="follow-up-note">Note (optional)</Label>
+              <Textarea
+                id="follow-up-note"
+                value={followUpNote}
+                onChange={(e) => setFollowUpNote(e.target.value)}
+                placeholder={followUpPending?.defaultNote}
+                rows={3}
+                className="text-sm resize-none"
+              />
+            </div>
+            <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-1">
+              <li>Activity is recorded in the commercial activity log</li>
+              <li>Health and renewal queues refresh after confirmation</li>
+              <li>Book a calendar invite separately if you need a scheduled meeting</li>
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFollowUpPending(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!followUpPending) return;
+                customerActionMut.mutate({
+                  action: followUpPending.action,
+                  customerExternalId: followUpPending.customerExternalId,
+                  note: followUpNote.trim() || followUpPending.defaultNote,
+                });
+                setFollowUpPending(null);
+              }}
+              disabled={customerActionMut.isPending}
+            >
+              {customerActionMut.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+              ) : (
+                <CalendarClock className="h-4 w-4 mr-1.5" />
+              )}
+              Confirm &amp; log follow-up
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -64,6 +64,9 @@ export function BespokeDashboardSettings({
       }
       toast({ title: "Dashboard updated" });
     },
+    onError: () => {
+      toast({ title: "Could not update dashboard", description: "You may not have permission to edit this dashboard.", variant: "destructive" });
+    },
   });
 
   const duplicateMutation = useMutation({
@@ -79,6 +82,9 @@ export function BespokeDashboardSettings({
       setCurrentDashboard(customDashboardId(copy.id));
       toast({ title: "Dashboard duplicated" });
     },
+    onError: () => {
+      toast({ title: "Could not duplicate dashboard", variant: "destructive" });
+    },
   });
 
   const deleteMutation = useMutation({
@@ -93,6 +99,9 @@ export function BespokeDashboardSettings({
       setCurrentDashboard("modules");
       onDeleted?.();
       toast({ title: "Dashboard deleted" });
+    },
+    onError: () => {
+      toast({ title: "Could not delete dashboard", description: "You may not have permission to delete this dashboard.", variant: "destructive" });
     },
   });
 

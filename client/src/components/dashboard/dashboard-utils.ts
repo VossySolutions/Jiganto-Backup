@@ -21,16 +21,18 @@ export function bespokeGridClass(layout: string): string {
     case "1-col":
       return "grid-cols-1";
     case "3-col":
-      return "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
+      return "grid-cols-1 lg:grid-cols-3";
     default:
-      return "grid-cols-1 md:grid-cols-2";
+      return "grid-cols-1 lg:grid-cols-2";
   }
 }
 
 export function widgetSpanClass(width: number, columns: number): string {
-  if (columns <= 1 || width <= 1) return "";
-  if (columns === 2 && width >= 2) return "md:col-span-2";
-  if (columns >= 3 && width >= 3) return "md:col-span-2 xl:col-span-3";
-  if (columns >= 3 && width >= 2) return "md:col-span-2";
+  if (columns <= 1) return "";
+  const span = Math.min(Math.max(width, 1), columns);
+  if (span >= columns) {
+    return columns === 3 ? "lg:col-span-3" : "lg:col-span-2";
+  }
+  if (span === 2 && columns >= 2) return "lg:col-span-2";
   return "";
 }

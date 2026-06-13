@@ -198,7 +198,7 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
               ))}</tbody>
             </table>
           </div>
-          <Button variant="link" className="p-0 h-auto text-sm" onClick={() => setLocation(`/modules/projects/${projectId}`)}>
+          <Button variant="ghost" className="p-0 h-auto text-sm text-primary hover:text-primary" onClick={() => setLocation(`/modules/projects/${projectId}`)}>
             View full RAID logs <ExternalLink className="h-3.5 w-3.5 ml-1" />
           </Button>
         </CardContent>

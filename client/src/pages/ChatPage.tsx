@@ -523,8 +523,8 @@ export function ChatPage() {
                   setTimeout(() => {
                     const el = document.querySelector(`[data-testid="message-${messageId}"]`);
                     el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                    el?.classList.add("ring-2", "ring-[#4338CA]/50");
-                    setTimeout(() => el?.classList.remove("ring-2", "ring-[#4338CA]/50"), 2000);
+                    el?.classList.add("ring-2", "ring-indigo-400/50");
+                    setTimeout(() => el?.classList.remove("ring-2", "ring-indigo-400/50"), 2000);
                   }, 100);
                 }}
               />
@@ -536,7 +536,7 @@ export function ChatPage() {
           ) : showThread ? (
             <div className="flex-1 flex items-center justify-center min-w-0">
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-md px-6">
-                <MessageSquare className="h-14 w-14 mx-auto text-[#4338CA]/60 mb-4" />
+                <MessageSquare className="h-14 w-14 mx-auto text-indigo-400/60 mb-4" />
                 <h3 className="font-semibold text-xl mb-2">Welcome to Chat</h3>
                 <p className="text-muted-foreground text-sm mb-6">
                   Select a conversation or start a new one.

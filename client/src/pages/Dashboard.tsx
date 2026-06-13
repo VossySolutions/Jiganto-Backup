@@ -9,7 +9,7 @@ import { PortfolioDashboardTab } from "@/components/portfolio/PortfolioDashboard
 import { useClientContext } from "@/hooks/use-client-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, Settings2, Star, Check, Presentation, X, Plus, Sparkles, Search } from "lucide-react";
+import { ChevronDown, Cog, Star, Check, Presentation, X, Plus, Sparkles, Search } from "lucide-react";
 import { ModuleDiscovery, useModuleDiscoveryShortcuts } from "@/components/ModuleDiscovery";
 
 import {
@@ -428,7 +428,7 @@ export function Dashboard() {
 
                   <>
 
-                    <DropdownMenuLabel className="text-xs text-muted-foreground">System views</DropdownMenuLabel>
+                    <DropdownMenuLabel className="text-xs font-medium text-muted-foreground bg-muted/50 py-1.5 px-2 -mx-1">System views</DropdownMenuLabel>
 
                     {filteredDashboards.system.map((dashboard, idx) => (
 
@@ -482,7 +482,7 @@ export function Dashboard() {
 
                     <DropdownMenuSeparator />
 
-                    <DropdownMenuLabel className="text-xs text-muted-foreground">Module dashboards</DropdownMenuLabel>
+                    <DropdownMenuLabel className="text-xs font-medium text-muted-foreground bg-muted/50 py-1.5 px-2 -mx-1">Module dashboards</DropdownMenuLabel>
 
                     {filteredDashboards.module.map((dashboard) => (
 
@@ -530,7 +530,7 @@ export function Dashboard() {
 
                     <DropdownMenuSeparator />
 
-                    <DropdownMenuLabel className="text-xs text-muted-foreground">My dashboards</DropdownMenuLabel>
+                    <DropdownMenuLabel className="text-xs font-medium text-muted-foreground bg-muted/50 py-1.5 px-2 -mx-1">My dashboards</DropdownMenuLabel>
 
                     {filteredDashboards.custom.map((dashboard) => (
 
@@ -671,7 +671,7 @@ export function Dashboard() {
 
               >
 
-                <Settings2 className="h-4 w-4" />
+                <Cog className="h-4 w-4" />
 
               </Button>
 
@@ -745,6 +745,8 @@ export function Dashboard() {
 
         onToggleModuleVisibility={toggleModuleVisibility}
         customDashboardId={customId}
+        customDashboards={enabledDashboards.filter((d) => d.group === "custom")}
+        onSelectCustomDashboard={setCurrentDashboard}
         contextClientId={contextClientId}
         contextProjectId={contextProjectId}
       />

@@ -52,7 +52,7 @@ export function PollCard({ pollId }: { pollId: number }) {
   return (
     <div className="rounded-xl border bg-card shadow-sm p-4 w-full max-w-md mt-1" data-testid={`poll-card-${pollId}`}>
       <div className="flex items-start gap-2 mb-3">
-        <BarChart2 className="h-4 w-4 text-[#4338CA] mt-0.5 shrink-0" />
+        <BarChart2 className="h-4 w-4 text-indigo-500 mt-0.5 shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm leading-snug">{poll.question}</p>
           <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
@@ -77,8 +77,8 @@ export function PollCard({ pollId }: { pollId: number }) {
               disabled={!canClick}
               className={cn(
                 "w-full text-left rounded-lg border px-3 py-2 text-sm transition-all relative overflow-hidden",
-                canClick ? "hover:border-[#4338CA] hover:bg-[#4338CA]/5 cursor-pointer" : "cursor-default",
-                isMyVote ? "border-[#4338CA] bg-[#4338CA]/10 font-medium" : "border-border bg-background",
+                canClick ? "hover:border-indigo-500 hover:bg-indigo-50 cursor-pointer" : "cursor-default",
+                isMyVote ? "border-indigo-500 bg-indigo-100 font-medium" : "border-border bg-background",
               )}
               data-testid={`poll-option-${pollId}-${i}`}
             >
@@ -86,7 +86,7 @@ export function PollCard({ pollId }: { pollId: number }) {
                 <div
                   className={cn(
                     "absolute inset-y-0 left-0 rounded-lg transition-all duration-700",
-                    isMyVote ? "bg-[#4338CA]/15" : "bg-muted/60",
+                    isMyVote ? "bg-indigo-100" : "bg-muted/60",
                   )}
                   style={{ width: `${pct}%` }}
                 />
@@ -94,7 +94,7 @@ export function PollCard({ pollId }: { pollId: number }) {
               <div className="relative flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5">
                   {vote.isPending && isMyVote ? <ChatButtonSpinner className="h-3 w-3" /> : null}
-                  {isMyVote && !vote.isPending && <Check className="h-3 w-3 text-[#4338CA] shrink-0" />}
+                  {isMyVote && !vote.isPending && <Check className="h-3 w-3 text-indigo-500 shrink-0" />}
                   <span>{option}</span>
                 </span>
                 {showBars && <span className="text-xs text-muted-foreground shrink-0 font-medium">{pct}%</span>}

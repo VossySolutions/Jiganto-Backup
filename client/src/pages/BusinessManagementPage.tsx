@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { copyTextToClipboard, documentModuleUrl } from "@/lib/module-links";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,7 @@ import {
   Eye, Lightbulb, Shield, Users, Workflow, Wrench, CheckCircle2,
   BarChart3, PieChart, Activity, Clock, Calendar, Flag, Link2,
   FileText, ExternalLink, ShieldCheck, MessageSquarePlus, Trash2, History,
-  Bell, Send, Upload, Brain, X, RefreshCw, CheckCircle, TriangleAlert, Info, Zap
+  Bell, Send, Upload, Brain, X, RefreshCw, CheckCircle, TriangleAlert, Info, Zap, Copy
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { BusinessLoadingState } from "@/components/business/BusinessLoadingState";
@@ -538,18 +539,6 @@ export default function BusinessManagementPage() {
               <span className="hidden sm:inline">Documents</span>
             </button>
 
-            <div className="ml-auto shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-xs h-8 border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-900/30"
-                onClick={openAiInsights}
-                data-testid="button-ai-insights-tab"
-              >
-                <Brain className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">AI Insights</span>
-              </Button>
-            </div>
           </div>
           </ScrollArea>
         </div>
@@ -567,6 +556,7 @@ export default function BusinessManagementPage() {
                     initiatives={initiatives} 
                     risks={risks}
                     strategyItems={strategyItems}
+                    onNavigate={setActiveTab}
                   />
                 )}
               </TabsContent>
@@ -862,12 +852,13 @@ function AddInitiativeButton({ goals, onSave, isCreating }: {
 
 // ── Dashboard Tab ─────────────────────────────────────────────────────────────
 
-function DashboardTab({ stats, goals, initiatives, risks, strategyItems }: { 
+function DashboardTab({ stats, goals, initiatives, risks, strategyItems, onNavigate }: { 
   stats?: BusinessStats; 
   goals: Goal[]; 
   initiatives: Initiative[];
   risks: Risk[];
   strategyItems: StrategyItem[];
+  onNavigate?: (tab: string) => void;
 }) {
   const metrics = [
     { title: "Strategy Items", value: stats?.strategyItems || 0, icon: Target, color: "bg-status-purple", testId: "strategy" },
@@ -878,6 +869,22 @@ function DashboardTab({ stats, goals, initiatives, risks, strategyItems }: {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <p className="text-sm text-muted-foreground max-w-2xl">
+          Live summary from your strategy data. To add or edit goals, KPIs, and initiatives, use Strategy Map
+          or the Manage tabs — this dashboard updates automatically.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 shrink-0"
+          onClick={() => onNavigate?.("strategy-map")}
+          data-testid="button-business-dashboard-configure"
+        >
+          <Settings className="h-4 w-4" />
+          Configure data
+        </Button>
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {metrics.map((metric, i) => (
           <motion.div
@@ -2178,7 +2185,19 @@ function StrategyLinksPanel() {
   const [filterLayer, setFilterLayer] = useState("all");
   const [filterSource, setFilterSource] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [form, setForm] = useState({ layerType: "strategy", layerItemId: "", docType: "external", externalUrl: "", externalTitle: "", externalDescription: "" });
+  const [form, setForm] = useState({
+    layerType: "strategy",
+    layerItemId: "",
+    docType: "external",
+    jigantoDocId: "",
+    externalUrl: "",
+    externalTitle: "",
+    externalDescription: "",
+  });
+
+  const { data: jigantoDocuments = [] } = useQuery<Document[]>({
+    queryKey: ["/api/documents"],
+  });
 
   const { data: links = [], isLoading } = useQuery<StrategyDocLink[]>({
     queryKey: ["/api/business/doc-links"],
@@ -2188,7 +2207,15 @@ function StrategyLinksPanel() {
     mutationFn: (body: Record<string, unknown>) => apiRequest("POST", "/api/business/doc-links", body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/business/doc-links"] });
-      setForm({ layerType: "strategy", layerItemId: "", docType: "external", externalUrl: "", externalTitle: "", externalDescription: "" });
+      setForm({
+        layerType: "strategy",
+        layerItemId: "",
+        docType: "external",
+        jigantoDocId: "",
+        externalUrl: "",
+        externalTitle: "",
+        externalDescription: "",
+      });
       setAddOpen(false);
       toast({ title: "Link added" });
     },
@@ -2204,7 +2231,22 @@ function StrategyLinksPanel() {
   });
 
   const save = () => {
-    if (!form.externalUrl.trim() || !form.layerItemId) return;
+    if (!form.layerItemId) return;
+    if (form.docType === "jiganto") {
+      if (!form.jigantoDocId) return;
+      const doc = jigantoDocuments.find((d) => d.id === Number(form.jigantoDocId));
+      addMutation.mutate({
+        layerType: form.layerType,
+        layerItemId: Number(form.layerItemId),
+        docType: "jiganto",
+        jigantoDocumentId: Number(form.jigantoDocId),
+        externalUrl: documentModuleUrl(Number(form.jigantoDocId)),
+        externalTitle: form.externalTitle.trim() || doc?.title || null,
+        externalDescription: form.externalDescription.trim() || null,
+      });
+      return;
+    }
+    if (!form.externalUrl.trim()) return;
     addMutation.mutate({
       layerType: form.layerType,
       layerItemId: Number(form.layerItemId),
@@ -2214,6 +2256,10 @@ function StrategyLinksPanel() {
       externalDescription: form.externalDescription.trim() || null,
     });
   };
+
+  const canSaveLink =
+    !!form.layerItemId &&
+    (form.docType === "jiganto" ? !!form.jigantoDocId : !!form.externalUrl.trim());
 
   const filtered = useMemo(() => links.filter(link => {
     if (filterLayer !== "all" && link.layerType !== filterLayer) return false;
@@ -2266,11 +2312,11 @@ function StrategyLinksPanel() {
             <Plus className="h-3 w-3" /> Add Link
           </Button>
           <DialogContent className="max-w-md">
-            <SubmitForm onSubmit={save} disabled={addMutation.isPending || !form.externalUrl.trim() || !form.layerItemId}>
+            <SubmitForm onSubmit={save} disabled={addMutation.isPending || !canSaveLink}>
             <DialogHeader><DialogTitle>Add Document Link</DialogTitle></DialogHeader>
             <div className="space-y-3 py-2">
               <div className="space-y-1"><Label className="text-xs">Source Type</Label>
-                <Select value={form.docType} onValueChange={v => setForm(f => ({ ...f, docType: v }))}>
+                <Select value={form.docType} onValueChange={v => setForm(f => ({ ...f, docType: v, jigantoDocId: "", externalUrl: "" }))}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {DOC_SOURCE_TYPES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
@@ -2290,9 +2336,23 @@ function StrategyLinksPanel() {
                   <Input type="number" placeholder="e.g. 1" value={form.layerItemId} onChange={e => setForm(f => ({ ...f, layerItemId: e.target.value }))} className="h-8 text-xs" />
                 </div>
               </div>
-              <div className="space-y-1"><Label className="text-xs">URL / Path *</Label>
-                <Input placeholder="https://..." value={form.externalUrl} onChange={e => setForm(f => ({ ...f, externalUrl: e.target.value }))} className="h-8 text-xs" />
-              </div>
+              {form.docType === "jiganto" ? (
+                <div className="space-y-1">
+                  <Label className="text-xs">Jiganto document *</Label>
+                  <Select value={form.jigantoDocId} onValueChange={v => setForm(f => ({ ...f, jigantoDocId: v }))}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Choose document…" /></SelectTrigger>
+                    <SelectContent>
+                      {jigantoDocuments.map((d) => (
+                        <SelectItem key={d.id} value={String(d.id)}>{d.title}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-1"><Label className="text-xs">URL / Path *</Label>
+                  <Input placeholder="https://..." value={form.externalUrl} onChange={e => setForm(f => ({ ...f, externalUrl: e.target.value }))} className="h-8 text-xs" />
+                </div>
+              )}
               <div className="space-y-1"><Label className="text-xs">Title / Label (optional)</Label>
                 <Input placeholder="Descriptive name" value={form.externalTitle} onChange={e => setForm(f => ({ ...f, externalTitle: e.target.value }))} className="h-8 text-xs" />
               </div>
@@ -2349,8 +2409,14 @@ function StrategyLinksPanel() {
                     <div className="truncate">
                       {link.externalTitle && <span className="font-medium block truncate">{link.externalTitle}</span>}
                       {link.externalUrl && (
-                        <a href={link.externalUrl} target="_blank" rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline truncate block">
+                        <a
+                          href={link.docType === "jiganto" && link.jigantoDocumentId
+                            ? documentModuleUrl(link.jigantoDocumentId)
+                            : link.externalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline truncate block"
+                        >
                           {link.externalTitle ? link.externalUrl : link.externalUrl}
                         </a>
                       )}
@@ -2362,9 +2428,32 @@ function StrategyLinksPanel() {
                     {link.createdAt ? new Date(link.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}
                   </td>
                   <td className="px-3 py-2">
-                    <button onClick={() => deleteMutation.mutate(link.id)} className="text-muted-foreground hover:text-destructive transition-colors">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {(link.externalUrl || link.jigantoDocumentId) && (
+                        <button
+                          type="button"
+                          title="Copy link"
+                          className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                          onClick={async () => {
+                            const url = link.jigantoDocumentId
+                              ? documentModuleUrl(link.jigantoDocumentId)
+                              : link.externalUrl?.startsWith("http")
+                                ? link.externalUrl
+                                : link.externalUrl
+                                  ? `${window.location.origin}${link.externalUrl}`
+                                  : "";
+                            if (url && (await copyTextToClipboard(url))) {
+                              toast({ title: "Link copied" });
+                            }
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      <button onClick={() => deleteMutation.mutate(link.id)} className="text-muted-foreground hover:text-destructive transition-colors p-1">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -2388,6 +2477,7 @@ function StrategyLinksPanel() {
 }
 
 function DocumentsTab({ initiatives }: { initiatives: Initiative[] }) {
+  const { toast } = useToast();
   const [activeSection, setActiveSection] = useState<"initiative" | "links">("initiative");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
@@ -2395,6 +2485,28 @@ function DocumentsTab({ initiatives }: { initiatives: Initiative[] }) {
   const [sortField, setSortField] = useState<"title" | "linkType" | "initiative" | "createdAt">("title");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [viewMode, setViewMode] = useState<"table" | "grouped">("table");
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkDocId, setLinkDocId] = useState("");
+  const [linkInitiativeId, setLinkInitiativeId] = useState("");
+  const [linkType, setLinkType] = useState("deliverable");
+
+  const linkMutation = useMutation({
+    mutationFn: (body: { documentId: number; initiativeId: number; linkType: string }) =>
+      apiRequest("POST", "/api/documents/initiative-links", body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["/api/documents/initiative-links"] });
+      setLinkOpen(false);
+      setLinkDocId("");
+      setLinkInitiativeId("");
+      toast({ title: "Document linked to initiative" });
+    },
+    onError: () => toast({ title: "Failed to link document", variant: "destructive" }),
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/documents/initiative-links/${id}`),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["/api/documents/initiative-links"] }),
+  });
 
   const { data: documentLinks = [], isLoading: linksLoading, error: linksError } = useQuery<DocumentInitiativeLink[]>({
     queryKey: ["/api/documents/initiative-links"],
@@ -2530,7 +2642,67 @@ function DocumentsTab({ initiatives }: { initiatives: Initiative[] }) {
         <Badge variant="secondary" className="text-xs" data-testid="badge-doc-count">
           {filteredRows.length} of {tableRows.length} documents
         </Badge>
+        <Button size="sm" className="gap-1.5" onClick={() => setLinkOpen(true)} data-testid="button-link-document">
+          <Link2 className="h-4 w-4" /> Link document
+        </Button>
       </div>
+
+      <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link document to initiative</DialogTitle>
+            <DialogDescription>Select a document from Document Management and the initiative it supports.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Document</Label>
+              <Select value={linkDocId} onValueChange={setLinkDocId}>
+                <SelectTrigger><SelectValue placeholder="Choose document…" /></SelectTrigger>
+                <SelectContent>
+                  {documents.map(d => (
+                    <SelectItem key={d.id} value={String(d.id)}>{d.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Initiative</Label>
+              <Select value={linkInitiativeId} onValueChange={setLinkInitiativeId}>
+                <SelectTrigger><SelectValue placeholder="Choose initiative…" /></SelectTrigger>
+                <SelectContent>
+                  {initiatives.map(i => (
+                    <SelectItem key={i.id} value={String(i.id)}>{i.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Link type</Label>
+              <Select value={linkType} onValueChange={setLinkType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(linkTypeLabels).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!linkDocId || !linkInitiativeId || linkMutation.isPending}
+              onClick={() => linkMutation.mutate({
+                documentId: Number(linkDocId),
+                initiativeId: Number(linkInitiativeId),
+                linkType,
+              })}
+            >
+              {linkMutation.isPending ? "Linking…" : "Link document"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Section switcher */}
       <div className="flex items-center gap-1 border-b border-border pb-2">
@@ -2632,16 +2804,41 @@ function DocumentsTab({ initiatives }: { initiatives: Initiative[] }) {
           loading={isLoading}
           emptyMessage="No documents linked to initiatives yet. Link documents from the Document Management module to track deliverables."
           selectable={false}
-          onRowClick={(row: DocTableRow) => window.open(`/modules/documents?doc=${row.documentId}`, '_blank')}
+          onRowClick={(row: DocTableRow) => window.open(`/modules/documents?document=${row.documentId}`, '_blank')}
           renderRowActions={(row: DocTableRow) => (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={(e) => { e.stopPropagation(); window.open(`/modules/documents?doc=${row.documentId}`, '_blank'); }}
-              data-testid={`button-view-doc-${row.documentId}`}
-            >
-              <ExternalLink className="h-4 w-4" />
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Copy link"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (await copyTextToClipboard(documentModuleUrl(row.documentId))) {
+                    toast({ title: "Document link copied" });
+                  }
+                }}
+                data-testid={`button-copy-doc-link-${row.documentId}`}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => { e.stopPropagation(); window.open(`/modules/documents?document=${row.documentId}`, '_blank'); }}
+                data-testid={`button-view-doc-${row.documentId}`}
+              >
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => { e.stopPropagation(); unlinkMutation.mutate(row.id); }}
+                disabled={unlinkMutation.isPending}
+                data-testid={`button-unlink-doc-${row.id}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
           )}
           alwaysShowRowActions
         />

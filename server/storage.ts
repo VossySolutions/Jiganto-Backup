@@ -598,6 +598,7 @@ export interface IStorage {
   getAllStrategyReviewNotes(tenantId: number): Promise<StrategyReviewNote[]>;
   createStrategyReviewNote(note: InsertStrategyReviewNote): Promise<StrategyReviewNote>;
   deleteStrategyReviewNote(id: number): Promise<void>;
+  updateStrategyReviewNote(id: number, userId: string, content: string): Promise<StrategyReviewNote | null>;
 
   // Business Governance - RAG History
   getStrategyRagHistory(tenantId: number, entityType?: string, entityId?: number): Promise<StrategyRagHistory[]>;
@@ -4387,6 +4388,17 @@ export class DatabaseStorage implements IStorage {
     await db.delete(strategyReviewNotes).where(eq(strategyReviewNotes.id, id));
   }
 
+  async updateStrategyReviewNote(id: number, userId: string, content: string): Promise<StrategyReviewNote | null> {
+    const [existing] = await db.select().from(strategyReviewNotes).where(eq(strategyReviewNotes.id, id));
+    if (!existing || existing.authorId !== userId) return null;
+    const [row] = await db
+      .update(strategyReviewNotes)
+      .set({ content })
+      .where(eq(strategyReviewNotes.id, id))
+      .returning();
+    return row ?? null;
+  }
+
   // Business Governance - RAG History
   async getStrategyRagHistory(tenantId: number, entityType?: string, entityId?: number): Promise<StrategyRagHistory[]> {
     const conditions = [eq(strategyRagHistory.tenantId, tenantId)];
@@ -7180,7 +7192,7 @@ export class DatabaseStorage implements IStorage {
         id: doc.id,
         title: doc.title,
         subtitle: doc.type ?? "Document",
-        href: `/documents?doc=${doc.id}`,
+        href: `/modules/documents?document=${doc.id}`,
       });
     }
 

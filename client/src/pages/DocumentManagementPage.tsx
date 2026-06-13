@@ -44,7 +44,7 @@ import {
   GripVertical, FolderInput, Save, X, FileUp,
   File, FileImage, FileSpreadsheet, FileArchive, Paperclip,
   Mail, Copy, Check, BookCopy, Globe, Building2, Layers, Palette, Users,
-  FileSignature, Bell, XCircle, Eye, Loader2
+  FileSignature, Bell, XCircle, Eye, Loader2, RotateCcw, Info
 } from "lucide-react";
 import {
   DocAllIcon,
@@ -328,6 +328,37 @@ export default function DocumentManagementPage() {
   const [newDocFolderId, setNewDocFolderId] = useState<number | null>(null);
   const [isSaveLocationOpen, setIsSaveLocationOpen] = useState(false);
   const [saveLocationFolderId, setSaveLocationFolderId] = useState<number | null>(null);
+  const [saveLocationTitle, setSaveLocationTitle] = useState("");
+  const [recentDocsExpanded, setRecentDocsExpanded] = useState(() => {
+    try {
+      const stored = localStorage.getItem("jiganto:documents:explorer-recent-expanded");
+      return stored === null ? true : stored === "true";
+    } catch {
+      return true;
+    }
+  });
+  const [mainRecentExpanded, setMainRecentExpanded] = useState(() => {
+    try {
+      const stored = localStorage.getItem("jiganto:documents:main-recent-expanded");
+      return stored === null ? true : stored === "true";
+    } catch {
+      return true;
+    }
+  });
+  const [recentCollapseHintDismissed, setRecentCollapseHintDismissed] = useState(() => {
+    try {
+      return localStorage.getItem("jiganto:documents:recent-collapse-hint") === "dismissed";
+    } catch {
+      return false;
+    }
+  });
+
+  const dismissRecentCollapseHint = () => {
+    setRecentCollapseHintDismissed(true);
+    try {
+      localStorage.setItem("jiganto:documents:recent-collapse-hint", "dismissed");
+    } catch { /* ignore */ }
+  };
   const FOLDER_COLORS = ["#f97316", "#3b82f6", "#10b981", "#8b5cf6", "#ef4444", "#f59e0b", "#ec4899", "#6b7280"] as const;
 
   const [pendingAnchoredComment, setPendingAnchoredComment] = useState<{ id: string; text: string } | null>(null);
@@ -465,24 +496,35 @@ export default function DocumentManagementPage() {
     } else if (format === "docx") {
       toast({ title: "Generating Word document…" });
       try {
-        const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } = await import("docx");
+        const {
+          Document: DocxDocument,
+          Packer,
+          Paragraph: DocxParagraph,
+          TextRun: DocxTextRun,
+          HeadingLevel,
+          Table: DocxTable,
+          TableRow: DocxTableRow,
+          TableCell: DocxTableCell,
+          WidthType,
+          BorderStyle,
+        } = await import("docx");
         const tempDiv = document.createElement("div");
         tempDiv.innerHTML = content;
 
-        const parseChildren = (el: Element): TextRun[] => {
-          const runs: TextRun[] = [];
+        const parseChildren = (el: Element): InstanceType<typeof DocxTextRun>[] => {
+          const runs: InstanceType<typeof DocxTextRun>[] = [];
           el.childNodes.forEach((node) => {
             if (node.nodeType === Node.TEXT_NODE) {
               const text = node.textContent || "";
-              if (text) runs.push(new TextRun({ text }));
+              if (text) runs.push(new DocxTextRun({ text }));
             } else if (node.nodeType === Node.ELEMENT_NODE) {
               const n = node as Element;
               const tag = n.tagName.toLowerCase();
               const innerText = n.textContent || "";
-              if (tag === "strong" || tag === "b") runs.push(new TextRun({ text: innerText, bold: true }));
-              else if (tag === "em" || tag === "i") runs.push(new TextRun({ text: innerText, italics: true }));
-              else if (tag === "u") runs.push(new TextRun({ text: innerText, underline: {} }));
-              else if (tag === "code") runs.push(new TextRun({ text: innerText, font: "Courier New" }));
+              if (tag === "strong" || tag === "b") runs.push(new DocxTextRun({ text: innerText, bold: true }));
+              else if (tag === "em" || tag === "i") runs.push(new DocxTextRun({ text: innerText, italics: true }));
+              else if (tag === "u") runs.push(new DocxTextRun({ text: innerText, underline: {} }));
+              else if (tag === "code") runs.push(new DocxTextRun({ text: innerText, font: "Courier New" }));
               else runs.push(...parseChildren(n));
             }
           });
@@ -490,45 +532,49 @@ export default function DocumentManagementPage() {
         };
 
         const docChildren: any[] = [
-          new Paragraph({ text: selectedDocument.title, heading: HeadingLevel.TITLE }),
+          new DocxParagraph({ text: selectedDocument.title, heading: HeadingLevel.TITLE }),
         ];
 
         const parseNode = (node: Element) => {
           const tag = node.tagName?.toLowerCase();
           if (!tag) return;
-          if (tag === "h1") docChildren.push(new Paragraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_1 }));
-          else if (tag === "h2") docChildren.push(new Paragraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_2 }));
-          else if (tag === "h3") docChildren.push(new Paragraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_3 }));
-          else if (tag === "h4") docChildren.push(new Paragraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_4 }));
+          if (tag === "h1") docChildren.push(new DocxParagraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_1 }));
+          else if (tag === "h2") docChildren.push(new DocxParagraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_2 }));
+          else if (tag === "h3") docChildren.push(new DocxParagraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_3 }));
+          else if (tag === "h4") docChildren.push(new DocxParagraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_4 }));
           else if (tag === "p" || tag === "div") {
             const callout = node.getAttribute("data-callout");
             const text = node.textContent || "";
             if (callout) {
-              docChildren.push(new Paragraph({
-                children: [new TextRun({ text: `[${callout.toUpperCase()}] ${text}`, bold: true })],
+              docChildren.push(new DocxParagraph({
+                children: [new DocxTextRun({ text: `[${callout.toUpperCase()}] ${text}`, bold: true })],
                 border: { left: { color: callout === "info" ? "3b82f6" : callout === "warning" ? "f59e0b" : callout === "success" ? "22c55e" : "ef4444", size: 12, style: BorderStyle.SINGLE } },
               }));
             } else {
-              docChildren.push(new Paragraph({ children: parseChildren(node) }));
+              docChildren.push(new DocxParagraph({ children: parseChildren(node) }));
             }
           } else if (tag === "ul" || tag === "ol") {
             node.querySelectorAll("li").forEach((li) => {
-              docChildren.push(new Paragraph({ text: li.textContent || "", bullet: { level: 0 } }));
+              docChildren.push(new DocxParagraph({ text: li.textContent || "", bullet: { level: 0 } }));
             });
           } else if (tag === "table") {
-            const rows: TableRow[] = [];
+            const rows: InstanceType<typeof DocxTableRow>[] = [];
             node.querySelectorAll("tr").forEach((tr) => {
-              const cells: TableCell[] = [];
+              const cells: InstanceType<typeof DocxTableCell>[] = [];
               tr.querySelectorAll("td, th").forEach((td) => {
-                cells.push(new TableCell({ children: [new Paragraph({ text: td.textContent || "" })] }));
+                const isHeader = td.tagName.toLowerCase() === "th";
+                cells.push(new DocxTableCell({
+                  children: [new DocxParagraph({ children: parseChildren(td as Element) })],
+                  shading: isHeader ? { fill: "E5E7EB" } : undefined,
+                }));
               });
-              if (cells.length) rows.push(new TableRow({ children: cells }));
+              if (cells.length) rows.push(new DocxTableRow({ children: cells }));
             });
             if (rows.length) {
-              docChildren.push(new Table({ rows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+              docChildren.push(new DocxTable({ rows, width: { size: 100, type: WidthType.PERCENTAGE } }));
             }
           } else if (tag === "blockquote") {
-            docChildren.push(new Paragraph({ text: node.textContent || "", indent: { left: 720 } }));
+            docChildren.push(new DocxParagraph({ text: node.textContent || "", indent: { left: 720 } }));
           } else {
             node.childNodes.forEach((child) => {
               if (child.nodeType === Node.ELEMENT_NODE) parseNode(child as Element);
@@ -540,7 +586,7 @@ export default function DocumentManagementPage() {
           if (child.nodeType === Node.ELEMENT_NODE) parseNode(child as Element);
         });
 
-        const doc = new Document({ sections: [{ children: docChildren }] });
+        const doc = new DocxDocument({ sections: [{ children: docChildren }] });
         const buffer = await Packer.toBlob(doc);
         const url = URL.createObjectURL(buffer);
         const a = document.createElement("a");
@@ -621,6 +667,28 @@ export default function DocumentManagementPage() {
     },
   });
 
+  const restoreVersionMutation = useMutation({
+    mutationFn: async (versionId: number) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/documents/${selectedDocument!.id}/versions/${versionId}/restore`,
+        {},
+      );
+      return res.json() as Promise<Document>;
+    },
+    onSuccess: (doc) => {
+      setSelectedDocument(doc);
+      setEditContent(doc.content || "");
+      queryClient.invalidateQueries({ queryKey: ["/api/documents", doc.id, "versions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/all"] });
+      toast({ title: "Version restored", description: `Document restored to v${doc.version}` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Restore failed", description: err.message, variant: "destructive" });
+    },
+  });
+
   const { data: comments = [], isLoading: commentsLoading } = useQuery<(DocumentComment & { author: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]>({
     queryKey: ["/api/documents", selectedDocument?.id, "comments"],
     enabled: !!selectedDocument,
@@ -658,6 +726,18 @@ export default function DocumentManagementPage() {
   useEffect(() => {
     if (isMobile) setIsFolderPanelOpen(false);
   }, [isMobile]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("jiganto:documents:explorer-recent-expanded", String(recentDocsExpanded));
+    } catch { /* ignore */ }
+  }, [recentDocsExpanded]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("jiganto:documents:main-recent-expanded", String(mainRecentExpanded));
+    } catch { /* ignore */ }
+  }, [mainRecentExpanded]);
 
   const prevMobileSelectionRef = useRef<{ docId?: number; fileId?: number }>({});
   useEffect(() => {
@@ -1344,8 +1424,16 @@ export default function DocumentManagementPage() {
       selectedFolderId ??
       (ALLOW_UNCATEGORISED_DOCS ? null : defaultFolderId),
     );
+    setSaveLocationTitle(selectedDocumentRef.current?.title ?? "");
     setIsSaveLocationOpen(true);
   }, [selectedFolderId, defaultFolderId]);
+
+  const closeDocumentView = useCallback(() => {
+    setSelectedDocument(null);
+    setIsEditing(false);
+    setIsPreviewMode(false);
+    setIsFolderPanelOpen(true);
+  }, []);
 
   const saveDocumentContent = useCallback((doc: Document) => {
     if (autoSaveTimer.current) {
@@ -1443,7 +1531,7 @@ export default function DocumentManagementPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const docId = params.get("document");
+    const docId = params.get("document") ?? params.get("doc");
     const folderId = params.get("folder");
     if (docId && allDocuments.length > 0) {
       const doc = allDocuments.find(d => d.id === Number(docId));
@@ -1818,6 +1906,20 @@ export default function DocumentManagementPage() {
       ? allDocuments.filter(d => d.title.toLowerCase().includes(explorerSearch.toLowerCase())).slice(0, 7)
       : (baseChipDocs as any[]).slice(0, 8);
 
+    const chipSection = explorerSearch
+      ? { label: "Matching documents", icon: Search, count: displayChipDocs.length }
+      : activeChip === "starred"
+        ? { label: "Starred", icon: Star, count: displayChipDocs.length }
+        : activeChip === "shared"
+          ? { label: "Shared with me", icon: Users, count: displayChipDocs.length }
+          : { label: "Recent", icon: Clock, count: displayChipDocs.length };
+    const ChipSectionIcon = chipSection.icon;
+    const collapsedPreview = displayChipDocs
+      .slice(0, 2)
+      .map((d) => d.title)
+      .join(" · ");
+    const collapsedMoreCount = Math.max(0, displayChipDocs.length - 2);
+
     const statusBadgeColors: Record<string, string> = {
       draft: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
       published: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
@@ -1906,14 +2008,65 @@ export default function DocumentManagementPage() {
           <div className="px-2 pb-2 space-y-3">
 
             {/* Recent / Starred / Search results */}
+            {!explorerSearch && !recentCollapseHintDismissed && (
+              <div
+                className="flex items-start gap-2 rounded-lg border border-primary/25 bg-primary/5 px-2.5 py-2"
+                data-testid="recent-collapse-hint"
+              >
+                <Info className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+                <p className="text-[10px] text-muted-foreground flex-1 leading-relaxed">
+                  <span className="font-medium text-foreground">Tip:</span> Use{" "}
+                  <span className="font-medium text-foreground">Hide</span> on the Recent list below to collapse it — click{" "}
+                  <span className="font-medium text-foreground">Show</span> to expand again.
+                </p>
+                <button
+                  type="button"
+                  onClick={dismissRecentCollapseHint}
+                  className="text-muted-foreground hover:text-foreground shrink-0 p-0.5 rounded"
+                  aria-label="Dismiss tip"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
             {(explorerSearch ? allDocsLoading : explorerChipLoading) ? (
               <ExplorerLoadingSkeleton />
             ) : displayChipDocs.length > 0 ? (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                  {explorerSearch ? "Matching Documents" : activeChip === "starred" ? "Starred Docs" : activeChip === "shared" ? "Shared with me" : "Recent Docs"}
-                </p>
-                <div className="space-y-0.5">
+              <Collapsible
+                open={recentDocsExpanded}
+                onOpenChange={(open) => {
+                  setRecentDocsExpanded(open);
+                  if (!open) dismissRecentCollapseHint();
+                }}
+                className="rounded-lg border border-border/60 bg-muted/20 overflow-hidden"
+                data-testid="explorer-recent-section"
+              >
+                <CollapsibleTrigger
+                  className="group/trigger flex items-center gap-1.5 w-full px-2 py-2 text-left hover:bg-muted/40 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                  title={recentDocsExpanded ? "Click to hide this list" : "Click to show this list"}
+                >
+                  {recentDocsExpanded ? (
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                  )}
+                  <ChipSectionIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="flex-1 text-[11px] font-semibold text-foreground truncate">{chipSection.label}</span>
+                  <Badge variant="secondary" className="h-5 min-w-[1.25rem] px-1.5 text-[10px] font-medium shrink-0">
+                    {chipSection.count}
+                  </Badge>
+                  <span className="text-[10px] font-semibold text-primary shrink-0 min-w-[2.25rem] text-right group-hover/trigger:underline">
+                    {recentDocsExpanded ? "Hide" : "Show"}
+                  </span>
+                </CollapsibleTrigger>
+                {!recentDocsExpanded && collapsedPreview && (
+                  <p className="px-2.5 pb-2 text-[10px] text-muted-foreground leading-snug truncate" title={displayChipDocs.map((d) => d.title).join(", ")}>
+                    {collapsedPreview}
+                    {collapsedMoreCount > 0 ? ` +${collapsedMoreCount} more` : ""}
+                  </p>
+                )}
+                <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
+                <div className="space-y-0.5 px-1 pb-1.5">
                   {displayChipDocs.map(doc => {
                     const isActive = selectedDocument?.id === doc.id || highlightedDocument?.id === doc.id;
                     const status = (doc as any).status as string | undefined;
@@ -1968,7 +2121,8 @@ export default function DocumentManagementPage() {
                     );
                   })}
                 </div>
-              </div>
+                </CollapsibleContent>
+              </Collapsible>
             ) : explorerSearch ? (
               <p className="text-xs text-muted-foreground px-1.5 py-2">No matching documents</p>
             ) : null}
@@ -2096,27 +2250,6 @@ export default function DocumentManagementPage() {
 
           </div>
         </ScrollArea>
-
-        {/* Footer action bar */}
-        <div className="px-2 py-2 border-t flex items-center gap-2 shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 gap-1.5 text-xs h-8"
-            onClick={() => openNewFolderDialog(selectedFolderId)}
-            data-testid="tree-new-folder"
-          >
-            <FolderPlus className="h-3.5 w-3.5" /> New folder
-          </Button>
-          <Button
-            size="sm"
-            className="flex-1 gap-1.5 text-xs h-8 bg-indigo-600 hover:bg-indigo-700 text-white"
-            onClick={() => openNewDocDialog()}
-            data-testid="tree-new-doc"
-          >
-            <FilePlus className="h-3.5 w-3.5" /> New doc
-          </Button>
-        </div>
       </div>
     );
   };
@@ -2169,8 +2302,9 @@ export default function DocumentManagementPage() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => { setSelectedDocument(null); setIsEditing(false); setIsPreviewMode(false); setIsFolderPanelOpen(true); }}
+              onClick={closeDocumentView}
               data-testid="button-back-to-list"
+              title="Close document"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
@@ -2226,6 +2360,15 @@ export default function DocumentManagementPage() {
                 >
                   <X className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Cancel</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={closeDocumentView}
+                  className="gap-1.5 shrink-0"
+                  data-testid="button-close-document"
+                >
+                  Close
                 </Button>
               </>
             ) : (
@@ -2671,19 +2814,36 @@ export default function DocumentManagementPage() {
                     versions.map((version) => (
                       <div
                         key={version.id}
-                        className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                        className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors gap-3"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium shrink-0">
                             v{version.version}
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <p className="text-sm font-medium">{version.changeDescription || "Content updated"}</p>
                             <p className="text-xs text-muted-foreground">
                               {new Date(version.createdAt!).toLocaleString()}
                             </p>
                           </div>
                         </div>
+                        {version.version !== selectedDocument.version && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0 gap-1.5"
+                            disabled={restoreVersionMutation.isPending}
+                            onClick={() => restoreVersionMutation.mutate(version.id)}
+                            data-testid={`button-restore-version-${version.id}`}
+                          >
+                            {restoreVersionMutation.isPending ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            )}
+                            Restore
+                          </Button>
+                        )}
                       </div>
                     ))
                   )}
@@ -3182,14 +3342,6 @@ export default function DocumentManagementPage() {
         <p className="text-sm text-muted-foreground mb-4">
           Click a document to preview it, or double-click to start editing right away.
         </p>
-        <div className="flex items-center justify-center gap-3 flex-wrap">
-          <Button size="sm" onClick={() => openNewDocDialog()} data-testid="button-create-doc-welcome">
-            <Plus className="h-4 w-4 mr-1.5" /> New Document
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => openNewFolderDialog(selectedFolderId)} data-testid="button-create-folder-welcome">
-            <FolderPlus className="h-4 w-4 mr-1.5" /> New Folder
-          </Button>
-        </div>
       </div>
     </div>
   );
@@ -3198,31 +3350,59 @@ export default function DocumentManagementPage() {
     <ScrollArea className="h-full">
       <div className="p-6">
         {selectedFolderId === null && recentDocs.length > 0 && !searchQuery && (
-          <div className="mb-8">
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
-              <Clock className="h-4 w-4" /> Recently Viewed
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {recentDocs.slice(0, 3).map((doc) => (
+          <Collapsible
+            open={mainRecentExpanded}
+            onOpenChange={setMainRecentExpanded}
+            className="mb-8 rounded-xl border border-border/60 bg-muted/15 overflow-hidden"
+            data-testid="main-recent-section"
+          >
+            <CollapsibleTrigger
+              className="group/trigger flex items-center gap-2 w-full px-4 py-3 text-left hover:bg-muted/30 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              title={mainRecentExpanded ? "Click to hide recently viewed documents" : "Click to show recently viewed documents"}
+            >
+              {mainRecentExpanded ? (
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              ) : (
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              )}
+              <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-sm font-medium text-foreground">Recently viewed</p>
+                {!mainRecentExpanded && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    {recentDocs.slice(0, 3).map((d) => d.title).join(" · ")}
+                    {recentDocs.length > 3 ? ` +${recentDocs.length - 3} more` : ""}
+                  </p>
+                )}
+              </div>
+              <Badge variant="secondary" className="shrink-0 text-xs">{recentDocs.length}</Badge>
+              <span className="text-xs font-semibold text-primary shrink-0 min-w-[2.5rem] text-right group-hover/trigger:underline">
+                {mainRecentExpanded ? "Hide" : "Show"}
+              </span>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-4 pt-0">
+              {recentDocs.map((doc) => (
                 <button
                   key={doc.id}
                   onClick={() => { setSelectedDocument(doc); setEditContent(doc.content || ""); }}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors text-left group"
+                  className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 hover:border-primary/20 transition-colors text-left group"
                   data-testid={`recent-doc-${doc.id}`}
                 >
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/15 transition-colors">
                     {getDocTypeIcon(doc.type)}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{doc.title}</p>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(doc.updatedAt!).toLocaleDateString()}
+                      {doc.updatedAt ? getRelativeTime(doc.updatedAt) : "—"}
                     </p>
                   </div>
                 </button>
               ))}
-            </div>
-          </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         )}
 
         {subfolders.length > 0 && !searchQuery && (
@@ -3232,15 +3412,6 @@ export default function DocumentManagementPage() {
                 <Folder className="h-4 w-4" /> Folders
               </h2>
               <div className="flex items-center gap-2">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-8 gap-1.5"
-                  onClick={() => openNewFolderDialog(selectedFolderId)}
-                  data-testid="quick-create-folder"
-                >
-                  <FolderPlus className="h-3.5 w-3.5" /> Create Folder
-                </Button>
                 <Button 
                   variant="ghost" 
                   size="sm" 
@@ -3441,15 +3612,6 @@ export default function DocumentManagementPage() {
                   variant="ghost" 
                   size="sm" 
                   className="h-8 gap-1.5"
-                  onClick={() => openNewFolderDialog(selectedFolderId)}
-                  data-testid="quick-create-folder-empty"
-                >
-                  <FolderPlus className="h-3.5 w-3.5" /> Create Folder
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-8 gap-1.5"
                   onClick={handleUploadFile}
                   data-testid="quick-upload-file-empty"
                 >
@@ -3486,16 +3648,11 @@ export default function DocumentManagementPage() {
                 <h3 className="font-semibold text-lg mb-1">
                   {searchQuery ? "No documents found" : "No documents yet"}
                 </h3>
-                <p className="text-muted-foreground text-sm mb-4">
+                <p className="text-muted-foreground text-sm">
                   {searchQuery
                     ? "Try a different search term"
-                    : "Create your first document to get started"}
+                    : "Use New Document in the toolbar to create your first document"}
                 </p>
-                {!searchQuery && (
-                  <Button onClick={() => openNewDocDialog()} data-testid="button-create-first-doc">
-                    <Plus className="h-4 w-4 mr-1.5" /> Create Document
-                  </Button>
-                )}
               </CardContent>
             </Card>
           ) : (
@@ -4270,6 +4427,15 @@ export default function DocumentManagementPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
+              <Label>Document title</Label>
+              <Input
+                value={saveLocationTitle}
+                onChange={(e) => setSaveLocationTitle(e.target.value)}
+                placeholder="Document title"
+                data-testid="input-save-document-title"
+              />
+            </div>
+            <div className="space-y-2">
               <Label>Save location</Label>
               <Select
                 value={folderSelectValue(saveLocationFolderId)}
@@ -4321,6 +4487,9 @@ export default function DocumentManagementPage() {
                   autoSaveTimer.current = null;
                 }
                 const updates: Partial<Document> = { content: editContentRef.current };
+                if (saveLocationTitle.trim()) {
+                  updates.title = saveLocationTitle.trim();
+                }
                 if (saveLocationFolderId != null) {
                   updates.folderId = saveLocationFolderId;
                 }
@@ -4418,9 +4587,20 @@ export default function DocumentManagementPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Import Word Document</DialogTitle>
-            <DialogDescription>Your document has been converted. Review the title and choose a destination folder.</DialogDescription>
+            <DialogDescription>
+              Review the title and choose a destination folder. Word import supports headings, lists, tables, and images; complex styles, headers/footers, and some embedded objects may not convert fully.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
+            <p className="font-medium text-foreground">Before you import</p>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>Supported: headings, paragraphs, lists, basic tables, hyperlinks, most inline images</li>
+              <li>May simplify: multi-column layouts, text boxes, TOC fields, custom Word styles</li>
+              <li>Not imported: headers, footers, page numbers, macros, EMF/WMF images</li>
+              <li>Maximum file size: 25 MB</li>
+            </ul>
+          </div>
+          <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Document Title</Label>
               <Input

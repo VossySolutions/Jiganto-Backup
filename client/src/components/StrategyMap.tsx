@@ -566,8 +566,8 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
       )}
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex flex-row items-center justify-between gap-2 overflow-x-auto flex-nowrap pb-1">
+        <div className="flex items-center gap-2 flex-nowrap shrink-0">
           <div className="relative flex-1 sm:flex-none min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -628,25 +628,24 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 shrink-0 flex-nowrap">
           {viewMode === "table" && (
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant={tableGroupBy !== "none" ? "secondary" : "outline"}
-                    size="sm"
+                    size="icon"
                     className={cn(
-                      "gap-1.5 h-8 text-xs",
+                      "h-8 w-8 shrink-0",
                       tableGroupBy !== "none" && "bg-[#0ea5e9]/10 border-[#0ea5e9]/30 text-[#0ea5e9] hover:bg-[#0ea5e9]/20"
                     )}
+                    title={tableGroupBy === "none" ? "Group rows" :
+                      tableGroupBy === "rag" ? "Grouped by RAG" :
+                      tableGroupBy === "department" ? "Grouped by department" : "Grouped by owner"}
                     data-testid="button-table-group-by"
                   >
                     <Layers className="h-3.5 w-3.5" />
-                    {tableGroupBy === "none" ? "Group" :
-                      tableGroupBy === "rag" ? "Group: RAG" :
-                      tableGroupBy === "department" ? "Group: Dept" : "Group: Owner"}
-                    <ChevronDown className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-44">
@@ -697,13 +696,26 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
               </SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportDialogOpen(true)} data-testid="button-import">
-            <Upload className="h-3.5 w-3.5" /> Import
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            title="Import"
+            onClick={() => setImportDialogOpen(true)}
+            data-testid="button-import"
+          >
+            <Upload className="h-3.5 w-3.5" />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-export">
-                <Download className="h-3.5 w-3.5" /> Export
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                title="Export"
+                data-testid="button-export"
+              >
+                <Download className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -1061,15 +1073,13 @@ function TableView({ rows, onCellClick, showIds, groupBy = "none", entityRefs }:
                         ) : (
                           <span className="text-muted-foreground/25 select-none text-[10px]">—</span>
                         )}
-                        {entity && cell.span > 1 && (ci === 0 || ci === 1) && (
+                        {entity && getOwner(entity) && (
                           <div className="flex items-center gap-1.5 mt-1.5">
                             <span className={cn(
                               "w-1.5 h-1.5 rounded-full inline-block shrink-0",
                               ragDots[(entity as StrategyEntity).ragStatus || ""] || "bg-muted-foreground/30"
                             )} />
-                            {getOwner(entity) && (
-                              <span className="text-[10px] text-muted-foreground truncate">{getOwner(entity)}</span>
-                            )}
+                            <span className="text-[10px] text-muted-foreground truncate">{getOwner(entity)}</span>
                           </div>
                         )}
                       </td>

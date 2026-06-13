@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,13 @@ const quickActions = [
 ];
 
 export function AIAssistantButton() {
+  const [location] = useLocation();
+  const hideFab =
+    location.startsWith("/modules/") ||
+    location.startsWith("/dashboard") ||
+    location.startsWith("/ws/") ||
+    location.startsWith("/documents") ||
+    location.startsWith("/clients");
   const { data: aiStatus, isLoading: aiStatusLoading } = useAiStatus();
   const aiEnabled = aiStatus?.modules.assistant ?? false;
   const [isOpen, setIsOpen] = useState(false);
@@ -127,6 +135,7 @@ export function AIAssistantButton() {
 
   return (
     <>
+      {!hideFab && (
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -150,6 +159,7 @@ export function AIAssistantButton() {
           <span>AI Assistant</span>
         </TooltipContent>
       </Tooltip>
+      )}
 
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetContent className="w-[420px] sm:w-[480px] flex flex-col h-full p-0 border-l gap-0">

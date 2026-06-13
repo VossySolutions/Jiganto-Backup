@@ -1,8 +1,10 @@
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { modulesInDiscoveryOrder } from "@/lib/module-metadata";
 import { apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import type { DashboardUserPreferences, BespokeDashboardPayload } from "@shared/models/dashboard";
 import type { BuiltInDashboardType, DashboardOption, DashboardType } from "@/hooks/use-dashboard-selector";
+import { customDashboardId as toCustomDashboardId, parseCustomDashboardId } from "@/hooks/use-dashboard-selector";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +16,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +39,8 @@ interface DashboardConfigDialogProps {
   onSetDefault: (id: DashboardType) => void;
   onToggleModuleVisibility: (key: string) => void;
   customDashboardId?: number | null;
+  customDashboards?: DashboardOption[];
+  onSelectCustomDashboard?: (id: DashboardType) => void;
   contextClientId?: number | null;
   contextProjectId?: number | null;
 }
@@ -44,25 +55,34 @@ export function DashboardConfigDialog({
   onSetDefault,
   onToggleModuleVisibility,
   customDashboardId,
+  customDashboards = [],
+  onSelectCustomDashboard,
   contextClientId,
   contextProjectId,
 }: DashboardConfigDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [settingsCustomId, setSettingsCustomId] = useState<number | null>(customDashboardId ?? null);
+
+  const activeCustomId = settingsCustomId ?? customDashboardId ?? null;
+
+  useEffect(() => {
+    if (customDashboardId != null) setSettingsCustomId(customDashboardId);
+  }, [customDashboardId, open]);
 
   const bespokeUrl =
-    customDashboardId != null
-      ? `/api/dashboards/${customDashboardId}${contextClientId ? `?clientId=${contextClientId}` : ""}${contextProjectId ? `${contextClientId ? "&" : "?"}projectId=${contextProjectId}` : ""}`
+    activeCustomId != null
+      ? `/api/dashboards/${activeCustomId}${contextClientId ? `?clientId=${contextClientId}` : ""}${contextProjectId ? `${contextClientId ? "&" : "?"}projectId=${contextProjectId}` : ""}`
       : null;
 
-  const { data: bespokeDetail } = useQuery({
+  const { data: bespokeDetail, isLoading: bespokeLoading } = useQuery({
     queryKey: bespokeUrl ? [bespokeUrl] : ["no-bespoke"],
     queryFn: async () => {
       const res = await fetchWithAuth(bespokeUrl!);
       if (!res.ok) throw new Error("Failed to load dashboard");
       return (await res.json()) as BespokeDashboardPayload;
     },
-    enabled: open && customDashboardId != null && !!bespokeUrl,
+    enabled: open && activeCustomId != null && !!bespokeUrl,
     staleTime: 0,
     refetchOnMount: "always",
   });
@@ -84,11 +104,7 @@ export function DashboardConfigDialog({
   };
 
   const handleToggleModule = (key: string) => {
-    const next = hiddenModuleKeys.includes(key)
-      ? hiddenModuleKeys.filter((k) => k !== key)
-      : [...hiddenModuleKeys, key];
     onToggleModuleVisibility(key);
-    savePrefs.mutate({ hiddenModuleKeys: next });
   };
 
   return (
@@ -97,7 +113,8 @@ export function DashboardConfigDialog({
         <DialogHeader>
           <DialogTitle>Dashboard configuration</DialogTitle>
           <DialogDescription>
-            Manage dashboards, module visibility, and your default home screen.
+            Settings controls which dashboards appear and your default home screen. Modules controls
+            visibility in the All Modules grid only — sidebar access is unchanged.
           </DialogDescription>
         </DialogHeader>
         <Tabs defaultValue="settings" className="flex-1 overflow-hidden flex flex-col">
@@ -108,16 +125,55 @@ export function DashboardConfigDialog({
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
           <TabsContent value="settings" className="overflow-y-auto max-h-80 mt-4 space-y-4">
-            {customDashboardId != null && bespokeDetail && (
+            <p className="text-xs text-muted-foreground">
+              Enable built-in dashboards, set your default, and manage custom dashboards (rename, layout, delete).
+            </p>
+            {customDashboards.length > 0 && (
+              <div className="space-y-2">
+                <Label>Custom dashboard to manage</Label>
+                <Select
+                  value={activeCustomId != null ? String(activeCustomId) : ""}
+                  onValueChange={(v) => {
+                    const id = Number(v);
+                    setSettingsCustomId(id);
+                    onSelectCustomDashboard?.(toCustomDashboardId(id));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a custom dashboard…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customDashboards.map((d) => {
+                      const parsed = parseCustomDashboardId(d.id);
+                      if (parsed == null) return null;
+                      return (
+                        <SelectItem key={d.id} value={String(parsed)}>
+                          {d.name}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {activeCustomId != null && bespokeLoading && (
+              <p className="text-sm text-muted-foreground">Loading dashboard settings…</p>
+            )}
+            {activeCustomId != null && bespokeDetail && (
               <BespokeDashboardSettings
-                key={customDashboardId}
-                dashboardId={customDashboardId}
+                key={activeCustomId}
+                dashboardId={activeCustomId}
                 name={bespokeDetail.name}
                 layout={bespokeDetail.layout}
                 clientId={contextClientId}
                 projectId={contextProjectId}
                 onDeleted={() => onOpenChange(false)}
               />
+            )}
+            {customDashboards.length > 0 && activeCustomId == null && (
+              <p className="text-sm text-muted-foreground">
+                Select a custom dashboard above to rename, change layout, or delete it.
+              </p>
             )}
             {dashboards.map((dashboard) => (
               <div
@@ -146,16 +202,24 @@ export function DashboardConfigDialog({
               </div>
             ))}
           </TabsContent>
-          <TabsContent value="widgets" className="mt-4 text-sm text-muted-foreground space-y-2">
+          <TabsContent value="widgets" className="mt-4 text-sm text-muted-foreground space-y-3 overflow-y-auto max-h-80">
             <p>
-              Module dashboards use the Jiganto system template with live workspace data. Custom dashboards
-              support add/remove widgets in edit mode on the dashboard view.
+              <span className="font-medium text-foreground">Built-in dashboards</span> (Home, Projects, etc.)
+              use fixed widget layouts with live workspace data — widgets cannot be rearranged here.
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Custom dashboards</span> support add, remove, and
+              resize widgets: open the dashboard, click <strong>Edit layout</strong>, then drag widgets or use
+              the widget picker. Changes save automatically.
+            </p>
+            <p className="text-xs">
+              Tip: switch to a custom dashboard from the header dropdown before editing widgets.
             </p>
           </TabsContent>
           <TabsContent value="history" className="mt-4 overflow-y-auto max-h-80">
-            {customDashboardId != null ? (
+            {activeCustomId != null ? (
               <DashboardHistoryPanel
-                dashboardId={customDashboardId}
+                dashboardId={activeCustomId}
                 clientId={contextClientId}
                 projectId={contextProjectId}
               />

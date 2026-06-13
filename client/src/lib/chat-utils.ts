@@ -1,5 +1,7 @@
-/** Module 02 accent — Indigo per spec */
-export const CHAT_ACCENT = "#4338CA";
+/** Module 02 accent — softer indigo aligned with platform palette */
+export const CHAT_ACCENT = "#6366F1";
+export const CHAT_ACCENT_SOFT = "rgb(99 102 241 / 0.12)";
+export const CHAT_ACCENT_TEXT = "#6366F1";
 
 const FIVE_MIN_MS = 5 * 60 * 1000;
 
