@@ -275,49 +275,22 @@ export async function loadProjectsModuleDashboard(
 }
 
 export async function loadTasksModuleDashboard(scope: DashboardScope): Promise<TasksModuleDashboard> {
-  const where = and(...taskScopeConditions(scope));
-  const today = todayIso();
+  const { listAggregatedTasks, summarizeTasks } = await import("../tasks/service");
+  const taskScope = {
+    userId: scope.userId,
+    tenantId: scope.tenantId,
+  };
+  const items = await listAggregatedTasks(taskScope, scope.clientId != null ? { workspaceId: scope.clientId } : {});
+  const summary = summarizeTasks(items);
+  const open = items.filter((t) => t.status !== "completed" && t.status !== "cancelled");
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
+  const completedWeek = items.filter((t) => t.status === "completed").length;
 
-  const rows = await db
-    .select({
-      id: tasks.id,
-      title: tasks.title,
-      status: tasks.status,
-      priority: tasks.priority,
-      dueDate: tasks.dueDate,
-      assigneeId: tasks.assigneeId,
-      completedAt: tasks.completedAt,
-      createdAt: tasks.createdAt,
-    })
-    .from(tasks)
-    .where(where);
-
-  const myOpen = rows.filter(
-    (t) =>
-      t.assigneeId === scope.userId &&
-      t.status &&
-      !CLOSED_TASK_STATUSES.includes(t.status.toLowerCase()),
-  );
-  const teamOpen = rows.filter(
-    (t) => t.status && !CLOSED_TASK_STATUSES.includes(t.status.toLowerCase()),
-  );
-  const overdue = rows.filter(
-    (t) =>
-      t.status &&
-      !CLOSED_TASK_STATUSES.includes(t.status.toLowerCase()) &&
-      t.dueDate != null &&
-      t.dueDate < today,
-  );
-  const completedWeek = rows.filter(
-    (t) => t.completedAt != null && t.completedAt >= weekAgo,
-  );
-
-  const priorityCounts = { high: 0, medium: 0, low: 0, critical: 0 };
-  for (const t of teamOpen) {
-    const p = (t.priority ?? "medium").toLowerCase();
-    if (p in priorityCounts) (priorityCounts as Record<string, number>)[p]++;
+  const priorityCounts = { high: 0, medium: 0, low: 0 };
+  for (const t of open) {
+    if (t.priority === "high") priorityCounts.high++;
+    else if (t.priority === "low") priorityCounts.low++;
     else priorityCounts.medium++;
   }
 
@@ -327,40 +300,45 @@ export async function loadTasksModuleDashboard(scope: DashboardScope): Promise<T
     start.setDate(start.getDate() - (3 - idx) * 7);
     const end = new Date(start);
     end.setDate(end.getDate() + 7);
-    const inWeek = rows.filter((t) => t.createdAt && t.createdAt >= start && t.createdAt < end);
+    const inWeek = items.filter((t) => {
+      if (!t.createdAt) return false;
+      const d = new Date(t.createdAt);
+      return d >= start && d < end;
+    });
     return {
       week,
-      todo: inWeek.filter((t) => (t.status ?? "") === "todo").length,
-      inProgress: inWeek.filter((t) => (t.status ?? "") === "in_progress").length,
-      done: inWeek.filter((t) => CLOSED_TASK_STATUSES.includes((t.status ?? "").toLowerCase())).length,
+      todo: inWeek.filter((t) => t.status === "todo").length,
+      inProgress: inWeek.filter((t) => t.status === "in_progress").length,
+      done: inWeek.filter((t) => t.status === "completed").length,
     };
   });
 
-  const dueSoon = myOpen
+  const dueSoon = open
     .filter((t) => t.dueDate != null)
     .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)))
     .slice(0, 10)
     .map((t) => ({
       id: t.id,
       title: t.title,
-      dueDate: t.dueDate,
-      priority: t.priority ?? "medium",
-      status: t.status ?? "todo",
+      dueDate: t.dueDate ?? null,
+      priority: t.priority,
+      status: t.status,
     }));
 
   return {
     kpis: {
-      myOpenTasks: myOpen.length,
-      overdue: overdue.length,
-      completedThisWeek: completedWeek.length,
-      teamOpenTasks: teamOpen.length,
+      myOpenTasks: summary.todo + summary.inProgress,
+      overdue: summary.overdue,
+      completedThisWeek: completedWeek,
+      teamOpenTasks: open.length,
     },
     byStatus,
     byPriority: [
-      { label: "High", count: priorityCounts.high + priorityCounts.critical, color: "#ef4444" },
+      { label: "High", count: priorityCounts.high, color: "#ef4444" },
       { label: "Medium", count: priorityCounts.medium, color: "#f59e0b" },
       { label: "Low", count: priorityCounts.low, color: "#22c55e" },
     ],
+    bySource: Object.entries(summary.bySource).map(([source, count]) => ({ source, count })),
     dueSoon,
   };
 }

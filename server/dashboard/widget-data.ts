@@ -21,6 +21,7 @@ export async function resolveWidgetData(widgetType: string, scope: DashboardScop
       return loadProjectsModuleDashboard(scope);
     case "tasks_kpi":
     case "tasks_due":
+    case "my_tasks_summary":
       return loadTasksModuleDashboard(scope);
     case "crm_pipeline":
     case "crm_hot":

@@ -152,6 +152,7 @@ export interface UniversalViewSystemProps<T extends { id: number | string }> {
   showViewSwitcher?: boolean;
   defaultView?: ViewType;
   enabledViews?: ViewType[];
+  initialGroupColumnId?: string;
 }
 
 const viewTypeConfig: Record<ViewType, { label: string; icon: typeof Text; description: string }> = {
@@ -2181,12 +2182,15 @@ export function UniversalViewSystem<T extends { id: number | string }>({
   showViewSwitcher = true,
   defaultView = "table",
   enabledViews = ["table", "kanban", "calendar", "gantt", "list", "form", "document", "chart"],
+  initialGroupColumnId,
 }: UniversalViewSystemProps<T>) {
   const [currentView, setCurrentView] = useState<ViewType>(defaultView);
   const [columns, setColumns] = useState<ColumnDef<T>[]>(initialColumns);
   const [filters, setFilters] = useState<FilterDef[]>([]);
   const [sorts, setSorts] = useState<SortDef[]>([]);
-  const [groups, setGroups] = useState<GroupDef[]>([]);
+  const [groups, setGroups] = useState<GroupDef[]>(
+    initialGroupColumnId ? [{ columnId: initialGroupColumnId }] : [],
+  );
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<number | string>>(new Set());
 

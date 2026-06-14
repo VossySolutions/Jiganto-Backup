@@ -10,6 +10,7 @@ export type AiInsightsModule =
   | "documents"
   | "surveys"
   | "crm"
+  | "tasks"
   | "general";
 
 export function resolveAiInsightsModule(path: string): AiInsightsModule {
@@ -19,6 +20,7 @@ export function resolveAiInsightsModule(path: string): AiInsightsModule {
   if (path.includes("/modules/documents") || path.startsWith("/documents")) return "documents";
   if (path.includes("/modules/surveys")) return "surveys";
   if (path.includes("/modules/crm")) return "crm";
+  if (path.includes("/modules/tasks") || path.startsWith("/tasks")) return "tasks";
   if (path === DASHBOARD_PATH || path.startsWith("/ws/")) return "dashboard";
   return "general";
 }

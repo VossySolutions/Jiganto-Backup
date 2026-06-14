@@ -204,7 +204,7 @@ function WidgetBody({ type, data }: { type: string; data: unknown }) {
   }
 
   if (type === "tasks_due" && Array.isArray(d.dueSoon)) {
-    const rows = d.dueSoon as { id: number; title: string; dueDate: string | null; priority: string }[];
+    const rows = d.dueSoon as { id: number | string; title: string; dueDate: string | null; priority: string }[];
     return (
       <Table>
         <TableHeader>
@@ -216,7 +216,7 @@ function WidgetBody({ type, data }: { type: string; data: unknown }) {
         </TableHeader>
         <TableBody>
           {rows.slice(0, 6).map((t) => (
-            <TableRow key={t.id}>
+            <TableRow key={String(t.id)} className="cursor-pointer hover:bg-muted/40" onClick={() => { window.location.href = `/modules/tasks?status=overdue`; }}>
               <TableCell>{t.title}</TableCell>
               <TableCell>{t.dueDate ?? "—"}</TableCell>
               <TableCell className="capitalize">{t.priority}</TableCell>
@@ -224,6 +224,43 @@ function WidgetBody({ type, data }: { type: string; data: unknown }) {
           ))}
         </TableBody>
       </Table>
+    );
+  }
+
+  if (type === "my_tasks_summary" && d.kpis) {
+    const k = d.kpis as Record<string, number>;
+    const bySource = (d.bySource as { source: string; count: number }[] | undefined) ?? [];
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { label: "To Do", value: k.myOpenTasks ?? 0, href: "/modules/tasks?status=todo" },
+            { label: "Overdue", value: k.overdue ?? 0, href: "/modules/tasks?status=overdue" },
+            { label: "Done (week)", value: k.completedThisWeek ?? 0, href: "/modules/tasks?status=completed" },
+          ].map((item) => (
+            <a
+              key={item.label}
+              href={item.href}
+              className="rounded-lg border border-border/50 p-2 hover:bg-muted/40 transition-colors"
+            >
+              <div className="text-lg font-bold">{item.value}</div>
+              <div className="text-xs text-muted-foreground">{item.label}</div>
+            </a>
+          ))}
+        </div>
+        <div className="space-y-1">
+          {bySource.filter((s) => s.count > 0).slice(0, 5).map((s) => (
+            <a
+              key={s.source}
+              href={`/modules/tasks?source=${s.source}`}
+              className="flex justify-between text-sm hover:text-primary"
+            >
+              <span className="capitalize">{s.source}</span>
+              <span>{s.count}</span>
+            </a>
+          ))}
+        </div>
+      </div>
     );
   }
 

@@ -79,8 +79,9 @@ export interface TasksModuleDashboard {
   };
   byStatus: { week: string; todo: number; inProgress: number; done: number }[];
   byPriority: DashboardHealthSlice[];
+  bySource: { source: string; count: number }[];
   dueSoon: {
-    id: number;
+    id: number | string;
     title: string;
     dueDate: string | null;
     priority: string;
@@ -246,6 +247,7 @@ export const DASHBOARD_WIDGET_CATALOG: WidgetCatalogEntry[] = [
   { type: "projects_table", module: "projects", name: "Active projects", description: "Top projects table", defaultWidth: 2, defaultHeight: 2 },
   { type: "tasks_kpi", module: "tasks", name: "Tasks KPIs", description: "Open, overdue, completed", defaultWidth: 4, defaultHeight: 1 },
   { type: "tasks_due", module: "tasks", name: "Tasks due soon", description: "Upcoming assignments", defaultWidth: 2, defaultHeight: 2 },
+  { type: "my_tasks_summary", module: "tasks", name: "My Tasks summary", description: "Counts by status and source with drill-down", defaultWidth: 2, defaultHeight: 2 },
   { type: "crm_pipeline", module: "crm", name: "CRM pipeline", description: "Pipeline by stage", defaultWidth: 2, defaultHeight: 2 },
   { type: "crm_hot", module: "crm", name: "Hot opportunities", description: "Highest value deals", defaultWidth: 2, defaultHeight: 2 },
   { type: "helpdesk_kpi", module: "helpdesk", name: "Help desk KPIs", description: "Tickets and SLA", defaultWidth: 4, defaultHeight: 1 },

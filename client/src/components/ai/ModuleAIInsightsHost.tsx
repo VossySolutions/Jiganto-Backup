@@ -1,4 +1,4 @@
-import { Brain, LayoutDashboard, MessageSquare, Users } from "lucide-react";
+import { Brain, LayoutDashboard, MessageSquare, Users, Sparkles } from "lucide-react";
 import { useAIInsightsPanel, type AiInsightsModule } from "@/hooks/use-ai-insights-panel";
 import { ModuleAiInsightsPanel } from "@/components/ai/ModuleAiInsightsPanel";
 import { GenericAIInsightsPanel } from "@/components/ai/GenericAIInsightsPanel";
@@ -51,6 +51,14 @@ const MODULE_CONFIG: Partial<
     endpoint: "/api/dashboard/ai-insights",
     queryKey: "/api/dashboard/ai-insights",
     icon: LayoutDashboard,
+  },
+  tasks: {
+    title: "Tasks AI",
+    subtitle: "Prioritisation & weekly summary",
+    description: "Prioritise today's work, summarise your week, and extract action items from notes.",
+    endpoint: "/api/tasks/ai/prioritize",
+    queryKey: "/api/tasks/ai/prioritize",
+    icon: Sparkles,
   },
 };
 
