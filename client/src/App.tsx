@@ -17,6 +17,7 @@ import TaskManagementPage from "@/pages/TaskManagementPage";
 import ProjectsManagementPage from "@/pages/ProjectsManagementPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ResourceManagementPage from "@/pages/ResourceManagementPage";
+import ResourcePlanningPage from "@/pages/ResourcePlanningPage";
 import BPMPage from "@/pages/BPMPage";
 import TestManagementPage from "@/pages/TestManagementPage";
 import WorkspacesPage from "@/pages/WorkspacesPage";
@@ -152,6 +153,7 @@ function Router() {
         </Route>
         <Route path="/modules/projects/:projectId" component={ProjectsManagementPage} />
         <Route path="/modules/projects" component={ProjectsManagementPage} />
+        <Route path="/modules/resource-planning" component={ResourcePlanningPage} />
         <Route path="/modules/resource-mgmt" component={ResourceManagementPage} />
         <Route path="/modules/bpm" component={BPMPage} />
         <Route path="/modules/test-mgmt" component={TestManagementPage} />

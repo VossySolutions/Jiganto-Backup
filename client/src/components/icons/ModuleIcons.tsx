@@ -147,6 +147,21 @@ export function ResourcesIcon({ className }: IconProps) {
   );
 }
 
+export function ResourcePlanningIcon({ className }: IconProps) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="2" y="3" width="12" height="11" rx="1.5" fill="#4338CA" fillOpacity="0.15" stroke="#4338CA" strokeWidth="1.2" />
+      <path d="M2 6H14" stroke="#4338CA" strokeWidth="1" />
+      <rect x="4" y="1.5" width="1.5" height="3" rx="0.5" fill="#4338CA" />
+      <rect x="10.5" y="1.5" width="1.5" height="3" rx="0.5" fill="#4338CA" />
+      <rect x="4" y="8" width="2.5" height="2" rx="0.5" fill="#0D9488" />
+      <rect x="7.5" y="8" width="2.5" height="2" rx="0.5" fill="#4338CA" />
+      <rect x="11" y="8" width="1.5" height="2" rx="0.5" fill="#D97706" />
+      <rect x="4" y="11" width="4" height="1.5" rx="0.5" fill="#7C3AED" fillOpacity="0.7" />
+    </svg>
+  );
+}
+
 export function ServiceDeskIcon({ className }: IconProps) {
   return (
     <svg className={className} width="16" height="16" viewBox="0 0 16 16" fill="none">

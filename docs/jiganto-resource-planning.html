@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Jiganto — Resource Planning & Workforce Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --brand:#4338CA;--brand-d:#1E1B4B;--brand-l:#EEF2FF;--brand-m:#818CF8;
+  --teal:#0D9488;--teal-l:#CCFBF1;--teal-d:#0F766E;
+  --green:#059669;--green-l:#D1FAE5;--green-d:#065F46;
+  --amber:#D97706;--amber-l:#FEF3C7;--amber-d:#92400E;
+  --red:#DC2626;--red-l:#FEE2E2;--red-d:#991B1B;
+  --violet:#7C3AED;--violet-l:#EDE9FE;--violet-d:#5B21B6;
+  --blue:#2563EB;--blue-l:#DBEAFE;--blue-d:#1D4ED8;
+  --text:#111827;--text2:#374151;--text3:#6B7280;--text4:#9CA3AF;
+  --border:#E5E7EB;--border2:#F3F4F6;--border3:#F9FAFB;
+  --surface:#FFFFFF;--bg:#F0F2FF;--sbg:#0F0F1A;
+  --font:'Plus Jakarta Sans',sans-serif;--mono:'DM Mono',monospace;
+  --r:8px;--rl:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:12px;-webkit-font-smoothing:antialiased;height:100%;}
+
+/* ── APP SHELL ── */
+.app{display:flex;height:100vh;overflow:hidden;}
+
+/* ── SIDEBAR ── */
+.sb{width:220px;flex-shrink:0;background:var(--sbg);display:flex;flex-direction:column;overflow-y:auto;position:relative;}
+.sb::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 30% at 50% 0%,rgba(67,56,202,.28),transparent);pointer-events:none;}
+.sb-brand{padding:16px 16px 14px;border-bottom:1px solid rgba(255,255,255,.07);position:relative;z-index:1;display:flex;align-items:center;gap:10px;}
+.sb-mark{width:32px;height:32px;background:linear-gradient(135deg,var(--brand),var(--teal));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;}
+.sb-name{font-size:14px;font-weight:800;color:#fff;letter-spacing:-.01em;}
+.sb-sub{font-size:9px;color:rgba(255,255,255,.35);letter-spacing:.06em;text-transform:uppercase;}
+.nav{flex:1;padding:8px 0;position:relative;z-index:1;}
+.nav-sec{padding:12px 16px 4px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.22);}
+.ni{display:flex;align-items:center;gap:9px;padding:7px 16px;cursor:pointer;border-left:2px solid transparent;transition:.1s;}
+.ni:hover{background:rgba(255,255,255,.05);}
+.ni.on{background:rgba(67,56,202,.2);border-left-color:var(--brand-m);}
+.ni-ic{font-size:14px;width:20px;text-align:center;color:rgba(255,255,255,.36);}
+.ni.on .ni-ic{color:var(--brand-m);}
+.ni-lb{font-size:12px;font-weight:500;color:rgba(255,255,255,.5);}
+.ni.on .ni-lb{color:#fff;font-weight:600;}
+.ni-badge{margin-left:auto;background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;}
+.ni-badge-soft{margin-left:auto;background:rgba(255,255,255,.1);color:rgba(255,255,255,.5);font-size:9px;font-weight:600;padding:1px 6px;border-radius:8px;}
+.sb-foot{padding:12px 16px;border-top:1px solid rgba(255,255,255,.07);position:relative;z-index:1;}
+.sb-role{font-size:9px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.04em;}
+.sb-user{font-size:11px;font-weight:600;color:rgba(255,255,255,.8);margin-top:2px;}
+.persona-switch{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;}
+.ps-btn{font-size:9px;padding:2px 7px;border-radius:6px;cursor:pointer;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.45);background:transparent;font-family:var(--font);transition:.1s;}
+.ps-btn:hover,.ps-btn.on{background:rgba(67,56,202,.3);border-color:var(--brand-m);color:#fff;}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:10px;flex-shrink:0;}
+.tb-title{font-size:15px;font-weight:700;color:var(--text);}
+.tb-sub{font-size:11px;color:var(--text3);}
+.sp{flex:1;}
+.tb-btn{height:34px;padding:0 14px;border-radius:var(--r);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;}
+.tb-ghost{background:transparent;border:1px solid var(--border);color:var(--text2);}
+.tb-ghost:hover{background:var(--border3);}
+.tb-primary{background:var(--brand);border:none;color:#fff;}
+.tb-primary:hover{background:var(--brand-d);}
+.tb-ai{background:linear-gradient(135deg,var(--brand),var(--violet));border:none;color:#fff;}
+
+/* ── CONTENT ── */
+.content{flex:1;overflow-y:auto;padding:20px 24px 48px;}
+.view{display:none;}
+.view.on{display:block;}
+
+/* ── SECTION STRIP ── */
+.strip{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.strip h2{font-size:16px;font-weight:700;color:var(--text);}
+.strip p{font-size:11px;color:var(--text3);margin-top:2px;}
+
+/* ── KPI GRID ── */
+.kpi-grid{display:grid;gap:14px;margin-bottom:20px;}
+.kpi-5{grid-template-columns:repeat(5,1fr);}
+.kpi-4{grid-template-columns:repeat(4,1fr);}
+.kpi-3{grid-template-columns:repeat(3,1fr);}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:16px;}
+.kpi-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:6px;}
+.kpi-val{font-size:26px;font-weight:800;color:var(--text);line-height:1;}
+.kpi-sub{font-size:11px;color:var(--text3);margin-top:4px;display:flex;align-items:center;gap:4px;}
+.kpi-up{color:var(--green);font-weight:600;}
+.kpi-dn{color:var(--red);font-weight:600;}
+.kpi-bar{height:4px;background:var(--border2);border-radius:2px;margin-top:8px;overflow:hidden;}
+.kpi-bar-fill{height:100%;border-radius:2px;}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;}
+.chdr{padding:12px 18px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.ct{font-size:13px;font-weight:700;color:var(--text);}
+.cs{font-size:11px;color:var(--text3);}
+.cb{padding:16px 18px;}
+.cb0{padding:0;}
+
+/* ── GRID ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+.g-63{display:grid;grid-template-columns:3fr 2fr;gap:16px;}
+.g-73{display:grid;grid-template-columns:7fr 3fr;gap:16px;}
+
+/* ── CHART PLACEHOLDERS (rendered with CSS/canvas-like divs) ── */
+.chart-area{position:relative;height:160px;display:flex;align-items:flex-end;gap:6px;padding:0 4px;}
+.bar-grp{flex:1;display:flex;gap:2px;align-items:flex-end;}
+.bar{flex:1;border-radius:3px 3px 0 0;min-height:4px;transition:.3s;}
+.bar-label{text-align:center;font-size:9px;color:var(--text4);margin-top:4px;}
+.chart-line{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;}
+.y-labels{display:flex;flex-direction:column;justify-content:space-between;height:160px;padding:0 8px 0 0;font-size:9px;color:var(--text4);flex-shrink:0;width:32px;}
+
+/* ── SPARKLINE ── */
+.spark{display:flex;align-items:flex-end;gap:2px;height:32px;}
+.spark-bar{width:6px;border-radius:2px 2px 0 0;flex-shrink:0;}
+
+/* ── UTILISATION RING ── */
+.ring-wrap{position:relative;width:80px;height:80px;flex-shrink:0;}
+.ring-wrap svg{transform:rotate(-90deg);}
+.ring-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;}
+
+/* ── PILLS / BADGES ── */
+.pill{display:inline-flex;align-items:center;justify-content:center;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;cursor:default;}
+.p-g{background:var(--green-l);color:var(--green-d);}
+.p-a{background:var(--amber-l);color:var(--amber-d);}
+.p-r{background:var(--red-l);color:var(--red-d);}
+.p-b{background:var(--blue-l);color:var(--blue-d);}
+.p-v{background:var(--violet-l);color:var(--violet-d);}
+.p-t{background:var(--teal-l);color:var(--teal-d);}
+.p-n{background:var(--border2);color:var(--text3);}
+
+/* ── AVATAR ── */
+.av{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;}
+.av-sm{width:22px;height:22px;font-size:8px;}
+.av-p{background:var(--brand);}.av-t{background:var(--teal);}.av-g{background:var(--green);}.av-a{background:var(--amber);}.av-v{background:var(--violet);}.av-r{background:var(--red);}
+
+/* ── DEMAND VS SUPPLY MATRIX ── */
+.dsm-wrap{overflow-x:auto;}
+.dsm{border-collapse:collapse;width:100%;min-width:800px;}
+.dsm th{padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);background:var(--border3);border-bottom:2px solid var(--border2);text-align:center;white-space:nowrap;}
+.dsm th:first-child{text-align:left;}
+.dsm td{padding:10px 12px;border-bottom:1px solid var(--border2);text-align:center;font-size:12px;font-weight:600;}
+.dsm td:first-child{text-align:left;font-weight:700;font-size:12px;}
+.dsm tr:hover td{background:rgba(67,56,202,.02);}
+.ds-surplus{color:var(--green-d);background:var(--green-l);border-radius:6px;display:inline-block;min-width:40px;padding:2px 6px;}
+.ds-shortage{color:var(--red-d);background:var(--red-l);border-radius:6px;display:inline-block;min-width:40px;padding:2px 6px;}
+.ds-ok{color:var(--text3);background:var(--border2);border-radius:6px;display:inline-block;min-width:40px;padding:2px 6px;}
+.ds-watch{color:var(--amber-d);background:var(--amber-l);border-radius:6px;display:inline-block;min-width:40px;padding:2px 6px;}
+
+/* ── HEATMAP ── */
+.hm-wrap{overflow-x:auto;}
+.hm{border-collapse:collapse;width:100%;min-width:900px;}
+.hm th{padding:7px 6px;font-size:10px;font-weight:600;color:var(--text3);text-align:center;white-space:nowrap;border-bottom:1px solid var(--border2);}
+.hm th:first-child{text-align:left;min-width:160px;}
+.hm td{padding:4px 5px;text-align:center;border-bottom:1px solid var(--border2);}
+.hm td:first-child{text-align:left;font-size:11px;font-weight:600;color:var(--text2);padding:8px 8px;}
+.hm-cell{width:100%;height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;cursor:pointer;transition:.1s;}
+.hm-cell:hover{opacity:.8;transform:scale(1.05);}
+.hc-green{background:var(--green-l);color:var(--green-d);}
+.hc-amber{background:var(--amber-l);color:var(--amber-d);}
+.hc-red{background:var(--red-l);color:var(--red-d);}
+.hc-grey{background:var(--border2);color:var(--text4);}
+.hc-blue{background:var(--blue-l);color:var(--blue-d);}
+
+/* ── SCHEDULER ── */
+.sched-wrap{overflow-x:auto;}
+.sched{border-collapse:collapse;width:100%;min-width:1000px;}
+.sched th{padding:8px 6px;font-size:10px;font-weight:600;color:var(--text3);text-align:center;border-bottom:2px solid var(--border2);white-space:nowrap;background:var(--border3);}
+.sched th:first-child{text-align:left;min-width:180px;padding:8px 12px;}
+.sched td{padding:3px 5px;border-bottom:1px solid var(--border2);vertical-align:middle;}
+.sched td:first-child{padding:8px 12px;}
+.res-info{display:flex;align-items:center;gap:8px;}
+.res-name{font-size:12px;font-weight:600;}
+.res-role{font-size:10px;color:var(--text3);}
+.sched-bar{border-radius:4px;height:22px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;padding:0 6px;cursor:grab;user-select:none;transition:.1s;}
+.sched-bar:hover{opacity:.85;box-shadow:0 2px 8px rgba(0,0,0,.2);}
+.sched-bar:active{cursor:grabbing;}
+.sched-avail{border-radius:4px;height:22px;background:var(--green-l);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--green-d);cursor:pointer;}
+.sched-avail:hover{background:var(--green-d);color:#fff;}
+.sched-soft{border:2px dashed;background:transparent;}
+
+/* ── SKILLS TABLE ── */
+.skills-tbl{width:100%;border-collapse:collapse;}
+.skills-tbl th{padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);background:var(--border3);border-bottom:1px solid var(--border2);text-align:left;}
+.skills-tbl td{padding:10px 12px;border-bottom:1px solid var(--border2);font-size:12px;vertical-align:middle;}
+.skills-tbl tr:last-child td{border-bottom:none;}
+.skills-tbl tr:hover td{background:var(--border3);}
+.skill-bar-track{width:100px;height:8px;background:var(--border2);border-radius:4px;overflow:hidden;}
+.skill-bar-fill{height:100%;border-radius:4px;}
+.prof-expert{background:var(--brand);}
+.prof-advanced{background:var(--teal);}
+.prof-intermediate{background:var(--amber);}
+.prof-beginner{background:var(--text4);}
+
+/* ── RECRUITMENT FORECAST ── */
+.rec-card{border:1px solid var(--border);border-radius:var(--rl);padding:14px;background:var(--surface);}
+.rec-card.shortage{border-left:4px solid var(--red);}
+.rec-card.surplus{border-left:4px solid var(--green);}
+.rec-card.watch{border-left:4px solid var(--amber);}
+.rec-month{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:4px;}
+.rec-skill{font-size:14px;font-weight:700;margin-bottom:8px;}
+.rec-row{display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border2);}
+.rec-row:last-of-type{border-bottom:none;}
+.rec-label{color:var(--text3);}
+.rec-action{margin-top:8px;font-size:11px;font-weight:600;padding:6px 10px;border-radius:6px;background:var(--brand-l);color:var(--brand);}
+
+/* ── AI PANEL ── */
+.ai-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);display:flex;flex-direction:column;height:600px;}
+.ai-hdr{padding:14px 18px;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:10px;}
+.ai-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);}
+.ai-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;}
+.ai-msg{max-width:85%;}
+.ai-msg.user{align-self:flex-end;}
+.ai-msg.ai{align-self:flex-start;}
+.ai-bubble{padding:10px 14px;border-radius:12px;font-size:12px;line-height:1.6;}
+.ai-bubble.user{background:var(--brand);color:#fff;border-radius:12px 12px 2px 12px;}
+.ai-bubble.ai{background:var(--border3);color:var(--text2);border-radius:12px 12px 12px 2px;border:1px solid var(--border2);}
+.ai-bubble strong{font-weight:700;}
+.ai-suggestions{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 12px;}
+.ai-sugg{padding:6px 12px;background:var(--brand-l);color:var(--brand);border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(67,56,202,.2);}
+.ai-sugg:hover{background:var(--brand);color:#fff;}
+.ai-input-wrap{padding:12px 16px;border-top:1px solid var(--border2);display:flex;gap:8px;}
+.ai-input{flex:1;padding:8px 14px;border:1px solid var(--border);border-radius:20px;font-family:var(--font);font-size:12px;outline:none;background:var(--border3);}
+.ai-input:focus{border-color:var(--brand);background:#fff;}
+.ai-send{width:36px;height:36px;border-radius:50%;background:var(--brand);border:none;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+
+/* ── OPPORTUNITY CARD ── */
+.opp-card{border:1px solid var(--border);border-radius:var(--r);padding:12px;background:var(--surface);margin-bottom:8px;}
+.opp-card:hover{border-color:var(--brand-m);background:var(--brand-l);}
+.opp-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.opp-client{font-size:13px;font-weight:700;}
+.opp-value{font-size:13px;font-weight:700;color:var(--brand);}
+.opp-proj{font-size:11px;color:var(--text3);margin-bottom:8px;}
+.opp-meta{display:flex;gap:8px;flex-wrap:wrap;}
+.opp-tag{font-size:10px;padding:2px 8px;border-radius:6px;font-weight:600;}
+.opp-demand{margin-top:8px;border-top:1px solid var(--border2);padding-top:8px;}
+.opp-demand-title{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;}
+.opp-role{display:flex;align-items:center;gap:6px;font-size:11px;padding:2px 0;}
+.opp-role-count{width:20px;height:20px;border-radius:50%;background:var(--brand-l);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;}
+
+/* ── SCENARIO PANEL ── */
+.scenario-tabs{display:flex;gap:2px;background:var(--border2);border-radius:8px;padding:2px;margin-bottom:14px;}
+.sc-tab{flex:1;padding:6px;text-align:center;font-size:11px;font-weight:600;color:var(--text3);border-radius:6px;cursor:pointer;}
+.sc-tab.on{background:var(--surface);color:var(--brand);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+
+/* ── MISC ── */
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);background:var(--border3);border-bottom:1px solid var(--border2);text-align:left;}
+.tbl td{padding:9px 12px;font-size:12px;border-bottom:1px solid var(--border2);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:var(--border3);}
+.mono{font-family:var(--mono);font-size:11px;}
+.section-divider{height:1px;background:var(--border2);margin:20px 0;}
+.alert-banner{background:var(--red-l);border:1px solid #FECACA;border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:12px;color:var(--red-d);}
+.info-banner{background:var(--blue-l);border:1px solid #BFDBFE;border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:12px;color:var(--blue-d);}
+.mini-chart{display:flex;align-items:flex-end;gap:3px;height:48px;}
+.mc-bar{border-radius:2px 2px 0 0;min-width:8px;}
+.tooltip{display:none;position:absolute;background:var(--text);color:#fff;font-size:10px;padding:4px 8px;border-radius:4px;pointer-events:none;z-index:100;white-space:nowrap;}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ════ SIDEBAR ════ -->
+<aside class="sb">
+  <div class="sb-brand">
+    <div class="sb-mark">Ji</div>
+    <div><div class="sb-name">Jiganto</div><div class="sb-sub">Resource Planning</div></div>
+  </div>
+  <nav class="nav">
+    <div class="nav-sec">Planning</div>
+    <div class="ni on" onclick="showView('exec',this)"><span class="ni-ic">📊</span><span class="ni-lb">Executive Dashboard</span></div>
+    <div class="ni" onclick="showView('dsm',this)"><span class="ni-ic">⚡</span><span class="ni-lb">Demand vs Supply</span><span class="ni-badge">3 gaps</span></div>
+    <div class="ni" onclick="showView('heatmap',this)"><span class="ni-ic">🗓</span><span class="ni-lb">Resource Heat Map</span></div>
+    <div class="ni" onclick="showView('scheduler',this)"><span class="ni-ic">📅</span><span class="ni-lb">Resource Scheduler</span></div>
+    <div class="nav-sec">Workforce</div>
+    <div class="ni" onclick="showView('skills',this)"><span class="ni-ic">🎯</span><span class="ni-lb">Skills Inventory</span></div>
+    <div class="ni" onclick="showView('pipeline',this)"><span class="ni-ic">💼</span><span class="ni-lb">Pipeline & Demand</span><span class="ni-badge-soft">5 opps</span></div>
+    <div class="ni" onclick="showView('recruit',this)"><span class="ni-ic">🔍</span><span class="ni-lb">Recruitment Forecast</span><span class="ni-badge">4 alerts</span></div>
+    <div class="ni" onclick="showView('bench',this)"><span class="ni-ic">👥</span><span class="ni-lb">Bench Management</span></div>
+    <div class="nav-sec">Intelligence</div>
+    <div class="ni" onclick="showView('ai',this)"><span class="ni-ic">✦</span><span class="ni-lb">AI Workforce Planner</span></div>
+    <div class="ni" onclick="showView('scenario',this)"><span class="ni-ic">🔀</span><span class="ni-lb">Scenario Planning</span></div>
+  </nav>
+  <div class="sb-foot">
+    <div class="sb-role">Current persona</div>
+    <div class="sb-user" id="persona-label">Resource Manager</div>
+    <div class="persona-switch">
+      <button class="ps-btn on" onclick="setPersona('Resource Mgr',this)">Res Mgr</button>
+      <button class="ps-btn" onclick="setPersona('Executive',this)">Exec</button>
+      <button class="ps-btn" onclick="setPersona('Sales Director',this)">Sales</button>
+      <button class="ps-btn" onclick="setPersona('HR Manager',this)">HR</button>
+    </div>
+  </div>
+</aside>
+
+<!-- ════ MAIN ════ -->
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="tb-title">Resource Planning & Workforce Management</div>
+      <div class="tb-sub">Live data · 147 resources · Last updated 2 minutes ago</div>
+    </div>
+    <div class="sp"></div>
+    <button class="tb-btn tb-ghost">📥 Export</button>
+    <button class="tb-btn tb-ghost">⚙ Settings</button>
+    <button class="tb-btn tb-ghost">🔔 Alerts <span style="background:var(--red);color:#fff;padding:1px 5px;border-radius:8px;font-size:9px;margin-left:2px;">4</span></button>
+    <button class="tb-btn tb-ai" onclick="showView('ai',document.querySelector('.ni:last-of-type'))">✦ AI Planner</button>
+  </div>
+  <div class="content">
+
+<!-- ════════════════════════════════
+     VIEW: EXECUTIVE DASHBOARD
+════════════════════════════════ -->
+<div class="view on" id="view-exec">
+  <div class="strip"><div><h2>Executive Dashboard</h2><p>Live capacity, utilisation and workforce health · Q2 2026</p></div>
+    <div style="display:flex;gap:8px;">
+      <select style="height:32px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r);font-family:var(--font);font-size:12px;background:var(--surface);">
+        <option>Q2 2026</option><option>Q3 2026</option><option>H2 2026</option><option>FY 2026</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- ALERT -->
+  <div class="alert-banner">⚠️ <strong>Critical: 3 SAP shortages identified in Q3 2026.</strong> &nbsp;4 senior consultants required — recommend initiating recruitment by end of Q2. <a href="#" onclick="showView('recruit',null)" style="color:var(--red-d);font-weight:700;margin-left:8px;">View recruitment forecast →</a></div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid kpi-5">
+    <div class="kpi">
+      <div class="kpi-label">Total Capacity</div>
+      <div class="kpi-val">147</div>
+      <div class="kpi-sub">resources available</div>
+      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:100%;background:var(--brand);"></div></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Billable Utilisation</div>
+      <div class="kpi-val" style="color:var(--amber);">74%</div>
+      <div class="kpi-sub"><span class="kpi-dn">↓ 3%</span> vs last month · Target: 82%</div>
+      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:74%;background:var(--amber);"></div></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Forecast Revenue</div>
+      <div class="kpi-val" style="color:var(--green);">£4.2M</div>
+      <div class="kpi-sub"><span class="kpi-up">↑ 8%</span> vs Q2 forecast</div>
+      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:82%;background:var(--green);"></div></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">On the Bench</div>
+      <div class="kpi-val" style="color:var(--red);">21</div>
+      <div class="kpi-sub"><span class="kpi-dn">↑ 4</span> vs last month · 14%</div>
+      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:14%;background:var(--red);"></div></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Open Skills Gaps</div>
+      <div class="kpi-val" style="color:var(--red);">7</div>
+      <div class="kpi-sub">3 critical · 4 emerging</div>
+      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:35%;background:var(--red);"></div></div>
+    </div>
+  </div>
+
+  <div class="g2" style="margin-bottom:16px;">
+    <!-- Demand vs Supply bar chart -->
+    <div class="card">
+      <div class="chdr"><div class="ct">Demand vs Supply — Next 6 Months</div><div class="cs">Confirmed + pipeline weighted</div></div>
+      <div class="cb">
+        <div style="display:flex;gap:10px;align-items:flex-end;">
+          <div class="y-labels"><span>80</span><span>60</span><span>40</span><span>20</span><span>0</span></div>
+          <div style="flex:1;">
+            <div class="chart-area" style="height:140px;border-left:1px solid var(--border2);border-bottom:1px solid var(--border2);">
+              <div class="bar-grp"><div class="bar" style="background:var(--brand);height:80%;" title="Demand: 72"></div><div class="bar" style="background:var(--teal-l);height:85%;" title="Supply: 76"></div></div>
+              <div class="bar-grp"><div class="bar" style="background:var(--brand);height:88%;" title="Demand: 79"></div><div class="bar" style="background:var(--teal-l);height:82%;" title="Supply: 74"></div></div>
+              <div class="bar-grp"><div class="bar" style="background:var(--brand);height:95%;" title="Demand: 86"></div><div class="bar" style="background:var(--teal-l);height:78%;" title="Supply: 70"></div></div>
+              <div class="bar-grp"><div class="bar" style="background:var(--brand);height:100%;" title="Demand: 90"></div><div class="bar" style="background:var(--teal-l);height:72%;" title="Supply: 65"></div></div>
+              <div class="bar-grp"><div class="bar" style="background:var(--brand);height:92%;" title="Demand: 83"></div><div class="bar" style="background:var(--teal-l);height:74%;" title="Supply: 67"></div></div>
+              <div class="bar-grp"><div class="bar" style="background:var(--brand);height:75%;" title="Demand: 68"></div><div class="bar" style="background:var(--teal-l);height:80%;" title="Supply: 72"></div></div>
+            </div>
+            <div style="display:flex;gap:0;padding-left:4px;">
+              <div class="bar-label" style="flex:1;">Jun</div>
+              <div class="bar-label" style="flex:1;">Jul</div>
+              <div class="bar-label" style="flex:1;">Aug</div>
+              <div class="bar-label" style="flex:1;">Sep</div>
+              <div class="bar-label" style="flex:1;">Oct</div>
+              <div class="bar-label" style="flex:1;">Nov</div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:8px;font-size:11px;">
+          <div style="display:flex;align-items:center;gap:5px;"><div style="width:12px;height:12px;border-radius:3px;background:var(--brand);"></div>Demand</div>
+          <div style="display:flex;align-items:center;gap:5px;"><div style="width:12px;height:12px;border-radius:3px;background:var(--teal-l);border:1px solid var(--teal);"></div>Supply</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Utilisation trend -->
+    <div class="card">
+      <div class="chdr"><div class="ct">Utilisation Trend</div><div class="cs">Billable % by month</div></div>
+      <div class="cb">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;">
+          <div class="ring-wrap">
+            <svg width="80" height="80" viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="32" fill="none" stroke="var(--border2)" stroke-width="10"/>
+              <circle cx="40" cy="40" r="32" fill="none" stroke="var(--amber)" stroke-width="10"
+                stroke-dasharray="150.8" stroke-dashoffset="39.2" stroke-linecap="round"/>
+            </svg>
+            <div class="ring-center" style="color:var(--amber);">74%</div>
+          </div>
+          <div>
+            <div style="font-size:12px;color:var(--text3);">Current utilisation</div>
+            <div style="font-size:22px;font-weight:800;color:var(--amber);">74%</div>
+            <div style="font-size:11px;color:var(--text3);">Target: <strong style="color:var(--brand);">82%</strong></div>
+            <div style="font-size:11px;color:var(--red);margin-top:2px;">⚠ 8% below target</div>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;">Monthly trend</div>
+        <div class="mini-chart">
+          <div class="mc-bar" style="height:60%;background:var(--brand-m);flex:1;" title="Jan: 78%"></div>
+          <div class="mc-bar" style="height:75%;background:var(--brand-m);flex:1;" title="Feb: 81%"></div>
+          <div class="mc-bar" style="height:78%;background:var(--brand-m);flex:1;" title="Mar: 83%"></div>
+          <div class="mc-bar" style="height:72%;background:var(--amber);flex:1;" title="Apr: 77%"></div>
+          <div class="mc-bar" style="height:68%;background:var(--amber);flex:1;" title="May: 74%"></div>
+          <div class="mc-bar" style="height:68%;background:var(--amber);flex:1;" title="Jun: 74%"></div>
+          <div class="mc-bar" style="height:75%;background:var(--border2);flex:1;" title="Jul: forecast 80%"></div>
+          <div class="mc-bar" style="height:82%;background:var(--border2);flex:1;" title="Aug: forecast 85%"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text4);margin-top:4px;">
+          <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul▸</span><span>Aug▸</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="g3" style="margin-bottom:16px;">
+    <!-- Top at-risk resources -->
+    <div class="card">
+      <div class="chdr"><div class="ct">Resources at Risk</div><div class="cs">Rolling off in next 30 days</div></div>
+      <div class="cb0">
+        <table class="tbl">
+          <thead><tr><th>Resource</th><th>Role</th><th>Roll-off</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td><div style="display:flex;align-items:center;gap:7px;"><div class="av av-p">SC</div><div><div style="font-weight:600;">Sarah Chen</div></div></div></td><td style="color:var(--text3);">Sr Developer</td><td style="color:var(--red);font-weight:600;">12 Jun</td><td><span class="pill p-r">No booking</span></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:7px;"><div class="av av-t">JO</div><div><div style="font-weight:600;">James Okafor</div></div></div></td><td style="color:var(--text3);">SAP Consultant</td><td style="color:var(--amber);font-weight:600;">18 Jun</td><td><span class="pill p-a">1 prospect</span></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:7px;"><div class="av av-g">PM</div><div><div style="font-weight:600;">Priya Mehta</div></div></div></td><td style="color:var(--text3);">Business Analyst</td><td style="color:var(--amber);font-weight:600;">22 Jun</td><td><span class="pill p-a">1 prospect</span></td></tr>
+            <tr><td><div style="display:flex;align-items:center;gap:7px;"><div class="av av-v">RB</div><div><div style="font-weight:600;">Robert Burns</div></div></div></td><td style="color:var(--text3);">Test Manager</td><td style="color:var(--green);font-weight:600;">30 Jun</td><td><span class="pill p-g">Booked</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Pipeline demand summary -->
+    <div class="card">
+      <div class="chdr"><div class="ct">Pipeline Demand</div><div class="cs">Soft demand by role · weighted</div></div>
+      <div class="cb">
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;"><div style="font-size:12px;font-weight:600;min-width:120px;">SAP Consultants</div><div style="flex:1;height:10px;background:var(--border2);border-radius:5px;overflow:hidden;"><div style="height:100%;width:85%;background:var(--red);border-radius:5px;"></div></div><div style="font-size:11px;font-weight:700;color:var(--red);min-width:24px;text-align:right;">17</div></div>
+          <div style="display:flex;align-items:center;gap:8px;"><div style="font-size:12px;font-weight:600;min-width:120px;">Project Managers</div><div style="flex:1;height:10px;background:var(--border2);border-radius:5px;overflow:hidden;"><div style="height:100%;width:60%;background:var(--amber);border-radius:5px;"></div></div><div style="font-size:11px;font-weight:700;color:var(--amber);min-width:24px;text-align:right;">12</div></div>
+          <div style="display:flex;align-items:center;gap:8px;"><div style="font-size:12px;font-weight:600;min-width:120px;">Business Analysts</div><div style="flex:1;height:10px;background:var(--border2);border-radius:5px;overflow:hidden;"><div style="height:100%;width:70%;background:var(--brand);border-radius:5px;"></div></div><div style="font-size:11px;font-weight:700;color:var(--brand);min-width:24px;text-align:right;">14</div></div>
+          <div style="display:flex;align-items:center;gap:8px;"><div style="font-size:12px;font-weight:600;min-width:120px;">Test Managers</div><div style="flex:1;height:10px;background:var(--border2);border-radius:5px;overflow:hidden;"><div style="height:100%;width:40%;background:var(--teal);border-radius:5px;"></div></div><div style="font-size:11px;font-weight:700;color:var(--teal-d);min-width:24px;text-align:right;">8</div></div>
+          <div style="display:flex;align-items:center;gap:8px;"><div style="font-size:12px;font-weight:600;min-width:120px;">Developers</div><div style="flex:1;height:10px;background:var(--border2);border-radius:5px;overflow:hidden;"><div style="height:100%;width:55%;background:var(--violet);border-radius:5px;"></div></div><div style="font-size:11px;font-weight:700;color:var(--violet-d);min-width:24px;text-align:right;">11</div></div>
+          <div style="display:flex;align-items:center;gap:8px;"><div style="font-size:12px;font-weight:600;min-width:120px;">Architects</div><div style="flex:1;height:10px;background:var(--border2);border-radius:5px;overflow:hidden;"><div style="height:100%;width:30%;background:var(--green);border-radius:5px;"></div></div><div style="font-size:11px;font-weight:700;color:var(--green-d);min-width:24px;text-align:right;">6</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--text4);margin-top:10px;font-style:italic;">Figures reflect probability-weighted pipeline demand</div>
+      </div>
+    </div>
+
+    <!-- Skills gap summary -->
+    <div class="card">
+      <div class="chdr"><div class="ct">Critical Skills Gaps</div><div class="cs">Demand exceeds supply</div></div>
+      <div class="cb">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="border:1px solid var(--red-l);border-left:3px solid var(--red);border-radius:6px;padding:8px 10px;">
+            <div style="font-size:12px;font-weight:700;">SAP S/4HANA</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">Demand: 15 &nbsp;·&nbsp; Supply: 11 &nbsp;·&nbsp; <span style="color:var(--red);font-weight:700;">Gap: –4</span></div>
+            <div style="font-size:10px;color:var(--red);margin-top:4px;">⚡ Recruit 4 by Jan 2027</div>
+          </div>
+          <div style="border:1px solid var(--red-l);border-left:3px solid var(--red);border-radius:6px;padding:8px 10px;">
+            <div style="font-size:12px;font-weight:700;">SAP BTP / Cloud</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">Demand: 8 &nbsp;·&nbsp; Supply: 5 &nbsp;·&nbsp; <span style="color:var(--red);font-weight:700;">Gap: –3</span></div>
+            <div style="font-size:10px;color:var(--red);margin-top:4px;">⚡ Upskill or recruit by Q4</div>
+          </div>
+          <div style="border:1px solid var(--amber-l);border-left:3px solid var(--amber);border-radius:6px;padding:8px 10px;">
+            <div style="font-size:12px;font-weight:700;">AI / ML Consulting</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">Demand: 6 &nbsp;·&nbsp; Supply: 4 &nbsp;·&nbsp; <span style="color:var(--amber);font-weight:700;">Gap: –2</span></div>
+            <div style="font-size:10px;color:var(--amber-d);margin-top:4px;">⚠ Monitor — fast-growing demand</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     VIEW: DEMAND vs SUPPLY MATRIX
+════════════════════════════════ -->
+<div class="view" id="view-dsm">
+  <div class="strip">
+    <div><h2>Demand vs Supply Matrix</h2><p>The flagship view — positive numbers = surplus, negative = shortage</p></div>
+    <div style="display:flex;gap:8px;">
+      <button class="tb-btn tb-ghost" style="font-size:11px;">⬇ Export</button>
+      <button class="tb-btn tb-primary" onclick="showView('recruit',null)">View Recruitment Actions</button>
+    </div>
+  </div>
+
+  <div class="info-banner">ℹ️ Numbers show available supply minus demand. <strong>Negative = shortage requiring action.</strong> Soft demand from pipeline is probability-weighted. Click any cell to see resource detail.</div>
+
+  <div class="kpi-grid kpi-4" style="margin-bottom:16px;">
+    <div class="kpi"><div class="kpi-label">Skills Tracked</div><div class="kpi-val">24</div><div class="kpi-sub">across 6 practice areas</div></div>
+    <div class="kpi"><div class="kpi-label">Critical Shortages</div><div class="kpi-val" style="color:var(--red);">7</div><div class="kpi-sub">in next 6 months</div></div>
+    <div class="kpi"><div class="kpi-label">Confirmed Demand</div><div class="kpi-val">89</div><div class="kpi-sub">headcount required</div></div>
+    <div class="kpi"><div class="kpi-label">Pipeline Demand</div><div class="kpi-val" style="color:var(--amber);">+43</div><div class="kpi-sub">probability weighted</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="chdr">
+      <div><div class="ct">Skill Demand vs Supply — Jun 2026 to Mar 2027</div><div class="cs">Confirmed demand only · Click "Include pipeline" to add weighted soft demand</div></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <label style="font-size:11px;display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="pipeline-toggle" onchange="togglePipeline(this)"> Include pipeline demand</label>
+        <select style="height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--font);font-size:11px;"><option>All practices</option><option>SAP Practice</option><option>Digital</option><option>Cloud</option></select>
+      </div>
+    </div>
+    <div class="cb0 dsm-wrap">
+      <table class="dsm">
+        <thead>
+          <tr>
+            <th style="text-align:left;">Skill / Role</th>
+            <th>Supply</th>
+            <th>Jun '26</th><th>Jul '26</th><th>Aug '26</th><th>Sep '26</th><th>Oct '26</th><th>Nov '26</th><th>Dec '26</th><th>Jan '27</th><th>Feb '27</th><th>Mar '27</th>
+            <th>Trend</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><div style="font-weight:700;">SAP S/4HANA</div><div style="font-size:10px;color:var(--text3);">Finance & Logistics</div></td><td style="text-align:center;font-weight:700;color:var(--brand);">11</td>
+            <td><span class="ds-surplus">+2</span></td><td><span class="ds-shortage">-1</span></td><td><span class="ds-shortage">-3</span></td><td><span class="ds-shortage">-4</span></td><td><span class="ds-shortage">-5</span></td><td><span class="ds-shortage">-4</span></td><td><span class="ds-shortage">-3</span></td><td><span class="ds-shortage">-2</span></td><td><span class="ds-watch">-1</span></td><td><span class="ds-ok">0</span></td>
+            <td><div class="spark" style="justify-content:flex-end;">
+              <div class="spark-bar" style="height:80%;background:var(--green-l);"></div>
+              <div class="spark-bar" style="height:60%;background:var(--amber-l);"></div>
+              <div class="spark-bar" style="height:40%;background:var(--red-l);"></div>
+              <div class="spark-bar" style="height:30%;background:var(--red);"></div>
+            </div></td>
+          </tr>
+          <tr><td><div style="font-weight:700;">SAP BTP / Cloud</div><div style="font-size:10px;color:var(--text3);">Platform & Integration</div></td><td style="text-align:center;font-weight:700;color:var(--brand);">5</td>
+            <td><span class="ds-ok">0</span></td><td><span class="ds-shortage">-1</span></td><td><span class="ds-shortage">-2</span></td><td><span class="ds-shortage">-3</span></td><td><span class="ds-shortage">-3</span></td><td><span class="ds-shortage">-2</span></td><td><span class="ds-watch">-1</span></td><td><span class="ds-ok">0</span></td><td><span class="ds-ok">0</span></td><td><span class="ds-surplus">+1</span></td>
+            <td><div class="spark"><div class="spark-bar" style="height:50%;background:var(--border2);"></div><div class="spark-bar" style="height:30%;background:var(--red-l);"></div><div class="spark-bar" style="height:20%;background:var(--red);"></div><div class="spark-bar" style="height:50%;background:var(--border2);"></div></div></td>
+          </tr>
+          <tr><td><div style="font-weight:700;">Project Management</div><div style="font-size:10px;color:var(--text3);">Senior PM / Programme</div></td><td style="text-align:center;font-weight:700;color:var(--brand);">14</td>
+            <td><span class="ds-surplus">+4</span></td><td><span class="ds-surplus">+3</span></td><td><span class="ds-surplus">+2</span></td><td><span class="ds-watch">-1</span></td><td><span class="ds-shortage">-2</span></td><td><span class="ds-shortage">-3</span></td><td><span class="ds-watch">-1</span></td><td><span class="ds-surplus">+1</span></td><td><span class="ds-surplus">+2</span></td><td><span class="ds-surplus">+3</span></td>
+            <td><div class="spark"><div class="spark-bar" style="height:80%;background:var(--green-l);"></div><div class="spark-bar" style="height:60%;background:var(--green-l);"></div><div class="spark-bar" style="height:30%;background:var(--red-l);"></div><div class="spark-bar" style="height:50%;background:var(--green-l);"></div></div></td>
+          </tr>
+          <tr><td><div style="font-weight:700;">Business Analysis</div><div style="font-size:10px;color:var(--text3);">BA / Process Analyst</div></td><td style="text-align:center;font-weight:700;color:var(--brand);">18</td>
+            <td><span class="ds-surplus">+5</span></td><td><span class="ds-surplus">+4</span></td><td><span class="ds-surplus">+2</span></td><td><span class="ds-surplus">+1</span></td><td><span class="ds-watch">-1</span></td><td><span class="ds-watch">-1</span></td><td><span class="ds-ok">0</span></td><td><span class="ds-surplus">+2</span></td><td><span class="ds-surplus">+3</span></td><td><span class="ds-surplus">+4</span></td>
+            <td><div class="spark"><div class="spark-bar" style="height:90%;background:var(--green-l);"></div><div class="spark-bar" style="height:60%;background:var(--green-l);"></div><div class="spark-bar" style="height:40%;background:var(--amber-l);"></div><div class="spark-bar" style="height:70%;background:var(--green-l);"></div></div></td>
+          </tr>
+          <tr><td><div style="font-weight:700;">Test Management</div><div style="font-size:10px;color:var(--text3);">QA / Test Lead</div></td><td style="text-align:center;font-weight:700;color:var(--brand);">9</td>
+            <td><span class="ds-surplus">+2</span></td><td><span class="ds-surplus">+1</span></td><td><span class="ds-ok">0</span></td><td><span class="ds-watch">-1</span></td><td><span class="ds-watch">-1</span></td><td><span class="ds-watch">-2</span></td><td><span class="ds-watch">-1</span></td><td><span class="ds-ok">0</span></td><td><span class="ds-surplus">+1</span></td><td><span class="ds-surplus">+2</span></td>
+            <td><div class="spark"><div class="spark-bar" style="height:70%;background:var(--green-l);"></div><div class="spark-bar" style="height:30%;background:var(--amber-l);"></div><div class="spark-bar" style="height:20%;background:var(--amber-l);"></div><div class="spark-bar" style="height:60%;background:var(--green-l);"></div></div></td>
+          </tr>
+          <tr><td><div style="font-weight:700;">Software Development</div><div style="font-size:10px;color:var(--text3);">Full Stack / React / Node</div></td><td style="text-align:center;font-weight:700;color:var(--brand);">22</td>
+            <td><span class="ds-surplus">+6</span></td><td><span class="ds-surplus">+5</span></td><td><span class="ds-surplus">+4</span></td><td><span class="ds-surplus">+3</span></td><td><span class="ds-surplus">+2</span></td><td><span class="ds-surplus">+1</span></td><td><span class="ds-ok">0</span></td><td><span class="ds-watch">-1</span></td><td><span class="ds-watch">-2</span></td><td><span class="ds-watch">-1</span></td>
+            <td><div class="spark"><div class="spark-bar" style="height:90%;background:var(--green-l);"></div><div class="spark-bar" style="height:80%;background:var(--green-l);"></div><div class="spark-bar" style="height:50%;background:var(--green-l);"></div><div class="spark-bar" style="height:30%;background:var(--amber-l);"></div></div></td>
+          </tr>
+          <tr><td><div style="font-weight:700;">AI / ML Consulting</div><div style="font-size:10px;color:var(--text3);">Emerging — fast growing</div></td><td style="text-align:center;font-weight:700;color:var(--amber);">4</td>
+            <td><span class="ds-ok">0</span></td><td><span class="ds-shortage">-1</span></td><td><span class="ds-shortage">-1</span></td><td><span class="ds-shortage">-2</span></td><td><span class="ds-shortage">-2</span></td><td><span class="ds-shortage">-3</span></td><td><span class="ds-shortage">-3</span></td><td><span class="ds-shortage">-4</span></td><td><span class="ds-shortage">-4</span></td><td><span class="ds-shortage">-5</span></td>
+            <td><div class="spark"><div class="spark-bar" style="height:50%;background:var(--border2);"></div><div class="spark-bar" style="height:30%;background:var(--red-l);"></div><div class="spark-bar" style="height:20%;background:var(--red);"></div><div class="spark-bar" style="height:10%;background:var(--red);"></div></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:10px 18px;background:var(--border3);border-top:1px solid var(--border2);display:flex;gap:16px;font-size:11px;">
+      <span style="display:flex;align-items:center;gap:5px;"><span class="ds-surplus" style="font-size:10px;">+n</span> Surplus</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span class="ds-shortage" style="font-size:10px;">–n</span> Shortage (recruit/contract)</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span class="ds-watch" style="font-size:10px;">–1</span> Watch (monitor)</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span class="ds-ok" style="font-size:10px;">0</span> Balanced</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     VIEW: RESOURCE HEAT MAP
+════════════════════════════════ -->
+<div class="view" id="view-heatmap">
+  <div class="strip">
+    <div><h2>Resource Heat Map</h2><p>Allocation status by resource · Click any cell to view assignment detail</p></div>
+    <div style="display:flex;gap:8px;">
+      <div style="display:flex;background:var(--border2);border-radius:6px;padding:2px;">
+        <button class="sc-tab on" style="font-size:11px;padding:4px 10px;" onclick="this.parentElement.querySelectorAll('.sc-tab').forEach(t=>t.classList.remove('on'));this.classList.add('on')">Month</button>
+        <button class="sc-tab" style="font-size:11px;padding:4px 10px;" onclick="this.parentElement.querySelectorAll('.sc-tab').forEach(t=>t.classList.remove('on'));this.classList.add('on')">Week</button>
+        <button class="sc-tab" style="font-size:11px;padding:4px 10px;" onclick="this.parentElement.querySelectorAll('.sc-tab').forEach(t=>t.classList.remove('on'));this.classList.add('on')">Quarter</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:14px;margin-bottom:12px;font-size:11px;flex-wrap:wrap;">
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:14px;border-radius:3px;background:var(--green-l);border:1px solid var(--green);display:inline-block;"></span>Available (0–49%)</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:14px;border-radius:3px;background:var(--amber-l);border:1px solid var(--amber);display:inline-block;"></span>Partially allocated (50–79%)</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:14px;border-radius:3px;background:var(--red-l);border:1px solid var(--red);display:inline-block;"></span>Fully allocated (80–100%)</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:14px;border-radius:3px;background:var(--border2);border:1px solid var(--border);display:inline-block;"></span>Leave / unavailable</span>
+    <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:14px;border-radius:3px;background:var(--blue-l);border:2px dashed var(--blue);display:inline-block;"></span>Soft booking (pipeline)</span>
+  </div>
+
+  <div class="card">
+    <div class="chdr">
+      <div class="ct">June — September 2026</div>
+      <div style="display:flex;gap:8px;">
+        <select style="height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--font);font-size:11px;"><option>All practices</option><option>SAP Practice</option><option>Digital</option></select>
+        <select style="height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--font);font-size:11px;"><option>All roles</option><option>SAP Consultant</option><option>Project Manager</option></select>
+      </div>
+    </div>
+    <div class="cb0 hm-wrap">
+      <table class="hm">
+        <thead>
+          <tr>
+            <th>Resource</th>
+            <th>Role</th>
+            <th colspan="4" style="background:rgba(67,56,202,.05);border-bottom:2px solid var(--brand-m);">June 2026</th>
+            <th colspan="4" style="border-bottom:2px solid var(--border2);">July 2026</th>
+            <th colspan="4" style="background:rgba(67,56,202,.05);border-bottom:2px solid var(--border2);">August 2026</th>
+            <th colspan="4" style="border-bottom:2px solid var(--red);">September 2026 ⚠</th>
+          </tr>
+          <tr>
+            <th></th><th></th>
+            <th>W1</th><th>W2</th><th>W3</th><th>W4</th>
+            <th>W1</th><th>W2</th><th>W3</th><th>W4</th>
+            <th>W1</th><th>W2</th><th>W3</th><th>W4</th>
+            <th>W1</th><th>W2</th><th>W3</th><th>W4</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><div style="display:flex;align-items:center;gap:6px;"><div class="av av-sm av-p">SC</div><span style="font-weight:600;">Sarah Chen</span></div></td>
+            <td style="color:var(--text3);font-size:11px;">Sr Dev</td>
+            <td><div class="hm-cell hc-red" title="TechNova: 100%">100</div></td><td><div class="hm-cell hc-red" title="TechNova: 100%">100</div></td><td><div class="hm-cell hc-green" title="Available">—</div></td><td><div class="hm-cell hc-green" title="Available">—</div></td>
+            <td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td>
+            <td><div class="hm-cell hc-blue" style="border:2px dashed var(--blue);" title="HSBC pipeline: soft 80%">80</div></td><td><div class="hm-cell hc-blue" style="border:2px dashed var(--blue);">80</div></td><td><div class="hm-cell hc-blue" style="border:2px dashed var(--blue);">80</div></td><td><div class="hm-cell hc-blue" style="border:2px dashed var(--blue);">80</div></td>
+            <td><div class="hm-cell hc-blue" style="border:2px dashed var(--blue);">80</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td>
+          </tr>
+          <tr>
+            <td><div style="display:flex;align-items:center;gap:6px;"><div class="av av-sm av-t">JO</div><span style="font-weight:600;">James Okafor</span></div></td>
+            <td style="color:var(--text3);font-size:11px;">SAP Cons</td>
+            <td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-amber">60</div></td>
+            <td><div class="hm-cell hc-amber">60</div></td><td><div class="hm-cell hc-amber">60</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td>
+            <td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td>
+            <td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-amber">60</div></td><td><div class="hm-cell hc-amber">60</div></td>
+          </tr>
+          <tr>
+            <td><div style="display:flex;align-items:center;gap:6px;"><div class="av av-sm av-g">PM</div><span style="font-weight:600;">Priya Mehta</span></div></td>
+            <td style="color:var(--text3);font-size:11px;">BA</td>
+            <td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td>
+            <td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-amber">50</div></td>
+            <td><div class="hm-cell hc-amber">50</div></td><td><div class="hm-cell hc-amber">50</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td>
+            <td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-amber">80</div></td>
+          </tr>
+          <tr>
+            <td><div style="display:flex;align-items:center;gap:6px;"><div class="av av-sm av-v">RB</div><span style="font-weight:600;">Robert Burns</span></div></td>
+            <td style="color:var(--text3);font-size:11px;">Test Mgr</td>
+            <td><div class="hm-cell hc-amber">80</div></td><td><div class="hm-cell hc-amber">80</div></td><td><div class="hm-cell hc-amber">80</div></td><td><div class="hm-cell hc-amber">80</div></td>
+            <td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td>
+            <td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td>
+            <td><div class="hm-cell hc-blue" style="border:2px dashed var(--blue);">80</div></td><td><div class="hm-cell hc-blue" style="border:2px dashed var(--blue);">80</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td>
+          </tr>
+          <tr>
+            <td><div style="display:flex;align-items:center;gap:6px;"><div class="av av-sm av-a">MK</div><span style="font-weight:600;">Maria Koch</span></div></td>
+            <td style="color:var(--text3);font-size:11px;">SAP Cons</td>
+            <td><div class="hm-cell hc-grey">Leave</div></td><td><div class="hm-cell hc-grey">Leave</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td>
+            <td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td>
+            <td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-amber">60</div></td>
+            <td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td>
+          </tr>
+          <tr>
+            <td><div style="display:flex;align-items:center;gap:6px;"><div class="av av-sm av-r">DL</div><span style="font-weight:600;">David Lee</span></div></td>
+            <td style="color:var(--text3);font-size:11px;">Architect</td>
+            <td><div class="hm-cell hc-amber">50</div></td><td><div class="hm-cell hc-amber">50</div></td><td><div class="hm-cell hc-amber">50</div></td><td><div class="hm-cell hc-amber">50</div></td>
+            <td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td><td><div class="hm-cell hc-green">—</div></td>
+            <td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td>
+            <td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td><td><div class="hm-cell hc-red">100</div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     VIEW: RESOURCE SCHEDULER
+════════════════════════════════ -->
+<div class="view" id="view-scheduler">
+  <div class="strip">
+    <div><h2>Resource Scheduler</h2><p>Drag and drop to allocate · Click a bar to edit · Click an empty cell to assign</p></div>
+    <div style="display:flex;gap:8px;">
+      <button class="tb-btn tb-ghost" style="font-size:11px;" onclick="alert('Resource matching engine: finding best-fit resources based on skills, availability, cost and location...')">🎯 Auto-match Resources</button>
+      <button class="tb-btn tb-primary">+ New Booking</button>
+    </div>
+  </div>
+
+  <div class="info-banner">ℹ️ <strong>Drag bars</strong> to move or extend assignments. <strong>Click an empty week</strong> to create a new booking. Dashed bars = soft bookings from pipeline.</div>
+
+  <div class="card">
+    <div class="chdr">
+      <div><div class="ct">June — September 2026</div></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span style="font-size:11px;color:var(--text3);">Filter:</span>
+        <select style="height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--font);font-size:11px;"><option>All resources</option><option>Available only</option><option>SAP Practice</option></select>
+      </div>
+    </div>
+    <div class="cb0 sched-wrap">
+      <table class="sched">
+        <thead>
+          <tr>
+            <th>Resource</th>
+            <th colspan="4" style="background:rgba(67,56,202,.05);">June 2026</th>
+            <th colspan="4">July 2026</th>
+            <th colspan="4" style="background:rgba(67,56,202,.05);">August 2026</th>
+            <th colspan="4" style="background:rgba(220,38,38,.04);">September 2026 ⚠</th>
+          </tr>
+          <tr>
+            <th></th>
+            <th>W1</th><th>W2</th><th>W3</th><th>W4</th>
+            <th>W1</th><th>W2</th><th>W3</th><th>W4</th>
+            <th>W1</th><th>W2</th><th>W3</th><th>W4</th>
+            <th>W1</th><th>W2</th><th>W3</th><th>W4</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><div class="res-info"><div class="av av-p">SC</div><div><div class="res-name">Sarah Chen</div><div class="res-role">Sr Developer · London</div></div></div></td>
+            <td colspan="2"><div class="sched-bar" style="background:#4338CA;" draggable="true" title="TechNova: £840/d · 100%">TechNova (100%)</div></td>
+            <td colspan="2"><div class="sched-avail" onclick="alert('Create new booking for Sarah Chen from W3 Jun')">+ Assign</div></td>
+            <td colspan="4"><div class="sched-avail" onclick="alert('Create new booking for Sarah Chen — July')">+ Available</div></td>
+            <td colspan="4"><div class="sched-bar" style="background:var(--blue-d);border:2px dashed #93C5FD;opacity:.7;" draggable="true" title="HSBC pipeline (soft) · 80%">HSBC (soft 80%)</div></td>
+            <td colspan="2"><div class="sched-bar" style="background:var(--blue-d);border:2px dashed #93C5FD;opacity:.7;" draggable="true">HSBC (soft)</div></td>
+            <td colspan="2"><div class="sched-avail">+ Assign</div></td>
+          </tr>
+          <tr>
+            <td><div class="res-info"><div class="av av-t">JO</div><div><div class="res-name">James Okafor</div><div class="res-role">SAP Consultant · Manchester</div></div></div></td>
+            <td colspan="3"><div class="sched-bar" style="background:#0D9488;" draggable="true">Barclays ERP (100%)</div></td>
+            <td colspan="2"><div class="sched-bar" style="background:#0D9488;opacity:.8;" draggable="true">Barclays (60%)</div></td>
+            <td colspan="2"><div class="sched-bar" style="background:#0D9488;" draggable="true">RetailCo (100%)</div></td>
+            <td colspan="4"><div class="sched-bar" style="background:#0D9488;" draggable="true">RetailCo (100%)</div></td>
+            <td colspan="4"><div class="sched-bar" style="background:#0D9488;" draggable="true">RetailCo (100%)</div></td>
+          </tr>
+          <tr>
+            <td><div class="res-info"><div class="av av-g">PM</div><div><div class="res-name">Priya Mehta</div><div class="res-role">Business Analyst · London</div></div></div></td>
+            <td colspan="2"><div class="sched-bar" style="background:#7C3AED;" draggable="true">NHS Trust (100%)</div></td>
+            <td colspan="4"><div class="sched-avail" onclick="alert('Book Priya Mehta')">+ Available</div></td>
+            <td colspan="2"><div class="sched-bar" style="background:#7C3AED;opacity:.8;" draggable="true">NHS (50%)</div></td>
+            <td colspan="4"><div class="sched-bar" style="background:#7C3AED;" draggable="true">Digital Transformation (100%)</div></td>
+            <td colspan="4"><div class="sched-bar" style="background:#7C3AED;" draggable="true">Digital Transform (100%)</div></td>
+          </tr>
+          <tr>
+            <td><div class="res-info"><div class="av av-v">RB</div><div><div class="res-name">Robert Burns</div><div class="res-role">Test Manager · Edinburgh</div></div></div></td>
+            <td colspan="4"><div class="sched-bar" style="background:#D97706;" draggable="true">CloudNova QA (80%)</div></td>
+            <td colspan="4"><div class="sched-bar" style="background:#D97706;" draggable="true">CloudNova QA (100%)</div></td>
+            <td colspan="4"><div class="sched-avail">+ Available</div></td>
+            <td colspan="2"><div class="sched-bar" style="background:var(--blue-d);border:2px dashed #93C5FD;opacity:.7;" draggable="true">HSBC (soft)</div></td>
+            <td colspan="2"><div class="sched-avail">+ Assign</div></td>
+          </tr>
+          <tr>
+            <td><div class="res-info"><div class="av av-a">MK</div><div><div class="res-name">Maria Koch</div><div class="res-role">SAP Consultant · Frankfurt</div></div></div></td>
+            <td colspan="2" style="background:var(--border3);text-align:center;font-size:10px;color:var(--text4);">✈ Leave</td>
+            <td colspan="6"><div class="sched-bar" style="background:#059669;" draggable="true">SAP S/4HANA — Apex (100%)</div></td>
+            <td colspan="4"><div class="sched-bar" style="background:#059669;" draggable="true">Apex (100%)</div></td>
+            <td colspan="4"><div class="sched-avail">+ Available</div></td>
+          </tr>
+          <tr>
+            <td><div class="res-info"><div class="av av-r">DL</div><div><div class="res-name">David Lee</div><div class="res-role">Solutions Architect · London</div></div></div></td>
+            <td colspan="4"><div class="sched-bar" style="background:#DC2626;opacity:.7;" draggable="true">Multi-project (50%)</div></td>
+            <td colspan="4"><div class="sched-avail">+ Available</div></td>
+            <td colspan="8"><div class="sched-bar" style="background:#DC2626;" draggable="true">HSBC Architecture (100%)</div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:10px 18px;background:var(--border3);border-top:1px solid var(--border2);font-size:11px;color:var(--text3);">
+      💡 Tip: Drag any booking bar to move it. Drag the right edge to extend. Click an empty cell to create a new booking. Dashed blue bars are soft bookings from pipeline opportunities.
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     VIEW: SKILLS INVENTORY
+════════════════════════════════ -->
+<div class="view" id="view-skills">
+  <div class="strip"><div><h2>Skills Inventory</h2><p>Searchable skills matrix across all 147 resources</p></div>
+    <div style="display:flex;gap:8px;">
+      <input placeholder="🔍 Search skill or resource..." style="height:34px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r);font-family:var(--font);font-size:12px;width:240px;background:var(--surface);outline:none;">
+      <button class="tb-btn tb-primary">+ Add Skill</button>
+    </div>
+  </div>
+
+  <div class="g2" style="margin-bottom:16px;">
+    <div class="card">
+      <div class="chdr"><div class="ct">Skills Distribution</div><div class="cs">By practice area</div></div>
+      <div class="cb">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div><div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:12px;"><span style="font-weight:600;">SAP Practice</span><span style="color:var(--text3);">38 resources</span></div><div style="height:10px;background:var(--border2);border-radius:5px;overflow:hidden;"><div style="width:26%;height:100%;background:var(--brand);border-radius:5px;"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:12px;"><span style="font-weight:600;">Software Development</span><span style="color:var(--text3);">34 resources</span></div><div style="height:10px;background:var(--border2);border-radius:5px;overflow:hidden;"><div style="width:23%;height:100%;background:var(--teal);border-radius:5px;"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:12px;"><span style="font-weight:600;">Project & Programme Mgmt</span><span style="color:var(--text3);">28 resources</span></div><div style="height:10px;background:var(--border2);border-radius:5px;overflow:hidden;"><div style="width:19%;height:100%;background:var(--violet);border-radius:5px;"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:12px;"><span style="font-weight:600;">Business Analysis</span><span style="color:var(--text3);">22 resources</span></div><div style="height:10px;background:var(--border2);border-radius:5px;overflow:hidden;"><div style="width:15%;height:100%;background:var(--green);border-radius:5px;"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:12px;"><span style="font-weight:600;">Testing & QA</span><span style="color:var(--text3);">16 resources</span></div><div style="height:10px;background:var(--border2);border-radius:5px;overflow:hidden;"><div style="width:11%;height:100%;background:var(--amber);border-radius:5px;"></div></div></div>
+          <div><div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:12px;"><span style="font-weight:600;">AI & Emerging Tech</span><span style="color:var(--text3);">9 resources</span></div><div style="height:10px;background:var(--border2);border-radius:5px;overflow:hidden;"><div style="width:6%;height:100%;background:var(--red);border-radius:5px;"></div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="chdr"><div class="ct">Top Demanded Skills</div><div class="cs">Current open demand vs available supply</div></div>
+      <div class="cb0">
+        <table class="tbl">
+          <thead><tr><th>Skill</th><th>Supply</th><th>Demand</th><th>Gap</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td style="font-weight:600;">SAP S/4HANA</td><td>11</td><td>15</td><td style="color:var(--red);font-weight:700;">–4</td><td><span class="pill p-r">Critical</span></td></tr>
+            <tr><td style="font-weight:600;">SAP BTP</td><td>5</td><td>8</td><td style="color:var(--red);font-weight:700;">–3</td><td><span class="pill p-r">Critical</span></td></tr>
+            <tr><td style="font-weight:600;">AI/ML Consulting</td><td>4</td><td>6</td><td style="color:var(--amber);font-weight:700;">–2</td><td><span class="pill p-a">Watch</span></td></tr>
+            <tr><td style="font-weight:600;">React / Node.js</td><td>18</td><td>16</td><td style="color:var(--green);font-weight:700;">+2</td><td><span class="pill p-g">Healthy</span></td></tr>
+            <tr><td style="font-weight:600;">Agile Delivery</td><td>24</td><td>20</td><td style="color:var(--green);font-weight:700;">+4</td><td><span class="pill p-g">Surplus</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="chdr"><div class="ct">Resource Skills Matrix</div><div class="cs">Expert · Advanced · Intermediate · Beginner</div></div>
+    <div class="cb0">
+      <table class="skills-tbl">
+        <thead><tr><th>Resource</th><th>Role / Grade</th><th>Location</th><th>Languages</th><th>Top Skills</th><th>Certifications</th><th>Utilisation</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-p">SC</div><div><div style="font-weight:600;">Sarah Chen</div><div style="font-size:10px;color:var(--text3);">ID: R-001</div></div></div></td>
+            <td><span class="pill p-b">Senior Developer</span><div style="font-size:10px;color:var(--text3);margin-top:2px;">Grade 4</div></td>
+            <td style="font-size:11px;">🇬🇧 London</td>
+            <td style="font-size:11px;">English, Mandarin</td>
+            <td>
+              <div style="display:flex;flex-direction:column;gap:3px;">
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;"><div class="skill-bar-track"><div class="skill-bar-fill prof-expert" style="width:100%;"></div></div>React / Node.js</div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;"><div class="skill-bar-track"><div class="skill-bar-fill prof-advanced" style="width:75%;"></div></div>AWS Cloud</div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;"><div class="skill-bar-track"><div class="skill-bar-fill prof-intermediate" style="width:50%;"></div></div>SAP BTP</div>
+              </div>
+            </td>
+            <td style="font-size:10px;line-height:1.6;">AWS Solutions Architect<br>Azure Developer</td>
+            <td><div style="font-size:14px;font-weight:700;color:var(--green);">87%</div><div class="spark" style="height:20px;"><div class="spark-bar" style="height:90%;background:var(--green-l);width:5px;"></div><div class="spark-bar" style="height:80%;background:var(--green-l);width:5px;"></div><div class="spark-bar" style="height:85%;background:var(--green-l);width:5px;"></div></div></td>
+          </tr>
+          <tr>
+            <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-t">JO</div><div><div style="font-weight:600;">James Okafor</div><div style="font-size:10px;color:var(--text3);">ID: R-002</div></div></div></td>
+            <td><span class="pill p-t">SAP Consultant</span><div style="font-size:10px;color:var(--text3);margin-top:2px;">Grade 5</div></td>
+            <td style="font-size:11px;">🇬🇧 Manchester</td>
+            <td style="font-size:11px;">English, French</td>
+            <td>
+              <div style="display:flex;flex-direction:column;gap:3px;">
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;"><div class="skill-bar-track"><div class="skill-bar-fill prof-expert" style="width:100%;"></div></div>SAP S/4HANA</div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;"><div class="skill-bar-track"><div class="skill-bar-fill prof-expert" style="width:100%;"></div></div>SAP Finance</div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;"><div class="skill-bar-track"><div class="skill-bar-fill prof-advanced" style="width:75%;"></div></div>Agile / PRINCE2</div>
+              </div>
+            </td>
+            <td style="font-size:10px;line-height:1.6;">SAP FICO Certified<br>PRINCE2 Practitioner</td>
+            <td><div style="font-size:14px;font-weight:700;color:var(--red);">100%</div><div style="font-size:10px;color:var(--red);">Fully booked</div></td>
+          </tr>
+          <tr>
+            <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-g">PM</div><div><div style="font-weight:600;">Priya Mehta</div><div style="font-size:10px;color:var(--text3);">ID: R-003</div></div></div></td>
+            <td><span class="pill p-v">Business Analyst</span><div style="font-size:10px;color:var(--text3);margin-top:2px;">Grade 3</div></td>
+            <td style="font-size:11px;">🇬🇧 London</td>
+            <td style="font-size:11px;">English, Hindi</td>
+            <td>
+              <div style="display:flex;flex-direction:column;gap:3px;">
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;"><div class="skill-bar-track"><div class="skill-bar-fill prof-advanced" style="width:75%;"></div></div>Business Analysis</div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;"><div class="skill-bar-track"><div class="skill-bar-fill prof-advanced" style="width:75%;"></div></div>Process Mapping</div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;"><div class="skill-bar-track"><div class="skill-bar-fill prof-intermediate" style="width:50%;"></div></div>Banking Domain</div>
+              </div>
+            </td>
+            <td style="font-size:10px;line-height:1.6;">BCS BA Practitioner<br>Agile BA</td>
+            <td><div style="font-size:14px;font-weight:700;color:var(--amber);">65%</div></td>
+          </tr>
+          <tr>
+            <td><div style="display:flex;align-items:center;gap:8px;"><div class="av av-a">MK</div><div><div style="font-weight:600;">Maria Koch</div><div style="font-size:10px;color:var(--text3);">ID: R-004</div></div></div></td>
+            <td><span class="pill p-t">SAP Consultant</span><div style="font-size:10px;color:var(--text3);margin-top:2px;">Grade 5</div></td>
+            <td style="font-size:11px;">🇩🇪 Frankfurt</td>
+            <td style="font-size:11px;">German, English</td>
+            <td>
+              <div style="display:flex;flex-direction:column;gap:3px;">
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;"><div class="skill-bar-track"><div class="skill-bar-fill prof-expert" style="width:100%;"></div></div>SAP S/4HANA</div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;"><div class="skill-bar-track"><div class="skill-bar-fill prof-expert" style="width:100%;"></div></div>SAP BTP</div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:11px;"><div class="skill-bar-track"><div class="skill-bar-fill prof-advanced" style="width:75%;"></div></div>Banking Industry</div>
+              </div>
+            </td>
+            <td style="font-size:10px;line-height:1.6;">SAP S/4HANA Expert<br>SAP BTP Associate</td>
+            <td><div style="font-size:14px;font-weight:700;color:var(--red);">100%</div><div style="font-size:10px;color:var(--red);">Fully booked</div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     VIEW: PIPELINE & DEMAND
+════════════════════════════════ -->
+<div class="view" id="view-pipeline">
+  <div class="strip"><div><h2>Pipeline & Resource Demand</h2><p>CRM opportunities creating soft demand · Click any opportunity to see resource requirements</p></div></div>
+
+  <div class="kpi-grid kpi-4" style="margin-bottom:16px;">
+    <div class="kpi"><div class="kpi-label">Active Opportunities</div><div class="kpi-val">5</div><div class="kpi-sub">£8.4M total pipeline value</div></div>
+    <div class="kpi"><div class="kpi-label">Soft Demand (weighted)</div><div class="kpi-val" style="color:var(--amber);">43</div><div class="kpi-sub">headcount across all opps</div></div>
+    <div class="kpi"><div class="kpi-label">At-risk opportunities</div><div class="kpi-val" style="color:var(--red);">2</div><div class="kpi-sub">insufficient capacity to deliver</div></div>
+    <div class="kpi"><div class="kpi-label">Avg probability</div><div class="kpi-val">64%</div><div class="kpi-sub">across active pipeline</div></div>
+  </div>
+
+  <div class="g-63">
+    <div>
+      <div class="opp-card">
+        <div class="opp-hdr">
+          <div><div class="opp-client">HSBC — Digital Transformation</div><div class="opp-proj">SAP S/4HANA Finance Implementation · Jan–Jun 2027</div></div>
+          <div class="opp-value">£2.4M</div>
+        </div>
+        <div class="opp-meta">
+          <span class="opp-tag" style="background:var(--green-l);color:var(--green-d);">70% probability</span>
+          <span class="opp-tag" style="background:var(--amber-l);color:var(--amber-d);">⚠ Resource risk</span>
+          <span class="opp-tag" style="background:var(--blue-l);color:var(--blue-d);">Soft demand active</span>
+          <span class="opp-tag" style="background:var(--border2);color:var(--text3);">Start: Jan 2027</span>
+        </div>
+        <div class="opp-demand">
+          <div class="opp-demand-title">Resource demand</div>
+          <div class="opp-role"><div class="opp-role-count">2</div><span>Senior Project Managers</span><span style="margin-left:auto;"><span class="pill p-g" style="font-size:9px;">2 available</span></span></div>
+          <div class="opp-role"><div class="opp-role-count">3</div><span>SAP S/4HANA Consultants</span><span style="margin-left:auto;"><span class="pill p-r" style="font-size:9px;">0 available ⚠</span></span></div>
+          <div class="opp-role"><div class="opp-role-count">4</div><span>Business Analysts</span><span style="margin-left:auto;"><span class="pill p-a" style="font-size:9px;">2 available</span></span></div>
+          <div class="opp-role"><div class="opp-role-count">1</div><span>Test Manager</span><span style="margin-left:auto;"><span class="pill p-g" style="font-size:9px;">1 available</span></span></div>
+        </div>
+      </div>
+
+      <div class="opp-card">
+        <div class="opp-hdr">
+          <div><div class="opp-client">Barclays — Core Banking Platform</div><div class="opp-proj">SAP BTP Cloud Integration · Mar–Dec 2027</div></div>
+          <div class="opp-value">£1.8M</div>
+        </div>
+        <div class="opp-meta">
+          <span class="opp-tag" style="background:var(--amber-l);color:var(--amber-d);">55% probability</span>
+          <span class="opp-tag" style="background:var(--red-l);color:var(--red-d);">⚡ Critical risk</span>
+          <span class="opp-tag" style="background:var(--border2);color:var(--text3);">Start: Mar 2027</span>
+        </div>
+        <div class="opp-demand">
+          <div class="opp-demand-title">Resource demand</div>
+          <div class="opp-role"><div class="opp-role-count">1</div><span>Programme Manager</span><span style="margin-left:auto;"><span class="pill p-g" style="font-size:9px;">1 available</span></span></div>
+          <div class="opp-role"><div class="opp-role-count">4</div><span>SAP BTP Consultants</span><span style="margin-left:auto;"><span class="pill p-r" style="font-size:9px;">1 available ⚠</span></span></div>
+          <div class="opp-role"><div class="opp-role-count">2</div><span>Integration Architects</span><span style="margin-left:auto;"><span class="pill p-a" style="font-size:9px;">1 available</span></span></div>
+        </div>
+      </div>
+
+      <div class="opp-card">
+        <div class="opp-hdr">
+          <div><div class="opp-client">NHS Trust — Digital Health</div><div class="opp-proj">Digital Transformation Programme · Jun 2026–Mar 2027</div></div>
+          <div class="opp-value">£1.2M</div>
+        </div>
+        <div class="opp-meta">
+          <span class="opp-tag" style="background:var(--green-l);color:var(--green-d);">80% probability</span>
+          <span class="opp-tag" style="background:var(--green-l);color:var(--green-d);">Resourcing confirmed</span>
+          <span class="opp-tag" style="background:var(--border2);color:var(--text3);">Start: Jun 2026</span>
+        </div>
+        <div class="opp-demand">
+          <div class="opp-demand-title">Resource demand</div>
+          <div class="opp-role"><div class="opp-role-count">1</div><span>Programme Manager</span><span style="margin-left:auto;"><span class="pill p-g" style="font-size:9px;">Confirmed</span></span></div>
+          <div class="opp-role"><div class="opp-role-count">3</div><span>Business Analysts</span><span style="margin-left:auto;"><span class="pill p-g" style="font-size:9px;">Confirmed</span></span></div>
+          <div class="opp-role"><div class="opp-role-count">2</div><span>Developers</span><span style="margin-left:auto;"><span class="pill p-g" style="font-size:9px;">Confirmed</span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panel: summary -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="card">
+        <div class="chdr"><div class="ct">Pipeline Probability Model</div></div>
+        <div class="cb">
+          <div class="scenario-tabs">
+            <div class="sc-tab on" onclick="setSc(this)">Expected</div>
+            <div class="sc-tab" onclick="setSc(this)">Best Case</div>
+            <div class="sc-tab" onclick="setSc(this)">Worst Case</div>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Expected case: probability-weighted demand</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;justify-content:space-between;padding:8px;background:var(--red-l);border-radius:6px;border-left:3px solid var(--red);">
+              <span style="font-size:12px;font-weight:700;">Weighted SAP demand</span>
+              <span style="font-size:14px;font-weight:800;color:var(--red);">13.8 FTE</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px;background:var(--amber-l);border-radius:6px;border-left:3px solid var(--amber);">
+              <span style="font-size:12px;font-weight:700;">Weighted BA demand</span>
+              <span style="font-size:14px;font-weight:800;color:var(--amber);">8.4 FTE</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:8px;background:var(--green-l);border-radius:6px;border-left:3px solid var(--green);">
+              <span style="font-size:12px;font-weight:700;">Forecast revenue (wtd)</span>
+              <span style="font-size:14px;font-weight:800;color:var(--green);">£5.4M</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="background:linear-gradient(135deg,var(--brand-l),#EDE9FE);border-color:var(--brand-m);">
+        <div class="chdr" style="border-bottom-color:rgba(67,56,202,.2);"><div class="ct" style="color:var(--brand-d);">✦ AI Recommendation</div></div>
+        <div class="cb" style="font-size:12px;color:var(--brand-d);line-height:1.7;">
+          <strong>HSBC opportunity is at risk.</strong> You need 3 SAP consultants in January 2027 but currently have 0 available at that date.<br><br>
+          <strong>Recommended actions:</strong><br>
+          1. Recruit 2 SAP S/4HANA consultants by October 2026<br>
+          2. Evaluate subcontracting 1 resource from partner network<br>
+          3. Upskill James Okafor on S/4HANA Finance module<br><br>
+          <button onclick="showView('recruit',null)" style="background:var(--brand);color:#fff;border:none;padding:7px 14px;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;width:100%;">View Recruitment Plan →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     VIEW: RECRUITMENT FORECAST
+════════════════════════════════ -->
+<div class="view" id="view-recruit">
+  <div class="strip"><div><h2>Recruitment Forecast</h2><p>AI-generated recommendations based on demand vs supply gap analysis</p></div>
+    <button class="tb-btn tb-primary">Export to HR System</button>
+  </div>
+
+  <div class="alert-banner">⚡ <strong>4 recruitment actions required.</strong> If not actioned within 60 days, 2 pipeline opportunities totalling £4.2M are at delivery risk.</div>
+
+  <div class="g3" style="margin-bottom:16px;">
+    <div class="rec-card shortage">
+      <div class="rec-month">Action required by Oct 2026</div>
+      <div class="rec-skill">SAP S/4HANA Consultants</div>
+      <div class="rec-row"><span class="rec-label">Demand (Jan 2027)</span><span style="font-weight:700;">15 FTE</span></div>
+      <div class="rec-row"><span class="rec-label">Supply</span><span style="font-weight:700;">11 FTE</span></div>
+      <div class="rec-row"><span class="rec-label">Gap</span><span style="font-weight:700;color:var(--red);">–4 FTE</span></div>
+      <div class="rec-row"><span class="rec-label">Driving opportunity</span><span style="font-weight:600;">HSBC, Barclays</span></div>
+      <div class="rec-action">📋 Recruit 4 SAP S/4HANA consultants — Grade 4–5 · £75–95K</div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button onclick="alert('Creating recruitment requisition...')" style="flex:1;background:var(--red);color:#fff;border:none;padding:7px;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;">Create Requisition</button>
+        <button onclick="alert('Reviewing subcontract partners...')" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text2);padding:7px;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;">Subcontract</button>
+      </div>
+    </div>
+
+    <div class="rec-card shortage">
+      <div class="rec-month">Action required by Nov 2026</div>
+      <div class="rec-skill">SAP BTP / Cloud Consultants</div>
+      <div class="rec-row"><span class="rec-label">Demand (Mar 2027)</span><span style="font-weight:700;">8 FTE</span></div>
+      <div class="rec-row"><span class="rec-label">Supply</span><span style="font-weight:700;">5 FTE</span></div>
+      <div class="rec-row"><span class="rec-label">Gap</span><span style="font-weight:700;color:var(--red);">–3 FTE</span></div>
+      <div class="rec-row"><span class="rec-label">Driving opportunity</span><span style="font-weight:600;">Barclays</span></div>
+      <div class="rec-action">📋 Recruit 2 + upskill 1 existing SAP consultant on BTP</div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button onclick="alert('Creating recruitment requisition...')" style="flex:1;background:var(--red);color:#fff;border:none;padding:7px;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;">Create Requisition</button>
+        <button onclick="alert('Scheduling upskill programme...')" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text2);padding:7px;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;">Upskill Plan</button>
+      </div>
+    </div>
+
+    <div class="rec-card watch">
+      <div class="rec-month">Monitor — Q4 2026</div>
+      <div class="rec-skill">AI / ML Consultants</div>
+      <div class="rec-row"><span class="rec-label">Demand (Q1 2027)</span><span style="font-weight:700;">6 FTE</span></div>
+      <div class="rec-row"><span class="rec-label">Supply</span><span style="font-weight:700;">4 FTE</span></div>
+      <div class="rec-row"><span class="rec-label">Gap</span><span style="font-weight:700;color:var(--amber);">–2 FTE</span></div>
+      <div class="rec-row"><span class="rec-label">Risk level</span><span style="font-weight:600;">Emerging / fast-growing</span></div>
+      <div class="rec-action" style="background:var(--amber-l);color:var(--amber-d);">⚠ Monitor demand — consider graduate/upskill programme</div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button style="flex:1;background:var(--amber);color:#fff;border:none;padding:7px;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;">Start Upskill Plan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Forecast timeline -->
+  <div class="card">
+    <div class="chdr"><div class="ct">Recruitment Timeline — 12-Month View</div><div class="cs">When to hire for each skill to meet demand on time</div></div>
+    <div class="cb0">
+      <table class="tbl">
+        <thead><tr><th>Role</th><th>Grade</th><th>Headcount</th><th>Avg Time-to-Hire</th><th>Latest Start Date</th><th>Target Go-Live</th><th>Est. Cost</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td style="font-weight:600;">SAP S/4HANA Consultant</td><td><span class="pill p-b">Grade 4</span></td><td style="font-weight:700;text-align:center;">2</td><td style="text-align:center;">10 weeks</td><td style="font-weight:600;color:var(--red);">19 Oct 2026</td><td>Jan 2027</td><td>£160K / yr</td><td><span class="pill p-r">Action needed</span></td></tr>
+          <tr><td style="font-weight:600;">SAP S/4HANA Consultant</td><td><span class="pill p-v">Grade 5</span></td><td style="font-weight:700;text-align:center;">2</td><td style="text-align:center;">12 weeks</td><td style="font-weight:600;color:var(--red);">12 Oct 2026</td><td>Jan 2027</td><td>£200K / yr</td><td><span class="pill p-r">Action needed</span></td></tr>
+          <tr><td style="font-weight:600;">SAP BTP Consultant</td><td><span class="pill p-b">Grade 4</span></td><td style="font-weight:700;text-align:center;">2</td><td style="text-align:center;">10 weeks</td><td style="font-weight:600;color:var(--amber);">16 Nov 2026</td><td>Mar 2027</td><td>£160K / yr</td><td><span class="pill p-a">Plan in progress</span></td></tr>
+          <tr><td style="font-weight:600;">AI/ML Consultant</td><td><span class="pill p-g">Grade 3–4</span></td><td style="font-weight:700;text-align:center;">2</td><td style="text-align:center;">12 weeks</td><td style="font-weight:600;color:var(--green);">Q4 2026</td><td>Q1 2027</td><td>£150K / yr</td><td><span class="pill p-a">Monitoring</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     VIEW: BENCH MANAGEMENT
+════════════════════════════════ -->
+<div class="view" id="view-bench">
+  <div class="strip"><div><h2>Bench Management</h2><p>Under-utilised resources · Upcoming availability · Redeployment opportunities</p></div></div>
+
+  <div class="kpi-grid kpi-4" style="margin-bottom:16px;">
+    <div class="kpi"><div class="kpi-label">On Bench Today</div><div class="kpi-val" style="color:var(--red);">21</div><div class="kpi-sub">14% of total capacity</div></div>
+    <div class="kpi"><div class="kpi-label">Rolling off (30 days)</div><div class="kpi-val" style="color:var(--amber);">8</div><div class="kpi-sub">will join bench unless booked</div></div>
+    <div class="kpi"><div class="kpi-label">Bench Cost / Month</div><div class="kpi-val" style="color:var(--red);">£84K</div><div class="kpi-sub">unbillable salary cost</div></div>
+    <div class="kpi"><div class="kpi-label">Redeployable</div><div class="kpi-val" style="color:var(--green);">14</div><div class="kpi-sub">matched to open demand</div></div>
+  </div>
+
+  <div class="card">
+    <div class="chdr"><div class="ct">Resources Available Now</div><div class="cs">Matched to open pipeline demand where possible</div></div>
+    <div class="cb0">
+      <table class="tbl">
+        <thead><tr><th>Resource</th><th>Role</th><th>Key Skills</th><th>Available Since</th><th>Days on Bench</th><th>Pipeline Match</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><div style="display:flex;align-items:center;gap:7px;"><div class="av av-g">AK</div><span style="font-weight:600;">Aiko Kimura</span></div></td>
+            <td><span class="pill p-t" style="font-size:10px;">SAP Consultant</span></td>
+            <td style="font-size:11px;">SAP S/4HANA · FICO · Banking</td>
+            <td style="font-size:11px;">01 Jun 2026</td>
+            <td style="color:var(--amber);font-weight:700;">5 days</td>
+            <td><span class="pill p-g" style="font-size:10px;">✓ HSBC match</span></td>
+            <td><button onclick="alert('Assigning Aiko Kimura to HSBC opportunity...')" style="background:var(--brand);color:#fff;border:none;padding:5px 10px;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;">Assign →</button></td>
+          </tr>
+          <tr>
+            <td><div style="display:flex;align-items:center;gap:7px;"><div class="av av-v">TP</div><span style="font-weight:600;">Tom Pearce</span></div></td>
+            <td><span class="pill p-v" style="font-size:10px;">Developer</span></td>
+            <td style="font-size:11px;">React · Node.js · AWS</td>
+            <td style="font-size:11px;">28 May 2026</td>
+            <td style="color:var(--amber);font-weight:700;">9 days</td>
+            <td><span class="pill p-a" style="font-size:10px;">2 partial matches</span></td>
+            <td><button onclick="alert('Reviewing matches for Tom Pearce...')" style="background:var(--brand);color:#fff;border:none;padding:5px 10px;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;">View →</button></td>
+          </tr>
+          <tr>
+            <td><div style="display:flex;align-items:center;gap:7px;"><div class="av av-r">LN</div><span style="font-weight:600;">Laura Novak</span></div></td>
+            <td><span class="pill p-b" style="font-size:10px;">Project Manager</span></td>
+            <td style="font-size:11px;">PRINCE2 · Agile · Banking</td>
+            <td style="font-size:11px;">20 May 2026</td>
+            <td style="color:var(--red);font-weight:700;">17 days</td>
+            <td><span class="pill p-r" style="font-size:10px;">No match found</span></td>
+            <td><button onclick="alert('Opening redeployment options...')" style="background:var(--amber);color:#fff;border:none;padding:5px 10px;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;">Redeploy</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     VIEW: AI WORKFORCE PLANNER
+════════════════════════════════ -->
+<div class="view" id="view-ai">
+  <div class="strip"><div><h2>✦ AI Workforce Planner</h2><p>Ask anything about your workforce — the AI has full visibility of supply, demand, skills, pipeline and capacity</p></div></div>
+
+  <div class="g-73">
+    <div class="ai-panel">
+      <div class="ai-hdr">
+        <div class="ai-dot"></div>
+        <div><div style="font-size:13px;font-weight:700;">Jiganto AI Workforce Planner</div><div style="font-size:11px;color:var(--text3);">Connected to live workforce data · 147 resources · 5 pipeline opportunities</div></div>
+      </div>
+      <div class="ai-messages" id="ai-msgs">
+        <div class="ai-msg ai">
+          <div class="ai-bubble ai">👋 Hello! I'm your AI Workforce Planner. I have full visibility of your <strong>147 resources</strong>, <strong>5 pipeline opportunities</strong>, skills inventory, capacity, and recruitment pipeline.<br><br>I can help you find available consultants, identify resource risks, plan recruitment, optimise utilisation, or model staffing scenarios. What would you like to know?</div>
+        </div>
+        <div class="ai-msg user">
+          <div class="ai-bubble user">Show me all SAP consultants available in Q3 2026</div>
+        </div>
+        <div class="ai-msg ai">
+          <div class="ai-bubble ai">I found <strong>3 SAP consultants</strong> with meaningful availability in Q3 2026:<br><br>
+            <strong>1. Aiko Kimura</strong> — SAP S/4HANA (Expert), FICO (Expert), Banking industry<br>
+            &nbsp;&nbsp;Available: Fully from 1 Jun · Bill rate: £840/day<br><br>
+            <strong>2. Maria Koch</strong> — SAP S/4HANA (Expert), SAP BTP (Expert)<br>
+            &nbsp;&nbsp;Available: From 15 Sep (currently on Apex project) · £920/day<br><br>
+            <strong>3. James Okafor</strong> — SAP S/4HANA (Expert)<br>
+            &nbsp;&nbsp;⚠ Partially available Jul only (60%) · Fully booked Jun, Aug, Sep<br><br>
+            <strong>⚠ Warning:</strong> Against your confirmed Q3 SAP demand of 8 FTE, this gives you only 2.6 FTE — a <strong>shortage of 5.4 FTE</strong>. I recommend immediate recruitment action or contractor engagement.</div>
+        </div>
+        <div class="ai-msg user">
+          <div class="ai-bubble user">Which pipeline opportunities are at risk due to resource shortages?</div>
+        </div>
+        <div class="ai-msg ai">
+          <div class="ai-bubble ai"><strong>2 opportunities are currently at delivery risk:</strong><br><br>
+            🔴 <strong>HSBC Digital Transformation (£2.4M, 70% prob)</strong><br>
+            Needs: 3 SAP S/4HANA consultants from Jan 2027<br>
+            Available: 0 confirmed at that date<br>
+            Risk: HIGH — recommend recruiting 2 now, consider 1 contractor<br><br>
+            🟡 <strong>Barclays Core Banking (£1.8M, 55% prob)</strong><br>
+            Needs: 4 SAP BTP consultants from Mar 2027<br>
+            Available: 1 confirmed at that date<br>
+            Risk: MEDIUM — current BTP supply insufficient if opportunity wins<br><br>
+            These two opportunities represent <strong>£4.2M</strong> of pipeline at risk. Would you like me to generate a detailed recruitment plan?</div>
+        </div>
+      </div>
+      <div class="ai-suggestions">
+        <div class="ai-sugg" onclick="sendAI(this)">What skills should we recruit over the next 6 months?</div>
+        <div class="ai-sugg" onclick="sendAI(this)">Optimise utilisation above 80%</div>
+        <div class="ai-sugg" onclick="sendAI(this)">Who is on the bench and why?</div>
+        <div class="ai-sugg" onclick="sendAI(this)">Model best case scenario for Q4</div>
+      </div>
+      <div class="ai-input-wrap">
+        <input class="ai-input" id="ai-input" placeholder="Ask about resources, demand, skills, capacity..." onkeydown="if(event.key==='Enter')sendAIInput()">
+        <button class="ai-send" onclick="sendAIInput()">➤</button>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="card">
+        <div class="chdr"><div class="ct">Quick Queries</div></div>
+        <div class="cb" style="display:flex;flex-direction:column;gap:6px;">
+          <button class="ai-sugg" style="text-align:left;border-radius:6px;width:100%;" onclick="sendAI(this)">Find SAP consultants for HSBC project</button>
+          <button class="ai-sugg" style="text-align:left;border-radius:6px;width:100%;" onclick="sendAI(this)">Who rolls off in the next 30 days?</button>
+          <button class="ai-sugg" style="text-align:left;border-radius:6px;width:100%;" onclick="sendAI(this)">What is our forecast utilisation for Q3?</button>
+          <button class="ai-sugg" style="text-align:left;border-radius:6px;width:100%;" onclick="sendAI(this)">Generate recruitment recommendations for HR</button>
+          <button class="ai-sugg" style="text-align:left;border-radius:6px;width:100%;" onclick="sendAI(this)">Which resources can be upskilled on SAP BTP?</button>
+        </div>
+      </div>
+      <div class="card" style="background:var(--brand-d);border-color:var(--brand-d);">
+        <div class="cb" style="color:rgba(255,255,255,.85);">
+          <div style="font-size:13px;font-weight:700;margin-bottom:8px;">Today's AI Insights</div>
+          <div style="font-size:11px;line-height:1.7;">
+            ⚡ <strong>Urgent:</strong> SAP shortage worsens in Q3<br>
+            📈 <strong>Positive:</strong> BA utilisation trending up<br>
+            🎯 <strong>Opportunity:</strong> 3 bench resources match NHS pipeline<br>
+            ⚠ <strong>Risk:</strong> Maria Koch contract expires Sep 30
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     VIEW: SCENARIO PLANNING
+════════════════════════════════ -->
+<div class="view" id="view-scenario">
+  <div class="strip"><div><h2>Scenario Planning</h2><p>Model best, expected and worst case workforce scenarios based on pipeline probability</p></div>
+    <button class="tb-btn tb-primary">+ New Scenario</button>
+  </div>
+
+  <div class="scenario-tabs" style="max-width:400px;">
+    <div class="sc-tab on" onclick="setSc(this)">Expected Case</div>
+    <div class="sc-tab" onclick="setSc(this)">Best Case</div>
+    <div class="sc-tab" onclick="setSc(this)">Worst Case</div>
+  </div>
+
+  <div class="kpi-grid kpi-4" style="margin-bottom:16px;">
+    <div class="kpi"><div class="kpi-label">Expected Revenue</div><div class="kpi-val" style="color:var(--green);">£5.4M</div><div class="kpi-sub">probability-weighted pipeline</div></div>
+    <div class="kpi"><div class="kpi-label">Resource Demand</div><div class="kpi-val" style="color:var(--amber);">89 FTE</div><div class="kpi-sub">weighted headcount needed</div></div>
+    <div class="kpi"><div class="kpi-label">Utilisation Forecast</div><div class="kpi-val" style="color:var(--green);">81%</div><div class="kpi-sub">if all actions taken</div></div>
+    <div class="kpi"><div class="kpi-label">Shortfall</div><div class="kpi-val" style="color:var(--red);">–7 FTE</div><div class="kpi-sub">action required</div></div>
+  </div>
+
+  <div class="g2">
+    <div class="card">
+      <div class="chdr"><div class="ct">Scenario Comparison</div><div class="cs">Key metrics across all three scenarios</div></div>
+      <div class="cb0">
+        <table class="tbl">
+          <thead><tr><th>Metric</th><th style="color:var(--amber);">Worst Case</th><th style="color:var(--brand);">Expected</th><th style="color:var(--green);">Best Case</th></tr></thead>
+          <tbody>
+            <tr><td style="font-weight:600;">Pipeline Revenue</td><td style="color:var(--amber);">£3.1M</td><td style="color:var(--brand);">£5.4M</td><td style="color:var(--green);">£8.4M</td></tr>
+            <tr><td style="font-weight:600;">Resource Demand</td><td>62 FTE</td><td>89 FTE</td><td>126 FTE</td></tr>
+            <tr><td style="font-weight:600;">Utilisation</td><td style="color:var(--red);">58%</td><td style="color:var(--amber);">74%</td><td style="color:var(--green);">86%</td></tr>
+            <tr><td style="font-weight:600;">Bench Size</td><td style="color:var(--red);">34 FTE</td><td style="color:var(--amber);">21 FTE</td><td style="color:var(--green);">8 FTE</td></tr>
+            <tr><td style="font-weight:600;">SAP Shortage</td><td style="color:var(--green);">0</td><td style="color:var(--red);">–4</td><td style="color:var(--red);">–11</td></tr>
+            <tr><td style="font-weight:600;">Recruitment needed</td><td>0</td><td>6 FTE</td><td>18 FTE</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="chdr"><div class="ct">Recommended Actions (Expected Case)</div></div>
+      <div class="cb" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="border:1px solid var(--red-l);border-left:3px solid var(--red);border-radius:6px;padding:10px;">
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🔴 Recruit 4 SAP S/4HANA consultants</div>
+          <div style="font-size:11px;color:var(--text3);">By Oct 2026 · Grade 4–5 · Est. £320K/yr · Critical path</div>
+        </div>
+        <div style="border:1px solid var(--amber-l);border-left:3px solid var(--amber);border-radius:6px;padding:10px;">
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🟡 Upskill 2 consultants on SAP BTP</div>
+          <div style="font-size:11px;color:var(--text3);">By Dec 2026 · Internal programme · Reduces gap from –3 to –1</div>
+        </div>
+        <div style="border:1px solid var(--blue-l);border-left:3px solid var(--blue);border-radius:6px;padding:10px;">
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🔵 Engage 3 SAP contractors (Q3 buffer)</div>
+          <div style="font-size:11px;color:var(--text3);">Contractor network · £600–700/day · Short-term cover while recruiting</div>
+        </div>
+        <div style="border:1px solid var(--green-l);border-left:3px solid var(--green);border-radius:6px;padding:10px;">
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px;">🟢 Redeploy 8 bench resources</div>
+          <div style="font-size:11px;color:var(--text3);">3 match NHS pipeline · 5 can move to internal projects · Saves £32K/month</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+// ── NAVIGATION ──────────────────────────────────────────────
+function showView(id, el) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
+  const t = document.getElementById('view-' + id);
+  if (t) t.classList.add('on');
+  document.querySelectorAll('.ni').forEach(n => n.classList.remove('on'));
+  if (el) el.classList.add('on');
+  else {
+    document.querySelectorAll('.ni').forEach(n => {
+      const oc = n.getAttribute('onclick') || '';
+      if (oc.includes("'" + id + "'")) n.classList.add('on');
+    });
+  }
+}
+
+// ── PERSONA SWITCH ───────────────────────────────────────────
+function setPersona(name, el) {
+  document.getElementById('persona-label').textContent = name;
+  document.querySelectorAll('.ps-btn').forEach(b => b.classList.remove('on'));
+  el.classList.add('on');
+}
+
+// ── SCENARIO TAB ─────────────────────────────────────────────
+function setSc(el) {
+  el.closest('.scenario-tabs').querySelectorAll('.sc-tab').forEach(t => t.classList.remove('on'));
+  el.classList.add('on');
+}
+
+// ── PIPELINE TOGGLE ──────────────────────────────────────────
+function togglePipeline(cb) {
+  // Visual feedback only — toggle labels in the matrix
+  const info = document.querySelector('#view-dsm .cs');
+  if (cb.checked) {
+    info.textContent = 'Confirmed + probability-weighted pipeline demand';
+  } else {
+    info.textContent = 'Confirmed demand only';
+  }
+}
+
+// ── AI PLANNER ───────────────────────────────────────────────
+const aiResponses = {
+  'What skills should we recruit over the next 6 months?': `Based on your demand vs supply analysis and pipeline opportunities, I recommend prioritising:<br><br>
+    <strong>1. SAP S/4HANA Consultants (Grade 4–5)</strong> — Recruit 4 immediately. Critical for HSBC and Barclays.<br>
+    <strong>2. SAP BTP / Cloud (Grade 4)</strong> — Recruit 2, upskill 1 existing resource.<br>
+    <strong>3. AI / ML Consultants (Grade 3–4)</strong> — Hire 2 by Q4 2026. Demand accelerating.<br><br>
+    Total recruitment budget estimate: <strong>£650–780K / year</strong>. I can generate a detailed JD and salary benchmarking report for each role.`,
+
+  'Optimise utilisation above 80%': `To reach 80% utilisation (currently 74%), here are my recommendations:<br><br>
+    ✅ <strong>Redeploy 8 bench resources</strong> — 3 to NHS pipeline, 5 to internal projects. Saves £32K/month.<br>
+    ✅ <strong>Assign Aiko Kimura to HSBC</strong> — She's on bench and an exact SAP match.<br>
+    ✅ <strong>Activate 2 soft bookings</strong> — Confirm pipeline bookings for Sarah Chen and Robert Burns.<br><br>
+    Applying all 3 actions would raise utilisation from <strong>74% → 83%</strong>, exceeding your target and saving approximately <strong>£47K/month</strong> in bench cost.`,
+
+  'Who is on the bench and why?': `<strong>21 resources currently on bench (14% of capacity):</strong><br><br>
+    🔴 <strong>4 resources:</strong> Rolled off client projects in the last 7 days — no bookings in pipeline<br>
+    🟡 <strong>9 resources:</strong> Between project assignments — average 12 days on bench<br>
+    🟢 <strong>8 resources:</strong> Partially booked (< 50%) — available for additional assignments<br><br>
+    <strong>Top redeployment opportunity:</strong> Aiko Kimura (SAP S/4HANA) — 17 days bench, perfect match for HSBC. I can book her now if you approve.`,
+
+  'Model best case scenario for Q4': `<strong>Best Case Scenario — Q4 2026:</strong><br><br>
+    Assumptions: All 5 pipeline opportunities won (100% close rate)<br><br>
+    📈 Revenue: <strong>£8.4M</strong> (+56% vs expected)<br>
+    👥 Demand: <strong>126 FTE</strong> (vs current 147 supply)<br>
+    🎯 Utilisation: <strong>86%</strong><br>
+    ⚠ SAP Gap: <strong>–11 FTE</strong> (critical!)<br><br>
+    In the best case, SAP shortage becomes <em>severe</em>. I recommend treating best-case SAP demand as the planning baseline for recruitment. Want me to generate a hiring plan?`,
+
+  'Find SAP consultants for HSBC project': `For the HSBC project (Jan–Jun 2027), you need 3 SAP S/4HANA consultants. Here's what's available:<br><br>
+    ✅ <strong>Aiko Kimura</strong> — SAP Expert, available now, London-based. Perfect match.<br>
+    🟡 <strong>Maria Koch</strong> — SAP Expert, available from Oct 2026 (rolls off Apex). Frankfurt-based — check travel requirements.<br>
+    🔴 <strong>James Okafor</strong> — Fully booked until Dec 2026. Cannot confirm.<br><br>
+    <strong>Gap: 1 consultant still needed.</strong> Recommend contractor engagement or accelerated recruitment.`,
+
+  'Who rolls off in the next 30 days?': `<strong>8 resources rolling off in the next 30 days:</strong><br><br>
+    🔴 <strong>Sarah Chen</strong> — Rolls off TechNova 12 Jun. No confirmed next booking.<br>
+    🟡 <strong>James Okafor</strong> — Partial availability from 18 Jun (Barclays reduces to 60%).<br>
+    🟡 <strong>Priya Mehta</strong> — Available from 22 Jun. 1 pipeline prospect.<br>
+    🟢 <strong>Robert Burns</strong> — Rolls off CloudNova 30 Jun. Confirmed next booking in July.<br>
+    + 4 more with confirmed next projects.<br><br>
+    <strong>Action needed for 3 resources. Want me to trigger proactive redeployment notifications?</strong>`,
+
+  'What is our forecast utilisation for Q3?': `<strong>Q3 2026 Utilisation Forecast:</strong><br><br>
+    July: <strong>78%</strong> (improving — NHS and RetailCo projects ramping)<br>
+    August: <strong>82%</strong> (on target — HSBC soft demand activating)<br>
+    September: <strong>79%</strong> (⚠ risk — SAP shortage causes 3 SAP cons to be unbillable)<br><br>
+    <strong>Q3 average: 80%</strong> — just at target, but September is fragile. If HSBC SAP shortage isn't resolved, September drops to 71%.<br><br>
+    Recommendation: Confirm contractor resource for September now to protect forecast.`,
+
+  'Generate recruitment recommendations for HR': `I've prepared a recruitment brief for HR:<br><br>
+    <strong>Priority 1 (Immediate):</strong> 4x SAP S/4HANA Consultant (Grade 4–5) · Deadline: 1 Oct 2026 · £75–95K<br>
+    <strong>Priority 2 (Nov 2026):</strong> 2x SAP BTP Consultant (Grade 4) · £70–85K<br>
+    <strong>Priority 3 (Q4 2026):</strong> 2x AI/ML Consultant (Grade 3–4) · £65–80K<br><br>
+    Total new headcount: 8 · Estimated annual cost: £620–720K<br><br>
+    I can export this as a formatted requirements document for your ATS system. Shall I proceed?`,
+
+  'Which resources can be upskilled on SAP BTP?': `Based on existing SAP knowledge and learning aptitude scores, these resources are best candidates for SAP BTP upskilling:<br><br>
+    ⭐ <strong>James Okafor</strong> — SAP S/4HANA Expert. SAP BTP is a natural progression. Estimated 8 weeks to Advanced.<br>
+    ⭐ <strong>Aiko Kimura</strong> — SAP Expert, already has some BTP exposure. Estimated 6 weeks to Intermediate.<br>
+    ✅ <strong>Maria Koch</strong> — Already SAP BTP Expert (no action needed).<br><br>
+    Upskilling 2 resources reduces your BTP gap from –3 to –1, saving approximately £90K vs external recruitment. Want me to schedule the training programme?`,
+};
+
+const fallbackResponse = `I'm processing your question against our live workforce data...<br><br>
+Based on current data: 147 resources, 74% utilisation, 7 skill gaps identified. I can see your pipeline of 5 active opportunities totalling £8.4M.<br><br>
+For the most accurate analysis, try one of the suggested queries above, or ask me about specific resources, roles, skills, or opportunities.`;
+
+function sendAI(el) {
+  const text = el.textContent.trim();
+  const msgs = document.getElementById('ai-msgs');
+
+  // Add user message
+  const userDiv = document.createElement('div');
+  userDiv.className = 'ai-msg user';
+  userDiv.innerHTML = `<div class="ai-bubble user">${text}</div>`;
+  msgs.appendChild(userDiv);
+
+  // Scroll down
+  msgs.scrollTop = msgs.scrollHeight;
+
+  // AI thinking indicator
+  const thinking = document.createElement('div');
+  thinking.className = 'ai-msg ai';
+  thinking.innerHTML = '<div class="ai-bubble ai" style="color:var(--text4);font-style:italic;">✦ Analysing workforce data...</div>';
+  msgs.appendChild(thinking);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  setTimeout(() => {
+    thinking.remove();
+    const aiDiv = document.createElement('div');
+    aiDiv.className = 'ai-msg ai';
+    const response = aiResponses[text] || fallbackResponse;
+    aiDiv.innerHTML = `<div class="ai-bubble ai">${response}</div>`;
+    msgs.appendChild(aiDiv);
+    msgs.scrollTop = msgs.scrollHeight;
+  }, 900);
+}
+
+function sendAIInput() {
+  const input = document.getElementById('ai-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  // Create a dummy element to reuse sendAI logic
+  const el = { textContent: text };
+  sendAI(el);
+}
+
+// ── DRAG AND DROP (visual only) ──────────────────────────────
+document.addEventListener('dragstart', function(e) {
+  if (e.target.classList.contains('sched-bar')) {
+    e.target.style.opacity = '0.5';
+    e.dataTransfer.setData('text', e.target.textContent);
+  }
+});
+document.addEventListener('dragend', function(e) {
+  if (e.target.classList.contains('sched-bar')) {
+    e.target.style.opacity = '';
+  }
+});
+
+// ── HEATMAP TOOLTIPS ────────────────────────────────────────
+document.querySelectorAll('.hm-cell').forEach(cell => {
+  cell.addEventListener('click', function() {
+    const title = this.getAttribute('title');
+    if (title && !title.includes('Available')) {
+      alert('Booking detail:\n' + title + '\n\nClick "Edit" to modify this booking.');
+    }
+  });
+});
+
+// ── MATRIX CELL CLICK ───────────────────────────────────────
+document.querySelectorAll('.dsm td').forEach(cell => {
+  cell.addEventListener('click', function() {
+    const span = this.querySelector('span');
+    if (span && span.textContent && span.textContent !== '') {
+      const row = this.closest('tr');
+      const skill = row.querySelector('td:first-child div:first-child')?.textContent;
+      const col = this.cellIndex;
+      if (col > 1) alert(`Detail for ${skill || 'this skill'}: Click to view individual resource bookings and availability for this month.`);
+    }
+  });
+});
+</script>
+</body>
+</html>

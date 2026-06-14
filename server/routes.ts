@@ -277,6 +277,9 @@ export async function registerRoutes(
   const { registerResourcesRoutes } = await import("./resources/routes");
   registerResourcesRoutes(app);
 
+  const { registerResourcePlanningRoutes } = await import("./resource-planning/routes");
+  registerResourcePlanningRoutes(app);
+
   const { registerClientRoutes } = await import("./clients/routes");
   registerClientRoutes(app);
 
@@ -3347,6 +3350,10 @@ export async function registerRoutes(
         actualCloseDate: req.body.actualCloseDate ? new Date(req.body.actualCloseDate) : null,
       };
       const opportunity = await storage.createCrmOpportunity(opportunityData);
+      try {
+        const { triggerCrmPipelineSync } = await import("./resource-planning/routes");
+        await triggerCrmPipelineSync(tenantId, userId);
+      } catch { /* non-blocking */ }
       res.status(201).json(opportunity);
     } catch (err) {
       console.error("Failed to create opportunity:", err);
@@ -3359,6 +3366,11 @@ export async function registerRoutes(
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const opportunity = await storage.updateCrmOpportunity(Number(req.params.id), req.body);
     if (!opportunity) return res.status(404).json({ message: "Opportunity not found" });
+    try {
+      const tenantId = getApiTenantIdWithFallback(req);
+      const { triggerCrmPipelineSync } = await import("./resource-planning/routes");
+      await triggerCrmPipelineSync(tenantId, userId);
+    } catch { /* non-blocking */ }
     res.json(opportunity);
   });
 
@@ -11460,6 +11472,7 @@ async function seedDatabase() {
       { key: "project-mgmt", name: "Project/Program Management", icon: "Kanban", description: "Full project lifecycle management and program delivery" },
       { key: "finance-mgmt", name: "Finance Management", icon: "DollarSign", description: "Budgeting, invoicing, and financial reporting" },
       { key: "resource-mgmt", name: "Resource Management", icon: "Users", description: "Team capacity planning and resource allocation" },
+      { key: "resource-planning", name: "Resource Planning", icon: "CalendarRange", description: "Workforce planning, demand forecasting, and recruitment intelligence" },
       { key: "test-mgmt", name: "Test Management", icon: "TestTube", description: "Test case management, execution, and defect tracking" },
       { key: "bpm", name: "BPM Business Process Management", icon: "Workflow", description: "Process modeling, automation, and optimization" },
       { key: "help-desk", name: "Help Desk / Service Management", icon: "Headphones", description: "IT service desk, ticketing, and support management" },

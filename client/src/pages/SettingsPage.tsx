@@ -81,6 +81,7 @@ const availableModules = [
   { key: "project-mgmt", name: "Projects" },
   { key: "finance-mgmt", name: "Finance" },
   { key: "resource-mgmt", name: "Resources" },
+  { key: "resource-planning", name: "Resource Planning" },
   { key: "test-mgmt", name: "Testing" },
   { key: "bpm", name: "BPM" },
 ];

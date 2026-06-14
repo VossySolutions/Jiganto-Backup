@@ -8,6 +8,7 @@ import {
   BusinessIcon,
   CRMIcon,
   FinanceIcon,
+  ResourcePlanningIcon,
   ResourcesIcon,
   ServiceDeskIcon,
   HelpDeskIcon,
@@ -166,6 +167,17 @@ export const moduleMetadata: ModuleMetadata[] = [
       "Team capacity and resource allocation with skills tracking, timesheets and utilisation reporting.",
     category: "Management",
     color: "#F97316",
+  },
+  {
+    key: "resource-planning",
+    name: "Resource Planning",
+    icon: ResourcePlanningIcon,
+    href: "/modules/resource-planning",
+    shortDescription: "Workforce planning & forecasting",
+    longDescription:
+      "Executive workforce dashboard, demand vs supply matrix, heat maps, scheduler, pipeline demand, recruitment forecast, and AI planner.",
+    category: "Management",
+    color: "#4338CA",
   },
   {
     key: "portfolio",

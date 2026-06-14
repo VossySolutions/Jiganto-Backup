@@ -26,6 +26,7 @@ export * from "./models/ai-tokens";
 export * from "./models/commercial";
 export * from "./models/dashboard";
 export * from "./models/finance";
+export * from "./models/resource-planning";
 
 import { users } from "./models/auth";
 
