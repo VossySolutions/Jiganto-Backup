@@ -1,258 +1,125 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { TmDefect } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Loader2, Filter } from "lucide-react";
-import { useTmProject } from "@/contexts/TmProjectContext";
+import { Filter } from "lucide-react";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
-
-const SEV_BADGE: Record<string, string> = {
-  critical: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-  high:     "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-  medium:   "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  low:      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-};
-
-const STATUS_OPTS = ["new","open","in_progress","resolved","closed","wont_fix"];
-const SEV_OPTS    = ["low","medium","high","critical"];
-const PRI_OPTS    = ["low","medium","high","critical"];
-
-function InlineSelect({ value, options, onChange, testId }: {
-  value: string; options: string[]; onChange: (v: string) => void; testId?: string;
-}) {
-  return (
-    <select
-      className="border border-transparent hover:border-border rounded px-1.5 py-0.5 text-xs bg-transparent hover:bg-background transition-all cursor-pointer capitalize"
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      data-testid={testId}
-    >
-      {options.map(o => <option key={o} value={o}>{o.replace("_", " ")}</option>)}
-    </select>
-  );
-}
+import { SEV_BADGE } from "@/lib/tm-utils";
+import type { TmHdDefect } from "@/types/testmgmt";
+import { useTmFetch } from "@/hooks/use-tm-fetch";
+import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 
 export function DefectTriageScreen() {
   const { toast } = useToast();
   const [filterSev, setFilterSev] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [search, setSearch] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newSev, setNewSev] = useState("medium");
-  const [pendingChanges, setPendingChanges] = useState<Record<number, Partial<TmDefect>>>({});
 
-  const { activeProjectId, qsParam } = useTmProject();
-  const { data: defects = [], isLoading } = useQuery<TmDefect[]>({
-    queryKey: ["/api/tm/defects", activeProjectId],
-    queryFn: async () => { const r = await fetch(qsParam("/api/tm/defects")); return r.ok ? r.json() : []; },
-  });
+  const {
+    data: defects = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useTmFetch<TmHdDefect[]>(["/api/tm/defects/hd"], "/api/tm/defects/hd");
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<TmDefect> }) => apiRequest("PATCH", `/api/tm/defects/${id}`, data),
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      apiRequest("PATCH", `/api/tm/defects/hd/${id}/status`, { status }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tm/defects"] });
-      setPendingChanges({});
+      queryClient.invalidateQueries({ queryKey: ["/api/tm/defects/hd"] });
     },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
-
-  const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/tm/defects", { ...data, tenantId: 1, projectId: activeProjectId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tm/defects"] });
-      setCreating(false);
-      setNewTitle("");
-      setNewSev("medium");
-      toast({ title: "Defect raised" });
-    },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/tm/defects/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/tm/defects"] }),
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
-  function applyChange(id: number, field: string, value: string) {
-    const change = { ...pendingChanges[id], [field]: value };
-    setPendingChanges(p => ({ ...p, [id]: change }));
-    updateMutation.mutate({ id, data: { [field]: value } });
-  }
 
   const filtered = defects.filter(d => {
     if (filterSev !== "all" && d.severity !== filterSev) return false;
     if (filterStatus !== "all" && d.status !== filterStatus) return false;
-    if (search && !d.title.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !d.title.toLowerCase().includes(search.toLowerCase()) && !d.ref.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
   const sevOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-  const sorted = [...filtered].sort((a, b) =>
-    (sevOrder[a.severity ?? "medium"] ?? 9) - (sevOrder[b.severity ?? "medium"] ?? 9)
-  );
-
-  const pagination = useTablePagination(sorted, {
-    resetKey: `${filterSev}-${filterStatus}-${search}`,
+  const sorted = [...filtered].sort((a, b) => {
+    const sev = (sevOrder[a.severity ?? "medium"] ?? 9) - (sevOrder[b.severity ?? "medium"] ?? 9);
+    if (sev !== 0) return sev;
+    return b.daysOpen - a.daysOpen;
   });
 
+  const pagination = useTablePagination(sorted, { resetKey: `${filterSev}-${filterStatus}-${search}` });
+
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 px-6 py-3 border-b border-border flex-shrink-0 flex-wrap">
-        <Filter className="h-4 w-4 text-muted-foreground" />
-        <input
-          className="border border-border rounded px-2.5 py-1 text-xs bg-background w-48"
-          placeholder="Search defects..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          data-testid="input-search-defects"
-        />
-        <select
-          className="border border-border rounded px-2 py-1 text-xs bg-background"
-          value={filterSev} onChange={e => setFilterSev(e.target.value)}
-          data-testid="filter-severity"
-        >
-          <option value="all">All Severities</option>
-          {SEV_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-        <select
-          className="border border-border rounded px-2 py-1 text-xs bg-background"
-          value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-          data-testid="filter-status"
-        >
-          <option value="all">All Statuses</option>
-          {STATUS_OPTS.map(o => <option key={o} value={o}>{o.replace("_", " ")}</option>)}
-        </select>
-        <span className="text-xs text-muted-foreground">{sorted.length} defects</span>
-        <Button size="sm" className="ml-auto gap-1 h-7 text-xs" onClick={() => setCreating(!creating)} data-testid="btn-raise-defect-triage">
-          <Plus className="h-3.5 w-3.5" /> Raise Defect
-        </Button>
-      </div>
-
-      {/* Create Row */}
-      {creating && (
-        <div className="flex items-center gap-3 px-6 py-3 bg-muted/30 border-b border-border flex-shrink-0 flex-wrap">
-          <input
-            className="border border-border rounded px-2.5 py-1.5 text-sm bg-background flex-1 min-w-[240px]"
-            placeholder="Defect title..."
-            value={newTitle}
-            onChange={e => setNewTitle(e.target.value)}
-            data-testid="input-new-defect-title"
-            autoFocus
-          />
-          <select className="border border-border rounded px-2 py-1.5 text-xs bg-background"
-            value={newSev} onChange={e => setNewSev(e.target.value)}>
-            {SEV_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+    <TmScreenShell
+      loading={isLoading}
+      error={isError ? error : null}
+      onRetry={() => refetch()}
+      label="Loading defect triage..."
+    >
+      <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex items-center gap-3 px-6 py-3 border-b border-border flex-wrap">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <input className="border rounded px-2.5 py-1 text-xs bg-background w-48" placeholder="Search defects..."
+            value={search} onChange={e => setSearch(e.target.value)} />
+          <select className="border rounded px-2 py-1 text-xs bg-background" value={filterSev} onChange={e => setFilterSev(e.target.value)}>
+            <option value="all">All Severities</option>
+            {["critical", "high", "medium", "low"].map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <Button size="sm" className="h-7" onClick={() => createMutation.mutate({ title: newTitle, severity: newSev })}
-            disabled={!newTitle.trim() || createMutation.isPending} data-testid="btn-confirm-raise-defect">
-            {createMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
-          </Button>
-          <Button size="sm" variant="ghost" className="h-7" onClick={() => setCreating(false)}>Cancel</Button>
+          <select className="border rounded px-2 py-1 text-xs bg-background" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <option value="all">All Statuses</option>
+            {["open", "assigned", "in_progress", "fix_ready", "retesting", "fixed", "wont_fix", "closed"].map(s =>
+              <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+          </select>
+          <span className="text-xs text-muted-foreground">{sorted.length} defects · sorted by severity, then days open</span>
         </div>
-      )}
 
-      {/* Table */}
-      <div className="flex-1 overflow-auto">
-        {isLoading ? (
-          <div className="flex justify-center p-10"><Loader2 className="h-5 w-5 animate-spin" /></div>
-        ) : sorted.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
-            <div className="text-sm">No defects match the current filters.</div>
-          </div>
-        ) : (
+        <div className="flex-1 overflow-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm border-b border-border">
-              <tr>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground w-20">ID</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Title</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground w-28">Severity</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground w-28">Priority</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground w-36">Status</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground w-32">Assigned To</th>
-                <th className="px-4 py-2.5 w-12" />
+            <thead className="bg-muted/40 sticky top-0">
+              <tr className="text-left text-xs text-muted-foreground uppercase tracking-wider">
+                <th className="px-4 py-2">Ref</th>
+                <th className="px-4 py-2">Title</th>
+                <th className="px-4 py-2">Severity</th>
+                <th className="px-4 py-2">Status</th>
+                <th className="px-4 py-2">Days Open</th>
+                <th className="px-4 py-2">Test Case</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border/50">
+            <tbody className="divide-y divide-border">
               {pagination.paginatedItems.map(d => (
-                <tr key={d.id} className="hover:bg-muted/30 transition-colors group" data-testid={`defect-row-${d.id}`}>
-                  <td className="px-4 py-2.5">
-                    <span className="font-mono text-xs text-muted-foreground">DEF-{String(d.id).padStart(3, "0")}</span>
+                <tr key={d.id} className="hover:bg-muted/30">
+                  <td className="px-4 py-2 font-mono text-xs">{d.ref}</td>
+                  <td className="px-4 py-2 text-xs font-medium max-w-[280px] truncate">{d.title}</td>
+                  <td className="px-4 py-2">
+                    <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded uppercase", SEV_BADGE[d.severity ?? "medium"])}>{d.severity}</span>
                   </td>
-                  <td className="px-4 py-2.5">
-                    <span className="text-xs">{d.title}</span>
+                  <td className="px-4 py-2">
+                    <select className="text-xs border rounded px-1 py-0.5 bg-background capitalize"
+                      value={d.status} onChange={e => updateMutation.mutate({ id: d.id, status: e.target.value })}>
+                      {["open", "assigned", "in_progress", "fix_ready", "retesting", "fixed", "wont_fix", "closed"].map(s =>
+                        <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+                    </select>
                   </td>
-                  <td className="px-4 py-2.5">
-                    <div className={cn("inline-flex items-center")}>
-                      <span className={cn("text-[9px] font-mono font-bold px-2 py-0.5 rounded uppercase mr-1", SEV_BADGE[d.severity ?? "medium"])}>
-                        {d.severity}
-                      </span>
-                      <InlineSelect
-                        value={d.severity ?? "medium"}
-                        options={SEV_OPTS}
-                        onChange={v => applyChange(d.id, "severity", v)}
-                        testId={`select-severity-${d.id}`}
-                      />
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <InlineSelect
-                      value={d.priority ?? "medium"}
-                      options={PRI_OPTS}
-                      onChange={v => applyChange(d.id, "priority", v)}
-                      testId={`select-priority-${d.id}`}
-                    />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <InlineSelect
-                      value={d.status ?? "new"}
-                      options={STATUS_OPTS}
-                      onChange={v => applyChange(d.id, "status", v)}
-                      testId={`select-status-${d.id}`}
-                    />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <input
-                      className="border border-transparent hover:border-border rounded px-1.5 py-0.5 text-xs bg-transparent hover:bg-background w-full transition-all"
-                      placeholder="Unassigned"
-                      defaultValue={d.assignedTo ?? ""}
-                      onBlur={e => { if (e.target.value !== (d.assignedTo ?? "")) applyChange(d.id, "assignedTo", e.target.value); }}
-                      data-testid={`input-assignee-${d.id}`}
-                    />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <button
-                      onClick={() => deleteMutation.mutate(d.id)}
-                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 transition-all"
-                      data-testid={`btn-delete-defect-triage-${d.id}`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
+                  <td className="px-4 py-2 font-mono text-xs">{d.daysOpen}</td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground">{d.linkedTestCaseId ? `#${d.linkedTestCaseId}` : "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-        {!isLoading && sorted.length > 0 && (
-          <TablePagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            total={pagination.total}
-            startIndex={pagination.startIndex}
-            endIndex={pagination.endIndex}
-            pageSize={pagination.pageSize}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
-          />
-        )}
+        </div>
+        <TablePagination
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          total={pagination.total}
+          startIndex={pagination.startIndex}
+          endIndex={pagination.endIndex}
+          pageSize={pagination.pageSize}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+        />
       </div>
-    </div>
+    </TmScreenShell>
   );
 }

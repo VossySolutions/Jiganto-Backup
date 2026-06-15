@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { TmRequirement, TmTestCase, TmTestResult, TmDefect } from "@shared/schema";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,8 @@ import { Plus, Trash2, Link, CheckCircle2, XCircle, MinusCircle, Clock, Loader2,
 import { useTmProject } from "@/contexts/TmProjectContext";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
+import { useTmFetch } from "@/hooks/use-tm-fetch";
+import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 
 const PRI_BADGE: Record<string, string> = {
   critical: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
@@ -58,23 +60,18 @@ export function TraceabilityScreen() {
   const [filterImpl, setFilterImpl] = useState("all");
   const [search, setSearch] = useState("");
 
-  const { activeProjectId, qsParam } = useTmProject();
-  const { data: reqs = [], isLoading } = useQuery<TmRequirement[]>({
-    queryKey: ["/api/tm/requirements", activeProjectId],
-    queryFn: async () => { const r = await fetch(qsParam("/api/tm/requirements")); return r.ok ? r.json() : []; },
-  });
-  const { data: cases = [] } = useQuery<TmTestCase[]>({
-    queryKey: ["/api/tm/cases", activeProjectId],
-    queryFn: async () => { const r = await fetch(qsParam("/api/tm/cases")); return r.ok ? r.json() : []; },
-  });
-  const { data: allResults = [] } = useQuery<TmTestResult[]>({
-    queryKey: ["/api/tm/results/all", activeProjectId],
-    queryFn: async () => { const r = await fetch(qsParam("/api/tm/results/all")); return r.ok ? r.json() : []; },
-  });
-  const { data: allDefects = [] } = useQuery<TmDefect[]>({
-    queryKey: ["/api/tm/defects", activeProjectId],
-    queryFn: async () => { const r = await fetch(qsParam("/api/tm/defects")); return r.ok ? r.json() : []; },
-  });
+  const { activeProjectId } = useTmProject();
+  const reqsQuery = useTmFetch<TmRequirement[]>(["/api/tm/requirements"], "/api/tm/requirements");
+  const casesQuery = useTmFetch<TmTestCase[]>(["/api/tm/cases"], "/api/tm/cases");
+  const resultsQuery = useTmFetch<TmTestResult[]>(["/api/tm/results/all"], "/api/tm/results/all");
+  const defectsQuery = useTmFetch<TmDefect[]>(["/api/tm/defects"], "/api/tm/defects");
+
+  const reqs = reqsQuery.data ?? [];
+  const cases = casesQuery.data ?? [];
+  const allResults = resultsQuery.data ?? [];
+  const allDefects = defectsQuery.data ?? [];
+  const isLoading = reqsQuery.isLoading || casesQuery.isLoading || resultsQuery.isLoading || defectsQuery.isLoading;
+  const firstError = reqsQuery.error ?? casesQuery.error ?? resultsQuery.error ?? defectsQuery.error ?? null;
 
   const selected = reqs.find(r => r.id === selectedId);
   const linkedCases = selected ? cases.filter(c => (selected.linkedCaseIds ?? []).includes(c.id)) : [];
@@ -164,7 +161,18 @@ export function TraceabilityScreen() {
   });
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <TmScreenShell
+      loading={isLoading}
+      error={firstError}
+      onRetry={() => {
+        void reqsQuery.refetch();
+        void casesQuery.refetch();
+        void resultsQuery.refetch();
+        void defectsQuery.refetch();
+      }}
+      label="Loading traceability..."
+    >
+      <div className="flex h-full overflow-hidden">
       {/* Requirements List */}
       <div className="w-[340px] min-w-[280px] border-r border-border flex flex-col overflow-hidden">
         {/* Header + Stats */}
@@ -214,9 +222,7 @@ export function TraceabilityScreen() {
 
         {/* List */}
         <div className="flex-1 overflow-y-auto divide-y divide-border/40">
-          {isLoading ? (
-            <div className="flex justify-center p-4"><Loader2 className="h-4 w-4 animate-spin" /></div>
-          ) : filtered.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className="p-4 text-xs text-muted-foreground">
               {reqs.length === 0 ? "No requirements yet. Click Add to create your first requirement." : "No requirements match your filters."}
             </div>
@@ -527,6 +533,7 @@ export function TraceabilityScreen() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </TmScreenShell>
   );
 }

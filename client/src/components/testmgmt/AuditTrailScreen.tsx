@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
-  Loader2, PlayCircle, Bug, Plus, Settings, CheckCircle2,
+  PlayCircle, Bug, Plus, Settings, CheckCircle2,
   XCircle, MinusCircle, Clock, Filter, Search, Download
 } from "lucide-react";
-import { useTmProject } from "@/contexts/TmProjectContext";
+import { useTmFetch } from "@/hooks/use-tm-fetch";
+import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 
 type AuditEvent = {
   id: string;
@@ -40,14 +40,13 @@ export function AuditTrailScreen() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 25;
 
-  const { activeProjectId, qsParam } = useTmProject();
-  const { data: events = [], isLoading } = useQuery<AuditEvent[]>({
-    queryKey: ["/api/tm/audit", activeProjectId],
-    queryFn: async () => {
-      const r = await fetch(qsParam("/api/tm/audit"));
-      return r.ok ? r.json() : [];
-    },
-  });
+  const {
+    data: events = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useTmFetch<AuditEvent[]>(["/api/tm/audit"], "/api/tm/audit");
 
   const actors = Array.from(new Set(events.map(e => e.actor).filter(Boolean)));
   const eventTypes = Array.from(new Set(events.map(e => e.eventType)));
@@ -85,20 +84,26 @@ export function AuditTrailScreen() {
   const todayCount = events.filter(e => e.timestamp && new Date(e.timestamp).toDateString() === today).length;
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold mb-1">Audit Trail</h2>
-          <p className="text-sm text-muted-foreground">Complete history of test executions, defect activity, and system events.</p>
+    <TmScreenShell
+      loading={isLoading}
+      error={isError ? error : null}
+      onRetry={() => refetch()}
+      label="Loading audit trail..."
+    >
+      <div className="p-6 space-y-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold mb-1">Audit Trail</h2>
+            <p className="text-sm text-muted-foreground">Complete history of test executions, defect activity, and system events.</p>
+          </div>
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted/50 transition-colors"
+            data-testid="btn-export-audit"
+          >
+            <Download className="h-3.5 w-3.5" /> Export CSV
+          </button>
         </div>
-        <button
-          onClick={exportCSV}
-          className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted/50 transition-colors"
-          data-testid="btn-export-audit"
-        >
-          <Download className="h-3.5 w-3.5" /> Export CSV
-        </button>
-      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -159,9 +164,7 @@ export function AuditTrailScreen() {
       </div>
 
       {/* Event List */}
-      {isLoading ? (
-        <div className="flex justify-center p-10"><Loader2 className="h-5 w-5 animate-spin" /></div>
-      ) : filtered.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-10 text-center text-muted-foreground text-sm">
           {events.length === 0
             ? "No activity recorded yet. Load demo data from the Command Centre to populate events."
@@ -235,6 +238,7 @@ export function AuditTrailScreen() {
           )}
         </>
       )}
-    </div>
+      </div>
+    </TmScreenShell>
   );
 }

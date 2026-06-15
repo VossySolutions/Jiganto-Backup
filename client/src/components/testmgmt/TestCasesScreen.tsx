@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { TmTestCase, TmTestSuite, TmTestStep } from "@shared/schema";
 import { useTmProject } from "@/contexts/TmProjectContext";
@@ -17,6 +17,8 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
+import { useTmFetch } from "@/hooks/use-tm-fetch";
+import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 
 const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 const STATUSES = ["draft", "active", "deprecated"] as const;
@@ -82,15 +84,13 @@ export function TestCasesScreen() {
   const [runStartDate, setRunStartDate] = useState("");
   const [runCaseIds, setRunCaseIds] = useState<Set<number>>(new Set());
 
-  const { activeProjectId, qsParam } = useTmProject();
-  const { data: suites = [] } = useQuery<TmTestSuite[]>({
-    queryKey: ["/api/tm/suites", activeProjectId],
-    queryFn: async () => { const r = await fetch(qsParam("/api/tm/suites")); return r.ok ? r.json() : []; },
-  });
-  const { data: allCases = [], isLoading } = useQuery<TmTestCase[]>({
-    queryKey: ["/api/tm/cases", activeProjectId],
-    queryFn: async () => { const r = await fetch(qsParam("/api/tm/cases")); return r.ok ? r.json() : []; },
-  });
+  const { activeProjectId } = useTmProject();
+  const suitesQuery = useTmFetch<TmTestSuite[]>(["/api/tm/suites"], "/api/tm/suites");
+  const casesQuery = useTmFetch<TmTestCase[]>(["/api/tm/cases"], "/api/tm/cases");
+  const suites = suitesQuery.data ?? [];
+  const allCases = casesQuery.data ?? [];
+  const isLoading = suitesQuery.isLoading || casesQuery.isLoading;
+  const firstError = suitesQuery.error ?? casesQuery.error ?? null;
 
   const filtered = allCases.filter(tc => {
     if (filterSuite && tc.suiteId !== filterSuite) return false;
@@ -248,7 +248,16 @@ export function TestCasesScreen() {
   const suiteName = (id: number | null) => suites.find(s => s.id === id)?.name ?? "—";
 
   return (
-    <div className="p-6 space-y-4">
+    <TmScreenShell
+      loading={isLoading}
+      error={firstError}
+      onRetry={() => {
+        void suitesQuery.refetch();
+        void casesQuery.refetch();
+      }}
+      label="Loading test cases..."
+    >
+      <div className="p-6 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
@@ -257,7 +266,7 @@ export function TestCasesScreen() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={openRunModal} data-testid="button-start-run" className="gap-2">
-            <Play className="h-4 w-4" /> Start Test Run
+            <Play className="h-4 w-4" /> Start Test Cycle
           </Button>
           <Button onClick={openCreate} data-testid="button-create-case">
             <Plus className="h-4 w-4 mr-2" /> New Test Case
@@ -305,9 +314,7 @@ export function TestCasesScreen() {
 
       {/* Table */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        {isLoading ? (
-          <div className="p-8 text-center text-muted-foreground text-sm">Loading...</div>
-        ) : filtered.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="p-12 text-center">
             <FlaskConical className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-muted-foreground text-sm">
@@ -588,12 +595,12 @@ export function TestCasesScreen() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Start Test Run Modal ── */}
+      {/* ── Start Test Cycle Modal ── */}
       <Dialog open={runModalOpen} onOpenChange={setRunModalOpen}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Play className="h-4 w-4 text-primary" /> Start Test Run
+              <Play className="h-4 w-4 text-primary" /> Start Test Cycle
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
@@ -651,6 +658,7 @@ export function TestCasesScreen() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </TmScreenShell>
   );
 }

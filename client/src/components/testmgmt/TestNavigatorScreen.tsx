@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { TmTestSuite, TmTestCase, TmTestStep, TmTestResult } from "@shared/schema";
 import { cn } from "@/lib/utils";
@@ -10,9 +10,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { useTmProject } from "@/contexts/TmProjectContext";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
+import { useTmFetch, useTmFetchById } from "@/hooks/use-tm-fetch";
+import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 
 const STATUS_ICON: Record<string, JSX.Element> = {
   pass:    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />,
@@ -47,53 +48,54 @@ export function TestNavigatorScreen() {
   const [editPreconditions, setEditPreconditions] = useState("");
   const [editSteps, setEditSteps] = useState<StepDraft[]>([]);
 
-  const { activeProjectId, qsParam } = useTmProject();
+  const suitesQuery = useTmFetch<TmTestSuite[]>(["/api/tm/suites"], "/api/tm/suites");
+  const casesQuery = useTmFetch<TmTestCase[]>(["/api/tm/cases"], "/api/tm/cases");
+  const resultsQuery = useTmFetch<TmTestResult[]>(["/api/tm/results/all"], "/api/tm/results/all");
 
-  const { data: suites = [], isLoading } = useQuery<TmTestSuite[]>({
-    queryKey: ["/api/tm/suites", activeProjectId],
-    queryFn: async () => { const r = await fetch(qsParam("/api/tm/suites")); return r.ok ? r.json() : []; },
-  });
-  const { data: allCases = [] } = useQuery<TmTestCase[]>({
-    queryKey: ["/api/tm/cases", activeProjectId],
-    queryFn: async () => { const r = await fetch(qsParam("/api/tm/cases")); return r.ok ? r.json() : []; },
-  });
-  const { data: allResults = [] } = useQuery<TmTestResult[]>({
-    queryKey: ["/api/tm/results/all", activeProjectId],
-    queryFn: async () => { const r = await fetch(qsParam("/api/tm/results/all")); return r.ok ? r.json() : []; },
-  });
+  const suites = suitesQuery.data ?? [];
+  const allCases = casesQuery.data ?? [];
+  const allResults = resultsQuery.data ?? [];
 
   const selectedCase = allCases.find(c => c.id === selectedCaseId);
-  const { data: steps = [], refetch: refetchSteps } = useQuery<TmTestStep[]>({
-    queryKey: ["/api/tm/cases", selectedCaseId, "steps"],
-    queryFn: async () => {
-      if (!selectedCaseId) return [];
-      const r = await fetch(`/api/tm/cases/${selectedCaseId}/steps`);
-      return r.ok ? r.json() : [];
-    },
-    enabled: !!selectedCaseId,
-  });
+  const stepsQuery = useTmFetchById<TmTestStep[]>(
+    ["/api/tm/cases", selectedCaseId, "steps"],
+    selectedCaseId ? `/api/tm/cases/${selectedCaseId}/steps` : null,
+    { enabled: !!selectedCaseId },
+  );
+  const stepsData = stepsQuery.data;
+  const steps = stepsData ?? [];
+  const refetchSteps = stepsQuery.refetch;
+  const casesData = casesQuery.data;
+  const isLoading = suitesQuery.isLoading || casesQuery.isLoading || resultsQuery.isLoading;
+  const firstError = suitesQuery.error ?? casesQuery.error ?? resultsQuery.error ?? null;
 
-  // Sync edit form when case/steps change
+  // Sync edit form when selection changes
   useEffect(() => {
-    if (selectedCase) {
-      setEditTitle(selectedCase.title);
-      setEditPriority(selectedCase.priority ?? "medium");
-      setEditStatus(selectedCase.status ?? "draft");
-      setEditDescription(selectedCase.description ?? "");
-      setEditPreconditions(selectedCase.preconditions ?? "");
-      setEditMode(false);
+    if (!selectedCaseId || !casesData) return;
+    const c = casesData.find(x => x.id === selectedCaseId);
+    if (!c) return;
+    setEditTitle(c.title);
+    setEditPriority(c.priority ?? "medium");
+    setEditStatus(c.status ?? "draft");
+    setEditDescription(c.description ?? "");
+    setEditPreconditions(c.preconditions ?? "");
+    setEditMode(false);
+  }, [selectedCaseId, casesData]);
+
+  useEffect(() => {
+    if (!selectedCaseId) {
+      setEditSteps([]);
+      return;
     }
-  }, [selectedCaseId]);
-
-  useEffect(() => {
-    setEditSteps(steps.map(s => ({
+    if (!stepsData) return;
+    setEditSteps(stepsData.map(s => ({
       id: s.id,
       stepOrder: s.stepOrder,
       action: s.action,
       expectedResult: s.expectedResult ?? "",
       testData: s.testData ?? "",
     })));
-  }, [steps]);
+  }, [selectedCaseId, stepsData]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -179,10 +181,18 @@ export function TestNavigatorScreen() {
     setEditMode(false);
   }
 
-  if (isLoading) return <div className="flex justify-center items-center h-full"><Loader2 className="h-5 w-5 animate-spin" /></div>;
-
   return (
-    <div className="flex h-full overflow-hidden">
+    <TmScreenShell
+      loading={isLoading}
+      error={firstError}
+      onRetry={() => {
+        void suitesQuery.refetch();
+        void casesQuery.refetch();
+        void resultsQuery.refetch();
+      }}
+      label="Loading test navigator..."
+    >
+      <div className="flex h-full overflow-hidden">
       {/* Tree Panel */}
       <div className="w-[320px] min-w-[280px] border-r border-border flex flex-col overflow-hidden">
         {/* Filters */}
@@ -476,6 +486,7 @@ export function TestNavigatorScreen() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </TmScreenShell>
   );
 }

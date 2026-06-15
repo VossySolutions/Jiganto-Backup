@@ -1,13 +1,13 @@
 import { useState, useRef } from "react";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { TmTestSuite } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, Download, FileText, CheckCircle2, Loader2, X } from "lucide-react";
-import { useTmProject } from "@/contexts/TmProjectContext";
+import { useTmFetch } from "@/hooks/use-tm-fetch";
+import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 
 interface ParsedRow {
   title: string;
@@ -74,15 +74,17 @@ export function ImportTemplatesScreen() {
   const [targetSuiteId, setTargetSuiteId] = useState<number | "">("");
   const [importing, setImporting] = useState(false);
 
-  const { activeProjectId, qsParam } = useTmProject();
+  const {
+    data: suites = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useTmFetch<TmTestSuite[]>(["/api/tm/suites"], "/api/tm/suites");
+
   const previewPagination = useTablePagination(parsed ?? [], {
     resetKey: parsed?.length ?? 0,
     enabled: !!parsed?.length,
-  });
-
-  const { data: suites = [] } = useQuery<TmTestSuite[]>({
-    queryKey: ["/api/tm/suites", activeProjectId],
-    queryFn: async () => { const r = await fetch(qsParam("/api/tm/suites")); return r.ok ? r.json() : []; },
   });
 
   function handleFile(file: File) {
@@ -132,14 +134,20 @@ export function ImportTemplatesScreen() {
   }
 
   return (
-    <div className="p-6 space-y-8 max-w-4xl">
-      <div>
-        <h2 className="text-xl font-semibold mb-1">Import & Templates</h2>
-        <p className="text-sm text-muted-foreground">Import test cases from CSV, or download starter templates.</p>
-      </div>
+    <TmScreenShell
+      loading={isLoading}
+      error={isError ? error : null}
+      onRetry={() => refetch()}
+      label="Loading import templates..."
+    >
+      <div className="p-6 space-y-8 max-w-4xl">
+        <div>
+          <h2 className="text-xl font-semibold mb-1">Import & Templates</h2>
+          <p className="text-sm text-muted-foreground">Import test cases from CSV, or download starter templates.</p>
+        </div>
 
       {/* Import Section */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-border flex items-center gap-2">
           <Upload className="h-4 w-4 text-primary" />
           <span className="font-semibold text-sm">Import Test Cases from CSV</span>
@@ -242,10 +250,10 @@ export function ImportTemplatesScreen() {
             </div>
           )}
         </div>
-      </div>
+        </div>
 
       {/* Templates Section */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-border flex items-center gap-2">
           <Download className="h-4 w-4 text-primary" />
           <span className="font-semibold text-sm">Download Templates</span>
@@ -303,7 +311,8 @@ export function ImportTemplatesScreen() {
             </div>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </TmScreenShell>
   );
 }

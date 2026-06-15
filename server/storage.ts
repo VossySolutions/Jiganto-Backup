@@ -109,8 +109,11 @@ import {
   type WorkspaceDatabaseColumn, type InsertWorkspaceDatabaseColumn,
   type WorkspaceDatabaseRow, type InsertWorkspaceDatabaseRow,
   type WorkspaceSavedView, type InsertWorkspaceSavedView,
-  tmProjects, tmTestSuites, tmTestCases, tmTestSteps, tmTestRuns, tmTestResults, tmDefects, tmRequirements, tmScenarios,
+  tmProjects, tmBusinessAreas, tmBusinessProcesses, tmTestSuites, tmTestCases, tmTestSteps,
+  tmTestRuns, tmTestResults, tmDefects, tmRequirements, tmScenarios, tmSignOffs,
   type TmProject, type InsertTmProject,
+  type TmBusinessArea, type InsertTmBusinessArea,
+  type TmBusinessProcess, type InsertTmBusinessProcess,
   type TmTestSuite, type InsertTmTestSuite,
   type TmTestCase, type InsertTmTestCase,
   type TmTestStep, type InsertTmTestStep,
@@ -119,6 +122,7 @@ import {
   type TmDefect, type InsertTmDefect,
   type TmRequirement, type InsertTmRequirement,
   type TmScenario, type InsertTmScenario,
+  type TmSignOff, type InsertTmSignOff,
 } from "@shared/schema";
 import {
   bpmlTemplates, bpmlEntries,
@@ -7259,6 +7263,73 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteTmScenario(id: number): Promise<void> {
     await db.delete(tmScenarios).where(eq(tmScenarios.id, id));
+  }
+
+  // ── Business Areas ─────────────────────────────────────────────────────────
+  async getTmBusinessAreas(tenantId: number, projectId?: number): Promise<TmBusinessArea[]> {
+    const conds = projectId !== undefined
+      ? and(eq(tmBusinessAreas.tenantId, tenantId), eq(tmBusinessAreas.projectId, projectId))
+      : eq(tmBusinessAreas.tenantId, tenantId);
+    return await db.select().from(tmBusinessAreas).where(conds).orderBy(tmBusinessAreas.sortOrder);
+  }
+  async getTmBusinessArea(id: number): Promise<TmBusinessArea | undefined> {
+    const [row] = await db.select().from(tmBusinessAreas).where(eq(tmBusinessAreas.id, id));
+    return row;
+  }
+  async createTmBusinessArea(data: InsertTmBusinessArea): Promise<TmBusinessArea> {
+    const [row] = await db.insert(tmBusinessAreas).values(data).returning();
+    return row;
+  }
+  async updateTmBusinessArea(id: number, data: Partial<InsertTmBusinessArea>): Promise<TmBusinessArea | undefined> {
+    const [row] = await db.update(tmBusinessAreas).set({ ...data, updatedAt: new Date() }).where(eq(tmBusinessAreas.id, id)).returning();
+    return row;
+  }
+  async deleteTmBusinessArea(id: number): Promise<void> {
+    await db.delete(tmBusinessAreas).where(eq(tmBusinessAreas.id, id));
+  }
+
+  // ── Business Processes ─────────────────────────────────────────────────────
+  async getTmBusinessProcesses(tenantId: number, projectId?: number, businessAreaId?: number): Promise<TmBusinessProcess[]> {
+    const conds = [eq(tmBusinessProcesses.tenantId, tenantId)];
+    if (projectId !== undefined) conds.push(eq(tmBusinessProcesses.projectId, projectId));
+    if (businessAreaId !== undefined) conds.push(eq(tmBusinessProcesses.businessAreaId, businessAreaId));
+    return await db.select().from(tmBusinessProcesses).where(and(...conds)).orderBy(tmBusinessProcesses.sortOrder);
+  }
+  async getTmBusinessProcess(id: number): Promise<TmBusinessProcess | undefined> {
+    const [row] = await db.select().from(tmBusinessProcesses).where(eq(tmBusinessProcesses.id, id));
+    return row;
+  }
+  async createTmBusinessProcess(data: InsertTmBusinessProcess): Promise<TmBusinessProcess> {
+    const [row] = await db.insert(tmBusinessProcesses).values(data).returning();
+    return row;
+  }
+  async updateTmBusinessProcess(id: number, data: Partial<InsertTmBusinessProcess>): Promise<TmBusinessProcess | undefined> {
+    const [row] = await db.update(tmBusinessProcesses).set({ ...data, updatedAt: new Date() }).where(eq(tmBusinessProcesses.id, id)).returning();
+    return row;
+  }
+  async deleteTmBusinessProcess(id: number): Promise<void> {
+    await db.delete(tmBusinessProcesses).where(eq(tmBusinessProcesses.id, id));
+  }
+
+  // ── TM Sign-offs ───────────────────────────────────────────────────────────
+  async getTmSignOffs(tenantId: number, projectId?: number, testCycleId?: number): Promise<TmSignOff[]> {
+    const conds = [eq(tmSignOffs.tenantId, tenantId)];
+    if (projectId !== undefined) conds.push(eq(tmSignOffs.projectId, projectId));
+    if (testCycleId !== undefined) conds.push(eq(tmSignOffs.testCycleId, testCycleId));
+    return await db.select().from(tmSignOffs).where(and(...conds)).orderBy(desc(tmSignOffs.signedOffAt));
+  }
+  async createTmSignOff(data: InsertTmSignOff): Promise<TmSignOff> {
+    const [row] = await db.insert(tmSignOffs).values(data).returning();
+    return row;
+  }
+
+  async getTmTestResult(id: number): Promise<TmTestResult | undefined> {
+    const [row] = await db.select().from(tmTestResults).where(eq(tmTestResults.id, id));
+    return row;
+  }
+
+  async getTmTestCasesByScenario(scenarioId: number): Promise<TmTestCase[]> {
+    return await db.select().from(tmTestCases).where(eq(tmTestCases.scenarioId, scenarioId));
   }
 
   // ── Sign-Off ────────────────────────────────────────────────────────────────

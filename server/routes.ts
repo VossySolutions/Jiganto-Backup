@@ -356,6 +356,8 @@ export async function registerRoutes(
   registerServiceDeskRoutes(app);
   const { registerHelpDeskRoutes } = await import("./help-desk/routes");
   registerHelpDeskRoutes(app);
+  const { registerTestMgmtExtensionRoutes } = await import("./testmgmt/routes");
+  registerTestMgmtExtensionRoutes(app, { storage });
 
   // === Application Routes ===
 

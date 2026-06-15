@@ -1,13 +1,17 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { TmTestCase, TmTestRun, TmDefect } from "@shared/schema";
-import { CheckCircle2, XCircle, AlertCircle, Clock, FlaskConical, Bug, PlayCircle, Sparkles, Loader2, ExternalLink } from "lucide-react";
+import { CheckCircle2, XCircle, AlertCircle, Clock, FlaskConical, Bug, PlayCircle, Sparkles, Loader2, ExternalLink, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useTmProject } from "@/contexts/TmProjectContext";
 import { TmScreen } from "@/types/testmgmt";
 import { cn } from "@/lib/utils";
+import { useTmFetch } from "@/hooks/use-tm-fetch";
+import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
+import { TmBurndownChart, TmDefectTrendChart, TmPassRateTrendChart, TmAreaHealthChart } from "@/components/testmgmt/TmCharts";
+import type { TmDashboardData } from "@/types/testmgmt";
 
 interface Props {
   onNavigate: (screen: TmScreen) => void;
@@ -37,51 +41,50 @@ function StatCard({ label, value, sub, color, onClick }: {
 
 export function CommandCentreScreen({ onNavigate }: Props) {
   const { toast } = useToast();
-  const { activeProjectId, qsParam } = useTmProject();
+  const { activeProjectId } = useTmProject();
 
-  const { data: cases = [] } = useQuery<TmTestCase[]>({
-    queryKey: ["/api/tm/cases", activeProjectId],
-    queryFn: async () => {
-      const r = await fetch(qsParam("/api/tm/cases"));
-      return r.ok ? r.json() : [];
-    },
-  });
-  const { data: runs = [] } = useQuery<TmTestRun[]>({
-    queryKey: ["/api/tm/runs", activeProjectId],
-    queryFn: async () => {
-      const r = await fetch(qsParam("/api/tm/runs"));
-      return r.ok ? r.json() : [];
-    },
-  });
-  const { data: defects = [] } = useQuery<TmDefect[]>({
-    queryKey: ["/api/tm/defects", activeProjectId],
-    queryFn: async () => {
-      const r = await fetch(qsParam("/api/tm/defects"));
-      return r.ok ? r.json() : [];
-    },
-  });
+  const dashboardQuery = useTmFetch<TmDashboardData>(["/api/tm/dashboard"], "/api/tm/dashboard");
+  const casesQuery = useTmFetch<TmTestCase[]>(["/api/tm/cases"], "/api/tm/cases");
+  const runsQuery = useTmFetch<TmTestRun[]>(["/api/tm/runs"], "/api/tm/runs");
+  const defectsQuery = useTmFetch<TmDefect[]>(["/api/tm/defects"], "/api/tm/defects");
+
+  const dashboard = dashboardQuery.data;
+  const cases = casesQuery.data ?? [];
+  const runs = runsQuery.data ?? [];
+  const defects = defectsQuery.data ?? [];
+  const isLoading = dashboardQuery.isLoading || casesQuery.isLoading || runsQuery.isLoading || defectsQuery.isLoading;
+  const firstError = dashboardQuery.error ?? casesQuery.error ?? runsQuery.error ?? defectsQuery.error ?? null;
 
   const seedMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/tm/seed-demo"),
-    onSuccess: async (data: any) => {
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/tm/migrate-schema").catch(() => {});
+      const data = await apiRequest("POST", "/api/tm/seed-demo");
       await apiRequest("POST", "/api/tm/migrate-project");
+      if (activeProjectId) await apiRequest("POST", "/api/tm/seed-hierarchy", { projectId: activeProjectId }).catch(() => {});
+      return data;
+    },
+    onSuccess: async (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tm/cases"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tm/runs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tm/cycles"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tm/defects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tm/suites"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tm/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tm/hierarchy"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tm/dashboard"] });
       toast({ title: "Demo data loaded", description: `${data.cases} test cases, ${data.defects} defects across ${data.suites} suites.` });
     },
     onError: (e: any) => toast({ title: "Could not load demo data", description: e.message, variant: "destructive" }),
   });
 
-  const isEmpty = cases.length === 0 && runs.length === 0 && defects.length === 0;
+  const kpis = dashboard?.kpis;
+  const isEmpty = !isLoading && !firstError && !dashboard && cases.length === 0 && runs.length === 0 && defects.length === 0;
 
   const activeCases = cases.filter(c => c.status === "active").length;
   const draftCases = cases.filter(c => c.status === "draft").length;
   const activeRuns = runs.filter(r => r.status === "in_progress").length;
-  const openDefects = defects.filter(d => d.status !== "resolved" && d.status !== "closed" && d.status !== "wont_fix").length;
-  const criticalDefects = defects.filter(d => d.severity === "critical" && d.status !== "resolved" && d.status !== "closed").length;
+  const openDefects = kpis?.openDefects ?? defects.filter(d => d.status !== "resolved" && d.status !== "closed" && d.status !== "wont_fix").length;
+  const criticalDefects = kpis?.criticalDefects ?? defects.filter(d => d.severity === "critical" && d.status !== "resolved" && d.status !== "closed").length;
 
   if (isEmpty) {
     return (
@@ -114,7 +117,18 @@ export function CommandCentreScreen({ onNavigate }: Props) {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <TmScreenShell
+      loading={isLoading}
+      error={firstError}
+      onRetry={() => {
+        void dashboardQuery.refetch();
+        void casesQuery.refetch();
+        void runsQuery.refetch();
+        void defectsQuery.refetch();
+      }}
+      label="Loading command centre..."
+    >
+      <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold mb-1">Command Centre</h2>
@@ -122,8 +136,64 @@ export function CommandCentreScreen({ onNavigate }: Props) {
         </div>
       </div>
 
-      {/* KPI Row — all cards are clickable */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPI Row — spec dashboard */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <StatCard label="Total Cases" value={kpis?.totalCases ?? cases.length} sub={`${activeCases} active`} color="text-primary" onClick={() => onNavigate("test-cases")} />
+        <StatCard label="Executed" value={kpis ? `${kpis.executed} (${kpis.executedPct}%)` : activeRuns} color="text-blue-500" onClick={() => onNavigate("execution")} />
+        <StatCard label="Passed" value={kpis ? `${kpis.passed} (${kpis.passedPct}%)` : "—"} color="text-green-600" onClick={() => onNavigate("execution")} />
+        <StatCard label="Failed" value={kpis ? `${kpis.failed} (${kpis.failedPct}%)` : "—"} color="text-red-500" onClick={() => onNavigate("defect-triage")} />
+        <StatCard label="Open Defects" value={openDefects} sub={`${criticalDefects} critical`} color="text-amber-500" onClick={() => onNavigate("defect-board")} />
+      </div>
+
+      {(kpis || dashboard) && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="bg-card border rounded-xl p-4">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Completion</div>
+            <div className="text-3xl font-bold font-mono text-primary">{kpis?.completionPct ?? 0}%</div>
+            <div className="mt-2 bg-muted rounded-full h-2"><div className="h-full bg-primary rounded-full" style={{ width: `${kpis?.completionPct ?? 0}%` }} /></div>
+          </div>
+          <div className="bg-card border rounded-xl p-4">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Pass Rate</div>
+            <div className="text-3xl font-bold font-mono text-green-600">{kpis?.passRatePct ?? 0}%</div>
+            <div className="mt-2 bg-muted rounded-full h-2"><div className="h-full bg-green-500 rounded-full" style={{ width: `${kpis?.passRatePct ?? 0}%` }} /></div>
+          </div>
+          <div className="bg-card border rounded-xl p-4">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Release Readiness</div>
+            <div className={cn("text-3xl font-bold font-mono", (kpis?.releaseReadiness ?? 0) >= 80 ? "text-green-600" : "text-amber-600")}>{kpis?.releaseReadiness ?? 0}%</div>
+            {dashboard?.activeCycle && <div className="text-xs text-muted-foreground mt-1">Active cycle: {dashboard.activeCycle.name}</div>}
+          </div>
+        </div>
+      )}
+
+      {dashboard && (dashboard.burndown?.length || dashboard.passRateTrend?.length) ? (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <BarChart3 className="h-4 w-4 text-primary" />
+            Analytics
+            <button onClick={() => onNavigate("phase-comparison")} className="ml-auto text-xs text-primary hover:underline">
+              Phase comparison →
+            </button>
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {dashboard.burndown?.length ? (
+              <TmBurndownChart data={dashboard.burndown.map(d => ({ date: d.date, target: d.target ?? 0, actual: d.actual ?? d.remaining ?? 0 }))} />
+            ) : null}
+            {dashboard.defectTrend?.length ? (
+              <TmDefectTrendChart data={dashboard.defectTrend.map(d => ({ date: d.date, open: d.open ?? d.count ?? 0, closed: d.closed ?? 0 }))} />
+            ) : null}
+            {dashboard.passRateTrend?.length ? (
+              <TmPassRateTrendChart data={dashboard.passRateTrend.map(d => ({ label: d.label ?? d.cycleName ?? "Cycle", rate: d.rate ?? d.passRatePct ?? 0 }))} />
+            ) : null}
+            {dashboard.byArea?.length ? (
+              <TmAreaHealthChart data={dashboard.byArea.map(a => ({ name: a.name ?? (a as { areaName?: string }).areaName ?? "Area", passRatePct: a.passRatePct ?? 0, completionPct: a.completionPct ?? 0 }))} />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Legacy KPI row hidden when dashboard loaded — keep runs/defects panels below */}
+      {!kpis && (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Total Test Cases"
           value={cases.length}
@@ -134,7 +204,7 @@ export function CommandCentreScreen({ onNavigate }: Props) {
         <StatCard
           label="Active Runs"
           value={activeRuns}
-          sub={`${runs.length} total runs`}
+          sub={`${runs.length} total cycles`}
           color="text-blue-500"
           onClick={() => onNavigate("execution")}
         />
@@ -153,6 +223,7 @@ export function CommandCentreScreen({ onNavigate }: Props) {
           onClick={() => onNavigate("defect-board")}
         />
       </div>
+      )}
 
       {/* Two column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -160,7 +231,7 @@ export function CommandCentreScreen({ onNavigate }: Props) {
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="px-5 py-3 border-b border-border flex items-center gap-2">
             <PlayCircle className="h-4 w-4 text-primary" />
-            <span className="font-medium text-sm">Test Runs</span>
+            <span className="font-medium text-sm">Test Cycles</span>
             <button
               onClick={() => onNavigate("execution")}
               className="ml-auto text-xs text-primary hover:underline flex items-center gap-1"
@@ -314,6 +385,7 @@ export function CommandCentreScreen({ onNavigate }: Props) {
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </TmScreenShell>
   );
 }

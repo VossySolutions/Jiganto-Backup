@@ -8,7 +8,7 @@ export async function createDefectFromTestResult(
   tenantId: number,
   userId: string,
   testResultId: number,
-  extra?: { comment?: string; environment?: string },
+  extra?: { comment?: string; environment?: string; severity?: string; buildVersion?: string },
 ) {
   const [result] = await db.select().from(tmTestResults).where(eq(tmTestResults.id, testResultId));
   if (!result || result.status !== "fail") {
@@ -27,20 +27,23 @@ export async function createDefectFromTestResult(
     ? failedSteps.map((s, i) => `${i + 1}. Step failed${s.comment ? `: ${s.comment}` : ""}`).join("\n")
     : "1. Test execution failed";
 
+  const severity = extra?.severity ?? (testCase.priority === "critical" ? "critical" : testCase.priority === "high" ? "high" : "medium");
+
   return sd.createTicket(tenantId, userId, {
     source: "help_desk",
     title: `Defect: ${testCase.title}`,
     type: "defect",
-    priority: testCase.priority === "critical" ? "p1" : testCase.priority === "high" ? "p2" : "p3",
-    description: { text: extra?.comment ?? result.comment ?? "Failed during test execution" },
+    priority: severity === "critical" ? "p1" : severity === "high" ? "p2" : "p3",
+    description: { text: extra?.comment ?? result.comment ?? result.actualResult ?? "Failed during test execution" },
     projectId: testCase.projectId,
     linkedTestCaseId: testCase.id,
     linkedTestResultId: testResultId,
-    defectSeverity: testCase.priority === "critical" ? "critical" : testCase.priority === "high" ? "high" : "medium",
+    defectSeverity: severity,
     defectStepsToReproduce: stepsText,
     defectExpectedResult: testCase.description ?? "See test case steps",
-    defectActualResult: extra?.comment ?? result.comment ?? "Test failed",
+    defectActualResult: extra?.comment ?? result.actualResult ?? result.comment ?? "Test failed",
     defectEnvironment: extra?.environment ?? "uat",
+    defectBuildVersion: extra?.buildVersion,
   });
 }
 

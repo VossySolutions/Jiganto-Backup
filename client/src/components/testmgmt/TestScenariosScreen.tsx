@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { TmScenario, TmTestCase } from "@shared/schema";
 import { cn } from "@/lib/utils";
@@ -8,8 +8,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useTmProject } from "@/contexts/TmProjectContext";
 import {
   Plus, Pencil, Trash2, BookOpen, Link, X, ChevronRight,
-  Loader2, Check, Save, LayoutGrid,
+  Loader2, Check, Save, LayoutGrid, Sparkles,
 } from "lucide-react";
+import { useTmFetch } from "@/hooks/use-tm-fetch";
+import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 
 const PRI_BADGE: Record<string, string> = {
   critical: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
@@ -42,8 +44,7 @@ const EMPTY_FORM: ScenarioForm = {
 
 export function TestScenariosScreen() {
   const { toast } = useToast();
-  const { activeProjectId, qsParam } = useTmProject();
-
+  const { activeProjectId } = useTmProject();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -53,21 +54,13 @@ export function TestScenariosScreen() {
   const [filterArea, setFilterArea] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const { data: scenarios = [], isLoading } = useQuery<TmScenario[]>({
-    queryKey: ["/api/tm/scenarios", activeProjectId],
-    queryFn: async () => {
-      const r = await fetch(qsParam("/api/tm/scenarios"));
-      return r.ok ? r.json() : [];
-    },
-  });
+  const scenariosQuery = useTmFetch<TmScenario[]>(["/api/tm/scenarios"], "/api/tm/scenarios");
+  const allCasesQuery = useTmFetch<TmTestCase[]>(["/api/tm/cases"], "/api/tm/cases");
 
-  const { data: allCases = [] } = useQuery<TmTestCase[]>({
-    queryKey: ["/api/tm/cases", activeProjectId],
-    queryFn: async () => {
-      const r = await fetch(qsParam("/api/tm/cases"));
-      return r.ok ? r.json() : [];
-    },
-  });
+  const scenarios = scenariosQuery.data ?? [];
+  const allCases = allCasesQuery.data ?? [];
+  const isLoading = scenariosQuery.isLoading || allCasesQuery.isLoading;
+  const firstError = scenariosQuery.error ?? allCasesQuery.error ?? null;
 
   const selected = scenarios.find(s => s.id === selectedId);
   const linkedCases = selected ? allCases.filter(c => (selected.linkedCaseIds ?? []).includes(c.id)) : [];
@@ -104,6 +97,28 @@ export function TestScenariosScreen() {
       setSelectedId(null);
       toast({ title: "Scenario deleted" });
     },
+  });
+
+  const aiGenerateMutation = useMutation({
+    mutationFn: async (scenarioId: number) => {
+      const res = await apiRequest("POST", "/api/tm/ai/generate-tests", {
+        scenarioId,
+        projectId: activeProjectId,
+        count: 3,
+        create: true,
+      });
+      return res.json() as Promise<{ createdCount?: number; source?: string; testCases?: unknown[] }>;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tm/cases"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tm/scenarios"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tm/hierarchy"] });
+      toast({
+        title: `Generated ${data.createdCount ?? data.testCases?.length ?? 0} test cases`,
+        description: data.source === "ai" ? "AI-generated from user story" : "Generated using built-in templates (no AI key)",
+      });
+    },
+    onError: (e: Error) => toast({ title: "Generation failed", description: e.message, variant: "destructive" }),
   });
 
   function toggleCaseLink(caseId: number) {
@@ -158,7 +173,16 @@ export function TestScenariosScreen() {
   const totalLinked = scenarios.reduce((sum, s) => sum + (s.linkedCaseIds?.length ?? 0), 0);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <TmScreenShell
+      loading={isLoading}
+      error={firstError}
+      onRetry={() => {
+        void scenariosQuery.refetch();
+        void allCasesQuery.refetch();
+      }}
+      label="Loading test scenarios..."
+    >
+      <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-border flex items-center justify-between">
         <div>
@@ -224,9 +248,7 @@ export function TestScenariosScreen() {
 
           {/* List */}
           <div className="flex-1 overflow-y-auto divide-y divide-border">
-            {isLoading ? (
-              <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-            ) : filtered.length === 0 ? (
+            {filtered.length === 0 ? (
               <div className="p-6 text-center text-sm text-muted-foreground">
                 {scenarios.length === 0 ? "No scenarios yet. Create your first one." : "No scenarios match your filters."}
               </div>
@@ -386,7 +408,17 @@ export function TestScenariosScreen() {
                   </div>
                   <h3 className="text-lg font-semibold">{selected.title}</h3>
                 </div>
-                <div className="flex gap-2 flex-shrink-0">
+                <div className="flex gap-2 flex-shrink-0 flex-wrap">
+                  <Button
+                    size="sm" variant="outline"
+                    onClick={() => aiGenerateMutation.mutate(selected.id)}
+                    disabled={aiGenerateMutation.isPending}
+                    className="gap-1"
+                    data-testid="btn-ai-generate-tests"
+                  >
+                    {aiGenerateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    AI Generate Tests
+                  </Button>
                   <Button size="sm" variant="outline" onClick={openEdit} className="gap-1" data-testid="btn-edit-scenario">
                     <Pencil className="h-3.5 w-3.5" /> Edit
                   </Button>
@@ -503,6 +535,7 @@ export function TestScenariosScreen() {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </TmScreenShell>
   );
 }

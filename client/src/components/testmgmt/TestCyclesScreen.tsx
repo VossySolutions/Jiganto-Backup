@@ -1,0 +1,202 @@
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { TmTestRun } from "@shared/schema";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { useTmProject } from "@/contexts/TmProjectContext";
+import { CYCLE_STATUS_COLORS, TEST_PHASES, getTmLabels } from "@/lib/tm-utils";
+import type { TmCycleMetrics } from "@/types/testmgmt";
+import { Plus, Loader2, ShieldCheck, Play, Calendar, FileDown } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useTmFetch } from "@/hooks/use-tm-fetch";
+import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
+import { tmDownloadPdf } from "@/lib/tm-api";
+
+type EnrichedCycle = TmTestRun & { metrics: TmCycleMetrics };
+
+export function TestCyclesScreen() {
+  const { toast } = useToast();
+  const { activeProjectId, activeProject, qsParam } = useTmProject();
+  const labels = getTmLabels(activeProject?.methodology);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [form, setForm] = useState({
+    name: "", testPhase: "uat", methodology: activeProject?.methodology ?? "waterfall",
+    startDate: "", endDate: "", buildVersion: "", notes: "",
+  });
+
+  const {
+    data: cycles = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useTmFetch<EnrichedCycle[]>(["/api/tm/cycles"], "/api/tm/cycles");
+
+  const createMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiRequest("POST", "/api/tm/runs", { ...body, tenantId: 1, projectId: activeProjectId, status: "planning" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tm/cycles"] });
+      setCreateOpen(false);
+      toast({ title: "Test cycle created" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const setActiveMutation = useMutation({
+    mutationFn: (cycleId: number) => apiRequest("PATCH", `/api/tm/cycles/${cycleId}/active`, { projectId: activeProjectId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tm/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tm/cycles"] });
+      toast({ title: "Active cycle updated" });
+    },
+  });
+
+  const signOffMutation = useMutation({
+    mutationFn: (cycleId: number) => apiRequest("POST", `/api/tm/cycles/${cycleId}/sign-off`, { signedOffBy: "current-user" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tm/cycles"] });
+      toast({ title: "Test cycle signed off" });
+    },
+    onError: (e: Error) => toast({ title: "Sign-off failed", description: e.message, variant: "destructive" }),
+  });
+
+  async function downloadCyclePdf(cycleId: number, name: string) {
+    try {
+      const url = qsParam(`/api/tm/sign-offs/pdf?entityType=test_cycle&entityId=${cycleId}&testCycleId=${cycleId}`);
+      await tmDownloadPdf(url, `signoff-cycle-${name.replace(/\s+/g, "-")}.pdf`);
+      toast({ title: "Sign-off PDF downloaded" });
+    } catch (e) {
+      toast({ title: "PDF export failed", description: (e as Error).message, variant: "destructive" });
+    }
+  }
+
+  return (
+    <TmScreenShell
+      loading={isLoading}
+      error={isError ? error : null}
+      onRetry={() => refetch()}
+      label="Loading test cycles..."
+    >
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">Test Cycles</h2>
+            <p className="text-sm text-muted-foreground">Organising envelopes for testing windows · {labels.area} methodology</p>
+          </div>
+          <Button onClick={() => setCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> New Cycle</Button>
+        </div>
+
+      <div className="grid gap-4">
+        {cycles.map(cycle => {
+          const m = cycle.metrics;
+          const isActive = activeProject?.activeCycleId === cycle.id;
+          return (
+            <div key={cycle.id} className={cn("border rounded-xl p-5 bg-card", isActive && "border-primary ring-1 ring-primary/20")}>
+              <div className="flex items-start gap-3 mb-4">
+                <div className={cn("w-3 h-3 rounded-full mt-1", CYCLE_STATUS_COLORS[cycle.status ?? "planning"] ?? "bg-muted")} />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold">{cycle.name}</h3>
+                    {isActive && <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-mono">ACTIVE</span>}
+                    <span className="text-[10px] font-mono uppercase bg-muted px-2 py-0.5 rounded">{cycle.testPhase ?? "uat"}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
+                    {cycle.startDate && <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{cycle.startDate} → {cycle.endDate}</span>}
+                    {cycle.buildVersion && <span>Build: {cycle.buildVersion}</span>}
+                    <span className="capitalize">{cycle.status?.replace("_", " ")}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {!isActive && cycle.status !== "signed_off" && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveMutation.mutate(cycle.id)}>
+                      <Play className="h-3 w-3 mr-1" /> Set Active
+                    </Button>
+                  )}
+                  {cycle.status === "completed" && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => signOffMutation.mutate(cycle.id)}>
+                      <ShieldCheck className="h-3 w-3" /> Sign Off Cycle
+                    </Button>
+                  )}
+                  {cycle.status === "signed_off" && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => downloadCyclePdf(cycle.id, cycle.name)}>
+                      <FileDown className="h-3 w-3" /> Export PDF
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {m && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+                  {[
+                    { label: "Total", value: m.total, color: "text-foreground" },
+                    { label: "Executed", value: m.executed, color: "text-blue-600" },
+                    { label: "Passed", value: m.passed, color: "text-green-600" },
+                    { label: "Failed", value: m.failed, color: "text-red-600" },
+                    { label: "Blocked", value: m.blocked, color: "text-amber-600" },
+                    { label: "Completion", value: `${m.completionPct}%`, color: "text-primary" },
+                    { label: "Pass Rate", value: `${m.passRatePct}%`, color: "text-green-600" },
+                    { label: "Deferred", value: m.deferred, color: "text-muted-foreground" },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="bg-muted/30 rounded-lg p-2 text-center">
+                      <div className={cn("text-lg font-bold font-mono", color)}>{value}</div>
+                      <div className="text-[10px] text-muted-foreground uppercase">{label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {m && m.total > 0 && (
+                <div className="mt-3 flex gap-2">
+                  <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
+                    <div className="h-full bg-primary" style={{ width: `${m.completionPct}%` }} />
+                  </div>
+                  <span className="text-[10px] font-mono text-muted-foreground">{m.completionPct}% complete</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {cycles.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground text-sm">No test cycles yet. Create one to begin execution.</div>
+        )}
+      </div>
+
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Create Test Cycle</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Cycle name (e.g. UAT Sprint 3)"
+                value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+              <select className="w-full border rounded-lg px-3 py-2 text-sm" value={form.testPhase}
+                onChange={e => setForm(f => ({ ...f, testPhase: e.target.value }))}>
+                {TEST_PHASES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+              <select className="w-full border rounded-lg px-3 py-2 text-sm" value={form.methodology}
+                onChange={e => setForm(f => ({ ...f, methodology: e.target.value }))}>
+                <option value="waterfall">Waterfall</option>
+                <option value="agile">Agile</option>
+                <option value="hybrid">Hybrid</option>
+              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="date" className="border rounded-lg px-3 py-2 text-sm" value={form.startDate}
+                  onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
+                <input type="date" className="border rounded-lg px-3 py-2 text-sm" value={form.endDate}
+                  onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
+              </div>
+              <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Build / Version"
+                value={form.buildVersion} onChange={e => setForm(f => ({ ...f, buildVersion: e.target.value }))} />
+              <textarea className="w-full border rounded-lg px-3 py-2 text-sm min-h-[60px]" placeholder="Planning notes, entry/exit criteria..."
+                value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+              <Button className="w-full" disabled={!form.name.trim() || createMutation.isPending}
+                onClick={() => createMutation.mutate(form)}>
+                {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Cycle"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </TmScreenShell>
+  );
+}

@@ -156,6 +156,12 @@ app.use((req, res, next) => {
             const mb = await migrateRes.json() as any;
             log(`TM project ready: "${mb.project?.name}" (id=${mb.project?.id})`, "seed");
           }
+          // Apply TM schema extensions (idempotent)
+          const schemaRes = await fetch(`http://localhost:${port}/api/tm/migrate-schema`, { method: "POST" });
+          if (schemaRes.ok) {
+            const sb = await schemaRes.json() as any;
+            log(`TM schema patched (${sb.executed ?? 0} statements)`, "seed");
+          }
           // Seed demo scenarios if none exist
           const scenariosRes = await fetch(`http://localhost:${port}/api/tm/seed-scenarios`, { method: "POST" });
           if (scenariosRes.ok) {

@@ -1,9 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
 import { TmTestSuite, TmTestCase, TmTestResult, TmDefect } from "@shared/schema";
 import { cn } from "@/lib/utils";
-import { Loader2, FlaskConical, Bug, CheckCircle2, Shield, TrendingUp } from "lucide-react";
-import { useTmProject } from "@/contexts/TmProjectContext";
+import { FlaskConical, Bug, Shield, TrendingUp } from "lucide-react";
 import { TmScreen } from "@/types/testmgmt";
+import { useTmFetch } from "@/hooks/use-tm-fetch";
+import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 
 interface Props { onNavigate: (screen: TmScreen) => void; }
 
@@ -24,37 +24,17 @@ function MiniBar({ pct, color }: { pct: number; color: string }) {
 }
 
 export function DigitalTwinScreen({ onNavigate }: Props) {
-  const { activeProjectId, qsParam } = useTmProject();
-  const { data: suites = [], isLoading } = useQuery<TmTestSuite[]>({
-    queryKey: ["/api/tm/suites", activeProjectId],
-    queryFn: async () => {
-      const r = await fetch(qsParam("/api/tm/suites"));
-      return r.ok ? r.json() : [];
-    },
-  });
-  const { data: cases = [] } = useQuery<TmTestCase[]>({
-    queryKey: ["/api/tm/cases", activeProjectId],
-    queryFn: async () => {
-      const r = await fetch(qsParam("/api/tm/cases"));
-      return r.ok ? r.json() : [];
-    },
-  });
-  const { data: defects = [] } = useQuery<TmDefect[]>({
-    queryKey: ["/api/tm/defects", activeProjectId],
-    queryFn: async () => {
-      const r = await fetch(qsParam("/api/tm/defects"));
-      return r.ok ? r.json() : [];
-    },
-  });
-  const { data: allResults = [] } = useQuery<TmTestResult[]>({
-    queryKey: ["/api/tm/results/all", activeProjectId],
-    queryFn: async () => {
-      const r = await fetch(qsParam("/api/tm/results/all"));
-      return r.ok ? r.json() : [];
-    },
-  });
+  const suitesQuery = useTmFetch<TmTestSuite[]>(["/api/tm/suites"], "/api/tm/suites");
+  const casesQuery = useTmFetch<TmTestCase[]>(["/api/tm/cases"], "/api/tm/cases");
+  const defectsQuery = useTmFetch<TmDefect[]>(["/api/tm/defects"], "/api/tm/defects");
+  const resultsQuery = useTmFetch<TmTestResult[]>(["/api/tm/results/all"], "/api/tm/results/all");
 
-  if (isLoading) return <div className="flex justify-center items-center h-full"><Loader2 className="h-5 w-5 animate-spin" /></div>;
+  const suites = suitesQuery.data ?? [];
+  const cases = casesQuery.data ?? [];
+  const defects = defectsQuery.data ?? [];
+  const allResults = resultsQuery.data ?? [];
+  const isLoading = suitesQuery.isLoading || casesQuery.isLoading || defectsQuery.isLoading || resultsQuery.isLoading;
+  const firstError = suitesQuery.error ?? casesQuery.error ?? defectsQuery.error ?? resultsQuery.error ?? null;
 
   // Build per-suite metrics
   const modules = suites.map(suite => {
@@ -93,14 +73,25 @@ export function DigitalTwinScreen({ onNavigate }: Props) {
   const overallPassRate = (totalPass + totalFail + totalBlocked) > 0 ? totalPass / (totalPass + totalFail + totalBlocked) : 0;
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold mb-1">Digital Twin</h2>
-        <p className="text-sm text-muted-foreground">Live test coverage health map across all application modules.</p>
-      </div>
+    <TmScreenShell
+      loading={isLoading}
+      error={firstError}
+      onRetry={() => {
+        void suitesQuery.refetch();
+        void casesQuery.refetch();
+        void defectsQuery.refetch();
+        void resultsQuery.refetch();
+      }}
+      label="Loading digital twin..."
+    >
+      <div className="p-6 space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold mb-1">Digital Twin</h2>
+          <p className="text-sm text-muted-foreground">Live test coverage health map across all application modules.</p>
+        </div>
 
       {/* Overall KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Overall Pass Rate", value: `${Math.round(overallPassRate * 100)}%`, icon: TrendingUp, cls: overallPassRate >= 0.8 ? "text-green-600" : overallPassRate >= 0.6 ? "text-amber-600" : "text-red-600" },
           { label: "Total Test Cases", value: totalCases, icon: FlaskConical, cls: "text-primary" },
@@ -199,6 +190,7 @@ export function DigitalTwinScreen({ onNavigate }: Props) {
           </div>
         ))}
       </div>
-    </div>
+      </div>
+    </TmScreenShell>
   );
 }
