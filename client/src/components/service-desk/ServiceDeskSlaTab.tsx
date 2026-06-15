@@ -28,16 +28,16 @@ interface BusinessCalendar {
   isBusinessTimeNow: boolean;
 }
 
-export function ServiceDeskSlaTab() {
+export function ServiceDeskSlaTab({ apiBase = "/api/service-desk" }: { apiBase?: string }) {
   const { toast } = useToast();
   const [form, setForm] = useState({ clientId: "", priority: "p1", responseHours: "1", resolutionHours: "4" });
 
-  const { data: configs = [], isLoading: configsLoading, isError: configsError, refetch } = useQuery<SlaConfigRow[]>({ queryKey: ["/api/service-desk/sla-configs"] });
+  const { data: configs = [], isLoading: configsLoading, isError: configsError, refetch } = useQuery<SlaConfigRow[]>({ queryKey: [`${apiBase}/sla-configs`] });
   const { data: calendar, isLoading: calLoading } = useQuery<BusinessCalendar>({ queryKey: ["/api/settings/business-calendar"] });
 
   const createConfig = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/service-desk/sla-configs", {
+      const res = await apiRequest("POST", `${apiBase}/sla-configs`, {
         clientId: form.clientId ? Number(form.clientId) : null,
         priority: form.priority,
         responseHours: Number(form.responseHours),
@@ -47,7 +47,7 @@ export function ServiceDeskSlaTab() {
     },
     onSuccess: () => {
       toast({ title: "SLA override saved" });
-      queryClient.invalidateQueries({ queryKey: ["/api/service-desk/sla-configs"] });
+      queryClient.invalidateQueries({ queryKey: [`${apiBase}/sla-configs`] });
     },
   });
 

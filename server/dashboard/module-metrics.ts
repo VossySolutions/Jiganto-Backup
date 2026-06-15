@@ -47,35 +47,8 @@ function businessClientFilter(clientId?: number) {
 export async function loadHelpDeskModuleDashboard(
   scope: DashboardScope,
 ): Promise<HelpDeskModuleDashboard> {
-  const tasks = await filterCrmTasksByClient(scope.tenantId, scope.clientId);
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-  const open = tasks.filter((t) => t.status !== "completed" && t.completedAt == null);
-  const slaBreached = open.filter((t) => t.dueDate != null && t.dueDate < now);
-
-  const completedRecent = tasks.filter(
-    (t) => t.completedAt != null && t.completedAt >= thirtyDaysAgo,
-  );
-  let totalResolutionMs = 0;
-  let resolutionCount = 0;
-  for (const t of completedRecent) {
-    if (t.completedAt && t.createdAt) {
-      totalResolutionMs += t.completedAt.getTime() - t.createdAt.getTime();
-      resolutionCount++;
-    }
-  }
-  const avgResolutionHours =
-    resolutionCount > 0 ? Math.round(totalResolutionMs / resolutionCount / 3600000) : 0;
-
-  const onTime = completedRecent.filter(
-    (t) => !t.dueDate || (t.completedAt && t.completedAt <= t.dueDate),
-  ).length;
-  const csatScore =
-    completedRecent.length > 0
-      ? Math.round((onTime / completedRecent.length) * 5 * 10) / 10
-      : 4.0;
+  const { loadHelpDeskDashboard } = await import("../help-desk/service");
+  const data = await loadHelpDeskDashboard(scope.tenantId, scope.clientId);
 
   const statusBuckets: Record<string, number> = {
     Open: 0,
@@ -83,56 +56,28 @@ export async function loadHelpDeskModuleDashboard(
     Pending: 0,
     Resolved: 0,
   };
-  for (const t of tasks) {
-    const s = (t.status ?? "pending").toLowerCase();
-    if (s === "completed") statusBuckets.Resolved++;
-    else if (s === "in_progress") statusBuckets["In Progress"]++;
-    else if (s === "pending") statusBuckets.Pending++;
-    else statusBuckets.Open++;
-  }
-
-  const volumeTrend: { day: string; count: number }[] = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
-    const count = tasks.filter((t) => t.createdAt >= dayStart && t.createdAt < dayEnd).length;
-    volumeTrend.push({ day: d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }), count });
-  }
-
-  const recentTickets = open
-    .sort((a, b) => {
-      const ad = a.dueDate?.getTime() ?? Infinity;
-      const bd = b.dueDate?.getTime() ?? Infinity;
-      return ad - bd;
-    })
-    .slice(0, 10)
-    .map((t) => ({
-      id: t.id,
-      subject: t.subject,
-      status: t.status ?? "pending",
-      priority: t.priority ?? "normal",
-      dueDate: t.dueDate ? t.dueDate.toISOString().slice(0, 10) : null,
-    }));
 
   return {
     kpis: {
-      openTickets: open.length,
-      slaBreached: slaBreached.length,
-      avgResolutionHours,
-      csatScore,
+      openTickets: data.kpis.openTickets,
+      slaBreached: data.kpis.slaBreached,
+      avgResolutionHours: data.kpis.avgResolutionHours,
+      csatScore: data.kpis.csatScore,
     },
     byStatus: [
       { label: "Open", count: statusBuckets.Open, color: "#6366f1" },
       { label: "In Progress", count: statusBuckets["In Progress"], color: "#f59e0b" },
-      { label: "Pending", count: statusBuckets.Pending, color: "#94a3b8" },
+      { label: "Pending", count: statusBuckets.Pending, color: "#8b5cf6" },
       { label: "Resolved", count: statusBuckets.Resolved, color: "#22c55e" },
     ],
-    volumeTrend,
-    recentTickets,
+    volumeTrend: data.volumeByType.map((v) => ({ day: v.type, count: v.count })),
+    recentTickets: data.overdueTable.map((t) => ({
+      id: t.id,
+      subject: t.title,
+      status: t.type,
+      priority: t.priority,
+      dueDate: t.slaDeadline ? String(t.slaDeadline).slice(0, 10) : null,
+    })),
   };
 }
 

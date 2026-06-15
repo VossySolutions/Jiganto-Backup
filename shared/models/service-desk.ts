@@ -10,8 +10,18 @@ import { pmProjects } from "./projects";
 export const TICKET_SOURCES = ["service_desk", "help_desk"] as const;
 export type TicketSource = (typeof TICKET_SOURCES)[number];
 
-export const TICKET_TYPES = ["incident", "service_request", "change_request", "question"] as const;
+export const TICKET_TYPES = ["incident", "service_request", "change_request", "question", "defect"] as const;
 export type TicketType = (typeof TICKET_TYPES)[number];
+
+export const DEFECT_SEVERITIES = ["critical", "high", "medium", "low"] as const;
+export type DefectSeverity = (typeof DEFECT_SEVERITIES)[number];
+
+export const DEFECT_ENVIRONMENTS = ["dev", "sit", "uat", "staging", "production"] as const;
+export type DefectEnvironment = (typeof DEFECT_ENVIRONMENTS)[number];
+
+export const DEFECT_STATUSES = [
+  "open", "assigned", "in_progress", "fix_ready", "retesting", "fixed", "wont_fix", "closed",
+] as const;
 
 export const TICKET_PRIORITIES = ["p1", "p2", "p3", "p4"] as const;
 export type TicketPriority = (typeof TICKET_PRIORITIES)[number];
@@ -41,6 +51,13 @@ export const DEFAULT_INCIDENT_SLA_HOURS: Record<TicketPriority, { response: numb
   p2: { response: 4, resolution: 8 },
   p3: { response: 8, resolution: 24 },
   p4: { response: 24, resolution: 72 },
+};
+
+export const DEFAULT_DEFECT_SLA_HOURS: Record<TicketPriority, { response: number; resolution: number }> = {
+  p1: { response: 2, resolution: 8 },
+  p2: { response: 4, resolution: 16 },
+  p3: { response: 8, resolution: 48 },
+  p4: { response: 24, resolution: 120 },
 };
 
 export const sdSettings = pgTable("sd_settings", {
@@ -167,9 +184,83 @@ export const sdTickets = pgTable("sd_tickets", {
   changePostReview: text("change_post_review"),
   internalNotes: text("internal_notes"),
   tags: jsonb("tags").default([]),
+  linkedTestCaseId: integer("linked_test_case_id"),
+  linkedTestResultId: integer("linked_test_result_id"),
+  sprintPhase: text("sprint_phase"),
+  defectSeverity: text("defect_severity"),
+  defectStepsToReproduce: text("defect_steps_to_reproduce"),
+  defectExpectedResult: text("defect_expected_result"),
+  defectActualResult: text("defect_actual_result"),
+  defectEnvironment: text("defect_environment"),
+  defectBuildVersion: text("defect_build_version"),
+  defectWorkaround: text("defect_workaround"),
+  defectFixVersion: text("defect_fix_version"),
+  csatScore: integer("csat_score"),
+  csatSurveySentAt: timestamp("csat_survey_sent_at"),
+  csatSurveyToken: text("csat_survey_token"),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const hdPortalConfigs = pgTable("hd_portal_configs", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  clientId: integer("client_id").references(() => clients.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  allowedEmailDomains: jsonb("allowed_email_domains").default([]),
+  allowedEmails: jsonb("allowed_emails").default([]),
+  isActive: boolean("is_active").default(true),
+  customBranding: jsonb("custom_branding").default({}),
+  portalName: text("portal_name"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const hdPortalSessions = pgTable("hd_portal_sessions", {
+  id: serial("id").primaryKey(),
+  portalConfigId: integer("portal_config_id").notNull().references(() => hdPortalConfigs.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  verificationCode: text("verification_code"),
+  verifiedAt: timestamp("verified_at"),
+  expiresAt: timestamp("expires_at"),
+  ipAddress: text("ip_address"),
+  csatOptedOut: boolean("csat_opted_out").default(false),
+  sessionToken: text("session_token"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const hdPortalActivityLog = pgTable("hd_portal_activity_log", {
+  id: serial("id").primaryKey(),
+  portalConfigId: integer("portal_config_id").notNull().references(() => hdPortalConfigs.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  action: text("action").notNull(),
+  ticketId: integer("ticket_id"),
+  ipAddress: text("ip_address"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const hdSlaContractedHours = pgTable("hd_sla_contracted_hours", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  clientId: integer("client_id").references(() => clients.id, { onDelete: "cascade" }),
+  monthlyHours: decimal("monthly_hours", { precision: 8, scale: 2 }).notNull(),
+  overageRate: decimal("overage_rate", { precision: 10, scale: 2 }),
+  currency: text("currency").default("GBP"),
+  effectiveFrom: date("effective_from"),
+  effectiveTo: date("effective_to"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const hdMaintenanceWindows = pgTable("hd_maintenance_windows", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  clientId: integer("client_id").references(() => clients.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  startAt: timestamp("start_at").notNull(),
+  endAt: timestamp("end_at").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
 export const sdTicketComments = pgTable("sd_ticket_comments", {
@@ -259,3 +350,7 @@ export type SdRoutingRule = typeof sdRoutingRules.$inferSelect;
 export type SdTicketComment = typeof sdTicketComments.$inferSelect;
 export type SdTicketTimeLog = typeof sdTicketTimeLogs.$inferSelect;
 export type SdCabReview = typeof sdCabReviews.$inferSelect;
+export type HdPortalConfig = typeof hdPortalConfigs.$inferSelect;
+export type HdPortalSession = typeof hdPortalSessions.$inferSelect;
+export type HdSlaContractedHours = typeof hdSlaContractedHours.$inferSelect;
+export type HdMaintenanceWindow = typeof hdMaintenanceWindows.$inferSelect;

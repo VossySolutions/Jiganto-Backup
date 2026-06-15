@@ -27,6 +27,7 @@ import {
   PmTestTrackerTool, PmStakeholderTool, PmBpmTool, PmSowTrackerTool, PmWbsTool,
 } from "@/components/projects/PmSecondaryTools";
 import { ReactGanttChart } from "@/components/projects/ReactGanttChart";
+import { HelpDeskProjectTicketsTool } from "@/components/help-desk/HelpDeskProjectTicketsTool";
 import type { GanttTask, GanttResource, GanttDependency } from "@/components/projects/gantt.types";
 import {
   Plus, Search, ChevronRight, ChevronDown, Loader2,
@@ -224,6 +225,7 @@ const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
     tools: [
       { id: "risk_log", name: "Risk Log", hint: "Risk register & mitigation", icon: PmRiskLogIcon },
       { id: "issues_log", name: "Issues Log", hint: "Open issues & actions", icon: PmIssuesLogIcon },
+      { id: "support_tickets", name: "Support Tickets", hint: "Help Desk tickets linked to this project", icon: PmIssuesLogIcon },
       { id: "assumptions_log", name: "Assumptions Log", hint: "Document assumptions", icon: PmAssumptionsLogIcon },
       { id: "dependencies_log", name: "Dependencies Log", hint: "Track dependencies", icon: PmDependenciesLogIcon },
       { id: "decisions_log", name: "Decisions Log", hint: "Key decision records", icon: PmDecisionsLogIcon },
@@ -2195,6 +2197,8 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
         return <RaiddLogTool logType="risk" projectId={project.id} />;
       case "issues_log":
         return <RaiddLogTool logType="issues" projectId={project.id} />;
+      case "support_tickets":
+        return <HelpDeskProjectTicketsTool projectId={project.id} />;
       case "assumptions_log":
         return <RaiddLogTool logType="assumptions" projectId={project.id} />;
       case "dependencies_log":

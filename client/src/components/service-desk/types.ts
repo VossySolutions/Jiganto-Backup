@@ -1,4 +1,4 @@
-export type TicketType = "incident" | "service_request" | "change_request" | "question";
+export type TicketType = "incident" | "service_request" | "change_request" | "question" | "defect";
 export type TicketPriority = "p1" | "p2" | "p3" | "p4";
 export type SlaState = "within" | "at_risk" | "breached" | "none";
 
@@ -144,7 +144,33 @@ export const TYPE_LABELS: Record<TicketType, string> = {
   service_request: "Service Request",
   change_request: "Change Request",
   question: "Question",
+  defect: "Defect",
 };
+
+export interface HelpDeskDashboard {
+  kpis: {
+    openTickets: number;
+    slaBreached: number;
+    avgResolutionHours: number;
+    csatScore: number;
+    openDefects: number;
+    billableHoursThisMonth: number;
+  };
+  volumeByType: { type: string; count: number }[];
+  resolutionTrend: { week: string; hours: number }[];
+  csatTrend: { month: string; score: number }[];
+  overdueTable: {
+    id: number;
+    ref: string;
+    title: string;
+    type: string;
+    priority: string;
+    clientName: string | null;
+    agentName: string | null;
+    slaDeadline: string | null;
+    overdueHours: number;
+  }[];
+}
 
 export function slaBadgeClass(state: SlaState): string {
   if (state === "breached") return "bg-red-500/15 text-red-700 dark:text-red-300";

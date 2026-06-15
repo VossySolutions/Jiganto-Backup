@@ -48,6 +48,7 @@ export function effectiveResolutionDeadline(
   },
   tenant: Tenant | null | undefined,
   now = new Date(),
+  maintenancePauseMs = 0,
 ): Date | null {
   if (!ticket.slaResolutionDeadline) return null;
   let deadline = new Date(ticket.slaResolutionDeadline);
@@ -57,6 +58,9 @@ export function effectiveResolutionDeadline(
     deadline = new Date(deadline.getTime() + pausedMs + extraPause);
   } else if (ticket.slaPausedMs) {
     deadline = new Date(deadline.getTime() + ticket.slaPausedMs);
+  }
+  if (maintenancePauseMs > 0) {
+    deadline = new Date(deadline.getTime() + maintenancePauseMs);
   }
   return deadline;
 }
@@ -74,11 +78,12 @@ export function slaStateForTicket(
   },
   tenant: Tenant | null | undefined,
   now = new Date(),
+  maintenancePauseMs = 0,
 ): { response: SlaState; resolution: SlaState } {
   if (ticket.type === "question") {
     return { response: "none", resolution: "none" };
   }
-  const resolutionDeadline = effectiveResolutionDeadline(ticket, tenant, now);
+  const resolutionDeadline = effectiveResolutionDeadline(ticket, tenant, now, maintenancePauseMs);
   let response: SlaState = "none";
   if (ticket.slaResponseDeadline && !ticket.firstResponseAt) {
     response = computeSlaState(ticket.slaResponseDeadline, now);

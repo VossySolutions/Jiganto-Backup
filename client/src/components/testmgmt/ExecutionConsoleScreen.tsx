@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
   Play, CheckCircle2, XCircle, MinusCircle, SkipForward,
-  Plus, Trash2, ChevronRight, Clock, Loader2,
+  Plus, Trash2, ChevronRight, Clock, Loader2, Bug,
 } from "lucide-react";
 import { useTmProject } from "@/contexts/TmProjectContext";
 
@@ -25,7 +25,7 @@ interface StepResult {
 const STATUS_LABELS: Record<string, string> = {
   not_run: "Not Run", pass: "Pass", fail: "Fail",
   blocked: "Blocked", skipped: "Skipped", planned: "Planned", in_progress: "In Progress",
-  completed: "Completed", aborted: "Aborted",
+  completed: "Completed", aborted: "Aborted", ready_for_retest: "Ready for Retest",
 };
 const STATUS_COLORS: Record<string, string> = {
   not_run: "bg-muted text-muted-foreground",
@@ -33,6 +33,7 @@ const STATUS_COLORS: Record<string, string> = {
   fail: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
   blocked: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
   skipped: "bg-muted text-muted-foreground",
+  ready_for_retest: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
   planned: "bg-muted text-muted-foreground",
   in_progress: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
   completed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
@@ -132,11 +133,31 @@ export function ExecutionConsoleScreen() {
 
   const submitResultMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/tm/results/${id}`, data),
-    onSuccess: () => {
+    onSuccess: async (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tm/runs", selectedRunId, "results"] });
       toast({ title: "Result submitted", description: "Test result saved successfully." });
+      if (vars.data.status === "fail") {
+        setLastFailedResultId(vars.id);
+      } else if (vars.data.status === "pass") {
+        try {
+          await apiRequest("POST", "/api/help-desk/retest-result", { testResultId: vars.id, status: "pass" });
+        } catch { /* no linked defect */ }
+      }
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const [lastFailedResultId, setLastFailedResultId] = useState<number | null>(null);
+
+  const createDefectMut = useMutation({
+    mutationFn: (testResultId: number) =>
+      apiRequest("POST", "/api/help-desk/tickets/from-test-result", { testResultId }),
+    onSuccess: async (res) => {
+      const ticket = await res.json();
+      toast({ title: "Defect created", description: `Help Desk ticket ${ticket.ref} created from failed test.` });
+      setLastFailedResultId(null);
+    },
+    onError: (e: Error) => toast({ title: "Could not create defect", description: e.message, variant: "destructive" }),
   });
 
   function openExecution(result: TmTestResult) {
@@ -411,6 +432,18 @@ export function ExecutionConsoleScreen() {
                 >
                   <MinusCircle className="h-4 w-4" /> Blocked
                 </Button>
+                {lastFailedResultId === selectedResultId && (
+                  <Button
+                    variant="outline"
+                    className="gap-2 border-red-400 text-red-600"
+                    onClick={() => createDefectMut.mutate(selectedResultId!)}
+                    disabled={createDefectMut.isPending}
+                    data-testid="btn-create-defect-hd"
+                  >
+                    {createDefectMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bug className="h-4 w-4" />}
+                    Create Defect in Help Desk
+                  </Button>
+                )}
                 {submitResultMutation.isPending && <Loader2 className="h-4 w-4 animate-spin self-center" />}
               </div>
             </div>

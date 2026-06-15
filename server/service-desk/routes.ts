@@ -37,7 +37,7 @@ function sdHandler(
 
 const createTicketSchema = z.object({
   title: z.string().min(1),
-  type: z.enum(["incident", "service_request", "change_request", "question"]),
+  type: z.enum(["incident", "service_request", "change_request", "question", "defect"]),
   priority: z.enum(["p1", "p2", "p3", "p4"]).optional(),
   description: z.unknown().optional(),
   category: z.string().optional(),

@@ -354,6 +354,8 @@ export async function registerRoutes(
 
   const { registerServiceDeskRoutes } = await import("./service-desk/routes");
   registerServiceDeskRoutes(app);
+  const { registerHelpDeskRoutes } = await import("./help-desk/routes");
+  registerHelpDeskRoutes(app);
 
   // === Application Routes ===
 
@@ -11037,6 +11039,12 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
         }
       }
       await storage.completeSurveyResponse(response.id, timeSeconds || 0);
+      try {
+        const { processCsatSurveyResponse } = await import("./help-desk/csat");
+        await processCsatSurveyResponse(survey.id, survey.category);
+      } catch (err) {
+        console.warn("[help-desk] CSAT survey hook skipped:", err);
+      }
       res.json({ success: true, responseId: response.id });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });

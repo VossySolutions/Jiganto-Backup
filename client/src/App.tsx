@@ -22,6 +22,9 @@ import BPMPage from "@/pages/BPMPage";
 import TestManagementPage from "@/pages/TestManagementPage";
 import WorkspacesPage from "@/pages/WorkspacesPage";
 import ServiceDeskPage from "@/pages/ServiceDeskPage";
+import HelpDeskPage from "@/pages/HelpDeskPage";
+import HelpDeskPortalPage from "@/pages/HelpDeskPortalPage";
+import HelpDeskCsatPage from "@/pages/HelpDeskCsatPage";
 import PortfolioManagementPage from "@/pages/PortfolioManagementPage";
 import SignOffPage from "@/pages/SignOffPage";
 import SigningPortalPage from "@/pages/SigningPortalPage";
@@ -98,6 +101,22 @@ function Router() {
       </Switch>
     );
   }
+  if (window.location.pathname.startsWith("/portal/")) {
+    return (
+      <Switch>
+        <Route path="/portal/:token" component={HelpDeskPortalPage} />
+        <Route component={NotFound} />
+      </Switch>
+    );
+  }
+  if (window.location.pathname.startsWith("/help-desk/csat/")) {
+    return (
+      <Switch>
+        <Route path="/help-desk/csat/:token" component={HelpDeskCsatPage} />
+        <Route component={NotFound} />
+      </Switch>
+    );
+  }
   if (window.location.pathname.startsWith("/invite/")) {
     return (
       <Switch>
@@ -146,6 +165,10 @@ function Router() {
         <Route path="/modules/business-mgmt" component={BusinessManagementPage} />
         <Route path="/modules/workspaces" component={WorkspacesPage} />
         <Route path="/modules/service-desk" component={ServiceDeskPage} />
+        <Route path="/modules/help-desk" component={HelpDeskPage} />
+        <Route path="/help-desk">
+          <Redirect to="/modules/help-desk" />
+        </Route>
         <Route path="/service-desk">
           <Redirect to="/modules/service-desk" />
         </Route>

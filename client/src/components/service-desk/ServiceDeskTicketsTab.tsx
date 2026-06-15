@@ -31,14 +31,16 @@ import {
 } from "@/components/ui/dialog";
 
 interface Props {
-  initialFilters?: { slaFilter?: string; status?: string; priority?: string };
+  initialFilters?: { slaFilter?: string; status?: string; priority?: string; type?: string };
   searchQuery?: string;
+  apiBase?: string;
+  includeDefect?: boolean;
 }
 
-export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "" }: Props) {
+export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "", apiBase = "/api/service-desk", includeDefect = false }: Props) {
   const { toast } = useToast();
   const [view, setView] = useState<"list" | "calendar">("list");
-  const [typeFilter, setTypeFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState(initialFilters?.type ?? "all");
   const [priorityFilter, setPriorityFilter] = useState(initialFilters?.priority ?? "all");
   const [statusFilter, setStatusFilter] = useState(initialFilters?.status ?? "all");
   const [slaFilter, setSlaFilter] = useState(initialFilters?.slaFilter ?? "all");
@@ -48,9 +50,21 @@ export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "" }: Prop
   useEffect(() => {
     setSearch(searchQuery);
   }, [searchQuery]);
+
+  useEffect(() => {
+    if (initialFilters?.type) setTypeFilter(initialFilters.type);
+    if (initialFilters?.slaFilter) setSlaFilter(initialFilters.slaFilter);
+    if (initialFilters?.priority) setPriorityFilter(initialFilters.priority);
+    if (initialFilters?.status) setStatusFilter(initialFilters.status);
+  }, [initialFilters]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newTicket, setNewTicket] = useState({ title: "", type: "incident" as TicketType, priority: "p3" as TicketPriority, description: "" });
+  const [newTicket, setNewTicket] = useState({
+    title: "", type: "incident" as TicketType, priority: "p3" as TicketPriority, description: "",
+    projectId: "", defectSeverity: "medium", defectEnvironment: "uat", defectStepsToReproduce: "",
+    defectExpectedResult: "", defectActualResult: "", sprintPhase: "",
+    defectBuildVersion: "", defectWorkaround: "", defectFixVersion: "",
+  });
 
   const queryParams = new URLSearchParams();
   if (typeFilter !== "all") queryParams.set("type", typeFilter);
@@ -63,71 +77,99 @@ export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "" }: Prop
   const qs = queryParams.toString();
 
   const { data: tickets = [], isLoading, isError, refetch, isFetching } = useQuery<TicketRow[]>({
-    queryKey: [`/api/service-desk/tickets${qs ? `?${qs}` : ""}`],
+    queryKey: [`${apiBase}/tickets${qs ? `?${qs}` : ""}`],
   });
 
   const { data: detail, isLoading: detailLoading } = useQuery<TicketDetail>({
-    queryKey: [`/api/service-desk/tickets/${selectedId}`],
+    queryKey: [`${apiBase}/tickets/${selectedId}`],
     enabled: selectedId != null,
   });
 
   const createMut = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/service-desk/tickets", {
-        ...newTicket,
+      const body: Record<string, unknown> = {
+        title: newTicket.title,
+        type: newTicket.type,
+        priority: newTicket.priority,
         description: newTicket.description ? { text: newTicket.description } : undefined,
-      });
+      };
+      if (includeDefect && newTicket.type === "defect") {
+        body.projectId = newTicket.projectId ? Number(newTicket.projectId) : undefined;
+        body.defectSeverity = newTicket.defectSeverity;
+        body.defectEnvironment = newTicket.defectEnvironment;
+        body.defectStepsToReproduce = newTicket.defectStepsToReproduce;
+        body.defectExpectedResult = newTicket.defectExpectedResult;
+        body.defectActualResult = newTicket.defectActualResult;
+        body.sprintPhase = newTicket.sprintPhase;
+        body.defectBuildVersion = newTicket.defectBuildVersion || undefined;
+        body.defectWorkaround = newTicket.defectWorkaround || undefined;
+        body.defectFixVersion = newTicket.defectFixVersion || undefined;
+      }
+      const res = await apiRequest("POST", `${apiBase}/tickets`, body);
       return res.json();
     },
     onSuccess: (t) => {
       toast({ title: `Ticket ${t.ref} created` });
       setShowCreate(false);
       setSelectedId(t.id);
-      queryClient.invalidateQueries({ queryKey: ["/api/service-desk/tickets"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/service-desk/dashboard"] });
+      queryClient.invalidateQueries({ queryKey: [`${apiBase}/tickets`] });
+      queryClient.invalidateQueries({ queryKey: [`${apiBase}/dashboard`] });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const statusMut = useMutation({
     mutationFn: async ({ id, status, reason }: { id: number; status: string; reason?: string }) => {
-      const res = await apiRequest("POST", `/api/service-desk/tickets/${id}/status`, { status, reason });
+      const res = await apiRequest("POST", `${apiBase}/tickets/${id}/status`, { status, reason });
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/service-desk/tickets"] });
-      if (selectedId) queryClient.invalidateQueries({ queryKey: [`/api/service-desk/tickets/${selectedId}`] });
+      queryClient.invalidateQueries({ queryKey: [`${apiBase}/tickets`] });
+      if (selectedId) queryClient.invalidateQueries({ queryKey: [`${apiBase}/tickets/${selectedId}`] });
     },
+  });
+
+  const convertMut = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `${apiBase}/tickets/${id}/convert-to-incident`, { reason: "Post-go-live conversion" });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Converted to incident" });
+      queryClient.invalidateQueries({ queryKey: [`${apiBase}/tickets`] });
+      if (selectedId) queryClient.invalidateQueries({ queryKey: [`${apiBase}/tickets/${selectedId}`] });
+    },
+    onError: (e: Error) => toast({ title: "Conversion failed", description: e.message, variant: "destructive" }),
   });
 
   const commentMut = useMutation({
     mutationFn: async ({ id, body, isInternal }: { id: number; body: string; isInternal: boolean }) => {
-      const res = await apiRequest("POST", `/api/service-desk/tickets/${id}/comments`, { body: { text: body }, isInternal });
+      const res = await apiRequest("POST", `${apiBase}/tickets/${id}/comments`, { body: { text: body }, isInternal });
       return res.json();
     },
     onSuccess: () => {
-      if (selectedId) queryClient.invalidateQueries({ queryKey: [`/api/service-desk/tickets/${selectedId}`] });
+      if (selectedId) queryClient.invalidateQueries({ queryKey: [`${apiBase}/tickets/${selectedId}`] });
     },
   });
 
   const timeLogMut = useMutation({
     mutationFn: async ({ id, logDate, hours, description, isBillable }: { id: number; logDate: string; hours: number; description: string; isBillable: boolean }) => {
-      const res = await apiRequest("POST", `/api/service-desk/tickets/${id}/time-logs`, { logDate, hours, description, isBillable });
+      const res = await apiRequest("POST", `${apiBase}/tickets/${id}/time-logs`, { logDate, hours, description, isBillable });
       return res.json();
     },
     onSuccess: () => {
-      if (selectedId) queryClient.invalidateQueries({ queryKey: [`/api/service-desk/tickets/${selectedId}`] });
+      if (selectedId) queryClient.invalidateQueries({ queryKey: [`${apiBase}/tickets/${selectedId}`] });
     },
   });
 
   const cabMut = useMutation({
     mutationFn: async ({ id, decision, comments }: { id: number; decision: string; comments?: string }) => {
-      const res = await apiRequest("POST", `/api/service-desk/tickets/${id}/cab-review`, { decision, comments });
+      const res = await apiRequest("POST", `${apiBase}/tickets/${id}/cab-review`, { decision, comments });
       return res.json();
     },
     onSuccess: () => {
-      if (selectedId) queryClient.invalidateQueries({ queryKey: [`/api/service-desk/tickets/${selectedId}`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/service-desk/tickets"] });
+      if (selectedId) queryClient.invalidateQueries({ queryKey: [`${apiBase}/tickets/${selectedId}`] });
+      queryClient.invalidateQueries({ queryKey: [`${apiBase}/tickets`] });
     },
   });
 
@@ -139,7 +181,7 @@ export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "" }: Prop
       if (!uploadRes.ok) throw new Error("Upload failed");
       const uploaded = await uploadRes.json() as { originalName: string; storedName: string; size: number; mimeType: string };
       const fileUrl = `/uploads/${uploaded.storedName}`;
-      const res = await apiRequest("POST", `/api/service-desk/tickets/${id}/attachments`, {
+      const res = await apiRequest("POST", `${apiBase}/tickets/${id}/attachments`, {
         fileName: uploaded.originalName ?? file.name,
         fileUrl,
         fileSize: uploaded.size ?? file.size,
@@ -149,7 +191,7 @@ export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "" }: Prop
     },
     onSuccess: () => {
       toast({ title: "Attachment uploaded" });
-      if (selectedId) queryClient.invalidateQueries({ queryKey: [`/api/service-desk/tickets/${selectedId}`] });
+      if (selectedId) queryClient.invalidateQueries({ queryKey: [`${apiBase}/tickets/${selectedId}`] });
     },
     onError: (e: Error) => toast({ title: "Upload failed", description: e.message, variant: "destructive" }),
   });
@@ -345,12 +387,31 @@ export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "" }: Prop
                       <p className="text-sm flex items-center gap-1"><Clock className="h-3 w-3" />Resolution deadline: {new Date(detail.effectiveResolutionDeadline).toLocaleString()}</p>
                     )}
                     <div className="flex flex-wrap gap-2">
-                      {["in_progress", "pending", "resolved", "closed", "assigned", "completed", "answered", "submitted", "under_review", "cab_approved", "scheduled", "implementing", "implemented"].map((s) => (
+                      {(includeDefect && detail.type === "defect"
+                        ? ["assigned", "in_progress", "fix_ready", "retesting", "fixed", "wont_fix", "closed"]
+                        : ["in_progress", "pending", "resolved", "closed", "assigned", "completed", "answered", "submitted", "under_review", "cab_approved", "scheduled", "implementing", "implemented"]
+                      ).map((s) => (
                         <Button key={s} size="sm" variant="outline" className="capitalize text-xs" onClick={() => statusMut.mutate({ id: detail.id, status: s })}>
                           → {s.replace(/_/g, " ")}
                         </Button>
                       ))}
                     </div>
+                    {detail.type === "defect" && (
+                      <div className="text-sm space-y-1 bg-muted/50 p-3 rounded-lg">
+                        {(detail as TicketDetail & { defectSeverity?: string }).defectSeverity && <p><strong>Severity:</strong> {(detail as TicketDetail & { defectSeverity?: string }).defectSeverity}</p>}
+                        {(detail as TicketDetail & { defectEnvironment?: string }).defectEnvironment && <p><strong>Environment:</strong> {(detail as TicketDetail & { defectEnvironment?: string }).defectEnvironment}</p>}
+                        {(detail as TicketDetail & { sprintPhase?: string }).sprintPhase && <p><strong>Sprint/Phase:</strong> {(detail as TicketDetail & { sprintPhase?: string }).sprintPhase}</p>}
+                        {(detail as TicketDetail & { defectBuildVersion?: string }).defectBuildVersion && <p><strong>Build/Version:</strong> {(detail as TicketDetail & { defectBuildVersion?: string }).defectBuildVersion}</p>}
+                        {(detail as TicketDetail & { defectFixVersion?: string }).defectFixVersion && <p><strong>Fix Version:</strong> {(detail as TicketDetail & { defectFixVersion?: string }).defectFixVersion}</p>}
+                        {(detail as TicketDetail & { defectWorkaround?: string }).defectWorkaround && <p><strong>Workaround:</strong> {(detail as TicketDetail & { defectWorkaround?: string }).defectWorkaround}</p>}
+                        {(detail as TicketDetail & { linkedTestCaseId?: number }).linkedTestCaseId && <p><strong>Test Case:</strong> #{(detail as TicketDetail & { linkedTestCaseId?: number }).linkedTestCaseId}</p>}
+                        {includeDefect && apiBase.includes("help-desk") && (
+                          <Button size="sm" variant="outline" className="mt-2" onClick={() => convertMut.mutate(detail.id)} disabled={convertMut.isPending}>
+                            Convert to Incident (post-go-live)
+                          </Button>
+                        )}
+                      </div>
+                    )}
                     {detail.internalNotes && <p className="text-sm bg-muted p-2 rounded-lg">{detail.internalNotes}</p>}
                     {detail.type === "change_request" && (
                       <div className="text-sm space-y-1">
@@ -482,7 +543,11 @@ export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "" }: Prop
                 <Label>Type</Label>
                 <Select value={newTicket.type} onValueChange={(v) => setNewTicket({ ...newTicket, type: v as TicketType })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+                  <SelectContent>
+                    {Object.entries(TYPE_LABELS)
+                      .filter(([k]) => includeDefect || k !== "defect")
+                      .map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
                 </Select>
               </div>
               <div>
@@ -494,6 +559,39 @@ export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "" }: Prop
               </div>
             </div>
             <div><Label>Description</Label><Textarea value={newTicket.description} onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })} /></div>
+            {includeDefect && newTicket.type === "defect" && (
+              <div className="space-y-3 border-t pt-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label>Severity</Label>
+                    <Select value={newTicket.defectSeverity} onValueChange={(v) => setNewTicket({ ...newTicket, defectSeverity: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {["critical", "high", "medium", "low"].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Environment</Label>
+                    <Select value={newTicket.defectEnvironment} onValueChange={(v) => setNewTicket({ ...newTicket, defectEnvironment: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {["dev", "sit", "uat", "staging", "production"].map((s) => <SelectItem key={s} value={s}>{s.toUpperCase()}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div><Label>Sprint / Phase</Label><Input value={newTicket.sprintPhase} onChange={(e) => setNewTicket({ ...newTicket, sprintPhase: e.target.value })} /></div>
+                <div><Label>Steps to Reproduce</Label><Textarea value={newTicket.defectStepsToReproduce} onChange={(e) => setNewTicket({ ...newTicket, defectStepsToReproduce: e.target.value })} /></div>
+                <div><Label>Expected Result</Label><Textarea value={newTicket.defectExpectedResult} onChange={(e) => setNewTicket({ ...newTicket, defectExpectedResult: e.target.value })} /></div>
+                <div><Label>Actual Result</Label><Textarea value={newTicket.defectActualResult} onChange={(e) => setNewTicket({ ...newTicket, defectActualResult: e.target.value })} /></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div><Label>Build / Version</Label><Input value={newTicket.defectBuildVersion} onChange={(e) => setNewTicket({ ...newTicket, defectBuildVersion: e.target.value })} /></div>
+                  <div><Label>Fix Version</Label><Input value={newTicket.defectFixVersion} onChange={(e) => setNewTicket({ ...newTicket, defectFixVersion: e.target.value })} /></div>
+                </div>
+                <div><Label>Workaround</Label><Textarea value={newTicket.defectWorkaround} onChange={(e) => setNewTicket({ ...newTicket, defectWorkaround: e.target.value })} rows={2} /></div>
+              </div>
+            )}
             <Button className="w-full" disabled={!newTicket.title || createMut.isPending} onClick={() => createMut.mutate()}>
               {createMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Create ticket

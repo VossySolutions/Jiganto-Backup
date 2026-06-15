@@ -18,6 +18,7 @@ import {
   sdCabReviews,
   sdCabMembers,
   DEFAULT_INCIDENT_SLA_HOURS,
+  DEFAULT_DEFECT_SLA_HOURS,
   type TicketType,
   type TicketPriority,
   type TicketSource,
@@ -79,6 +80,16 @@ const VALID_TRANSITIONS: Record<TicketType, Record<string, string[]>> = {
     answered: ["closed"],
     closed: [],
   },
+  defect: {
+    open: ["assigned", "in_progress"],
+    assigned: ["in_progress"],
+    in_progress: ["fix_ready", "wont_fix"],
+    fix_ready: ["retesting"],
+    retesting: ["fixed", "open"],
+    fixed: ["closed"],
+    wont_fix: ["closed"],
+    closed: [],
+  },
 };
 
 export async function getOrCreateSettings(tenantId: number) {
@@ -110,6 +121,7 @@ export async function resolveSlaHours(
   priority: TicketPriority,
   serviceId?: number | null,
   clientId?: number | null,
+  ticketType?: TicketType,
 ): Promise<{ response: number; resolution: number }> {
   if (clientId) {
     const [override] = await db
@@ -135,6 +147,7 @@ export async function resolveSlaHours(
       };
     }
   }
+  if (ticketType === "defect") return DEFAULT_DEFECT_SLA_HOURS[priority];
   return DEFAULT_INCIDENT_SLA_HOURS[priority];
 }
 
@@ -222,6 +235,18 @@ export async function createTicket(
     changeRollbackPlan?: string;
     changeImplementationDate?: string;
     reporterEmail?: string;
+    reporterId?: string | null;
+    linkedTestCaseId?: number | null;
+    linkedTestResultId?: number | null;
+    sprintPhase?: string;
+    defectSeverity?: string;
+    defectStepsToReproduce?: string;
+    defectExpectedResult?: string;
+    defectActualResult?: string;
+    defectEnvironment?: string;
+    defectBuildVersion?: string;
+    defectWorkaround?: string;
+    defectFixVersion?: string;
   },
 ) {
   const source = data.source ?? "service_desk";
@@ -252,7 +277,7 @@ export async function createTicket(
 
   const slaHours = data.type === "question"
     ? null
-    : await resolveSlaHours(tenantId, priority, data.serviceId, data.clientId);
+    : await resolveSlaHours(tenantId, priority, data.serviceId, data.clientId, data.type);
 
   const now = new Date();
   let slaResponseDeadline: Date | null = null;
@@ -260,6 +285,15 @@ export async function createTicket(
   if (slaHours) {
     slaResponseDeadline = addBusinessHours(now, slaHours.response, tenant);
     slaResolutionDeadline = addBusinessHours(now, slaHours.resolution, tenant);
+    try {
+      const { computeMaintenanceOverlapMs } = await import("../help-desk/maintenance-sla");
+      const respPause = await computeMaintenanceOverlapMs(tenantId, data.clientId, now, slaResponseDeadline);
+      const resPause = await computeMaintenanceOverlapMs(tenantId, data.clientId, now, slaResolutionDeadline);
+      if (respPause > 0) slaResponseDeadline = new Date(slaResponseDeadline.getTime() + respPause);
+      if (resPause > 0) slaResolutionDeadline = new Date(slaResolutionDeadline.getTime() + resPause);
+    } catch {
+      /* maintenance tables may not exist yet */
+    }
   }
 
   const initialStatus = data.type === "change_request" ? "draft" : "open";
@@ -278,7 +312,7 @@ export async function createTicket(
       category: data.category,
       serviceId: data.serviceId,
       customFields: data.customFields ?? {},
-      reporterId: userId,
+      reporterId: data.reporterId !== undefined ? data.reporterId : userId,
       reporterEmail: data.reporterEmail,
       assignedAgentId,
       assignedTeamId,
@@ -290,6 +324,17 @@ export async function createTicket(
       changeRiskAssessment: data.changeRiskAssessment,
       changeRollbackPlan: data.changeRollbackPlan,
       changeImplementationDate: data.changeImplementationDate ? new Date(data.changeImplementationDate) : null,
+      linkedTestCaseId: data.linkedTestCaseId ?? null,
+      linkedTestResultId: data.linkedTestResultId ?? null,
+      sprintPhase: data.sprintPhase,
+      defectSeverity: data.defectSeverity,
+      defectStepsToReproduce: data.defectStepsToReproduce,
+      defectExpectedResult: data.defectExpectedResult,
+      defectActualResult: data.defectActualResult,
+      defectEnvironment: data.defectEnvironment,
+      defectBuildVersion: data.defectBuildVersion,
+      defectWorkaround: data.defectWorkaround,
+      defectFixVersion: data.defectFixVersion,
       tags,
       createdBy: userId,
     })
@@ -347,12 +392,24 @@ export async function addTicketAttachment(
 
 export async function enrichTicket(ticket: typeof sdTickets.$inferSelect, tenant?: typeof tenants.$inferSelect | null) {
   const t = tenant ?? (await storage.getTenant(ticket.tenantId));
-  const sla = slaStateForTicket(ticket, t);
-  const effectiveDeadline = effectiveResolutionDeadline(ticket, t);
+  let maintenancePauseMs = 0;
+  try {
+    const { maintenancePauseForTicket } = await import("../help-desk/maintenance-sla");
+    maintenancePauseMs = await maintenancePauseForTicket(
+      ticket.tenantId,
+      ticket.clientId,
+      new Date(ticket.createdAt),
+    );
+  } catch {
+    /* optional */
+  }
+  const sla = slaStateForTicket(ticket, t, new Date(), maintenancePauseMs);
+  const effectiveDeadline = effectiveResolutionDeadline(ticket, t, new Date(), maintenancePauseMs);
   return {
     ...ticket,
     slaState: sla,
     effectiveResolutionDeadline: effectiveDeadline?.toISOString() ?? null,
+    maintenancePauseMs,
     totalTimeLogged: await getTotalTimeLogged(ticket.id),
   };
 }
@@ -493,7 +550,7 @@ export async function updateTicketStatus(
     }
   }
 
-  if (newStatus === "resolved" || newStatus === "completed" || newStatus === "answered") {
+  if (newStatus === "resolved" || newStatus === "completed" || newStatus === "answered" || newStatus === "fixed") {
     updates.resolvedAt = new Date();
   }
   if (newStatus === "closed") {
@@ -518,9 +575,83 @@ export async function updateTicketStatus(
     reason,
   });
 
+  const finalStatus = updates.status ?? newStatus;
+
+  if (ticket.source === "help_desk" && finalStatus === "closed") {
+    try {
+      const { triggerCsatSurvey } = await import("../help-desk/csat");
+      await triggerCsatSurvey(tenantId, updated);
+    } catch (err) {
+      console.warn("[help-desk] CSAT trigger skipped:", err);
+    }
+  }
+
+  if (ticket.type === "defect" && finalStatus === "fix_ready" && ticket.linkedTestCaseId) {
+    try {
+      const { notifyTestCaseReadyForRetest } = await import("../help-desk/tm-bridge");
+      await notifyTestCaseReadyForRetest(tenantId, updated, userId);
+    } catch (err) {
+      console.warn("[help-desk] TM retest notify skipped:", err);
+    }
+  }
+
   if (newStatus === "under_review" || (newStatus === "submitted" && ticket.type === "change_request")) {
     // handled above
   }
+
+  return enrichTicket(updated, tenant);
+}
+
+/** Post-go-live: convert a defect ticket to incident while preserving history. */
+export async function convertDefectToIncident(
+  tenantId: number,
+  ticketId: number,
+  userId: string,
+  reason?: string,
+) {
+  const [ticket] = await db
+    .select()
+    .from(sdTickets)
+    .where(and(eq(sdTickets.id, ticketId), eq(sdTickets.tenantId, tenantId)));
+  if (!ticket) return null;
+  if (ticket.type !== "defect") throw new Error("Only defect tickets can be converted to incidents");
+
+  const tenant = await storage.getTenant(tenantId);
+  const slaHours = await resolveSlaHours(tenantId, ticket.priority as TicketPriority, ticket.serviceId, ticket.clientId, "incident");
+  const now = new Date();
+  let slaResponseDeadline = addBusinessHours(now, slaHours.response, tenant);
+  let slaResolutionDeadline = addBusinessHours(now, slaHours.resolution, tenant);
+  try {
+    const { computeMaintenanceOverlapMs } = await import("../help-desk/maintenance-sla");
+    const respPause = await computeMaintenanceOverlapMs(tenantId, ticket.clientId, now, slaResponseDeadline);
+    const resPause = await computeMaintenanceOverlapMs(tenantId, ticket.clientId, now, slaResolutionDeadline);
+    if (respPause > 0) slaResponseDeadline = new Date(slaResponseDeadline.getTime() + respPause);
+    if (resPause > 0) slaResolutionDeadline = new Date(slaResolutionDeadline.getTime() + resPause);
+  } catch { /* */ }
+
+  const priorType = ticket.type;
+  const [updated] = await db
+    .update(sdTickets)
+    .set({
+      type: "incident",
+      status: "open",
+      slaResponseDeadline,
+      slaResolutionDeadline,
+      slaPausedAt: null,
+      slaPausedMs: 0,
+      tags: [...((ticket.tags as string[] | null) ?? []), "converted_from_defect"],
+      updatedAt: now,
+    })
+    .where(eq(sdTickets.id, ticketId))
+    .returning();
+
+  await db.insert(sdTicketStatusHistory).values({
+    ticketId,
+    fromStatus: ticket.status,
+    toStatus: "open",
+    changedBy: userId,
+    reason: reason ?? `Converted from ${priorType} to incident (post-go-live)`,
+  });
 
   return enrichTicket(updated, tenant);
 }
@@ -603,7 +734,7 @@ export async function updateTicket(
   }
   if (patch.priority && patch.priority !== ticket.priority && ticket.type !== "question") {
     const tenant = await storage.getTenant(tenantId);
-    const slaHours = await resolveSlaHours(tenantId, patch.priority, ticket.serviceId, ticket.clientId);
+    const slaHours = await resolveSlaHours(tenantId, patch.priority, ticket.serviceId, ticket.clientId, ticket.type as TicketType);
     const created = ticket.createdAt ?? new Date();
     updates.slaResponseDeadline = addBusinessHours(created, slaHours.response, tenant);
     updates.slaResolutionDeadline = addBusinessHours(created, slaHours.resolution, tenant);
@@ -953,7 +1084,7 @@ export async function loadServiceDeskDashboard(tenantId: number, clientId?: numb
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const open = tickets.filter((t) => !["closed", "resolved", "completed", "answered"].includes(t.status));
+  const open = tickets.filter((t) => !["closed", "resolved", "completed", "answered", "fixed", "wont_fix"].includes(t.status));
   const breached = open.filter((t) => t.slaState.resolution === "breached");
   const atRisk = open.filter((t) => t.slaState.resolution === "at_risk");
   const p1p2Open = open.filter((t) => t.type === "incident" && (t.priority === "p1" || t.priority === "p2"));
@@ -974,7 +1105,7 @@ export async function loadServiceDeskDashboard(tenantId: number, clientId?: numb
   }
   const avgResolutionHours = count > 0 ? Math.round(totalMs / count / 3600000) : 0;
 
-  const byType: Record<string, number> = { incident: 0, service_request: 0, change_request: 0, question: 0 };
+  const byType: Record<string, number> = { incident: 0, service_request: 0, change_request: 0, question: 0, defect: 0 };
   const recent30 = tickets.filter((t) => t.createdAt >= thirtyDaysAgo);
   for (const t of recent30) {
     byType[t.type] = (byType[t.type] ?? 0) + 1;
