@@ -19,6 +19,7 @@ import AgileDashboard from "@/components/projects/AgileDashboard";
 import RaiddLogTool from "@/components/projects/RaiddLogTool";
 import DeliverablesTracker from "@/components/projects/DeliverablesTracker";
 import MilestoneTracker from "@/components/projects/MilestoneTracker";
+import { ProjectTrackingBoard } from "@/components/projects/ProjectTrackingBoard";
 import { Portfolio360ReportView } from "@/components/portfolio/Portfolio360ReportView";
 import {
   PmTeamOrgTool, PmRaciTool, PmResourceTrackerTool, PmTimesheetsTool,
@@ -197,6 +198,7 @@ const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
       { id: "sprint_board", name: "Sprint Board", hint: "Agile sprint board with drag & drop", icon: PmSprintBoardIcon },
       { id: "scrum_board", name: "Scrum Board", hint: "Agile sprint management", icon: PmScrumBoardIcon },
       { id: "kanban_board", name: "Kanban Board", hint: "Visual task flow", icon: PmKanbanBoardIcon },
+      { id: "tracking_board", name: "Tracking Board", hint: "Lightweight flexible table for project tracking", icon: PmKanbanBoardIcon },
       { id: "backlog", name: "Backlog", hint: "Product backlog refinement", icon: PmBacklogIcon },
       { id: "epics", name: "Epics", hint: "Epic tracking & burn-up", icon: PmEpicsStoriesIcon },
       { id: "stories", name: "Stories", hint: "User story management", icon: PmStoriesIcon },
@@ -2171,6 +2173,8 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
         return <AgileBoard view="board" boardMode="scrum" projectId={project.id} />;
       case "kanban_board":
         return <AgileBoard view="board" boardMode="kanban" projectId={project.id} />;
+      case "tracking_board":
+        return <ProjectTrackingBoard projectId={project.id} />;
       case "backlog":
         return <AgileBoard view="backlog" projectId={project.id} />;
       case "epics":

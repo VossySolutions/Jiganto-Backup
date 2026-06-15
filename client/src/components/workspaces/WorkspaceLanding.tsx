@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -24,7 +24,6 @@ import { useClientContext } from "@/hooks/use-client-context";
 import { usePermissions } from "@/hooks/use-permissions";
 import { cn } from "@/lib/utils";
 import {
-  Plus,
   MoreHorizontal,
   Sparkles,
   Search,
@@ -40,9 +39,15 @@ import {
   Users,
   Star,
   SlidersHorizontal,
+  Share2,
+  Copy,
+  Archive,
 } from "lucide-react";
 import type { Workspace, WorkspacePage, WorkspaceMember } from "@shared/schema";
 import { WorkspaceIconRenderer, getWorkspaceIconDef } from "@/components/workspaces/WorkspaceIconPicker";
+import { WorkspaceQueryShell } from "@/components/workspaces/loading";
+import { WorkspaceKpiStrip } from "@/components/workspaces/WorkspaceKpiStrip";
+import { WorkspaceFilterBar, type WorkspaceLandingFilters } from "@/components/workspaces/WorkspaceFilterBar";
 
 const WORKSPACE_COLORS = [
   "#7C3AED", "#1E88C8", "#22C55E", "#F59E0B", "#EC4899",
@@ -116,6 +121,9 @@ function WorkspaceCardGrid({
   setDeleteConfirmId,
   onEditWorkspace,
   onToggleFavorite,
+  onDuplicateWorkspace,
+  onArchiveWorkspace,
+  onShareWorkspace,
 }: {
   ws: Workspace;
   onSelectWorkspace: (id: number) => void;
@@ -127,17 +135,18 @@ function WorkspaceCardGrid({
   setDeleteConfirmId: (id: number | null) => void;
   onEditWorkspace: (ws: Workspace) => void;
   onToggleFavorite: (id: number) => void;
+  onDuplicateWorkspace: (id: number) => void;
+  onArchiveWorkspace: (id: number) => void;
+  onShareWorkspace: (id: number) => void;
 }) {
   const wsColor = getWorkspaceColor(ws.id, ws.color);
 
   const { data: pages = [] } = useQuery<WorkspacePage[]>({
     queryKey: ["/api/workspaces", ws.id, "pages"],
-    queryFn: () => fetch(`/api/workspaces/${ws.id}/pages`).then(r => r.json()),
   });
 
   const { data: members = [] } = useQuery<WorkspaceMember[]>({
     queryKey: ["/api/workspaces", ws.id, "members"],
-    queryFn: () => fetch(`/api/workspaces/${ws.id}/members`).then(r => r.json()),
   });
 
   const boardPages = pages.filter(p => p.pageType === "database" || p.pageType === "board");
@@ -197,6 +206,18 @@ function WorkspaceCardGrid({
                 <Pencil className="h-4 w-4 mr-2" />
                 Edit
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onShareWorkspace(ws.id); }} data-testid={`share-workspace-${ws.id}`}>
+                <Share2 className="h-4 w-4 mr-2" />
+                Share
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicateWorkspace(ws.id); }} data-testid={`duplicate-workspace-${ws.id}`}>
+                <Copy className="h-4 w-4 mr-2" />
+                Duplicate
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onArchiveWorkspace(ws.id); }} data-testid={`archive-workspace-${ws.id}`}>
+                <Archive className="h-4 w-4 mr-2" />
+                Archive
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingId(ws.id); setRenameValue(ws.name); }} data-testid={`rename-workspace-${ws.id}`}>
                 <Pencil className="h-4 w-4 mr-2" />
                 Rename
@@ -232,7 +253,10 @@ function WorkspaceCardGrid({
             </button>
           </div>
         ) : (
-          <h3 className="font-bold text-base mb-1 truncate" data-testid={`workspace-title-${ws.id}`}>{ws.name}</h3>
+          <div className="mb-1 flex items-center gap-1.5">
+            <h3 className="font-bold text-base truncate" data-testid={`workspace-title-${ws.id}`}>{ws.name}</h3>
+            {(ws as any).isShared && <Users className="h-3.5 w-3.5 text-muted-foreground" data-testid={`workspace-shared-${ws.id}`} />}
+          </div>
         )}
 
         {ws.description && (
@@ -314,6 +338,9 @@ function WorkspaceCardList({
   setDeleteConfirmId,
   onEditWorkspace,
   onToggleFavorite,
+  onDuplicateWorkspace,
+  onArchiveWorkspace,
+  onShareWorkspace,
 }: {
   ws: Workspace;
   onSelectWorkspace: (id: number) => void;
@@ -322,17 +349,18 @@ function WorkspaceCardList({
   setDeleteConfirmId: (id: number | null) => void;
   onEditWorkspace: (ws: Workspace) => void;
   onToggleFavorite: (id: number) => void;
+  onDuplicateWorkspace: (id: number) => void;
+  onArchiveWorkspace: (id: number) => void;
+  onShareWorkspace: (id: number) => void;
 }) {
   const wsColor = getWorkspaceColor(ws.id, ws.color);
 
   const { data: pages = [] } = useQuery<WorkspacePage[]>({
     queryKey: ["/api/workspaces", ws.id, "pages"],
-    queryFn: () => fetch(`/api/workspaces/${ws.id}/pages`).then(r => r.json()),
   });
 
   const { data: members = [] } = useQuery<WorkspaceMember[]>({
     queryKey: ["/api/workspaces", ws.id, "members"],
-    queryFn: () => fetch(`/api/workspaces/${ws.id}/members`).then(r => r.json()),
   });
 
   const boardPages = pages.filter(p => p.pageType === "database" || p.pageType === "board");
@@ -352,7 +380,10 @@ function WorkspaceCardList({
         fallbackColor={wsColor}
       />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold truncate">{ws.name}</div>
+        <div className="text-sm font-semibold truncate flex items-center gap-1.5">
+          {ws.name}
+          {(ws as any).isShared && <Users className="h-3.5 w-3.5 text-muted-foreground" data-testid={`workspace-list-shared-${ws.id}`} />}
+        </div>
         {ws.description && <p className="text-xs text-muted-foreground truncate">{ws.description}</p>}
       </div>
       <div className="hidden sm:flex items-center gap-1.5">
@@ -403,6 +434,18 @@ function WorkspaceCardList({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onShareWorkspace(ws.id); }} data-testid={`share-workspace-list-${ws.id}`}>
+            <Share2 className="h-4 w-4 mr-2" />
+            Share
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicateWorkspace(ws.id); }} data-testid={`duplicate-workspace-list-${ws.id}`}>
+            <Copy className="h-4 w-4 mr-2" />
+            Duplicate
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onArchiveWorkspace(ws.id); }} data-testid={`archive-workspace-list-${ws.id}`}>
+            <Archive className="h-4 w-4 mr-2" />
+            Archive
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEditWorkspace(ws); }} data-testid={`edit-workspace-list-${ws.id}`}>
             <Pencil className="h-4 w-4 mr-2" />
             Edit
@@ -424,14 +467,18 @@ function WorkspaceCardList({
 
 export function WorkspaceLanding({
   onSelectWorkspace,
-  onCreateWorkspace,
   onEditWorkspace,
   onToggleFavorite,
+  onShareWorkspace,
+  searchQuery: externalSearch,
+  onSearchQueryChange,
 }: {
   onSelectWorkspace: (id: number) => void;
-  onCreateWorkspace: () => void;
   onEditWorkspace: (ws: Workspace) => void;
   onToggleFavorite: (id: number) => void;
+  onShareWorkspace: (id: number) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (value: string) => void;
 }) {
   const { toast } = useToast();
   const { isMasterView } = useClientContext();
@@ -439,8 +486,14 @@ export function WorkspaceLanding({
   const workspacesHiddenForRole =
     !isMasterView &&
     (platformRole === "client_project_user" || platformRole === "client_executive");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+    const stored = localStorage.getItem("jiganto_workspace_view_mode");
+    return stored === "list" ? "list" : "grid";
+  });
+  const [landingTab, setLandingTab] = useState<"all" | "favorites" | "recent" | "shared" | "mine">("all");
+  const [internalSearch, setInternalSearch] = useState("");
+  const searchQuery = externalSearch ?? internalSearch;
+  const setSearchQuery = onSearchQueryChange ?? setInternalSearch;
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
@@ -448,9 +501,24 @@ export function WorkspaceLanding({
   const [sortBy, setSortBy] = useState<string>("updated");
   const [favoritesFirst, setFavoritesFirst] = useState(false);
 
-  const { data: workspaces = [], isLoading } = useQuery<Workspace[]>({
-    queryKey: ["/api/workspaces"],
+  const workspacesQuery = useQuery<Workspace[]>({
+    queryKey: ["/api/workspaces/list", landingTab],
+    queryFn: async () => {
+      try {
+        const scoped = await fetchWithAuth(`/api/workspaces/list?filter=${landingTab}`);
+        if (scoped.ok) return scoped.json();
+      } catch {
+      }
+      const fallback = await fetchWithAuth("/api/workspaces");
+      if (!fallback.ok) throw new Error("Failed to load workspaces");
+      const all = (await fallback.json()) as Workspace[];
+      if (landingTab === "favorites") return all.filter((w) => w.isFavorite);
+      if (landingTab === "shared") return all.filter((w) => Boolean((w as any).isShared));
+      if (landingTab === "mine") return all.filter((w) => !Boolean((w as any).isShared));
+      return all;
+    },
   });
+  const workspaces = workspacesQuery.data ?? [];
 
   const { data: favorites = [] } = useQuery<WorkspacePage[]>({
     queryKey: ["/api/workspace-pages/favorites"],
@@ -477,8 +545,43 @@ export function WorkspaceLanding({
     },
   });
 
+  const duplicateMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/workspaces/${id}/duplicate`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces/list"] });
+      toast({ title: "Workspace duplicated" });
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/workspaces/${id}/archive`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces/list"] });
+      toast({ title: "Workspace archived" });
+    },
+  });
+
+  useEffect(() => {
+    localStorage.setItem("jiganto_workspace_view_mode", viewMode);
+  }, [viewMode]);
+
+  const recentWorkspaceIds: number[] = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("jiganto_recent_workspaces") || "[]");
+    } catch {
+      return [];
+    }
+  })();
+
+  const toRecentList = (list: Workspace[]) =>
+    recentWorkspaceIds
+      .map((id) => list.find((w) => w.id === id))
+      .filter(Boolean) as Workspace[];
+
   const filteredWorkspaces = (() => {
-    let list = [...workspaces];
+    let list = landingTab === "recent" ? toRecentList(workspaces) : [...workspaces];
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       list = list.filter((w) => w.name.toLowerCase().includes(q) || (w.description && w.description.toLowerCase().includes(q)));
@@ -500,39 +603,37 @@ export function WorkspaceLanding({
   })();
 
   const favoriteWorkspaces = workspaces.filter((w) => w.isFavorite);
+  const recentWorkspaces = toRecentList(workspaces);
 
-  const recentWorkspaceIds: number[] = (() => {
-    try {
-      return JSON.parse(localStorage.getItem("jiganto_recent_workspaces") || "[]");
-    } catch {
-      return [];
-    }
-  })();
+  const landingFilters: WorkspaceLandingFilters = {
+    landingTab,
+    statusFilter,
+    sortBy,
+    favoritesFirst,
+    viewMode,
+  };
 
-  const recentWorkspaces = recentWorkspaceIds
-    .map((id) => workspaces.find((w) => w.id === id))
-    .filter(Boolean) as Workspace[];
+  const patchFilters = (patch: Partial<WorkspaceLandingFilters>) => {
+    if (patch.landingTab !== undefined) setLandingTab(patch.landingTab);
+    if (patch.statusFilter !== undefined) setStatusFilter(patch.statusFilter);
+    if (patch.sortBy !== undefined) setSortBy(patch.sortBy);
+    if (patch.favoritesFirst !== undefined) setFavoritesFirst(patch.favoritesFirst);
+    if (patch.viewMode !== undefined) setViewMode(patch.viewMode);
+  };
 
   return (
-    <div className="h-full overflow-y-auto" data-testid="workspace-landing">
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2.5 rounded-xl" style={{ backgroundColor: "rgba(245, 158, 11, 0.1)" }}>
-              <Sparkles className="h-7 w-7" style={{ color: "#F59E0B" }} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight" data-testid="landing-title">Workspaces</h1>
-              <p className="text-sm text-muted-foreground">
-                {workspaces.length} workspace{workspaces.length !== 1 ? "s" : ""} 
-                {favorites.length > 0 && ` · ${favorites.length} favorite${favorites.length !== 1 ? "s" : ""}`}
-              </p>
-            </div>
-          </div>
-        </div>
+    <div className="flex-1 overflow-y-auto" data-testid="workspace-landing">
+      <div className="p-3 sm:p-4 space-y-3 sm:space-y-4 max-w-[1600px] w-full mx-auto">
+        <WorkspaceKpiStrip
+          workspaces={workspaces}
+          loading={workspacesQuery.isLoading}
+          activeTab={landingTab}
+          onTabChange={(tab) => setLandingTab(tab)}
+        />
 
-        {recentWorkspaces.length > 0 && !searchQuery && (
-          <div className="mb-8">
+        <WorkspaceFilterBar filters={landingFilters} onChange={patchFilters} />
+        {recentWorkspaces.length > 0 && !searchQuery && (landingTab === "all" || landingTab === "recent") && (
+          <div className="mb-2">
             <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Continue where you left off</h2>
             <div className="flex gap-3 overflow-x-auto pb-1">
               {recentWorkspaces.slice(0, 4).map((ws) => (
@@ -562,77 +663,26 @@ export function WorkspaceLanding({
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-4 mb-2">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search workspaces..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-              data-testid="landing-search-input"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center border rounded-md">
-              <button
-                className={cn("p-1.5 rounded-l-md", viewMode === "grid" ? "bg-muted" : "hover:bg-muted/50")}
-                onClick={() => setViewMode("grid")}
-                data-testid="view-mode-grid"
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-              <button
-                className={cn("p-1.5 rounded-r-md", viewMode === "list" ? "bg-muted" : "hover:bg-muted/50")}
-                onClick={() => setViewMode("list")}
-                data-testid="view-mode-list"
-              >
-                <List className="h-4 w-4" />
-              </button>
-            </div>
-            <Button onClick={onCreateWorkspace} className="gap-1" data-testid="create-workspace-button">
-              <Plus className="h-4 w-4" />
-              New Workspace
-            </Button>
+        <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center border rounded-md">
+            <button
+              className={cn("p-1.5 rounded-l-md", viewMode === "grid" ? "bg-muted" : "hover:bg-muted/50")}
+              onClick={() => setViewMode("grid")}
+              data-testid="view-mode-grid"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              className={cn("p-1.5 rounded-r-md", viewMode === "list" ? "bg-muted" : "hover:bg-muted/50")}
+              onClick={() => setViewMode("list")}
+              data-testid="view-mode-list"
+            >
+              <List className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 mb-4 flex-wrap" data-testid="landing-filters">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-            data-testid="filter-status"
-          >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-            <option value="closed">Closed</option>
-          </select>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-            data-testid="filter-sort"
-          >
-            <option value="updated">Last Updated</option>
-            <option value="name">Name (A-Z)</option>
-            <option value="created">Recently Created</option>
-          </select>
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none" data-testid="filter-favorites-first">
-            <input
-              type="checkbox"
-              checked={favoritesFirst}
-              onChange={(e) => setFavoritesFirst(e.target.checked)}
-              className="rounded border-input"
-              data-testid="favorites-first-checkbox"
-            />
-            <Star className="h-3 w-3" />
-            Favorites first
-          </label>
-        </div>
-
-        {favoriteWorkspaces.length > 0 && !searchQuery && (
+        {favoriteWorkspaces.length > 0 && !searchQuery && (landingTab === "all" || landingTab === "favorites") && (
           <div className="mb-6" data-testid="favorites-section">
             <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
@@ -666,11 +716,8 @@ export function WorkspaceLanding({
           </div>
         )}
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : filteredWorkspaces.length === 0 ? (
+        <WorkspaceQueryShell query={workspacesQuery} skeleton="grid">
+        {filteredWorkspaces.length === 0 ? (
           <div className="text-center py-16">
             {searchQuery ? (
               <>
@@ -694,11 +741,8 @@ export function WorkspaceLanding({
                 <h2 className="text-lg font-semibold mb-2">Create your first workspace</h2>
                 <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
                   Workspaces are collaborative spaces for meeting notes, checklists, task boards, and more.
+                  Use <strong>New Workspace</strong> in the header to get started.
                 </p>
-                <Button onClick={onCreateWorkspace} data-testid="empty-create-workspace">
-                  <Plus className="h-4 w-4 mr-1" />
-                  New Workspace
-                </Button>
               </>
             )}
           </div>
@@ -717,20 +761,11 @@ export function WorkspaceLanding({
                 setDeleteConfirmId={setDeleteConfirmId}
                 onEditWorkspace={onEditWorkspace}
                 onToggleFavorite={onToggleFavorite}
+                onDuplicateWorkspace={(id) => duplicateMutation.mutate(id)}
+                onArchiveWorkspace={(id) => archiveMutation.mutate(id)}
+                onShareWorkspace={onShareWorkspace}
               />
             ))}
-            <Card
-              className="border-dashed cursor-pointer hover:shadow-md transition-shadow flex items-center justify-center min-h-[200px]"
-              onClick={onCreateWorkspace}
-              data-testid="new-workspace-card"
-            >
-              <div className="text-center p-6">
-                <div className="w-12 h-12 rounded-full border-2 border-dashed border-muted-foreground/30 flex items-center justify-center mx-auto mb-3">
-                  <Plus className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <span className="text-sm font-medium text-muted-foreground">New Workspace</span>
-              </div>
-            </Card>
           </div>
         ) : (
           <div className="space-y-1" data-testid="workspace-list">
@@ -744,10 +779,14 @@ export function WorkspaceLanding({
                 setDeleteConfirmId={setDeleteConfirmId}
                 onEditWorkspace={onEditWorkspace}
                 onToggleFavorite={onToggleFavorite}
+                onDuplicateWorkspace={(id) => duplicateMutation.mutate(id)}
+                onArchiveWorkspace={(id) => archiveMutation.mutate(id)}
+                onShareWorkspace={onShareWorkspace}
               />
             ))}
           </div>
         )}
+        </WorkspaceQueryShell>
       </div>
 
       <Dialog open={deleteConfirmId !== null} onOpenChange={() => setDeleteConfirmId(null)}>

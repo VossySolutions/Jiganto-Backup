@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { getSelectColors, getSelectChoices } from "@/lib/selectColors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ import {
   Columns,
   ArrowUp,
   ArrowDown,
+  ArrowUpDown,
   Filter,
   X,
   GripVertical,
@@ -54,6 +55,7 @@ import {
   ArrowUpFromLine,
   ArrowDownFromLine,
   CircleDot,
+  Star,
   Maximize2,
   Minimize2,
   Pencil,
@@ -64,6 +66,7 @@ import {
   Save,
   ArrowLeftFromLine,
   ArrowRightFromLine,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   Popover,
@@ -83,6 +86,10 @@ import type {
   WorkspaceSavedView,
 } from "@shared/schema";
 import { DATABASE_TEMPLATES, TEMPLATE_CATEGORIES, type DatabaseTemplate } from "@/lib/workspaceTemplates";
+import { WorkspaceKanbanView } from "./WorkspaceKanbanView";
+import { WorkspaceCalendarView } from "./WorkspaceCalendarView";
+import { WorkspaceRowDetailPanel } from "./WorkspaceRowDetailPanel";
+import { combineWorkspaceQueries, WorkspaceQueryShell } from "./loading";
 
 const TEMPLATE_ICONS: Record<string, React.ElementType> = {
   "clipboard-list": ClipboardList,
@@ -109,10 +116,13 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const COLUMN_TYPES = [
   { type: "text", label: "Text", icon: Type },
+  { type: "long_text", label: "Long Text", icon: Type },
   { type: "number", label: "Number", icon: Hash },
   { type: "select", label: "Select", icon: Tag },
   { type: "multi_select", label: "Multi Select", icon: Tag },
+  { type: "rating", label: "Rating", icon: Star },
   { type: "date", label: "Date", icon: CalendarDays },
+  { type: "created_date", label: "Created Date", icon: CalendarDays },
   { type: "checkbox", label: "Checkbox", icon: CheckSquare },
   { type: "person", label: "Person", icon: User },
   { type: "url", label: "URL", icon: Link2 },
@@ -137,6 +147,8 @@ function SavedViewsStrip({
     viewType: string;
     sortColumn: number | null;
     sortDirection: string;
+    secondarySortColumn?: number | null;
+    secondarySortDirection?: string;
     groupByColumn: number | null;
     filterRules: FilterRule[];
   };
@@ -182,6 +194,8 @@ function SavedViewsStrip({
       config: {
         sortColumn: activeViewConfig.sortColumn,
         sortDirection: activeViewConfig.sortDirection,
+        secondarySortColumn: activeViewConfig.secondarySortColumn ?? null,
+        secondarySortDirection: activeViewConfig.secondarySortDirection ?? "asc",
         groupByColumn: activeViewConfig.groupByColumn,
         filterRules: activeViewConfig.filterRules,
       },
@@ -195,6 +209,8 @@ function SavedViewsStrip({
       viewType: view.viewType || "table",
       sortColumn: config.sortColumn ?? null,
       sortDirection: config.sortDirection ?? "asc",
+      secondarySortColumn: config.secondarySortColumn ?? null,
+      secondarySortDirection: config.secondarySortDirection ?? "asc",
       groupByColumn: config.groupByColumn ?? null,
       filterRules: config.filterRules ?? [],
     });
@@ -508,18 +524,24 @@ export function WorkspaceTableView({
   workspaceId,
   isExpanded,
   onToggleExpand,
+  readOnly = false,
 }: {
   databaseId: number;
   workspaceId: number;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  readOnly?: boolean;
 }) {
   const [sortColumn, setSortColumn] = useState<number | null>(null);
+  const [secondarySortColumn, setSecondarySortColumn] = useState<number | null>(null);
+  const [secondarySortDirection, setSecondarySortDirection] = useState<"asc" | "desc">("asc");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [searchQuery, setSearchQuery] = useState("");
   const [editingCell, setEditingCell] = useState<{ rowId: number; colId: number } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [activeView, setActiveView] = useState<string>("table");
+  const [detailRowId, setDetailRowId] = useState<number | null>(null);
+  const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<number>>(new Set());
   const [addingColumnInline, setAddingColumnInline] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [newColumnType, setNewColumnType] = useState("text");
@@ -536,13 +558,26 @@ export function WorkspaceTableView({
   const [draggedColId, setDraggedColId] = useState<number | null>(null);
   const [dragOverColId, setDragOverColId] = useState<number | null>(null);
   const newColumnInputRef = useRef<HTMLInputElement>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
+  const lastPersistedViewRef = useRef<string | null>(null);
 
-  const { data: columns = [] } = useQuery<WorkspaceDatabaseColumn[]>({
+  const columnsQuery = useQuery<WorkspaceDatabaseColumn[]>({
     queryKey: ["/api/workspace-databases", databaseId, "columns"],
   });
-
-  const { data: rows = [] } = useQuery<WorkspaceDatabaseRow[]>({
+  const rowsQuery = useQuery<WorkspaceDatabaseRow[]>({
     queryKey: ["/api/workspace-databases", databaseId, "rows"],
+  });
+  const columns = columnsQuery.data ?? [];
+  const rows = rowsQuery.data ?? [];
+  const tableDataQuery = combineWorkspaceQueries(columnsQuery, rowsQuery);
+
+  const { data: databaseMeta } = useQuery<{ id: number; activeView?: string } | null>({
+    queryKey: ["/api/workspace-databases", databaseId],
+    queryFn: async () => {
+      const res = await fetchWithAuth(`/api/workspace-databases/${databaseId}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
   });
 
   const addColumnMutation = useMutation({
@@ -566,6 +601,15 @@ export function WorkspaceTableView({
       queryClient.invalidateQueries({ queryKey: ["/api/workspace-databases", databaseId, "columns"] });
       setEditingColumnId(null);
       setEditingColumnName("");
+    },
+  });
+
+  const updateDatabaseMutation = useMutation({
+    mutationFn: (data: { activeView: string }) =>
+      apiRequest("PATCH", `/api/workspace-databases/${databaseId}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace-databases", databaseId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace-pages"] });
     },
   });
 
@@ -639,11 +683,11 @@ export function WorkspaceTableView({
     },
     onSuccess: (newRow: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/workspace-databases", databaseId, "rows"] });
-      if (columns.length > 0) {
+      if (visibleColumns.length > 0) {
         setTimeout(() => {
           const rowId = newRow?.id;
           if (rowId) {
-            setEditingCell({ rowId, colId: columns[0].id });
+            setEditingCell({ rowId, colId: visibleColumns[0].id });
             setEditValue("");
           }
         }, 100);
@@ -681,6 +725,18 @@ export function WorkspaceTableView({
       queryClient.invalidateQueries({ queryKey: ["/api/workspace-databases", databaseId, "columns"] }),
   });
 
+  const importCsvMutation = useMutation({
+    mutationFn: (payload: { rows: Array<Record<string, unknown>>; mode: "append" | "overwrite" }) =>
+      apiRequest("POST", `/api/workspace-databases/${databaseId}/import-csv`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace-databases", databaseId, "rows"] });
+      toast({ title: "CSV imported" });
+    },
+    onError: () => {
+      toast({ title: "CSV import failed", variant: "destructive" });
+    },
+  });
+
   const { toast } = useToast();
   const applyTemplateMutation = useMutation({
     mutationFn: (template: DatabaseTemplate) =>
@@ -709,15 +765,115 @@ export function WorkspaceTableView({
     setEditingCell(null);
   };
 
+  useEffect(() => {
+    if (!databaseMeta?.activeView) return;
+    setActiveView(databaseMeta.activeView);
+    lastPersistedViewRef.current = databaseMeta.activeView;
+  }, [databaseMeta?.activeView]);
+
+  useEffect(() => {
+    if (!activeView) return;
+    if (lastPersistedViewRef.current === null) {
+      lastPersistedViewRef.current = activeView;
+      return;
+    }
+    if (lastPersistedViewRef.current !== activeView) {
+      lastPersistedViewRef.current = activeView;
+      updateDatabaseMutation.mutate({ activeView });
+    }
+  }, [activeView]);
+
+  useEffect(() => {
+    setHiddenColumnIds(new Set(columns.filter((c) => c.isVisible === false).map((c) => c.id)));
+  }, [columns]);
+
+  const visibleColumns = useMemo(
+    () => columns.filter((col) => col.isVisible !== false),
+    [columns],
+  );
+
+  const toggleColumnVisibility = (col: WorkspaceDatabaseColumn) => {
+    const nextVisible = col.isVisible === false;
+    apiRequest("PATCH", `/api/workspace-database-columns/${col.id}`, { isVisible: nextVisible })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/workspace-databases", databaseId, "columns"] });
+      })
+      .catch(() => {
+        toast({ title: "Failed to update column visibility", variant: "destructive" });
+      });
+  };
+
+  const parseCsvRows = (csvText: string): Array<Record<string, unknown>> => {
+    const lines = csvText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(",").map((h) => h.trim());
+    return lines.slice(1).map((line) => {
+      const parts = line.split(",");
+      const row: Record<string, unknown> = {};
+      headers.forEach((header, idx) => {
+        row[header] = (parts[idx] || "").trim();
+      });
+      return row;
+    });
+  };
+
+  const handleCsvImport = async (file: File) => {
+    const text = await file.text();
+    const parsedRows = parseCsvRows(text);
+    if (parsedRows.length === 0) {
+      toast({ title: "No rows found in CSV", variant: "destructive" });
+      return;
+    }
+    importCsvMutation.mutate({ rows: parsedRows, mode: "append" });
+  };
+
+  const handleExcelExport = async () => {
+    try {
+      const res = await fetchWithAuth(`/api/workspace-databases/${databaseId}/export-xlsx`);
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `workspace-board-${databaseId}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Excel export failed", variant: "destructive" });
+    }
+  };
+
+  const handleCsvExport = async () => {
+    try {
+      const response = await apiRequest("GET", `/api/workspace-databases/${databaseId}/export-csv`);
+      const payload = await response.json();
+      const headers = Array.isArray(payload.headers) ? payload.headers : [];
+      const rowsData = Array.isArray(payload.rows) ? payload.rows : [];
+      const content = [headers.join(","), ...rowsData.map((row: unknown[]) => row.map((cell) => String(cell ?? "")).join(","))].join("\n");
+      const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `workspace-board-${databaseId}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "CSV export failed", variant: "destructive" });
+    }
+  };
+
   const handleTabNavigation = (currentRowId: number, currentColId: number, shift: boolean) => {
-    if (columns.length === 0 || processedRows.length === 0) return;
-    const colIndex = columns.findIndex((c) => c.id === currentColId);
+    if (visibleColumns.length === 0 || processedRows.length === 0) return;
+    const colIndex = visibleColumns.findIndex((c) => c.id === currentColId);
     const rowIndex = processedRows.findIndex((r) => r.id === currentRowId);
     if (colIndex < 0 || rowIndex < 0) return;
     handleCellEdit(currentRowId, currentColId, editValue);
     if (!shift) {
-      if (colIndex < columns.length - 1) {
-        const nextCol = columns[colIndex + 1];
+      if (colIndex < visibleColumns.length - 1) {
+        const nextCol = visibleColumns[colIndex + 1];
         setEditingCell({ rowId: currentRowId, colId: nextCol.id });
         const row = rows.find((r) => r.id === currentRowId);
         const rowData = (row?.data as Record<string, unknown>) || {};
@@ -732,14 +888,14 @@ export function WorkspaceTableView({
       }
     } else {
       if (colIndex > 0) {
-        const prevCol = columns[colIndex - 1];
+        const prevCol = visibleColumns[colIndex - 1];
         setEditingCell({ rowId: currentRowId, colId: prevCol.id });
         const row = rows.find((r) => r.id === currentRowId);
         const rowData = (row?.data as Record<string, unknown>) || {};
         setEditValue(String(rowData[String(prevCol.id)] || ""));
       } else if (rowIndex > 0) {
         const prevRow = processedRows[rowIndex - 1];
-        const lastCol = columns[columns.length - 1];
+        const lastCol = visibleColumns[visibleColumns.length - 1];
         setEditingCell({ rowId: prevRow.id, colId: lastCol.id });
         const rowData = (prevRow.data as Record<string, unknown>) || {};
         setEditValue(String(rowData[String(lastCol.id)] || ""));
@@ -763,6 +919,36 @@ export function WorkspaceTableView({
 
   const renderCellContent = (row: WorkspaceDatabaseRow, col: WorkspaceDatabaseColumn, cellValue: string, isEditing: boolean, rowData: Record<string, unknown>) => {
     const colType = col.type || "text";
+
+    if (colType === "created_date") {
+      const createdAt = row.createdAt ? new Date(row.createdAt) : null;
+      return (
+        <span className="text-sm block min-h-[20px] text-muted-foreground">
+          {createdAt && !isNaN(createdAt.getTime()) ? format(createdAt, "MMM d, yyyy") : ""}
+        </span>
+      );
+    }
+
+    if (colType === "rating" && !isEditing) {
+      const rating = Math.max(0, Math.min(5, Number(cellValue || 0)));
+      return (
+        <div className="flex items-center gap-0.5 min-h-[20px]">
+          {[1, 2, 3, 4, 5].map((value) => (
+            <button
+              key={value}
+              onClick={() => {
+                const rd = (row.data as Record<string, unknown>) || {};
+                updateRowMutation.mutate({ id: row.id, data: { ...rd, [String(col.id)]: String(value) } });
+              }}
+              className="p-0.5"
+              data-testid={`cell-rating-${row.id}-${col.id}-${value}`}
+            >
+              <Star className={cn("h-3.5 w-3.5", value <= rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40")} />
+            </button>
+          ))}
+        </div>
+      );
+    }
 
     if (colType === "date") {
       const dateVal = cellValue ? new Date(cellValue) : null;
@@ -934,6 +1120,28 @@ export function WorkspaceTableView({
     }
 
     if (isEditing) {
+      if (colType === "long_text") {
+        return (
+          <textarea
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => handleCellEdit(row.id, col.id, editValue)}
+            onKeyDown={(e) => {
+              if (e.key === "Tab") {
+                e.preventDefault();
+                handleTabNavigation(row.id, col.id, e.shiftKey);
+              } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                handleCellEdit(row.id, col.id, editValue);
+              } else if (e.key === "Escape") {
+                setEditingCell(null);
+              }
+            }}
+            className="w-full text-sm bg-transparent outline-none resize-none min-h-[56px]"
+            autoFocus
+            data-testid={`cell-textarea-${row.id}-${col.id}`}
+          />
+        );
+      }
       return (
         <input
           value={editValue}
@@ -944,6 +1152,10 @@ export function WorkspaceTableView({
               e.preventDefault();
               handleTabNavigation(row.id, col.id, e.shiftKey);
             } else if (e.key === "Enter") {
+              const colIndex = visibleColumns.findIndex((c) => c.id === col.id);
+              if (colIndex === visibleColumns.length - 1) {
+                addRowMutation.mutate();
+              }
               handleCellEdit(row.id, col.id, editValue);
             } else if (e.key === "Escape") {
               setEditingCell(null);
@@ -1006,12 +1218,19 @@ export function WorkspaceTableView({
         const aVal = String(aData[String(sortColumn)] || "");
         const bVal = String(bData[String(sortColumn)] || "");
         const cmp = aVal.localeCompare(bVal);
-        return sortDirection === "asc" ? cmp : -cmp;
+        if (cmp !== 0) return sortDirection === "asc" ? cmp : -cmp;
+        if (secondarySortColumn !== null) {
+          const aSecondary = String(aData[String(secondarySortColumn)] || "");
+          const bSecondary = String(bData[String(secondarySortColumn)] || "");
+          const secondaryCmp = aSecondary.localeCompare(bSecondary);
+          if (secondaryCmp !== 0) return secondarySortDirection === "asc" ? secondaryCmp : -secondaryCmp;
+        }
+        return 0;
       });
     }
 
     return result;
-  }, [rows, searchQuery, filterRules, sortColumn, sortDirection]);
+  }, [rows, searchQuery, filterRules, sortColumn, sortDirection, secondarySortColumn, secondarySortDirection]);
 
   const rowPagination = useTablePagination(processedRows, {
     resetKey: `${searchQuery}-${JSON.stringify(filterRules)}-${sortColumn}-${sortDirection}`,
@@ -1079,9 +1298,12 @@ export function WorkspaceTableView({
   };
 
   const handleApplyView = (config: any) => {
-    setActiveView(config.viewType || "table");
+    const nextView = config.viewType || "table";
+    setActiveView(nextView);
     setSortColumn(config.sortColumn ?? null);
     setSortDirection(config.sortDirection ?? "asc");
+    setSecondarySortColumn(config.secondarySortColumn ?? null);
+    setSecondarySortDirection(config.secondarySortDirection ?? "asc");
     setGroupByColumn(config.groupByColumn ?? null);
     setFilterRules(config.filterRules ?? []);
   };
@@ -1091,7 +1313,6 @@ export function WorkspaceTableView({
     { key: "list", icon: List, label: "List" },
     { key: "kanban", icon: Columns, label: "Board" },
     { key: "calendar", icon: Calendar, label: "Calendar" },
-    { key: "gallery", icon: LayoutGrid, label: "Gallery" },
   ];
 
   const startAddColumn = () => {
@@ -1148,7 +1369,7 @@ export function WorkspaceTableView({
             </DropdownMenu>
           </div>
         </td>
-        {columns.map((col) => {
+        {visibleColumns.map((col) => {
           const cellValue = String(rowData[String(col.id)] || "");
           const isEditing = editingCell?.rowId === row.id && editingCell?.colId === col.id;
           return (
@@ -1156,11 +1377,11 @@ export function WorkspaceTableView({
               key={col.id}
               className={cn(
                 "px-3 py-1.5 border-r last:border-r-0",
-                !["date", "rag", "checkbox", "select"].includes(col.type || "text") && "cursor-text",
+                !["date", "rag", "checkbox", "select", "rating", "created_date"].includes(col.type || "text") && "cursor-text",
                 isEditing && "bg-accent/20 ring-1 ring-primary/30 ring-inset"
               )}
               onClick={() => {
-                if (!isEditing && !["date", "rag", "checkbox", "select"].includes(col.type || "text")) {
+                if (!isEditing && !["date", "rag", "checkbox", "select", "rating", "created_date"].includes(col.type || "text")) {
                   setEditingCell({ rowId: row.id, colId: col.id });
                   setEditValue(cellValue);
                 }
@@ -1171,28 +1392,41 @@ export function WorkspaceTableView({
             </td>
           );
         })}
-        <td className="w-8" />
+        <td className="w-8 px-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => setDetailRowId(row.id)}
+            data-testid={`row-detail-open-${row.id}`}
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </td>
       </tr>
     );
   };
 
   return (
     <>
-      <div className="border rounded-md bg-card" data-testid="workspace-table">
+      <WorkspaceQueryShell query={tableDataQuery} skeleton="table">
+      <div className="border rounded-md bg-card overflow-hidden" data-testid="workspace-table">
         <SavedViewsStrip
           databaseId={databaseId}
           activeViewConfig={{
             viewType: activeView,
             sortColumn,
             sortDirection,
+            secondarySortColumn,
+            secondarySortDirection,
             groupByColumn,
             filterRules,
           }}
           onApplyView={handleApplyView}
         />
 
-        <div className="flex items-center justify-between gap-2 p-2 border-b flex-wrap">
-          <div className="flex items-center gap-1">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 border-b">
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
             {viewOptions.map((v) => (
               <Button
                 key={v.key}
@@ -1208,15 +1442,83 @@ export function WorkspaceTableView({
             ))}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="outline" size="sm" onClick={startAddColumn} className="gap-1 text-xs" data-testid="toolbar-add-field-button">
+            <Button variant="outline" size="sm" onClick={startAddColumn} className="gap-1 text-xs shrink-0" data-testid="toolbar-add-field-button">
               <Plus className="h-3.5 w-3.5" />
               Add Field
             </Button>
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-7 text-xs w-40" data-testid="table-search-input" />
+              <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-7 text-xs w-full sm:w-40" data-testid="table-search-input" />
             </div>
             <FilterPanel columns={columns} filterRules={filterRules} onUpdateFilters={setFilterRules} />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-1 text-xs" data-testid="toggle-columns-trigger">
+                  <Columns className="h-3.5 w-3.5" />
+                  Hide columns
+                  {hiddenColumnIds.size > 0 ? ` (${hiddenColumnIds.size})` : ""}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-2" align="end">
+                <div className="space-y-1">
+                  {columns.map((col) => {
+                    const isVisible = col.isVisible !== false;
+                    return (
+                      <button
+                        key={col.id}
+                        onClick={() => toggleColumnVisibility(col)}
+                        className="flex w-full items-center justify-between rounded px-2 py-1 text-xs hover-elevate"
+                        data-testid={`toggle-column-${col.id}`}
+                      >
+                        <span className={cn(!isVisible && "text-muted-foreground line-through")}>{col.name}</span>
+                        {isVisible && <Check className="h-3.5 w-3.5" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-xs"
+              onClick={() => csvInputRef.current?.click()}
+              data-testid="toolbar-import-csv"
+            >
+              <ArrowUpFromLine className="h-3.5 w-3.5" />
+              Import CSV
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-xs"
+              onClick={handleExcelExport}
+              data-testid="toolbar-export-excel"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              Export Excel
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-xs"
+              onClick={handleCsvExport}
+              data-testid="toolbar-export-csv"
+            >
+              <ArrowDownFromLine className="h-3.5 w-3.5" />
+              Export CSV
+            </Button>
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleCsvImport(file);
+                e.currentTarget.value = "";
+              }}
+            />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -1235,7 +1537,7 @@ export function WorkspaceTableView({
                   No grouping
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                {columns.map((col) => (
+                {visibleColumns.map((col) => (
                   <DropdownMenuItem
                     key={col.id}
                     onClick={() => setGroupByColumn(col.id)}
@@ -1293,7 +1595,7 @@ export function WorkspaceTableView({
                         data-testid="select-all-checkbox"
                       />
                     </th>
-                    {columns.map((col, colIndex) => {
+                    {visibleColumns.map((col, colIndex) => {
                       const colType = COLUMN_TYPES.find((ct) => ct.type === col.type);
                       const ColIcon = colType?.icon || Type;
                       const isEditingHeader = editingColumnId === col.id;
@@ -1365,6 +1667,19 @@ export function WorkspaceTableView({
                                     <ArrowDown className="h-4 w-4 mr-2" />
                                     Sort Z-A
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => { setSecondarySortColumn(col.id); setSecondarySortDirection("asc"); }} data-testid={`secondary-sort-${col.id}`}>
+                                    <ArrowUpDown className="h-4 w-4 mr-2" />
+                                    Use as secondary sort (A-Z)
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => { setSecondarySortColumn(col.id); setSecondarySortDirection("desc"); }} data-testid={`secondary-sort-desc-${col.id}`}>
+                                    <ArrowUpDown className="h-4 w-4 mr-2" />
+                                    Secondary sort (Z-A)
+                                  </DropdownMenuItem>
+                                  {secondarySortColumn !== null && (
+                                    <DropdownMenuItem onClick={() => setSecondarySortColumn(null)} data-testid="clear-secondary-sort">
+                                      Clear secondary sort
+                                    </DropdownMenuItem>
+                                  )}
                                   <DropdownMenuSeparator />
                                   {colIndex > 0 && (
                                     <DropdownMenuItem onClick={() => moveColumn(col.id, "left")} data-testid={`move-column-left-${col.id}`}>
@@ -1372,13 +1687,13 @@ export function WorkspaceTableView({
                                       Move Left
                                     </DropdownMenuItem>
                                   )}
-                                  {colIndex < columns.length - 1 && (
+                                  {colIndex < visibleColumns.length - 1 && (
                                     <DropdownMenuItem onClick={() => moveColumn(col.id, "right")} data-testid={`move-column-right-${col.id}`}>
                                       <ArrowRightFromLine className="h-4 w-4 mr-2" />
                                       Move Right
                                     </DropdownMenuItem>
                                   )}
-                                  {(colIndex > 0 || colIndex < columns.length - 1) && <DropdownMenuSeparator />}
+                                  {(colIndex > 0 || colIndex < visibleColumns.length - 1) && <DropdownMenuSeparator />}
                                   <DropdownMenuItem onClick={() => deleteColumnMutation.mutate(col.id)} className="text-destructive" data-testid={`delete-column-${col.id}`}>
                                     <Trash2 className="h-4 w-4 mr-2" />
                                     Delete Column
@@ -1442,9 +1757,9 @@ export function WorkspaceTableView({
                   </tr>
                 </thead>
                 <tbody>
-                  {processedRows.length === 0 && columns.length > 0 && (
+                    {processedRows.length === 0 && visibleColumns.length > 0 && (
                     <tr>
-                      <td colSpan={columns.length + 2} className="text-center py-8">
+                      <td colSpan={visibleColumns.length + 2} className="text-center py-8">
                         <p className="text-sm text-muted-foreground mb-2">No rows yet</p>
                         <button className="text-sm text-primary hover-elevate rounded px-3 py-1" onClick={() => addRowMutation.mutate()} data-testid="empty-rows-add-button">
                           <Plus className="h-3 w-3 inline mr-1" />
@@ -1460,7 +1775,7 @@ export function WorkspaceTableView({
                       return (
                         <React.Fragment key={groupKey}>
                           <tr className="bg-muted/40 border-b">
-                            <td colSpan={columns.length + 2} className="px-3 py-1.5">
+                            <td colSpan={visibleColumns.length + 2} className="px-3 py-1.5">
                               <button
                                 className="flex items-center gap-2 text-sm font-medium"
                                 onClick={() => toggleGroupCollapse(groupKey)}
@@ -1504,13 +1819,13 @@ export function WorkspaceTableView({
           <div className="p-3 space-y-1">
             {displayRows.map((row) => {
               const rowData = (row.data as Record<string, unknown>) || {};
-              const firstCol = columns[0];
+              const firstCol = visibleColumns[0];
               const title = firstCol ? String(rowData[String(firstCol.id)] || "Untitled") : "Untitled";
               return (
-                <div key={row.id} className="flex items-center gap-2 p-2 rounded hover-elevate" data-testid={`list-row-${row.id}`}>
+                <div key={row.id} className="flex items-center gap-2 p-2 rounded hover-elevate cursor-pointer" onClick={() => setDetailRowId(row.id)} data-testid={`list-row-${row.id}`}>
                   <FileText className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm flex-1">{title}</span>
-                  {columns.slice(1, 3).map((col) => (
+                  {visibleColumns.slice(1, 3).map((col) => (
                     <Badge key={col.id} variant="secondary" className="text-xs">
                       {String(rowData[String(col.id)] || "")}
                     </Badge>
@@ -1523,37 +1838,41 @@ export function WorkspaceTableView({
 
         {activeView === "kanban" && (
           <div className="p-3">
-            <div className="text-sm text-muted-foreground text-center py-8">
-              Board view - Add a "Select" type column to group items
-            </div>
+            <WorkspaceKanbanView
+              columns={visibleColumns}
+              rows={displayRows}
+              onUpdateRow={(rowId, data) => updateRowMutation.mutate({ id: rowId, data })}
+              onAddRow={(statusColId, statusValue) => {
+                const maxSort = rows.length > 0 ? Math.max(...rows.map((r) => r.sortOrder || 0)) : -1;
+                apiRequest("POST", `/api/workspace-databases/${databaseId}/rows`, {
+                  data: { [String(statusColId)]: statusValue },
+                  sortOrder: maxSort + 1,
+                }).then(() => {
+                  queryClient.invalidateQueries({ queryKey: ["/api/workspace-databases", databaseId, "rows"] });
+                });
+              }}
+              onOpenRowDetail={(rowId) => setDetailRowId(rowId)}
+            />
           </div>
         )}
 
         {activeView === "calendar" && (
           <div className="p-3">
-            <div className="text-sm text-muted-foreground text-center py-8">
-              Calendar view - Add a "Date" type column to display items on a calendar
-            </div>
-          </div>
-        )}
-
-        {activeView === "gallery" && (
-          <div className="p-3 grid grid-cols-3 gap-3">
-            {displayRows.map((row) => {
-              const rowData = (row.data as Record<string, unknown>) || {};
-              const firstCol = columns[0];
-              const title = firstCol ? String(rowData[String(firstCol.id)] || "Untitled") : "Untitled";
-              return (
-                <Card key={row.id} className="p-3" data-testid={`gallery-card-${row.id}`}>
-                  <div className="text-sm font-medium mb-1">{title}</div>
-                  {columns.slice(1, 3).map((col) => (
-                    <div key={col.id} className="text-xs text-muted-foreground">
-                      {col.name}: {String(rowData[String(col.id)] || "-")}
-                    </div>
-                  ))}
-                </Card>
-              );
-            })}
+            <WorkspaceCalendarView
+              columns={visibleColumns}
+              rows={displayRows}
+              onUpdateRow={(rowId, data) => updateRowMutation.mutate({ id: rowId, data })}
+              onAddRow={(dateColId, isoDate) => {
+                const maxSort = rows.length > 0 ? Math.max(...rows.map((r) => r.sortOrder || 0)) : -1;
+                apiRequest("POST", `/api/workspace-databases/${databaseId}/rows`, {
+                  data: { [String(dateColId)]: isoDate },
+                  sortOrder: maxSort + 1,
+                }).then(() => {
+                  queryClient.invalidateQueries({ queryKey: ["/api/workspace-databases", databaseId, "rows"] });
+                });
+              }}
+              onOpenRowDetail={(rowId) => setDetailRowId(rowId)}
+            />
           </div>
         )}
 
@@ -1569,6 +1888,7 @@ export function WorkspaceTableView({
           </span>
         </div>
       </div>
+      </WorkspaceQueryShell>
 
       <Dialog open={showInlineTemplateDialog} onOpenChange={setShowInlineTemplateDialog}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
@@ -1653,6 +1973,15 @@ export function WorkspaceTableView({
         columns={columns}
         onBulkUpdate={handleBulkUpdate}
       />
+      {detailRowId !== null && (
+        <WorkspaceRowDetailPanel
+          rowId={detailRowId}
+          databaseId={databaseId}
+          columns={columns}
+          onClose={() => setDetailRowId(null)}
+          readOnly={readOnly}
+        />
+      )}
     </>
   );
 }

@@ -150,6 +150,7 @@ import {
   insertClientUserSchema,
 } from "@shared/models/clients";
 import { slugify } from "./lib/slug";
+import { seedSpecDefaultBoard, VALID_COLUMN_TYPES } from "./workspaces/defaults";
 
 function getWorstRag(ragStatuses: (string | null | undefined)[]): string {
   const ragPriority: Record<string, number> = { red: 3, amber: 2, green: 1 };
@@ -220,6 +221,60 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/public/workspace/pages/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      if (!token || !/^[a-f0-9]{48}$/.test(token)) {
+        return res.status(404).send("Page not found");
+      }
+      const { getPageByPublicToken } = await import("./workspaces/service");
+      const page = await getPageByPublicToken(token);
+      if (!page) return res.status(404).send("Page not found or link has been revoked");
+      const htmlStyles = `
+        body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1.5rem; line-height: 1.6; color: #1a1a1a; }
+        h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .meta { color: #666; font-size: 0.875rem; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #eee; }
+        .content { line-height: 1.7; }
+        .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; color: #999; font-size: 0.75rem; text-align: center; }
+      `;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${page.title} — Jiganto Workspace</title>
+  <style>${htmlStyles}</style>
+</head>
+<body>
+  <h1>${page.title}</h1>
+  <div class="meta">Shared workspace page · Read-only public view</div>
+  <div class="content">${page.content || "<p><em>No content</em></p>"}</div>
+  <div class="footer">Shared via Jiganto Workspaces</div>
+</body>
+</html>`);
+    } catch (err) {
+      console.error("Public workspace page error:", err);
+      res.status(500).send("Error loading page");
+    }
+  });
+
+  app.get("/public/workspace/rows/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      if (!token || !/^[a-f0-9]{48}$/.test(token)) {
+        return res.status(404).json({ message: "Row not found" });
+      }
+      const { getRowByPublicToken } = await import("./workspaces/service");
+      const row = await getRowByPublicToken(token);
+      if (!row) return res.status(404).json({ message: "Row not found or link revoked" });
+      res.json({ id: row.id, data: row.data, createdAt: row.createdAt, updatedAt: row.updatedAt });
+    } catch (err) {
+      console.error("Public workspace row error:", err);
+      res.status(500).json({ message: "Error loading row" });
+    }
+  });
+
   // Setup Auth and Integrations
   await setupAuth(app);
   app.use(attachPermissionContext);
@@ -282,6 +337,9 @@ export async function registerRoutes(
 
   const { registerClientRoutes } = await import("./clients/routes");
   registerClientRoutes(app);
+
+  const { registerWorkspaceExtendedRoutes } = await import("./workspaces/routes");
+  registerWorkspaceExtendedRoutes(app);
 
   const { registerPortfolioRoutes } = await import("./portfolio/routes");
   registerPortfolioRoutes(app);
@@ -9443,32 +9501,10 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
           pageId: result.id,
           name: req.body.title || "Board",
         });
-        const defaultColumns = [
-          { databaseId: db.id, name: "Task", type: "text", sortOrder: 0, options: {} },
-          { databaseId: db.id, name: "Owner", type: "text", sortOrder: 1, options: {} },
-          { databaseId: db.id, name: "Status", type: "select", sortOrder: 2, options: { choices: ["Not Started", "In Progress", "Delayed", "Done"] } },
-          { databaseId: db.id, name: "Priority", type: "select", sortOrder: 3, options: { choices: ["Low", "Medium", "High", "Critical"] } },
-          { databaseId: db.id, name: "Due Date", type: "date", sortOrder: 4, options: {} },
-          { databaseId: db.id, name: "Commentary", type: "text", sortOrder: 5, options: {} },
-        ];
-        const createdCols: any[] = [];
-        for (const col of defaultColumns) {
-          const c = await storage.createWorkspaceDatabaseColumn(col);
-          createdCols.push(c);
-        }
-        const taskCol = createdCols.find(c => c.name === "Task");
-        const statusCol = createdCols.find(c => c.name === "Status");
-        const priorityCol = createdCols.find(c => c.name === "Priority");
-        if (taskCol && statusCol && priorityCol) {
-          await storage.createWorkspaceDatabaseRow({
-            databaseId: db.id,
-            data: { [taskCol.id]: "Sample task 1", [statusCol.id]: "Not Started", [priorityCol.id]: "Medium" },
-          });
-          await storage.createWorkspaceDatabaseRow({
-            databaseId: db.id,
-            data: { [taskCol.id]: "Sample task 2", [statusCol.id]: "In Progress", [priorityCol.id]: "High" },
-          });
-        }
+        await seedSpecDefaultBoard(
+          (col) => storage.createWorkspaceDatabaseColumn(col).then((c) => ({ id: c.id, name: c.name })),
+          db.id,
+        );
       }
 
       res.json(result);
@@ -9517,46 +9553,10 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
         pageId: Number(req.params.pageId),
       });
 
-      const defaultColumns = [
-        { name: "Task", type: "text", options: null, sortOrder: 0, width: null },
-        { name: "Owner", type: "text", options: null, sortOrder: 1, width: null },
-        { name: "Status", type: "select", options: ["Not Started", "In Progress", "Delayed", "Done"], sortOrder: 2, width: null },
-        { name: "Priority", type: "select", options: ["Low", "Medium", "High", "Critical"], sortOrder: 3, width: null },
-        { name: "Due Date", type: "date", options: null, sortOrder: 4, width: null },
-        { name: "Commentary", type: "text", options: null, sortOrder: 5, width: null },
-      ];
-
-      const columnIdMap: Record<string, number> = {};
-      for (const col of defaultColumns) {
-        const created = await storage.createWorkspaceDatabaseColumn({
-          databaseId: result.id,
-          name: col.name,
-          type: col.type,
-          options: col.options,
-          sortOrder: col.sortOrder,
-          width: col.width,
-        });
-        columnIdMap[col.name] = created.id;
-      }
-
-      const sampleRows = [
-        { Task: "Sample task 1", Owner: "", Status: "Not Started", Priority: "Medium", "Due Date": "", Commentary: "" },
-        { Task: "Sample task 2", Owner: "", Status: "In Progress", Priority: "High", "Due Date": "", Commentary: "" },
-      ];
-
-      for (let i = 0; i < sampleRows.length; i++) {
-        const rowData: Record<string, any> = {};
-        for (const [colName, value] of Object.entries(sampleRows[i])) {
-          if (columnIdMap[colName] !== undefined) {
-            rowData[String(columnIdMap[colName])] = value;
-          }
-        }
-        await storage.createWorkspaceDatabaseRow({
-          databaseId: result.id,
-          data: rowData,
-          sortOrder: i,
-        });
-      }
+      await seedSpecDefaultBoard(
+        (col) => storage.createWorkspaceDatabaseColumn(col).then((c) => ({ id: c.id, name: c.name })),
+        result.id,
+      );
 
       res.json(result);
     } catch (error: any) {
@@ -9572,7 +9572,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       if (!columns || !Array.isArray(columns) || columns.length === 0) {
         return res.status(400).json({ error: "Template must include at least one column" });
       }
-      const validColumnTypes = ["text", "number", "select", "multi_select", "date", "checkbox", "person", "url", "rag"];
+      const validColumnTypes = [...VALID_COLUMN_TYPES];
       for (const col of columns) {
         if (!col.name || typeof col.name !== "string") {
           return res.status(400).json({ error: "Each column must have a name" });
@@ -9630,7 +9630,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       if (!columns || !Array.isArray(columns) || columns.length === 0) {
         return res.status(400).json({ error: "Template must include at least one column" });
       }
-      const validColumnTypes = ["text", "number", "select", "multi_select", "date", "checkbox", "person", "url", "rag"];
+      const validColumnTypes = [...VALID_COLUMN_TYPES];
       for (const col of columns) {
         if (!col.name || typeof col.name !== "string") {
           return res.status(400).json({ error: "Each column must have a name" });
@@ -9678,6 +9678,16 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       res.json(updated);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/workspace-databases/:id", async (req, res) => {
+    try {
+      const database = await storage.getWorkspaceDatabase(Number(req.params.id));
+      if (!database) return res.status(404).json({ message: "Database not found" });
+      res.json(database);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 

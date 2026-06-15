@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
@@ -36,6 +36,7 @@ import {
   WorkspaceIconRenderer,
   getWorkspaceIconDef,
 } from "@/components/workspaces/WorkspaceIconPicker";
+import { WorkspaceOverviewSkeleton } from "@/components/workspaces/loading";
 
 const WORKSPACE_COLORS = [
   "#7C3AED", "#1E88C8", "#22C55E", "#F59E0B", "#EC4899",
@@ -87,7 +88,7 @@ function useWorkspaceKPIs(databasePages: WorkspacePage[]) {
     queryFn: async () => {
       const results = await Promise.all(
         databasePages.map(async (page) => {
-          const resp = await fetch(`/api/workspace-pages/${page.id}/databases`);
+          const resp = await fetchWithAuth(`/api/workspace-pages/${page.id}/databases`);
           const databases: WorkspaceDatabase[] = resp.ok ? await resp.json() : [];
           return { databases, pageId: page.id };
         })
@@ -113,8 +114,8 @@ function useWorkspaceKPIs(databasePages: WorkspacePage[]) {
       await Promise.all(
         allDatabases.map(async (db) => {
           const [rowsResp, colsResp] = await Promise.all([
-            fetch(`/api/workspace-databases/${db.id}/rows`),
-            fetch(`/api/workspace-databases/${db.id}/columns`),
+            fetchWithAuth(`/api/workspace-databases/${db.id}/rows`),
+            fetchWithAuth(`/api/workspace-databases/${db.id}/columns`),
           ]);
           const rows: WorkspaceDatabaseRow[] = rowsResp.ok ? await rowsResp.json() : [];
           const cols: WorkspaceDatabaseColumn[] = colsResp.ok ? await colsResp.json() : [];
@@ -353,9 +354,11 @@ export function WorkspaceOverview({
     queryKey: ["/api/workspaces", workspaceId],
   });
 
-  const { data: pages = [], isLoading: pagesLoading } = useQuery<WorkspacePage[]>({
+  const pagesQuery = useQuery<WorkspacePage[]>({
     queryKey: ["/api/workspaces", workspaceId, "pages"],
   });
+  const pages = pagesQuery.data ?? [];
+  const pagesLoading = pagesQuery.isLoading;
 
   const { data: members = [] } = useQuery<WorkspaceMember[]>({
     queryKey: ["/api/workspaces", workspaceId, "members"],
@@ -405,11 +408,7 @@ export function WorkspaceOverview({
   });
 
   if (pagesLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <WorkspaceOverviewSkeleton />;
   }
 
   return (
