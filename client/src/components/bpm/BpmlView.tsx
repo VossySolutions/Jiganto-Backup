@@ -17,6 +17,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import MondayTable, { type ColumnDef, type GroupDef, defaultStatusColors } from "@/components/MondayTable";
+import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
+import { type ConditionalFormatRule } from "@/lib/conditionalFormatting";
+import { BpmlVersionHistory } from "@/components/bpm/BpmlVersionHistory";
+import { applyBpmlFilter, multiSort, type BpmlFilter, type BpmlFilterOperator } from "@/lib/bpm-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
@@ -24,6 +28,7 @@ import {
   ChevronDown, ChevronRight, FileText, Eye, EyeOff, Copy, LayoutTemplate,
   ArrowUp, ArrowDown, X, FolderOpen, Pencil, LayoutGrid, List, Clock,
   Filter, ArrowUpDown, Save, Bookmark, ClipboardCopy, Image as ImageIcon, FileDown,
+  Pin, Share2,
 } from "lucide-react";
 import {
   BPML_FIELD_SECTIONS,
@@ -111,6 +116,16 @@ const BPML_ENTRY_GROUP_OPTIONS = [
   { value: "erpPlatform", label: "ERP Platform" },
 ];
 
+const BPML_FILTER_OPERATORS: { value: BpmlFilterOperator; label: string }[] = [
+  { value: "contains", label: "Contains" },
+  { value: "equals", label: "Equals" },
+  { value: "starts_with", label: "Starts with" },
+  { value: "is_empty", label: "Is empty" },
+  { value: "is_not_empty", label: "Is not empty" },
+  { value: "greater_than", label: "Greater than" },
+  { value: "less_than", label: "Less than" },
+];
+
 const BPML_FILTER_FIELDS: { value: string; label: string; options?: readonly string[] }[] = [
   { value: "overallStatus", label: "Overall Status", options: bpmlStatusEnum },
   { value: "fitGapStatus", label: "Fit/Gap", options: bpmlFitGapEnum },
@@ -141,12 +156,16 @@ const BPML_FILTER_FIELDS: { value: string; label: string; options?: readonly str
 interface SavedView {
   id: string;
   name: string;
-  filters: { field: string; value: string }[];
+  filters: BpmlFilter[];
   sortField: string;
   sortDir: "asc" | "desc";
+  secondarySortField?: string;
+  secondarySortDir?: "asc" | "desc";
   groupBy: string;
   hiddenColumns?: string[];
   columnOrder?: string[];
+  pinned?: boolean;
+  shared?: boolean;
 }
 
 const DETAIL_PANEL_SIZES = {
@@ -374,9 +393,15 @@ export default function BpmlView() {
   const [catalogueGroupBy, setCatalogueGroupBy] = useState("none");
   const [catalogueViewMode, setCatalogueViewMode] = useState<"grid" | "table">("grid");
 
-  const [entryFilters, setEntryFilters] = useState<{ field: string; value: string }[]>([]);
+  const [entryFilters, setEntryFilters] = useState<BpmlFilter[]>([]);
   const [entrySortField, setEntrySortField] = useState("sequenceOrder");
   const [entrySortDir, setEntrySortDir] = useState<"asc" | "desc">("asc");
+  const [secondarySortField, setSecondarySortField] = useState("");
+  const [secondarySortDir, setSecondarySortDir] = useState<"asc" | "desc">("asc");
+  const [importMode, setImportMode] = useState<"append" | "upsert">("append");
+  const [formatRules, setFormatRules] = useState<ConditionalFormatRule[]>([]);
+  const [showFormatPanel, setShowFormatPanel] = useState(false);
+  const [pendingFilterOperator, setPendingFilterOperator] = useState<BpmlFilterOperator>("contains");
   const [entryGroupBy, setEntryGroupBy] = useState("none");
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [showSaveViewDialog, setShowSaveViewDialog] = useState(false);
@@ -496,7 +521,12 @@ export default function BpmlView() {
   const templateSavedViews = useMemo(() => {
     if (!selectedTemplate) return [];
     const vf = selectedTemplate.visibleFields as any;
-    return (vf?.savedViews as SavedView[]) || [];
+    const views = (vf?.savedViews as SavedView[]) || [];
+    return [...views].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return a.name.localeCompare(b.name);
+    });
   }, [selectedTemplate]);
 
   const activeFields = useMemo(() => {
@@ -550,17 +580,15 @@ export default function BpmlView() {
     }
 
     if (entryFilters.length > 0) {
-      const enumFields = new Set(BPML_FILTER_FIELDS.filter(f => f.options).map(f => f.value));
-      data = data.filter(row =>
-        entryFilters.every(f => {
-          const val = String(row[f.field] || "").toLowerCase();
-          const filterVal = f.value.toLowerCase();
-          return enumFields.has(f.field) ? val === filterVal : val.includes(filterVal);
-        })
-      );
+      data = data.filter(row => entryFilters.every(f => applyBpmlFilter(row, f)));
     }
 
-    if (entrySortField && entrySortField !== "none") {
+    const sorts = [
+      ...(entrySortField && entrySortField !== "none" ? [{ field: entrySortField, dir: entrySortDir }] : []),
+      ...(secondarySortField ? [{ field: secondarySortField, dir: secondarySortDir }] : []),
+    ];
+    if (sorts.length) data = multiSort(data, sorts);
+    else if (entrySortField && entrySortField !== "none") {
       data = [...data].sort((a, b) => {
         const aVal = String(a[entrySortField] || "");
         const bVal = String(b[entrySortField] || "");
@@ -570,7 +598,7 @@ export default function BpmlView() {
     }
 
     return data;
-  }, [tableData, searchTerm, entryFilters, entrySortField, entrySortDir]);
+  }, [tableData, searchTerm, entryFilters, entrySortField, entrySortDir, secondarySortField, secondarySortDir]);
 
   const groups = useMemo<GroupDef<any>[] | undefined>(() => {
     if (entryGroupBy === "none") return undefined;
@@ -616,6 +644,7 @@ export default function BpmlView() {
       color: "bg-primary/10 text-primary",
     }));
   }, [filteredCatalogueData, catalogueGroupBy]);
+
 
   const handleCellEdit = useCallback((rowId: number | string, columnId: string, value: unknown) => {
     const entry = entries.find(e => e.id === Number(rowId));
@@ -795,8 +824,27 @@ export default function BpmlView() {
     e.target.value = "";
   };
 
+  const upsertImportMutation = useMutation({
+    mutationFn: async (rows: Record<string, unknown>[]) => {
+      const res = await apiRequest("POST", "/api/bpml/entries/bulk-upsert", {
+        rows, mode: importMode, templateId: selectedTemplateId, tenantId,
+      });
+      return res.json();
+    },
+    onSuccess: (result: any) => {
+      queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith("/api/bpml/entries") });
+      toast({ title: "Import complete", description: `${result.imported} added, ${result.updated} updated` });
+    },
+  });
+
   const handleImportConfirm = () => {
     if (!importPreview || !selectedTemplateId) return;
+    if (importMode === "upsert") {
+      upsertImportMutation.mutate(importPreview);
+      setShowImportDialog(false);
+      setImportPreview(null);
+      return;
+    }
     const entriesToCreate = importPreview.map((row, idx) => {
       const coreFieldIds = new Set(BPML_CORE_FIELDS.map(f => f.id));
       const entry: Record<string, any> = {
@@ -949,6 +997,8 @@ export default function BpmlView() {
       filters: [...entryFilters],
       sortField: entrySortField,
       sortDir: entrySortDir,
+      secondarySortField: secondarySortField || undefined,
+      secondarySortDir: secondarySortDir,
       groupBy: entryGroupBy,
       hiddenColumns: Array.from(hiddenColumnIds),
       columnOrder: columnOrder.length > 0 ? [...columnOrder] : [],
@@ -969,10 +1019,34 @@ export default function BpmlView() {
     setEntryFilters(view.filters);
     setEntrySortField(view.sortField);
     setEntrySortDir(view.sortDir);
+    setSecondarySortField(view.secondarySortField || "");
+    setSecondarySortDir(view.secondarySortDir || "asc");
     setEntryGroupBy(view.groupBy);
     setHiddenColumnIds(new Set(view.hiddenColumns || []));
     setColumnOrder(view.columnOrder || []);
     setActiveViewId(view.id);
+  };
+
+  const handleTogglePinView = (viewId: string) => {
+    if (!selectedTemplate) return;
+    const newViews = templateSavedViews.map(v =>
+      v.id === viewId ? { ...v, pinned: !v.pinned } : v,
+    );
+    updateTemplateMutation.mutate({
+      id: selectedTemplate.id,
+      visibleFields: { ...(selectedTemplate.visibleFields as any || {}), savedViews: newViews },
+    });
+  };
+
+  const handleToggleShareView = (viewId: string) => {
+    if (!selectedTemplate) return;
+    const newViews = templateSavedViews.map(v =>
+      v.id === viewId ? { ...v, shared: !v.shared } : v,
+    );
+    updateTemplateMutation.mutate({
+      id: selectedTemplate.id,
+      visibleFields: { ...(selectedTemplate.visibleFields as any || {}), savedViews: newViews },
+    });
   };
 
   const handleDeleteView = (viewId: string) => {
@@ -996,8 +1070,9 @@ export default function BpmlView() {
   };
 
   const handleAddFilter = () => {
-    if (!pendingFilterField || !pendingFilterValue) return;
-    setEntryFilters(prev => [...prev, { field: pendingFilterField, value: pendingFilterValue }]);
+    if (!pendingFilterField) return;
+    if (!["is_empty", "is_not_empty"].includes(pendingFilterOperator) && !pendingFilterValue) return;
+    setEntryFilters(prev => [...prev, { field: pendingFilterField, operator: pendingFilterOperator, value: pendingFilterValue }]);
     setPendingFilterField("");
     setPendingFilterValue("");
     setActiveViewId(null);
@@ -1420,9 +1495,9 @@ export default function BpmlView() {
   }
 
   return (
-    <div className="flex flex-col h-full" data-testid="bpml-table-view">
-      <div className="flex items-center justify-between gap-3 px-4 py-2 border-b flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
+    <div className="flex flex-col h-full min-h-0" data-testid="bpml-table-view">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 px-3 sm:px-4 py-2 border-b">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
           <Button size="sm" variant="ghost" onClick={() => { setSelectedTemplateId(null); setSearchTerm(""); setEntryFilters([]); setEntrySortField("sequenceOrder"); setEntrySortDir("asc"); setEntryGroupBy("none"); setActiveViewId(null); }} data-testid="button-back-to-libraries">
             <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
             Back
@@ -1450,7 +1525,7 @@ export default function BpmlView() {
             />
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap overflow-x-auto pb-1 sm:pb-0 max-w-full">
           <Popover open={showFilterPopover} onOpenChange={setShowFilterPopover}>
             <PopoverTrigger asChild>
               <Button size="sm" variant="outline" data-testid="button-entry-filter"
@@ -1467,10 +1542,11 @@ export default function BpmlView() {
                 <h4 className="text-sm font-medium">Filters</h4>
                 {entryFilters.map((f, idx) => {
                   const fieldDef = BPML_FILTER_FIELDS.find(ff => ff.value === f.field);
+                  const opLabel = BPML_FILTER_OPERATORS.find(o => o.value === f.operator)?.label || f.operator;
                   return (
                     <div key={idx} className="flex items-center gap-2">
                       <Badge variant="outline" className="text-xs shrink-0">{fieldDef?.label || f.field}</Badge>
-                      <span className="text-xs text-muted-foreground">= {f.value.replace(/_/g, " ")}</span>
+                      <span className="text-xs text-muted-foreground">{opLabel}{f.value ? ` "${f.value.replace(/_/g, " ")}"` : ""}</span>
                       <Button size="icon" variant="ghost" className="h-5 w-5 ml-auto shrink-0" onClick={() => handleRemoveFilter(idx)} data-testid={`button-remove-filter-${idx}`}>
                         <X className="h-3 w-3" />
                       </Button>
@@ -1488,6 +1564,16 @@ export default function BpmlView() {
                     </SelectContent>
                   </Select>
                   {pendingFilterField && (
+                    <Select value={pendingFilterOperator} onValueChange={v => setPendingFilterOperator(v as BpmlFilterOperator)}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="select-filter-operator"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {BPML_FILTER_OPERATORS.map(o => (
+                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {pendingFilterField && !["is_empty", "is_not_empty"].includes(pendingFilterOperator) && (
                     <Select value={pendingFilterValue} onValueChange={setPendingFilterValue}>
                       <SelectTrigger className="h-8 text-xs" data-testid="select-filter-value"><SelectValue placeholder="Select value..." /></SelectTrigger>
                       <SelectContent>
@@ -1505,7 +1591,13 @@ export default function BpmlView() {
                       </SelectContent>
                     </Select>
                   )}
-                  <Button size="sm" className="w-full" disabled={!pendingFilterField || !pendingFilterValue} onClick={handleAddFilter} data-testid="button-add-filter">
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    disabled={!pendingFilterField || (!["is_empty", "is_not_empty"].includes(pendingFilterOperator) && !pendingFilterValue)}
+                    onClick={handleAddFilter}
+                    data-testid="button-add-filter"
+                  >
                     <Plus className="h-4 w-4 mr-1" />
                     Add Filter
                   </Button>
@@ -1557,6 +1649,34 @@ export default function BpmlView() {
                   )}
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuSeparator />
+              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Then sort by</div>
+              {secondarySortField && (
+                <DropdownMenuItem onClick={() => { setSecondarySortField(""); setActiveViewId(null); }} data-testid="menuitem-secondary-sort-clear">
+                  <X className="h-3.5 w-3.5 mr-1.5 text-red-500" />
+                  <span className="text-red-600 dark:text-red-400">Clear secondary sort</span>
+                </DropdownMenuItem>
+              )}
+              {BPML_SORT_OPTIONS.filter(o => o.value !== entrySortField).map(opt => (
+                <DropdownMenuItem
+                  key={`sec-${opt.value}`}
+                  onClick={() => {
+                    if (secondarySortField === opt.value) {
+                      setSecondarySortDir(prev => prev === "asc" ? "desc" : "asc");
+                    } else {
+                      setSecondarySortField(opt.value);
+                      setSecondarySortDir("asc");
+                    }
+                    setActiveViewId(null);
+                  }}
+                  data-testid={`menuitem-secondary-sort-${opt.value}`}
+                >
+                  <span className="flex-1">{opt.label}</span>
+                  {secondarySortField === opt.value && (
+                    <Badge variant="secondary" className="ml-2 text-[10px]">{secondarySortDir}</Badge>
+                  )}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -1603,6 +1723,10 @@ export default function BpmlView() {
           <Button size="sm" onClick={handleAddEntry} data-testid="button-add-bpml-entry">
             <Plus className="h-4 w-4 mr-1" />
             Add Entry
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setShowFormatPanel(true)} data-testid="button-bpml-conditional-format">
+            <ImageIcon className="h-4 w-4 mr-1" />
+            Format
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1673,7 +1797,7 @@ export default function BpmlView() {
             className={cn("text-xs toggle-elevate",
               activeViewId === `ws_${ws}` && "toggle-elevated")}
             onClick={() => {
-              setEntryFilters([{ field: "level1", value: ws }]);
+              setEntryFilters([{ field: "level1", operator: "equals", value: ws }]);
               setEntrySortField("sequenceOrder");
               setEntrySortDir("asc");
               setEntryGroupBy("none");
@@ -1694,8 +1818,29 @@ export default function BpmlView() {
               onClick={() => handleApplyView(view)}
               data-testid={`button-view-${view.id}`}
             >
-              <Bookmark className="h-3 w-3 mr-1" />
+              {view.pinned ? <Pin className="h-3 w-3 mr-1 text-primary" /> : <Bookmark className="h-3 w-3 mr-1" />}
               {view.name}
+              {view.shared && <Share2 className="h-3 w-3 ml-1 text-muted-foreground" />}
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-5 w-5"
+              onClick={(e) => { e.stopPropagation(); handleTogglePinView(view.id); }}
+              title={view.pinned ? "Unpin view" : "Pin view"}
+              data-testid={`button-pin-view-${view.id}`}
+            >
+              <Pin className={cn("h-3 w-3", view.pinned && "text-primary")} />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-5 w-5"
+              onClick={(e) => { e.stopPropagation(); handleToggleShareView(view.id); }}
+              title={view.shared ? "Unshare view" : "Share with team"}
+              data-testid={`button-share-view-${view.id}`}
+            >
+              <Share2 className={cn("h-3 w-3", view.shared && "text-primary")} />
             </Button>
             <Button
               size="icon"
@@ -1732,6 +1877,8 @@ export default function BpmlView() {
             columnWidthStorageKey="jiganto-bpml-list-col-widths"
             groups={groups}
             onCellEdit={handleCellEdit}
+            conditionalFormatRules={formatRules}
+            searchHighlightTerm={searchTerm}
             onDeleteItems={(ids) => handleDeleteEntries(ids)}
             selectable
             gridLines
@@ -2027,6 +2174,16 @@ export default function BpmlView() {
               )}
             </div>
           )}
+          <div className="flex items-center gap-2">
+            <Label className="text-sm">Import mode:</Label>
+            <Select value={importMode} onValueChange={(v) => setImportMode(v as "append" | "upsert")}>
+              <SelectTrigger className="w-[200px]" data-testid="select-import-mode"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="append">Append new rows</SelectItem>
+                <SelectItem value="upsert">Upsert (match by BPML ID)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {importPreview && importPreview.length > 0 && (
             <div className="max-h-[300px] overflow-auto border rounded-md">
               <table className="w-full text-xs min-w-[700px]">
@@ -2290,6 +2447,7 @@ export default function BpmlView() {
               if (!entry) return <p className="text-sm text-muted-foreground">Entry not found</p>;
               return (
                 <div className="space-y-4 pr-4">
+                  <BpmlVersionHistory entryId={selectedEntryId} />
                   {BPML_FIELD_SECTIONS.filter(s => visibleSections.includes(s.id)).map(section => {
                     const sectionFields = activeFields.filter(f => f.section === section.id);
                     if (sectionFields.length === 0) return null;
@@ -2323,6 +2481,15 @@ export default function BpmlView() {
           </ScrollArea>
         </SheetContent>
       </Sheet>
+
+      <ConditionalFormattingPanel
+        open={showFormatPanel}
+        onOpenChange={setShowFormatPanel}
+        rules={formatRules}
+        onRulesChange={setFormatRules}
+        columns={columns}
+        data={filteredData}
+      />
     </div>
   );
 }

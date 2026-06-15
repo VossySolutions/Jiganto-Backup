@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { bpmFetchFormData } from "@/lib/bpm-api";
 import {
   ReactFlow,
   Background,
@@ -37,6 +38,9 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { nodeTypes, NODE_DEFAULTS, BpmAttrVisibilityProvider, NodeUpdateProvider, SequenceNumberProvider, DiagramNavigateProvider, type PointerPosition } from "@/components/bpm/BpmNodeTypes";
 import BpmTableView, { generateCsvTemplate, generateBlankTemplate, parseCsvContent, buildDiagramFromRows, nodesToRows, type ParsedProcessRow } from "@/components/bpm/BpmTableView";
+import { BpmProcessReportDialog } from "@/components/bpm/BpmProcessReportDialog";
+import { BpmStepLinksPanel } from "@/components/bpm/BpmStepLinksPanel";
+import { autoLayoutNodes } from "@/lib/bpm-utils";
 import {
   ArrowLeft, Save, Loader2, Trash2,
   DollarSign, Clock, RefreshCw, Users, BookOpen,
@@ -854,9 +858,7 @@ function PropertiesPanel({
     const formData = new FormData();
     formData.append('image', file);
     try {
-      const res = await fetch('/api/bpm/upload-image', { method: 'POST', body: formData });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
+      const data = await bpmFetchFormData<{ url: string }>('/api/bpm/upload-image', formData);
       updateImageUrl(data.url);
       toast({ title: "Image uploaded", description: "Logo/image has been added to the node" });
     } catch {
@@ -1282,6 +1284,13 @@ function PropertiesPanel({
               </div>
             </>
           )}
+          {!isSwimlane && diagramId && (
+            <BpmStepLinksPanel
+              diagramId={diagramId}
+              nodeId={singleNode.id}
+              nodeLabel={singleNode.data?.label as string || singleNode.id}
+            />
+          )}
         </div>
       </ScrollArea>
     </div>
@@ -1388,6 +1397,8 @@ function CanvasEditorInner({
   const [importPreview, setImportPreview] = useState<Map<string, ParsedProcessRow[]> | null>(null);
   const [importFileName, setImportFileName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showProcessReport, setShowProcessReport] = useState(false);
+  const [snapToGridEnabled, setSnapToGridEnabled] = useState(true);
 
   const updateUserDefaults = useCallback((updates: Partial<BpmUserDefaults>) => {
     setUserDefaults(prev => {
@@ -1396,6 +1407,13 @@ function CanvasEditorInner({
       return next;
     });
   }, []);
+
+  const handleAutoLayout = useCallback(() => {
+    const laid = autoLayoutNodes(nodes, edges, "LR");
+    setNodes(laid);
+    setIsDirty(true);
+    toast({ title: "Auto-layout applied" });
+  }, [nodes, edges, toast]);
 
   const sequenceMap = useMemo(() => {
     if (!showSequenceNumbers) return new Map<string, number>();
@@ -2288,6 +2306,15 @@ function CanvasEditorInner({
           {isDirty && <span className="text-xs text-muted-foreground">Unsaved</span>}
         </div>
         <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={handleAutoLayout} data-testid="button-auto-layout" title="Auto-layout nodes">
+            <AlignHorizontalDistributeCenter className="h-4 w-4 mr-1" />
+            Auto-layout
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setShowProcessReport(true)} data-testid="button-process-report" title="Process Report">
+            <FileText className="h-4 w-4 mr-1" />
+            Report
+          </Button>
+          <Separator orientation="vertical" className="h-6" />
           <Button size="icon" variant="ghost" onClick={handleUndo} disabled={historyIndexRef.current <= 0} data-testid="button-undo" title="Undo (Ctrl+Z)">
             <Undo2 className="h-4 w-4" />
           </Button>
@@ -2483,7 +2510,7 @@ function CanvasEditorInner({
               }}
               connectionMode={ConnectionMode.Loose}
               fitView
-              snapToGrid
+              snapToGrid={snapToGridEnabled}
               snapGrid={[15, 15]}
               multiSelectionKeyCode={["Shift", "Meta", "Control"]}
               selectionOnDrag
@@ -2772,6 +2799,8 @@ function CanvasEditorInner({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <BpmProcessReportDialog diagramId={diagram.id} open={showProcessReport} onOpenChange={setShowProcessReport} />
     </div>
   );
 }

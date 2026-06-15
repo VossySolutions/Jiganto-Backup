@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -38,6 +38,9 @@ export const bpmlTemplates = pgTable("bpml_templates", {
   visibleFields: jsonb("visible_fields"),
   customFields: jsonb("custom_fields").default([]),
   isSystem: boolean("is_system").default(false),
+  projectId: integer("project_id"),
+  orgChartId: integer("org_chart_id"),
+  processIdPrefix: text("process_id_prefix").default("P-"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -58,7 +61,21 @@ export const bpmlEntries = pgTable("bpml_entries", {
   bpmlId: text("bpml_id"),
   processCode: text("process_code"),
   processName: text("process_name").notNull(),
+  processShortName: text("process_short_name"),
   processDescription: text("process_description"),
+  notes: text("notes"),
+
+  businessArea: text("business_area"),
+  businessFunction: text("business_function"),
+  processLevel: text("process_level"),
+  systemName: text("system_name"),
+  moduleArea: text("module_area"),
+  transactionScreen: text("transaction_screen"),
+  asIsStatus: text("as_is_status"),
+  toBeStatus: text("to_be_status"),
+  linkedDiagramId: integer("linked_diagram_id"),
+  testCoverageSummary: jsonb("test_coverage_summary"),
+  updatedBy: varchar("updated_by"),
 
   level1: text("level_1"),
   level2: text("level_2"),
@@ -206,7 +223,25 @@ export const BPML_CORE_FIELDS: { id: string; label: string; section: string; typ
   { id: "bpmlId", label: "BPML ID", section: "core", type: "text" },
   { id: "processCode", label: "Process Code", section: "core", type: "text" },
   { id: "processName", label: "Process Name", section: "core", type: "text", required: true },
+  { id: "processShortName", label: "Process Short Name", section: "core", type: "text" },
   { id: "processDescription", label: "Description", section: "core", type: "textarea" },
+  { id: "businessArea", label: "Business Area", section: "core", type: "text" },
+  { id: "businessFunction", label: "Business Function", section: "core", type: "text" },
+  { id: "processLevel", label: "Process Level", section: "core", type: "enum", options: [
+    { value: "L1", label: "L1 - End-to-end" }, { value: "L2", label: "L2 - Process" },
+    { value: "L3", label: "L3 - Sub-process" }, { value: "L4", label: "L4 - Task" },
+  ]},
+  { id: "systemName", label: "System", section: "core", type: "text" },
+  { id: "moduleArea", label: "Module / Area", section: "core", type: "text" },
+  { id: "transactionScreen", label: "Transaction / Screen", section: "core", type: "text" },
+  { id: "asIsStatus", label: "As-Is Status", section: "core", type: "enum", options: [
+    { value: "existing", label: "Existing" }, { value: "workaround", label: "Workaround" }, { value: "gap", label: "Gap" },
+  ]},
+  { id: "toBeStatus", label: "To-Be Status", section: "core", type: "enum", options: [
+    { value: "configured", label: "Configured" }, { value: "custom", label: "Custom" }, { value: "manual", label: "Manual" },
+  ]},
+  { id: "notes", label: "Notes", section: "core", type: "textarea" },
+  { id: "testCoverageSummary", label: "Test Coverage", section: "core", type: "text" },
   { id: "level1", label: "L1 - End-to-End", section: "core", type: "text" },
   { id: "level2", label: "L2 - Process Group", section: "core", type: "text" },
   { id: "level3", label: "L3 - Business Process", section: "core", type: "text" },

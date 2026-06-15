@@ -13,6 +13,7 @@ export * from "./models/tasks";
 export * from "./models/projects";
 export * from "./models/resources";
 export * from "./models/bpm";
+export * from "./models/bpm-extensions";
 export * from "./models/bpml";
 export * from "./models/orgchart";
 export * from "./models/workspaces";

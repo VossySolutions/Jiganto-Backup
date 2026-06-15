@@ -354,6 +354,10 @@ export async function registerRoutes(
 
   const { registerServiceDeskRoutes } = await import("./service-desk/routes");
   registerServiceDeskRoutes(app);
+
+  const { registerBpmExtensionRoutes } = await import("./bpm/routes");
+  registerBpmExtensionRoutes(app);
+
   const { registerHelpDeskRoutes } = await import("./help-desk/routes");
   registerHelpDeskRoutes(app);
   const { registerTestMgmtExtensionRoutes } = await import("./testmgmt/routes");
@@ -9073,8 +9077,13 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const entry = await storage.updateBpmlEntry(Number(req.params.id), req.body);
-      if (!entry) return res.status(404).json({ message: "Entry not found" });
+      const id = Number(req.params.id);
+      const existing = await storage.getBpmlEntry(id);
+      if (!existing) return res.status(404).json({ message: "Entry not found" });
+      const entry = await storage.updateBpmlEntry(id, { ...req.body, updatedBy: userId });
+      const { recordBpmlEntryChanges } = await import("./bpm/service");
+      const trackFields = Object.keys(req.body).filter(k => k !== "updatedAt");
+      await recordBpmlEntryChanges(id, existing as any, req.body, userId, trackFields);
       res.json(entry);
     } catch (error: any) {
       res.status(400).json({ message: error.message });

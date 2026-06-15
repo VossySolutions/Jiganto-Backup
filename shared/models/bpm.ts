@@ -6,7 +6,10 @@ import { users } from "./auth";
 import { tenants } from "../schema";
 import { bpmlEntries } from "./bpml";
 
-export const bpmDiagramTypeEnum = ["flowchart", "process_flow", "bpml", "org_chart", "architecture", "network", "database_diagram", "workflow"] as const;
+export const bpmDiagramTypeEnum = [
+  "flowchart", "process_flow", "bpml", "org_chart", "architecture", "network", "database_diagram", "workflow",
+  "system_landscape", "integration_architecture", "data_flow", "raci_matrix", "deployment", "custom",
+] as const;
 export const bpmDiagramStatusEnum = ["draft", "review", "approved", "published"] as const;
 export const bpmNodeTypeEnum = [
   "start", "end", "task", "decision", "gateway_parallel", "gateway_exclusive", "gateway_inclusive",
@@ -124,7 +127,13 @@ export const bpmLibraries = pgTable("bpm_libraries", {
   name: text("name").notNull(),
   description: text("description"),
   vendor: text("vendor"),
+  projectId: integer("project_id"),
+  status: text("status").default("draft"),
+  ownerId: varchar("owner_id").references(() => users.id),
+  systemTag: text("system_tag"),
+  isTemplateLibrary: boolean("is_template_library").default(false),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const bpmLibrariesRelations = relations(bpmLibraries, ({ one, many }) => ({
@@ -147,7 +156,12 @@ export const bpmTemplates = pgTable("bpm_templates", {
   processType: text("process_type"),
   templateData: jsonb("template_data"),
   isSystem: boolean("is_system").default(false),
+  tier: text("tier").default("customer"),
+  submissionStatus: text("submission_status"),
+  submittedByOrg: text("submitted_by_org"),
+  reviewFeedback: text("review_feedback"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const bpmTemplatesRelations = relations(bpmTemplates, ({ one }) => ({
@@ -257,7 +271,10 @@ export const portalDiagramAssignmentsRelations = relations(portalDiagramAssignme
   }),
 }));
 
-export const processResourceTypeEnum = ["user_guide", "quick_reference", "simulation", "video", "template", "tool", "faq", "sop"] as const;
+export const processResourceTypeEnum = [
+  "user_guide", "quick_reference", "simulation", "video", "template", "tool", "faq", "sop",
+  "process_flow", "training_material", "data_entry_guide", "external_link", "custom",
+] as const;
 
 export const processResources = pgTable("process_resources", {
   id: serial("id").primaryKey(),

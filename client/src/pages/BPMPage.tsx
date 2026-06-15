@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import MondayTable, { type ColumnDef, type GroupDef, defaultStatusColors } from "@/components/MondayTable";
@@ -29,7 +30,7 @@ import {
   LogIn, LogOut, Timer, X, Link2, Unlink, ExternalLink, Rows3, Columns3,
   Download, Image, FileDown, LayoutList, Columns2, ClipboardCopy, MoreVertical, Copy,
   ArrowLeftRight, FolderTree, Video, FileQuestion, Sparkles, Globe, PanelRightOpen, PanelRightClose,
-  ChevronsDownUp,
+  ChevronsDownUp, Server,
 } from "lucide-react";
 import {
   BpmLibraryIcon,
@@ -44,6 +45,13 @@ import type { ProcessResource } from "@shared/models/bpm";
 import { parseCsvContent, buildDiagramFromRows, type ParsedProcessRow } from "@/components/bpm/BpmTableView";
 import BpmlView from "@/components/bpm/BpmlView";
 import OrgChartView from "@/components/bpm/OrgChartView";
+import { PortalAssetPanel } from "@/components/bpm/PortalAssetPanel";
+import { PortalSettingsDialog } from "@/components/bpm/PortalSettingsDialog";
+import { BpmDeltaReportTable } from "@/components/bpm/BpmDeltaReportTable";
+import { BpmTemplatePipeline } from "@/components/bpm/BpmTemplatePipeline";
+import { useAuth } from "@/hooks/use-auth";
+import { BpmLoadingState, BpmCardGridSkeleton } from "@/components/bpm/BpmLoadingState";
+import { bpmFetchJson } from "@/lib/bpm-api";
 
 import {
   ReactFlow,
@@ -82,6 +90,11 @@ type BpmLibrary = {
   name: string;
   description: string | null;
   vendor: string | null;
+  projectId?: number | null;
+  status?: string | null;
+  ownerId?: string | null;
+  systemTag?: string | null;
+  isTemplateLibrary?: boolean | null;
   createdAt: string;
 };
 
@@ -131,9 +144,15 @@ const DIAGRAM_TYPE_OPTIONS = [
   { value: "flowchart", label: "Flowchart", icon: GitBranch, description: "Simple flow diagrams" },
   { value: "org_chart", label: "Org Chart", icon: Building2, description: "Organization structure" },
   { value: "architecture", label: "Architecture Diagram", icon: Layers, description: "System architecture views" },
+  { value: "system_landscape", label: "System Landscape", icon: Layers, description: "All systems in scope and relationships" },
+  { value: "integration_architecture", label: "Integration Architecture", icon: Network, description: "Interfaces and data flows between systems" },
+  { value: "data_flow", label: "Data Flow Diagram", icon: GitBranch, description: "Data movement through systems" },
   { value: "network", label: "Network Diagram", icon: Network, description: "Network topology" },
+  { value: "raci_matrix", label: "RACI Matrix", icon: Users, description: "Responsibility assignment matrix" },
+  { value: "deployment", label: "Deployment Diagram", icon: Server, description: "Software deployment across infrastructure" },
   { value: "database_diagram", label: "Database Diagram", icon: Database, description: "ER diagrams" },
   { value: "workflow", label: "Workflow Diagram", icon: GitBranch, description: "Approval and automation flows" },
+  { value: "custom", label: "Custom", icon: FolderOpen, description: "User-defined diagram type" },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -149,7 +168,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 const SECTION_TYPE_FILTERS: Record<string, string[]> = {
   process: ["process_flow", "flowchart", "workflow"],
-  architecture: ["architecture", "network", "database_diagram"],
+  architecture: ["architecture", "network", "database_diagram", "system_landscape", "integration_architecture", "data_flow", "raci_matrix", "deployment", "custom"],
 };
 
 const PROCESS_TEMPLATES: Record<string, { name: string; description: string; nodes: any[]; edges: any[] }> = {
@@ -457,12 +476,11 @@ function FrameworksCatalogue({ onOpenFramework, onCreateNew }: { onOpenFramework
   const [groupBy, setGroupBy] = useState("none");
 
   const { data: frameworksList = [], isLoading } = useQuery<FrameworkItem[]>({
-    queryKey: ["/api/frameworks", { tenantId: 1 }],
-    queryFn: () => fetch("/api/frameworks?tenantId=1").then(r => r.json()),
+    queryKey: [`/api/frameworks?tenantId=1`],
   });
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/frameworks/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/frameworks", { tenantId: 1 }] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/frameworks?tenantId=1`] }),
   });
   const filtered = useMemo(() => frameworksList.filter(fw => {
     const matchesSearch = !search || fw.name.toLowerCase().includes(search.toLowerCase()) || fw.description?.toLowerCase().includes(search.toLowerCase());
@@ -751,9 +769,8 @@ function DocumentLinkDialog({ open, onClose, onSelect, itemText }: {
   open: boolean; onClose: () => void; onSelect: (doc: { id: number; title: string }) => void; itemText: string;
 }) {
   const [search, setSearch] = useState("");
-  const { data: allDocs = [] } = useQuery<{ id: number; title: string; type: string; status: string }[]>({
-    queryKey: ["/api/documents", { tenantId: 1 }],
-    queryFn: () => fetch("/api/documents?tenantId=1").then(r => r.json()),
+  const { data: allDocs = [], isLoading: docsLoading } = useQuery<{ id: number; title: string; type: string; status: string }[]>({
+    queryKey: [`/api/documents?tenantId=1`],
     enabled: open,
   });
 
@@ -1849,6 +1866,8 @@ type BpmTemplate = {
   processType: string | null;
   templateData: any;
   isSystem: boolean | null;
+  tier?: string | null;
+  submissionStatus?: string | null;
   createdAt: string;
 };
 
@@ -2101,6 +2120,10 @@ function DiagramCompareView({ asIsId, toBeId, onBack }: { asIsId: number; toBeId
         <Badge variant="outline" className="border-[#EF4444] text-[#EF4444]" data-testid="badge-removed-count">{counts.removed} removed</Badge>
         <Badge variant="outline" className="border-[#F59E0B] text-[#F59E0B]" data-testid="badge-changed-count">{counts.changed} changed</Badge>
       </div>
+      <BpmDeltaReportTable
+        asIsNodes={(asIsDiagram.canvasData as any)?.nodes || []}
+        toBeNodes={(toBeDiagram.canvasData as any)?.nodes || []}
+      />
     </div>
   );
 }
@@ -2111,6 +2134,7 @@ type BpmlEntry = {
   tenantId: number;
   processName: string;
   processDescription: string | null;
+  businessArea?: string | null;
   level1: string | null;
   level2: string | null;
   level3: string | null;
@@ -2146,6 +2170,7 @@ type TreeNodeData = {
 };
 
 function ProcessPortal() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("library");
   const [selectedLibrary, setSelectedLibrary] = useState<number | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
@@ -2156,38 +2181,56 @@ function ProcessPortal() {
   const [assignDialogNodeId, setAssignDialogNodeId] = useState<number | null>(null);
   const [selectedMenuNodeId, setSelectedMenuNodeId] = useState<number | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<{ node: TreeNodeData; entry: BpmlEntry } | null>(null);
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [videoLightbox, setVideoLightbox] = useState<string | null>(null);
 
   const { data: bpmlLibraries = [], isLoading: librariesLoading } = useQuery<BpmlTemplate[]>({
-    queryKey: ["/api/bpml/templates"],
-    queryFn: () => fetch("/api/bpml/templates?tenantId=1").then(r => r.json()),
+    queryKey: [`/api/bpml/templates?tenantId=1`],
   });
 
   const { data: allEntries = [], isLoading: entriesLoading } = useQuery<BpmlEntry[]>({
-    queryKey: ["/api/bpml/entries", { templateId: selectedLibrary }],
-    queryFn: () => fetch(`/api/bpml/entries?tenantId=1&templateId=${selectedLibrary}`).then(r => r.json()),
+    queryKey: [`/api/bpml/entries?tenantId=1&templateId=${selectedLibrary}`],
     enabled: !!selectedLibrary,
   });
 
-  const { data: allDiagrams = [] } = useQuery<BpmDiagram[]>({
-    queryKey: ["/api/bpm/diagrams?tenantId=1"],
+  const { data: allDiagrams = [], isLoading: diagramsLoading } = useQuery<BpmDiagram[]>({
+    queryKey: [`/api/bpm/diagrams?tenantId=1`],
   });
 
   const { data: menuNodes = [], isLoading: menuNodesLoading } = useQuery<any[]>({
-    queryKey: ["/api/portal/menu-nodes?tenantId=1"],
+    queryKey: [`/api/portal/menu-nodes?tenantId=1`],
   });
 
-  const { data: portalAssignments = [] } = useQuery<any[]>({
-    queryKey: ["/api/portal/assignments?tenantId=1"],
+  const { data: portalAssignments = [], isLoading: assignmentsLoading } = useQuery<any[]>({
+    queryKey: [`/api/portal/assignments?tenantId=1`],
   });
 
-  const { data: allResources = [] } = useQuery<ProcessResource[]>({
-    queryKey: ["/api/process-resources?tenantId=1"],
+  const { data: allResources = [], isLoading: resourcesLoading } = useQuery<ProcessResource[]>({
+    queryKey: [`/api/process-resources?tenantId=1`],
   });
 
-  const entries = useMemo(() =>
-    allEntries.filter(e => e.templateId === selectedLibrary),
-    [allEntries, selectedLibrary]
-  );
+  const { data: portalSettings, isLoading: portalSettingsLoading } = useQuery<any>({
+    queryKey: [`/api/bpm/portal-settings?tenantId=1${selectedLibrary ? `&libraryId=${selectedLibrary}` : ""}`],
+    enabled: !!selectedLibrary,
+  });
+
+  const areaColorMap: Record<string, string> = (portalSettings?.businessAreaColors as Record<string, string>) || {};
+
+  const entries = useMemo(() => {
+    let data = allEntries.filter(e => e.templateId === selectedLibrary);
+    if (portalSettings?.accessModel === "tag_based" && user?.id) {
+      const userAreaTags = (portalSettings.userAreaTags as Record<string, string[]>) || {};
+      const userTags = userAreaTags[user.id] || [];
+      if (userTags.length > 0) {
+        const tagSet = new Set(userTags.map(t => t.toLowerCase()));
+        data = data.filter(e => {
+          const area = (e.businessArea || e.level1 || "").trim().toLowerCase();
+          return area && tagSet.has(area);
+        });
+      }
+    }
+    return data;
+  }, [allEntries, selectedLibrary, portalSettings, user?.id]);
 
   const createMenuNodeMutation = useMutation({
     mutationFn: (body: any) => apiRequest("POST", "/api/portal/menu-nodes", body),
@@ -2367,7 +2410,9 @@ function ProcessPortal() {
           ) : (
             <span className="w-4 shrink-0" />
           )}
-          <div className={cn("w-2 h-2 rounded-full shrink-0", levelColorDots[node.level] || "bg-muted-foreground")} />
+          <div className={cn("w-2 h-2 rounded-full shrink-0", levelColorDots[node.level] || "bg-muted-foreground")}
+            style={node.level === 1 && areaColorMap[node.name] ? { backgroundColor: areaColorMap[node.name] } : undefined}
+          />
           <span className="text-sm min-w-0 truncate">{node.name}</span>
           <Badge variant="outline" className="text-[10px] shrink-0">{node.count}</Badge>
           <div className="flex items-center gap-1.5 shrink-0 ml-1" data-testid={`resource-indicators-${node.path.replace(/\s+/g, '-').toLowerCase()}`}>
@@ -2676,8 +2721,11 @@ function ProcessPortal() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden min-h-0" data-testid="portal-tabs">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="px-6 pt-4 pb-0 border-b bg-card shrink-0">
-          <h2 className="text-xl font-semibold mb-3" data-testid="text-portal-title">Process Portal</h2>
+        <div className="px-4 sm:px-6 pt-4 pb-0 border-b bg-card shrink-0">
+          <h2 className="text-lg sm:text-xl font-semibold mb-3" data-testid="text-portal-title">Process Portal</h2>
+          <div className="flex items-center gap-2 mb-3">
+            {selectedLibrary && <PortalSettingsDialog tenantId={1} libraryId={selectedLibrary} />}
+          </div>
           <TabsList className="h-12 bg-transparent border-0 gap-1" data-testid="portal-tabs-list">
             <TabsTrigger value="library" className="gap-2 rounded-lg data-[state=active]:bg-primary/10 data-[state=active]:text-primary" data-testid="tab-process-library">
               <div className="p-1 rounded-md bg-status-purple">
@@ -2700,9 +2748,7 @@ function ProcessPortal() {
           {!selectedLibrary ? (
             <div className="flex-1 overflow-auto p-6">
               {librariesLoading ? (
-                <div className="flex items-center justify-center py-16">
-                  <Loader2 className="h-8 w-8 text-primary animate-spin" data-testid="loader-libraries" />
-                </div>
+                <BpmCardGridSkeleton count={3} />
               ) : bpmlLibraries.filter(l => l.status === "active").length === 0 ? (
                 <Card>
                   <CardContent className="p-8 text-center">
@@ -2763,13 +2809,14 @@ function ProcessPortal() {
                   </Button>
                 </div>
               </div>
-              <div className="flex-1 flex overflow-hidden min-h-0">
-                <div className={cn("flex-1 flex flex-col overflow-hidden min-h-0 transition-all duration-300", selectedEntry ? "w-[60%]" : "w-full")}>
-                  <div className="flex-1 overflow-auto p-4">
-                    {entriesLoading ? (
-                      <div className="flex items-center justify-center py-16">
-                        <Loader2 className="h-8 w-8 text-primary animate-spin" data-testid="loader-entries" />
-                      </div>
+              <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
+                <div className={cn(
+                  "flex flex-col overflow-hidden min-h-0 transition-all duration-300",
+                  leftPanelCollapsed ? "w-0 opacity-0 overflow-hidden" : selectedEntry ? "w-full lg:w-[60%]" : "flex-1",
+                )}>
+                  <div className="flex-1 overflow-auto p-3 sm:p-4">
+                    {entriesLoading || portalSettingsLoading ? (
+                      <BpmLoadingState label="Loading process hierarchy…" />
                     ) : rootTreeNodes.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-16 text-center">
                         <Target className="h-10 w-10 text-muted-foreground mb-3" />
@@ -2838,9 +2885,17 @@ function ProcessPortal() {
                 </div>
 
                 {selectedEntry && (
-                  <div className="w-[40%] border-l p-4 overflow-auto transition-all duration-300" data-testid="detail-panel">
+                  <div className={cn(
+                    "border-t lg:border-t-0 lg:border-l p-3 sm:p-4 overflow-auto transition-all duration-300 min-h-0",
+                    leftPanelCollapsed ? "flex-1" : "w-full lg:w-[40%]",
+                  )} data-testid="detail-panel">
                     <div className="flex items-start justify-between gap-2 mb-4">
-                      <h3 className="text-base font-semibold" data-testid="detail-panel-name">{detailNode?.name}</h3>
+                      <div className="flex items-center gap-2">
+                        <Button size="icon" variant="ghost" onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)} title={leftPanelCollapsed ? "Show tree" : "Collapse tree"} data-testid="button-collapse-tree">
+                          {leftPanelCollapsed ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+                        </Button>
+                        <h3 className="text-base font-semibold" data-testid="detail-panel-name">{detailNode?.name}</h3>
+                      </div>
                       <Button
                         size="icon"
                         variant="ghost"
@@ -2867,68 +2922,27 @@ function ProcessPortal() {
 
                     <Separator className="mb-4" />
 
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                        <BookOpen className="h-4 w-4 text-muted-foreground" />
-                        Resources
-                      </h4>
-                      <div className="grid grid-cols-2 gap-2" data-testid="detail-resources">
-                        {[
-                          { label: "Process Flow Diagram", icon: Workflow, type: "process_diagram" },
-                          { label: "User Guide", icon: FileText, type: "user_guide" },
-                          { label: "Quick Reference", icon: FileQuestion, type: "quick_reference" },
-                          { label: "Simulation Video", icon: Video, type: "simulation" },
-                          { label: "SOP", icon: BookOpen, type: "sop" },
-                          { label: "Data Entry Guides", icon: Database, type: "template" },
-                        ].map(res => {
-                          const hasRes = res.type === "process_diagram"
-                            ? !!detailDiagram
-                            : allResources.some(r =>
-                                ((r.entryId && detailNode?.entries.some(e => e.id === r.entryId)) ||
-                                 (r.menuNodeId && menuNodes.some((mn: any) => mn.id === r.menuNodeId && mn.name === detailNode?.value))) &&
-                                (r.resourceType === res.type || (res.type === "simulation" && r.resourceType === "video"))
-                              );
-                          return (
-                            <div
-                              key={res.type}
-                              className={cn(
-                                "flex items-center gap-2 p-2 rounded-md border text-sm",
-                                hasRes ? "border-status-green/30 bg-status-green/5" : "border-border/50 opacity-50"
-                              )}
-                              data-testid={`detail-resource-${res.type}`}
-                            >
-                              <res.icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                              <span className="text-xs truncate">{res.label}</span>
-                              {hasRes && <div className="w-2 h-2 rounded-full bg-status-green ml-auto shrink-0" />}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {!allResources.some(r =>
-                        (r.entryId && detailNode?.entries.some(e => e.id === r.entryId)) ||
-                        (r.menuNodeId && menuNodes.some((mn: any) => mn.id === r.menuNodeId && mn.name === detailNode?.value))
-                      ) && (
-                        <div className="flex flex-col items-center py-4 text-center mt-2" data-testid="detail-no-resources">
-                          <BookOpen className="h-8 w-8 text-muted-foreground/30 mb-2" />
-                          <p className="text-xs text-muted-foreground">No resources available yet</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {detailDiagram && (
-                      <Button
-                        size="sm"
-                        className="w-full"
-                        onClick={() => setViewingDiagram(detailDiagram)}
-                        data-testid="button-view-process-map"
-                      >
-                        <Eye className="h-4 w-4 mr-1.5" />
-                        View Process Map
-                      </Button>
-                    )}
+                    <PortalAssetPanel
+                      tenantId={1}
+                      entryIds={detailNode?.entries.map(e => e.id) || []}
+                      entryLabel={detailNode?.name || ""}
+                      resources={allResources}
+                      resourcesLoading={resourcesLoading}
+                      diagramId={detailDiagram?.id}
+                      onViewDiagram={detailDiagram ? () => setViewingDiagram(detailDiagram) : undefined}
+                      onPlayVideo={(url) => setVideoLightbox(url)}
+                    />
                   </div>
                 )}
               </div>
+
+              {videoLightbox && (
+                <Dialog open={!!videoLightbox} onOpenChange={() => setVideoLightbox(null)}>
+                  <DialogContent className="max-w-3xl p-0 overflow-hidden" data-testid="video-lightbox">
+                    <video src={videoLightbox} controls autoPlay className="w-full" />
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
           )}
         </div>
@@ -2968,10 +2982,8 @@ function ProcessPortal() {
             </div>
           </div>
           <div className="flex-1 overflow-auto p-4">
-            {menuNodesLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 text-primary animate-spin" data-testid="loader-menu-nodes" />
-              </div>
+            {menuNodesLoading || diagramsLoading || assignmentsLoading ? (
+              <BpmLoadingState label="Loading menu tree…" />
             ) : rootMenuNodes.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <FolderTree className="h-10 w-10 text-muted-foreground mb-3" />
@@ -3075,6 +3087,9 @@ export default function BPMPage() {
   const [newLibraryName, setNewLibraryName] = useState("");
   const [newLibraryDescription, setNewLibraryDescription] = useState("");
   const [newLibraryVendor, setNewLibraryVendor] = useState("");
+  const [newLibrarySystemTag, setNewLibrarySystemTag] = useState("");
+  const [newLibraryIsTemplate, setNewLibraryIsTemplate] = useState(false);
+  const [newLibraryStatus, setNewLibraryStatus] = useState("draft");
 
   const [newTemplateName, setNewTemplateName] = useState("");
   const [newTemplateLibraryId, setNewTemplateLibraryId] = useState("");
@@ -3100,9 +3115,8 @@ export default function BPMPage() {
     queryKey: ["/api/bpm/templates"],
   });
 
-  const { data: libraries = [] } = useQuery<BpmLibrary[]>({
-    queryKey: ["/api/bpm/libraries", { tenantId: 1 }],
-    queryFn: () => fetch("/api/bpm/libraries?tenantId=1").then(r => r.json()),
+  const { data: libraries = [], isLoading: librariesLoading } = useQuery<BpmLibrary[]>({
+    queryKey: [`/api/bpm/libraries?tenantId=1`],
   });
 
   const createMutation = useMutation({
@@ -3127,11 +3141,14 @@ export default function BPMPage() {
   const createLibraryMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/bpm/libraries", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/bpm/libraries", { tenantId: 1 }] });
+      queryClient.invalidateQueries({ queryKey: [`/api/bpm/libraries?tenantId=1`] });
       setShowCreateLibraryDialog(false);
       setNewLibraryName("");
       setNewLibraryDescription("");
       setNewLibraryVendor("");
+      setNewLibrarySystemTag("");
+      setNewLibraryIsTemplate(false);
+      setNewLibraryStatus("draft");
       toast({ title: "Library Created", description: "New library has been created" });
     },
     onError: (error: any) => {
@@ -3253,6 +3270,10 @@ export default function BPMPage() {
       name: newLibraryName,
       description: newLibraryDescription || null,
       vendor: newLibraryVendor && newLibraryVendor !== "none" ? newLibraryVendor : null,
+      systemTag: newLibrarySystemTag.trim() || null,
+      isTemplateLibrary: newLibraryIsTemplate,
+      status: newLibraryStatus,
+      ownerId: null,
     });
   };
 
@@ -3413,17 +3434,18 @@ export default function BPMPage() {
                 }
               />
             </header>
-            <Tabs value={activeSection} onValueChange={(v) => setActiveSection(v as ActiveSection)} className="px-4">
-              <TabsList className="h-12 bg-transparent border-0 gap-1">
+            <Tabs value={activeSection} onValueChange={(v) => setActiveSection(v as ActiveSection)} className="px-2 sm:px-4">
+              <TabsList className="h-auto min-h-12 bg-transparent border-0 gap-1 flex flex-wrap overflow-x-auto pb-1 w-full justify-start">
                 {SUB_NAV_ITEMS.map(item => (
                   <TabsTrigger
                     key={item.key}
                     value={item.key}
-                    className="gap-2 rounded-lg data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                    className="gap-1.5 sm:gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-xs sm:text-sm"
                     data-testid={`tab-section-${item.key}`}
                   >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span className="hidden sm:inline">{item.label}</span>
+                    <span className="sm:hidden">{item.label.split(" ")[0]}</span>
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -3482,9 +3504,7 @@ export default function BPMPage() {
               onSaveAsTemplate={handleSaveAsTemplate}
               onNavigateToDiagram={async (diagramId: number) => {
                 try {
-                  const res = await fetch(`/api/bpm/diagrams/${diagramId}`);
-                  if (!res.ok) throw new Error("Failed to fetch diagram");
-                  const diagram = await res.json();
+                  const diagram = await bpmFetchJson<BpmDiagram>(`/api/bpm/diagrams/${diagramId}`);
                   handleOpenDiagram(diagram);
                 } catch {
                   toast({ title: "Could not open diagram", variant: "destructive" });
@@ -3654,6 +3674,37 @@ export default function BPMPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Status</Label>
+              <Select value={newLibraryStatus} onValueChange={setNewLibraryStatus}>
+                <SelectTrigger data-testid="select-library-status"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="archived">Archived</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>System Tag (optional)</Label>
+              <Input
+                value={newLibrarySystemTag}
+                onChange={(e) => setNewLibrarySystemTag(e.target.value)}
+                placeholder="e.g., sap-activate"
+                data-testid="input-library-system-tag"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="library-template-flag"
+                checked={newLibraryIsTemplate}
+                onCheckedChange={(v) => setNewLibraryIsTemplate(!!v)}
+                data-testid="checkbox-library-template"
+              />
+              <Label htmlFor="library-template-flag" className="text-sm font-normal cursor-pointer">
+                Template library (reusable diagram templates)
+              </Label>
             </div>
           </div>
           <DialogFooter>
@@ -3952,16 +4003,24 @@ export default function BPMPage() {
                                   <p className="text-xs text-muted-foreground">Created {new Date(tpl.createdAt).toLocaleDateString()}</p>
                                 </div>
                               </div>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => {
-                                  if (confirm("Delete this template?")) deleteTemplateMutation.mutate(tpl.id);
-                                }}
-                                data-testid={`button-delete-template-${tpl.id}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <BpmTemplatePipeline
+                                  templateId={tpl.id}
+                                  templateName={tpl.name}
+                                  tier={tpl.tier}
+                                  isSystem={tpl.isSystem}
+                                />
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    if (confirm("Delete this template?")) deleteTemplateMutation.mutate(tpl.id);
+                                  }}
+                                  data-testid={`button-delete-template-${tpl.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                           ))
                         )}

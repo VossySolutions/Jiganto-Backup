@@ -187,6 +187,9 @@ function Router() {
         <Route path="/modules/resource-planning" component={ResourcePlanningPage} />
         <Route path="/modules/resource-mgmt" component={ResourceManagementPage} />
         <Route path="/modules/bpm" component={BPMPage} />
+        <Route path="/bpm">
+          <Redirect to="/modules/bpm" />
+        </Route>
         <Route path="/modules/test-mgmt" component={TestManagementPage} />
         <Route path="/modules/clients/:id" component={LegacyClientsDetailRedirect} />
         <Route path="/modules/clients">

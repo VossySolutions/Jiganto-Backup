@@ -18,6 +18,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from "@/lib/utils";
 import { ArrowLeft, Plus, Search, Download, Image, Trash2, Users, Building2, Layout, Save, Loader2, ChevronDown, UserPlus, X, Upload, Palette, Type, LayoutDashboard, Table2, FileDown, FileUp, Circle, Square, ArrowDown, ArrowRight, Presentation, ClipboardCopy, LayoutGrid, List, Copy, ArrowUpDown, SortAsc, SortDesc, Calendar, MoreVertical } from "lucide-react";
 import { MondayTable, type ColumnDef } from "@/components/MondayTable";
+import { CHART_TYPE_THEME_COLORS, ENGAGEMENT_LEVELS } from "@shared/models/bpm-extensions";
+import { bpmFetchFormData } from "@/lib/bpm-api";
+import { BpmLoadingState, BpmCardGridSkeleton } from "@/components/bpm/BpmLoadingState";
 import type { OrgChart, OrgChartMember, OrgChartTemplate } from "@shared/models/orgchart";
 import type { Resource } from "@shared/models/resources";
 import {
@@ -49,6 +52,7 @@ const CHART_TYPES = [
   { value: "department", label: "Department" },
   { value: "project_team", label: "Project Team" },
   { value: "steering_committee", label: "Steering Committee" },
+  { value: "stakeholder_map", label: "Stakeholder Map" },
   { value: "company", label: "Company" },
   { value: "division", label: "Division" },
   { value: "custom", label: "Custom" },
@@ -721,6 +725,7 @@ function OrgChartEditorInner({
   const [photoShape, setPhotoShape] = useState<"round" | "square">("round");
   const [collapseLevel, setCollapseLevel] = useState<number | null>(null);
   const [showPeopleCount, setShowPeopleCount] = useState(false);
+  const [engagementFilter, setEngagementFilter] = useState<string>("all");
   const [presentationMode, setPresentationMode] = useState(false);
   const [viewMode, setViewMode] = useState<"canvas" | "table">("canvas");
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -732,13 +737,11 @@ function OrgChartEditorInner({
   const initialLoadDoneForDirty = useRef(false);
 
   const { data: members = [], isLoading: membersLoading } = useQuery<OrgChartMember[]>({
-    queryKey: ["/api/org-charts", chart.id, "members"],
-    queryFn: () => fetch(`/api/org-charts/${chart.id}/members`).then(r => r.json()),
+    queryKey: [`/api/org-charts/${chart.id}/members`],
   });
 
-  const { data: templates = [] } = useQuery<OrgChartTemplate[]>({
-    queryKey: ["/api/org-chart-templates", { tenantId: 1 }],
-    queryFn: () => fetch("/api/org-chart-templates?tenantId=1").then(r => r.json()),
+  const { data: templates = [], isLoading: templatesLoading } = useQuery<OrgChartTemplate[]>({
+    queryKey: [`/api/org-chart-templates?tenantId=1`],
   });
 
   const activeTemplate = useMemo(() => {
@@ -757,8 +760,22 @@ function OrgChartEditorInner({
         titleBgColor: DEFAULT_TEMPLATE_COLORS.titleBgColor,
       } as TemplateColors;
     }
+    if (activeTemplate) {
+      return getTemplateColors(activeTemplate);
+    }
+    const typeTheme = CHART_TYPE_THEME_COLORS[chartType];
+    if (typeTheme) {
+      return {
+        ...DEFAULT_TEMPLATE_COLORS,
+        nodeHeaderColor: typeTheme.header,
+        edgeColor: typeTheme.edge,
+        nodeBorderColor: typeTheme.edge,
+        badgeColor: `${typeTheme.header}22`,
+        badgeTextColor: typeTheme.header,
+      } as TemplateColors;
+    }
     return getTemplateColors(activeTemplate);
-  }, [activeTemplate, selectedPresetIndex]);
+  }, [activeTemplate, selectedPresetIndex, chartType]);
 
   const handleSelectTemplate = useCallback((id: number | null) => {
     setSelectedTemplateId(id);
@@ -800,9 +817,12 @@ function OrgChartEditorInner({
       const currentShowPeopleCount = showPeopleCountRef.current;
 
       const levelMap = computeNodeLevels(members);
-      const filteredMembers = currentCollapseLevel !== null
+      let filteredMembers = currentCollapseLevel !== null
         ? members.filter(m => (levelMap.get(m.id) || 1) <= currentCollapseLevel)
         : members;
+      if (chart.chartType === "stakeholder_map" && engagementFilter !== "all") {
+        filteredMembers = filteredMembers.filter(m => (m.engagementLevel || "neutral") === engagementFilter);
+      }
 
       const peopleCountMap = currentShowPeopleCount ? computeDescendantCounts(members) : undefined;
 
@@ -916,7 +936,7 @@ function OrgChartEditorInner({
   const updateChartMutation = useMutation({
     mutationFn: (data: Partial<OrgChart>) => apiRequest("PATCH", `/api/org-charts/${chart.id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/org-charts"] });
+      queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith("/api/org-charts") });
       toast({ title: "Chart updated" });
     },
   });
@@ -924,7 +944,7 @@ function OrgChartEditorInner({
   const createMemberMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", `/api/org-charts/${chart.id}/members`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/org-charts", chart.id, "members"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/org-charts/${chart.id}/members`] });
       toast({ title: "Member added" });
     },
   });
@@ -932,7 +952,7 @@ function OrgChartEditorInner({
   const updateMemberMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/org-charts/members/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/org-charts", chart.id, "members"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/org-charts/${chart.id}/members`] });
       toast({ title: "Member updated" });
     },
   });
@@ -946,7 +966,7 @@ function OrgChartEditorInner({
       return apiRequest("DELETE", `/api/org-charts/members/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/org-charts", chart.id, "members"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/org-charts/${chart.id}/members`] });
       setSelectedMember(null);
       toast({ title: "Member deleted" });
     },
@@ -1123,8 +1143,8 @@ function OrgChartEditorInner({
         templateId: selectedTemplateId,
         metadata: { memberCount: members.length, selectedPresetIndex },
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/org-charts", chart.id, "members"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/org-charts"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/org-charts/${chart.id}/members`] });
+      queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith("/api/org-charts") });
       hasUnsavedChanges.current = false;
       toast({ title: "Org chart saved" });
     } catch (err: any) {
@@ -1201,12 +1221,7 @@ function OrgChartEditorInner({
     const formData = new FormData();
     formData.append("image", file);
     try {
-      const response = await fetch("/api/org-charts/upload-photo", {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) throw new Error("Upload failed");
-      const { url } = await response.json();
+      const { url } = await bpmFetchFormData<{ url: string }>("/api/org-charts/upload-photo", formData);
       updateMemberMutation.mutate({ id: memberId, data: { photoUrl: url } });
       toast({ title: "Photo uploaded" });
     } catch (err: any) {
@@ -1299,7 +1314,7 @@ function OrgChartEditorInner({
         }
       }
 
-      queryClient.invalidateQueries({ queryKey: ["/api/org-charts", chart.id, "members"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/org-charts/${chart.id}/members`] });
       setShowImportDialog(false);
       setImportPreview(null);
       setImportFileName("");
@@ -1411,7 +1426,15 @@ function OrgChartEditorInner({
           className="h-8 text-sm font-semibold w-[180px]"
           data-testid="input-chart-name"
         />
-        <Select value={chartType} onValueChange={setChartType}>
+        <Select value={chartType} onValueChange={(v) => {
+          setChartType(v);
+          markDirty();
+          if (CHART_TYPE_THEME_COLORS[v] && selectedTemplateId === null && selectedPresetIndex === null) {
+            const theme = CHART_TYPE_THEME_COLORS[v];
+            const matchIdx = PRESET_TEMPLATES.findIndex(p => p.nodeHeaderColor === theme.header);
+            if (matchIdx >= 0) setSelectedPresetIndex(matchIdx);
+          }
+        }}>
           <SelectTrigger className="h-8 w-[160px] text-xs" data-testid="select-chart-type">
             <SelectValue />
           </SelectTrigger>
@@ -1506,6 +1529,19 @@ function OrgChartEditorInner({
             />
             <Label className="text-xs text-muted-foreground cursor-pointer">Count</Label>
           </div>
+        )}
+        {viewMode === "canvas" && chart.chartType === "stakeholder_map" && (
+          <Select value={engagementFilter} onValueChange={setEngagementFilter}>
+            <SelectTrigger className="h-8 w-[140px] text-xs" data-testid="select-engagement-filter">
+              <SelectValue placeholder="Engagement" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All engagement</SelectItem>
+              {ENGAGEMENT_LEVELS.map(l => (
+                <SelectItem key={l} value={l} className="capitalize">{l}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
         {viewMode === "canvas" && (
           <Button
@@ -1905,7 +1941,7 @@ function TemplateDialog({
   const createTemplateMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/org-chart-templates", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/org-chart-templates", { tenantId: 1 }] });
+      queryClient.invalidateQueries({ queryKey: [`/api/org-chart-templates?tenantId=1`] });
       toast({ title: "Template created" });
       setNewName("");
       setTab("apply");
@@ -1915,7 +1951,7 @@ function TemplateDialog({
   const deleteTemplateMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/org-chart-templates/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/org-chart-templates", { tenantId: 1 }] });
+      queryClient.invalidateQueries({ queryKey: [`/api/org-chart-templates?tenantId=1`] });
       toast({ title: "Template deleted" });
     },
   });
@@ -2155,9 +2191,8 @@ function AddMemberDialog({
   const [manualPhotoUrl, setManualPhotoUrl] = useState("");
   const [manualParent, setManualParent] = useState<string>("none");
 
-  const { data: resources = [] } = useQuery<Resource[]>({
-    queryKey: ["/api/resources", { tenantId: 1 }],
-    queryFn: () => fetch("/api/resources?tenantId=1").then(r => r.json()),
+  const { data: resources = [], isLoading: resourcesLoading } = useQuery<Resource[]>({
+    queryKey: [`/api/resources?tenantId=1`],
     enabled: open,
   });
 
@@ -2378,8 +2413,7 @@ function OrgChartCatalogue({ onSelectChart }: { onSelectChart: (chart: OrgChart)
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const { data: charts = [], isLoading } = useQuery<OrgChart[]>({
-    queryKey: ["/api/org-charts", { tenantId: 1 }],
-    queryFn: () => fetch("/api/org-charts?tenantId=1").then(r => r.json()),
+    queryKey: [`/api/org-charts?tenantId=1`],
   });
 
   const filteredAndSortedCharts = useMemo(() => {
@@ -2413,7 +2447,7 @@ function OrgChartCatalogue({ onSelectChart }: { onSelectChart: (chart: OrgChart)
   const createMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/org-charts", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/org-charts"] });
+      queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith("/api/org-charts") });
       setShowCreate(false);
       setCreateName("");
       setCreateDescription("");
@@ -2425,7 +2459,7 @@ function OrgChartCatalogue({ onSelectChart }: { onSelectChart: (chart: OrgChart)
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/org-charts/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/org-charts"] });
+      queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith("/api/org-charts") });
       toast({ title: "Org chart deleted" });
     },
   });
@@ -2434,7 +2468,7 @@ function OrgChartCatalogue({ onSelectChart }: { onSelectChart: (chart: OrgChart)
     mutationFn: ({ id, name }: { id: number; name: string }) =>
       apiRequest("POST", `/api/org-charts/${id}/duplicate`, { name }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/org-charts"] });
+      queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith("/api/org-charts") });
       setShowDuplicateDialog(null);
       setDuplicateName("");
       toast({ title: "Org chart duplicated" });
@@ -2565,9 +2599,7 @@ function OrgChartCatalogue({ onSelectChart }: { onSelectChart: (chart: OrgChart)
         )}
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 text-primary animate-spin" />
-          </div>
+          <BpmCardGridSkeleton count={6} />
         ) : charts.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-16">

@@ -108,6 +108,8 @@ export interface MondayTableProps<T extends { id: number | string }> {
   onConditionalFormatRulesChange?: (rules: ConditionalFormatRule[]) => void;
   /** Client-side pagination (default: enabled). Pass false to show all rows. */
   pagination?: boolean | { defaultPageSize?: number; resetKey?: string | number };
+  /** Highlights matching text in read-only text cells (case-insensitive). */
+  searchHighlightTerm?: string;
 }
 
 const columnTypeIcons: Record<ColumnType, typeof Text> = {
@@ -541,6 +543,17 @@ function NumberCell({ value, currency }: { value: number | string | null; curren
 
 type NavigationDirection = "tab" | "shift-tab" | "enter" | "shift-enter" | "arrow-left" | "arrow-right" | "arrow-up" | "arrow-down";
 
+function highlightTextParts(text: string, term: string): React.ReactNode {
+  if (!term.trim()) return text;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = text.split(new RegExp(`(${escaped})`, "gi"));
+  return parts.map((part, i) =>
+    part.toLowerCase() === term.toLowerCase()
+      ? <mark key={i} className="bg-yellow-200 dark:bg-yellow-900 rounded px-0.5">{part}</mark>
+      : part,
+  );
+}
+
 function TextCell({ 
   value,
   editable,
@@ -550,6 +563,7 @@ function TextCell({
   onCommit,
   onCancel,
   onNavigate,
+  searchHighlightTerm,
 }: { 
   value: string | null;
   editable?: boolean;
@@ -559,6 +573,7 @@ function TextCell({
   onCommit?: () => void;
   onCancel?: () => void;
   onNavigate?: (direction: NavigationDirection) => void;
+  searchHighlightTerm?: string;
 }) {
   const [editValue, setEditValue] = useState(value || "");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -626,7 +641,9 @@ function TextCell({
         }
       }}
     >
-      {value || <span className="text-muted-foreground italic">Empty</span>}
+      {value
+        ? (searchHighlightTerm ? highlightTextParts(value, searchHighlightTerm) : value)
+        : <span className="text-muted-foreground italic">Empty</span>}
     </span>
   );
 }
@@ -745,6 +762,7 @@ interface CellRendererProps<T> {
   onCommit?: () => void;
   onCancel?: () => void;
   onNavigate?: (direction: NavigationDirection) => void;
+  searchHighlightTerm?: string;
 }
 
 function CellRenderer<T>({ 
@@ -758,6 +776,7 @@ function CellRenderer<T>({
   onCommit,
   onCancel,
   onNavigate,
+  searchHighlightTerm,
 }: CellRendererProps<T>) {
   const editable = column.editable && !!onEdit;
 
@@ -860,6 +879,7 @@ function CellRenderer<T>({
           onCommit={onCommit}
           onCancel={onCancel}
           onNavigate={onNavigate}
+          searchHighlightTerm={searchHighlightTerm}
         />
       );
   }
@@ -894,6 +914,7 @@ export function MondayTable<T extends { id: number | string }>({
   defaultConditionalFormatRules,
   onConditionalFormatRulesChange,
   pagination = true,
+  searchHighlightTerm,
 }: MondayTableProps<T>) {
   const [selectedIds, setSelectedIds] = useState<Set<number | string>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -1432,6 +1453,7 @@ export function MondayTable<T extends { id: number | string }>({
                 isFocused={isCellFocused}
                 onStartEdit={() => handleCellStartEdit(item.id, column.id)}
                 onCommit={handleCellCommit}
+                searchHighlightTerm={searchHighlightTerm}
                 onCancel={handleCellCancel}
                 onNavigate={navigateFromCell}
               />

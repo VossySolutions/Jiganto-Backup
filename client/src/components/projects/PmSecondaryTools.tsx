@@ -19,6 +19,11 @@ export function PmTeamOrgTool({ projectId }: ToolProps) {
   const { data: team = [], isLoading } = useQuery<any[]>({
     queryKey: [`/api/pm/projects/${projectId}/team`],
   });
+  const { data: orgCharts = [] } = useQuery<any[]>({
+    queryKey: ["/api/org-charts", { tenantId: 1 }],
+    queryFn: () => fetch("/api/org-charts?tenantId=1").then(r => r.json()),
+  });
+  const projectChart = orgCharts.find((c: any) => c.metadata?.projectId === projectId);
 
   if (isLoading) {
     return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
@@ -28,7 +33,15 @@ export function PmTeamOrgTool({ projectId }: ToolProps) {
     <div className="space-y-4">
       <Card>
         <CardContent className="p-6">
-          <h3 className="text-sm font-semibold mb-4">Project Team & Org Structure</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold">Project Team & Org Structure</h3>
+            <Link href={projectChart ? `/modules/bpm` : `/modules/bpm`}>
+              <Button variant="outline" size="sm">
+                <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                {projectChart ? "Open Org Chart in BPM" : "Create in BPM"}
+              </Button>
+            </Link>
+          </div>
           {team.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">No team members assigned. Add members via Project Settings → People.</p>
           ) : (
@@ -754,13 +767,14 @@ export function PmBpmTool({ projectId }: ToolProps) {
   const { data: diagrams = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/bpm/diagrams"],
   });
+  const projectDiagrams = diagrams.filter((d: any) => d.metadata?.projectId === projectId);
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold">{isLoading ? "…" : diagrams.length}</div>
+            <div className="text-2xl font-bold">{isLoading ? "…" : projectDiagrams.length || diagrams.length}</div>
             <div className="text-xs text-muted-foreground">BPM Diagrams</div>
           </CardContent>
         </Card>
@@ -773,10 +787,15 @@ export function PmBpmTool({ projectId }: ToolProps) {
       </div>
       <Card>
         <CardContent className="p-8 text-center space-y-4">
-          <p className="text-sm text-muted-foreground">Create and edit process flows in the BPM module.</p>
-          <Link href="/modules/bpm">
-            <Button variant="outline"><ExternalLink className="h-4 w-4 mr-2" /> Open BPM</Button>
-          </Link>
+          <p className="text-sm text-muted-foreground">Create and edit process flows, BPML, and org charts in the BPM module.</p>
+          <div className="flex gap-2 justify-center flex-wrap">
+            <Link href="/modules/bpm">
+              <Button variant="outline"><ExternalLink className="h-4 w-4 mr-2" /> Open BPM</Button>
+            </Link>
+            <Link href="/bpm">
+              <Button variant="ghost" size="sm">Process Portal</Button>
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>

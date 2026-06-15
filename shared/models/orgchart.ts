@@ -5,7 +5,7 @@ import { relations, sql } from "drizzle-orm";
 import { tenants } from "../schema";
 import { resources } from "./resources";
 
-export const orgChartTypeEnum = ["department", "project_team", "steering_committee", "company", "division", "custom"] as const;
+export const orgChartTypeEnum = ["department", "project_team", "steering_committee", "stakeholder_map", "company", "division", "custom"] as const;
 
 export const orgChartTemplates = pgTable("org_chart_templates", {
   id: serial("id").primaryKey(),
@@ -68,8 +68,11 @@ export const orgChartMembers = pgTable("org_chart_members", {
   name: text("name").notNull(),
   title: text("title"),
   department: text("department"),
+  organisation: text("organisation"),
   email: text("email"),
   phone: text("phone"),
+  engagementLevel: text("engagement_level"),
+  notes: text("notes"),
   photoUrl: text("photo_url"),
   parentMemberId: integer("parent_member_id"),
   sortOrder: integer("sort_order").notNull().default(0),
