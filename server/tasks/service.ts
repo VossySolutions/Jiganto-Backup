@@ -424,6 +424,51 @@ export async function listAggregatedTasks(
     });
   }
 
+  try {
+    const { sdTickets } = await import("@shared/models/service-desk");
+    const sdRows = await db
+      .select({ ticket: sdTickets, assignee: { id: users.id, firstName: users.firstName, lastName: users.lastName, profileImageUrl: users.profileImageUrl } })
+      .from(sdTickets)
+      .leftJoin(users, eq(sdTickets.assignedAgentId, users.id))
+      .where(
+        and(
+          eq(sdTickets.tenantId, scope.tenantId),
+          eq(sdTickets.assignedAgentId, scope.userId),
+          eq(sdTickets.source, "service_desk"),
+        ),
+      );
+
+    for (const row of sdRows) {
+      const closed = ["closed", "resolved", "completed", "answered"].includes(row.ticket.status);
+      if (closed) continue;
+      const status = normalizeStatus(
+        row.ticket.status === "in_progress" ? "in_progress" : row.ticket.status === "pending" ? "in_progress" : "todo",
+      );
+      items.push({
+        id: buildCompositeId("helpdesk", `sd-${row.ticket.id}`),
+        title: `${row.ticket.ref}: ${row.ticket.title}`,
+        description: null,
+        status,
+        priority: normalizePriority(row.ticket.priority === "p1" ? "urgent" : row.ticket.priority === "p2" ? "high" : "medium"),
+        source: "helpdesk",
+        assigneeId: row.ticket.assignedAgentId,
+        assignee: row.assignee?.id ? row.assignee : undefined,
+        dueDate: row.ticket.slaResolutionDeadline ? row.ticket.slaResolutionDeadline.toISOString().slice(0, 10) : null,
+        workspaceId: row.ticket.clientId,
+        workspaceName: "Service Desk",
+        workspaceColor: "#14B8A6",
+        contextLabel: "Service desk ticket",
+        contextHref: `/modules/service-desk?ticket=${row.ticket.id}`,
+        isOverdue: isOverdue(row.ticket.slaResolutionDeadline ? row.ticket.slaResolutionDeadline.toISOString().slice(0, 10) : null, status),
+        isReadOnly: false,
+        externalKind: "crm",
+        externalId: row.ticket.id,
+      });
+    }
+  } catch (err) {
+    console.warn("[tasks] service desk ticket aggregation skipped:", err);
+  }
+
   const signoffRows = await db
     .select({
       signer: signoffSigners,

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { copyTextToClipboard, documentModuleUrl } from "@/lib/module-links";
@@ -1674,6 +1674,52 @@ function PlaceholderTab({ title, description, icon: Icon }: {
   );
 }
 
+// ─── SIMPLE TABLE ─────────────────────────────────────────────────────────────
+
+type SimpleColDef<T> = {
+  key: string;
+  label: string;
+  width: string;
+  render: (row: T) => ReactNode;
+};
+
+function SimpleRenderTable<T extends { id: number }>({
+  data,
+  columns,
+  rowTestId,
+}: {
+  data: T[];
+  columns: SimpleColDef<T>[];
+  rowTestId?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/30">
+            {columns.map((col) => (
+              <th key={col.key} className="text-left py-2.5 px-3 text-xs font-semibold text-muted-foreground" style={{ width: col.width }}>
+                {col.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row) => (
+            <tr key={row.id} className="border-b border-border/50 hover:bg-muted/20" data-testid={rowTestId ? `${rowTestId}-${row.id}` : undefined}>
+              {columns.map((col) => (
+                <td key={col.key} className="py-2.5 px-3 align-middle">
+                  {col.render(row)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── OBJECTIVES TAB ──────────────────────────────────────────────────────────
 
 function ObjectivesTab({ objectives, goals }: { objectives: Objective[]; goals: Goal[] }) {
@@ -1685,7 +1731,7 @@ function ObjectivesTab({ objectives, goals }: { objectives: Objective[]; goals: 
     return <Badge className={cn("text-[10px] font-semibold border-0", cls)}>{label}</Badge>;
   };
 
-  const cols: ColumnDef<Objective>[] = [
+  const cols: SimpleColDef<Objective>[] = [
     { key: "title", label: "Objective", width: "30%", render: (r) => <span className="font-medium text-sm">{r.title}</span> },
     { key: "goalId", label: "Parent Goal", width: "22%", render: (r) => { const g = goals.find(g => g.id === r.goalId); return g ? <span className="text-xs text-muted-foreground">{g.title}</span> : <span className="text-muted-foreground/40">—</span>; } },
     { key: "ownerName", label: "Owner", width: "13%", render: (r) => <span className="text-xs">{r.ownerName || "—"}</span> },
@@ -1716,7 +1762,7 @@ function ObjectivesTab({ objectives, goals }: { objectives: Objective[]; goals: 
         </Card>
       ) : (
         <div className="w-full max-w-full min-w-0 overflow-x-hidden">
-          <MondayTable data={objectives} columns={cols} rowTestId="objective-row" />
+          <SimpleRenderTable data={objectives} columns={cols} rowTestId="objective-row" />
         </div>
       )}
     </div>
@@ -1734,7 +1780,7 @@ function OkrsTab({ okrs, goals, objectives }: { okrs: Okr[]; goals: Goal[]; obje
     return <Badge className={cn("text-[10px] font-semibold border-0", cls)}>{label}</Badge>;
   };
 
-  const cols: ColumnDef<Okr>[] = [
+  const cols: SimpleColDef<Okr>[] = [
     { key: "title", label: "OKR Title", width: "28%", render: (r) => <span className="font-medium text-sm">{r.title}</span> },
     { key: "objectiveId", label: "Objective", width: "22%", render: (r) => { const o = objectives.find(o => o.id === r.objectiveId); return o ? <span className="text-xs text-muted-foreground">{o.title}</span> : <span className="text-muted-foreground/40">—</span>; } },
     { key: "goalId", label: "Goal", width: "18%", render: (r) => { const g = goals.find(g => g.id === r.goalId); return g ? <span className="text-xs text-muted-foreground">{g.title}</span> : <span className="text-muted-foreground/40">—</span>; } },
@@ -1760,7 +1806,7 @@ function OkrsTab({ okrs, goals, objectives }: { okrs: Okr[]; goals: Goal[]; obje
         </Card>
       ) : (
         <div className="w-full max-w-full min-w-0 overflow-x-hidden">
-          <MondayTable data={okrs} columns={cols} rowTestId="okr-row" />
+          <SimpleRenderTable data={okrs} columns={cols} rowTestId="okr-row" />
         </div>
       )}
     </div>
@@ -1778,7 +1824,7 @@ function KpisTab({ kpis, goals }: { kpis: Kpi[]; goals: Goal[] }) {
     return <Badge className={cn("text-[10px] font-semibold border-0", cls)}>{label}</Badge>;
   };
 
-  const cols: ColumnDef<Kpi>[] = [
+  const cols: SimpleColDef<Kpi>[] = [
     { key: "name", label: "KPI Name", width: "25%", render: (r) => <span className="font-medium text-sm">{r.name}</span> },
     { key: "goalId", label: "Linked Goal", width: "22%", render: (r) => { const g = goals.find(g => g.id === r.goalId); return g ? <span className="text-xs text-muted-foreground">{g.title}</span> : <span className="text-muted-foreground/40">—</span>; } },
     { key: "indicatorType", label: "Type", width: "10%", render: (r) => <span className="text-xs capitalize">{r.indicatorType || "—"}</span> },
@@ -1809,7 +1855,7 @@ function KpisTab({ kpis, goals }: { kpis: Kpi[]; goals: Goal[] }) {
         </Card>
       ) : (
         <div className="w-full max-w-full min-w-0 overflow-x-hidden">
-          <MondayTable data={kpis} columns={cols} rowTestId="kpi-row" />
+          <SimpleRenderTable data={kpis} columns={cols} rowTestId="kpi-row" />
         </div>
       )}
     </div>
@@ -1943,8 +1989,8 @@ function ReviewsTab({
     const result: Array<{ type: string; title: string; reason: string; severity: "high" | "medium" }> = [];
 
     // Initiatives overdue and not completed
-    initiatives.filter(i => i.endDate && new Date(i.endDate).getTime() < now && i.status !== "completed").forEach(i => {
-      const daysOverdue = Math.round((now - new Date(i.endDate!).getTime()) / 86400000);
+    initiatives.filter(i => i.dueDate && new Date(i.dueDate).getTime() < now && i.status !== "completed").forEach(i => {
+      const daysOverdue = Math.round((now - new Date(i.dueDate!).getTime()) / 86400000);
       result.push({ type: "initiative", title: i.title, reason: `${daysOverdue}d overdue`, severity: daysOverdue > 30 ? "high" : "medium" });
     });
 

@@ -401,7 +401,7 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
 
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
       ["Code", "Objective Code", "Title", "Description", "Owner Name", "Department", "RAG Status", "Priority", "Progress %", "Start Date", "End Date"],
-      ...[...initiativesMap.values()].map((ini, i) => [`I${String(i + 1).padStart(2, "0")}`, (ini as StrategyEntity & { _oCode?: string })._oCode || "", getEntityTitle(ini), ini.description || "", getOwner(ini) || "", ini.departmentName || "", ragLabel(ini.ragStatus || ""), ini.priority || "", ini.progress ?? "", ini.startDate || "", (ini as StrategyEntity & { dueDate?: string }).dueDate || ini.endDate || ""]),
+      ...[...initiativesMap.values()].map((ini, i) => [`I${String(i + 1).padStart(2, "0")}`, (ini as StrategyEntity & { _oCode?: string })._oCode || "", getEntityTitle(ini), ini.description || "", getOwner(ini) || "", ini.departmentName || "", ragLabel(ini.ragStatus || ""), ini.priority || "", ini.progress ?? "", (ini as StrategyEntity & { startDate?: string }).startDate || "", (ini as StrategyEntity & { dueDate?: string; endDate?: string }).dueDate || (ini as StrategyEntity & { endDate?: string }).endDate || ""]),
     ]), "Initiatives");
 
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
@@ -411,7 +411,7 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
 
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
       ["Code", "Goal Code", "Name", "Description", "Owner Name", "KPI Type", "Current Value", "Target Value", "Unit", "RAG Status", "Target Date"],
-      ...[...kpisMap.values()].map((k, i) => [`P${String(i + 1).padStart(2, "0")}`, (k as StrategyEntity & { _gCode?: string })._gCode || "", k.name || getEntityTitle(k), k.description || "", getOwner(k) || "", k.kpiType || "", k.currentValue ?? "", k.targetValue ?? "", k.unit || "", ragLabel(k.ragStatus || ""), k.targetDate || ""]),
+      ...[...kpisMap.values()].map((k, i) => [`P${String(i + 1).padStart(2, "0")}`, (k as StrategyEntity & { _gCode?: string })._gCode || "", k.name || getEntityTitle(k), k.description || "", getOwner(k) || "", (k as StrategyEntity & { kpiType?: string }).kpiType || "", (k as StrategyEntity & { currentValue?: unknown }).currentValue ?? "", (k as StrategyEntity & { targetValue?: unknown }).targetValue ?? "", (k as StrategyEntity & { unit?: string }).unit || "", ragLabel(k.ragStatus || ""), k.targetDate || ""]),
     ]), "KPIs");
 
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
@@ -437,7 +437,8 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
 
   const importMutation = useMutation({
     mutationFn: async (rows: Record<string, unknown>[]) => {
-      return apiRequest("POST", "/api/business/bulk-import", { rows });
+      const res = await apiRequest("POST", "/api/business/bulk-import", { rows });
+      return res.json() as Promise<{ created?: Record<string, number>; skipped?: number }>;
     },
     onSuccess: (data: { created?: Record<string, number>; skipped?: number }) => {
       BUSINESS_IMPORT_QUERY_KEYS.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
@@ -748,6 +749,7 @@ export function StrategyMap({ onCellClick }: StrategyMapProps) {
           focusedLayerItems={focusedLayerItems}
           subLayers={SUB_LAYERS}
           collapsedLayers={collapsedLayers}
+          ragFilter={ragFilter}
           onSelectStrategy={(id) => setFocusedStrategyId(id)}
           onToggleLayer={toggleLayerCollapse}
           onCellClick={handleCellClick}

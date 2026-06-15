@@ -66,7 +66,7 @@ export function LandingPage() {
     enabled: !!pendingInviteToken,
     queryFn: async () => {
       const res = await fetch(
-        `/api/auth/invitations/${encodeURIComponent(pendingInviteToken)}/preview`,
+        `/api/auth/invitations/${encodeURIComponent(pendingInviteToken!)}/preview`,
       );
       if (!res.ok) {
         const text = await res.text();

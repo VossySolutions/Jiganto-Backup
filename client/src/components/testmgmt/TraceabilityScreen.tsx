@@ -87,7 +87,10 @@ export function TraceabilityScreen() {
   }
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/tm/requirements", { ...data, tenantId: 1, projectId: activeProjectId }),
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/tm/requirements", { ...data, tenantId: 1, projectId: activeProjectId });
+      return res.json() as Promise<TmRequirement>;
+    },
     onSuccess: (created: TmRequirement) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tm/requirements"] });
       setCreating(false);

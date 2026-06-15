@@ -153,9 +153,8 @@ import {
   type ClientUser, type InsertClientUser,
   type ClientModuleVisibility, type ClientInvitation,
 } from "@shared/models/clients";
-import { documents } from "@shared/models/documents";
 import { db } from "./db";
-import { eq, and, desc, isNull, or, sql, inArray, gt, lt, ne } from "drizzle-orm";
+import { eq, and, desc, asc, isNull, or, sql, inArray, gt, lt, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { users } from "@shared/models/auth";
 import { orgMemberships } from "@shared/models/permissions";
@@ -172,6 +171,7 @@ export interface IStorage {
   // Tenants
   getTenants(): Promise<Tenant[]>;
   getTenant(id: number): Promise<Tenant | undefined>;
+  getDefaultTenant(): Promise<Tenant | undefined>;
   getTenantBySlug(slug: string): Promise<Tenant | undefined>;
   createTenant(tenant: InsertTenant): Promise<Tenant>;
   updateTenant(id: number, updates: Partial<InsertTenant>): Promise<Tenant | undefined>;
@@ -1159,7 +1159,7 @@ export interface IStorage {
   getSurvey(id: number): Promise<SurveyWithDetails | undefined>;
   getSurveyByToken(token: string): Promise<SurveyWithDetails | undefined>;
   createSurvey(data: InsertSurvey): Promise<Survey>;
-  updateSurvey(id: number, data: Partial<InsertSurvey>): Promise<Survey | undefined>;
+  updateSurvey(id: number, data: Partial<InsertSurvey> & Partial<Pick<Survey, "sentAt" | "closedAt">>): Promise<Survey | undefined>;
   deleteSurvey(id: number): Promise<void>;
   getSurveyQuestions(surveyId: number): Promise<SurveyQuestion[]>;
   createSurveyQuestion(data: InsertSurveyQuestion): Promise<SurveyQuestion>;
@@ -1233,6 +1233,11 @@ export class DatabaseStorage implements IStorage {
 
   async getTenant(id: number): Promise<Tenant | undefined> {
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id));
+    return tenant;
+  }
+
+  async getDefaultTenant(): Promise<Tenant | undefined> {
+    const [tenant] = await db.select().from(tenants).orderBy(asc(tenants.id)).limit(1);
     return tenant;
   }
 
@@ -1724,12 +1729,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createChannel(insertChannel: InsertChannel): Promise<Channel> {
-    const [channel] = await db.insert(channels).values(insertChannel).returning();
+    const values = {
+      ...insertChannel,
+      bridgeConfig: insertChannel.bridgeConfig as ChannelBridgeConfig | null | undefined,
+    };
+    const [channel] = await db.insert(channels).values(values).returning();
     return channel;
   }
 
   async updateChannel(id: number, updates: Partial<InsertChannel>): Promise<Channel | undefined> {
-    const [channel] = await db.update(channels).set({ ...updates, updatedAt: new Date() }).where(eq(channels.id, id)).returning();
+    const { bridgeConfig, ...rest } = updates;
+    const payload = {
+      ...rest,
+      ...(bridgeConfig !== undefined ? { bridgeConfig: bridgeConfig as ChannelBridgeConfig | null } : {}),
+      updatedAt: new Date(),
+    };
+    const [channel] = await db.update(channels).set(payload).where(eq(channels.id, id)).returning();
     return channel;
   }
 
@@ -2961,8 +2976,8 @@ export class DatabaseStorage implements IStorage {
         discountPercent: r.discountPercent,
         status: r.status,
         sortOrder: i,
-        breaks: r.breaks,
-        weekOverrides: r.weekOverrides,
+        breaks: (r.breaks ?? []) as InsertOpportunityResourceRow["breaks"],
+        weekOverrides: (r.weekOverrides ?? {}) as InsertOpportunityResourceRow["weekOverrides"],
       });
     }
     return newPlan;
@@ -4458,6 +4473,7 @@ export class DatabaseStorage implements IStorage {
       if (g.reviewCadence) {
         const cadenceDays = g.reviewCadence === "monthly" ? 30 : g.reviewCadence === "quarterly" ? 90 : 365;
         const lastReview = g.updatedAt;
+        if (!lastReview) continue;
         const daysSince = Math.floor((new Date().getTime() - new Date(lastReview).getTime()) / 86400000);
         if (daysSince > cadenceDays) {
           result.push({ entityType: "goal", entityId: g.id, entityTitle: g.title, ownerName: g.ownerName, nextReviewDate: "", reviewCadence: g.reviewCadence, daysOverdue: daysSince - cadenceDays });
@@ -6372,6 +6388,7 @@ export class DatabaseStorage implements IStorage {
         resourceId: resourceAllocations.resourceId,
         projectId: resourceAllocations.projectId,
         projectName: resourceAllocations.projectName,
+        opportunityRowId: resourceAllocations.opportunityRowId,
         allocationType: resourceAllocations.allocationType,
         allocationPercentage: resourceAllocations.allocationPercentage,
         daysPerWeek: resourceAllocations.daysPerWeek,
@@ -7400,7 +7417,7 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async updateSurvey(id: number, data: Partial<InsertSurvey>): Promise<Survey | undefined> {
+  async updateSurvey(id: number, data: Partial<InsertSurvey> & Partial<Pick<Survey, "sentAt" | "closedAt">>): Promise<Survey | undefined> {
     const [row] = await db.update(surveys)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(surveys.id, id))

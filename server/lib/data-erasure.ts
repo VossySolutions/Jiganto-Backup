@@ -84,7 +84,6 @@ export async function anonymizeUserData(userId: string, orgId: number): Promise<
       .set({
         jobTitle: null,
         department: null,
-        updatedAt: new Date(),
       })
       .where(eq(profiles.id, profile.id));
   }

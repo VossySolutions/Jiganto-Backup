@@ -363,7 +363,6 @@ export function registerResourcesRoutes(app: Express): void {
       status: "pending",
       createdBy: ctx.userId,
       createdByName: body.signerName,
-      sentAt: new Date(),
     });
 
     const token = crypto.randomBytes(32).toString("hex");

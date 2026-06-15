@@ -1483,7 +1483,7 @@ export function ProfessionalGanttChart({ projectId }: ProfessionalGanttChartProp
       width: 100,
       editable: true,
     },
-  ], [toggleExpand, TYPE_COLORS]);
+  ], [toggleExpand, TYPE_COLORS]) as ColDef<GanttRow>[];
 
   const columnDefs = useMemo(() => 
     baseColumnDefs.filter(col => !hiddenColumns.has(col.field || "")),

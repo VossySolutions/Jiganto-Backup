@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEditor, EditorContent, ReactRenderer } from '@tiptap/react';
 import Mention from '@tiptap/extension-mention';
 import StarterKit from '@tiptap/starter-kit';

@@ -567,31 +567,21 @@ export function GanttView({ projectId }: GanttViewProps) {
         onOpenChange={setPhaseDialogOpen}
         projectId={projectId}
         phase={editingPhase}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "phases"] });
-        }}
+        existingPhasesCount={phases.length}
       />
 
       <WorkstreamFormDialog
         open={workstreamDialogOpen}
         onOpenChange={setWorkstreamDialogOpen}
         projectId={projectId}
-        phases={phases}
         workstream={editingWorkstream}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: [`/api/pm/workstreams?projectId=${projectId}`] });
-        }}
       />
 
       <TaskFormDialog
         open={taskDialogOpen}
         onOpenChange={setTaskDialogOpen}
         projectId={projectId}
-        phases={phases}
         task={editingTask}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "tasks"] });
-        }}
       />
     </div>
   );

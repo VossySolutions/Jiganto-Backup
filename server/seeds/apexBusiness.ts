@@ -189,6 +189,7 @@ export async function seedApexBusinessData(tenantId: number) {
   ];
 
   const objMap: Record<string, number> = {};
+  const goalFirstObjMap: Record<string, number> = {};
   for (const [key, goalKey, title, owner, deptName, rawRag, rawProg, date] of objectivesRaw) {
     const [row] = await db.insert(objectives).values({
       tenantId,
@@ -203,6 +204,7 @@ export async function seedApexBusinessData(tenantId: number) {
       targetDate: date,
     }).returning({ id: objectives.id });
     objMap[key] = row.id;
+    if (!goalFirstObjMap[goalKey]) goalFirstObjMap[goalKey] = row.id;
   }
 
   // ── 5. Initiatives ─────────────────────────────────────────────────────────
@@ -284,7 +286,7 @@ export async function seedApexBusinessData(tenantId: number) {
   for (const [key, , goalKey, title, description, , , deptName, rawRag, rawProg, date] of okrsRaw) {
     const [row] = await db.insert(okrs).values({
       tenantId,
-      goalId: goalMap[goalKey] ?? null,
+      objectiveId: goalFirstObjMap[goalKey] ?? null,
       title,
       description,
       departmentId: dept(deptName),

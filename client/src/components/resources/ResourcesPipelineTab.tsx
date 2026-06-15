@@ -41,6 +41,9 @@ export function ResourcesPipelineTab({ onViewPlan, onGapAnalysis }: Props) {
     queryKey: ["/api/resources/pipeline-view"],
   });
 
+  const items = data?.items ?? [];
+  const pagination = useTablePagination(items, { resetKey: items.length, enabled: !isLoading && !isError });
+
   const flagMutation = useMutation({
     mutationFn: (oppId: number) => apiRequest("POST", `/api/resources/pipeline/${oppId}/flag-capacity`, {}),
     onSuccess: () => toast({ title: "Capacity concern flagged to opportunity owner" }),

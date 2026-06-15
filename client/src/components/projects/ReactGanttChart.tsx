@@ -122,7 +122,7 @@ function buildGanttData(
       depType: "FS",
       notes: (ph as any).description ?? "",
       color: "#0891b2",
-      wbs: ph.wbsCode || "",
+      wbs: (ph as { wbsCode?: string }).wbsCode || "",
     });
   });
 

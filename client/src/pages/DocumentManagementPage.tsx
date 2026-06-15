@@ -682,7 +682,7 @@ export default function DocumentManagementPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/documents", doc.id, "versions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
       queryClient.invalidateQueries({ queryKey: ["/api/documents/all"] });
-      toast({ title: "Version restored", description: `Document restored to v${doc.version}` });
+      toast({ title: "Version restored", description: `Document restored to v${(doc as { version?: number }).version ?? "?"}` });
     },
     onError: (err: Error) => {
       toast({ title: "Restore failed", description: err.message, variant: "destructive" });
@@ -2827,7 +2827,7 @@ export default function DocumentManagementPage() {
                             </p>
                           </div>
                         </div>
-                        {version.version !== selectedDocument.version && (
+                        {version.version !== (selectedDocument as { version?: number }).version && (
                           <Button
                             variant="outline"
                             size="sm"

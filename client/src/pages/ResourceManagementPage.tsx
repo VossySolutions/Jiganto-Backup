@@ -137,9 +137,9 @@ export default function ResourceManagementPage() {
 
   const utilByResource = (stats as { utilByResource?: Record<number, number> })?.utilByResource ?? {};
 
-  const visibleResources = scope?.visibleResourceIds === "all"
+  const visibleResources = !scope || scope.visibleResourceIds === "all"
     ? resources
-    : resources.filter((r) => scope?.visibleResourceIds.includes(r.id));
+    : resources.filter((r) => (scope.visibleResourceIds as number[]).includes(r.id));
 
   const allowedTabs = scope?.allowedTabs ?? [
     "dashboard", "people", "skills", "allocations", "pipeline", "timesheets", "reports", "rate-cards", "org-chart",

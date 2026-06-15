@@ -14,6 +14,9 @@ export async function getSupabaseAccessToken(): Promise<string | undefined> {
 export function waitForSupabaseSession(): Promise<void> {
   if (!supabaseAuthEnabled || !supabase) return Promise.resolve();
 
+  const client = supabase;
+  if (!client) return Promise.resolve();
+
   return new Promise((resolve) => {
     let settled = false;
     const done = () => {
@@ -25,11 +28,11 @@ export function waitForSupabaseSession(): Promise<void> {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
+    } = client.auth.onAuthStateChange((event) => {
       if (event === "INITIAL_SESSION") done();
     });
 
-    void supabase.auth.getSession().then(({ data }) => {
+    void client.auth.getSession().then(({ data }) => {
       if (data.session?.access_token) done();
     });
 

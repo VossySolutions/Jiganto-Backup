@@ -1,4 +1,6 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+
+type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 import { randomBytes } from "crypto";
 import { db } from "../db";
 import { storage } from "../storage";
@@ -454,7 +456,7 @@ export async function duplicateWorkspace(workspaceId: number, userId: string, te
         content: page.content,
         pageType: page.pageType,
         documentStatus: page.documentStatus,
-        tags: page.tags,
+        tags: page.tags as Json,
         sharePermission: page.sharePermission,
         linkedDocumentId: null,
         isFavorite: false,
@@ -493,7 +495,7 @@ export async function duplicateWorkspace(workspaceId: number, userId: string, te
         databaseId: mappedDatabaseId,
         name: column.name,
         type: column.type,
-        options: column.options,
+        options: column.options as Json,
         sortOrder: column.sortOrder,
         width: column.width,
         isVisible: column.isVisible,
@@ -505,7 +507,7 @@ export async function duplicateWorkspace(workspaceId: number, userId: string, te
       if (!mappedDatabaseId) continue;
       await storage.createWorkspaceDatabaseRow({
         databaseId: mappedDatabaseId,
-        data: row.data,
+        data: row.data as Json,
         sortOrder: row.sortOrder,
         createdBy: userId,
         lockedBy: null,

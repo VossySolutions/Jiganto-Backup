@@ -74,6 +74,7 @@ export const API_PREFIX_TO_MODULE_KEY: readonly [string, string][] = [
   ["/api/frameworks", "templates"],
   ["/api/portal", "help-desk"],
   ["/api/workspaces", "workspaces"],
+  ["/api/service-desk", "service-desk"],
   ["/api/conversations", "chat"],
   ["/api/chat", "chat"],
   ["/api/customer-mgmt", "customer-mgmt"],

@@ -536,7 +536,10 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
   }, [pagination.paginatedItems, groupBy, collapsedGroups]);
 
   const importMutation = useMutation({
-    mutationFn: (rows: Record<string, unknown>[]) => apiRequest("POST", "/api/business/bulk-import", { rows }),
+    mutationFn: async (rows: Record<string, unknown>[]) => {
+      const res = await apiRequest("POST", "/api/business/bulk-import", { rows });
+      return res.json() as Promise<{ created?: Record<string, number>; skipped?: number }>;
+    },
     onSuccess: (data: { created?: Record<string, number>; skipped?: number }) => {
       BUSINESS_IMPORT_QUERY_KEYS.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
       const total = Object.values(data?.created ?? {}).reduce((a, b) => a + b, 0);
@@ -908,7 +911,9 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
             </SheetTitle>
             {checkinItem && (
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                {checkinItem.ragStatus && <RagBadge rag={String(checkinItem.ragStatus)} />}
+                {checkinItem.ragStatus != null && checkinItem.ragStatus !== "" && (
+                  <RagBadge rag={String(checkinItem.ragStatus)} />
+                )}
                 {checkinItem.progress !== null && checkinItem.progress !== undefined && (
                   <span className="text-[10px] text-muted-foreground">{String(checkinItem.progress)}% complete</span>
                 )}
@@ -1075,23 +1080,23 @@ function DefaultCard({ item, refPrefix, accent, onEdit, entityRefs, entityType }
         <CardTitle className="text-sm leading-snug line-clamp-2 mt-1">{title}</CardTitle>
       </CardHeader>
       <CardContent className="pl-5 pb-3 space-y-2">
-        {(item.ownerName || item.departmentName) && (
+        {Boolean(item.ownerName || item.departmentName) && (
           <div className="text-xs text-muted-foreground truncate">
-            {item.ownerName && <><OwnerCell name={item.ownerName as string} />&nbsp;</>}
-            {item.departmentName && <span className="opacity-60">· {String(item.departmentName)}</span>}
+            {item.ownerName != null && item.ownerName !== "" && <><OwnerCell name={item.ownerName as string} />&nbsp;</>}
+            {item.departmentName != null && item.departmentName !== "" && <span className="opacity-60">· {String(item.departmentName)}</span>}
           </div>
         )}
         <div className="flex flex-wrap gap-1.5 items-center">
           {rag && <RagBadge rag={rag} />}
           {status && <StatusBadge status={status} />}
-          {(item.priority) && (
+          {item.priority != null && item.priority !== "" && (
             <span className={cn("inline-flex text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize", PRIORITY_CLASS[item.priority as string] ?? "bg-muted text-muted-foreground")}>
               {String(item.priority)}
             </span>
           )}
         </div>
         {progress !== null && progress !== undefined && <ProgressBar value={progress} />}
-        {(item.targetDate || item.dueDate) && (
+        {Boolean(item.targetDate || item.dueDate) && (
           <div className="text-[10px] text-muted-foreground">Target: <DateCell date={(item.targetDate ?? item.dueDate) as string} /></div>
         )}
       </CardContent>

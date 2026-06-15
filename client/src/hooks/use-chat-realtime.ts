@@ -46,6 +46,7 @@ export function useChatSupabaseRealtime(
       .subscribe();
 
     return () => {
+      if (!supabase) return;
       void supabase.removeChannel(sub);
     };
   }, [channelId, enabled, onChange]);

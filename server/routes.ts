@@ -121,11 +121,15 @@ import {
   insertBpmTemplateSchema,
   insertBpmAttachmentSchema,
   bpmTemplates,
+  type InsertBpmDiagram,
+  type InsertBpmNode,
+  type InsertBpmEdge,
 } from "@shared/models/bpm";
 import {
   insertOrgChartSchema,
   insertOrgChartMemberSchema,
   insertOrgChartTemplateSchema,
+  type InsertOrgChart,
 } from "@shared/models/orgchart";
 import {
   insertUserRoleSchema,
@@ -151,6 +155,7 @@ import {
 } from "@shared/models/clients";
 import { slugify } from "./lib/slug";
 import { seedSpecDefaultBoard, VALID_COLUMN_TYPES } from "./workspaces/defaults";
+import type { InsertWorkspaceDatabaseColumn } from "@shared/models/workspaces";
 
 function getWorstRag(ragStatuses: (string | null | undefined)[]): string {
   const ragPriority: Record<string, number> = { red: 3, amber: 2, green: 1 };
@@ -346,6 +351,9 @@ export async function registerRoutes(
 
   const { registerTasksRoutes } = await import("./tasks/routes");
   registerTasksRoutes(app);
+
+  const { registerServiceDeskRoutes } = await import("./service-desk/routes");
+  registerServiceDeskRoutes(app);
 
   // === Application Routes ===
 
@@ -5164,7 +5172,7 @@ export async function registerRoutes(
 
     // Add standalone governance rows linked at strategy level
     for (const gov of governanceList) {
-      const linkedStrategy = gov.linkedStrategyId ? strategyItemsList.find(s => s.id === gov.linkedStrategyId) : null;
+      const linkedStrategy = gov.linkedStrategyItemId ? strategyItemsList.find(s => s.id === gov.linkedStrategyItemId) : null;
       rows.push({
         id: `row-${rowId++}`,
         strategy: linkedStrategy ? withOwnerName(linkedStrategy) : null,
@@ -5255,7 +5263,7 @@ export async function registerRoutes(
     };
 
     const now = Date.now();
-    const overdueInitiatives = initiatives.filter(i => i.endDate && new Date(i.endDate).getTime() < now && i.status !== "completed");
+    const overdueInitiatives = initiatives.filter(i => i.dueDate && new Date(i.dueDate).getTime() < now && i.status !== "completed");
     const staleItems = [...strategies, ...goals, ...objectives, ...initiatives].filter(i => {
       if (!i.updatedAt) return false;
       const daysSince = (now - new Date(i.updatedAt).getTime()) / (1000 * 86400);
@@ -5276,7 +5284,7 @@ export async function registerRoutes(
         ...goals.filter(i => i.ragStatus === "red").map(i => ({ type: "Goal", title: i.title })),
         ...initiatives.filter(i => i.ragStatus === "red").map(i => ({ type: "Initiative", title: i.title })),
       ].slice(0, 10),
-      overdueList: overdueInitiatives.slice(0, 5).map(i => ({ title: i.title, endDate: i.endDate })),
+      overdueList: overdueInitiatives.slice(0, 5).map(i => ({ title: i.title, endDate: i.dueDate })),
     };
 
     // Try AI generation
@@ -6147,7 +6155,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       if (!existingDoc) return res.status(404).json({ message: "Document not found" });
       
       const updateSchema = insertDocumentSchema.partial();
-      const input = updateSchema.parse(req.body);
+      const { changeDescription, ...bodyRest } = req.body as { changeDescription?: string };
+      const input = updateSchema.parse(bodyRest);
       
       // Create version if content changed
       if (input.content && input.content !== existingDoc.content) {
@@ -6156,7 +6165,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
           version: (existingDoc.currentVersion || 1) + 1,
           title: existingDoc.title,
           content: existingDoc.content,
-          changeDescription: input.changeDescription || "Content updated",
+          changeDescription: changeDescription || "Content updated",
           authorId: userId,
         });
         input.currentVersion = (existingDoc.currentVersion || 1) + 1;
@@ -8389,8 +8398,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
         type: source.type,
         status: "draft",
         version: 1,
-        canvasData: source.canvasData,
-        metadata: source.metadata,
+        canvasData: source.canvasData as InsertBpmDiagram["canvasData"],
+        metadata: source.metadata as InsertBpmDiagram["metadata"],
         libraryId: source.libraryId,
         ownerId: userId,
       });
@@ -8400,27 +8409,27 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
         await storage.createBpmNode({
           diagramId: newDiagram.id,
           nodeId: node.nodeId,
-          type: node.type,
+          nodeType: node.nodeType,
           label: node.label,
           positionX: node.positionX,
           positionY: node.positionY,
           width: node.width,
           height: node.height,
-          data: node.data,
+          attributes: node.attributes as InsertBpmNode["attributes"],
+          style: node.style as InsertBpmNode["style"],
           parentNodeId: node.parentNodeId,
+          swimlaneId: node.swimlaneId,
         });
       }
       for (const edge of sourceEdges) {
         await storage.createBpmEdge({
           diagramId: newDiagram.id,
           edgeId: edge.edgeId,
-          source: edge.source,
-          target: edge.target,
-          sourceHandle: edge.sourceHandle,
-          targetHandle: edge.targetHandle,
-          type: edge.type,
+          sourceNodeId: edge.sourceNodeId,
+          targetNodeId: edge.targetNodeId,
+          edgeType: edge.edgeType,
           label: edge.label,
-          data: edge.data,
+          style: edge.style as InsertBpmEdge["style"],
         });
       }
       const sourceSwimlanes = await storage.getBpmSwimlanes(source.id);
@@ -9210,7 +9219,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
         showPhotos: sourceChart.showPhotos,
         templateId: sourceChart.templateId,
         chartTitle: sourceChart.chartTitle,
-        metadata: sourceChart.metadata,
+        metadata: sourceChart.metadata as InsertOrgChart["metadata"],
       });
       const sourceMembers = await storage.getOrgChartMembers(sourceChart.id);
       const oldToNewId = new Map<number, number>();
@@ -9502,7 +9511,10 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
           name: req.body.title || "Board",
         });
         await seedSpecDefaultBoard(
-          (col) => storage.createWorkspaceDatabaseColumn(col).then((c) => ({ id: c.id, name: c.name })),
+          (col) => storage.createWorkspaceDatabaseColumn({
+            ...col,
+            options: col.options as InsertWorkspaceDatabaseColumn["options"],
+          }).then((c) => ({ id: c.id, name: c.name })),
           db.id,
         );
       }
@@ -9554,7 +9566,10 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       });
 
       await seedSpecDefaultBoard(
-        (col) => storage.createWorkspaceDatabaseColumn(col).then((c) => ({ id: c.id, name: c.name })),
+        (col) => storage.createWorkspaceDatabaseColumn({
+          ...col,
+          options: col.options as InsertWorkspaceDatabaseColumn["options"],
+        }).then((c) => ({ id: c.id, name: c.name })),
         result.id,
       );
 
@@ -10454,7 +10469,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
           eventType: "run_created",
           actor: run.createdBy ?? "System",
           entity: `Run: ${run.name}`,
-          detail: `Test run created with environment "${run.environment ?? "N/A"}" and status "${run.status}"`,
+          detail: `Test run created with status "${run.status}"`,
           timestamp: run.createdAt,
         });
       }
@@ -10477,7 +10492,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
           id: `defect-${d.id}`,
           eventType: "defect_raised",
           actor: d.reportedBy ?? "System",
-          entity: `[${d.defectId}] ${d.title}`,
+          entity: `[DEF-${d.id}] ${d.title}`,
           detail: `Severity: ${d.severity}, Priority: ${d.priority}, Status: ${d.status}`,
           timestamp: d.createdAt,
         });
@@ -10486,7 +10501,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
             id: `defect-resolved-${d.id}`,
             eventType: "defect_resolved",
             actor: d.assignedTo ?? "System",
-            entity: `[${d.defectId}] ${d.title}`,
+            entity: `[DEF-${d.id}] ${d.title}`,
             detail: `Defect marked as ${d.status}`,
             timestamp: d.updatedAt ?? d.createdAt,
           });
@@ -10528,9 +10543,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
         return res.json({ skipped: true, count: existing.length });
       }
       const cases = await storage.getTmTestCases(1);
-      function caseIdsByIndex(indices: number[]) {
-        return indices.map(i => cases[i]?.id).filter(Boolean) as number[];
-      }
+      const caseIdsByIndex = (indices: number[]) =>
+        indices.map(i => cases[i]?.id).filter(Boolean) as number[];
       const demoScenarios = [
         {
           scenarioId: "SCN-001", title: "End-to-End Customer Order Fulfilment",
@@ -11083,7 +11097,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/surveys/:id/activate", async (req, res) => {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
-      const survey = await storage.updateSurvey(Number(req.params.id), { status: "active", sentAt: new Date() as any });
+      const survey = await storage.updateSurvey(Number(req.params.id), { status: "active", sentAt: new Date() });
       res.json(survey);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -11091,7 +11105,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/surveys/:id/close", async (req, res) => {
     if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
-      const survey = await storage.updateSurvey(Number(req.params.id), { status: "closed", closedAt: new Date() as any });
+      const survey = await storage.updateSurvey(Number(req.params.id), { status: "closed", closedAt: new Date() });
       res.json(survey);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -11185,8 +11199,8 @@ Use a mix of question types appropriate to the topic. For satisfaction/rating to
       });
       const origQuestions = await storage.getSurveyQuestions(original.id);
       for (let i = 0; i < origQuestions.length; i++) {
-        const q = origQuestions[i];
-        await storage.createSurveyQuestion({ ...q, id: undefined as any, surveyId: copy.id, questionOrder: i + 1 });
+        const { id: _omitId, createdAt: _omitCreated, ...q } = origQuestions[i];
+        await storage.createSurveyQuestion({ ...q, surveyId: copy.id, questionOrder: i + 1 });
       }
       const fullCopy = await storage.getSurvey(copy.id);
       res.json(fullCopy);

@@ -106,7 +106,8 @@ export function TestCasesScreen() {
 
   const createMutation = useMutation({
     mutationFn: async (data: { tc: FormData; steps: StepDraft[] }) => {
-      const tc: TmTestCase = await apiRequest("POST", "/api/tm/cases", { ...data.tc, tenantId: 1, projectId: activeProjectId });
+      const res = await apiRequest("POST", "/api/tm/cases", { ...data.tc, tenantId: 1, projectId: activeProjectId });
+      const tc: TmTestCase = await res.json();
       if (data.steps.length > 0) {
         await apiRequest("POST", `/api/tm/cases/${tc.id}/steps/bulk`, data.steps);
       }
@@ -145,13 +146,14 @@ export function TestCasesScreen() {
 
   const createRunMutation = useMutation({
     mutationFn: async ({ name, startDate, caseIds }: { name: string; startDate: string; caseIds: number[] }) => {
-      const run = await apiRequest("POST", "/api/tm/runs", {
+      const runRes = await apiRequest("POST", "/api/tm/runs", {
         name,
         tenantId: 1,
         projectId: activeProjectId,
         status: "not_started",
         startDate: startDate || null,
       });
+      const run = await runRes.json() as { id: number };
       if (caseIds.length > 0) {
         await apiRequest("POST", `/api/tm/runs/${run.id}/results`, { caseIds });
       }
@@ -196,7 +198,8 @@ export function TestCasesScreen() {
       estimatedDuration: tc.estimatedDuration ?? null,
       tags: (tc.tags as string[]) ?? [],
     });
-    const fetchedSteps: TmTestStep[] = await apiRequest("GET", `/api/tm/cases/${tc.id}/steps`);
+    const stepsRes = await apiRequest("GET", `/api/tm/cases/${tc.id}/steps`);
+    const fetchedSteps: TmTestStep[] = await stepsRes.json();
     setSteps(fetchedSteps.map(s => ({ action: s.action, expectedResult: s.expectedResult ?? "", testData: s.testData ?? "" })));
     setDialogOpen(true);
   }

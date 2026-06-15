@@ -73,7 +73,10 @@ export function TestScenariosScreen() {
   const linkedCases = selected ? allCases.filter(c => (selected.linkedCaseIds ?? []).includes(c.id)) : [];
 
   const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/tm/scenarios", data),
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/tm/scenarios", data);
+      return res.json() as Promise<TmScenario>;
+    },
     onSuccess: (created: TmScenario) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tm/scenarios"] });
       setCreating(false);

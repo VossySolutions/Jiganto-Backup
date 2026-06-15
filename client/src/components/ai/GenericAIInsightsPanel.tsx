@@ -90,6 +90,17 @@ const MODULE_COPY: Record<
       },
     ],
   },
+  tasks: {
+    title: "Tasks AI",
+    subtitle: "Work management",
+    tips: [
+      {
+        icon: Sparkles,
+        title: "Task prioritisation",
+        desc: "Review overdue and high-priority tasks across workspaces from the unified Tasks view.",
+      },
+    ],
+  },
   general: {
     title: "Jiganto AI Insights",
     subtitle: "Module-specific intelligence",

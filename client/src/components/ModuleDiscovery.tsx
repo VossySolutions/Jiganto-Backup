@@ -11,8 +11,8 @@ import {
   modulesInDiscoveryOrder,
 } from "@/lib/module-metadata";
 import { DashboardKpiStrip } from "@/components/dashboard/DashboardKpiStrip";
-import { useAuth } from "@/hooks/use-auth";
 import { useModuleAccess } from "@/hooks/use-module-access";
+import { usePermissions } from "@/hooks/use-permissions";
 import { isModuleLicensed, useModuleEntitlements } from "@/hooks/use-module-entitlements";
 import { getSettingsAccess } from "@/lib/settings-access";
 import { navPathToModuleKey } from "@shared/models/module-access";
@@ -35,10 +35,10 @@ export function ModuleDiscovery({
   projectId?: number | null;
   hiddenModuleKeys?: string[];
 }) {
-  const { user } = useAuth();
   const { canAccessNavPath } = useModuleAccess();
   const { data: entitlements } = useModuleEntitlements();
-  const settingsAccess = getSettingsAccess(user?.platformRole, user?.isJigantoStaff);
+  const { platformRole, isJigantoStaff } = usePermissions();
+  const settingsAccess = getSettingsAccess(platformRole, isJigantoStaff);
   const includeCommercial = settingsAccess.tier === "system";
   const discoveryCategories = getDiscoveryCategories(includeCommercial);
 
@@ -130,10 +130,10 @@ export function ModuleDiscovery({
 
 /** Flat list of authorized (clickable) modules for keyboard shortcuts 1–9 */
 export function useModuleDiscoveryShortcuts(hiddenModuleKeys: string[] = []) {
-  const { user } = useAuth();
   const { canAccessNavPath } = useModuleAccess();
   const { data: entitlements } = useModuleEntitlements();
-  const settingsAccess = getSettingsAccess(user?.platformRole, user?.isJigantoStaff);
+  const { platformRole, isJigantoStaff } = usePermissions();
+  const settingsAccess = getSettingsAccess(platformRole, isJigantoStaff);
   const includeCommercial = settingsAccess.tier === "system";
 
   return modulesInDiscoveryOrder(includeCommercial)

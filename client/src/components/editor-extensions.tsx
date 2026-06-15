@@ -125,7 +125,7 @@ export const CalloutNode = Node.create({
     return {
       insertCallout: (type: CalloutType = 'info') => ({ chain }: any) =>
         chain().insertContent({ type: 'callout', attrs: { type }, content: [{ type: 'paragraph' }] }).run(),
-    };
+    } as any;
   },
   addKeyboardShortcuts() {
     return {
@@ -198,7 +198,7 @@ export const CollapsibleNode = Node.create({
     return {
       insertCollapsible: () => ({ chain }: any) =>
         chain().insertContent({ type: 'collapsible', attrs: { open: true, title: 'Collapsible Section' }, content: [{ type: 'paragraph' }] }).run(),
-    };
+    } as any;
   },
 });
 
@@ -294,7 +294,7 @@ export const VideoEmbedNode = Node.create({
     return {
       insertVideoEmbed: () => ({ chain }: any) =>
         chain().insertContent({ type: 'videoEmbed', attrs: { src: '' } }).run(),
-    };
+    } as any;
   },
 });
 
@@ -394,7 +394,7 @@ export const MathBlockNode = Node.create({
     return {
       insertMathBlock: () => ({ chain }: any) =>
         chain().insertContent({ type: 'mathBlock', attrs: { formula: '' } }).run(),
-    };
+    } as any;
   },
 });
 
@@ -436,7 +436,7 @@ export const TextDirectionExtension = Extension.create({
         });
         return (editor.commands as any).setTextDirection(currentDir === 'rtl' ? 'ltr' : 'rtl');
       },
-    };
+    } as any;
   },
 });
 
@@ -629,12 +629,12 @@ export const InlineCommentMark = Mark.create({
     return {
       setInlineComment:
         (commentId: string) =>
-        ({ commands }) =>
+        ({ commands }: any) =>
           commands.setMark(this.name, { commentId }),
       unsetInlineComment:
         () =>
-        ({ commands }) =>
+        ({ commands }: any) =>
           commands.unsetMark(this.name),
-    };
+    } as any;
   },
 });

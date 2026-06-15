@@ -74,7 +74,7 @@ export default function SurveyPortalPage() {
 
   function handleNext() {
     if (currentQ < total - 1) setCurrentQ(q => q + 1);
-    else if (!survey.anonymous) setNameStep(true);
+    else if (!survey?.anonymous) setNameStep(true);
     else handleSubmit();
   }
 
@@ -188,7 +188,7 @@ export default function SurveyPortalPage() {
               ← Back
             </button>
             <button onClick={handleNext}
-              disabled={q.required && (currentAnswer === null || currentAnswer === undefined || currentAnswer === "" || (Array.isArray(currentAnswer) && currentAnswer.length === 0))}
+              disabled={!!q.required && (currentAnswer === null || currentAnswer === undefined || currentAnswer === "" || (Array.isArray(currentAnswer) && currentAnswer.length === 0))}
               style={{ padding: "11px 28px", background: C.teal, color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 15, fontWeight: 600 }}
               data-testid="button-next-question">
               {currentQ === total - 1 ? (survey.anonymous ? "Submit Survey ✓" : "Next →") : "Next →"}

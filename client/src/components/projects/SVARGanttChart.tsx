@@ -849,7 +849,7 @@ export function SVARGanttChart({ projectId }: SVARGanttChartProps) {
             key={ganttKey}
             tasks={filteredTasks}
             links={ganttLinks}
-            columns={columns}
+            columns={columns as any}
             zoom={zoomConfig}
             cellHeight={36}
             undo={true}

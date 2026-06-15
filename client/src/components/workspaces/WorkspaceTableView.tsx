@@ -1840,7 +1840,7 @@ export function WorkspaceTableView({
           <div className="p-3">
             <WorkspaceKanbanView
               columns={visibleColumns}
-              rows={displayRows}
+              rows={[...displayRows]}
               onUpdateRow={(rowId, data) => updateRowMutation.mutate({ id: rowId, data })}
               onAddRow={(statusColId, statusValue) => {
                 const maxSort = rows.length > 0 ? Math.max(...rows.map((r) => r.sortOrder || 0)) : -1;
@@ -1860,7 +1860,7 @@ export function WorkspaceTableView({
           <div className="p-3">
             <WorkspaceCalendarView
               columns={visibleColumns}
-              rows={displayRows}
+              rows={[...displayRows]}
               onUpdateRow={(rowId, data) => updateRowMutation.mutate({ id: rowId, data })}
               onAddRow={(dateColId, isoDate) => {
                 const maxSort = rows.length > 0 ? Math.max(...rows.map((r) => r.sortOrder || 0)) : -1;

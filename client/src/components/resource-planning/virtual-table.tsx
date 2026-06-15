@@ -33,7 +33,7 @@ export function RpVirtualScrollContainer({
   maxHeight,
   children,
 }: {
-  scrollRef: React.RefObject<HTMLDivElement | null>;
+  scrollRef: React.Ref<HTMLDivElement>;
   onScroll: () => void;
   maxHeight: number;
   children: ReactNode;

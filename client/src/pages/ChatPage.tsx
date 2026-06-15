@@ -36,7 +36,7 @@ import {
 export function ChatPage() {
   const { mainOffset, mobileTopOffset, isMobile } = useShellLayout();
   const { user } = useAuth();
-  const { data: permissions } = usePermissions();
+  const { permissions } = usePermissions();
   const tenantId = permissions?.orgId ?? 1;
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();

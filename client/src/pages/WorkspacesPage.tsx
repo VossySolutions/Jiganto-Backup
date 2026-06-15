@@ -1091,7 +1091,7 @@ function PageView({
             <div className="mb-8" data-testid="page-editor">
               <TipTapEditor
                 content={page.content || ""}
-                onChange={readOnly ? undefined : autoSave}
+                onChange={readOnly ? () => {} : autoSave}
                 onExport={(format) => exportDocument(format, page.title || "Untitled", page.content || "")}
                 placeholder="Start writing... Use the menu above to add a board."
                 editable={!readOnly}

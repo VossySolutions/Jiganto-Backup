@@ -94,6 +94,7 @@ async function ensureUserFromConfig(config: {
   lastName: string;
   platformRole: PlatformRole;
   lockedWorkspaceId: number | null;
+  organisationName?: string;
 }) {
   await authStorage.upsertUser({
     id: config.userId,

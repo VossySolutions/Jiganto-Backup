@@ -27,6 +27,7 @@ export * from "./models/commercial";
 export * from "./models/dashboard";
 export * from "./models/finance";
 export * from "./models/resource-planning";
+export * from "./models/service-desk";
 
 import { users } from "./models/auth";
 

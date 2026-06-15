@@ -531,7 +531,11 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
                             {m.name}
                           </span>
                         )}
-                        {od && editingCell?.field !== "name" && <AlertTriangle className="inline h-3.5 w-3.5 ml-1.5 text-red-500" title="Overdue" />}
+                        {od && editingCell?.field !== "name" && (
+                          <span aria-label="Overdue" className="inline-block">
+                            <AlertTriangle className="inline h-3.5 w-3.5 ml-1.5 text-red-500" />
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5">
                         {editingDate === m.id ? (

@@ -3,6 +3,10 @@ import OpenAI from "openai";
 import { getOpenAIConfig } from "../lib/openai";
 import { chatStorage } from "./storage";
 
+function parseIdParam(value: string | string[]): number {
+  return parseInt(String(value), 10);
+}
+
 function createOpenAIClient(): OpenAI | null {
   const { apiKey, baseURL } = getOpenAIConfig();
   if (!apiKey) return null;
@@ -22,7 +26,7 @@ export function registerChatRoutes(app: Express): void {
 
   app.get("/api/conversations/:id", async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
       const conversation = await chatStorage.getConversation(id);
       if (!conversation) {
         return res.status(404).json({ error: "Conversation not found" });
@@ -48,7 +52,7 @@ export function registerChatRoutes(app: Express): void {
 
   app.delete("/api/conversations/:id", async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseIdParam(req.params.id);
       await chatStorage.deleteConversation(id);
       res.status(204).send();
     } catch (error) {
@@ -66,7 +70,7 @@ export function registerChatRoutes(app: Express): void {
         });
       }
 
-      const conversationId = parseInt(req.params.id);
+      const conversationId = parseIdParam(req.params.id);
       const { content } = req.body;
 
       const userId = (req as Request & { user?: { claims?: { sub?: string } } }).user?.claims

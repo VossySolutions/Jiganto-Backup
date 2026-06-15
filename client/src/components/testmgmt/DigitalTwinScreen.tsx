@@ -74,7 +74,7 @@ export function DigitalTwinScreen({ onNavigate }: Props) {
     const passRate = executed > 0 ? pass / executed : 0;
 
     const openDefects = defects.filter(d =>
-      (d.tags ?? []).some((tag: string) => suite.name.toLowerCase().includes(tag.toLowerCase()) || tag.toLowerCase().includes(suite.name.toLowerCase().split(" ")[0])) &&
+      ((d as { tags?: string[] }).tags ?? []).some((tag: string) => suite.name.toLowerCase().includes(tag.toLowerCase()) || tag.toLowerCase().includes(suite.name.toLowerCase().split(" ")[0])) &&
       d.status !== "resolved" && d.status !== "closed" && d.status !== "wont_fix"
     );
     const criticalDefects = openDefects.filter(d => d.severity === "critical");

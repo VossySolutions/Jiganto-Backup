@@ -118,6 +118,8 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
     return true;
   });
 
+  const pagination = useTablePagination(filtered, { resetKey: `${searchTerm}-${typeFilter}` });
+
   const allItems = rateCards.flatMap((c) => (c.items ?? []).map((i) => ({ ...i, cardName: c.name })));
 
   const exportCSV = useCallback(() => {

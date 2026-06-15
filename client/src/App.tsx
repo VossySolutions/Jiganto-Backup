@@ -21,6 +21,7 @@ import ResourcePlanningPage from "@/pages/ResourcePlanningPage";
 import BPMPage from "@/pages/BPMPage";
 import TestManagementPage from "@/pages/TestManagementPage";
 import WorkspacesPage from "@/pages/WorkspacesPage";
+import ServiceDeskPage from "@/pages/ServiceDeskPage";
 import PortfolioManagementPage from "@/pages/PortfolioManagementPage";
 import SignOffPage from "@/pages/SignOffPage";
 import SigningPortalPage from "@/pages/SigningPortalPage";
@@ -144,6 +145,10 @@ function Router() {
         </Route>
         <Route path="/modules/business-mgmt" component={BusinessManagementPage} />
         <Route path="/modules/workspaces" component={WorkspacesPage} />
+        <Route path="/modules/service-desk" component={ServiceDeskPage} />
+        <Route path="/service-desk">
+          <Redirect to="/modules/service-desk" />
+        </Route>
         <Route path="/modules/documents" component={DocumentManagementPage} />
         <Route path="/documents" component={DocumentManagementPage} />
         <Route path="/modules/tasks" component={TaskManagementPage} />

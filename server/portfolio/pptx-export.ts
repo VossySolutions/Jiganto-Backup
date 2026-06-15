@@ -148,17 +148,19 @@ export function map360ReportToPptxInput(report: unknown, narrative?: string): Re
     nextPhasePreview: string;
   };
 
-  const health = r.healthDashboard
-    ? {
-        overall: r.healthDashboard.overall,
-        schedule: r.healthDashboard.schedule,
-        budget: r.healthDashboard.budget,
-        quality: r.healthDashboard.quality,
-        delivery: r.healthDashboard.delivery,
-        risk: r.healthDashboard.risk,
-        resources: r.healthDashboard.resources,
-        stakeholders: r.healthDashboard.stakeholders,
-      }
+  const health: Record<string, string> | null = r.healthDashboard
+    ? (Object.fromEntries(
+        Object.entries({
+          overall: r.healthDashboard.overall,
+          schedule: r.healthDashboard.schedule,
+          budget: r.healthDashboard.budget,
+          quality: r.healthDashboard.quality,
+          delivery: r.healthDashboard.delivery,
+          risk: r.healthDashboard.risk,
+          resources: r.healthDashboard.resources,
+          stakeholders: r.healthDashboard.stakeholders,
+        }).filter((entry): entry is [string, string] => entry[1] != null),
+      ) as Record<string, string>)
     : null;
 
   return {

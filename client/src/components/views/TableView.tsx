@@ -200,7 +200,7 @@ export function TableView({ columns: columnsData, items: itemsData, onItemClick,
   ], [columnsData, activeFilters, onAddColumn, pagination.startIndex]);
 
   const table = useReactTable({
-    data: pagination.paginatedItems,
+    data: [...pagination.paginatedItems],
     columns,
     getCoreRowModel: getCoreRowModel(),
     onColumnFiltersChange: setColumnFilters,

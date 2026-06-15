@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useClientContext } from "@/hooks/use-client-context";
+import { useClientContext, type Client } from "@/hooks/use-client-context";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,13 +50,13 @@ export function ClientCard({
   const handleEnter = () => {
     if (isArchived || isPendingDelete || entering) return;
     setEntering(true);
-    void Promise.resolve(setActiveClient(client)).catch(() => setEntering(false));
+    void Promise.resolve(setActiveClient(client as Client)).catch(() => setEntering(false));
   };
 
   const handleViewArchived = () => {
     if (entering) return;
     setEntering(true);
-    void Promise.resolve(setActiveClient(client)).catch(() => setEntering(false));
+    void Promise.resolve(setActiveClient(client as Client)).catch(() => setEntering(false));
   };
 
   return (

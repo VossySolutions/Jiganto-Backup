@@ -9,7 +9,7 @@ export type TablePaginationOptions = {
 };
 
 export function useTablePagination<T>(
-  items: T[],
+  items: readonly T[],
   options?: TablePaginationOptions
 ) {
   const enabled = options?.enabled !== false;

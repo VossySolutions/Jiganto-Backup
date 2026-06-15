@@ -12,7 +12,7 @@ import { useClientContext } from "@/hooks/use-client-context";
 interface ModuleHeaderProps {
   icon: LucideIcon | React.ComponentType<{ className?: string }>;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   searchPlaceholder?: string;
   searchValue?: string;
   onSearchChange?: (value: string) => void;

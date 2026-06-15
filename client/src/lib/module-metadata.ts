@@ -23,7 +23,7 @@ import {
 export interface ModuleMetadata {
   key: string;
   name: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   href: string;
   shortDescription: string;
   longDescription: string;
