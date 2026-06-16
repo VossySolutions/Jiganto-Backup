@@ -46,7 +46,8 @@
     "smoke:portfolio": "tsx scripts/smoke-portfolio-apis.mjs",
     "db:reset": "tsx script/db-reset.ts",
     "db:clients-rls": "tsx script/apply-clients-rls.ts",
-    "db:clients-indexes": "tsx script/apply-clients-indexes.ts"
+    "db:clients-indexes": "tsx script/apply-clients-indexes.ts",
+    "db:performance-indexes": "tsx script/apply-performance-indexes.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",

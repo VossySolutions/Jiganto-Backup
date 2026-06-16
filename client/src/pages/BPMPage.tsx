@@ -43,8 +43,8 @@ import {
 
 import type { ProcessResource } from "@shared/models/bpm";
 import { parseCsvContent, buildDiagramFromRows, type ParsedProcessRow } from "@/components/bpm/BpmTableView";
-import BpmlView from "@/components/bpm/BpmlView";
-import OrgChartView from "@/components/bpm/OrgChartView";
+const BpmlView = lazy(() => import("@/components/bpm/BpmlView"));
+const OrgChartView = lazy(() => import("@/components/bpm/OrgChartView"));
 import { PortalAssetPanel } from "@/components/bpm/PortalAssetPanel";
 import { PortalSettingsDialog } from "@/components/bpm/PortalSettingsDialog";
 import { BpmDeltaReportTable } from "@/components/bpm/BpmDeltaReportTable";
@@ -3475,9 +3475,13 @@ export default function BPMPage() {
               <FrameworksCatalogue onOpenFramework={handleOpenFramework} onCreateNew={() => setShowCreateFrameworkDialog(true)} />
             )
           ) : activeSection === "bpml" ? (
-            <BpmlView />
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
+              <BpmlView />
+            </Suspense>
           ) : activeSection === "orgchart" ? (
-            <OrgChartView />
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
+              <OrgChartView />
+            </Suspense>
           ) : (
             <DiagramCatalogue
               onOpenDiagram={handleOpenDiagram}

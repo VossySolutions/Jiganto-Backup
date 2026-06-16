@@ -17,6 +17,29 @@ const EXEMPT_PREFIXES = [
   "/api/notifications",
 ];
 
+/** Only these list APIs may return client-scoped rows needing response filtering. */
+const FILTERABLE_PREFIXES = [
+  "/api/crm",
+  "/api/documents",
+  "/api/tasks",
+  "/api/pm",
+  "/api/portfolio",
+  "/api/business",
+  "/api/resources",
+  "/api/finance",
+  "/api/bpm",
+  "/api/tm",
+  "/api/surveys",
+  "/api/signoff",
+  "/api/workspaces",
+  "/api/service-desk",
+  "/api/help-desk",
+  "/api/whiteboard",
+  "/api/templates",
+  "/api/conversations",
+  "/api/chat",
+];
+
 function recordClientId(record: Record<string, unknown>): number | null | undefined {
   if (record.clientId !== undefined) return record.clientId as number | null;
   if (record.client_id !== undefined) return record.client_id as number | null;
@@ -171,6 +194,7 @@ export function filterWorkspaceResponses(
 ): void {
   if (!isApiRequest(req.path) || req.method !== "GET") return next();
   if (EXEMPT_PREFIXES.some((p) => req.path.startsWith(p))) return next();
+  if (!FILTERABLE_PREFIXES.some((p) => req.path.startsWith(p))) return next();
 
   const scoped = workspaceClientId(req);
   if (scoped === undefined) return next();

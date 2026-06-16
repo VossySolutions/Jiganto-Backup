@@ -395,6 +395,7 @@ export interface IStorage {
 
   // Rate Cards
   getRateCards(tenantId: number): Promise<RateCard[]>;
+  getRateCardsWithItems(tenantId: number): Promise<Array<RateCard & { items: RateCardItem[] }>>;
   getRateCard(id: number): Promise<RateCard | undefined>;
   createRateCard(card: InsertRateCard): Promise<RateCard>;
   updateRateCard(id: number, updates: Partial<InsertRateCard>): Promise<RateCard | undefined>;
@@ -405,6 +406,7 @@ export interface IStorage {
 
   // Resource Plan Templates
   getResourcePlanTemplates(tenantId: number): Promise<ResourcePlanTemplate[]>;
+  getResourcePlanTemplatesWithRows(tenantId: number): Promise<Array<ResourcePlanTemplate & { rows: ResourcePlanTemplateRow[] }>>;
   getResourcePlanTemplate(id: number): Promise<ResourcePlanTemplate | undefined>;
   createResourcePlanTemplate(template: InsertResourcePlanTemplate): Promise<ResourcePlanTemplate>;
   updateResourcePlanTemplate(id: number, updates: Partial<InsertResourcePlanTemplate>): Promise<ResourcePlanTemplate | undefined>;
@@ -2903,6 +2905,23 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(rateCardItems).where(eq(rateCardItems.rateCardId, rateCardId));
   }
 
+  async getRateCardsWithItems(tenantId: number): Promise<Array<RateCard & { items: RateCardItem[] }>> {
+    const cards = await this.getRateCards(tenantId);
+    if (cards.length === 0) return [];
+    const cardIds = cards.map((c) => c.id);
+    const items = await db
+      .select()
+      .from(rateCardItems)
+      .where(inArray(rateCardItems.rateCardId, cardIds));
+    const itemsByCard = new Map<number, RateCardItem[]>();
+    for (const item of items) {
+      const list = itemsByCard.get(item.rateCardId) ?? [];
+      list.push(item);
+      itemsByCard.set(item.rateCardId, list);
+    }
+    return cards.map((card) => ({ ...card, items: itemsByCard.get(card.id) ?? [] }));
+  }
+
   async createRateCardItem(item: InsertRateCardItem): Promise<RateCardItem> {
     const [created] = await db.insert(rateCardItems).values(item).returning();
     return created;
@@ -2938,6 +2957,29 @@ export class DatabaseStorage implements IStorage {
 
   async getResourcePlanTemplateRows(templateId: number): Promise<ResourcePlanTemplateRow[]> {
     return await db.select().from(resourcePlanTemplateRows).where(eq(resourcePlanTemplateRows.templateId, templateId)).orderBy(resourcePlanTemplateRows.sortOrder);
+  }
+
+  async getResourcePlanTemplatesWithRows(
+    tenantId: number,
+  ): Promise<Array<ResourcePlanTemplate & { rows: ResourcePlanTemplateRow[] }>> {
+    const templates = await this.getResourcePlanTemplates(tenantId);
+    if (templates.length === 0) return [];
+    const templateIds = templates.map((t) => t.id);
+    const rows = await db
+      .select()
+      .from(resourcePlanTemplateRows)
+      .where(inArray(resourcePlanTemplateRows.templateId, templateIds))
+      .orderBy(resourcePlanTemplateRows.sortOrder);
+    const rowsByTemplate = new Map<number, ResourcePlanTemplateRow[]>();
+    for (const row of rows) {
+      const list = rowsByTemplate.get(row.templateId) ?? [];
+      list.push(row);
+      rowsByTemplate.set(row.templateId, list);
+    }
+    return templates.map((template) => ({
+      ...template,
+      rows: rowsByTemplate.get(template.id) ?? [],
+    }));
   }
 
   async createResourcePlanTemplateRow(row: InsertResourcePlanTemplateRow): Promise<ResourcePlanTemplateRow> {
@@ -3017,21 +3059,24 @@ export class DatabaseStorage implements IStorage {
   async getAllOpportunityResourceRowsWithPlans(tenantId: number): Promise<Array<OpportunityResourceRow & { planId: number; opportunityId: number; opportunityName?: string }>> {
     const plans = await db.select().from(opportunityResourcePlans).where(eq(opportunityResourcePlans.tenantId, tenantId));
     if (plans.length === 0) return [];
+    const planIds = plans.map((p) => p.id);
     const opps = await db.select({ id: crmOpportunities.id, name: crmOpportunities.name }).from(crmOpportunities).where(eq(crmOpportunities.tenantId, tenantId));
-    const oppMap = new Map(opps.map(o => [o.id, o.name]));
-    const allRows: Array<OpportunityResourceRow & { planId: number; opportunityId: number; opportunityName?: string }> = [];
-    for (const plan of plans) {
-      const rows = await db.select().from(opportunityResourceRows).where(eq(opportunityResourceRows.planId, plan.id)).orderBy(opportunityResourceRows.sortOrder);
-      for (const row of rows) {
-        allRows.push({
-          ...row,
-          planId: plan.id,
-          opportunityId: plan.opportunityId,
-          opportunityName: oppMap.get(plan.opportunityId) || undefined,
-        });
-      }
-    }
-    return allRows;
+    const oppMap = new Map(opps.map((o) => [o.id, o.name]));
+    const planMap = new Map(plans.map((p) => [p.id, p]));
+    const rows = await db
+      .select()
+      .from(opportunityResourceRows)
+      .where(inArray(opportunityResourceRows.planId, planIds))
+      .orderBy(opportunityResourceRows.sortOrder);
+    return rows.map((row) => {
+      const plan = planMap.get(row.planId)!;
+      return {
+        ...row,
+        planId: plan.id,
+        opportunityId: plan.opportunityId,
+        opportunityName: oppMap.get(plan.opportunityId) || undefined,
+      };
+    });
   }
 
   async createOpportunityResourceRow(row: InsertOpportunityResourceRow): Promise<OpportunityResourceRow> {

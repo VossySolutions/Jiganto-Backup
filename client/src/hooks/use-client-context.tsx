@@ -198,8 +198,6 @@ export function ClientContextProvider({ children }: { children: ReactNode }) {
 
     enabled: sessionReady && isAuthenticated,
 
-    staleTime: 60_000,
-
   });
 
   const accessGranted = access?.granted === true;

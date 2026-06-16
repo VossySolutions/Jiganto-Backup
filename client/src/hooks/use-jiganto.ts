@@ -30,7 +30,7 @@ export function useTenants() {
       return api.tenants.list.responses[200].parse(await res.json());
     },
     enabled: tenantsQueryEnabled(sessionReady, isAuthenticated, orgId),
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   });
 }
 
@@ -48,7 +48,7 @@ export function useCurrentOrganisation() {
       return (await res.json()) as Tenant;
     },
     enabled: tenantsQueryEnabled(sessionReady, isAuthenticated, orgId),
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   });
 }
 

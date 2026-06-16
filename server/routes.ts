@@ -3760,14 +3760,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const tenantId = getApiTenantIdWithFallback(req);
-    const cards = await storage.getRateCards(tenantId);
-    const cardsWithItems = await Promise.all(
-      cards.map(async (card) => {
-        const items = await storage.getRateCardItems(card.id);
-        return { ...card, items };
-      })
-    );
-    res.json(cardsWithItems);
+    const cards = await storage.getRateCardsWithItems(tenantId);
+    res.json(cards);
   });
 
   app.post("/api/crm/rate-cards", async (_req, res) => {
@@ -3803,14 +3797,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const tenantId = getApiTenantIdWithFallback(req);
-    const templates = await storage.getResourcePlanTemplates(tenantId);
-    const templatesWithRows = await Promise.all(
-      templates.map(async (tmpl) => {
-        const rows = await storage.getResourcePlanTemplateRows(tmpl.id);
-        return { ...tmpl, rows };
-      })
-    );
-    res.json(templatesWithRows);
+    const templates = await storage.getResourcePlanTemplatesWithRows(tenantId);
+    res.json(templates);
   });
 
   app.post("/api/crm/resource-plan-templates", async (req, res) => {
@@ -7953,12 +7941,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const tenantId = getApiTenantIdWithFallback(req);
-    const cards = await storage.getRateCards(tenantId);
-    const cardsWithItems = await Promise.all(cards.map(async (card) => {
-      const items = await storage.getRateCardItems(card.id);
-      return { ...card, items };
-    }));
-    res.json(cardsWithItems);
+    const cards = await storage.getRateCardsWithItems(tenantId);
+    res.json(cards);
   });
 
   app.post("/api/resources/rate-cards", async (req, res) => {

@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useRef, useEffect, useMemo, Fragment } from "react";
+﻿import { useState, useCallback, useRef, useEffect, useMemo, Fragment, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
@@ -56,7 +56,10 @@ import {
   DocTestingIcon,
   DocBPMIcon,
 } from "@/components/icons/ModuleIcons";
-import { TipTapEditor, type MentionUser } from "@/components/TipTapEditor";
+import type { MentionUser } from "@/components/TipTapEditor";
+const TipTapEditor = lazy(() =>
+  import("@/components/TipTapEditor").then((m) => ({ default: m.TipTapEditor })),
+);
 import type { Document, DocumentFolder, DocumentVersion, DocumentComment, DocumentFile, DocumentTemplate } from "@shared/schema";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -2712,20 +2715,22 @@ export default function DocumentManagementPage() {
               </div>
 
               <TabsContent value="content" className="mt-0">
-                <TipTapEditor
-                  content={editContent}
-                  onChange={setEditContent}
-                  onExport={handleExport}
-                  editable={isEditing}
-                  placeholder="Start writing your document..."
-                  users={mentionUsers}
-                  documentId={selectedDocument?.id}
-                  documentTitle={selectedDocument?.title}
-                  onAnchorComment={(commentId, selectedText) => {
-                    setPendingAnchoredComment({ id: commentId, text: selectedText });
-                    setActiveTab("comments");
-                  }}
-                />
+                <Suspense fallback={<div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
+                  <TipTapEditor
+                    content={editContent}
+                    onChange={setEditContent}
+                    onExport={handleExport}
+                    editable={isEditing}
+                    placeholder="Start writing your document..."
+                    users={mentionUsers}
+                    documentId={selectedDocument?.id}
+                    documentTitle={selectedDocument?.title}
+                    onAnchorComment={(commentId, selectedText) => {
+                      setPendingAnchoredComment({ id: commentId, text: selectedText });
+                      setActiveTab("comments");
+                    }}
+                  />
+                </Suspense>
               </TabsContent>
 
               <TabsContent value="comments" className="mt-0">

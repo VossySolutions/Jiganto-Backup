@@ -54,6 +54,7 @@ import { useModuleAccess } from "@/hooks/use-module-access";
 import { useResourceScope } from "@/hooks/use-resource-scope";
 import { DASHBOARD_PATH, isDashboardPath } from "@shared/app-routes";
 import { dashboardPathForClient } from "@/lib/workspace-scope";
+import { preloadRoute } from "@/lib/route-preload";
 import { PLATFORM_ROLE_LABELS } from "@shared/models/permissions";
 import {
   CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS,
@@ -422,7 +423,7 @@ export function Sidebar() {
       return (
         <Tooltip key={item.href}>
           <TooltipTrigger asChild>
-            <Link href={href} onClick={closeMobileNav}>
+            <Link href={href} onClick={closeMobileNav} onMouseEnter={() => preloadRoute(href)}>
               <div
                 data-testid={`nav-${item.href.replace(/\//g, "-").slice(1) || "dashboard"}`}
                 className={cn(
@@ -442,7 +443,7 @@ export function Sidebar() {
     }
 
     return (
-      <Link key={item.href} href={href} onClick={closeMobileNav}>
+      <Link key={item.href} href={href} onClick={closeMobileNav} onMouseEnter={() => preloadRoute(href)}>
         <div
           data-testid={`nav-${item.href.replace(/\//g, "-").slice(1) || "dashboard"}`}
           className={cn(

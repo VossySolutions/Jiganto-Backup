@@ -62,7 +62,7 @@ export function usePermissions() {
   const { data: access } = useQuery<{ granted: boolean }>({
     queryKey: ["/api/auth/access"],
     enabled: sessionReady && isAuthenticated,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   });
   const accessGranted = access?.granted === true;
 
@@ -72,7 +72,7 @@ export function usePermissions() {
     queryKey: ["/api/auth/session", staffOrg],
     queryFn: () => fetchSessionPermissions(staffOrg),
     enabled: sessionReady && isAuthenticated && accessGranted,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   });
 
   const permissions = data?.permissions;

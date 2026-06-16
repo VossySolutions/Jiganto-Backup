@@ -14,22 +14,42 @@ import { useToast } from "@/hooks/use-toast";
 import { Sidebar } from "@/components/Sidebar";
 import { useShellLayout } from "@/hooks/use-shell-layout";
 import { cn } from "@/lib/utils";
-import AgileBoard from "@/components/projects/AgileBoard";
-import AgileDashboard from "@/components/projects/AgileDashboard";
-import RaiddLogTool from "@/components/projects/RaiddLogTool";
-import DeliverablesTracker from "@/components/projects/DeliverablesTracker";
-import { ProjectWhiteboardTool } from "@/components/whiteboard/ProjectWhiteboardTool";
-import MilestoneTracker from "@/components/projects/MilestoneTracker";
-import { ProjectTrackingBoard } from "@/components/projects/ProjectTrackingBoard";
-import { Portfolio360ReportView } from "@/components/portfolio/Portfolio360ReportView";
-import {
-  PmTeamOrgTool, PmRaciTool, PmResourceTrackerTool, PmTimesheetsTool,
-  PmFinanceTrackerTool, PmStatusReportingTool, PmChangeLogTool, PmDocumentationTool,
-  PmTestTrackerTool, PmStakeholderTool, PmBpmTool, PmSowTrackerTool, PmWbsTool,
-} from "@/components/projects/PmSecondaryTools";
-import { ReactGanttChart } from "@/components/projects/ReactGanttChart";
-import { HelpDeskProjectTicketsTool } from "@/components/help-desk/HelpDeskProjectTicketsTool";
 import type { GanttTask, GanttResource, GanttDependency } from "@/components/projects/gantt.types";
+
+const AgileBoard = lazy(() => import("@/components/projects/AgileBoard"));
+const AgileDashboard = lazy(() => import("@/components/projects/AgileDashboard"));
+const RaiddLogTool = lazy(() => import("@/components/projects/RaiddLogTool"));
+const DeliverablesTracker = lazy(() => import("@/components/projects/DeliverablesTracker"));
+const ProjectWhiteboardTool = lazy(() =>
+  import("@/components/whiteboard/ProjectWhiteboardTool").then((m) => ({ default: m.ProjectWhiteboardTool })),
+);
+const MilestoneTracker = lazy(() => import("@/components/projects/MilestoneTracker"));
+const ProjectTrackingBoard = lazy(() =>
+  import("@/components/projects/ProjectTrackingBoard").then((m) => ({ default: m.ProjectTrackingBoard })),
+);
+const Portfolio360ReportView = lazy(() =>
+  import("@/components/portfolio/Portfolio360ReportView").then((m) => ({ default: m.Portfolio360ReportView })),
+);
+const ReactGanttChart = lazy(() =>
+  import("@/components/projects/ReactGanttChart").then((m) => ({ default: m.ReactGanttChart })),
+);
+const HelpDeskProjectTicketsTool = lazy(() =>
+  import("@/components/help-desk/HelpDeskProjectTicketsTool").then((m) => ({ default: m.HelpDeskProjectTicketsTool })),
+);
+const PmTeamOrgTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmTeamOrgTool })));
+const PmRaciTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmRaciTool })));
+const PmResourceTrackerTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmResourceTrackerTool })));
+const PmTimesheetsTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmTimesheetsTool })));
+const PmFinanceTrackerTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmFinanceTrackerTool })));
+const PmStatusReportingTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmStatusReportingTool })));
+const PmChangeLogTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmChangeLogTool })));
+const PmDocumentationTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmDocumentationTool })));
+const PmTestTrackerTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmTestTrackerTool })));
+const PmStakeholderTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmStakeholderTool })));
+const PmBpmTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmBpmTool })));
+const PmSowTrackerTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmSowTrackerTool })));
+const PmWbsTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmWbsTool })));
+
 import {
   Plus, Search, ChevronRight, ChevronDown, Loader2,
   Calendar, Users, Settings, Lightbulb,
@@ -2309,7 +2329,9 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
       )}
       {/* Content — for Gantt, flex-1 min-h-0 so it fills the remaining height */}
       <div className={isGantt ? "flex-1 min-h-0 overflow-hidden" : ""}>
-        {renderPlaceholder()}
+        <Suspense fallback={<div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
+          {renderPlaceholder()}
+        </Suspense>
       </div>
     </div>
   );

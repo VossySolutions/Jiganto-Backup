@@ -19,7 +19,7 @@ export function useModuleAccess() {
       return (await res.json()) as ModuleAccessPayload;
     },
     enabled: sessionReady && isAuthenticated,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   });
 
   const allowedKeys = data?.modules;

@@ -33,6 +33,10 @@ export default defineConfig({
           if (id.includes("@radix-ui")) return "radix";
           if (id.includes("@tanstack")) return "tanstack";
           if (id.includes("lucide-react")) return "icons";
+          if (id.includes("framer-motion")) return "motion";
+          if (id.includes("xlsx")) return "xlsx";
+          if (id.includes("ag-grid")) return "ag-grid";
+          if (id.includes("@supabase")) return "supabase";
         },
       },
     },
