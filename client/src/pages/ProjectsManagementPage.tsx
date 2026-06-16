@@ -18,6 +18,7 @@ import AgileBoard from "@/components/projects/AgileBoard";
 import AgileDashboard from "@/components/projects/AgileDashboard";
 import RaiddLogTool from "@/components/projects/RaiddLogTool";
 import DeliverablesTracker from "@/components/projects/DeliverablesTracker";
+import { ProjectWhiteboardTool } from "@/components/whiteboard/ProjectWhiteboardTool";
 import MilestoneTracker from "@/components/projects/MilestoneTracker";
 import { ProjectTrackingBoard } from "@/components/projects/ProjectTrackingBoard";
 import { Portfolio360ReportView } from "@/components/portfolio/Portfolio360ReportView";
@@ -207,6 +208,7 @@ const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
       { id: "defects", name: "Defects", hint: "Bug tracking & triage", icon: PmDefectsIcon },
       { id: "roadmap", name: "Roadmap", hint: "Release roadmap timeline", icon: PmRoadmapIcon },
       { id: "epics_stories", name: "Epics & Stories", hint: "Product backlog", icon: PmEpicsStoriesIcon },
+      { id: "whiteboard", name: "Whiteboard", hint: "Collaborative sticky notes", icon: PmKanbanBoardIcon },
     ],
   },
   reporting_dashboards: {
@@ -271,12 +273,12 @@ const MASTER_TOOL_ORDER: string[] = [
   "dependencies_log", "decisions_log", "change_log", "documentation", "org_chart",
   "stakeholder_map", "business_process_model", "deliverables_tracker", "kanban_board",
   "raci_model", "resource_tracker", "test_tracker", "timesheets", "finance_tracker",
-  "sow_tracker", "wbs",
+  "sow_tracker", "wbs", "whiteboard",
   "scrum_board", "epics_stories",
 ];
 
 const DEFAULT_TOOLS: Record<string, string[]> = {
-  project: ["gantt_chart", "milestone_plan", "project_dashboard", "sprint_board", "backlog", "epics", "stories", "sprints", "defects", "roadmap", "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log", "dependencies_log", "decisions_log", "change_log", "documentation", "org_chart", "stakeholder_map", "business_process_model", "deliverables_tracker", "kanban_board", "raci_model", "resource_tracker", "test_tracker", "timesheets", "finance_tracker", "sow_tracker", "wbs"],
+  project: ["gantt_chart", "milestone_plan", "project_dashboard", "sprint_board", "backlog", "epics", "stories", "sprints", "defects", "roadmap", "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log", "dependencies_log", "decisions_log", "change_log", "documentation", "org_chart", "stakeholder_map", "business_process_model", "deliverables_tracker", "kanban_board", "raci_model", "resource_tracker", "test_tracker", "timesheets", "finance_tracker", "sow_tracker", "wbs", "whiteboard"],
   programme: ["gantt_chart", "milestone_plan", "status_reporting", "project_dashboard", "risk_log", "issues_log"],
   initiative: ["milestone_plan", "status_reporting", "project_dashboard", "risk_log"],
   campaign: ["kanban_board", "milestone_plan", "status_reporting"],
@@ -2229,6 +2231,8 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
         return <PmStakeholderTool projectId={project.id} project={project} />;
       case "business_process_model":
         return <PmBpmTool projectId={project.id} />;
+      case "whiteboard":
+        return <ProjectWhiteboardTool projectId={project.id} />;
       case "raci_model":
         return <PmRaciTool projectId={project.id} />;
       case "resource_tracker":

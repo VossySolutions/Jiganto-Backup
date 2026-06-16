@@ -364,6 +364,12 @@ export async function registerRoutes(
   const { registerSignoffRoutes } = await import("./signoff/routes");
   registerSignoffRoutes(app);
 
+  const { registerWhiteboardRoutes } = await import("./whiteboard/routes");
+  registerWhiteboardRoutes(app);
+
+  const { initializeWhiteboardWebSocket } = await import("./whiteboard/websocket");
+  initializeWhiteboardWebSocket(httpServer);
+
   const { registerHelpDeskRoutes } = await import("./help-desk/routes");
   registerHelpDeskRoutes(app);
   const { registerTestMgmtExtensionRoutes } = await import("./testmgmt/routes");

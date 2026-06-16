@@ -29,6 +29,8 @@ import PortfolioManagementPage from "@/pages/PortfolioManagementPage";
 import SignOffPage from "@/pages/SignOffPage";
 import SigningPortalPage from "@/pages/SigningPortalPage";
 import SurveysPage from "@/pages/SurveysPage";
+import { WhiteboardPage } from "@/pages/WhiteboardPage";
+import { WhiteboardCanvasPage } from "@/pages/WhiteboardCanvasPage";
 import SurveyPortalPage from "@/pages/SurveyPortalPage";
 import PollPortalPage from "@/pages/PollPortalPage";
 import ClientsPage from "@/pages/ClientsPage";
@@ -219,6 +221,14 @@ function Router() {
         <Route path="/settings/workspace" component={SettingsPage} />
         <Route path="/settings/personal" component={SettingsPage} />
         <Route path="/settings" component={SettingsPage} />
+        <Route path="/modules/whiteboarding/:id" component={WhiteboardCanvasPage} />
+        <Route path="/modules/whiteboarding" component={WhiteboardPage} />
+        <Route path="/whiteboard/:id">
+          {(params) => <Redirect to={`/modules/whiteboarding/${params.id}`} />}
+        </Route>
+        <Route path="/whiteboard">
+          <Redirect to="/modules/whiteboarding" />
+        </Route>
         <Route path="/modules/:key" component={ModulePage} />
         <Route component={NotFound} />
       </Switch>

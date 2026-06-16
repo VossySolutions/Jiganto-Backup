@@ -10,6 +10,11 @@ export default defineConfig({
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
     },
+    // react-konva must share the same React instance as the app (fixes useRef null crash)
+    dedupe: ["react", "react-dom", "react/jsx-runtime"],
+  },
+  optimizeDeps: {
+    include: ["react-konva", "konva"],
   },
   root: path.resolve(import.meta.dirname, "client"),
   build: {

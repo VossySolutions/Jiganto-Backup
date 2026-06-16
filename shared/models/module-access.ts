@@ -18,6 +18,7 @@ export const SETTINGS_MODULE_KEYS = [
   { key: "test-mgmt", name: "Testing" },
   { key: "bpm", name: "BPM" },
   { key: "workspaces", name: "Workspaces" },
+  { key: "whiteboard", name: "Whiteboard" },
 ] as const;
 
 import { DASHBOARD_PATH, LANDING_PATH } from "../app-routes";
@@ -79,6 +80,7 @@ export const API_PREFIX_TO_MODULE_KEY: readonly [string, string][] = [
   ["/api/conversations", "chat"],
   ["/api/chat", "chat"],
   ["/api/customer-mgmt", "customer-mgmt"],
+  ["/api/whiteboard", "whiteboard"],
 ];
 
 /** Always hidden in client workspace for all users (Docs §5). */
