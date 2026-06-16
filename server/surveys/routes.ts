@@ -419,11 +419,19 @@ Return JSON: { "questions": [{ "text", "type" (mc|scale|nps|text|para|yn|sc|like
   app.post("/api/surveys/:id/save-template", async (req, res) => {
     if (!isAuth(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
+      const tenantId = getApiTenantIdWithFallback(req);
       const tpl = await surveyService.saveAsTemplate({
         surveyId: Number(req.params.id),
-        tenantId: getApiTenantIdWithFallback(req),
+        tenantId,
         userId: userId(req),
         title: req.body.title,
+      });
+      const { registerFromSource } = await import("../templates/register-helper");
+      await registerFromSource({
+        tenantId, userId: userId(req), userName: userName(req),
+        module: "survey", sourceModule: "survey", sourceId: tpl.id,
+        name: tpl.title, description: tpl.description ?? undefined,
+        categoryTags: tpl.category ? [tpl.category] : undefined,
       });
       res.json(tpl);
     } catch (e: unknown) { res.status(500).json({ message: (e as Error).message }); }

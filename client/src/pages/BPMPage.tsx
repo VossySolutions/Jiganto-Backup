@@ -49,6 +49,7 @@ import { PortalAssetPanel } from "@/components/bpm/PortalAssetPanel";
 import { PortalSettingsDialog } from "@/components/bpm/PortalSettingsDialog";
 import { BpmDeltaReportTable } from "@/components/bpm/BpmDeltaReportTable";
 import { BpmTemplatePipeline } from "@/components/bpm/BpmTemplatePipeline";
+import { SaveAsPlatformTemplateDialog } from "@/components/templates/SaveAsPlatformTemplateDialog";
 import { useAuth } from "@/hooks/use-auth";
 import { BpmLoadingState, BpmCardGridSkeleton } from "@/components/bpm/BpmLoadingState";
 import { bpmFetchJson } from "@/lib/bpm-api";
@@ -982,6 +983,7 @@ function FrameworkDetailView({ framework, onBack, onUpdate }: { framework: Frame
   const [layoutMode, setLayoutMode] = useState<"phase" | "consolidated">("phase");
   const [detailColumns, setDetailColumns] = useState<1 | 2>(2);
   const [isExporting, setIsExporting] = useState(false);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const frameworkContentRef = useRef<HTMLDivElement>(null);
 
   const selectedPhase = phases.find(p => p.id === selectedPhaseId);
@@ -1181,8 +1183,18 @@ function FrameworkDetailView({ framework, onBack, onUpdate }: { framework: Frame
               <DropdownMenuItem onClick={handleExportPdf} data-testid="button-export-pdf">
                 <FileDown className="h-4 w-4 mr-2" />Export as PDF
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowSaveTemplate(true)} data-testid="button-save-fw-template">
+                <LayoutTemplate className="h-4 w-4 mr-2" />Save as Template
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <SaveAsPlatformTemplateDialog
+            open={showSaveTemplate}
+            onOpenChange={setShowSaveTemplate}
+            endpoint={`/api/frameworks/${framework.id}/save-as-template`}
+            defaultName={editName}
+            defaultDescription={editDescription}
+          />
           {editMode && (
             <>
               <Select value={editStatus} onValueChange={(v) => { setEditStatus(v); setIsDirty(true); }}>

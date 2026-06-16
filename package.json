@@ -36,6 +36,7 @@
     "smoke:bpm": "node scripts/smoke-test-bpm-apis.mjs",
     "smoke:surveys": "node scripts/smoke-test-surveys-apis.mjs",
     "smoke:esign": "node scripts/smoke-test-esign-apis.mjs",
+    "smoke:templates": "node scripts/smoke-test-templates-apis.mjs",
     "db:patch-portfolio": "node scripts/patch-portfolio-schema.mjs",
     "db:patch-tasks": "node scripts/patch-tasks-schema.mjs",
     "smoke:tasks": "node scripts/smoke-tasks-apis.mjs",

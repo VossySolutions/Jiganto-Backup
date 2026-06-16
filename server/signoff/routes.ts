@@ -293,6 +293,15 @@ export function registerSignoffRoutes(app: Express) {
     if (tenantId == null) return;
     try {
       const tpl = await signoffService.saveAsTemplate(Number(req.params.id), tenantId, userId(req));
+      const { registerFromSource } = await import("../templates/register-helper");
+      const u = req.user as { firstName?: string; lastName?: string; email?: string };
+      await registerFromSource({
+        tenantId, userId: userId(req),
+        userName: u?.firstName && u?.lastName ? `${u.firstName} ${u.lastName}` : u?.email,
+        module: "esign", sourceModule: "esign", sourceId: tpl.id,
+        name: tpl.title, description: tpl.description ?? undefined,
+        categoryTags: tpl.category ? [tpl.category] : undefined,
+      });
       res.json(tpl);
     } catch (e: unknown) { res.status(400).json({ message: (e as Error).message }); }
   });

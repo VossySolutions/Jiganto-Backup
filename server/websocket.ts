@@ -20,8 +20,18 @@ class ChatWebSocketServer {
   private typingUsers: Map<number, Map<string, NodeJS.Timeout>> = new Map();
 
   constructor(server: HttpServer) {
-    this.wss = new WebSocketServer({ server, path: "/ws/chat" });
+    this.wss = new WebSocketServer({ noServer: true });
     this.setupHandlers();
+
+    server.on("upgrade", (req, socket, head) => {
+      const pathname = new URL(req.url || "", `http://${req.headers.host}`).pathname;
+      if (pathname !== "/ws/chat") return;
+
+      this.wss.handleUpgrade(req, socket, head, (ws) => {
+        this.wss.emit("connection", ws, req);
+      });
+    });
+
     console.log("WebSocket server initialized on /ws/chat");
   }
 

@@ -20,6 +20,7 @@ import MondayTable, { type ColumnDef, type GroupDef, defaultStatusColors } from 
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
 import { type ConditionalFormatRule } from "@/lib/conditionalFormatting";
 import { BpmlVersionHistory } from "@/components/bpm/BpmlVersionHistory";
+import { SaveAsPlatformTemplateDialog } from "@/components/templates/SaveAsPlatformTemplateDialog";
 import { applyBpmlFilter, multiSort, type BpmlFilter, type BpmlFilterOperator } from "@/lib/bpm-utils";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -363,6 +364,7 @@ export default function BpmlView() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [showCreateTemplateDialog, setShowCreateTemplateDialog] = useState(false);
   const [showEditTemplateDialog, setShowEditTemplateDialog] = useState(false);
+  const [showSavePlatformTemplate, setShowSavePlatformTemplate] = useState(false);
   const [showColumnConfig, setShowColumnConfig] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
@@ -1752,8 +1754,25 @@ export default function BpmlView() {
               <DropdownMenuItem onClick={handleDownloadBlankTemplate} data-testid="menuitem-download-blank">
                 Download Blank CSV
               </DropdownMenuItem>
+              {selectedTemplate && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setShowSavePlatformTemplate(true)} data-testid="menuitem-save-bpml-platform-template">
+                    <LayoutTemplate className="h-4 w-4 mr-2" /> Save as Template
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
+          {selectedTemplate && (
+            <SaveAsPlatformTemplateDialog
+              open={showSavePlatformTemplate}
+              onOpenChange={setShowSavePlatformTemplate}
+              endpoint={`/api/bpml/templates/${selectedTemplate.id}/save-as-template`}
+              defaultName={selectedTemplate.name}
+              defaultDescription={selectedTemplate.description ?? ""}
+            />
+          )}
           <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} data-testid="button-upload-bpml">
             <Upload className="h-4 w-4 mr-1" />
             Import

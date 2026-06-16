@@ -25,12 +25,13 @@ import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 import {
   LayoutDashboard, GitBranch, Map, BookOpen, FlaskConical, Network,
   Upload, Play, Bug, LayoutGrid, ScrollText, ShieldCheck, RotateCcw,
-  ChevronDown, FolderKanban, Plus, Check, X, Loader2, Layers, Menu, GitCompare,
+  ChevronDown, FolderKanban, Plus, Check, X, Loader2, Layers, Menu, GitCompare, LayoutTemplate,
 } from "lucide-react";
 import { TmScreen } from "@/types/testmgmt";
 export type { TmScreen };
 import { useToast } from "@/hooks/use-toast";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { SaveAsPlatformTemplateDialog } from "@/components/templates/SaveAsPlatformTemplateDialog";
 
 interface NavItem {
   id: TmScreen;
@@ -150,6 +151,31 @@ function ProjectSelector({ onSelect }: { onSelect?: () => void }) {
   );
 }
 
+function SaveTmProjectAsTemplate() {
+  const { activeProject } = useTmProject();
+  const [open, setOpen] = useState(false);
+  if (!activeProject) return null;
+  return (
+    <div className="px-3 pb-2">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded-lg border border-dashed border-border hover:bg-muted/60 transition-colors"
+        data-testid="btn-save-tm-project-template"
+      >
+        <LayoutTemplate className="h-3.5 w-3.5 text-primary shrink-0" />
+        <span className="truncate">Save project as template</span>
+      </button>
+      <SaveAsPlatformTemplateDialog
+        open={open}
+        onOpenChange={setOpen}
+        endpoint={`/api/tm/projects/${activeProject.id}/save-as-template`}
+        defaultName={activeProject.name}
+      />
+    </div>
+  );
+}
+
 function NavPanel({ activeScreen, onNavigate }: { activeScreen: TmScreen; onNavigate: (s: TmScreen) => void }) {
   return (
     <>
@@ -167,6 +193,7 @@ function NavPanel({ activeScreen, onNavigate }: { activeScreen: TmScreen; onNavi
       <div className="border-b border-border pb-2 flex-shrink-0">
         <div className="px-4 pt-2 pb-0 text-[10px] font-semibold text-muted-foreground tracking-[0.12em] uppercase font-mono">Project</div>
         <ProjectSelector onSelect={() => {}} />
+        <SaveTmProjectAsTemplate />
       </div>
       <nav className="flex-1 py-3 space-y-0.5 overflow-y-auto">
         {navSections.map(section => (

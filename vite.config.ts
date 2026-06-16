@@ -22,6 +22,9 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    hmr: {
+      path: "/vite-hmr",
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],

@@ -31,6 +31,8 @@ import SigningPortalPage from "@/pages/SigningPortalPage";
 import SurveysPage from "@/pages/SurveysPage";
 import { WhiteboardPage } from "@/pages/WhiteboardPage";
 import { WhiteboardCanvasPage } from "@/pages/WhiteboardCanvasPage";
+import TemplatesPage from "@/pages/TemplatesPage";
+import { SavingAsTemplateBanner } from "@/components/templates/SavingAsTemplateBanner";
 import SurveyPortalPage from "@/pages/SurveyPortalPage";
 import PollPortalPage from "@/pages/PollPortalPage";
 import ClientsPage from "@/pages/ClientsPage";
@@ -159,6 +161,7 @@ function Router() {
 
   return (
     <AIInsightsPanelProvider>
+      <SavingAsTemplateBanner />
       <WhatsNewAutoPopup />
       <AIAssistantButton />
       <ModuleAIInsightsHost />
@@ -221,6 +224,7 @@ function Router() {
         <Route path="/settings/workspace" component={SettingsPage} />
         <Route path="/settings/personal" component={SettingsPage} />
         <Route path="/settings" component={SettingsPage} />
+        <Route path="/modules/templates" component={TemplatesPage} />
         <Route path="/modules/whiteboarding/:id" component={WhiteboardCanvasPage} />
         <Route path="/modules/whiteboarding" component={WhiteboardPage} />
         <Route path="/whiteboard/:id">

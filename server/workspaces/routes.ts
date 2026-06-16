@@ -87,6 +87,13 @@ export function registerWorkspaceExtendedRoutes(app: Express): void {
       const uid = userId(req);
       if (!uid) return res.status(401).json({ message: "Unauthorized" });
       const saved = await ws.saveWorkspaceAsTemplate(Number(req.params.id), uid, tenantId, req.body);
+      const { registerFromSource } = await import("../templates/register-helper");
+      await registerFromSource({
+        tenantId, userId: uid,
+        module: "workspace", sourceModule: "workspace", sourceId: saved.id,
+        name: saved.name, description: saved.description ?? undefined,
+        categoryTags: saved.category ? [saved.category] : undefined,
+      });
       res.json(saved);
     } catch (error: any) {
       res.status(400).json({ message: error.message });

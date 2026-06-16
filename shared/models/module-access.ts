@@ -19,6 +19,7 @@ export const SETTINGS_MODULE_KEYS = [
   { key: "bpm", name: "BPM" },
   { key: "workspaces", name: "Workspaces" },
   { key: "whiteboard", name: "Whiteboard" },
+  { key: "templates", name: "Templates" },
 ] as const;
 
 import { DASHBOARD_PATH, LANDING_PATH } from "../app-routes";
@@ -72,6 +73,7 @@ export const API_PREFIX_TO_MODULE_KEY: readonly [string, string][] = [
   ["/api/tm", "test-mgmt"],
   ["/api/surveys", "surveys"],
   ["/api/signoff", "e-sign"],
+  ["/api/templates", "templates"],
   ["/api/frameworks", "templates"],
   ["/api/portal", "help-desk"],
   ["/api/help-desk", "help-desk"],

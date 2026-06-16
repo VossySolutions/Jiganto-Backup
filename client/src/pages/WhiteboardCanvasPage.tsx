@@ -16,8 +16,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
   ArrowLeft, Plus, Minus, Maximize2, Map, MoreHorizontal, Share2, History,
-  Users, Copy, Trash2, StickyNote, RefreshCw,
+  Users, Copy, Trash2, StickyNote, RefreshCw, LayoutTemplate,
 } from "lucide-react";
+import { SaveAsPlatformTemplateDialog } from "@/components/templates/SaveAsPlatformTemplateDialog";
 import type { WhiteboardDetail, WhiteboardActivity, WhiteboardPermission } from "@shared/models/whiteboard";
 import { WhiteboardCanvasLazy } from "@/components/whiteboard/WhiteboardCanvasLazy";
 import type { WhiteboardCanvasHandle } from "@/components/whiteboard/WhiteboardCanvas";
@@ -69,6 +70,7 @@ export function WhiteboardCanvasPage() {
   const [savedVisible, setSavedVisible] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showMinimap, setShowMinimap] = useState(true);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const canvasRef = useRef<WhiteboardCanvasHandle | null>(null);
   const [zoomLabel, setZoomLabel] = useState(100);
   const memberSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -274,6 +276,11 @@ export function WhiteboardCanvasPage() {
               <DropdownMenuItem onClick={() => setShowMinimap((v) => !v)}>
                 <Map className="h-4 w-4 mr-2" /> {showMinimap ? "Hide" : "Show"} minimap
               </DropdownMenuItem>
+              {isAdmin && (
+                <DropdownMenuItem onClick={() => setShowSaveTemplate(true)} data-testid="menu-save-whiteboard-template">
+                  <LayoutTemplate className="h-4 w-4 mr-2" /> Save as Template
+                </DropdownMenuItem>
+              )}
               {isAdmin && (
                 <>
                   <DropdownMenuSeparator />
@@ -497,6 +504,16 @@ export function WhiteboardCanvasPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      {board && (
+        <SaveAsPlatformTemplateDialog
+          open={showSaveTemplate}
+          onOpenChange={setShowSaveTemplate}
+          endpoint={`/api/whiteboard/${board.id}/save-as-template`}
+          defaultName={board.name}
+          defaultDescription={board.description ?? ""}
+        />
+      )}
     </div>
   );
 }

@@ -367,13 +367,13 @@ export async function registerRoutes(
   const { registerWhiteboardRoutes } = await import("./whiteboard/routes");
   registerWhiteboardRoutes(app);
 
-  const { initializeWhiteboardWebSocket } = await import("./whiteboard/websocket");
-  initializeWhiteboardWebSocket(httpServer);
-
   const { registerHelpDeskRoutes } = await import("./help-desk/routes");
   registerHelpDeskRoutes(app);
   const { registerTestMgmtExtensionRoutes } = await import("./testmgmt/routes");
   registerTestMgmtExtensionRoutes(app, { storage });
+
+  const { registerTemplateRoutes } = await import("./templates/routes");
+  registerTemplateRoutes(app);
 
   // === Application Routes ===
 
@@ -8674,6 +8674,14 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     try {
       const data = insertBpmTemplateSchema.parse(req.body);
       const template = await storage.createBpmTemplate(data);
+      const tenantId = getApiTenantIdWithFallback(req);
+      const { registerFromSource } = await import("./templates/register-helper");
+      await registerFromSource({
+        tenantId, userId,
+        module: "bpm_diagram", sourceModule: "bpm_diagram", sourceId: template.id,
+        name: template.name, description: template.description ?? undefined,
+        categoryTags: template.vendor ? [template.vendor] : undefined,
+      });
       res.status(201).json(template);
     } catch (error: any) {
       res.status(400).json({ message: error.message });

@@ -20,8 +20,19 @@ class WhiteboardWebSocketServer {
   private boardSubscriptions: Map<number, Set<string>> = new Map();
 
   constructor(server: HttpServer) {
-    this.wss = new WebSocketServer({ server, path: "/ws/whiteboard" });
+    // noServer: avoid ws aborting unrelated upgrades (e.g. Vite /vite-hmr)
+    this.wss = new WebSocketServer({ noServer: true });
     this.setupHandlers();
+
+    server.on("upgrade", (req, socket, head) => {
+      const pathname = new URL(req.url || "", `http://${req.headers.host}`).pathname;
+      if (pathname !== "/ws/whiteboard") return;
+
+      this.wss.handleUpgrade(req, socket, head, (ws) => {
+        this.wss.emit("connection", ws, req);
+      });
+    });
+
     setInterval(() => this.pruneInactive(), 10_000);
     console.log("WebSocket server initialized on /ws/whiteboard");
   }

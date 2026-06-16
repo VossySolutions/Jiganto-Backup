@@ -35,9 +35,10 @@ import {
   Calendar, Users, Settings, Lightbulb,
   X, Trash2, ArrowRight,
   Maximize2, Minimize2, Share2, ChevronLeft,
-  LayoutGrid, TableProperties, MoreHorizontal,
+  LayoutGrid, TableProperties, MoreHorizontal, LayoutTemplate,
   ArrowUpDown, ExternalLink, Check
 } from "lucide-react";
+import { SaveAsPlatformTemplateDialog } from "@/components/templates/SaveAsPlatformTemplateDialog";
 import {
   PmProjectIcon, PmProgrammeIcon, PmInitiativeIcon, PmCampaignIcon, PmPocIcon,
   PmUserDefinedIcon, PmPortfolioIcon, PmSubProjectIcon, PmProgramIncrementIcon,
@@ -1285,6 +1286,7 @@ function ProjectDetailView({
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -1515,11 +1517,30 @@ function ProjectDetailView({
           <HealthPill health={project.ragStatus} />
           <StatusBadge status={project.status} />
           <div className="ml-auto flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" data-testid="button-project-more">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setShowSaveTemplate(true)} data-testid="menu-save-project-template">
+                  <LayoutTemplate className="h-4 w-4 mr-2" /> Save as Template
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" data-testid="button-fullscreen"><Maximize2 className="h-3.5 w-3.5" /></Button>
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowSettings(!showSettings)} data-testid="button-project-settings"><SettingsGearIcon className="h-4 w-4" /></Button>
           </div>
         </div>
       </div>
+      <SaveAsPlatformTemplateDialog
+        open={showSaveTemplate}
+        onOpenChange={setShowSaveTemplate}
+        endpoint={`/api/pm/projects/${projectId}/save-as-template`}
+        defaultName={project.name}
+        defaultDescription={project.description ?? ""}
+      />
 
       <div className="flex-shrink-0 flex items-center border-b border-border bg-card sticky top-0 z-40 overflow-hidden" data-testid="tool-tabs-bar">
         {canScrollLeft && (

@@ -30,6 +30,7 @@ export * from "./models/finance";
 export * from "./models/resource-planning";
 export * from "./models/service-desk";
 export * from "./models/whiteboard";
+export * from "./models/templates";
 
 import { users } from "./models/auth";
 

@@ -15,6 +15,7 @@ import {
   isSupabaseAuthUser,
   authMode,
 } from "./supabaseAuth";
+import { isDevLoginEnabled } from "./devLogin";
 
 const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
 const PgSession = connectPg(session);
@@ -96,12 +97,18 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return next();
   }
 
-  if (authMode() === "supabase") {
-    return res.status(401).json({ message: "Unauthorized" });
+  const devSessionOk =
+    sessionValid &&
+    req.isAuthenticated?.() &&
+    isSessionAuthUser(user) &&
+    (process.env.NODE_ENV !== "production" || isDevLoginEnabled());
+
+  if (devSessionOk) {
+    return next();
   }
 
-  if (sessionValid && req.isAuthenticated?.() && isSessionAuthUser(user)) {
-    return next();
+  if (authMode() === "supabase") {
+    return res.status(401).json({ message: "Unauthorized" });
   }
 
   return res.status(401).json({ message: "Unauthorized" });
