@@ -256,6 +256,23 @@ export default function DocumentManagementPage() {
   const selectedDocumentRef = useRef<Document | null>(null);
   const isEditingRef = useRef(false);
 
+  useEffect(() => {
+    if (!selectedDocument?.id || selectedDocument.content != null) return;
+    let cancelled = false;
+    void fetchWithAuth(`/api/documents/${selectedDocument.id}`)
+      .then((res) => res.json())
+      .then((full: Document) => {
+        if (cancelled) return;
+        setSelectedDocument(full);
+        if (!isEditingRef.current) {
+          setEditContentState(full.content || "");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDocument?.id, selectedDocument?.content]);
+
   const doSave = useCallback(async (docId: number, contentStr: string) => {
     setAutoSaveStatus("saving");
     try {

@@ -3,6 +3,7 @@ import {
   type SupabaseAuthUser,
   syncSupabaseUserToApp,
 } from "./appUserSync";
+import { supabaseAuthCache } from "../lib/supabase-auth-cache";
 
 function normalizeSupabaseUrl(url?: string): string | null {
   if (!url) return null;
@@ -48,11 +49,27 @@ export const attachSupabaseIdentity: RequestHandler = async (req, _res, next) =>
     const token = bearerToken(req);
     if (!token) return next();
 
-    // Always validate JWT when present — do not let a stale passport dev-session cookie win.
+    const cached = supabaseAuthCache.get(token);
+    if (cached) {
+      const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60;
+      req.user = {
+        supabaseAuth: true,
+        expires_at: expiresAt,
+        claims: {
+          sub: cached.sbUser.id,
+          email: cached.appUser.email ?? undefined,
+          first_name: cached.appUser.firstName ?? undefined,
+          last_name: cached.appUser.lastName ?? undefined,
+        },
+      } as Express.User;
+      return next();
+    }
+
     const sbUser = await fetchSupabaseUser(token);
     if (!sbUser?.id) return next();
 
     const appUser = await syncSupabaseUserToApp(sbUser);
+    supabaseAuthCache.set(token, sbUser, appUser);
 
     const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60; // 1 hour cache window
     req.user = {

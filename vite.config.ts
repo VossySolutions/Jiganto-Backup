@@ -14,12 +14,28 @@ export default defineConfig({
     dedupe: ["react", "react-dom", "react/jsx-runtime"],
   },
   optimizeDeps: {
-    include: ["react-konva", "konva"],
+    include: ["react-konva", "konva", "@xyflow/react", "recharts"],
   },
   root: path.resolve(import.meta.dirname, "client"),
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("@xyflow")) return "xyflow";
+          if (id.includes("@tiptap") || id.includes("prosemirror")) return "tiptap";
+          if (id.includes("recharts") || id.includes("d3-")) return "charts";
+          if (id.includes("pdfjs-dist")) return "pdfjs";
+          if (id.includes("konva") || id.includes("react-konva")) return "konva";
+          if (id.includes("@radix-ui")) return "radix";
+          if (id.includes("@tanstack")) return "tanstack";
+          if (id.includes("lucide-react")) return "icons";
+        },
+      },
+    },
   },
   server: {
     hmr: {

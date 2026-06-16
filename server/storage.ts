@@ -160,6 +160,7 @@ import {
 import { db } from "./db";
 import { eq, and, desc, asc, isNull, or, sql, inArray, gt, lt, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { modulePermissionsCache } from "./lib/module-permissions-cache";
 import { users } from "@shared/models/auth";
 import { orgMemberships } from "@shared/models/permissions";
 
@@ -645,7 +646,7 @@ export interface IStorage {
 
   // Document Management - Documents
   getDocuments(tenantId: number, folderId?: number | null, clientId?: number): Promise<Document[]>;
-  getDocumentsWithOwner(tenantId: number, folderId?: number | null, clientId?: number): Promise<(Document & { ownerName: string | null })[]>;
+  getDocumentsWithOwner(tenantId: number, folderId?: number | null, clientId?: number): Promise<(Omit<Document, "content"> & { ownerName: string | null; content?: string | null })[]>;
   getDocument(id: number): Promise<Document | undefined>;
   createDocument(document: InsertDocument): Promise<Document>;
   updateDocument(id: number, updates: Partial<InsertDocument>): Promise<Document | undefined>;
@@ -1477,6 +1478,7 @@ export class DatabaseStorage implements IStorage {
 
   async upsertUserModulePermissions(profileId: number, tenantId: number, permissions: { moduleKey: string; canCreate: boolean; canRead: boolean; canUpdate: boolean; canDelete: boolean }[]): Promise<UserModulePermission[]> {
     await db.delete(userModulePermissions).where(eq(userModulePermissions.profileId, profileId));
+    modulePermissionsCache.invalidateProfile(profileId);
     if (permissions.length === 0) return [];
     const values = permissions.map(p => ({
       profileId,
@@ -1881,9 +1883,25 @@ export class DatabaseStorage implements IStorage {
         : [];
     const pinnedSet = new Set(pinnedRows.map((p) => p.messageId));
 
+    const reactionsByMessage = new Map<number, typeof reactionRows>();
+    for (const r of reactionRows) {
+      if (r.messageId == null) continue;
+      const list = reactionsByMessage.get(r.messageId) ?? [];
+      list.push(r);
+      reactionsByMessage.set(r.messageId, list);
+    }
+
+    const attachmentsByMessage = new Map<number, typeof attachmentRows>();
+    for (const a of attachmentRows) {
+      if (a.messageId == null) continue;
+      const list = attachmentsByMessage.get(a.messageId) ?? [];
+      list.push(a);
+      attachmentsByMessage.set(a.messageId, list);
+    }
+
     return rows.map((message) => {
       const grouped = new Map<string, { count: number; userIds: string[] }>();
-      for (const r of reactionRows.filter((x) => x.messageId === message.id)) {
+      for (const r of reactionsByMessage.get(message.id) ?? []) {
         const existing = grouped.get(r.emoji) ?? { count: 0, userIds: [] };
         existing.count += 1;
         existing.userIds.push(r.userId);
@@ -1900,8 +1918,7 @@ export class DatabaseStorage implements IStorage {
         })),
         threadReplyCount: thread?.count ?? 0,
         threadLastReplyAt: thread?.lastAt ?? null,
-        attachments: attachmentRows
-          .filter((a) => a.messageId === message.id)
+        attachments: (attachmentsByMessage.get(message.id) ?? [])
           .map((a) => ({
             id: a.id,
             fileName: a.fileName,
@@ -4671,7 +4688,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(documents.updatedAt));
   }
 
-  async getDocumentsWithOwner(tenantId: number, folderId?: number | null, clientId?: number): Promise<(Document & { ownerName: string | null })[]> {
+  async getDocumentsWithOwner(tenantId: number, folderId?: number | null, clientId?: number): Promise<(Omit<Document, "content"> & { ownerName: string | null; content?: string | null })[]> {
     const conditions = [eq(documents.tenantId, tenantId)];
     if (folderId === null) conditions.push(isNull(documents.folderId));
     else if (folderId !== undefined) conditions.push(eq(documents.folderId, folderId));
@@ -4684,7 +4701,6 @@ export class DatabaseStorage implements IStorage {
       folderId: documents.folderId,
       title: documents.title,
       description: documents.description,
-      content: documents.content,
       type: documents.type,
       status: documents.status,
       ownerId: documents.ownerId,
@@ -6154,11 +6170,51 @@ export class DatabaseStorage implements IStorage {
     const risks: { id: string; title: string; severity: string; ws: string; color: string }[] = [];
     let burndownData: { day: string; ideal: number; actual: number | null }[] = [];
 
+    const wsIds = workstreams.map((ws) => ws.id);
+    const [allEpics, allStories, allSprints, allDefects] =
+      wsIds.length > 0
+        ? await Promise.all([
+            db.select().from(pmEpics).where(inArray(pmEpics.agileWorkstreamId, wsIds)).orderBy(pmEpics.createdAt),
+            db.select().from(pmAgileStories).where(inArray(pmAgileStories.agileWorkstreamId, wsIds)).orderBy(pmAgileStories.createdAt),
+            db.select().from(pmAgileSprints).where(inArray(pmAgileSprints.agileWorkstreamId, wsIds)).orderBy(pmAgileSprints.createdAt),
+            db.select().from(pmAgileDefects).where(inArray(pmAgileDefects.agileWorkstreamId, wsIds)).orderBy(pmAgileDefects.createdAt),
+          ])
+        : [[], [], [], []];
+
+    const epicsByWs = new Map<number, typeof allEpics>();
+    for (const epic of allEpics) {
+      if (epic.agileWorkstreamId == null) continue;
+      const list = epicsByWs.get(epic.agileWorkstreamId) ?? [];
+      list.push(epic);
+      epicsByWs.set(epic.agileWorkstreamId, list);
+    }
+    const storiesByWs = new Map<number, typeof allStories>();
+    for (const story of allStories) {
+      if (story.agileWorkstreamId == null) continue;
+      const list = storiesByWs.get(story.agileWorkstreamId) ?? [];
+      list.push(story);
+      storiesByWs.set(story.agileWorkstreamId, list);
+    }
+    const sprintsByWs = new Map<number, typeof allSprints>();
+    for (const sprint of allSprints) {
+      if (sprint.agileWorkstreamId == null) continue;
+      const list = sprintsByWs.get(sprint.agileWorkstreamId) ?? [];
+      list.push(sprint);
+      sprintsByWs.set(sprint.agileWorkstreamId, list);
+    }
+    const defectsByWs = new Map<number, typeof allDefects>();
+    for (const defect of allDefects) {
+      if (defect.agileWorkstreamId == null) continue;
+      const list = defectsByWs.get(defect.agileWorkstreamId) ?? [];
+      list.push(defect);
+      defectsByWs.set(defect.agileWorkstreamId, list);
+    }
+
     for (const ws of workstreams) {
-      const epics = await this.getPmEpics(ws.id);
-      const stories = await this.getPmAgileStories(ws.id);
-      const sprints = await this.getPmAgileSprints(ws.id);
-      const defects = await this.getPmAgileDefects(ws.id);
+      const epics = epicsByWs.get(ws.id) ?? [];
+      const stories = storiesByWs.get(ws.id) ?? [];
+      const sprints = sprintsByWs.get(ws.id) ?? [];
+      const defects = defectsByWs.get(ws.id) ?? [];
 
       const wsTotal = stories.reduce((a, s) => a + (s.points || 0), 0);
       const wsDone = stories.filter((s) => s.status === "Done").reduce((a, s) => a + (s.points || 0), 0);

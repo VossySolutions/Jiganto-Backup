@@ -75,19 +75,23 @@ export function log(message: string, source = "express") {
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
+  const logResponseBody =
+    process.env.LOG_API_BODY === "true" || process.env.NODE_ENV !== "production";
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
+  if (logResponseBody) {
+    const originalResJson = res.json;
+    res.json = function (bodyJson, ...args) {
+      capturedJsonResponse = bodyJson;
+      return originalResJson.apply(res, [bodyJson, ...args]);
+    };
+  }
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
+      if (logResponseBody && capturedJsonResponse) {
         const jsonStr = JSON.stringify(capturedJsonResponse);
         logLine += ` :: ${jsonStr.length > 2000 ? jsonStr.slice(0, 2000) + "...[truncated]" : jsonStr}`;
       }
@@ -139,6 +143,7 @@ app.use((req, res, next) => {
 
   const onListen = () => {
       log(`serving on port ${port}`);
+      if (process.env.NODE_ENV === "development" && process.env.AUTO_SEED_TM !== "false") {
       // Auto-seed TM demo data if not already present, then migrate to project
       setTimeout(async () => {
         try {
@@ -174,6 +179,7 @@ app.use((req, res, next) => {
           log(`TM auto-seed error: ${e.message}`, "seed");
         }
       }, 2000);
+      }
   };
 
   // reusePort is Linux-only; Windows throws ENOTSUP

@@ -13,7 +13,7 @@ export type AiModuleStatus = {
   };
 };
 
-export function useAiStatus() {
+export function useAiStatus(enabled = true) {
   return useQuery({
     queryKey: ["/api/ai/status"],
     queryFn: async () => {
@@ -21,6 +21,7 @@ export function useAiStatus() {
       if (!res.ok) throw new Error("Failed to load AI status");
       return (await res.json()) as AiModuleStatus;
     },
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
+    enabled,
   });
 }

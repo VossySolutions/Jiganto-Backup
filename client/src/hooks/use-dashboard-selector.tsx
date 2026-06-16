@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, fetchWithAuth } from "@/lib/queryClient";
+import { isDashboardPath } from "@shared/app-routes";
 import type { DashboardUserPreferences } from "@shared/models/dashboard";
 
 export type BuiltInDashboardType =
@@ -89,6 +91,8 @@ function mergeDashboards(stored: DashboardOption[]): DashboardOption[] {
 
 export function DashboardSelectorProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const [location] = useLocation();
+  const needsDashboardData = isDashboardPath(location);
 
   const { data: serverPrefs } = useQuery({
     queryKey: ["/api/dashboard/preferences"],
@@ -97,8 +101,9 @@ export function DashboardSelectorProvider({ children }: { children: ReactNode })
       if (!res.ok) return null;
       return (await res.json()) as DashboardUserPreferences;
     },
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
     retry: false,
+    enabled: needsDashboardData,
   });
 
   const { data: customRows = [] } = useQuery({
@@ -108,7 +113,8 @@ export function DashboardSelectorProvider({ children }: { children: ReactNode })
       if (!res.ok) return [];
       return (await res.json()) as { id: number; name: string; description: string | null; isShared?: boolean }[];
     },
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
+    enabled: needsDashboardData,
   });
 
   const [dashboards, setDashboards] = useState<DashboardOption[]>(() => {

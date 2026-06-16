@@ -3,6 +3,7 @@ import { isApiRequest } from "../lib/request-paths";
 import { isRequestAuthenticated } from "../auth/supabaseAuth";
 import { apiPathToModuleKey } from "@shared/models/module-access";
 import { canAccessModuleApi } from "../lib/module-access";
+import { modulePermissionsCache } from "../lib/module-permissions-cache";
 import { storage } from "../storage";
 const EXEMPT_PREFIXES = [
   "/api/auth/",
@@ -33,7 +34,12 @@ export async function enforceModulePermissions(
   if (!perms) return next();
 
   try {
-    const profile = await storage.getProfileByUserId(perms.userId, perms.orgId);
+    let profile = modulePermissionsCache.getProfile(perms.userId, perms.orgId);
+    if (profile === undefined) {
+      const loaded = await storage.getProfileByUserId(perms.userId, perms.orgId);
+      profile = loaded ?? null;
+      modulePermissionsCache.setProfile(perms.userId, perms.orgId, profile);
+    }
     if (!profile) return next();
 
     const allowed = await canAccessModuleApi(

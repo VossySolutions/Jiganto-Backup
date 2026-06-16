@@ -1,44 +1,14 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect, type ComponentType, type ReactNode } from "react";
 import { Switch, Route, Redirect, useRoute } from "wouter";
 import { DASHBOARD_PATH } from "@shared/app-routes";
 import { getQueryFn, queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/not-found";
 import { LandingPage } from "@/pages/LandingPage";
 import { DashboardRoute, RootRedirect } from "@/components/resources/ContractorPortalRedirect";
-import { ModulePage } from "@/pages/ModulePage";
-import { ChatPage } from "@/pages/ChatPage";
-import CRMPage from "@/pages/CRMPage";
-import BusinessManagementPage from "@/pages/BusinessManagementPage";
-import DocumentManagementPage from "@/pages/DocumentManagementPage";
-import TaskManagementPage from "@/pages/TaskManagementPage";
-import ProjectsManagementPage from "@/pages/ProjectsManagementPage";
-import SettingsPage from "@/pages/SettingsPage";
-import ResourceManagementPage from "@/pages/ResourceManagementPage";
-import ResourcePlanningPage from "@/pages/ResourcePlanningPage";
-import BPMPage from "@/pages/BPMPage";
-import TestManagementPage from "@/pages/TestManagementPage";
-import WorkspacesPage from "@/pages/WorkspacesPage";
-import ServiceDeskPage from "@/pages/ServiceDeskPage";
-import HelpDeskPage from "@/pages/HelpDeskPage";
-import HelpDeskPortalPage from "@/pages/HelpDeskPortalPage";
-import HelpDeskCsatPage from "@/pages/HelpDeskCsatPage";
-import PortfolioManagementPage from "@/pages/PortfolioManagementPage";
-import SignOffPage from "@/pages/SignOffPage";
-import SigningPortalPage from "@/pages/SigningPortalPage";
-import SurveysPage from "@/pages/SurveysPage";
-import { WhiteboardPage } from "@/pages/WhiteboardPage";
-import { WhiteboardCanvasPage } from "@/pages/WhiteboardCanvasPage";
-import TemplatesPage from "@/pages/TemplatesPage";
+import { ShellPageLoader } from "@/components/AppShell";
 import { SavingAsTemplateBanner } from "@/components/templates/SavingAsTemplateBanner";
-import SurveyPortalPage from "@/pages/SurveyPortalPage";
-import PollPortalPage from "@/pages/PollPortalPage";
-import ClientsPage from "@/pages/ClientsPage";
-import ClientDetailPage from "@/pages/ClientDetailPage";
-import CustomerManagementPage from "@/pages/CustomerManagementPage";
-import FinanceManagementPage from "@/pages/FinanceManagementPage";
 import { useAuth } from "@/hooks/use-auth";
 import { SidebarStateProvider } from "@/hooks/use-sidebar-state";
 import { DashboardSelectorProvider } from "@/hooks/use-dashboard-selector";
@@ -54,10 +24,79 @@ import { AIInsightsPanelProvider } from "@/hooks/use-ai-insights-panel";
 import { ModuleAIInsightsHost } from "@/components/ai/ModuleAIInsightsHost";
 import { Loader2 } from "lucide-react";
 import { AccessPendingPage } from "@/pages/AccessPendingPage";
-import { AcceptInvitationPage } from "@/pages/AcceptInvitationPage";
 import { SupabaseAuthSync } from "@/components/SupabaseAuthSync";
 import { OrgBrandingSync } from "@/hooks/use-org-branding";
 import { getPendingInviteToken, inviteAcceptPath } from "@/lib/pending-invite";
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <Loader2 className="h-8 w-8 text-primary animate-spin" />
+    </div>
+  );
+}
+
+function LazyRoute({
+  component: Component,
+  fallback = <ShellPageLoader />,
+  ...props
+}: {
+  component: ComponentType<any>;
+  fallback?: ReactNode;
+}) {
+  return (
+    <Suspense fallback={fallback}>
+      <Component {...props} />
+    </Suspense>
+  );
+}
+
+function lazyPage<T extends ComponentType<any>>(
+  factory: () => Promise<{ default: T } | Record<string, T>>,
+  exportName?: string,
+) {
+  return lazy(async () => {
+    const mod = await factory();
+    if ("default" in mod && mod.default) {
+      return { default: mod.default as T };
+    }
+    const named = exportName ? (mod as Record<string, T>)[exportName] : Object.values(mod)[0];
+    return { default: named as T };
+  });
+}
+
+const NotFound = lazyPage(() => import("@/pages/not-found"));
+const AcceptInvitationPage = lazyPage(() => import("@/pages/AcceptInvitationPage"));
+const SigningPortalPage = lazyPage(() => import("@/pages/SigningPortalPage"));
+const SurveyPortalPage = lazyPage(() => import("@/pages/SurveyPortalPage"));
+const PollPortalPage = lazyPage(() => import("@/pages/PollPortalPage"));
+const HelpDeskPortalPage = lazyPage(() => import("@/pages/HelpDeskPortalPage"));
+const HelpDeskCsatPage = lazyPage(() => import("@/pages/HelpDeskCsatPage"));
+const ChatPage = lazyPage(() => import("@/pages/ChatPage"), "ChatPage");
+const CRMPage = lazyPage(() => import("@/pages/CRMPage"));
+const BusinessManagementPage = lazyPage(() => import("@/pages/BusinessManagementPage"));
+const DocumentManagementPage = lazyPage(() => import("@/pages/DocumentManagementPage"));
+const TaskManagementPage = lazyPage(() => import("@/pages/TaskManagementPage"));
+const ProjectsManagementPage = lazyPage(() => import("@/pages/ProjectsManagementPage"));
+const SettingsPage = lazyPage(() => import("@/pages/SettingsPage"));
+const ResourceManagementPage = lazyPage(() => import("@/pages/ResourceManagementPage"));
+const ResourcePlanningPage = lazyPage(() => import("@/pages/ResourcePlanningPage"));
+const BPMPage = lazyPage(() => import("@/pages/BPMPage"));
+const TestManagementPage = lazyPage(() => import("@/pages/TestManagementPage"));
+const WorkspacesPage = lazyPage(() => import("@/pages/WorkspacesPage"));
+const ServiceDeskPage = lazyPage(() => import("@/pages/ServiceDeskPage"));
+const HelpDeskPage = lazyPage(() => import("@/pages/HelpDeskPage"));
+const PortfolioManagementPage = lazyPage(() => import("@/pages/PortfolioManagementPage"));
+const SignOffPage = lazyPage(() => import("@/pages/SignOffPage"));
+const SurveysPage = lazyPage(() => import("@/pages/SurveysPage"));
+const WhiteboardPage = lazyPage(() => import("@/pages/WhiteboardPage"), "WhiteboardPage");
+const WhiteboardCanvasPage = lazyPage(() => import("@/pages/WhiteboardCanvasPage"));
+const TemplatesPage = lazyPage(() => import("@/pages/TemplatesPage"));
+const ClientsPage = lazyPage(() => import("@/pages/ClientsPage"));
+const ClientDetailPage = lazyPage(() => import("@/pages/ClientDetailPage"));
+const CustomerManagementPage = lazyPage(() => import("@/pages/CustomerManagementPage"));
+const FinanceManagementPage = lazyPage(() => import("@/pages/FinanceManagementPage"));
+const ModulePage = lazyPage(() => import("@/pages/ModulePage"), "ModulePage");
 
 function LegacyClientsDetailRedirect() {
   const [, params] = useRoute("/modules/clients/:id");
@@ -85,56 +124,63 @@ function Router() {
     queryKey: ["/api/auth/access"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: sessionReady && !!user,
-    staleTime: 60_000,
     retry: false,
   });
+
+  const suspense = (Component: ComponentType<any>) => (props: any) => (
+    <LazyRoute component={Component} {...props} />
+  );
+
+  const publicSuspense = (Component: ComponentType<any>) => (props: any) => (
+    <LazyRoute component={Component} fallback={<PageLoader />} {...props} />
+  );
 
   // Public portals — no auth required
   if (window.location.pathname.startsWith("/sign/")) {
     return (
       <Switch>
-        <Route path="/sign/:token" component={SigningPortalPage} />
-        <Route component={NotFound} />
+        <Route path="/sign/:token">{publicSuspense(SigningPortalPage)}</Route>
+        <Route>{publicSuspense(NotFound)}</Route>
       </Switch>
     );
   }
   if (window.location.pathname.startsWith("/survey/")) {
     return (
       <Switch>
-        <Route path="/survey/:token" component={SurveyPortalPage} />
-        <Route component={NotFound} />
+        <Route path="/survey/:token">{publicSuspense(SurveyPortalPage)}</Route>
+        <Route>{publicSuspense(NotFound)}</Route>
       </Switch>
     );
   }
   if (window.location.pathname.startsWith("/poll/")) {
     return (
       <Switch>
-        <Route path="/poll/:token" component={PollPortalPage} />
-        <Route component={NotFound} />
+        <Route path="/poll/:token">{publicSuspense(PollPortalPage)}</Route>
+        <Route>{publicSuspense(NotFound)}</Route>
       </Switch>
     );
   }
   if (window.location.pathname.startsWith("/portal/")) {
     return (
       <Switch>
-        <Route path="/portal/:token" component={HelpDeskPortalPage} />
-        <Route component={NotFound} />
+        <Route path="/portal/:token">{publicSuspense(HelpDeskPortalPage)}</Route>
+        <Route>{publicSuspense(NotFound)}</Route>
       </Switch>
     );
   }
   if (window.location.pathname.startsWith("/help-desk/csat/")) {
     return (
       <Switch>
-        <Route path="/help-desk/csat/:token" component={HelpDeskCsatPage} />
-        <Route component={NotFound} />
+        <Route path="/help-desk/csat/:token">{publicSuspense(HelpDeskCsatPage)}</Route>
+        <Route>{publicSuspense(NotFound)}</Route>
       </Switch>
     );
   }
   if (window.location.pathname.startsWith("/invite/")) {
     return (
       <Switch>
-        <Route path="/invite/:token" component={AcceptInvitationPage} />
-        <Route component={NotFound} />
+        <Route path="/invite/:token">{publicSuspense(AcceptInvitationPage)}</Route>
+        <Route>{publicSuspense(NotFound)}</Route>
       </Switch>
     );
   }
@@ -166,75 +212,75 @@ function Router() {
       <AIAssistantButton />
       <ModuleAIInsightsHost />
       <Switch>
-        <Route path={DASHBOARD_PATH} component={DashboardRoute} />
-        <Route path="/ws/:slug" component={DashboardRoute} />
-        <Route path="/">
-          <RootRedirect />
-        </Route>
-        <Route path="/modules/chat/:channelId?" component={ChatPage} />
-        <Route path="/modules/crm" component={CRMPage} />
-        <Route path="/crm">
-          <Redirect to="/modules/crm" />
-        </Route>
-        <Route path="/modules/business-mgmt" component={BusinessManagementPage} />
-        <Route path="/modules/workspaces" component={WorkspacesPage} />
-        <Route path="/modules/service-desk" component={ServiceDeskPage} />
-        <Route path="/modules/help-desk" component={HelpDeskPage} />
-        <Route path="/help-desk">
-          <Redirect to="/modules/help-desk" />
-        </Route>
-        <Route path="/service-desk">
-          <Redirect to="/modules/service-desk" />
-        </Route>
-        <Route path="/modules/documents" component={DocumentManagementPage} />
-        <Route path="/documents" component={DocumentManagementPage} />
-        <Route path="/modules/tasks" component={TaskManagementPage} />
-        <Route path="/tasks">
-          <Redirect to="/modules/tasks" />
-        </Route>
-        <Route path="/modules/portfolio" component={PortfolioManagementPage} />
-        <Route path="/portfolio">
-          <Redirect to="/modules/portfolio" />
-        </Route>
-        <Route path="/modules/projects/:projectId" component={ProjectsManagementPage} />
-        <Route path="/modules/projects" component={ProjectsManagementPage} />
-        <Route path="/modules/resource-planning" component={ResourcePlanningPage} />
-        <Route path="/modules/resource-mgmt" component={ResourceManagementPage} />
-        <Route path="/modules/bpm" component={BPMPage} />
-        <Route path="/bpm">
-          <Redirect to="/modules/bpm" />
-        </Route>
-        <Route path="/modules/test-mgmt" component={TestManagementPage} />
-        <Route path="/modules/clients/:id" component={LegacyClientsDetailRedirect} />
-        <Route path="/modules/clients">
-          <Redirect to="/clients" />
-        </Route>
-        <Route path="/clients/:id" component={ClientDetailPage} />
-        <Route path="/clients" component={ClientsPage} />
-        <Route path="/modules/customer-mgmt" component={CustomerManagementPage} />
-        <Route path="/modules/finance-mgmt" component={FinanceManagementPage} />
-        <Route path="/finance">
-          <Redirect to="/modules/finance-mgmt" />
-        </Route>
-        <Route path="/modules/e-sign" component={SignOffPage} />
-        <Route path="/esign" component={SignOffPage} />
-        <Route path="/modules/surveys" component={SurveysPage} />
-        <Route path="/surveys">{() => <Redirect to="/modules/surveys" />}</Route>
-        <Route path="/settings/system" component={SettingsPage} />
-        <Route path="/settings/workspace" component={SettingsPage} />
-        <Route path="/settings/personal" component={SettingsPage} />
-        <Route path="/settings" component={SettingsPage} />
-        <Route path="/modules/templates" component={TemplatesPage} />
-        <Route path="/modules/whiteboarding/:id" component={WhiteboardCanvasPage} />
-        <Route path="/modules/whiteboarding" component={WhiteboardPage} />
-        <Route path="/whiteboard/:id">
-          {(params) => <Redirect to={`/modules/whiteboarding/${params.id}`} />}
-        </Route>
-        <Route path="/whiteboard">
-          <Redirect to="/modules/whiteboarding" />
-        </Route>
-        <Route path="/modules/:key" component={ModulePage} />
-        <Route component={NotFound} />
+          <Route path={DASHBOARD_PATH}>{suspense(DashboardRoute)}</Route>
+          <Route path="/ws/:slug">{suspense(DashboardRoute)}</Route>
+          <Route path="/">
+            <RootRedirect />
+          </Route>
+          <Route path="/modules/chat/:channelId?">{suspense(ChatPage)}</Route>
+          <Route path="/modules/crm">{suspense(CRMPage)}</Route>
+          <Route path="/crm">
+            <Redirect to="/modules/crm" />
+          </Route>
+          <Route path="/modules/business-mgmt">{suspense(BusinessManagementPage)}</Route>
+          <Route path="/modules/workspaces">{suspense(WorkspacesPage)}</Route>
+          <Route path="/modules/service-desk">{suspense(ServiceDeskPage)}</Route>
+          <Route path="/modules/help-desk">{suspense(HelpDeskPage)}</Route>
+          <Route path="/help-desk">
+            <Redirect to="/modules/help-desk" />
+          </Route>
+          <Route path="/service-desk">
+            <Redirect to="/modules/service-desk" />
+          </Route>
+          <Route path="/modules/documents">{suspense(DocumentManagementPage)}</Route>
+          <Route path="/documents">{suspense(DocumentManagementPage)}</Route>
+          <Route path="/modules/tasks">{suspense(TaskManagementPage)}</Route>
+          <Route path="/tasks">
+            <Redirect to="/modules/tasks" />
+          </Route>
+          <Route path="/modules/portfolio">{suspense(PortfolioManagementPage)}</Route>
+          <Route path="/portfolio">
+            <Redirect to="/modules/portfolio" />
+          </Route>
+          <Route path="/modules/projects/:projectId">{suspense(ProjectsManagementPage)}</Route>
+          <Route path="/modules/projects">{suspense(ProjectsManagementPage)}</Route>
+          <Route path="/modules/resource-planning">{suspense(ResourcePlanningPage)}</Route>
+          <Route path="/modules/resource-mgmt">{suspense(ResourceManagementPage)}</Route>
+          <Route path="/modules/bpm">{suspense(BPMPage)}</Route>
+          <Route path="/bpm">
+            <Redirect to="/modules/bpm" />
+          </Route>
+          <Route path="/modules/test-mgmt">{suspense(TestManagementPage)}</Route>
+          <Route path="/modules/clients/:id" component={LegacyClientsDetailRedirect} />
+          <Route path="/modules/clients">
+            <Redirect to="/clients" />
+          </Route>
+          <Route path="/clients/:id">{suspense(ClientDetailPage)}</Route>
+          <Route path="/clients">{suspense(ClientsPage)}</Route>
+          <Route path="/modules/customer-mgmt">{suspense(CustomerManagementPage)}</Route>
+          <Route path="/modules/finance-mgmt">{suspense(FinanceManagementPage)}</Route>
+          <Route path="/finance">
+            <Redirect to="/modules/finance-mgmt" />
+          </Route>
+          <Route path="/modules/e-sign">{suspense(SignOffPage)}</Route>
+          <Route path="/esign">{suspense(SignOffPage)}</Route>
+          <Route path="/modules/surveys">{suspense(SurveysPage)}</Route>
+          <Route path="/surveys">{() => <Redirect to="/modules/surveys" />}</Route>
+          <Route path="/settings/system">{suspense(SettingsPage)}</Route>
+          <Route path="/settings/workspace">{suspense(SettingsPage)}</Route>
+          <Route path="/settings/personal">{suspense(SettingsPage)}</Route>
+          <Route path="/settings">{suspense(SettingsPage)}</Route>
+          <Route path="/modules/templates">{suspense(TemplatesPage)}</Route>
+          <Route path="/modules/whiteboarding/:id">{suspense(WhiteboardCanvasPage)}</Route>
+          <Route path="/modules/whiteboarding">{suspense(WhiteboardPage)}</Route>
+          <Route path="/whiteboard/:id">
+            {(params) => <Redirect to={`/modules/whiteboarding/${params.id}`} />}
+          </Route>
+          <Route path="/whiteboard">
+            <Redirect to="/modules/whiteboarding" />
+          </Route>
+          <Route path="/modules/:key">{suspense(ModulePage)}</Route>
+          <Route>{suspense(NotFound)}</Route>
       </Switch>
     </AIInsightsPanelProvider>
   );

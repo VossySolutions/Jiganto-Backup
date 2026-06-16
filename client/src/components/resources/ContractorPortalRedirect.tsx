@@ -1,6 +1,6 @@
 import { Redirect } from "wouter";
-import { Loader2 } from "lucide-react";
 import { DASHBOARD_PATH } from "@shared/app-routes";
+import { ShellPageLoader } from "@/components/AppShell";
 import { useResourceScope } from "@/hooks/use-resource-scope";
 import { Dashboard } from "@/pages/Dashboard";
 
@@ -11,11 +11,7 @@ export function DashboardRoute() {
   const { data: scope, isLoading } = useResourceScope();
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <Loader2 className="h-8 w-8 text-primary animate-spin" />
-      </div>
-    );
+    return <ShellPageLoader />;
   }
 
   if (scope?.isContractorPortal) {
@@ -29,11 +25,7 @@ export function RootRedirect() {
   const { data: scope, isLoading } = useResourceScope();
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <Loader2 className="h-8 w-8 text-primary animate-spin" />
-      </div>
-    );
+    return <ShellPageLoader />;
   }
 
   if (scope?.isContractorPortal) {

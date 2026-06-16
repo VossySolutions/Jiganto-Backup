@@ -8,6 +8,7 @@ import {
   apiPathToModuleKey,
   CLIENT_WORKSPACE_BLOCKED_MODULE_KEYS,
 } from "@shared/models/module-access";
+import { modulePermissionsCache } from "./module-permissions-cache";
 
 export type ModulePermissionRow = {
   moduleKey: string;
@@ -53,6 +54,39 @@ export async function applyRoleModulePermissionsToProfile(
   await storage.upsertUserModulePermissions(profileId, tenantId, rows);
 }
 
+async function getEffectiveModuleRows(profileId: number): Promise<ModulePermissionRow[] | null> {
+  const cached = modulePermissionsCache.getModuleRows(profileId);
+  if (cached) return cached;
+
+  const rows = await storage.getUserModulePermissions(profileId);
+  let effective: ModulePermissionRow[];
+
+  if (rows.length > 0) {
+    effective = rows.map((r) => ({
+      moduleKey: r.moduleKey,
+      canRead: r.canRead,
+      canCreate: r.canCreate,
+      canUpdate: r.canUpdate,
+      canDelete: r.canDelete,
+    }));
+  } else {
+    const profile = await getProfileById(profileId);
+    if (!profile?.roleId) return null;
+    const [role] = await db
+      .select()
+      .from(userRoles)
+      .where(eq(userRoles.id, profile.roleId))
+      .limit(1);
+    effective = modulePermissionsFromRoleJson(
+      (role?.permissions as ModulePermissions) ?? undefined,
+    );
+    if (effective.length === 0) return null;
+  }
+
+  modulePermissionsCache.setModuleRows(profileId, effective);
+  return effective;
+}
+
 /** Visible module keys for sidebar; `null` = no ACL restriction (platform role default). */
 export async function resolveVisibleModuleKeys(
   profileId: number,
@@ -68,26 +102,10 @@ export async function resolveVisibleModuleKeys(
     return null;
   }
 
-  const rows = await storage.getUserModulePermissions(profileId);
-  let keys: string[];
+  const effective = await getEffectiveModuleRows(profileId);
+  if (!effective) return null;
 
-  if (rows.length > 0) {
-    keys = rows.filter((r) => r.canRead).map((r) => r.moduleKey);
-  } else {
-    const profile = await getProfileById(profileId);
-    if (!profile?.roleId) return null;
-
-    const [role] = await db
-      .select()
-      .from(userRoles)
-      .where(eq(userRoles.id, profile.roleId))
-      .limit(1);
-    const fromRole = modulePermissionsFromRoleJson(
-      (role?.permissions as ModulePermissions) ?? undefined,
-    );
-    if (fromRole.length === 0) return null;
-    keys = fromRole.filter((p) => p.canRead).map((p) => p.moduleKey);
-  }
+  let keys = effective.filter((r) => r.canRead).map((r) => r.moduleKey);
 
   if (
     workspaceClientId != null &&
@@ -122,30 +140,8 @@ export async function canAccessModuleApi(
     return true;
   }
 
-  const rows = await storage.getUserModulePermissions(profileId);
-  let effective: ModulePermissionRow[];
-
-  if (rows.length > 0) {
-    effective = rows.map((r) => ({
-      moduleKey: r.moduleKey,
-      canRead: r.canRead,
-      canCreate: r.canCreate,
-      canUpdate: r.canUpdate,
-      canDelete: r.canDelete,
-    }));
-  } else {
-    const profile = await getProfileById(profileId);
-    if (!profile?.roleId) return true;
-    const [role] = await db
-      .select()
-      .from(userRoles)
-      .where(eq(userRoles.id, profile.roleId))
-      .limit(1);
-    effective = modulePermissionsFromRoleJson(
-      (role?.permissions as ModulePermissions) ?? undefined,
-    );
-    if (effective.length === 0) return true;
-  }
+  const effective = await getEffectiveModuleRows(profileId);
+  if (!effective) return true;
 
   const row = effective.find((r) => r.moduleKey === moduleKey);
   if (!row) return false;

@@ -1,4 +1,6 @@
 import type { EffectivePermissions } from "./permissions";
+import { membershipCache } from "./membership-cache";
+import { modulePermissionsCache } from "./module-permissions-cache";
 
 const PERMISSION_CACHE_TTL_MS = 30_000;
 const cache = new Map<
@@ -26,5 +28,7 @@ export const permissionCache = {
     for (const k of cache.keys()) {
       if (k.startsWith(`${userId}:`)) cache.delete(k);
     }
+    membershipCache.invalidate(userId);
+    modulePermissionsCache.invalidateUser(userId);
   },
 };

@@ -36,7 +36,7 @@ export function AIAssistantButton() {
     location.startsWith("/ws/") ||
     location.startsWith("/documents") ||
     location.startsWith("/clients");
-  const { data: aiStatus, isLoading: aiStatusLoading } = useAiStatus();
+  const { data: aiStatus, isLoading: aiStatusLoading } = useAiStatus(!hideFab);
   const aiEnabled = aiStatus?.modules.assistant ?? false;
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);

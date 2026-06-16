@@ -38,14 +38,18 @@ function parsePlatformRole(value: string): PlatformRole | null {
     : null;
 }
 
+let cachedStaffUserIds: Set<string> | null = null;
+
 function staffUserIdsFromEnv(): Set<string> {
+  if (cachedStaffUserIds) return cachedStaffUserIds;
   const raw = process.env.JIGANTO_STAFF_USER_IDS ?? "";
-  return new Set(
+  cachedStaffUserIds = new Set(
     raw
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
   );
+  return cachedStaffUserIds;
 }
 
 export function isJigantoStaffUserId(userId: string): boolean {
@@ -53,6 +57,7 @@ export function isJigantoStaffUserId(userId: string): boolean {
 }
 
 import { permissionCache } from "./permissions-cache";
+import { membershipCache } from "./membership-cache";
 
 function isMissingRelationError(err: unknown): boolean {
   return (
@@ -65,11 +70,16 @@ function isMissingRelationError(err: unknown): boolean {
 
 /** Load org_memberships rows; empty if table not migrated yet. */
 async function loadOrgMemberships(userId: string) {
+  const cached = membershipCache.get(userId);
+  if (cached) return cached;
+
   try {
-    return await db
+    const rows = await db
       .select()
       .from(orgMemberships)
       .where(and(eq(orgMemberships.userId, userId), eq(orgMemberships.isActive, true)));
+    membershipCache.set(userId, rows);
+    return rows;
   } catch (err) {
     if (isMissingRelationError(err)) {
       console.warn(

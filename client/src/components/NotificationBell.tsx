@@ -124,7 +124,7 @@ export function NotificationBell() {
 
   const { data: rawNotifications = [], isLoading } = useQuery<Notification[]>({
     queryKey: [notifKey],
-    refetchInterval: 30000,
+    refetchInterval: isOpen ? 30000 : false,
   });
 
   const unreadKey = activeClient
@@ -133,12 +133,12 @@ export function NotificationBell() {
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: [unreadKey],
-    refetchInterval: 30000,
+    refetchInterval: isOpen ? 30000 : 120000,
   });
 
   const { data: pendingSignoffs = [] } = useQuery<any[]>({
     queryKey: ["/api/signoff/my-pending"],
-    refetchInterval: 60000,
+    refetchInterval: isOpen ? 60000 : false,
   });
 
   const notifications = rawNotifications.filter((n) =>
