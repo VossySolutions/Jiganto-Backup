@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { TmTestRun } from "@shared/schema";
 import { cn } from "@/lib/utils";
@@ -8,16 +9,18 @@ import { useToast } from "@/hooks/use-toast";
 import { useTmProject } from "@/contexts/TmProjectContext";
 import { CYCLE_STATUS_COLORS, TEST_PHASES, getTmLabels } from "@/lib/tm-utils";
 import type { TmCycleMetrics } from "@/types/testmgmt";
-import { Plus, Loader2, ShieldCheck, Play, Calendar, FileDown } from "lucide-react";
+import { Plus, Loader2, ShieldCheck, Play, Calendar, FileDown, FileSignature } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useTmFetch } from "@/hooks/use-tm-fetch";
 import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 import { tmDownloadPdf } from "@/lib/tm-api";
+import type { SignoffRequest } from "@/lib/signoff-constants";
 
 type EnrichedCycle = TmTestRun & { metrics: TmCycleMetrics };
 
 export function TestCyclesScreen() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const { activeProjectId, activeProject, qsParam } = useTmProject();
   const labels = getTmLabels(activeProject?.methodology);
   const [createOpen, setCreateOpen] = useState(false);
@@ -33,6 +36,36 @@ export function TestCyclesScreen() {
     error,
     refetch,
   } = useTmFetch<EnrichedCycle[]>(["/api/tm/cycles"], "/api/tm/cycles");
+
+  const { data: esignRequests = [] } = useQuery<SignoffRequest[]>({
+    queryKey: ["/api/signoff"],
+    queryFn: () => fetch("/api/signoff").then(r => r.json()),
+  });
+
+  function esignForCycle(cycleId: number) {
+    return esignRequests.find(
+      r => r.testCycleId === cycleId && !["voided", "cancelled", "draft"].includes(r.status),
+    );
+  }
+
+  function requestEsign(cycle: EnrichedCycle) {
+    const m = cycle.metrics;
+    const params = new URLSearchParams({
+      compose: "1",
+      testCycleId: String(cycle.id),
+      testCycleName: cycle.name,
+      testPhase: cycle.testPhase ?? "uat",
+    });
+    if (m) {
+      params.set("uatTotal", String(m.total));
+      params.set("uatPassed", String(m.passed));
+      params.set("uatFailed", String(m.failed));
+      params.set("uatCompletion", String(m.completionPct));
+      params.set("uatPassRate", String(m.passRatePct));
+    }
+    if (cycle.buildVersion) params.set("buildVersion", cycle.buildVersion);
+    setLocation(`/modules/e-sign?${params.toString()}`);
+  }
 
   const createMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) => apiRequest("POST", "/api/tm/runs", { ...body, tenantId: 1, projectId: activeProjectId, status: "planning" }),
@@ -92,6 +125,7 @@ export function TestCyclesScreen() {
         {cycles.map(cycle => {
           const m = cycle.metrics;
           const isActive = activeProject?.activeCycleId === cycle.id;
+          const linkedEsign = esignForCycle(cycle.id);
           return (
             <div key={cycle.id} className={cn("border rounded-xl p-5 bg-card", isActive && "border-primary ring-1 ring-primary/20")}>
               <div className="flex items-start gap-3 mb-4">
@@ -115,9 +149,21 @@ export function TestCyclesScreen() {
                     </Button>
                   )}
                   {cycle.status === "completed" && (
-                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => signOffMutation.mutate(cycle.id)}>
-                      <ShieldCheck className="h-3 w-3" /> Sign Off Cycle
-                    </Button>
+                    <>
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => signOffMutation.mutate(cycle.id)}>
+                        <ShieldCheck className="h-3 w-3" /> Sign Off Cycle
+                      </Button>
+                      {linkedEsign ? (
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                          onClick={() => setLocation(`/modules/e-sign?request=${linkedEsign.id}`)}>
+                          <FileSignature className="h-3 w-3" /> View e-Sign
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => requestEsign(cycle)}>
+                          <FileSignature className="h-3 w-3" /> Request e-Sign
+                        </Button>
+                      )}
+                    </>
                   )}
                   {cycle.status === "signed_off" && (
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => downloadCyclePdf(cycle.id, cycle.name)}>

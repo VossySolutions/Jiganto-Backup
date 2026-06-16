@@ -2600,7 +2600,7 @@ export default function DocumentManagementPage() {
                     {docSignoffRequests.length > 0 && (
                       <span className={cn(
                         "ml-1 inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
-                        docSignoffRequests.some((r: any) => r.status === "sent") 
+                        docSignoffRequests.some((r: any) => r.status === "pending" || r.status === "partially_signed") 
                           ? "bg-amber-100 text-amber-700" 
                           : docSignoffRequests.some((r: any) => r.status === "completed")
                           ? "bg-green-100 text-green-700"
@@ -2995,10 +2995,14 @@ export default function DocumentManagementPage() {
                   <div className="space-y-4">
                     {docSignoffRequests.map((req: any) => {
                       const reqStatusCfg: Record<string, { label: string; cls: string }> = {
-                        draft:     { label: "Draft",     cls: "bg-muted text-muted-foreground border-border" },
-                        sent:      { label: "Pending",   cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800" },
-                        completed: { label: "Completed", cls: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800" },
-                        cancelled: { label: "Cancelled", cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:text-red-400 dark:border-red-800" },
+                        draft:             { label: "Draft",              cls: "bg-muted text-muted-foreground border-border" },
+                        pending:           { label: "Awaiting Signature", cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800" },
+                        partially_signed:  { label: "Partially Signed",   cls: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800" },
+                        completed:         { label: "Completed",          cls: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800" },
+                        declined:          { label: "Declined",           cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:text-red-400 dark:border-red-800" },
+                        expired:           { label: "Expired",            cls: "bg-muted text-muted-foreground border-border" },
+                        voided:            { label: "Voided",             cls: "bg-muted text-muted-foreground/70 border-border line-through" },
+                        cancelled:         { label: "Cancelled",          cls: "bg-muted text-muted-foreground border-border" },
                       };
                       const signerStatusCfg: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
                         pending:  { label: "Pending",  cls: "bg-muted text-muted-foreground border-border",                                          icon: <Clock className="h-3 w-3" /> },
@@ -3007,7 +3011,7 @@ export default function DocumentManagementPage() {
                         declined: { label: "Declined", cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-950 dark:text-red-400",               icon: <XCircle className="h-3 w-3" /> },
                       };
                       const rc = reqStatusCfg[req.status] || reqStatusCfg.draft;
-                      const canRemind = req.status === "sent";
+                      const canRemind = req.status === "pending" || req.status === "partially_signed";
                       return (
                         <div key={req.id} className="border border-border rounded-xl overflow-hidden" data-testid={`signoff-request-${req.id}`}>
                           {/* Request header */}

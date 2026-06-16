@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { PmDeliverablePhase, PmDeliverable } from "@shared/models/projects";
@@ -199,6 +200,7 @@ function PeopleEditor({ label, hint, people, onChange }: PeopleEditorProps) {
 }
 
 export default function DeliverablesTracker({ projectId }: { projectId: number }) {
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const { data: phases = [], isLoading: phasesLoading } = useQuery<PmDeliverablePhase[]>({
@@ -936,6 +938,15 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
                   onDelete={deleteDeliverable}
                   onReview={openReviewModal}
                   onTogglePhaseSelect={togglePhaseSelect}
+                  onRequestSignoff={(del) => {
+                    const params = new URLSearchParams({
+                      compose: "1",
+                      projectId: String(projectId),
+                      deliverableId: String(del.id),
+                      deliverableTitle: del.name,
+                    });
+                    setLocation(`/modules/e-sign?${params.toString()}`);
+                  }}
                   paginationResetKey={`${phaseName}|${searchQuery}|${phaseFilter}|${ragFilter}|${statusFilter}|${activeKpi}`}
                 />
               )}
@@ -1309,6 +1320,7 @@ function PhaseGroupTable({
   onDelete,
   onReview,
   onTogglePhaseSelect,
+  onRequestSignoff,
   paginationResetKey,
 }: {
   phaseName: string;
@@ -1325,6 +1337,7 @@ function PhaseGroupTable({
   onDelete: (id: number) => Promise<void>;
   onReview: (id: number) => void;
   onTogglePhaseSelect: (phaseName: string, checked: boolean) => void;
+  onRequestSignoff: (del: PmDeliverable) => void;
   paginationResetKey: string;
 }) {
   const pagination = useTablePagination(items, { resetKey: paginationResetKey });
@@ -1388,6 +1401,7 @@ function PhaseGroupTable({
                 onDelete={() => onDelete(d.id)}
                 onReview={() => onReview(d.id)}
                 deliverables={deliverables}
+                onRequestSignoff={onRequestSignoff}
               />
             );
           })}
@@ -1411,7 +1425,7 @@ function PhaseGroupTable({
 function PhaseRow({
   d, isSel, isDrawerOpen, ai, TypeIcon, dateDisplay,
   onToggleSelect, onCycleStatus, onCycleRag, onToggleDrawer,
-  onEdit, onAudit, onDelete, onReview, deliverables,
+  onEdit, onAudit, onDelete, onReview, deliverables, onRequestSignoff,
 }: {
   d: PmDeliverable;
   isSel: boolean;
@@ -1428,6 +1442,7 @@ function PhaseRow({
   onDelete: () => void;
   onReview: (prefill: string) => void;
   deliverables: PmDeliverable[];
+  onRequestSignoff: (del: PmDeliverable) => void;
 }) {
   const audit = (d.auditLog as AuditEntry[]) || [];
   const approvers = (d.approvers as string[]) || [];
@@ -1501,6 +1516,16 @@ function PhaseRow({
         </td>
         <td className="px-3 py-2">
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+            {(d.type === "Sign-off" || d.status === "In Review") && (
+              <button
+                className="w-6 h-6 rounded-md border flex items-center justify-center text-primary hover:text-primary hover:border-primary/30 transition cursor-pointer"
+                title="Request e-Sign"
+                onClick={e => { e.stopPropagation(); onRequestSignoff(d); }}
+                data-testid={`button-signoff-${d.id}`}
+              >
+                <FileSignature className="h-3 w-3" />
+              </button>
+            )}
             <button className="w-6 h-6 rounded-md border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/30 transition cursor-pointer" title="Edit" onClick={e => { e.stopPropagation(); onEdit(); }} data-testid={`button-edit-${d.id}`}>
               <Pencil className="h-3 w-3" />
             </button>

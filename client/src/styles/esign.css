@@ -1,0 +1,141 @@
+/* eSign module — responsive layout & skeleton animations */
+
+@keyframes esign-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.esign-skeleton-line,
+.esign-skeleton-kpi,
+.esign-skeleton-avatar {
+  background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted) / 0.5) 50%, hsl(var(--muted)) 75%);
+  background-size: 200% 100%;
+  animation: esign-shimmer 1.4s ease-in-out infinite;
+  border-radius: 0.375rem;
+}
+
+.esign-skeleton-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.esign-page {
+  --esign-accent: #ec4899;
+}
+
+.esign-doc-preview {
+  height: min(70vh, 620px);
+  min-height: 280px;
+  border: none;
+}
+
+.esign-doc-scroll {
+  max-height: min(70vh, 620px);
+  min-height: 200px;
+}
+
+.esign-detail-actions {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.esign-detail-actions::-webkit-scrollbar {
+  display: none;
+}
+
+.esign-page-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Mobile document cards (shown below md when table hidden) */
+.esign-mobile-cards {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .esign-desktop-table {
+    display: none;
+  }
+
+  .esign-mobile-cards {
+    display: block;
+  }
+
+  .esign-doc-card {
+    padding: 1rem;
+    border-bottom: 1px solid hsl(var(--border));
+    transition: background-color 0.15s;
+  }
+
+  .esign-doc-card:last-child {
+    border-bottom: none;
+  }
+
+  .esign-doc-card:active {
+    background: hsl(var(--muted) / 0.5);
+  }
+
+  .esign-compose-steps {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .esign-compose-steps::-webkit-scrollbar {
+    display: none;
+  }
+
+  .esign-page-header-nav {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 639px) {
+  .esign-detail-actions {
+    max-width: 100% !important;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    padding-bottom: 0.25rem;
+  }
+
+  .esign-detail-actions button,
+  .esign-detail-actions a {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+}
+
+/* Subtle refresh indicator when refetching */
+.esign-table-wrap.is-fetching {
+  opacity: 0.72;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.esign-portal-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .esign-portal-grid {
+    grid-template-columns: 1fr 340px;
+  }
+}
+
+.esign-sign-panel {
+  position: sticky;
+  top: 4.5rem;
+}
+
+@media (max-width: 1023px) {
+  .esign-sign-panel {
+    position: static;
+  }
+}

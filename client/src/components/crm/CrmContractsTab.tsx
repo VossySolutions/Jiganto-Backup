@@ -537,17 +537,20 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
               );
             }
             const cfgMap: Record<string, { icon: React.ReactNode; cls: string; label: string }> = {
-              draft:     { icon: <Clock className="h-3 w-3" />,         cls: "text-muted-foreground",                label: "Draft" },
-              sent:      { icon: <Clock className="h-3 w-3" />,         cls: "text-amber-600 dark:text-amber-400",   label: "Pending" },
-              completed: { icon: <CheckCircle2 className="h-3 w-3" />,  cls: "text-green-600 dark:text-green-400",   label: "Signed" },
-              declined:  { icon: <XCircle className="h-3 w-3" />,       cls: "text-red-600 dark:text-red-400",       label: "Declined" },
-              cancelled: { icon: <XCircle className="h-3 w-3" />,       cls: "text-muted-foreground",                label: "Cancelled" },
-              expired:   { icon: <Clock className="h-3 w-3" />,         cls: "text-orange-600 dark:text-orange-400", label: "Expired" },
+              draft:             { icon: <Clock className="h-3 w-3" />,         cls: "text-muted-foreground",                label: "Draft" },
+              pending:           { icon: <Clock className="h-3 w-3" />,         cls: "text-amber-600 dark:text-amber-400",   label: "Pending" },
+              partially_signed:  { icon: <Clock className="h-3 w-3" />,         cls: "text-amber-600 dark:text-amber-400",   label: "Partial" },
+              sent:              { icon: <Clock className="h-3 w-3" />,         cls: "text-amber-600 dark:text-amber-400",   label: "Pending" },
+              completed:         { icon: <CheckCircle2 className="h-3 w-3" />,  cls: "text-green-600 dark:text-green-400",   label: "Signed" },
+              declined:          { icon: <XCircle className="h-3 w-3" />,       cls: "text-red-600 dark:text-red-400",       label: "Declined" },
+              cancelled:         { icon: <XCircle className="h-3 w-3" />,       cls: "text-muted-foreground",                label: "Cancelled" },
+              voided:            { icon: <XCircle className="h-3 w-3" />,       cls: "text-muted-foreground",                label: "Voided" },
+              expired:           { icon: <Clock className="h-3 w-3" />,         cls: "text-orange-600 dark:text-orange-400", label: "Expired" },
             };
             const cfg = cfgMap[req.status] || cfgMap.draft;
             return (
               <button
-                onClick={() => setLocation(`/modules/e-sign`)}
+                onClick={() => setLocation(`/modules/e-sign?request=${req.id}`)}
                 className={cn("inline-flex items-center gap-1 text-xs font-medium transition-colors hover:opacity-80", cfg.cls)}
                 title={`View in e-Sign: ${req.title}`}
                 data-testid={`signoff-status-contract-${c.id}`}

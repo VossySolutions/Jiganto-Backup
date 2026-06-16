@@ -39,6 +39,7 @@ import {
   listTimesheetEntries,
   getTimesheetPeriod,
 } from "../finance/repository";
+import * as signoffService from "../signoff/service";
 import { deliverTimesheetIntegration } from "./jobs";
 import {
   resolveResourceScope,
@@ -49,7 +50,6 @@ import {
 import { db } from "../db";
 import { timesheetIntegrations, resourceLeaves } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import crypto from "crypto";
 
 function getUserId(req: Request): string | null {
   return effectiveUserId(req);
@@ -347,44 +347,42 @@ export function registerResourcesRoutes(app: Express): void {
     const period = await getTimesheetPeriod(ctx.tenantId, periodId);
     if (!period) return res.status(404).json({ message: "Timesheet not found" });
 
-    const resource = await storage.getResource(period.resourceId);
     const body = z.object({
       signerEmail: z.string().email(),
       signerName: z.string().min(1),
       message: z.string().optional(),
     }).parse(req.body);
 
-    const created = await storage.createSignoffRequest({
-      tenantId: ctx.tenantId,
-      title: `Timesheet approval — ${resource?.firstName ?? ""} ${resource?.lastName ?? ""} (${new Date(period.weekStartDate).toLocaleDateString()})`,
-      sourceType: "timesheet_period",
-      timesheetPeriodId: periodId,
-      message: body.message,
-      status: "pending",
-      createdBy: ctx.userId,
-      createdByName: body.signerName,
-    });
+    try {
+      const userRows = await storage.getTenantUsers(ctx.tenantId);
+      const actor = userRows.find(u => u.id === ctx.userId);
+      const actorName = actor
+        ? [actor.firstName, actor.lastName].filter(Boolean).join(" ") || actor.email || "Unknown"
+        : "Unknown";
 
-    const token = crypto.randomBytes(32).toString("hex");
-    await storage.createSignoffSigner({
-      requestId: created.id,
-      signerOrder: 1,
-      name: body.signerName,
-      email: body.signerEmail,
-      isInternal: true,
-      status: "pending",
-      token,
-      tokenExpiresAt: new Date(Date.now() + 7 * 86400000),
-    });
+      const result = await signoffService.createTimesheetSignoffRequest({
+        tenantId: ctx.tenantId,
+        periodId,
+        userId: ctx.userId,
+        userName: actorName,
+        userEmail: actor?.email ?? undefined,
+        signerName: body.signerName,
+        signerEmail: body.signerEmail,
+        message: body.message,
+        ip: req.ip,
+      });
 
-    await storage.createSignoffAuditLog({
-      requestId: created.id,
-      event: "sent",
-      actorName: body.signerName,
-      actorEmail: body.signerEmail,
-    });
+      await logTimesheetAudit(ctx.tenantId, periodId, "esign_requested", ctx.userId, `Sent to ${body.signerEmail}`);
 
-    res.status(201).json({ ...created, signUrl: `/sign/${token}` });
+      res.status(201).json({
+        ...result.request,
+        signUrl: result.signUrl,
+      });
+    } catch (e: unknown) {
+      const msg = (e as Error).message;
+      if (msg.includes("already exists")) return res.status(409).json({ message: msg });
+      res.status(400).json({ message: msg });
+    }
   });
 
   app.get("/api/resources/:id/documents", async (req, res) => {

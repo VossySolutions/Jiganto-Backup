@@ -469,6 +469,9 @@ export async function listAggregatedTasks(
     console.warn("[tasks] service desk ticket aggregation skipped:", err);
   }
 
+  const [userRow] = await db.select({ email: users.email }).from(users).where(eq(users.id, scope.userId)).limit(1);
+  const userEmail = userRow?.email?.toLowerCase() ?? null;
+
   const signoffRows = await db
     .select({
       signer: signoffSigners,
@@ -479,8 +482,12 @@ export async function listAggregatedTasks(
     .where(
       and(
         eq(signoffRequests.tenantId, scope.tenantId),
-        eq(signoffSigners.userId, scope.userId),
-        eq(signoffSigners.status, "pending"),
+        inArray(signoffRequests.status, ["pending", "partially_signed"]),
+        inArray(signoffSigners.status, ["pending", "notified", "viewed"]),
+        or(
+          eq(signoffSigners.userId, scope.userId),
+          userEmail ? sql`lower(${signoffSigners.email}) = ${userEmail}` : sql`false`,
+        ),
       ),
     );
 

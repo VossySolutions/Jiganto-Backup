@@ -76,6 +76,16 @@ export function startPlatformBackgroundJobs(): void {
     } catch (err) {
       console.warn("[platform-jobs] Survey jobs error:", err);
     }
+
+    try {
+      const { runEsignJobs } = await import("../signoff/jobs");
+      const esignJobs = await runEsignJobs();
+      if (esignJobs.expired > 0 || esignJobs.reminders > 0) {
+        console.log(`[platform-jobs] eSign: expired ${esignJobs.expired}, reminders ${esignJobs.reminders}`);
+      }
+    } catch (err) {
+      console.warn("[platform-jobs] eSign jobs error:", err);
+    }
   };
 
   setTimeout(() => void runDaily(), 60_000);

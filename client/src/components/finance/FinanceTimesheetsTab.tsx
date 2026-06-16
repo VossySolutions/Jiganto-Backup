@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -114,6 +115,7 @@ export function FinanceTimesheetsTab({
   initialViewMode = "entry",
 }: FinanceTimesheetsTabProps) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [viewMode, setViewMode] = useState<"entry" | "approval" | "reports">(initialViewMode);
   const [gridMode, setGridMode] = useState<"weekly" | "daily">("weekly");
   const [selectedDay, setSelectedDay] = useState(1);
@@ -152,6 +154,28 @@ export function FinanceTimesheetsTab({
   const { data: projects = [] } = useQuery<Array<{ id: number; name: string }>>({
     queryKey: ["/api/pm/projects"],
   });
+
+  const { data: signoffRequests = [] } = useQuery<Array<{ id: number; title: string; status: string; timesheetPeriodId?: number }>>({
+    queryKey: ["/api/signoff"],
+  });
+
+  const signoffByPeriodId = useMemo(() => {
+    const map = new Map<number, { id: number; status: string; title: string }>();
+    for (const r of signoffRequests) {
+      if (r.timesheetPeriodId) map.set(r.timesheetPeriodId, { id: r.id, status: r.status, title: r.title });
+    }
+    return map;
+  }, [signoffRequests]);
+
+  const signoffStatusLabel: Record<string, string> = {
+    pending: "Awaiting signature",
+    partially_signed: "Partially signed",
+    completed: "Signed",
+    declined: "Declined",
+    voided: "Voided",
+    expired: "Expired",
+    draft: "Draft",
+  };
 
   const activePeriodId = selectedPeriodId ?? (selectedResourceId
     ? periods.find((p) => String(p.resourceId) === selectedResourceId)?.id ?? null
@@ -259,11 +283,19 @@ export function FinanceTimesheetsTab({
       apiRequest("POST", `/api/resources/timesheets/periods/${periodId}/request-signoff`, { signerEmail, signerName }),
     onSuccess: async (res) => {
       const data = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/signoff"] });
       invalidate();
-      toast({ title: "E-sign request sent", description: data.signUrl ? `Sign at ${data.signUrl}` : undefined });
+      toast({
+        title: "E-sign request sent",
+        description: data.signUrl ? `Signer portal: ${data.signUrl}` : undefined,
+      });
       setSignoffPeriodId(null);
+      setSignoffEmail("");
+      setSignoffName("");
     },
-    onError: () => toast({ title: "E-sign request failed", variant: "destructive" }),
+    onError: async (err: Error & { message?: string }) => {
+      toast({ title: "E-sign request failed", description: err.message, variant: "destructive" });
+    },
   });
 
   const toggleBulk = (id: number) => {
@@ -540,7 +572,10 @@ export function FinanceTimesheetsTab({
           )}
           {pendingPeriods.length === 0 ? (
             <Card><CardContent className="py-12 text-center text-muted-foreground">No timesheets pending approval</CardContent></Card>
-          ) : approvalPagination.paginatedItems.map((p) => (
+          ) : approvalPagination.paginatedItems.map((p) => {
+            const periodSignoff = signoffByPeriodId.get(p.id);
+            const signoffActive = periodSignoff && !["voided", "declined", "expired"].includes(periodSignoff.status);
+            return (
             <Card key={p.id}>
               <CardContent className="p-4 flex flex-col gap-3">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -557,12 +592,30 @@ export function FinanceTimesheetsTab({
                       <div className="text-sm mt-1 flex flex-wrap items-center gap-1.5 pl-6">
                         <span>{p.totalHours ?? "0"} hrs</span>
                         <Badge variant="outline">{p.approvalStatus ?? p.status}</Badge>
+                        {periodSignoff && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setLocation(`/modules/e-sign?request=${periodSignoff.id}`); }}
+                            className={cn(
+                              "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border",
+                              periodSignoff.status === "completed"
+                                ? "bg-green-50 text-green-700 border-green-200"
+                                : periodSignoff.status === "declined"
+                                ? "bg-red-50 text-red-700 border-red-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200",
+                            )}
+                          >
+                            <PenLine className="h-3 w-3" />
+                            {signoffStatusLabel[periodSignoff.status] || periodSignoff.status}
+                          </button>
+                        )}
                       </div>
                     </button>
                   </div>
                   {canApprove && (
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setSignoffPeriodId(p.id)}>
+                      <Button variant="outline" size="sm" onClick={() => setSignoffPeriodId(p.id)}
+                        disabled={!!signoffActive}>
                         <PenLine className="h-4 w-4 mr-1" /> E-Sign
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => rejectMutation.mutate({ id: p.id, reason: "Needs revision" })}
@@ -586,7 +639,8 @@ export function FinanceTimesheetsTab({
                 {expandedPeriodId === p.id && <PeriodEntriesPanel periodId={p.id} canApprove={canApprove} />}
               </CardContent>
             </Card>
-          ))}
+          );
+          })}
           {pendingPeriods.length > 0 && (
             <TablePagination
               page={approvalPagination.page}
@@ -612,7 +666,7 @@ export function FinanceTimesheetsTab({
                   <Button variant="outline" size="sm" onClick={() => setSignoffPeriodId(null)}>Cancel</Button>
                   <Button size="sm" disabled={!signoffEmail || !signoffName || signoffMutation.isPending}
                     onClick={() => signoffMutation.mutate({ periodId: signoffPeriodId, signerEmail: signoffEmail, signerName: signoffName })}>
-                    Send e-sign request
+                    {signoffMutation.isPending ? <><FinanceButtonSpinner className="mr-1" /> Sending…</> : "Send e-sign request"}
                   </Button>
                 </div>
               </CardContent>

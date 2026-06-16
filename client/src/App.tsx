@@ -212,6 +212,7 @@ function Router() {
           <Redirect to="/modules/finance-mgmt" />
         </Route>
         <Route path="/modules/e-sign" component={SignOffPage} />
+        <Route path="/esign" component={SignOffPage} />
         <Route path="/modules/surveys" component={SurveysPage} />
         <Route path="/surveys">{() => <Redirect to="/modules/surveys" />}</Route>
         <Route path="/settings/system" component={SettingsPage} />
