@@ -358,6 +358,9 @@ export async function registerRoutes(
   const { registerBpmExtensionRoutes } = await import("./bpm/routes");
   registerBpmExtensionRoutes(app);
 
+  const { registerSurveyRoutes } = await import("./surveys/routes");
+  registerSurveyRoutes(app);
+
   const { registerHelpDeskRoutes } = await import("./help-desk/routes");
   registerHelpDeskRoutes(app);
   const { registerTestMgmtExtensionRoutes } = await import("./testmgmt/routes");
@@ -2245,11 +2248,15 @@ export async function registerRoutes(
     const channelId = Number(req.params.id);
     const gate = await assertCanPostToChannel(channelId, userId);
     if (!gate.ok) return res.status(gate.status).json({ message: gate.message });
-    const { question, options, durationMinutes = 1440, anonymous = false } = req.body;
+    const { question, options, durationMinutes = 1440, anonymous = false,
+      pollType = "single", showResultsToVoters = true, allowVoteChange = false } = req.body;
     if (!question || !Array.isArray(options) || options.length < 2 || options.length > 6) {
       return res.status(400).json({ message: "Question and 2–6 options required" });
     }
     try {
+      const channel = await storage.getChannel(channelId);
+      if (!channel) return res.status(404).json({ message: "Channel not found" });
+      const tenantId = channel.tenantId;
       const { chatPolls, chatMessages: chatMessagesTable } = await import("@shared/models/chat");
       const closedAt = new Date(Date.now() + Number(durationMinutes) * 60 * 1000);
       const [poll] = await db.insert(chatPolls).values({
@@ -2257,6 +2264,20 @@ export async function registerRoutes(
         question, options: JSON.stringify(options),
         durationMinutes: Number(durationMinutes), anonymous: Boolean(anonymous), closedAt,
       }).returning();
+      const { syncChatPollToModule } = await import("./surveys/service");
+      await syncChatPollToModule({
+        chatPollId: poll.id,
+        channelId,
+        tenantId,
+        question,
+        options,
+        anonymous: Boolean(anonymous),
+        closedAt,
+        createdBy: userId,
+        pollType: pollType === "multi" ? "multi" : "single",
+        showResultsToVoters: Boolean(showResultsToVoters),
+        allowVoteChange: Boolean(allowVoteChange),
+      });
       const [message] = await db.insert(chatMessagesTable).values({
         channelId, userId, content: `📊 ${question}`,
         messageType: "poll", pollId: poll.id,
@@ -11013,266 +11034,6 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
         metadata: { reminderSentTo: pending.map(s => s.email) },
       });
       res.json({ success: true, reminderSentTo: pending.length });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // ─── Surveys ─────────────────────────────────────────────────────────────
-
-  // Public: get survey by token (respondent portal)
-  app.get("/api/surveys/by-token/:token", async (req, res) => {
-    try {
-      const survey = await storage.getSurveyByToken(req.params.token);
-      if (!survey) return res.status(404).json({ message: "Survey not found" });
-      if (survey.status !== "active") return res.status(410).json({ message: "Survey is not active" });
-      const { createdBy, ...publicSurvey } = survey as any;
-      res.json(publicSurvey);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // Public: submit a response
-  app.post("/api/surveys/by-token/:token/respond", async (req, res) => {
-    try {
-      const survey = await storage.getSurveyByToken(req.params.token);
-      if (!survey) return res.status(404).json({ message: "Survey not found" });
-      if (survey.status !== "active") return res.status(410).json({ message: "Survey is closed" });
-      const { respondentName, respondentEmail, answers, timeSeconds } = req.body;
-      const response = await storage.createSurveyResponse({
-        surveyId: survey.id,
-        respondentName: survey.anonymous ? null : (respondentName || null),
-        respondentEmail: survey.anonymous ? null : (respondentEmail || null),
-        ipAddress: req.ip,
-      });
-      if (Array.isArray(answers)) {
-        for (const a of answers) {
-          if (a.questionId && a.value !== undefined) {
-            await storage.createSurveyAnswer({ responseId: response.id, questionId: a.questionId, value: a.value });
-          }
-        }
-      }
-      await storage.completeSurveyResponse(response.id, timeSeconds || 0);
-      try {
-        const { processCsatSurveyResponse } = await import("./help-desk/csat");
-        await processCsatSurveyResponse(survey.id, survey.category);
-      } catch (err) {
-        console.warn("[help-desk] CSAT survey hook skipped:", err);
-      }
-      res.json({ success: true, responseId: response.id });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // Authenticated routes
-  app.get("/api/surveys", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const user = req.user as any;
-      const tenantId = user.tenantId || 1;
-      const surveys = await storage.getSurveys(tenantId);
-      res.json(surveys);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.get("/api/surveys/:id", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const survey = await storage.getSurvey(Number(req.params.id));
-      if (!survey) return res.status(404).json({ message: "Not found" });
-      res.json(survey);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.post("/api/surveys", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const user = req.user as any;
-      const token = crypto.randomBytes(16).toString("hex");
-      const survey = await storage.createSurvey({
-        ...req.body,
-        tenantId: getApiTenantIdWithFallback(req),
-        token,
-        createdBy: user.id,
-        createdByName: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : (user.email || "Unknown"),
-      });
-      res.json(survey);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.patch("/api/surveys/:id", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const survey = await storage.updateSurvey(Number(req.params.id), req.body);
-      if (!survey) return res.status(404).json({ message: "Not found" });
-      res.json(survey);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.delete("/api/surveys/:id", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      await storage.deleteSurvey(Number(req.params.id));
-      res.json({ success: true });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.post("/api/surveys/:id/activate", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const survey = await storage.updateSurvey(Number(req.params.id), { status: "active", sentAt: new Date() });
-      res.json(survey);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.post("/api/surveys/:id/close", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const survey = await storage.updateSurvey(Number(req.params.id), { status: "closed", closedAt: new Date() });
-      res.json(survey);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // AI-powered survey generation
-  app.post("/api/surveys/ai-generate", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const { getOpenAIConfig } = await import("./lib/openai");
-      const { apiKey, baseURL } = getOpenAIConfig();
-      if (!apiKey) {
-        return res.status(503).json({ message: "OpenAI is not configured. Set OPENAI_API_KEY." });
-      }
-      const OpenAI = (await import("openai")).default;
-      const openai = new OpenAI({ apiKey, baseURL });
-      const { description, count = 8 } = req.body;
-      if (!description?.trim()) return res.status(400).json({ message: "Description is required" });
-      const prompt = `You are a professional survey designer. Generate ${count} high-quality survey questions based on this brief:
-
-"${description}"
-
-Return a JSON array only — no explanation, no markdown. Each item must be an object with:
-- "text": the question text (string, clear and professional)
-- "type": one of: "mc" (multiple choice), "scale" (1-10 scale), "nps" (0-10 NPS), "text" (short text), "para" (paragraph), "yn" (yes/no), "sc" (star rating 1-5)
-- "options": array of strings if type is "mc" (3-5 options), otherwise empty array []
-- "required": true or false
-- "helpText": a short clarifying sub-text or null
-
-Use a mix of question types appropriate to the topic. For satisfaction/rating topics include at least one NPS or scale question. For open feedback include at least one "para" question.`;
-
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-        temperature: 0.7,
-      });
-      const raw = completion.choices[0].message.content || "{}";
-      let questions: any[] = [];
-      try {
-        const parsed = JSON.parse(raw);
-        questions = Array.isArray(parsed) ? parsed : (parsed.questions || parsed.items || []);
-      } catch { return res.status(500).json({ message: "AI returned invalid JSON" }); }
-      res.json({ questions });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // Bulk question creation (for template/AI paths)
-  app.post("/api/surveys/:id/questions/bulk", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const surveyId = Number(req.params.id);
-      const { questions } = req.body;
-      if (!Array.isArray(questions)) return res.status(400).json({ message: "questions must be an array" });
-      const existing = await storage.getSurveyQuestions(surveyId);
-      let order = existing.length;
-      const created = [];
-      for (const q of questions) {
-        order += 1;
-        const created_q = await storage.createSurveyQuestion({
-          surveyId, type: q.type || "text", text: q.text || "Question",
-          helpText: q.helpText || null, options: q.options || [],
-          required: q.required ?? true, allowOther: false,
-          randomizeOptions: false, questionOrder: order,
-          scaleMin: q.type === "nps" ? 0 : 1,
-          scaleMax: q.type === "nps" ? 10 : q.type === "scale" ? 10 : q.type === "sc" ? 5 : 10,
-          matrixRows: [], matrixCols: [],
-        });
-        created.push(created_q);
-      }
-      res.json({ created: created.length });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // Duplicate survey
-  app.post("/api/surveys/:id/duplicate", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const original = await storage.getSurvey(Number(req.params.id));
-      if (!original) return res.status(404).json({ message: "Not found" });
-      const crypto = await import("crypto");
-      const copy = await storage.createSurvey({
-        tenantId: original.tenantId, title: `${original.title} (copy)`,
-        description: original.description, status: "draft",
-        category: original.category, anonymous: original.anonymous,
-        showProgress: original.showProgress, onePerPage: original.onePerPage,
-        randomizeQuestions: original.randomizeQuestions,
-        thankYouMessage: original.thankYouMessage,
-        token: crypto.randomBytes(16).toString("hex"),
-        createdBy: (req.user as any)?.id || null,
-        createdByName: (req.user as any)?.firstName ? `${(req.user as any).firstName} ${(req.user as any).lastName || ""}`.trim() : "Unknown",
-      });
-      const origQuestions = await storage.getSurveyQuestions(original.id);
-      for (let i = 0; i < origQuestions.length; i++) {
-        const { id: _omitId, createdAt: _omitCreated, ...q } = origQuestions[i];
-        await storage.createSurveyQuestion({ ...q, surveyId: copy.id, questionOrder: i + 1 });
-      }
-      const fullCopy = await storage.getSurvey(copy.id);
-      res.json(fullCopy);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // Questions
-  app.post("/api/surveys/:id/questions", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const surveyId = Number(req.params.id);
-      const existing = await storage.getSurveyQuestions(surveyId);
-      const question = await storage.createSurveyQuestion({
-        ...req.body,
-        surveyId,
-        questionOrder: existing.length + 1,
-      });
-      res.json(question);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.patch("/api/surveys/questions/:qid", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const q = await storage.updateSurveyQuestion(Number(req.params.qid), req.body);
-      if (!q) return res.status(404).json({ message: "Not found" });
-      res.json(q);
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.delete("/api/surveys/questions/:qid", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      await storage.deleteSurveyQuestion(Number(req.params.qid));
-      res.json({ success: true });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  app.post("/api/surveys/:id/questions/reorder", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const { orderedIds } = req.body;
-      await storage.reorderSurveyQuestions(Number(req.params.id), orderedIds);
-      res.json({ success: true });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
-  });
-
-  // Responses
-  app.get("/api/surveys/:id/responses", async (req, res) => {
-    if (!isRequestAuthenticated(req)) return res.status(401).json({ message: "Unauthorized" });
-    try {
-      const responses = await storage.getSurveyResponses(Number(req.params.id));
-      res.json(responses);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

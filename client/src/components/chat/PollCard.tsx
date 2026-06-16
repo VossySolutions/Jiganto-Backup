@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { BarChart2, Check, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { chatFont } from "@/lib/chat-utils";
 import { apiRequest } from "@/lib/queryClient";
 import { ChatButtonSpinner } from "@/components/chat/ChatLoading";
+import { useChatConfig } from "@/hooks/use-chat-realtime";
+import { useChatPollRealtime } from "@/hooks/use-poll-realtime";
 
 export type PollData = {
   id: number;
@@ -21,9 +24,18 @@ export type PollData = {
 
 export function PollCard({ pollId }: { pollId: number }) {
   const queryClient = useQueryClient();
+  const { data: chatConfig } = useChatConfig();
+  const realtime = Boolean(chatConfig?.supabaseRealtime);
+
+  const invalidate = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: [`/api/chat/polls/${pollId}`] });
+  }, [queryClient, pollId]);
+
+  useChatPollRealtime(pollId, realtime, invalidate);
+
   const { data: poll, isLoading } = useQuery<PollData>({
     queryKey: [`/api/chat/polls/${pollId}`],
-    refetchInterval: 5000,
+    refetchInterval: realtime ? false : 5000,
   });
 
   const vote = useMutation({

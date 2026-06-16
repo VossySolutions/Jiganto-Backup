@@ -66,6 +66,16 @@ export function startPlatformBackgroundJobs(): void {
     } catch (err) {
       console.warn("[platform-jobs] Portfolio report jobs error:", err);
     }
+
+    try {
+      const { runSurveyJobs } = await import("../surveys/jobs");
+      const surveyJobs = await runSurveyJobs();
+      if (surveyJobs.surveysClosed > 0 || surveyJobs.pollsClosed > 0) {
+        console.log(`[platform-jobs] Surveys: closed ${surveyJobs.surveysClosed} survey(s), ${surveyJobs.pollsClosed} poll(s)`);
+      }
+    } catch (err) {
+      console.warn("[platform-jobs] Survey jobs error:", err);
+    }
   };
 
   setTimeout(() => void runDaily(), 60_000);

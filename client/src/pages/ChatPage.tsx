@@ -332,6 +332,9 @@ export function ChatPage() {
       options: string[];
       durationMinutes: number;
       anonymous: boolean;
+      pollType?: "single" | "multi";
+      showResultsToVoters?: boolean;
+      allowVoteChange?: boolean;
     }) => apiRequest("POST", `/api/chat/channels/${selectedChannelId}/polls`, data),
     onSuccess: () => {
       setIsPollOpen(false);

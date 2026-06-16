@@ -90,6 +90,11 @@ export function BpmStepLinksPanel({ diagramId, nodeId, nodeLabel }: Props) {
         <div key={l.id} className="flex items-center gap-1 text-xs">
           <Badge variant="outline" className="text-[9px]">{l.linkType.replace(/_/g, " ")}</Badge>
           <span className="flex-1 truncate">{l.label || `#${l.targetId}`}</span>
+          {(l.linkType === "survey" || l.linkType === "poll") && l.targetId ? (
+            <Link href="/modules/surveys">
+              <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+            </Link>
+          ) : null}
           <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => deleteMutation.mutate(l.id)}>
             <Trash2 className="h-3 w-3" />
           </Button>
@@ -102,9 +107,14 @@ export function BpmStepLinksPanel({ diagramId, nodeId, nodeLabel }: Props) {
             <SelectItem value="test_scenario">Test Scenario</SelectItem>
             <SelectItem value="help_desk_incident">Help Desk</SelectItem>
             <SelectItem value="document">Document</SelectItem>
+            <SelectItem value="survey">Survey</SelectItem>
+            <SelectItem value="poll">Poll</SelectItem>
           </SelectContent>
         </Select>
         <Input placeholder="ID" value={targetId} onChange={e => setTargetId(e.target.value)} className="h-7 text-xs flex-1" />
+        {(linkType === "survey" || linkType === "poll") && (
+          <Input placeholder="Label" value={label} onChange={e => setLabel(e.target.value)} className="h-7 text-xs flex-1" />
+        )}
         <Button size="sm" className="h-7 px-2" disabled={!targetId} onClick={() => createMutation.mutate({
           nodeId, linkType, targetId: Number(targetId), label: label || nodeLabel,
         })} data-testid="button-add-step-link">

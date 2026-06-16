@@ -27,7 +27,7 @@ import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { common, createLowlight } from 'lowlight';
 import CharacterCount from '@tiptap/extension-character-count';
 import {
-  CalloutNode, CollapsibleNode, VideoEmbedNode, MathBlockNode,
+  CalloutNode, CollapsibleNode, VideoEmbedNode, PollEmbedNode, MathBlockNode,
   TextDirectionExtension, SlashCommandExtension, buildSlashSuggestion,
   InlineCommentMark,
   type SlashCommandItem,
@@ -54,7 +54,7 @@ import {
   Search, Replace, X, ChevronUp, ChevronsUpDown, Check,
   Paintbrush, Video, Sigma, Smile, Languages, BookOpen, Layers, Scissors, Combine,
   Info, AlertTriangle, CheckCircle, AlertCircle, ChevronsLeftRight, FileSignature,
-  MessageSquare,
+  MessageSquare, BarChart2,
 } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { useLocation } from 'wouter';
@@ -782,6 +782,7 @@ export function TipTapEditor({
     { title: 'Callout — Danger', description: 'Red danger callout',          icon: AlertCircle,   keywords: ['callout','danger','error'], command: (ed, range) => ed.chain().focus().deleteRange(range).insertCallout('danger').run() },
     { title: 'Collapsible',      description: 'Expandable/collapsible block',icon: Layers,        keywords: ['collapse','toggle','detail'], command: (ed, range) => ed.chain().focus().deleteRange(range).insertCollapsible().run() },
     { title: 'Video',            description: 'Embed YouTube or Vimeo',      icon: Video,         keywords: ['youtube','vimeo','embed'],  command: (ed, range) => ed.chain().focus().deleteRange(range).insertVideoEmbed().run() },
+    { title: 'Live Poll',        description: 'Embed a live poll in meeting notes', icon: BarChart2, keywords: ['poll','vote','survey'], command: (ed, range) => ed.chain().focus().deleteRange(range).insertPollEmbed().run() },
     { title: 'Math / LaTeX',     description: 'Mathematical formula',        icon: Sigma,         keywords: ['math','latex','formula'],  command: (ed, range) => ed.chain().focus().deleteRange(range).insertMathBlock().run() },
   ], []);
 
@@ -997,6 +998,7 @@ export function TipTapEditor({
       CalloutNode,
       CollapsibleNode,
       VideoEmbedNode,
+      PollEmbedNode,
       MathBlockNode,
       TextDirectionExtension,
       InlineCommentMark,

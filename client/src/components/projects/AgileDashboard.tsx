@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PmDashboardSkeleton, PmErrorState } from "@/components/projects/PmLoadingShell";
+import { ProjectPollsCard } from "@/components/surveys/ProjectPollsCard";
 import "./agile-responsive.css";
 
 const C = {
@@ -463,6 +464,8 @@ export default function AgileDashboard({ projectId }: { projectId?: number }) {
             ))}
           </div>
         </div>
+
+        {projectId ? <ProjectPollsCard projectId={projectId} /> : null}
       </div>
     </div>
   );

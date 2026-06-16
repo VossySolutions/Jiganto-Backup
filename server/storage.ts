@@ -7551,7 +7551,7 @@ export class DatabaseStorage implements IStorage {
 
   async completeSurveyResponse(id: number, timeSeconds: number): Promise<SurveyResponse | undefined> {
     const [row] = await db.update(surveyResponses)
-      .set({ completedAt: new Date(), timeSeconds })
+      .set({ completedAt: new Date(), timeSeconds, isComplete: true })
       .where(eq(surveyResponses.id, id))
       .returning();
     return row;

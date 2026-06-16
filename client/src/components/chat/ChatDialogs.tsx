@@ -271,22 +271,44 @@ export function PollCreatorDialog({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSubmit: (data: { question: string; options: string[]; durationMinutes: number; anonymous: boolean }) => void;
+  onSubmit: (data: {
+    question: string;
+    options: string[];
+    durationMinutes: number;
+    anonymous: boolean;
+    pollType: "single" | "multi";
+    showResultsToVoters: boolean;
+    allowVoteChange: boolean;
+  }) => void;
   pending: boolean;
 }) {
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState(["", ""]);
   const [duration, setDuration] = useState("1440");
   const [anonymous, setAnonymous] = useState(false);
+  const [pollType, setPollType] = useState<"single" | "multi">("single");
+  const [showResultsToVoters, setShowResultsToVoters] = useState(true);
+  const [allowVoteChange, setAllowVoteChange] = useState(false);
 
   const submit = () => {
     const valid = options.map((o) => o.trim()).filter(Boolean);
     if (!question.trim() || valid.length < 2) return;
-    onSubmit({ question: question.trim(), options: valid, durationMinutes: Number(duration), anonymous });
+    onSubmit({
+      question: question.trim(),
+      options: valid,
+      durationMinutes: Number(duration),
+      anonymous,
+      pollType,
+      showResultsToVoters,
+      allowVoteChange,
+    });
     setQuestion("");
     setOptions(["", ""]);
     setDuration("1440");
     setAnonymous(false);
+    setPollType("single");
+    setShowResultsToVoters(true);
+    setAllowVoteChange(false);
   };
 
   return (
@@ -328,14 +350,33 @@ export function PollCreatorDialog({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="15">15 minutes</SelectItem>
+              <SelectItem value="30">30 minutes</SelectItem>
               <SelectItem value="60">1 hour</SelectItem>
+              <SelectItem value="240">4 hours</SelectItem>
               <SelectItem value="1440">24 hours</SelectItem>
               <SelectItem value="10080">1 week</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={pollType} onValueChange={(v) => setPollType(v as "single" | "multi")}>
+            <SelectTrigger>
+              <SelectValue placeholder="Poll type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="single">Single choice</SelectItem>
+              <SelectItem value="multi">Multiple choice</SelectItem>
             </SelectContent>
           </Select>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} />
             Anonymous votes
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={showResultsToVoters} onChange={(e) => setShowResultsToVoters(e.target.checked)} />
+            Show results to voters
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={allowVoteChange} onChange={(e) => setAllowVoteChange(e.target.checked)} />
+            Allow vote change
           </label>
           <Button type="submit" className="w-full gap-2" disabled={pending}>
             {pending ? <ChatButtonSpinner /> : <Check className="h-4 w-4" />}

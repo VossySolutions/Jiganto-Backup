@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } fro
 import { cn } from '@/lib/utils';
 import {
   Info, AlertTriangle, CheckCircle, AlertCircle,
-  ChevronRight, PlayCircle, Sigma,
+  ChevronRight, PlayCircle, Sigma, BarChart2,
   Type, Heading1, Heading2, Heading3, Heading4,
   List, ListOrdered, CheckSquare, Quote, Code, Minus, Layers,
 } from 'lucide-react';
@@ -294,6 +294,95 @@ export const VideoEmbedNode = Node.create({
     return {
       insertVideoEmbed: () => ({ chain }: any) =>
         chain().insertContent({ type: 'videoEmbed', attrs: { src: '' } }).run(),
+    } as any;
+  },
+});
+
+// ── Poll Embed Node (Module 17 — meeting notes) ─────────────────────────────
+
+function PollEmbedComponent({ node, updateAttributes, selected }: any) {
+  const [editing, setEditing] = useState(!node.attrs.token);
+  const [tokenInput, setTokenInput] = useState(node.attrs.token || '');
+
+  const save = () => {
+    const raw = tokenInput.trim();
+    const token = raw.includes('/poll/') ? raw.split('/poll/').pop()?.split(/[?#]/)[0] ?? raw : raw;
+    if (!token) return;
+    updateAttributes({ token });
+    setEditing(false);
+  };
+
+  const pollUrl = node.attrs.token ? `/poll/${node.attrs.token}` : null;
+
+  return (
+    <NodeViewWrapper as="div" contentEditable={false}>
+      <div
+        className={cn('my-3 rounded-lg overflow-hidden border border-border', selected && 'ring-2 ring-primary ring-offset-2')}
+        data-poll-embed=""
+        data-testid="poll-embed-node"
+      >
+        {editing || !pollUrl ? (
+          <div className="p-4 bg-muted/40 space-y-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+              <BarChart2 className="h-4 w-4" /> Live Poll Embed
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={tokenInput}
+                onChange={e => setTokenInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') save(); e.stopPropagation(); }}
+                placeholder="Poll link or token…"
+                className="flex-1 h-8 px-3 text-sm rounded-md border border-border bg-background outline-none focus:ring-2 focus:ring-primary"
+                data-testid="poll-embed-token-input"
+                autoFocus
+              />
+              <Button size="sm" className="h-8" onClick={save} data-testid="poll-embed-btn">Embed</Button>
+              {node.attrs.token && (
+                <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditing(false)}>Cancel</Button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="relative group">
+            <iframe
+              src={pollUrl}
+              title="Embedded poll"
+              className="w-full border-0"
+              style={{ minHeight: 280 }}
+              data-testid="poll-embed-iframe"
+            />
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 rounded px-2 py-1 text-xs border border-border"
+              data-testid="poll-embed-edit-btn"
+            >
+              Change poll
+            </button>
+          </div>
+        )}
+      </div>
+    </NodeViewWrapper>
+  );
+}
+
+export const PollEmbedNode = Node.create({
+  name: 'pollEmbed',
+  group: 'block',
+  atom: true,
+  draggable: true,
+  addAttributes() {
+    return {
+      token: { default: null, parseHTML: el => el.getAttribute('data-token') || null, renderHTML: attrs => ({ 'data-token': attrs.token }) },
+    };
+  },
+  parseHTML() { return [{ tag: 'div[data-poll-embed]' }]; },
+  renderHTML({ HTMLAttributes }) { return ['div', mergeAttributes(HTMLAttributes)]; },
+  addNodeView() { return ReactNodeViewRenderer(PollEmbedComponent); },
+  addCommands() {
+    return {
+      insertPollEmbed: () => ({ chain }: any) =>
+        chain().insertContent({ type: 'pollEmbed', attrs: { token: '' } }).run(),
     } as any;
   },
 });

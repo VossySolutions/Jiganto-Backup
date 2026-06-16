@@ -1,8 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "wouter";
 import { SubmitForm } from "@/components/ui/submit-form";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import type { SurveyWithDetails, SurveyQuestion } from "@shared/models/surveys";
+import { LIKERT_OPTIONS, EMOJI_RATINGS } from "@/lib/survey-constants";
+import { SurveyLoadingState, SurveyButtonSpinner } from "@/components/surveys/SurveyLoadingState";
+import "@/styles/surveys.css";
 
 const C = {
   teal: "#1A6B5A", tealL: "#E4F2EE", tealM: "#2E8C74",
@@ -14,9 +17,20 @@ const C = {
 
 const TYPE_LABEL: Record<string, string> = {
   mc: "Multiple Choice", yn: "Yes / No", cb: "Checkboxes", dd: "Dropdown",
-  sc: "Star Rating", scale: "Scale", nps: "NPS Score", text: "Short Text",
-  para: "Paragraph", date: "Date", matrix: "Matrix",
+  sc: "Star Rating", scale: "Scale", nps: "NPS Score", likert: "Likert", text: "Short Text",
+  para: "Paragraph", date: "Date", file: "File Upload", matrix: "Matrix", section: "Section",
 };
+
+function orderQuestions(questions: SurveyQuestion[], randomize: boolean) {
+  const filtered = questions.filter(q => q.type !== "section" && !q.isSection);
+  if (!randomize) return filtered;
+  const copy = [...filtered];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
 
 type AnswerValue = string | string[] | number | null;
 
@@ -50,7 +64,7 @@ export default function SurveyPortalPage() {
 
   if (isLoading) return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${C.teal} 0%, #0F3D31 100%)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ color: "rgba(255,255,255,.7)", fontSize: 15 }}>Loading survey…</div>
+      <SurveyLoadingState label="Loading survey…" />
     </div>
   );
 
@@ -64,9 +78,10 @@ export default function SurveyPortalPage() {
     </div>
   );
 
-  const questions = survey.questions;
+  const questions = orderQuestions(survey.questions ?? [], !!survey.randomizeQuestions);
+  const onePerPage = survey.onePerPage !== false;
   const total = questions.length;
-  const progress = total > 0 ? ((currentQ) / total) * 100 : 0;
+  const progress = total > 0 ? ((onePerPage ? currentQ : total) / total) * 100 : 0;
 
   function setAnswer(qId: number, val: AnswerValue) {
     setAnswers(prev => ({ ...prev, [qId]: val }));
@@ -95,21 +110,7 @@ export default function SurveyPortalPage() {
 
   // ── Submitted ─────────────────────────────────────────────────────────────
   if (submitted) return (
-    <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${C.teal} 0%, #0F3D31 100%)`, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px" }}>
-      <div style={{ background: "#fff", borderRadius: 20, maxWidth: 560, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
-        <div style={{ padding: "48px 36px", textAlign: "center" }}>
-          <div style={{ fontSize: 56, marginBottom: 20 }}>🎉</div>
-          <h2 style={{ fontFamily: "serif", fontSize: 26, fontWeight: 700, marginBottom: 10 }}>Thank you!</h2>
-          <p style={{ color: C.ink3, fontSize: 14, lineHeight: 1.6 }}>
-            {survey.thankYouMessage || "Your response has been recorded. We appreciate your feedback."}
-          </p>
-        </div>
-        <div style={{ padding: "16px 36px 24px", borderTop: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 12, color: C.ink4 }}>Anonymous survey</span>
-          <span style={{ fontFamily: "serif", fontWeight: 700, color: C.ink3, fontSize: 13 }}>Jiganto Surveys</span>
-        </div>
-      </div>
-    </div>
+    <SubmittedView survey={survey} token={token!} />
   );
 
   // ── Name capture step ──────────────────────────────────────────────────────
@@ -146,7 +147,39 @@ export default function SurveyPortalPage() {
     );
   }
 
-  // ── Question page ─────────────────────────────────────────────────────────
+  // ── All questions on one page ─────────────────────────────────────────────
+  if (!onePerPage && survey) {
+    return (
+      <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${C.teal} 0%, #0F3D31 100%)`, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px" }}>
+        <div style={{ background: "#fff", borderRadius: 20, maxWidth: 640, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
+          <div style={{ padding: "28px 36px", borderBottom: `1px solid ${C.line}` }}>
+            <h1 style={{ fontFamily: "serif", fontSize: 22, fontWeight: 700, margin: 0 }}>{survey.title}</h1>
+            {survey.description && <p style={{ fontSize: 13, color: C.ink3, marginTop: 8 }}>{survey.description}</p>}
+          </div>
+          <SubmitForm onSubmit={() => { if (!survey.anonymous) setNameStep(true); else handleSubmit(); }} style={{ padding: "28px 36px" }}>
+            {questions.map((q, i) => (
+              <div key={q.id} style={{ marginBottom: 28, paddingBottom: 28, borderBottom: i < questions.length - 1 ? `1px solid ${C.line}` : "none" }}>
+                <div style={{ fontWeight: 500, marginBottom: 8 }}>{q.text}{q.required && " *"}</div>
+                {q.helpText && <div style={{ fontSize: 12, color: C.ink3, marginBottom: 8 }}>{q.helpText}</div>}
+                <QuestionInput q={q} token={token!} value={answers[q.id] ?? null} onChange={val => setAnswer(q.id, val)} />
+              </div>
+            ))}
+            {!survey.anonymous && (
+              <>
+                <input value={respondentName} onChange={e => setRespondentName(e.target.value)} placeholder="Your name (optional)" style={{ width: "100%", padding: "10px", marginBottom: 8, borderRadius: 8, border: `1px solid ${C.line}` }} />
+                <input value={respondentEmail} onChange={e => setRespondentEmail(e.target.value)} placeholder="Email (optional)" style={{ width: "100%", padding: "10px", marginBottom: 16, borderRadius: 8, border: `1px solid ${C.line}` }} />
+              </>
+            )}
+            <button type="submit" disabled={submitMut.isPending} style={{ width: "100%", padding: "14px", background: C.teal, color: "#fff", border: "none", borderRadius: 10, fontWeight: 600, cursor: "pointer" }}>
+              {submitMut.isPending ? "Submitting…" : "Submit Survey ✓"}
+            </button>
+          </SubmitForm>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Question page (one per page) ──────────────────────────────────────────
   const q = questions[currentQ];
   if (!q) return null;
   const currentAnswer = answers[q.id];
@@ -180,7 +213,7 @@ export default function SurveyPortalPage() {
           </div>
           {q.helpText && <div style={{ fontSize: 13, color: C.ink3, marginBottom: 20 }}>{q.helpText}</div>}
 
-          <QuestionInput q={q} value={currentAnswer} onChange={val => setAnswer(q.id, val)} />
+          <QuestionInput q={q} token={token!} value={currentAnswer} onChange={val => setAnswer(q.id, val)} />
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 28, paddingTop: 24, borderTop: `1px solid ${C.line}` }}>
             <button onClick={handleBack} disabled={currentQ === 0}
@@ -206,7 +239,7 @@ export default function SurveyPortalPage() {
 }
 
 // ─── Question input components ─────────────────────────────────────────────
-function QuestionInput({ q, value, onChange }: { q: SurveyQuestion; value: AnswerValue; onChange: (v: AnswerValue) => void }) {
+function QuestionInput({ q, token, value, onChange }: { q: SurveyQuestion; token: string; value: AnswerValue; onChange: (v: AnswerValue) => void }) {
   const opts = (q.options as string[]) || [];
 
   const optStyle = (selected: boolean): React.CSSProperties => ({
@@ -336,21 +369,68 @@ function QuestionInput({ q, value, onChange }: { q: SurveyQuestion; value: Answe
     );
   }
 
-  // Short text
-  if (q.type === "text") {
+  // Likert
+  if (q.type === "likert") {
+    const cols = (q.matrixCols as string[])?.length ? (q.matrixCols as string[]) : LIKERT_OPTIONS;
     return (
-      <input value={value as string || ""} onChange={e => onChange(e.target.value)}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {cols.map(c => {
+          const sel = value === c;
+          return (
+            <div key={c} onClick={() => onChange(c)} style={{ flex: "1 1 100px", textAlign: "center", padding: "10px 6px", border: `1.5px solid ${sel ? C.teal : C.line}`, borderRadius: 10, cursor: "pointer", fontSize: 12, background: sel ? C.tealL : "#fff", color: sel ? C.teal : C.ink2 }}>{c}</div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // File upload
+  if (q.type === "file") {
+    return (
+      <input type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx"
+        onChange={async e => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          if (file.size > 10 * 1024 * 1024) { alert("Max file size is 10MB"); return; }
+          const fd = new FormData();
+          fd.append("file", file);
+          const res = await fetch(`/api/surveys/by-token/${token}/upload`, { method: "POST", body: fd });
+          const data = await res.json();
+          if (data.url) onChange(data.url);
+        }}
+        style={{ width: "100%", fontSize: 14 }} />
+    );
+  }
+
+  // Short text with max length
+  if (q.type === "text") {
+    const max = q.maxLength ?? 200;
+    return (
+      <input value={value as string || ""} onChange={e => onChange(e.target.value.slice(0, max))}
+        maxLength={max}
         style={{ width: "100%", padding: "11px 14px", border: `1.5px solid ${C.line}`, borderRadius: 10, fontSize: 14, color: C.ink, outline: "none", fontFamily: "inherit" }}
         placeholder="Type your answer here…" data-testid="input-text-answer" />
     );
   }
 
-  // Paragraph
+  // Paragraph with max length
   if (q.type === "para") {
+    const max = q.maxLength ?? 2000;
     return (
-      <textarea value={value as string || ""} onChange={e => onChange(e.target.value)} rows={5}
+      <textarea value={value as string || ""} onChange={e => onChange(e.target.value.slice(0, max))} rows={5} maxLength={max}
         style={{ width: "100%", padding: "11px 14px", border: `1.5px solid ${C.line}`, borderRadius: 10, fontSize: 14, color: C.ink, outline: "none", fontFamily: "inherit", resize: "vertical" }}
         placeholder="Type your answer here…" data-testid="input-para-answer" />
+    );
+  }
+
+  // Star rating with emoji mode
+  if (q.type === "sc" && q.ratingDisplay === "emoji") {
+    return (
+      <div style={{ display: "flex", gap: 12 }}>
+        {EMOJI_RATINGS.map((emoji, i) => (
+          <div key={i} onClick={() => onChange(i + 1)} style={{ fontSize: 36, cursor: "pointer", opacity: (value as number) >= i + 1 ? 1 : 0.3 }}>{emoji}</div>
+        ))}
+      </div>
     );
   }
 
@@ -399,4 +479,79 @@ function QuestionInput({ q, value, onChange }: { q: SurveyQuestion; value: Answe
   }
 
   return <div style={{ color: C.ink4, fontSize: 13 }}>Unsupported question type.</div>;
+}
+
+function SubmittedView({ survey, token }: { survey: SurveyWithDetails; token: string }) {
+  const showResults = !!survey.showResultsToRespondents;
+  const { data: results, isLoading } = useQuery({
+    queryKey: ["/api/surveys/by-token", token, "results"],
+    queryFn: () => fetch(`/api/surveys/by-token/${token}/results`).then(r => {
+      if (!r.ok) throw new Error("Results unavailable");
+      return r.json();
+    }),
+    enabled: showResults,
+  });
+
+  return (
+    <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${C.teal} 0%, #0F3D31 100%)`, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px" }}>
+      <div style={{ background: "#fff", borderRadius: 20, maxWidth: showResults ? 720 : 560, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
+        <div style={{ padding: "48px 36px", textAlign: "center" }}>
+          <div style={{ fontSize: 56, marginBottom: 20 }}>🎉</div>
+          <h2 style={{ fontFamily: "serif", fontSize: 26, fontWeight: 700, marginBottom: 10 }}>Thank you!</h2>
+          <p style={{ color: C.ink3, fontSize: 14, lineHeight: 1.6 }}>
+            {survey.thankYouMessage || "Your response has been recorded. We appreciate your feedback."}
+          </p>
+        </div>
+        {showResults && (
+          <div style={{ padding: "0 36px 32px", borderTop: `1px solid ${C.line}` }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: "24px 0 16px" }}>Survey results so far</h3>
+            {isLoading && <p style={{ color: C.ink3, fontSize: 14 }}>Loading results…</p>}
+            {results?.survey?.questions?.filter((q: SurveyQuestion) => q.type !== "section").map((q: SurveyQuestion) => {
+              const answers = (results.responses ?? []).flatMap((r: { answers: { questionId: number; value: unknown }[] }) =>
+                r.answers.filter((a: { questionId: number }) => a.questionId === q.id).map((a: { value: unknown }) => a.value));
+              if (["mc", "dd", "yn", "likert"].includes(q.type)) {
+                const opts = q.type === "yn" ? ["Yes", "No"] : (q.type === "likert" ? ((q.matrixCols as string[]) || LIKERT_OPTIONS) : ((q.options as string[]) || []));
+                const counts: Record<string, number> = {};
+                for (const a of answers) counts[String(a)] = (counts[String(a)] || 0) + 1;
+                const total = answers.length || 1;
+                return (
+                  <div key={q.id} style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{q.text}</div>
+                    {opts.map(o => {
+                      const n = counts[o] || 0;
+                      const pct = Math.round((n / total) * 100);
+                      return (
+                        <div key={o} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                          <div style={{ width: 120, fontSize: 12, color: C.ink3, flexShrink: 0 }}>{o}</div>
+                          <div style={{ flex: 1, height: 22, background: C.paper2, borderRadius: 5, overflow: "hidden" }}>
+                            <div style={{ width: `${Math.max(pct, 2)}%`, height: "100%", background: C.teal, borderRadius: 5 }} />
+                          </div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: C.ink3, width: 36 }}>{pct}%</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              }
+              if (q.type === "nps" || q.type === "scale" || q.type === "sc") {
+                const nums = answers.map((a: unknown) => Number(a)).filter((n: number) => !isNaN(n));
+                const avg = nums.length ? (nums.reduce((s: number, n: number) => s + n, 0) / nums.length).toFixed(1) : "—";
+                return (
+                  <div key={q.id} style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>{q.text}</div>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: C.teal, marginTop: 4 }}>{avg} <span style={{ fontSize: 13, fontWeight: 400, color: C.ink3 }}>avg ({nums.length} responses)</span></div>
+                  </div>
+                );
+              }
+              return null;
+            })}
+          </div>
+        )}
+        <div style={{ padding: "16px 36px 24px", borderTop: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: C.ink4 }}>{survey.anonymous ? "Anonymous survey" : "Survey complete"}</span>
+          <span style={{ fontFamily: "serif", fontWeight: 700, color: C.ink3, fontSize: 13 }}>Jiganto Surveys</span>
+        </div>
+      </div>
+    </div>
+  );
 }

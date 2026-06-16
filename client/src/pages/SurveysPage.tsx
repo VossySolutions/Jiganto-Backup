@@ -1,84 +1,50 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Sidebar } from "@/components/Sidebar";
 import { useShellLayout } from "@/hooks/use-shell-layout";
 import { cn } from "@/lib/utils";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, PieChart, Pie, Cell,
 } from "recharts";
-import type { SurveyWithDetails, SurveyQuestion, SurveyResponseWithAnswers } from "@shared/models/surveys";
-
-// ─── Design colour tokens (from Claude design) ────────────────────────────────
-const C = {
-  teal:    "#1A6B5A", tealL: "#E4F2EE", tealM: "#2E8C74",
-  amber:   "#B85C0A", amberL: "#FDF0E4",
-  violet:  "#4A2D8C", violetL: "#EEE9FA",
-  rose:    "#9C2B2B", roseL:  "#FAEAEA",
-  blue:    "#1A4A8C", blueL:  "#E6EEF8",
-  ink:     "#0F0E0C", ink2: "#2E2C28", ink3: "#5C5952", ink4: "#9C9890",
-  paper:   "#FAFAF7", paper2: "#F2F0EB", paper3: "#E8E5DE",
-  line:    "#DDD9D0", line2: "#CBC7BC",
-};
-
-// MC result bar palette: teal → teal-mid → amber → rose (ordered best→worst)
-const MC_BARS = [C.tealM, "#4AAD90", C.amber, C.rose, "#6842B8", "#1A4A8C"];
-// Checkbox bars: violet shades
-const CB_BARS = [C.violet, "#6842B8", "#8C5ECC", "#AA7ADE", "#C89EEA"];
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-type View = "dashboard" | "builder" | "results";
-
-const QUESTION_TYPES: { type: string; icon: string; label: string; group: string }[] = [
-  { type: "mc",    icon: "◉",  label: "Multiple Choice", group: "Choice" },
-  { type: "yn",    icon: "✓✗", label: "Yes / No",        group: "Choice" },
-  { type: "cb",    icon: "☑",  label: "Checkboxes",      group: "Choice" },
-  { type: "dd",    icon: "▾",  label: "Dropdown",        group: "Choice" },
-  { type: "sc",    icon: "⭐", label: "Star Rating",     group: "Rating" },
-  { type: "scale", icon: "◈",  label: "Scale (1–10)",    group: "Rating" },
-  { type: "nps",   icon: "📈", label: "NPS Score",       group: "Rating" },
-  { type: "text",  icon: "✏",  label: "Short Text",      group: "Open-ended" },
-  { type: "para",  icon: "☰",  label: "Paragraph",       group: "Open-ended" },
-  { type: "date",  icon: "📅", label: "Date",            group: "Other" },
-  { type: "matrix",icon: "⊞", label: "Matrix / Grid",   group: "Other" },
-];
-
-const TYPE_LABEL: Record<string, string> = Object.fromEntries(QUESTION_TYPES.map(q => [q.type, q.label]));
-
-const STATUS_STYLES: Record<string, { label: string; bg: string; color: string; dot?: boolean }> = {
-  draft:    { label: "Draft",   bg: C.paper3,  color: C.ink3 },
-  active:   { label: "Active",  bg: C.tealL,   color: C.teal,   dot: true },
-  closed:   { label: "Closed",  bg: C.roseL,   color: C.rose },
-  archived: { label: "Archived",bg: C.paper3,  color: C.ink4 },
-};
-
-const CATEGORY_ICONS: Record<string, string> = {
-  "Retrospective": "📊", "Client Satisfaction": "🎯", "Team Wellbeing": "💡",
-  "Onboarding": "📝", "Product Feedback": "🔧", "Other": "📋", "": "📋",
-};
-
-function fmtDate(d: string | null | undefined) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-function fmtTime(s: number | null | undefined) {
-  if (!s) return "—";
-  const m = Math.floor(s / 60), sec = s % 60;
-  return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
-}
-function initials(name: string | null | undefined) {
-  if (!name) return "?";
-  return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-}
+import type { SurveyWithDetails, SurveyQuestion, SurveyResponseWithAnswers, SurveyTemplate, SurveyLogicRule } from "@shared/models/surveys";
+import {
+  C, MC_BARS, CB_BARS, QUESTION_TYPES, TYPE_LABEL, STATUS_STYLES, CATEGORY_ICONS, CATEGORIES,
+  LIKERT_OPTIONS, EMOJI_RATINGS, fmtDate, fmtTime, initials, wordFrequency,
+  type MainTab, type View,
+} from "@/lib/survey-constants";
+import { exportSurveyToPPT, exportSurveyToCSV, exportSurveyToExcel } from "@/lib/survey-exports";
+import { ShareModal } from "@/components/surveys/ShareModal";
+import { PollsTab } from "@/components/surveys/PollsTab";
+import { TemplatesTab } from "@/components/surveys/TemplatesTab";
+import { SurveyLoadingState, SurveyKpiSkeleton, SurveyRowSkeleton, SurveyCardSkeleton, SurveyButtonSpinner } from "@/components/surveys/SurveyLoadingState";
+import { asArray, fetchSurveys, fetchSurvey, fetchSurveyResponses, fetchSurveyResultsSummary } from "@/lib/survey-api";
+import { SurveyAiTokenBanner } from "@/components/surveys/SurveyAiTokenBanner";
+import { RichTextField } from "@/components/surveys/RichTextField";
+import { useSurveyAiStatus } from "@/hooks/use-survey-ai-status";
+import "@/styles/surveys.css";
 
 // ─── Question preview card ─────────────────────────────────────────────────
-function QuestionPreview({ q, idx, selected, onClick, onDelete, onMoveUp, onMoveDown, isFirst, isLast }: {
+function QuestionPreview({ q, idx, selected, onClick, onDelete, onDuplicate, onMoveUp, onMoveDown, isFirst, isLast }: {
   q: SurveyQuestion; idx: number; selected: boolean;
-  onClick: () => void; onDelete: () => void; onMoveUp: () => void; onMoveDown: () => void;
+  onClick: () => void; onDelete: () => void; onDuplicate: () => void; onMoveUp: () => void; onMoveDown: () => void;
   isFirst: boolean; isLast: boolean;
 }) {
   const opts = (q.options as string[]) || [];
+  if (q.type === "section" || q.isSection) {
+    return (
+      <div onClick={onClick} style={{ background: C.paper2, border: `1.5px solid ${selected ? C.teal : C.line}`, borderRadius: 12, padding: "14px 20px", marginBottom: 10, cursor: "pointer", position: "relative" }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: C.ink4, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>Section</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{q.text || "Section header"}</div>
+        <div style={{ position: "absolute", right: 12, top: 12, display: "flex", gap: 4 }}>
+          <button onClick={e => { e.stopPropagation(); onDuplicate(); }} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 12 }} title="Duplicate">⧉</button>
+          <button onClick={e => { e.stopPropagation(); onDelete(); }} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", color: C.rose, fontSize: 12 }} title="Delete">✕</button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       onClick={onClick}
@@ -92,7 +58,8 @@ function QuestionPreview({ q, idx, selected, onClick, onDelete, onMoveUp, onMove
         <span>Q{idx + 1} · {TYPE_LABEL[q.type] || q.type}</span>
         {q.required && <span style={{ background: C.tealL, color: C.teal, fontSize: 10, padding: "2px 8px", borderRadius: 20, fontWeight: 600 }}>Required</span>}
       </div>
-      <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 12, color: C.ink, lineHeight: 1.4 }}>{q.text || "Untitled question"}</div>
+      <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 12, color: C.ink, lineHeight: 1.4 }}
+        dangerouslySetInnerHTML={{ __html: q.text || "Untitled question" }} />
 
       {/* Preview by type */}
       {(q.type === "mc" || q.type === "yn" || q.type === "dd") && (
@@ -146,9 +113,21 @@ function QuestionPreview({ q, idx, selected, onClick, onDelete, onMoveUp, onMove
           {(q.matrixRows as string[] || ["Row 1", "Row 2"]).slice(0, 2).join(", ")} × {(q.matrixCols as string[] || ["Col 1", "Col 2"]).slice(0, 2).join(", ")}
         </div>
       )}
+      {q.type === "likert" && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {((q.matrixCols as string[])?.length ? (q.matrixCols as string[]) : LIKERT_OPTIONS).map(c => (
+            <div key={c} style={{ flex: "1 1 80px", textAlign: "center", padding: "6px 4px", border: `1px solid ${C.line2}`, borderRadius: 6, fontSize: 11, color: C.ink3 }}>{c}</div>
+          ))}
+        </div>
+      )}
+      {q.type === "file" && (
+        <div style={{ padding: "8px 12px", border: `1px dashed ${C.line2}`, borderRadius: 8, fontSize: 13, color: C.ink4 }}>File upload (max 10MB)</div>
+      )}
 
       {/* Actions */}
       <div style={{ position: "absolute", right: 12, top: 12, display: "flex", gap: 4 }}>
+        <button onClick={e => { e.stopPropagation(); onDuplicate(); }}
+          style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 12 }} title="Duplicate">⧉</button>
         <button onClick={e => { e.stopPropagation(); onMoveUp(); }} disabled={isFirst}
           style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: isFirst ? "not-allowed" : "pointer", opacity: isFirst ? 0.3 : 1, fontSize: 12 }} title="Move up">↑</button>
         <button onClick={e => { e.stopPropagation(); onMoveDown(); }} disabled={isLast}
@@ -161,10 +140,11 @@ function QuestionPreview({ q, idx, selected, onClick, onDelete, onMoveUp, onMove
 }
 
 // ─── Settings panel for selected question ─────────────────────────────────
-function QuestionSettings({ q, onUpdate }: { q: SurveyQuestion; onUpdate: (data: Partial<SurveyQuestion>) => void }) {
+function QuestionSettings({ q, allQuestions, onUpdate }: { q: SurveyQuestion; allQuestions: SurveyQuestion[]; onUpdate: (data: Partial<SurveyQuestion>) => void }) {
   const opts = (q.options as string[]) || [];
   const matrixRows = (q.matrixRows as string[]) || ["Row 1", "Row 2"];
-  const matrixCols = (q.matrixCols as string[]) || ["Strongly Agree", "Agree", "Disagree", "Strongly Disagree"];
+  const matrixCols = (q.matrixCols as string[]) || (q.type === "likert" ? LIKERT_OPTIONS : ["Strongly Agree", "Agree", "Disagree", "Strongly Disagree"]);
+  const logicRules = (q.logicJson as SurveyLogicRule[]) || [];
 
   const inputStyle = { width: "100%", padding: "8px 11px", border: `1px solid ${C.line2}`, borderRadius: 7, fontFamily: "inherit", fontSize: 13, color: C.ink, background: "#fff", outline: "none" };
   const labelStyle = { display: "block" as const, fontSize: 11, fontWeight: 600 as const, color: C.ink3, marginBottom: 5, textTransform: "uppercase" as const, letterSpacing: ".05em" };
@@ -173,8 +153,7 @@ function QuestionSettings({ q, onUpdate }: { q: SurveyQuestion; onUpdate: (data:
     <div style={{ padding: "0 2px" }}>
       <div style={{ marginBottom: 14 }}>
         <label style={labelStyle}>Question Text</label>
-        <textarea rows={3} value={q.text} onChange={e => onUpdate({ text: e.target.value })}
-          style={{ ...inputStyle, resize: "vertical" as const, minHeight: 72 }} />
+        <RichTextField value={q.text} onChange={text => onUpdate({ text })} rows={3} />
       </div>
       <div style={{ marginBottom: 14 }}>
         <label style={labelStyle}>Help text (optional)</label>
@@ -218,6 +197,42 @@ function QuestionSettings({ q, onUpdate }: { q: SurveyQuestion; onUpdate: (data:
         </div>
       )}
 
+      {/* Likert settings */}
+      {q.type === "likert" && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ ...labelStyle, marginBottom: 6 }}>Likert options</div>
+          {matrixCols.map((c, i) => (
+            <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <input value={c} onChange={e => { const n = [...matrixCols]; n[i] = e.target.value; onUpdate({ matrixCols: n }); }} style={{ ...inputStyle, flex: 1 }} />
+              <button onClick={() => onUpdate({ matrixCols: matrixCols.filter((_, j) => j !== i) })} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", color: C.rose, fontSize: 13 }}>✕</button>
+            </div>
+          ))}
+          <button onClick={() => onUpdate({ matrixCols: [...matrixCols, `Option ${matrixCols.length + 1}`] })} style={{ width: "100%", padding: "6px", border: `1px dashed ${C.line2}`, borderRadius: 7, background: C.paper2, cursor: "pointer", fontSize: 12, color: C.ink3 }}>+ Option</button>
+        </div>
+      )}
+
+      {/* Star rating display */}
+      {q.type === "sc" && (
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Display style</label>
+          <select value={q.ratingDisplay ?? "stars"} onChange={e => onUpdate({ ratingDisplay: e.target.value })}
+            style={{ ...inputStyle, cursor: "pointer" }}>
+            <option value="stars">Stars</option>
+            <option value="emoji">Emoji faces</option>
+            <option value="numbers">Numbers</option>
+          </select>
+        </div>
+      )}
+
+      {/* Text limits */}
+      {(q.type === "text" || q.type === "para") && (
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Max characters</label>
+          <input type="number" value={q.maxLength ?? (q.type === "text" ? 200 : 2000)}
+            onChange={e => onUpdate({ maxLength: Number(e.target.value) })} style={inputStyle} />
+        </div>
+      )}
+
       {/* Matrix settings */}
       {q.type === "matrix" && (
         <div style={{ marginBottom: 14 }}>
@@ -237,6 +252,36 @@ function QuestionSettings({ q, onUpdate }: { q: SurveyQuestion; onUpdate: (data:
             </div>
           ))}
           <button onClick={() => onUpdate({ matrixCols: [...matrixCols, `Col ${matrixCols.length + 1}`] })} style={{ width: "100%", padding: "6px", border: `1px dashed ${C.line2}`, borderRadius: 7, background: C.paper2, cursor: "pointer", fontSize: 12, color: C.ink3 }}>+ Column</button>
+        </div>
+      )}
+
+      {/* Branching logic */}
+      {["mc", "dd", "yn"].includes(q.type) && (
+        <div style={{ marginBottom: 14, borderTop: `1px solid ${C.line}`, paddingTop: 12 }}>
+          <div style={{ ...labelStyle, marginBottom: 8 }}>Skip logic</div>
+          {logicRules.map((rule, i) => (
+            <div key={i} style={{ marginBottom: 8, padding: 10, background: C.paper2, borderRadius: 8 }}>
+              <select value={rule.operator} onChange={e => { const n = [...logicRules]; n[i] = { ...rule, operator: e.target.value as SurveyLogicRule["operator"] }; onUpdate({ logicJson: n }); }}
+                style={{ ...inputStyle, marginBottom: 6 }}>
+                <option value="equals">If answer equals</option>
+                <option value="not_equals">If answer not equals</option>
+              </select>
+              <input value={String(rule.value ?? "")} placeholder="Answer value"
+                onChange={e => { const n = [...logicRules]; n[i] = { ...rule, value: e.target.value }; onUpdate({ logicJson: n }); }}
+                style={{ ...inputStyle, marginBottom: 6 }} />
+              <select value={rule.skipToQuestionId ?? ""} onChange={e => { const n = [...logicRules]; n[i] = { ...rule, skipToQuestionId: Number(e.target.value) }; onUpdate({ logicJson: n }); }}
+                style={inputStyle}>
+                <option value="">Skip to…</option>
+                {allQuestions.filter(x => x.id !== q.id && x.type !== "section").map((x, xi) => (
+                  <option key={x.id} value={x.id}>Q{xi + 1}: {x.text.slice(0, 40)}</option>
+                ))}
+              </select>
+              <button onClick={() => onUpdate({ logicJson: logicRules.filter((_, j) => j !== i) })}
+                style={{ marginTop: 6, fontSize: 12, color: C.rose, background: "none", border: "none", cursor: "pointer" }}>Remove rule</button>
+            </div>
+          ))}
+          <button onClick={() => onUpdate({ logicJson: [...logicRules, { questionId: q.id, operator: "equals" as const, value: "", skipToQuestionId: 0 }] })}
+            style={{ width: "100%", padding: "6px", border: `1px dashed ${C.line2}`, borderRadius: 7, background: C.paper2, cursor: "pointer", fontSize: 12, color: C.ink3 }}>+ Add skip rule</button>
         </div>
       )}
 
@@ -295,9 +340,28 @@ function QuestionResults({ q, responses, idx }: { q: SurveyQuestion; responses: 
       const v = String(a.value ?? "");
       counts[v] = (counts[v] || 0) + 1;
     }
-    const sorted = opts.map((o, i) => ({ label: o, count: counts[o] || 0, color: MC_BARS[i % MC_BARS.length] }))
-      .sort((a, b) => b.count - a.count);
-    content = <div>{sorted.map(s => <ResultBar key={s.label} label={s.label} count={s.count} total={n} color={s.color} />)}</div>;
+    if (q.type === "yn") {
+      const data = opts.map((o, i) => ({ name: o, value: counts[o] || 0, fill: [C.tealM, C.rose][i] }));
+      content = (
+        <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+          <ResponsiveContainer width={160} height={160}>
+            <PieChart><Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={40} outerRadius={70}>{data.map((d, i) => <Cell key={i} fill={d.fill} />)}</Pie><Tooltip /></PieChart>
+          </ResponsiveContainer>
+          <div>{data.map(s => <ResultBar key={s.name} label={s.name} count={s.value} total={n} color={s.fill} />)}</div>
+        </div>
+      );
+    } else {
+      const sorted = opts.map((o, i) => ({ label: o, count: counts[o] || 0, color: MC_BARS[i % MC_BARS.length] }))
+        .sort((a, b) => b.count - a.count);
+      content = <div>{sorted.map(s => <ResultBar key={s.label} label={s.label} count={s.count} total={n} color={s.color} />)}</div>;
+    }
+  }
+
+  if (q.type === "likert") {
+    const opts = (q.matrixCols as string[])?.length ? (q.matrixCols as string[]) : LIKERT_OPTIONS;
+    const counts: Record<string, number> = {};
+    for (const a of answers) { const v = String(a.value ?? ""); counts[v] = (counts[v] || 0) + 1; }
+    content = <div>{opts.map((o, i) => <ResultBar key={o} label={o} count={counts[o] || 0} total={n} color={MC_BARS[i % MC_BARS.length]} />)}</div>;
   }
 
   if (q.type === "cb") {
@@ -373,18 +437,37 @@ function QuestionResults({ q, responses, idx }: { q: SurveyQuestion; responses: 
   }
 
   if (q.type === "text" || q.type === "para") {
-    const texts = answers.map(a => ({ text: String(a.value ?? ""), respId: a.responseId })).filter(a => a.text.trim());
+    const texts = answers.map(a => String(a.value ?? "")).filter(t => t.trim());
+    const words = wordFrequency(texts);
     content = (
-      <div style={{ marginTop: 12 }}>
+      <div>
+        {words.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16, padding: 12, background: C.paper2, borderRadius: 8 }}>
+            {words.slice(0, 20).map(w => (
+              <span key={w.word} style={{ fontSize: 12 + Math.min(w.count * 2, 12), color: C.teal, fontWeight: 500 }}>{w.word}</span>
+            ))}
+          </div>
+        )}
         {texts.slice(0, 5).map((t, i) => (
           <div key={i} style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" }}>
             <div style={{ width: 28, height: 28, borderRadius: "50%", background: MC_BARS[i % MC_BARS.length], color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
-            <div style={{ fontSize: 13, color: C.ink2, lineHeight: 1.5 }}>{t.text}</div>
+            <div style={{ fontSize: 13, color: C.ink2, lineHeight: 1.5 }}>{t}</div>
           </div>
         ))}
         {texts.length > 5 && <div style={{ fontSize: 12, color: C.ink4, textAlign: "center", padding: 8 }}>+ {texts.length - 5} more responses</div>}
         {texts.length === 0 && <div style={{ fontSize: 13, color: C.ink4, padding: "12px 0" }}>No text responses yet.</div>}
       </div>
+    );
+  }
+
+  if (q.type === "file") {
+    const files = answers.map(a => String(a.value ?? "")).filter(Boolean);
+    content = (
+      <div>{files.map((f, i) => (
+        <div key={i} style={{ padding: "8px 12px", border: `1px solid ${C.line}`, borderRadius: 8, marginBottom: 6, fontSize: 13 }}>
+          📎 <a href={f} target="_blank" rel="noreferrer" style={{ color: C.teal }}>{f.split("/").pop()}</a>
+        </div>
+      ))}{files.length === 0 && <div style={{ fontSize: 13, color: C.ink4 }}>No files uploaded.</div>}</div>
     );
   }
 
@@ -524,104 +607,8 @@ export const SURVEY_TEMPLATES: { id: string; name: string; description: string; 
     ]},
 ];
 
-// ─── PPT Export ────────────────────────────────────────────────────────────
-async function exportSurveyToPPT(survey: any, responses: any[]) {
-  const PptxGenJS = (await import("pptxgenjs")).default;
-  const prs = new PptxGenJS();
-  prs.layout = "LAYOUT_WIDE";
-  const TEAL = "1A6B5A"; const LIGHT = "E4F2EE"; const DARK = "0F3D31";
-  const GREY = "F2F0EB"; const INK = "0F0E0C"; const MID = "5C5952";
-
-  // Slide 1: Cover
-  const cover = prs.addSlide();
-  cover.background = { color: DARK };
-  cover.addText(survey.title, { x: 0.5, y: 2.2, w: 12, h: 1.2, fontSize: 36, bold: true, color: "FFFFFF", align: "center" });
-  cover.addText(`${responses.length} responses · ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`, { x: 0.5, y: 3.6, w: 12, h: 0.5, fontSize: 16, color: "AACCBB", align: "center" });
-  if (survey.category) cover.addText(survey.category.toUpperCase(), { x: 0.5, y: 4.2, w: 12, h: 0.4, fontSize: 11, color: "88BBAA", align: "center", charSpacing: 3 });
-
-  // Slide 2: Summary
-  const completed = responses.filter((r: any) => r.completedAt);
-  const summ = prs.addSlide();
-  summ.addText("Survey Summary", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: INK });
-  const summItems = [
-    { label: "Total Responses", val: responses.length },
-    { label: "Completed", val: completed.length },
-    { label: "Questions", val: survey.questions?.length || 0 },
-    { label: "Completion Rate", val: responses.length ? `${Math.round(completed.length / responses.length * 100)}%` : "—" },
-  ];
-  summItems.forEach((item, i) => {
-    const x = 0.5 + i * 3.3;
-    summ.addShape(prs.ShapeType.rect, { x, y: 1.1, w: 3, h: 1.8, fill: { color: LIGHT }, line: { color: "B0D9CE", width: 0.5 } });
-    summ.addText(String(item.val), { x, y: 1.3, w: 3, h: 0.9, fontSize: 32, bold: true, color: TEAL, align: "center" });
-    summ.addText(item.label, { x, y: 2.2, w: 3, h: 0.5, fontSize: 11, color: MID, align: "center" });
-  });
-
-  // One slide per question
-  const TYPE_LABEL_MAP: Record<string, string> = { mc: "Multiple Choice", yn: "Yes / No", cb: "Checkboxes", dd: "Dropdown", sc: "Star Rating", scale: "Scale 1–10", nps: "NPS Score", text: "Short Text", para: "Paragraph", date: "Date", matrix: "Matrix" };
-  for (let qi = 0; qi < (survey.questions || []).length; qi++) {
-    const q = survey.questions[qi];
-    const qSlide = prs.addSlide();
-    qSlide.addText(`Q${qi + 1} · ${TYPE_LABEL_MAP[q.type] || q.type}`, { x: 0.5, y: 0.25, w: 12, h: 0.35, fontSize: 11, color: MID, charSpacing: 1 });
-    qSlide.addText(q.text, { x: 0.5, y: 0.65, w: 12, h: 0.9, fontSize: 18, bold: true, color: INK, wrap: true });
-    const answers = completed.map((r: any) => r.answers?.find((a: any) => a.questionId === q.id)?.value).filter((v: any) => v != null);
-    if (q.type === "mc" || q.type === "cb" || q.type === "yn" || q.type === "dd") {
-      const opts = q.type === "yn" ? ["Yes", "No"] : (q.options || []);
-      const counts = opts.map((o: string) => ({ label: o, count: answers.filter((a: any) => Array.isArray(a) ? a.includes(o) : a === o).length }));
-      const max = Math.max(1, ...counts.map((c: any) => c.count));
-      counts.forEach((c: any, i: number) => {
-        const y = 1.7 + i * 0.55;
-        const barW = Math.max(0.1, (c.count / max) * 7);
-        qSlide.addShape(prs.ShapeType.rect, { x: 3.5, y: y + 0.05, w: barW, h: 0.38, fill: { color: LIGHT } });
-        qSlide.addText(c.label, { x: 0.5, y, w: 2.8, h: 0.45, fontSize: 12, color: INK, valign: "middle" });
-        qSlide.addText(`${c.count}`, { x: 3.5 + barW + 0.1, y, w: 0.8, h: 0.45, fontSize: 12, bold: true, color: TEAL, valign: "middle" });
-      });
-    } else if (q.type === "scale" || q.type === "nps") {
-      const nums = answers.map(Number).filter((n: number) => !isNaN(n));
-      const avg = nums.length ? (nums.reduce((a: number, b: number) => a + b, 0) / nums.length).toFixed(1) : "—";
-      qSlide.addShape(prs.ShapeType.rect, { x: 4.5, y: 1.7, w: 4, h: 1.8, fill: { color: LIGHT }, line: { color: "B0D9CE", width: 0.5 } });
-      qSlide.addText(avg, { x: 4.5, y: 1.9, w: 4, h: 0.9, fontSize: 52, bold: true, color: TEAL, align: "center" });
-      qSlide.addText(q.type === "nps" ? "Average NPS Score (0–10)" : "Average Score (1–10)", { x: 4.5, y: 2.9, w: 4, h: 0.4, fontSize: 11, color: MID, align: "center" });
-      if (nums.length) qSlide.addText(`${nums.length} responses`, { x: 4.5, y: 3.4, w: 4, h: 0.3, fontSize: 10, color: MID, align: "center" });
-    } else if (q.type === "sc") {
-      const nums = answers.map(Number).filter((n: number) => !isNaN(n));
-      const avg = nums.length ? (nums.reduce((a: number, b: number) => a + b, 0) / nums.length).toFixed(1) : "—";
-      qSlide.addText(`Average: ${avg} / 5 ⭐`, { x: 2, y: 2, w: 9, h: 0.8, fontSize: 28, bold: true, color: TEAL, align: "center" });
-    } else if (q.type === "para" || q.type === "text") {
-      const texts = answers.filter((a: any) => typeof a === "string" && a.trim()).slice(0, 5);
-      texts.forEach((t: string, i: number) => {
-        qSlide.addText(`"${t}"`, { x: 0.5, y: 1.7 + i * 0.9, w: 12, h: 0.8, fontSize: 12, color: INK, italic: true, wrap: true });
-      });
-      if (!texts.length) qSlide.addText("No text responses yet", { x: 0.5, y: 2.5, w: 12, h: 0.5, fontSize: 13, color: MID, align: "center" });
-    }
-    qSlide.addShape(prs.ShapeType.rect, { x: 0, y: 7.3, w: 13.33, h: 0.2, fill: { color: LIGHT } });
-    qSlide.addText(survey.title, { x: 0.5, y: 7.1, w: 9, h: 0.25, fontSize: 9, color: MID });
-    qSlide.addText(`${qi + 1} / ${survey.questions.length}`, { x: 12, y: 7.1, w: 1, h: 0.25, fontSize: 9, color: MID, align: "right" });
-  }
-  prs.writeFile({ fileName: `${survey.title.replace(/[^a-z0-9]/gi, "_")}_results.pptx` });
-}
-
-// ─── CSV Export ────────────────────────────────────────────────────────────
-function exportSurveyToCSV(survey: any, responses: any[]) {
-  const headers = ["Respondent", "Completed At", "Time (s)", ...survey.questions.map((q: any, i: number) => `Q${i + 1}: ${q.text.replace(/,/g, ";").substring(0, 60)}`)];
-  const rows = responses.filter((r: any) => r.completedAt).map((r: any) => {
-    const base = [r.respondentName || "Anonymous", r.completedAt ? new Date(r.completedAt).toLocaleDateString("en-GB") : "", r.timeSeconds || ""];
-    const vals = survey.questions.map((q: any) => {
-      const a = r.answers?.find((ans: any) => ans.questionId === q.id);
-      if (!a) return "";
-      const v = a.value;
-      if (Array.isArray(v)) return v.join("; ");
-      return String(v ?? "").replace(/,/g, ";");
-    });
-    return [...base, ...vals];
-  });
-  const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-  a.download = `${survey.title.replace(/[^a-z0-9]/gi, "_")}_responses.csv`; a.click();
-}
-
 // ─── New Survey Wizard ─────────────────────────────────────────────────────
-const CATEGORIES = ["Retrospective", "Client Satisfaction", "Team Wellbeing", "Onboarding", "Product Feedback", "Other"];
+const WIZARD_CATEGORIES = CATEGORIES;
 
 type CreationMode = "scratch" | "template" | "ai";
 
@@ -635,6 +622,11 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
   const [category, setCategory] = useState("Retrospective");
   const [anonymous, setAnonymous] = useState(false);
   const [closeDate, setCloseDate] = useState("");
+  const [showProgress, setShowProgress] = useState(true);
+  const [onePerPage, setOnePerPage] = useState(true);
+  const [randomizeQuestions, setRandomizeQuestions] = useState(false);
+  const [allowMultiple, setAllowMultiple] = useState(false);
+  const [showResults, setShowResults] = useState(false);
   // Template path
   const [selectedTpl, setSelectedTpl] = useState<string | null>(null);
   const [previewTpl, setPreviewTpl] = useState<string | null>(null);
@@ -644,6 +636,8 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiQuestions, setAiQuestions] = useState<any[]>([]);
   const [aiError, setAiError] = useState("");
+  const { data: aiStatus } = useSurveyAiStatus();
+  const aiDisabled = aiStatus?.empty === true;
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -672,6 +666,7 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
   });
 
   const handleGenerate = useCallback(async () => {
+    if (aiDisabled) { setAiError("Your organisation's AI token balance is empty. Contact your administrator to replenish the balance."); return; }
     if (!aiDesc.trim()) { setAiError("Please describe what this survey is about."); return; }
     setAiError(""); setAiGenerating(true); setAiQuestions([]);
     try {
@@ -681,7 +676,7 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
       else { setAiError("AI did not return any questions. Try a more specific description."); }
     } catch (e: any) { setAiError(e.message || "AI generation failed."); }
     finally { setAiGenerating(false); }
-  }, [aiDesc, aiCount]);
+  }, [aiDesc, aiCount, aiDisabled]);
 
   const removeAiQ = (i: number) => setAiQuestions(qs => qs.filter((_, idx) => idx !== i));
   const editAiQText = (i: number, text: string) => setAiQuestions(qs => qs.map((q, idx) => idx === i ? { ...q, text } : q));
@@ -708,8 +703,12 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
   const previewTplObj = previewTpl ? SURVEY_TEMPLATES.find(t => t.id === previewTpl) : null;
 
   const handleCreate = () => {
-    createMut.mutate({ title, description: desc, category, anonymous, status: "draft",
-      ...(tpl && !title.trim() ? {} : {}), // title already set
+    createMut.mutate({
+      title, description: desc, category, anonymous, status: "draft",
+      closeDate: closeDate ? new Date(closeDate).toISOString() : null,
+      showProgress, onePerPage, randomizeQuestions,
+      allowMultipleResponses: allowMultiple,
+      showResultsToRespondents: showResults,
     });
   };
 
@@ -802,6 +801,7 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
           {/* ── Step 1 AI: AI Generation ── */}
           {step === 1 && mode === "ai" && (
             <div>
+              {aiDisabled && <SurveyAiTokenBanner />}
               <div style={{ marginBottom: 16 }}>
                 <label style={labelStyle}>Describe your survey *</label>
                 <textarea value={aiDesc} onChange={e => { setAiDesc(e.target.value); setAiError(""); }}
@@ -816,8 +816,8 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
                     {[5, 6, 7, 8, 10, 12].map(n => <option key={n} value={n}>{n} questions</option>)}
                   </select>
                 </div>
-                <button onClick={handleGenerate} disabled={aiGenerating || !aiDesc.trim()}
-                  style={{ padding: "9px 20px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, opacity: aiGenerating || !aiDesc.trim() ? 0.6 : 1, whiteSpace: "nowrap" as const }}
+                <button onClick={handleGenerate} disabled={aiGenerating || !aiDesc.trim() || aiDisabled}
+                  style={{ padding: "9px 20px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, opacity: aiGenerating || !aiDesc.trim() || aiDisabled ? 0.6 : 1, whiteSpace: "nowrap" as const }}
                   data-testid="button-ai-generate">
                   {aiGenerating ? "✨ Generating…" : "✨ Generate Questions"}
                 </button>
@@ -868,7 +868,7 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
               <div>
                 <label style={labelStyle}>Category</label>
                 <select value={category} onChange={e => setCategory(e.target.value)} style={inputStyle} data-testid="select-survey-category">
-                  {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                  {WIZARD_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
               <div>
@@ -893,12 +893,15 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <div style={{ background: C.paper2, border: `1px solid ${C.line}`, borderRadius: 10, padding: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: C.ink4, textTransform: "uppercase", marginBottom: 10 }}>Display</div>
-                <ToggleRow label="Show progress bar" value={true} onChange={() => {}} />
-                <ToggleRow label="One question per page" value={true} onChange={() => {}} last />
+                <ToggleRow label="Show progress bar" value={showProgress} onChange={setShowProgress} />
+                <ToggleRow label="One question per page" value={onePerPage} onChange={setOnePerPage} last />
               </div>
               <div style={{ background: C.paper2, border: `1px solid ${C.line}`, borderRadius: 10, padding: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: C.ink4, textTransform: "uppercase", marginBottom: 10 }}>Privacy</div>
-                <ToggleRow label="Anonymous responses" value={anonymous} onChange={setAnonymous} last />
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.ink4, textTransform: "uppercase", marginBottom: 10 }}>Privacy & access</div>
+                <ToggleRow label="Anonymous responses" value={anonymous} onChange={setAnonymous} />
+                <ToggleRow label="Randomise question order" value={randomizeQuestions} onChange={setRandomizeQuestions} />
+                <ToggleRow label="Allow multiple responses" value={allowMultiple} onChange={setAllowMultiple} />
+                <ToggleRow label="Show results to respondents" value={showResults} onChange={setShowResults} last />
               </div>
             </div>
           )}
@@ -940,38 +943,6 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
               </button>
             )}
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Share link modal ──────────────────────────────────────────────────────
-function ShareModal({ survey, onClose }: { survey: SurveyWithDetails; onClose: () => void }) {
-  const { toast } = useToast();
-  const link = `${window.location.origin}/survey/${survey.token}`;
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(15,14,12,.6)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,.15)", width: "100%", maxWidth: 480 }}>
-        <div style={{ padding: "18px 24px", borderBottom: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontWeight: 600, fontSize: 16 }}>Share Survey</div>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: C.ink3 }}>✕</button>
-        </div>
-        <div style={{ padding: 24 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.ink4, textTransform: "uppercase", marginBottom: 8 }}>Survey Link</div>
-          <div style={{ display: "flex", alignItems: "center", background: C.paper2, border: `1px solid ${C.line2}`, borderRadius: 8, overflow: "hidden" }}>
-            <input readOnly value={link} style={{ flex: 1, padding: "9px 12px", border: "none", background: "transparent", fontSize: 13, outline: "none", color: C.ink }} />
-            <button onClick={() => { navigator.clipboard.writeText(link); toast({ title: "Link copied ✓" }); }}
-              style={{ padding: "9px 14px", background: C.teal, color: "#fff", border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer" }}>Copy</button>
-          </div>
-          {survey.status !== "active" && (
-            <div style={{ marginTop: 12, padding: "10px 14px", background: C.amberL, borderRadius: 8, fontSize: 13, color: C.amber }}>
-              ⚠ This survey is currently <strong>{survey.status}</strong>. Activate it before sharing so respondents can submit.
-            </div>
-          )}
-        </div>
-        <div style={{ padding: "14px 24px", borderTop: `1px solid ${C.line}`, display: "flex", justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ padding: "8px 20px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14 }}>Done</button>
         </div>
       </div>
     </div>
@@ -1041,6 +1012,13 @@ export default function SurveysPage() {
   const qc = useQueryClient();
 
   const [view, setView] = useState<View>("dashboard");
+  const [mainTab, setMainTab] = useState<MainTab>("surveys");
+  const [listView, setListView] = useState<"card" | "list">("card");
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [resultsFilter, setResultsFilter] = useState<"all" | "completed" | "partial">("all");
+  const [resultsDateFrom, setResultsDateFrom] = useState("");
+  const [resultsDateTo, setResultsDateTo] = useState("");
+  const [resultsRespondent, setResultsRespondent] = useState("");
   const [activeSurveyId, setActiveSurveyId] = useState<number | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [shareModal, setShareModal] = useState<SurveyWithDetails | null>(null);
@@ -1053,19 +1031,34 @@ export default function SurveysPage() {
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [responseModal, setResponseModal] = useState<{ idx: number } | null>(null);
+  const [builderMobilePanel, setBuilderMobilePanel] = useState<"palette" | "canvas" | "settings">("canvas");
 
   // ── Queries ───────────────────────────────────────────────────────────────
-  const { data: surveys = [], isLoading } = useQuery<SurveyWithDetails[]>({ queryKey: ["/api/surveys"] });
+  const { data: surveys = [], isLoading, isError, refetch } = useQuery<SurveyWithDetails[]>({
+    queryKey: ["/api/surveys"],
+    queryFn: fetchSurveys,
+  });
 
-  const { data: activeSurvey } = useQuery<SurveyWithDetails>({
+  const { data: activeSurvey, isLoading: surveyDetailLoading } = useQuery<SurveyWithDetails>({
     queryKey: ["/api/surveys", activeSurveyId],
+    queryFn: () => fetchSurvey(activeSurveyId!),
     enabled: !!activeSurveyId,
   });
 
-  const { data: responses = [] } = useQuery<SurveyResponseWithAnswers[]>({
-    queryKey: ["/api/surveys", activeSurveyId, "responses"],
-    queryFn: () => fetch(`/api/surveys/${activeSurveyId}/responses`, { credentials: "include" }).then(r => r.json()),
+  const { data: aiStatus } = useSurveyAiStatus();
+  const aiDisabled = aiStatus?.empty === true;
+
+  const { data: resultsSummary } = useQuery({
+    queryKey: ["/api/surveys", activeSurveyId, "results-summary"],
+    queryFn: () => fetchSurveyResultsSummary(activeSurveyId!),
     enabled: !!activeSurveyId && view === "results",
+  });
+
+  const { data: responses = [], isLoading: responsesLoading, isError: responsesError, refetch: refetchResponses } = useQuery<SurveyResponseWithAnswers[]>({
+    queryKey: ["/api/surveys", activeSurveyId, "responses"],
+    queryFn: () => fetchSurveyResponses(activeSurveyId!),
+    enabled: !!activeSurveyId && view === "results",
+    initialData: [],
   });
 
   // ── Mutations ─────────────────────────────────────────────────────────────
@@ -1089,6 +1082,43 @@ export default function SurveysPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/surveys"] }); toast({ title: "Survey closed" }); },
   });
 
+  const archiveMut = useMutation({
+    mutationFn: ({ id, archive }: { id: number; archive: boolean }) => apiRequest("POST", `/api/surveys/${id}/archive`, { archive }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/surveys"] }); toast({ title: "Survey archived" }); },
+  });
+
+  const saveTemplateMut = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/surveys/${id}/save-template`, {}),
+    onSuccess: () => { toast({ title: "Saved as template ✓" }); qc.invalidateQueries({ queryKey: ["/api/surveys/templates"] }); },
+  });
+
+  const aiAnalyzeMut = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/surveys/${id}/ai-analyze`),
+    onSuccess: async (res) => { const d = await res.json(); setAiAnalysis(d.analysis); },
+    onError: async (e: Error) => toast({ title: e.message || "AI analysis failed", variant: "destructive" }),
+  });
+
+  const duplicateQMut = useMutation({
+    mutationFn: (qid: number) => apiRequest("POST", `/api/surveys/questions/${qid}/duplicate`),
+    onSuccess: async (res) => {
+      const q = await res.json();
+      qc.invalidateQueries({ queryKey: ["/api/surveys", activeSurveyId] });
+      setSelectedQId(q.id);
+    },
+  });
+
+  const fromTemplateMut = useMutation({
+    mutationFn: (templateId: number) => apiRequest("POST", `/api/surveys/from-template/${templateId}`, {}),
+    onSuccess: async (res) => {
+      const survey: SurveyWithDetails = await res.json();
+      qc.invalidateQueries({ queryKey: ["/api/surveys"] });
+      toast({ title: `"${survey.title}" created from template ✓` });
+      openBuilder(survey);
+      setMainTab("surveys");
+    },
+    onError: () => toast({ title: "Failed to create from template", variant: "destructive" }),
+  });
+
   const duplicateMut = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/api/surveys/${id}/duplicate`),
     onSuccess: async (res) => {
@@ -1101,7 +1131,13 @@ export default function SurveysPage() {
 
   const addQMut = useMutation({
     mutationFn: ({ surveyId, type }: { surveyId: number; type: string }) => {
-      const defaults: any = { type, text: `New ${TYPE_LABEL[type] || type} question`, options: type === "mc" ? ["Option 1", "Option 2", "Option 3"] : type === "cb" ? ["Option A", "Option B", "Option C"] : type === "dd" ? ["Choice 1", "Choice 2"] : [] };
+      const defaults: any = {
+        type,
+        text: type === "section" ? "New section" : `New ${TYPE_LABEL[type] || type} question`,
+        isSection: type === "section",
+        options: type === "mc" ? ["Option 1", "Option 2", "Option 3"] : type === "cb" ? ["Option A", "Option B", "Option C"] : type === "dd" ? ["Choice 1", "Choice 2"] : type === "likert" ? LIKERT_OPTIONS : [],
+        matrixCols: type === "likert" ? LIKERT_OPTIONS : [],
+      };
       return apiRequest("POST", `/api/surveys/${surveyId}/questions`, defaults);
     },
     onSuccess: async (res) => {
@@ -1173,6 +1209,14 @@ export default function SurveysPage() {
     reorderMut.mutate({ surveyId: activeSurveyId!, orderedIds: ids });
   }
 
+  function onQuestionDragEnd(result: DropResult) {
+    if (!result.destination || !activeSurveyId) return;
+    const ids = questions.map(q => q.id);
+    const [removed] = ids.splice(result.source.index, 1);
+    ids.splice(result.destination.index, 0, removed);
+    reorderMut.mutate({ surveyId: activeSurveyId, orderedIds: ids });
+  }
+
   // ── Filtered list ─────────────────────────────────────────────────────────
   const filteredSurveys = surveys.filter(s => {
     const matchSearch = s.title.toLowerCase().includes(searchQ.toLowerCase());
@@ -1198,19 +1242,54 @@ export default function SurveysPage() {
   if (view === "dashboard") return (
     <div className="h-screen overflow-hidden bg-background flex">
       <Sidebar />
-      <main className={cn("transition-all duration-300 h-full overflow-y-auto flex-1", mainOffset, mobileTopOffset)}>
-        <div style={{ maxWidth: 1020, margin: "0 auto", padding: "0 24px 40px" }}>
+      <main className={cn("transition-all duration-300 h-full overflow-y-auto flex-1 w-full min-w-0", mainOffset, mobileTopOffset)}>
+        <div className="survey-page-wrap">
+          <SurveyAiTokenBanner />
           {/* Header */}
-          <div style={{ padding: "32px 0 24px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+          <div className="survey-page-header">
             <div>
-              <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, marginBottom: 4 }}>Surveys</h1>
+              <h1 style={{ fontSize: "clamp(22px, 4vw, 26px)", fontWeight: 700, margin: 0, marginBottom: 4 }}>Surveys & Polls</h1>
               <p style={{ color: C.ink3, fontSize: 14, margin: 0 }}>Build, distribute, and analyse surveys across your projects and teams</p>
             </div>
-            <button onClick={() => setWizardOpen(true)} style={btnPrimary} data-testid="button-new-survey">+ New Survey</button>
+            {mainTab === "surveys" && (
+              <button onClick={() => setWizardOpen(true)} style={btnPrimary} data-testid="button-new-survey">+ New Survey</button>
+            )}
           </div>
 
+          {isError && (
+            <div style={{ background: C.roseL, border: `1px solid ${C.rose}`, borderRadius: 10, padding: 16, marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 14, color: C.rose }}>Failed to load surveys.</span>
+              <button onClick={() => refetch()} style={btnSecondary}>Retry</button>
+            </div>
+          )}
+
+          {/* Sub-navigation (Module 17 spec) */}
+          <div className="survey-subnav">
+            {([["surveys", "Surveys"], ["polls", "Polls"], ["templates", "Templates"], ["results", "Results"]] as [MainTab, string][]).map(([id, label]) => (
+              <button key={id} onClick={() => { setMainTab(id); if (id === "results" && surveys[0]) openResults(surveys[0].id); }}
+                className="survey-subnav-btn"
+                style={{ borderBottom: `2px solid ${mainTab === id ? C.teal : "transparent"}`, color: mainTab === id ? C.teal : C.ink3 }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {fromTemplateMut.isPending && (
+            <div style={{ background: C.tealL, borderRadius: 10, padding: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: C.teal }}>
+              <SurveyButtonSpinner /> Creating survey from template…
+            </div>
+          )}
+
+          {mainTab === "polls" && <PollsTab />}
+          {mainTab === "templates" && (
+            <TemplatesTab onUseTemplate={(tpl) => fromTemplateMut.mutate(tpl.id)} usingTemplateId={fromTemplateMut.isPending ? fromTemplateMut.variables : undefined} />
+          )}
+
+          {mainTab === "surveys" && (
+          <>
           {/* KPI cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 28 }}>
+          {isLoading ? <SurveyKpiSkeleton /> : (
+          <div className="survey-kpi-grid">
             {[
               { n: kpiTotal,     label: "Total surveys",    color: C.ink },
               { n: kpiActive,    label: "Active now",       color: C.teal },
@@ -1223,6 +1302,7 @@ export default function SurveysPage() {
               </div>
             ))}
           </div>
+          )}
 
           {/* Tabs */}
           <div style={{ display: "flex", gap: 2, background: C.paper3, padding: 3, borderRadius: 10, marginBottom: 24, maxWidth: 360 }}>
@@ -1236,7 +1316,7 @@ export default function SurveysPage() {
 
           {/* Search + filter (history only) */}
           {dashTab === "history" && (
-            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+            <div className="survey-search-bar">
               <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
                 style={{ flex: 1, padding: "8px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, fontSize: 13, outline: "none" }}
                 placeholder="Search surveys…" data-testid="input-search-surveys" />
@@ -1246,22 +1326,39 @@ export default function SurveysPage() {
                 <option value="active">Active</option>
                 <option value="draft">Draft</option>
                 <option value="closed">Closed</option>
+                <option value="archived">Archived</option>
               </select>
+              <button onClick={() => setListView(listView === "card" ? "list" : "card")}
+                style={{ padding: "8px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, background: "#fff", cursor: "pointer", fontSize: 12 }}>
+                {listView === "card" ? "☰ List" : "▦ Cards"}
+              </button>
+              <button onClick={() => setMainTab("templates")} style={{ padding: "8px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, background: C.tealL, color: C.teal, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>📋 Templates</button>
             </div>
           )}
 
           {/* Survey list */}
-          <div>
+          <div className={listView === "card" && dashTab === "history" ? "survey-card-grid" : undefined}>
             {isLoading ? (
-              <div style={{ textAlign: "center", padding: "48px", color: C.ink4 }}>Loading surveys…</div>
+              listView === "card" && dashTab === "history" ? <SurveyCardSkeleton count={6} /> : <SurveyRowSkeleton rows={5} />
             ) : (
               (dashTab === "active" ? surveys.filter(s => ["active", "draft"].includes(s.status)).slice(0, 8) : filteredSurveys).map(s => {
                 const st = STATUS_STYLES[s.status] || STATUS_STYLES.draft;
                 const icon = CATEGORY_ICONS[s.category || ""] || "📋";
                 const iconBg = s.status === "active" ? C.tealL : s.status === "closed" ? C.roseL : s.status === "draft" ? C.amberL : C.blueL;
+                if (listView === "card" && dashTab === "history") {
+                  return (
+                    <div key={s.id} style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)", cursor: "pointer" }} onClick={() => openResults(s.id)}>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
+                      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{s.title}</div>
+                      <div style={{ fontSize: 12, color: C.ink4, marginBottom: 10 }}>{s.responseCount} responses · {s.questions.length} questions</div>
+                      <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 500, background: st.bg, color: st.color }}>{st.label}</span>
+                    </div>
+                  );
+                }
                 return (
                   <div key={s.id} data-testid={`survey-row-${s.id}`}
-                    style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "18px 22px", marginBottom: 10, display: "flex", alignItems: "center", gap: 16, boxShadow: "0 1px 3px rgba(0,0,0,.06)", transition: "box-shadow .15s" }}>
+                    className="survey-list-row"
+                    style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "18px 22px", marginBottom: 10, boxShadow: "0 1px 3px rgba(0,0,0,.06)", transition: "box-shadow .15s" }}>
                     <div style={{ width: 46, height: 46, borderRadius: 11, background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{icon}</div>
                     <div style={{ flex: 1, cursor: "pointer", minWidth: 0 }} onClick={() => openResults(s.id)}>
                       <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.title}</div>
@@ -1273,7 +1370,7 @@ export default function SurveysPage() {
                     <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 500, background: st.bg, color: st.color, flexShrink: 0 }}>
                       {st.dot && "● "}{st.label}
                     </span>
-                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                    <div className="survey-list-row-actions">
                       {s.status === "completed" || s.status === "closed" ? (
                         <button onClick={() => openResults(s.id)} style={btnPrimary} data-testid={`button-results-${s.id}`}>Results</button>
                       ) : s.status === "draft" ? (
@@ -1290,6 +1387,10 @@ export default function SurveysPage() {
                       <button onClick={() => duplicateMut.mutate(s.id)} disabled={duplicateMut.isPending}
                         title="Duplicate survey"
                         style={{ ...btnGhost }} data-testid={`button-duplicate-${s.id}`}>⧉ Duplicate</button>
+                      {s.status === "closed" && (
+                        <button onClick={() => archiveMut.mutate({ id: s.id, archive: true })} style={btnGhost}>Archive</button>
+                      )}
+                      <button onClick={() => saveTemplateMut.mutate(s.id)} style={btnGhost} title="Save as template">Save tpl</button>
                       <button onClick={() => { if (confirm(`Delete "${s.title}"?`)) deleteMut.mutate(s.id); }}
                         style={{ ...btnGhost, color: C.rose, borderColor: "#f0b8b8" }} data-testid={`button-delete-${s.id}`}>Delete</button>
                     </div>
@@ -1306,6 +1407,24 @@ export default function SurveysPage() {
               </div>
             )}
           </div>
+          </>
+          )}
+
+          {mainTab === "results" && (
+            <div>
+              <p style={{ fontSize: 13, color: C.ink3, marginBottom: 16 }}>Select a survey to view results.</p>
+              {surveys.filter(s => s.responseCount > 0).map(s => (
+                <div key={s.id} onClick={() => openResults(s.id)}
+                  style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: 16, marginBottom: 8, cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
+                  <div><div style={{ fontWeight: 600 }}>{s.title}</div><div style={{ fontSize: 12, color: C.ink4 }}>{s.responseCount} responses</div></div>
+                  <span style={{ color: C.teal, fontWeight: 600 }}>View →</span>
+                </div>
+              ))}
+              {surveys.filter(s => s.responseCount > 0).length === 0 && (
+                <div style={{ textAlign: "center", padding: 40, color: C.ink4 }}>No surveys with responses yet</div>
+              )}
+            </div>
+          )}
         </div>
 
         {wizardOpen && <NewSurveyWizard onClose={() => setWizardOpen(false)} onCreated={id => { setWizardOpen(false); setActiveSurveyId(id); openBuilder(surveys.find(s => s.id === id) || { id, title: "", questions: [], responseCount: 0 } as any); }} />}
@@ -1319,34 +1438,50 @@ export default function SurveysPage() {
   // ════════════════════════════════════════════════════════════════════════════
   if (view === "builder") {
     const groups = ["Choice", "Rating", "Open-ended", "Other"];
+    const panelClass = (panel: typeof builderMobilePanel) =>
+      cn("survey-builder-panel", panel === builderMobilePanel ? "survey-builder-panel--active-mobile" : "survey-builder-panel--hidden-mobile");
     return (
       <div className="h-screen overflow-hidden bg-background flex">
         <Sidebar />
         <main className={cn("transition-all duration-300 h-full overflow-hidden flex flex-col", mainOffset, mobileTopOffset)}>
           {/* Top bar */}
-          <div style={{ background: "#fff", borderBottom: `1px solid ${C.line}`, padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div className="survey-builder-topbar" style={{ background: "#fff", borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
               <button onClick={() => setView("dashboard")} style={btnGhost}>← Back</button>
-              <span style={{ fontSize: 14, fontWeight: 600, color: C.ink2, maxWidth: 280, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{builderTitle || "Untitled Survey"}</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: C.ink2, maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{builderTitle || "Untitled Survey"}</span>
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {autoSaveStatus === "saving" && <span style={{ fontSize: 12, color: C.ink4 }}>Saving…</span>}
+            <div className="survey-builder-actions">
+              {autoSaveStatus === "saving" && <span style={{ fontSize: 12, color: C.ink4, display: "flex", alignItems: "center", gap: 4 }}><SurveyButtonSpinner /> Saving…</span>}
               {autoSaveStatus === "saved" && <span style={{ fontSize: 12, color: C.teal, fontWeight: 500 }}>✓ Saved</span>}
-              <button onClick={saveBuilderMeta} style={btnSecondary} data-testid="button-builder-save">Save</button>
+              <button onClick={saveBuilderMeta} disabled={updateMut.isPending} style={btnSecondary} data-testid="button-builder-save">
+                {updateMut.isPending ? <SurveyButtonSpinner /> : null} Save
+              </button>
               {activeSurvey && <button onClick={() => setShareModal(activeSurvey)} style={btnSecondary}>🔗 Share</button>}
               {activeSurvey?.status === "draft" && (
-                <button onClick={() => activateMut.mutate(activeSurveyId!)} style={btnPrimary}>Activate Survey →</button>
+                <button onClick={() => activateMut.mutate(activeSurveyId!)} disabled={activateMut.isPending} style={btnPrimary}>
+                  {activateMut.isPending ? <SurveyButtonSpinner /> : null} Activate →
+                </button>
               )}
               {activeSurvey?.status === "active" && (
-                <button onClick={() => openResults(activeSurveyId!)} style={btnPrimary}>View Results →</button>
+                <button onClick={() => openResults(activeSurveyId!)} style={btnPrimary}>Results →</button>
               )}
             </div>
           </div>
 
-          {/* 3-panel layout */}
-          <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 260px", flex: 1, overflow: "hidden" }}>
+          <div className="survey-builder-mobile-tabs">
+            {([["palette", "Add"], ["canvas", "Build"], ["settings", "Settings"]] as const).map(([id, label]) => (
+              <button key={id} type="button" className="survey-builder-mobile-tab"
+                style={{ color: builderMobilePanel === id ? C.teal : C.ink3, borderBottomColor: builderMobilePanel === id ? C.teal : "transparent" }}
+                onClick={() => setBuilderMobilePanel(id)}>{label}</button>
+            ))}
+          </div>
+
+          {surveyDetailLoading ? (
+            <SurveyLoadingState label="Loading survey builder…" />
+          ) : (
+          <div className="survey-builder-layout">
             {/* Left: question types */}
-            <div style={{ background: "#fff", borderRight: `1px solid ${C.line}`, padding: "18px 14px", overflowY: "auto" }}>
+            <div className={cn(panelClass("palette"), "survey-builder-panel--left")}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Add Question</div>
               {groups.map(g => (
                 <div key={g}>
@@ -1366,7 +1501,7 @@ export default function SurveysPage() {
             </div>
 
             {/* Centre: canvas */}
-            <div style={{ background: C.paper2, padding: "24px 28px", overflowY: "auto" }}>
+            <div className={cn(panelClass("canvas"), "survey-builder-panel--center")}>
               {/* Survey title card */}
               <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "22px 26px", marginBottom: 18, borderTop: `4px solid ${C.teal}` }}>
                 <input value={builderTitle} onChange={e => setBuilderTitle(e.target.value)}
@@ -1375,30 +1510,52 @@ export default function SurveysPage() {
                   style={{ fontFamily: "inherit", fontSize: 13, border: "none", outline: "none", width: "100%", background: "transparent", color: C.ink3, resize: "none", marginTop: 8, lineHeight: 1.5 }} placeholder="Survey description (optional)…" />
               </div>
 
+              {addQMut.isPending && (
+                <div style={{ textAlign: "center", padding: 8, fontSize: 12, color: C.teal, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  <SurveyButtonSpinner /> Adding question…
+                </div>
+              )}
               {questions.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "52px 32px", color: C.ink4, border: `2px dashed ${C.line2}`, borderRadius: 12, fontSize: 14 }}>
                   ← Click a question type to add it to your survey
                 </div>
               ) : (
-                questions.map((q, idx) => (
-                  <QuestionPreview key={q.id} q={q} idx={idx}
-                    selected={selectedQId === q.id}
-                    onClick={() => setSelectedQId(q.id)}
-                    onDelete={() => deleteQMut.mutate(q.id)}
-                    onMoveUp={() => moveQ(questions, idx, -1)}
-                    onMoveDown={() => moveQ(questions, idx, 1)}
-                    isFirst={idx === 0} isLast={idx === questions.length - 1} />
-                ))
+                <DragDropContext onDragEnd={onQuestionDragEnd}>
+                  <Droppable droppableId="survey-questions">
+                    {provided => (
+                      <div ref={provided.innerRef} {...provided.droppableProps}>
+                        {questions.map((q, idx) => (
+                          <Draggable key={q.id} draggableId={String(q.id)} index={idx}>
+                            {dragProvided => (
+                              <div ref={dragProvided.innerRef} {...dragProvided.draggableProps}>
+                                <div {...dragProvided.dragHandleProps} style={{ cursor: "grab", fontSize: 11, color: C.ink4, marginBottom: 4, paddingLeft: 4 }}>⋮⋮ Drag to reorder</div>
+                                <QuestionPreview q={q} idx={idx}
+                                  selected={selectedQId === q.id}
+                                  onClick={() => setSelectedQId(q.id)}
+                                  onDelete={() => deleteQMut.mutate(q.id)}
+                                  onDuplicate={() => duplicateQMut.mutate(q.id)}
+                                  onMoveUp={() => moveQ(questions, idx, -1)}
+                                  onMoveDown={() => moveQ(questions, idx, 1)}
+                                  isFirst={idx === 0} isLast={idx === questions.length - 1} />
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
               )}
             </div>
 
             {/* Right: settings */}
-            <div style={{ background: "#fff", borderLeft: `1px solid ${C.line}`, padding: "18px 16px", overflowY: "auto" }}>
+            <div className={cn(panelClass("settings"), "survey-builder-panel--right")}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
                 {selectedQ ? "Question Settings" : "Survey Settings"}
               </div>
               {selectedQ ? (
-                <QuestionSettings key={selectedQ.id} q={selectedQ} onUpdate={data => updateQMut.mutate({ id: selectedQ.id, data })} />
+                <QuestionSettings key={selectedQ.id} q={selectedQ} allQuestions={questions} onUpdate={data => updateQMut.mutate({ id: selectedQ.id, data })} />
               ) : (
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", color: C.ink4, marginBottom: 10 }}>Display</div>
@@ -1406,8 +1563,18 @@ export default function SurveysPage() {
                   <ToggleRow label="One question per page" value={activeSurvey?.onePerPage ?? true} onChange={v => activeSurveyId && updateMut.mutate({ id: activeSurveyId, data: { onePerPage: v } })} />
                   <ToggleRow label="Randomise order" value={activeSurvey?.randomizeQuestions ?? false} onChange={v => activeSurveyId && updateMut.mutate({ id: activeSurveyId, data: { randomizeQuestions: v } })} />
                   <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 14, marginTop: 4 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", color: C.ink4, marginBottom: 10 }}>Privacy</div>
-                    <ToggleRow label="Anonymous responses" value={activeSurvey?.anonymous ?? false} onChange={v => activeSurveyId && updateMut.mutate({ id: activeSurveyId, data: { anonymous: v } })} last />
+                    <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", color: C.ink4, marginBottom: 10 }}>Privacy & responses</div>
+                    <ToggleRow label="Anonymous responses" value={activeSurvey?.anonymous ?? false} onChange={v => activeSurveyId && updateMut.mutate({ id: activeSurveyId, data: { anonymous: v } })} />
+                    <ToggleRow label="Allow multiple responses" value={activeSurvey?.allowMultipleResponses ?? false} onChange={v => activeSurveyId && updateMut.mutate({ id: activeSurveyId, data: { allowMultipleResponses: v } })} />
+                    <ToggleRow label="Show results to respondents" value={activeSurvey?.showResultsToRespondents ?? false} onChange={v => activeSurveyId && updateMut.mutate({ id: activeSurveyId, data: { showResultsToRespondents: v } })} last />
+                  </div>
+                  <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 14, marginTop: 4 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", color: C.ink4, marginBottom: 10 }}>Schedule</div>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: C.ink3, marginBottom: 5, textTransform: "uppercase" }}>Close date</label>
+                    <input type="datetime-local"
+                      value={activeSurvey?.closeDate ? new Date(activeSurvey.closeDate).toISOString().slice(0, 16) : ""}
+                      onChange={e => activeSurveyId && updateMut.mutate({ id: activeSurveyId, data: { closeDate: e.target.value ? new Date(e.target.value).toISOString() : null } })}
+                      style={{ width: "100%", padding: "8px 11px", border: `1px solid ${C.line2}`, borderRadius: 7, fontFamily: "inherit", fontSize: 13, marginBottom: 8 }} />
                   </div>
                   {activeSurvey && (
                     <div style={{ marginTop: 16 }}>
@@ -1427,8 +1594,24 @@ export default function SurveysPage() {
               )}
             </div>
           </div>
+          )}
         </main>
         {shareModal && <ShareModal survey={shareModal} onClose={() => setShareModal(null)} />}
+      </div>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // RENDER: RESULTS (loading)
+  // ════════════════════════════════════════════════════════════════════════════
+  if (view === "results" && (!activeSurvey || surveyDetailLoading || responsesLoading)) {
+    const loadingLabel = !activeSurvey || surveyDetailLoading ? "Loading survey…" : "Loading responses…";
+    return (
+      <div className="h-screen overflow-hidden bg-background flex">
+        <Sidebar />
+        <main className={cn("survey-page-loading-main transition-all duration-300 h-full overflow-hidden", mainOffset, mobileTopOffset)}>
+          <SurveyLoadingState label={loadingLabel} size="lg" />
+        </main>
       </div>
     );
   }
@@ -1437,7 +1620,24 @@ export default function SurveysPage() {
   // RENDER: RESULTS
   // ════════════════════════════════════════════════════════════════════════════
   if (view === "results" && activeSurvey) {
-    const completedResponses = responses.filter(r => r.completedAt);
+    const safeResponses = asArray<SurveyResponseWithAnswers>(responses);
+    const filteredResponses = safeResponses.filter(r => {
+      if (resultsFilter === "completed" && !r.completedAt) return false;
+      if (resultsFilter === "partial" && (r.completedAt || !r.startedAt)) return false;
+      if (resultsDateFrom && r.completedAt && new Date(r.completedAt) < new Date(resultsDateFrom)) return false;
+      if (resultsDateTo && r.completedAt) {
+        const to = new Date(resultsDateTo);
+        to.setHours(23, 59, 59, 999);
+        if (new Date(r.completedAt) > to) return false;
+      }
+      if (resultsRespondent.trim()) {
+        const q = resultsRespondent.toLowerCase();
+        const name = (r.respondentName || r.respondentEmail || "").toLowerCase();
+        if (!name.includes(q)) return false;
+      }
+      return true;
+    });
+    const completedResponses = filteredResponses.filter(r => r.completedAt);
     const avgTime = completedResponses.length > 0
       ? Math.round(completedResponses.reduce((s, r) => s + (r.timeSeconds || 0), 0) / completedResponses.length) : 0;
 
@@ -1454,20 +1654,31 @@ export default function SurveysPage() {
     return (
       <div className="h-screen overflow-hidden bg-background flex">
         <Sidebar />
-        <main className={cn("transition-all duration-300 h-full overflow-y-auto", mainOffset, mobileTopOffset)}>
-          <div style={{ maxWidth: 1020, margin: "0 auto", padding: "0 24px 40px" }}>
+        <main className={cn("transition-all duration-300 h-full overflow-y-auto flex-1 w-full min-w-0", mainOffset, mobileTopOffset)}>
+          <div className="survey-page-wrap survey-results-page">
+            <SurveyAiTokenBanner />
             {/* Header */}
-            <div style={{ padding: "28px 0 20px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-              <div>
-                <button onClick={() => setView("dashboard")} style={{ ...btnGhost, marginBottom: 10 }}>← Back</button>
-                <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, marginBottom: 4 }}>{activeSurvey.title}</h1>
-                <p style={{ color: C.ink3, fontSize: 13, margin: 0 }}>
-                  {STATUS_STYLES[activeSurvey.status]?.label} · {activeSurvey.sentAt ? `Sent ${fmtDate(activeSurvey.sentAt.toString())}` : "Draft"}
-                </p>
+            <div className="survey-results-header">
+              <div className="survey-results-header-main">
+                <button onClick={() => setView("dashboard")} style={btnGhost} className="survey-results-back">← Back</button>
+                <div>
+                  <div className="survey-results-title-row">
+                    <h1 className="survey-results-title">{activeSurvey.title}</h1>
+                    <span className="survey-results-status-badge" style={{ background: STATUS_STYLES[activeSurvey.status]?.bg, color: STATUS_STYLES[activeSurvey.status]?.color }}>
+                      {STATUS_STYLES[activeSurvey.status]?.dot && "● "}{STATUS_STYLES[activeSurvey.status]?.label}
+                    </span>
+                  </div>
+                  <p className="survey-results-subtitle">
+                    {activeSurvey.questions.length} question{activeSurvey.questions.length !== 1 ? "s" : ""}
+                    {activeSurvey.sentAt ? ` · Sent ${fmtDate(activeSurvey.sentAt.toString())}` : activeSurvey.status === "draft" ? " · Not yet published" : ""}
+                  </p>
+                </div>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div className="survey-results-actions">
                 {activeSurvey.status === "draft" && (
-                  <button onClick={() => activateMut.mutate(activeSurvey.id)} style={btnPrimary}>Activate →</button>
+                  <button onClick={() => activateMut.mutate(activeSurvey.id)} disabled={activateMut.isPending} style={btnPrimary}>
+                    {activateMut.isPending ? <SurveyButtonSpinner /> : null} Activate survey
+                  </button>
                 )}
                 {activeSurvey.status === "active" && (
                   <>
@@ -1476,34 +1687,95 @@ export default function SurveysPage() {
                     <button onClick={() => closeMut.mutate(activeSurvey.id)} style={{ ...btnGhost, color: C.rose, borderColor: "#f0b8b8" }}>Close</button>
                   </>
                 )}
-                {responses.length > 0 && (
+                {safeResponses.length > 0 && (
                   <>
-                    <button onClick={() => exportSurveyToCSV({ ...activeSurvey }, responses)}
-                      style={btnSecondary} title="Export response data as CSV" data-testid="button-export-csv">
-                      ↓ CSV
-                    </button>
-                    <button onClick={() => exportSurveyToPPT({ ...activeSurvey }, responses)}
-                      style={btnSecondary} title="Export results as PowerPoint" data-testid="button-export-ppt">
-                      ↓ PPT
-                    </button>
+                    <button onClick={() => exportSurveyToCSV({ ...activeSurvey }, safeResponses)}
+                      style={btnSecondary} title="Export CSV" data-testid="button-export-csv">↓ CSV</button>
+                    <button onClick={() => exportSurveyToExcel({ ...activeSurvey }, safeResponses)}
+                      style={btnSecondary} title="Export Excel">↓ Excel</button>
+                    <button onClick={() => exportSurveyToPPT({ title: activeSurvey.title, category: activeSurvey.category, questions: activeSurvey.questions as { id: number; type: string; text: string; options?: string[] }[] }, safeResponses)}
+                      style={btnSecondary} title="Export PowerPoint" data-testid="button-export-ppt">↓ PPT</button>
+                    {completedResponses.length >= 10 && (
+                      <button onClick={() => aiAnalyzeMut.mutate(activeSurvey.id)} disabled={aiAnalyzeMut.isPending || aiDisabled}
+                        style={{ ...btnSecondary, opacity: aiDisabled ? 0.5 : 1 }} title={aiDisabled ? "AI tokens depleted" : undefined}>✨ Analyse</button>
+                    )}
                   </>
                 )}
                 <button onClick={() => duplicateMut.mutate(activeSurvey.id)} style={btnGhost} title="Duplicate this survey" data-testid="button-results-duplicate">
                   ⧉ Duplicate
                 </button>
-                <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 13, fontWeight: 500, background: STATUS_STYLES[activeSurvey.status]?.bg, color: STATUS_STYLES[activeSurvey.status]?.color }}>
-                  {STATUS_STYLES[activeSurvey.status]?.dot && "● "}{STATUS_STYLES[activeSurvey.status]?.label}
-                </span>
               </div>
             </div>
 
+            {responsesError && (
+              <div style={{ background: C.roseL, borderRadius: 10, padding: 14, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 13, color: C.rose }}>Failed to load responses.</span>
+                <button onClick={() => refetchResponses()} style={{ padding: "6px 12px", border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer" }}>Retry</button>
+              </div>
+            )}
+
+            {/* Results filters (Module 17 §4) */}
+            {safeResponses.length > 0 && (
+              <div className="survey-results-filters" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16, alignItems: "flex-end" }}>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: C.ink4, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Status</label>
+                  <select value={resultsFilter} onChange={e => setResultsFilter(e.target.value as typeof resultsFilter)}
+                    style={{ padding: "8px 10px", border: `1px solid ${C.line2}`, borderRadius: 8, fontSize: 13 }}>
+                    <option value="all">All responses</option>
+                    <option value="completed">Completed</option>
+                    <option value="partial">Partial</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: C.ink4, textTransform: "uppercase", display: "block", marginBottom: 4 }}>From</label>
+                  <input type="date" value={resultsDateFrom} onChange={e => setResultsDateFrom(e.target.value)}
+                    style={{ padding: "8px 10px", border: `1px solid ${C.line2}`, borderRadius: 8, fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: C.ink4, textTransform: "uppercase", display: "block", marginBottom: 4 }}>To</label>
+                  <input type="date" value={resultsDateTo} onChange={e => setResultsDateTo(e.target.value)}
+                    style={{ padding: "8px 10px", border: `1px solid ${C.line2}`, borderRadius: 8, fontSize: 13 }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: C.ink4, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Respondent</label>
+                  <input value={resultsRespondent} onChange={e => setResultsRespondent(e.target.value)} placeholder="Search by name or email…"
+                    style={{ width: "100%", padding: "8px 10px", border: `1px solid ${C.line2}`, borderRadius: 8, fontSize: 13, boxSizing: "border-box" }} />
+                </div>
+              </div>
+            )}
+
+            {resultsSummary && (resultsSummary.invited > 0 || (resultsSummary.invitees?.length ?? 0) > 0) && (
+              <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "16px 20px", marginBottom: 16, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: C.ink4, marginBottom: 12 }}>Completion breakdown</div>
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
+                  {[
+                    { n: resultsSummary.completed, label: "Completed", color: C.teal },
+                    { n: resultsSummary.partial, label: "Partial", color: C.amber },
+                    { n: resultsSummary.notStarted, label: "Not started", color: C.ink4 },
+                  ].map(x => (
+                    <div key={x.label}><span style={{ fontWeight: 700, color: x.color, fontSize: 20 }}>{x.n}</span> <span style={{ fontSize: 12, color: C.ink3 }}>{x.label}</span></div>
+                  ))}
+                </div>
+                {(resultsSummary.invitees?.length ?? 0) > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 120, overflowY: "auto" }}>
+                    {resultsSummary.invitees!.slice(0, 20).map(inv => (
+                      <div key={inv.userId} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "4px 0", borderBottom: `1px solid ${C.line}` }}>
+                        <span style={{ color: C.ink2 }}>{inv.userId.slice(0, 8)}…</span>
+                        <span style={{ color: inv.status === "completed" ? C.teal : inv.status === "partial" ? C.amber : C.ink4, fontWeight: 600, textTransform: "capitalize" }}>{inv.status.replace("_", " ")}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* KPI strip */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 28 }}>
+            <div className="survey-kpi-grid">
               {[
-                { n: completedResponses.length, label: "Responses",       color: C.teal },
-                { n: activeSurvey.questions.length, label: "Questions",   color: C.ink },
-                { n: completedResponses.length > 0 ? "—" : "—", label: "Invited",       color: C.amber },
-                { n: fmtTime(avgTime), label: "Avg time",               color: C.violet },
+                { n: completedResponses.length, label: "Responses", color: C.teal },
+                { n: activeSurvey.invitedCount ? `${completedResponses.length} / ${activeSurvey.invitedCount}` : completedResponses.length, label: "Invited vs replied", color: C.amber },
+                { n: activeSurvey.invitedCount ? `${Math.round((completedResponses.length / activeSurvey.invitedCount) * 100)}%` : "—", label: "Completion rate", color: C.violet },
+                { n: fmtTime(avgTime), label: "Avg time", color: C.ink },
               ].map(k => (
                 <div key={k.label} style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "16px 20px", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
                   <div style={{ fontSize: 26, fontWeight: 700, color: k.color }}>{k.n}</div>
@@ -1512,6 +1784,14 @@ export default function SurveysPage() {
               ))}
             </div>
 
+            <>
+            {aiAnalysis && (
+              <div style={{ background: C.tealL, border: `1px solid ${C.teal}`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
+                <div style={{ fontWeight: 700, marginBottom: 8, color: C.teal }}>✨ AI Analysis {aiAnalyzeMut.isPending && <SurveyButtonSpinner />}</div>
+                <div style={{ fontSize: 14, lineHeight: 1.6, color: C.ink2, whiteSpace: "pre-wrap" }}>{aiAnalysis}</div>
+              </div>
+            )}
+
             {activeSurvey.questions.length === 0 ? (
               <div style={{ textAlign: "center", padding: "48px", background: "#fff", borderRadius: 12, border: `1px solid ${C.line}`, color: C.ink4 }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
@@ -1519,29 +1799,39 @@ export default function SurveysPage() {
                 <button onClick={() => openBuilder(activeSurvey)} style={btnPrimary}>Open Builder →</button>
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 20 }}>
-                {/* Left: question results */}
-                <div>
+              <div className={cn("survey-results-grid", completedResponses.length === 0 && "survey-results-grid--empty")}>
+                {/* Main content */}
+                <div className="survey-results-main">
                   {completedResponses.length === 0 ? (
-                    <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "40px 24px", textAlign: "center", color: C.ink4 }}>
-                      <div style={{ fontSize: 36, marginBottom: 12 }}>📊</div>
-                      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8, color: C.ink }}>No responses yet</div>
-                      <div style={{ fontSize: 13, marginBottom: 16 }}>
-                        {activeSurvey.status === "draft" ? "Activate the survey to start collecting responses." : "Share the survey link to start collecting responses."}
+                    <div className="survey-results-empty-card">
+                      <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+                      <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8, color: C.ink }}>No responses yet</div>
+                      <div style={{ fontSize: 14, marginBottom: 20, color: C.ink3, lineHeight: 1.5 }}>
+                        {activeSurvey.status === "draft"
+                          ? "Activate the survey to start collecting responses from your team or stakeholders."
+                          : "Share the survey link to start collecting responses."}
                       </div>
-                      {activeSurvey.status === "active" && (
-                        <button onClick={() => setShareModal(activeSurvey)} style={btnPrimary}>🔗 Share Survey</button>
-                      )}
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+                        {activeSurvey.status === "draft" ? (
+                          <button onClick={() => activateMut.mutate(activeSurvey.id)} disabled={activateMut.isPending} style={btnPrimary}>
+                            {activateMut.isPending ? <SurveyButtonSpinner /> : null} Activate survey
+                          </button>
+                        ) : (
+                          <button onClick={() => setShareModal(activeSurvey)} style={btnPrimary}>🔗 Share survey</button>
+                        )}
+                        <button onClick={() => openBuilder(activeSurvey)} style={btnSecondary}>✏ Edit questions</button>
+                      </div>
                     </div>
                   ) : (
                     activeSurvey.questions.map((q, idx) => (
-                      <QuestionResults key={q.id} q={q} responses={responses} idx={idx} />
+                      <QuestionResults key={q.id} q={q} responses={filteredResponses} idx={idx} />
                     ))
                   )}
                 </div>
 
-                {/* Right sidebar */}
-                <div>
+                {/* Sidebar — only when there's content or actions beyond empty state */}
+                {(completedResponses.length > 0 || timelineData.length > 0) && (
+                <div className="survey-results-sidebar">
                   {timelineData.length > 0 && (
                     <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "18px 20px", marginBottom: 14, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
                       <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: C.ink4, marginBottom: 14 }}>Response Timeline</div>
@@ -1563,9 +1853,6 @@ export default function SurveysPage() {
                       <button onClick={() => openBuilder(activeSurvey)} style={{ ...btnSecondary, justifyContent: "flex-start" }}>✏ Edit questions</button>
                       {activeSurvey.status === "active" && (
                         <button onClick={() => setShareModal(activeSurvey)} style={{ ...btnSecondary, justifyContent: "flex-start" }}>🔗 Share survey link</button>
-                      )}
-                      {activeSurvey.status === "draft" && (
-                        <button onClick={() => activateMut.mutate(activeSurvey.id)} style={{ ...btnPrimary, justifyContent: "flex-start" }}>▶ Activate survey</button>
                       )}
                       {activeSurvey.status === "active" && (
                         <button onClick={() => closeMut.mutate(activeSurvey.id)} style={{ ...btnGhost, justifyContent: "flex-start", color: C.rose, borderColor: "#f0b8b8" }}>⬛ Close survey</button>
@@ -1598,8 +1885,10 @@ export default function SurveysPage() {
                     </div>
                   )}
                 </div>
+                )}
               </div>
             )}
+            </>
           </div>
 
           {shareModal && <ShareModal survey={shareModal} onClose={() => setShareModal(null)} />}
@@ -1621,8 +1910,8 @@ export default function SurveysPage() {
   return (
     <div className="h-screen overflow-hidden bg-background flex">
       <Sidebar />
-      <main className={cn("transition-all duration-300 h-full overflow-y-auto flex items-center justify-center", mainOffset, mobileTopOffset)}>
-        <div style={{ textAlign: "center", color: C.ink4 }}>Loading…</div>
+      <main className={cn("survey-page-loading-main transition-all duration-300 h-full overflow-hidden", mainOffset, mobileTopOffset)}>
+        <SurveyLoadingState label="Loading survey…" size="lg" />
       </main>
     </div>
   );

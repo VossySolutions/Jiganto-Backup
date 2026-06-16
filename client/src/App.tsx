@@ -30,6 +30,7 @@ import SignOffPage from "@/pages/SignOffPage";
 import SigningPortalPage from "@/pages/SigningPortalPage";
 import SurveysPage from "@/pages/SurveysPage";
 import SurveyPortalPage from "@/pages/SurveyPortalPage";
+import PollPortalPage from "@/pages/PollPortalPage";
 import ClientsPage from "@/pages/ClientsPage";
 import ClientDetailPage from "@/pages/ClientDetailPage";
 import CustomerManagementPage from "@/pages/CustomerManagementPage";
@@ -97,6 +98,14 @@ function Router() {
     return (
       <Switch>
         <Route path="/survey/:token" component={SurveyPortalPage} />
+        <Route component={NotFound} />
+      </Switch>
+    );
+  }
+  if (window.location.pathname.startsWith("/poll/")) {
+    return (
+      <Switch>
+        <Route path="/poll/:token" component={PollPortalPage} />
         <Route component={NotFound} />
       </Switch>
     );
@@ -204,6 +213,7 @@ function Router() {
         </Route>
         <Route path="/modules/e-sign" component={SignOffPage} />
         <Route path="/modules/surveys" component={SurveysPage} />
+        <Route path="/surveys">{() => <Redirect to="/modules/surveys" />}</Route>
         <Route path="/settings/system" component={SettingsPage} />
         <Route path="/settings/workspace" component={SettingsPage} />
         <Route path="/settings/personal" component={SettingsPage} />
