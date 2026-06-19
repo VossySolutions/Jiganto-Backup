@@ -74,6 +74,10 @@ export async function fetchWithAuth(
   for (const [k, v] of Object.entries(auth)) {
     if (v) merged.set(k, v);
   }
+  // Let the browser set multipart boundary — a preset Content-Type breaks uploads.
+  if (init?.body instanceof FormData) {
+    merged.delete("Content-Type");
+  }
   return fetch(scopeApiUrl(url), {
     ...init,
     credentials: "include",

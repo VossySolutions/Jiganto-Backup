@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { Sidebar } from "@/components/Sidebar";
-import { useShellLayout } from "@/hooks/use-shell-layout";
-import { cn } from "@/lib/utils";
+import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,14 +22,11 @@ import { PortfolioHealthMatrixTab } from "@/components/portfolio/PortfolioHealth
 import { PortfolioReportsTab } from "@/components/portfolio/PortfolioReportsTab";
 
 export default function PortfolioManagementPage() {
-  const { mainOffset, mobileTopOffset } = useShellLayout();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [searchTerm, setSearchTerm] = useState("");
 
   return (
-    <div className="h-screen overflow-hidden bg-background">
-      <Sidebar />
-      <main className={cn("transition-all duration-300 h-full flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
+    <ModuleShell className="h-screen overflow-hidden bg-background" mainClassName="h-full flex flex-col overflow-hidden">
         <div className="px-3 sm:px-4 pt-3 sm:pt-4">
           <ModuleWelcomeBanner
             moduleKey="portfolio"
@@ -104,7 +99,6 @@ export default function PortfolioManagementPage() {
             </TabsContent>
           </Tabs>
         </div>
-      </main>
-    </div>
+    </ModuleShell>
   );
 }

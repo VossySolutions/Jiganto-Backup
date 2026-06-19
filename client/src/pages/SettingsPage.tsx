@@ -4,9 +4,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth, getQueryFn } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { useShellLayout } from "@/hooks/use-shell-layout";
 import { cn } from "@/lib/utils";
-import { Sidebar } from "@/components/Sidebar";
+import { ModuleShell } from "@/components/ModuleShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -123,7 +122,6 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { activeClient } = useClientContext();
-  const { mainOffset, mobileTopOffset } = useShellLayout();
   const [location, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<SettingsTabId>("personal");
   const [brandingForm, setBrandingForm] = useState({
@@ -694,14 +692,7 @@ export default function SettingsPage() {
 
   if (missingOrg) {
     return (
-      <div className="min-h-screen bg-background" data-testid="settings-page">
-        <Sidebar />
-        <main
-          className={cn(
-            "transition-all duration-300 h-screen flex items-center justify-center",
-            mainOffset, mobileTopOffset,
-          )}
-        >
+      <ModuleShell className="min-h-screen bg-background" testId="settings-page" mainClassName="h-screen flex items-center justify-center">
           <Card className="max-w-md">
             <CardHeader>
               <CardTitle>No organisation linked</CardTitle>
@@ -711,26 +702,20 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
           </Card>
-        </main>
-      </div>
+      </ModuleShell>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background" data-testid="settings-page">
-        <Sidebar />
-        <main className={cn("transition-all duration-300 h-screen flex items-center justify-center", mainOffset, mobileTopOffset)}>
+      <ModuleShell className="min-h-screen bg-background" testId="settings-page" mainClassName="h-screen flex items-center justify-center">
           <div className="animate-pulse text-muted-foreground">Loading settings...</div>
-        </main>
-      </div>
+      </ModuleShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background" data-testid="settings-page">
-      <Sidebar />
-      <main className={cn("transition-all duration-300 h-screen flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
+    <ModuleShell className="min-h-screen bg-background" testId="settings-page" mainClassName="h-screen flex flex-col overflow-hidden">
         <div className="border-b border-border/30 bg-card backdrop-blur-sm sticky top-0 z-50">
           <ModuleHeader
             icon={Settings}
@@ -1900,7 +1885,6 @@ export default function SettingsPage() {
             </Tabs>
           </div>
         </div>
-      </main>
-    </div>
+    </ModuleShell>
   );
 }

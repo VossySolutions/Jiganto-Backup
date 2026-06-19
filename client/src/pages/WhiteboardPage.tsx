@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Sidebar } from "@/components/Sidebar";
-import { useShellLayout } from "@/hooks/use-shell-layout";
+import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { Button } from "@/components/ui/button";
@@ -29,7 +28,6 @@ function fmtDate(d: string | Date | null | undefined) {
 
 export function WhiteboardPage() {
   const [, navigate] = useLocation();
-  const { mainOffset, mobileTopOffset } = useShellLayout();
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -89,9 +87,8 @@ export function WhiteboardPage() {
   });
 
   return (
-    <div className="min-h-screen bg-background wb-page">
-      <Sidebar />
-      <main className={cn("transition-all duration-300", mainOffset, mobileTopOffset)}>
+    <>
+    <ModuleShell className="min-h-screen bg-background wb-page">
         <div className="px-4 sm:px-8 pt-3 sm:pt-4">
           <ModuleWelcomeBanner moduleKey="whiteboarding" />
         </div>
@@ -216,7 +213,7 @@ export function WhiteboardPage() {
             </div>
           )}
         </div>
-      </main>
+    </ModuleShell>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
@@ -277,6 +274,6 @@ export function WhiteboardPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

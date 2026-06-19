@@ -329,6 +329,7 @@ export function computeDashboardMetrics(params: {
         customers.length > 0
           ? `${healthy} healthy · ${watch} watch · ${atRisk} at risk`
           : "No customers yet",
+      scheduledCheckIns: [],
       attentionRows,
     },
     trials: {

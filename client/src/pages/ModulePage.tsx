@@ -1,5 +1,5 @@
 import { useRoute } from "wouter";
-import { Sidebar } from "@/components/Sidebar";
+import { ModuleShell } from "@/components/ModuleShell";
 import { BoardView } from "@/components/BoardView";
 import { Button } from "@/components/ui/button";
 import { useBoards, useCreateBoard, useCreateColumn } from "@/hooks/use-jiganto";
@@ -10,8 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
 import { type InsertBoard } from "@shared/schema";
-import { useShellLayout } from "@/hooks/use-shell-layout";
-import { cn } from "@/lib/utils";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { TemplateSelector, type BoardTemplate } from "@/components/TemplateSelector";
 import { SubmitForm } from "@/components/ui/submit-form";
@@ -26,7 +24,6 @@ export function ModulePage() {
   const { data: boards } = useBoards(tenantId?.toString());
   const createBoard = useCreateBoard();
   const createColumn = useCreateColumn();
-  const { mainOffset, mobileTopOffset } = useShellLayout();
   const [newBoardName, setNewBoardName] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTemplateOpen, setIsTemplateOpen] = useState(false);
@@ -90,9 +87,8 @@ export function ModulePage() {
     : "Module";
 
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar />
-      <main className={cn("transition-all duration-300", mainOffset, mobileTopOffset)}>
+    <>
+    <ModuleShell className="min-h-screen bg-background">
         {moduleKey && (
           <div className="px-8 pt-4">
             <ModuleWelcomeBanner moduleKey={moduleKey} />
@@ -183,13 +179,13 @@ export function ModulePage() {
             </div>
           )}
         </div>
-      </main>
+    </ModuleShell>
       <TemplateSelector 
         open={isTemplateOpen}
         onOpenChange={setIsTemplateOpen}
         onSelectTemplate={handleSelectTemplate}
         onAskAI={() => { setIsTemplateOpen(false); }}
       />
-    </div>
+    </>
   );
 }

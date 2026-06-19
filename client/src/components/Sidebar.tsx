@@ -62,7 +62,6 @@ import {
   CONTRACTOR_PORTAL_ALLOWED_MODULE_KEYS,
   navPathToModuleKey,
 } from "@shared/models/module-access";
-import { ContextBanner } from "@/components/ContextBanner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -332,7 +331,6 @@ export function Sidebar() {
     closeMobileNav,
     toggleMobileNav,
     sidebarWidth,
-    bannerLeft,
   } = useShellLayout();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const { clients, activeClient, setActiveClient, isClientUser, showContextSwitcher } =
@@ -521,23 +519,23 @@ export function Sidebar() {
         <div className="space-y-5">
           <div
             className={cn(
-              "flex items-center pb-4 border-b border-border/40",
-              showCollapsed ? "justify-center" : "justify-between gap-2",
+              "relative pb-4 border-b border-border/40",
+              showCollapsed
+                ? "flex flex-col items-center gap-1.5"
+                : "flex items-center justify-between gap-2",
             )}
           >
             <div
               className={cn(
                 "flex items-center gap-3 min-w-0",
-                showCollapsed ? "justify-center" : "px-1",
+                showCollapsed ? "justify-center" : "px-1 flex-1 min-w-0",
               )}
             >
               <img
                 src="/jiganto-logo.png"
                 alt="Jiganto"
-                onClick={!isMobile ? toggleCollapse : undefined}
                 className={cn(
                   "rounded-full flex-shrink-0 object-contain",
-                  !isMobile && "cursor-pointer",
                   showCollapsed ? "h-8 w-8" : "h-9 w-9 md:h-10 md:w-10",
                 )}
               />
@@ -561,7 +559,7 @@ export function Sidebar() {
                 variant="ghost"
                 size="icon"
                 onClick={closeMobileNav}
-                className="h-8 w-8 shrink-0"
+                className="h-8 w-8 shrink-0 absolute right-3 top-3"
                 aria-label="Close menu"
                 data-testid="mobile-nav-close"
               >
@@ -575,10 +573,29 @@ export function Sidebar() {
                 size="icon"
                 onClick={toggleCollapse}
                 className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground"
+                aria-label="Collapse sidebar"
                 data-testid="sidebar-toggle"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
+            )}
+
+            {!isMobile && showCollapsed && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleCollapse}
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    aria-label="Expand sidebar"
+                    data-testid="sidebar-toggle"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Expand Sidebar</TooltipContent>
+              </Tooltip>
             )}
           </div>
 
@@ -858,23 +875,6 @@ export function Sidebar() {
         <div className="mt-auto space-y-2 border-t border-border/40 pt-4">
           {showCollapsed ? (
             <>
-              {!isMobile && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={toggleCollapse}
-                    className="w-full h-10"
-                    data-testid="sidebar-toggle"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Expand Sidebar</TooltipContent>
-              </Tooltip>
-              )}
-
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -1169,16 +1169,6 @@ export function Sidebar() {
             </>
           )}
         </div>
-      </div>
-
-      <div
-        className={cn(
-          "fixed top-0 right-0 z-30 flex flex-col transition-[left] duration-300 ease-out",
-          isMobile && "top-12",
-          bannerLeft,
-        )}
-      >
-        <ContextBanner />
       </div>
 
       <Dialog open={showCustomizeDialog} onOpenChange={setShowCustomizeDialog}>

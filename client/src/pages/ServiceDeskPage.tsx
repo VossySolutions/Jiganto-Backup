@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Sidebar } from "@/components/Sidebar";
+import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { ServiceDeskIcon } from "@/components/icons/ModuleIcons";
-import { useShellLayout } from "@/hooks/use-shell-layout";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +34,6 @@ export default function ServiceDeskPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [ticketFilters, setTicketFilters] = useState<{ slaFilter?: string; status?: string; priority?: string }>({});
   const tabsListRef = useRef<HTMLDivElement>(null);
-  const { mainOffset, mobileTopOffset } = useShellLayout();
 
   const { data: dashboard } = useQuery<ServiceDeskDashboard>({
     queryKey: ["/api/service-desk/dashboard"],
@@ -65,9 +63,7 @@ export default function ServiceDeskPage() {
   };
 
   return (
-    <div className="min-h-screen sm:h-screen sm:overflow-hidden bg-background" data-testid="service-desk-page">
-      <Sidebar />
-      <main className={cn("transition-all duration-300 sm:h-full sm:flex sm:flex-col sm:overflow-hidden", mainOffset, mobileTopOffset)}>
+    <ModuleShell className="min-h-screen sm:h-screen sm:overflow-hidden bg-background" testId="service-desk-page" mainClassName="sm:h-full sm:flex sm:flex-col sm:overflow-hidden">
         <div className="px-3 sm:px-4 pt-3 sm:pt-4 hidden md:block shrink-0">
           <ModuleWelcomeBanner
             moduleKey="service-desk"
@@ -158,7 +154,6 @@ export default function ServiceDeskPage() {
             </TabsContent>
           </Tabs>
         </div>
-      </main>
-    </div>
+    </ModuleShell>
   );
 }

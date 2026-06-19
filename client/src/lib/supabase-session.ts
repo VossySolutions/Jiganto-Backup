@@ -1,11 +1,6 @@
 import { supabase, supabaseAuthEnabled } from "./supabase";
 
-/** Bearer token for API calls, or undefined if signed out / Supabase disabled. */
-export async function getSupabaseAccessToken(): Promise<string | undefined> {
-  if (!supabaseAuthEnabled || !supabase) return undefined;
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token;
-}
+let sessionReadyPromise: Promise<void> | null = null;
 
 /**
  * Wait until Supabase has finished loading the session from browser storage.
@@ -13,11 +8,10 @@ export async function getSupabaseAccessToken(): Promise<string | undefined> {
  */
 export function waitForSupabaseSession(): Promise<void> {
   if (!supabaseAuthEnabled || !supabase) return Promise.resolve();
+  if (sessionReadyPromise) return sessionReadyPromise;
 
   const client = supabase;
-  if (!client) return Promise.resolve();
-
-  return new Promise((resolve) => {
+  sessionReadyPromise = new Promise((resolve) => {
     let settled = false;
     const done = () => {
       if (settled) return;
@@ -38,4 +32,16 @@ export function waitForSupabaseSession(): Promise<void> {
 
     setTimeout(done, 5000);
   });
+
+  return sessionReadyPromise;
+}
+
+/** Bearer token for API calls, or undefined if signed out / Supabase disabled. */
+export async function getSupabaseAccessToken(): Promise<string | undefined> {
+  if (!supabaseAuthEnabled || !supabase) return undefined;
+  await waitForSupabaseSession();
+  const { data } = await supabase.auth.getSession();
+  if (data.session?.access_token) return data.session.access_token;
+  const { data: refreshed } = await supabase.auth.refreshSession();
+  return refreshed.session?.access_token;
 }

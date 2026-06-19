@@ -128,12 +128,17 @@ function comboToRunStyle(c: RunCombo): RunStyle {
   return style;
 }
 
-function readRunText(run: Element): string {
+function readRunContent(run: Element): string {
   let text = "";
   for (let i = 0; i < run.childNodes.length; i++) {
     const n = run.childNodes[i] as Element;
-    if (n.nodeType === 1 && n.localName === "t" && (n.namespaceURI === W_NS || n.prefix === "w")) {
+    if (n.nodeType !== 1) continue;
+    if (n.localName === "t" && (n.namespaceURI === W_NS || n.prefix === "w")) {
       text += n.textContent ?? "";
+    } else if (n.localName === "tab" && (n.namespaceURI === W_NS || n.prefix === "w")) {
+      text += "\t";
+    } else if (n.localName === "br" && (n.namespaceURI === W_NS || n.prefix === "w")) {
+      text += "\n";
     }
   }
   return text;
@@ -167,6 +172,59 @@ function readRunCombo(run: Element): RunCombo {
   return combo;
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function runHasMark(run: Element, mark: string): boolean {
+  const rPr = wDirectChild(run, "rPr");
+  if (!rPr) return false;
+  const el = wDirectChild(rPr, mark);
+  if (!el) return false;
+  const val = wAttr(el, "val");
+  return val === null || val === "1" || val === "true" || val === "on";
+}
+
+function paragraphAlign(p: Element): string | null {
+  const pPr = wDirectChild(p, "pPr");
+  if (!pPr) return null;
+  const jc = wDirectChild(pPr, "jc");
+  const val = jc ? wAttr(jc, "val") : null;
+  if (val === "center") return "center";
+  if (val === "right") return "right";
+  if (val === "both") return "justify";
+  return null;
+}
+
+/** Convert a Word header/footer XML part to simple HTML. */
+function xmlPartToHtml(xmlText: string): string {
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+  const parts: string[] = [];
+
+  for (const p of wAll(xmlDoc, "p")) {
+    let inner = "";
+    for (const run of wAll(p, "r")) {
+      const text = readRunContent(run);
+      if (!text) continue;
+      let wrapped = escapeHtml(text);
+      if (runHasMark(run, "b")) wrapped = `<strong>${wrapped}</strong>`;
+      if (runHasMark(run, "i")) wrapped = `<em>${wrapped}</em>`;
+      if (runHasMark(run, "u")) wrapped = `<u>${wrapped}</u>`;
+      inner += wrapped;
+    }
+    if (!inner.trim()) continue;
+    const align = paragraphAlign(p);
+    const style = align ? ` style="text-align:${align}"` : "";
+    parts.push(`<p${style}>${inner}</p>`);
+  }
+
+  return parts.join("");
+}
+
 // ---------------------------------------------------------------------------
 // XML scan
 // ---------------------------------------------------------------------------
@@ -178,7 +236,7 @@ function scanDocxXml(xmlText: string): { xmlRuns: XmlTextRun[]; tables: ParsedTa
   const tables: ParsedTable[] = [];
 
   for (const run of wAll(xmlDoc, "r")) {
-    const text = readRunText(run);
+    const text = readRunContent(run);
     if (!text) continue;
     xmlRuns.push({ text, combo: readRunCombo(run) });
   }
@@ -506,6 +564,97 @@ export function enhanceImportedDocxHtml(html: string): string {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+export interface DocxPageRegions {
+  headerHtml: string;
+  footerHtml: string;
+}
+
+const REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+function relAttr(el: Element, local: string): string | null {
+  return el.getAttributeNS(REL_NS, local) ?? el.getAttribute(`r:${local}`);
+}
+
+function normalizeZipPath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\/+/, "");
+}
+
+async function resolveDocxPartPath(
+  zip: Awaited<ReturnType<(typeof import("jszip"))["default"]["loadAsync"]>>,
+  kind: "header" | "footer",
+): Promise<string | null> {
+  const tag = kind === "header" ? "headerReference" : "footerReference";
+  const pattern = kind === "header" ? /^word\/header\d*\.xml$/i : /^word\/footer\d*\.xml$/i;
+
+  const docXmlFile = zip.file("word/document.xml");
+  const relsFile = zip.file("word/_rels/document.xml.rels");
+  if (docXmlFile && relsFile) {
+    const parser = new DOMParser();
+    const docXml = await docXmlFile.async("string");
+    const doc = parser.parseFromString(docXml, "text/xml");
+    const refs = wAll(doc, tag);
+
+    let chosenRId: string | null = null;
+    for (const ref of refs) {
+      const rId = relAttr(ref, "id");
+      if (!rId) continue;
+      const refType = wAttr(ref, "type") ?? "default";
+      if (refType === "default") {
+        chosenRId = rId;
+        break;
+      }
+      if (!chosenRId) chosenRId = rId;
+    }
+
+    if (chosenRId) {
+      const relsXml = await relsFile.async("string");
+      const relsDoc = parser.parseFromString(relsXml, "text/xml");
+      for (const rel of Array.from(relsDoc.getElementsByTagName("Relationship"))) {
+        if (rel.getAttribute("Id") !== chosenRId) continue;
+        const target = rel.getAttribute("Target");
+        if (!target) break;
+        const path = normalizeZipPath(
+          target.startsWith("word/") ? target : `word/${target.replace(/^\.\//, "")}`,
+        );
+        if (zip.file(path)) return path;
+      }
+    }
+  }
+
+  const paths = Object.keys(zip.files).sort();
+  for (const path of paths) {
+    if (pattern.test(path)) return path;
+  }
+  return null;
+}
+
+/** Extract default header/footer HTML from a .docx file. */
+export async function extractDocxHeaderFooter(arrayBuffer: ArrayBuffer): Promise<DocxPageRegions> {
+  try {
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    let headerHtml = "";
+    let footerHtml = "";
+
+    const headerPath = await resolveDocxPartPath(zip, "header");
+    const footerPath = await resolveDocxPartPath(zip, "footer");
+
+    if (headerPath) {
+      const file = zip.file(headerPath);
+      if (file) headerHtml = xmlPartToHtml(await file.async("string"));
+    }
+    if (footerPath) {
+      const file = zip.file(footerPath);
+      if (file) footerHtml = xmlPartToHtml(await file.async("string"));
+    }
+
+    return { headerHtml, footerHtml };
+  } catch (err) {
+    console.warn("[docx-import] Header/footer extraction failed:", err);
+    return { headerHtml: "", footerHtml: "" };
+  }
+}
 
 export async function prepareDocxImport(
   arrayBuffer: ArrayBuffer,

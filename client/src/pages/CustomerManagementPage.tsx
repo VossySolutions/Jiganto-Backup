@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -18,8 +18,7 @@ import {
   Shield,
   Pencil,
 } from "lucide-react";
-import { Sidebar } from "@/components/Sidebar";
-import { useShellLayout } from "@/hooks/use-shell-layout";
+import { ModuleShell } from "@/components/ModuleShell";
 import { usePermissions } from "@/hooks/use-permissions";
 import { fetchWithAuth, queryClient, apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -30,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -139,6 +139,23 @@ const NAV_SHORT_LABELS: Record<ViewId, string> = {
   settings: "Settings",
 };
 
+type DetailSectionId =
+  | "subscription"
+  | "health"
+  | "contacts"
+  | "flags"
+  | "notes"
+  | "history";
+
+const DETAIL_SECTIONS: { id: DetailSectionId; label: string }[] = [
+  { id: "subscription", label: "Subscription" },
+  { id: "health", label: "Health score" },
+  { id: "contacts", label: "Key contacts" },
+  { id: "flags", label: "Feature flags" },
+  { id: "notes", label: "Customer notes" },
+  { id: "history", label: "Access & extension history" },
+];
+
 function clearCustomerFilters(
   setSearch: (v: string) => void,
   setStatusFilter: (v: string) => void,
@@ -188,6 +205,17 @@ function formatNewMrrSub(percent: number): string {
   return `${percent > 0 ? "+" : ""}${percent}% new MRR (30d)`;
 }
 
+function defaultCheckInDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatScheduledDate(isoDate: string): string {
+  const d = new Date(`${isoDate}T12:00:00`);
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+}
+
 function mrrTrendGrowthLabel(trend: { amountPence: number }[]): string {
   if (trend.length < 2) return "Insufficient history";
   const first = trend[0]!.amountPence;
@@ -203,9 +231,9 @@ export default function CustomerManagementPage() {
   const settingsAccess = getSettingsAccess(platformRole, isJigantoStaff);
   const allowed = settingsAccess.tier === "system";
   const canGrantCommercial = canGrantCommercialAccess(platformRole, isJigantoStaff);
-  const { mainOffset, mobileTopOffset } = useShellLayout();
   const { toast } = useToast();
   const [view, setView] = useState<ViewId>("customers");
+  const [detailSection, setDetailSection] = useState<DetailSectionId>("subscription");
   const [selectedSlug, setSelectedSlug] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -229,6 +257,7 @@ export default function CustomerManagementPage() {
     defaultNote: string;
   } | null>(null);
   const [followUpNote, setFollowUpNote] = useState("");
+  const [followUpScheduledAt, setFollowUpScheduledAt] = useState(defaultCheckInDate);
 
   const openFollowUpDialog = (input: {
     action: "health_follow_up" | "renewal_follow_up";
@@ -237,6 +266,7 @@ export default function CustomerManagementPage() {
     defaultNote: string;
   }) => {
     setFollowUpNote("");
+    setFollowUpScheduledAt(defaultCheckInDate());
     setFollowUpPending(input);
   };
 
@@ -320,6 +350,10 @@ export default function CustomerManagementPage() {
     enabled: allowed && view === "detail",
   });
 
+  useEffect(() => {
+    setDetailSection("subscription");
+  }, [selectedSlug]);
+
   const [customerNote, setCustomerNote] = useState("");
 
   const addCustomerNoteMut = useMutation({
@@ -372,16 +406,24 @@ export default function CustomerManagementPage() {
 
   const customerActionMut = useMutation({
     mutationFn: async (input: {
-      action: "health_follow_up" | "renewal_follow_up" | "convert_trial";
+      action: "health_follow_up" | "renewal_follow_up" | "convert_trial" | "complete_scheduled_check_in";
       customerExternalId: string;
       note?: string;
+      scheduledAt?: string;
+      activityLogId?: number;
     }) => {
       const res = await apiRequest("POST", "/api/customer-mgmt/customers/_by_id/actions", input);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       invalidateCommercialQueries(selectedSlug || undefined);
-      toast({ title: "Action recorded" });
+      if (variables.action === "complete_scheduled_check_in") {
+        toast({ title: "Check-in marked complete" });
+      } else if (variables.scheduledAt) {
+        toast({ title: "Check-in scheduled", description: `Scheduled for ${formatScheduledDate(variables.scheduledAt)}` });
+      } else {
+        toast({ title: "Action recorded" });
+      }
     },
     onError: (err: Error) => {
       toast({ title: "Action failed", description: err.message, variant: "destructive" });
@@ -424,6 +466,18 @@ export default function CustomerManagementPage() {
   });
   const renewalsPagination = useTablePagination(dashboard?.renewals.rows ?? [], {
     resetKey: dashboard?.renewals.rows.length ?? 0,
+    enabled: !!dashboard,
+  });
+  const scheduledCheckInsPagination = useTablePagination(dashboard?.health.scheduledCheckIns ?? [], {
+    resetKey: dashboard?.health.scheduledCheckIns.length ?? 0,
+    enabled: !!dashboard,
+  });
+  const discountRulesPagination = useTablePagination(dashboard?.pricing.discountRules ?? [], {
+    resetKey: dashboard?.pricing.discountRules.length ?? 0,
+    enabled: !!dashboard,
+  });
+  const invoicesPagination = useTablePagination(dashboard?.billing.recentInvoices ?? [], {
+    resetKey: dashboard?.billing.recentInvoices.length ?? 0,
     enabled: !!dashboard,
   });
 
@@ -471,35 +525,18 @@ export default function CustomerManagementPage() {
 
   if (permissionsLoading) {
     return (
-      <div className="h-screen overflow-hidden bg-background" data-testid="customer-mgmt-loading">
-        <Sidebar />
-        <main
-          className={cn(
-            "transition-all duration-300 h-full flex items-center justify-center overflow-hidden",
-            mainOffset,
-            mobileTopOffset,
-          )}
-        >
+      <ModuleShell className="h-screen overflow-hidden bg-background" testId="customer-mgmt-loading" mainClassName="h-full flex items-center justify-center overflow-hidden">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin" style={{ color: CUSTOMER_MGMT_COLOR }} />
             <p className="text-sm text-muted-foreground">Loading Customer Management...</p>
           </div>
-        </main>
-      </div>
+      </ModuleShell>
     );
   }
 
   if (!allowed) {
     return (
-      <div className="h-screen overflow-hidden bg-background" data-testid="customer-mgmt-denied">
-        <Sidebar />
-        <main
-          className={cn(
-            "transition-all duration-300 h-full flex flex-col overflow-hidden",
-            mainOffset,
-            mobileTopOffset,
-          )}
-        >
+      <ModuleShell className="h-screen overflow-hidden bg-background" testId="customer-mgmt-denied" mainClassName="h-full flex flex-col overflow-hidden">
           <div className="flex-1 flex items-center justify-center p-6">
             <Card className="max-w-md rounded-xl">
               <CardHeader>
@@ -514,43 +551,25 @@ export default function CustomerManagementPage() {
               </CardHeader>
             </Card>
           </div>
-        </main>
-      </div>
+      </ModuleShell>
     );
   }
 
   if (dashboardLoading && dataStatus === undefined) {
     return (
-      <div className="h-screen overflow-hidden bg-background" data-testid="customer-mgmt-loading">
-        <Sidebar />
-        <main
-          className={cn(
-            "transition-all duration-300 h-full flex items-center justify-center overflow-hidden",
-            mainOffset,
-            mobileTopOffset,
-          )}
-        >
+      <ModuleShell className="h-screen overflow-hidden bg-background" testId="customer-mgmt-loading" mainClassName="h-full flex items-center justify-center overflow-hidden">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin" style={{ color: CUSTOMER_MGMT_COLOR }} />
             <p className="text-sm text-muted-foreground">Loading commercial data...</p>
           </div>
-        </main>
-      </div>
+      </ModuleShell>
     );
   }
 
   if (!dashboard) {
     return (
       <>
-        <div className="h-screen overflow-hidden bg-background" data-testid="customer-mgmt-empty">
-          <Sidebar />
-          <main
-            className={cn(
-              "transition-all duration-300 h-full flex flex-col overflow-hidden",
-              mainOffset,
-              mobileTopOffset,
-            )}
-          >
+        <ModuleShell className="h-screen overflow-hidden bg-background" testId="customer-mgmt-empty" mainClassName="h-full flex flex-col overflow-hidden">
             <div className="flex-1 flex items-center justify-center p-6">
               <Card className="max-w-lg rounded-xl">
                 <CardHeader>
@@ -572,8 +591,7 @@ export default function CustomerManagementPage() {
                 </CardContent>
               </Card>
             </div>
-          </main>
-        </div>
+        </ModuleShell>
         <AddCustomerModal open={addCustomerOpen} onOpenChange={setAddCustomerOpen} />
       </>
     );
@@ -607,15 +625,8 @@ export default function CustomerManagementPage() {
         : "Internal commercial administration · subscriptions, trials & billing";
 
   return (
-    <div className="h-screen overflow-hidden bg-background" data-testid="customer-mgmt-page">
-      <Sidebar />
-      <main
-        className={cn(
-          "transition-all duration-300 h-full flex flex-col overflow-hidden",
-          mainOffset,
-          mobileTopOffset,
-        )}
-      >
+    <>
+    <ModuleShell className="h-screen overflow-hidden bg-background" testId="customer-mgmt-page" mainClassName="h-full flex flex-col overflow-hidden">
         <div className="px-4 pt-4 shrink-0">
           <ModuleWelcomeBanner
             moduleKey="customer-mgmt"
@@ -1030,51 +1041,127 @@ export default function CustomerManagementPage() {
                     </Button>
                     </div>
                   </div>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <SectionCard title="Subscription">
-                      <FieldRow label="Plan" value={<PlanBadge plan={detail.subscription.plan} />} />
-                      <FieldRow
-                        label="MRR"
-                        value={`${formatGbp(detail.subscription.mrrPence)} / month`}
-                      />
-                      <FieldRow label="Billing cycle" value={detail.subscription.billingCycle} />
-                      <FieldRow label="Renewal date" value={detail.subscription.renewalDate} />
-                      <FieldRow
-                        label="Discount applied"
-                        value={
-                          detail.subscription.discountLabel ? (
-                            <Badge variant="outline" className="text-teal-700">
-                              {detail.subscription.discountLabel}
+                  <nav
+                    className="flex flex-wrap gap-1 border-b border-border/50 -mx-1"
+                    aria-label="Customer detail sections"
+                  >
+                    {DETAIL_SECTIONS.map((section) => (
+                      <button
+                        key={section.id}
+                        type="button"
+                        onClick={() => setDetailSection(section.id)}
+                        className={cn(
+                          "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
+                          detailSection === section.id
+                            ? "border-primary text-primary"
+                            : "border-transparent text-muted-foreground hover:text-foreground",
+                        )}
+                        data-testid={`customer-detail-tab-${section.id}`}
+                      >
+                        {section.label}
+                      </button>
+                    ))}
+                  </nav>
+
+                  {detailSection === "subscription" && (
+                    <>
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <SectionCard title="Subscription">
+                          <FieldRow label="Plan" value={<PlanBadge plan={detail.subscription.plan} />} />
+                          <FieldRow
+                            label="MRR"
+                            value={`${formatGbp(detail.subscription.mrrPence)} / month`}
+                          />
+                          <FieldRow label="Billing cycle" value={detail.subscription.billingCycle} />
+                          <FieldRow label="Renewal date" value={detail.subscription.renewalDate} />
+                          <FieldRow
+                            label="Discount applied"
+                            value={
+                              detail.subscription.discountLabel ? (
+                                <Badge variant="outline" className="text-teal-700">
+                                  {detail.subscription.discountLabel}
+                                </Badge>
+                              ) : (
+                                "—"
+                              )
+                            }
+                          />
+                          <FieldRow label="Payment method" value={detail.subscription.paymentMethod} />
+                          <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setChangePlanOpen(true)}>
+                              Change plan
+                            </Button>
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setAddDiscountOpen(true)}>
+                              Add discount
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="w-full sm:w-auto"
+                              onClick={() =>
+                                openGrant({
+                                  customerId: detail.id,
+                                  customerSlug: detail.slug,
+                                  customerName: detail.name,
+                                  subtitle: "Free access period",
+                                })
+                              }
+                            >
+                              Grant free access
+                            </Button>
+                          </div>
+                        </SectionCard>
+                        <SectionCard
+                          title="Health score"
+                          action={
+                            <Badge className="bg-emerald-100 text-emerald-800">
+                              {detail.healthScore} / 100
                             </Badge>
-                          ) : (
-                            "—"
-                          )
-                        }
-                      />
-                      <FieldRow label="Payment method" value={detail.subscription.paymentMethod} />
-                      <div className="flex flex-col sm:flex-row gap-2 mt-3">
-                        <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setChangePlanOpen(true)}>
-                          Change plan
-                        </Button>
-                        <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setAddDiscountOpen(true)}>
-                          Add discount
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="w-full sm:w-auto"
-                          onClick={() =>
-                            openGrant({
-                              customerId: detail.id,
-                              customerSlug: detail.slug,
-                              customerName: detail.name,
-                              subtitle: "Free access period",
-                            })
                           }
                         >
-                          Grant free access
-                        </Button>
+                          {detail.healthSignals.map((s) => (
+                            <UsageBar
+                              key={s.key}
+                              label={s.label}
+                              used={s.score}
+                              limit={100}
+                              tone={s.score >= 70 ? "green" : s.score >= 50 ? "amber" : "red"}
+                            />
+                          ))}
+                          <p className="text-[10px] text-muted-foreground mt-2">
+                            Recalculated from live usage, activity, and subscription data on each load.
+                          </p>
+                        </SectionCard>
                       </div>
-                    </SectionCard>
+                      <SectionCard title="Usage & entitlements">
+                        <UsageBar
+                          label="Users"
+                          used={detail.usage.users.used}
+                          limit={detail.usage.users.limit}
+                          tone="primary"
+                        />
+                        <UsageBar
+                          label="AI tokens"
+                          used={Math.round(detail.usage.aiTokens.used / 1000)}
+                          limit={Math.round(detail.usage.aiTokens.limit / 1000)}
+                          tone="blue"
+                        />
+                        <UsageBar
+                          label="Storage (GB)"
+                          used={detail.usage.storageGb.used}
+                          limit={detail.usage.storageGb.limit}
+                          tone="green"
+                        />
+                        <UsageBar
+                          label="eSign docs"
+                          used={detail.usage.esignDocs.used}
+                          limit={detail.usage.esignDocs.limit}
+                          tone="amber"
+                        />
+                      </SectionCard>
+                    </>
+                  )}
+
+                  {detailSection === "health" && (
                     <SectionCard
                       title="Health score"
                       action={
@@ -1096,23 +1183,33 @@ export default function CustomerManagementPage() {
                         Recalculated from live usage, activity, and subscription data on each load.
                       </p>
                     </SectionCard>
+                  )}
+
+                  {detailSection === "contacts" && (
                     <SectionCard title="Key contacts" action={<Button variant="outline" size="sm" onClick={() => setAddContactOpen(true)}>Add</Button>}>
-                      {detail.contacts.map((c) => (
-                        <div
-                          key={c.id}
-                          className="flex items-center gap-3 py-2 border-b border-border/40 last:border-0"
-                        >
-                          <OrgAvatar initials={c.initials} color={c.avatarColor} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold">{c.name}</p>
-                            <p className="text-[10px] text-muted-foreground truncate">{c.email}</p>
+                      {detail.contacts.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">No contacts yet.</p>
+                      ) : (
+                        detail.contacts.map((c) => (
+                          <div
+                            key={c.id}
+                            className="flex items-center gap-3 py-2 border-b border-border/40 last:border-0"
+                          >
+                            <OrgAvatar initials={c.initials} color={c.avatarColor} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold">{c.name}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">{c.email}</p>
+                            </div>
+                            <Badge variant="outline" className="text-[9px]">
+                              {c.roleLabel}
+                            </Badge>
                           </div>
-                          <Badge variant="outline" className="text-[9px]">
-                            {c.roleLabel}
-                          </Badge>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </SectionCard>
+                  )}
+
+                  {detailSection === "flags" && (
                     <SectionCard title="Feature flags" description="Overrides for this org only">
                       {detail.featureFlags.map((f) => (
                         <div
@@ -1133,75 +1230,70 @@ export default function CustomerManagementPage() {
                         </div>
                       ))}
                     </SectionCard>
-                  </div>
-                  <SectionCard title="Usage & entitlements">
-                    <UsageBar
-                      label="Users"
-                      used={detail.usage.users.used}
-                      limit={detail.usage.users.limit}
-                      tone="primary"
-                    />
-                    <UsageBar
-                      label="AI tokens"
-                      used={Math.round(detail.usage.aiTokens.used / 1000)}
-                      limit={Math.round(detail.usage.aiTokens.limit / 1000)}
-                      tone="blue"
-                    />
-                    <UsageBar
-                      label="Storage (GB)"
-                      used={detail.usage.storageGb.used}
-                      limit={detail.usage.storageGb.limit}
-                      tone="green"
-                    />
-                    <UsageBar
-                      label="eSign docs"
-                      used={detail.usage.esignDocs.used}
-                      limit={detail.usage.esignDocs.limit}
-                      tone="amber"
-                    />
-                  </SectionCard>
-                  <SectionCard title="Customer notes">
-                    <div className="space-y-3">
-                      <Textarea
-                        value={customerNote}
-                        onChange={(e) => setCustomerNote(e.target.value)}
-                        placeholder="Record arrangements, conversations, or follow-ups…"
-                        rows={3}
-                        className="text-sm"
-                      />
-                      <Button
-                        size="sm"
-                        disabled={!customerNote.trim() || addCustomerNoteMut.isPending}
-                        onClick={() => addCustomerNoteMut.mutate(customerNote.trim())}
-                      >
-                        Add note
-                      </Button>
-                      <div className="space-y-2 max-h-48 overflow-y-auto">
-                        {detail.activityLog.filter(a => a.type === "note").map((a) => (
-                          <div key={a.id} className="rounded-lg border border-border/60 p-2.5 text-xs">
-                            <p className="font-medium text-foreground">{a.title}</p>
-                            <p className="text-muted-foreground mt-0.5 whitespace-pre-wrap">{a.detail}</p>
-                            <p className="text-[10px] text-muted-foreground/70 mt-1">{a.date}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </SectionCard>
-                  <SectionCard title="Access & extension history">
-                    <div className="space-y-3">
-                      {detail.activityLog.map((a) => (
-                        <div key={a.id} className="flex gap-3">
-                          <span
-                            className="mt-1.5 h-2 w-2 rounded-full shrink-0"
-                            style={{ backgroundColor: a.dotColor }}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            <strong className="text-foreground">{a.title}</strong> — {a.detail}
-                          </p>
+                  )}
+
+                  {detailSection === "notes" && (
+                    <SectionCard title="Customer notes">
+                      <div className="space-y-3">
+                        <Textarea
+                          value={customerNote}
+                          onChange={(e) => setCustomerNote(e.target.value)}
+                          placeholder="Record arrangements, conversations, or follow-ups…"
+                          rows={3}
+                          className="text-sm"
+                        />
+                        <Button
+                          size="sm"
+                          disabled={!customerNote.trim() || addCustomerNoteMut.isPending}
+                          onClick={() => addCustomerNoteMut.mutate(customerNote.trim())}
+                        >
+                          Add note
+                        </Button>
+                        <div className="space-y-2 max-h-[min(480px,50vh)] overflow-y-auto">
+                          {detail.activityLog.filter((a) => a.type === "note").length === 0 ? (
+                            <p className="text-sm text-muted-foreground py-4 text-center">No notes yet.</p>
+                          ) : (
+                            detail.activityLog.filter((a) => a.type === "note").map((a) => (
+                              <div key={a.id} className="rounded-lg border border-border/60 p-2.5 text-xs">
+                                <p className="font-medium text-foreground">{a.title}</p>
+                                <p className="text-muted-foreground mt-0.5 whitespace-pre-wrap">{a.detail}</p>
+                                <p className="text-[10px] text-muted-foreground/70 mt-1">{a.date}</p>
+                              </div>
+                            ))
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  </SectionCard>
+                      </div>
+                    </SectionCard>
+                  )}
+
+                  {detailSection === "history" && (
+                    <SectionCard title="Access & extension history">
+                      <div className="space-y-3">
+                        {detail.activityLog.length === 0 ? (
+                          <p className="text-sm text-muted-foreground py-4 text-center">No activity recorded yet.</p>
+                        ) : (
+                          detail.activityLog.map((a) => (
+                            <div key={a.id} className="flex gap-3">
+                              <span
+                                className="mt-1.5 h-2 w-2 rounded-full shrink-0"
+                                style={{ backgroundColor: a.dotColor }}
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                <strong className="text-foreground">{a.title}</strong>
+                                {a.type === "scheduled_check_in" ? (
+                                  <Badge variant="outline" className="ml-2 text-[10px] h-5 px-1.5 align-middle">
+                                    Scheduled · {formatScheduledDate(a.date)}
+                                  </Badge>
+                                ) : null}
+                                {" — "}
+                                {a.detail}
+                              </p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </SectionCard>
+                  )}
                 </>
                   ) : (
                     <Card className="rounded-xl p-8 sm:p-12 text-center max-w-md mx-auto">
@@ -1229,6 +1321,98 @@ export default function CustomerManagementPage() {
                     Health scores are recalculated from live usage (users, AI tokens), subscription
                     status, renewal timing, and recent CSM follow-up activity in the activity log.
                   </InfoAlert>
+                  <SectionCard
+                    title="Upcoming check-ins"
+                    description="Scheduled CSM re-engagement — overdue items appear first"
+                  >
+                    {dashboard.health.scheduledCheckIns.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-4 text-center">
+                        No check-ins scheduled yet. Use &ldquo;Schedule check-in&rdquo; on a customer below to plan
+                        your next outreach.
+                      </p>
+                    ) : (
+                      <ResponsiveTableWrap minWidthClass="min-w-[900px]">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Organisation</TableHead>
+                              <TableHead>Scheduled for</TableHead>
+                              <TableHead>CSM</TableHead>
+                              <TableHead>Note</TableHead>
+                              <TableHead>Action</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {scheduledCheckInsPagination.paginatedItems.map((row) => (
+                              <TableRow
+                                key={row.id}
+                                className={row.isOverdue ? "bg-red-50/50 dark:bg-red-950/20" : undefined}
+                              >
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <OrgAvatar initials={row.initials} color={row.avatarColor} />
+                                    <span className="font-semibold">{row.customerName}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-1.5 text-xs">
+                                    <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className={cn(row.isOverdue && "text-red-600 font-semibold")}>
+                                      {formatScheduledDate(row.scheduledDate)}
+                                      {row.isOverdue ? " · Overdue" : ""}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs">{row.csmName}</TableCell>
+                                <TableCell className="text-xs text-muted-foreground max-w-[240px] truncate">
+                                  {row.note}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex gap-1.5">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-xs"
+                                      onClick={() => {
+                                        setSelectedSlug(row.customerSlug);
+                                        setView("detail");
+                                      }}
+                                    >
+                                      View
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      className="h-7 text-xs"
+                                      disabled={customerActionMut.isPending}
+                                      onClick={() =>
+                                        customerActionMut.mutate({
+                                          action: "complete_scheduled_check_in",
+                                          customerExternalId: row.customerId,
+                                          activityLogId: Number(row.id),
+                                        })
+                                      }
+                                    >
+                                      Mark done
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        <TablePagination
+                          page={scheduledCheckInsPagination.page}
+                          totalPages={scheduledCheckInsPagination.totalPages}
+                          total={scheduledCheckInsPagination.total}
+                          startIndex={scheduledCheckInsPagination.startIndex}
+                          endIndex={scheduledCheckInsPagination.endIndex}
+                          pageSize={scheduledCheckInsPagination.pageSize}
+                          onPageChange={scheduledCheckInsPagination.setPage}
+                          onPageSizeChange={scheduledCheckInsPagination.setPageSize}
+                        />
+                      </ResponsiveTableWrap>
+                    )}
+                  </SectionCard>
                   <SectionCard title="Customers needing attention" description="Watch and at-risk only — sorted by urgency">
                     <ResponsiveTableWrap minWidthClass="min-w-[1000px]">
                     <Table>
@@ -1652,7 +1836,7 @@ export default function CustomerManagementPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {dashboard.pricing.discountRules.map((d) => (
+                        {discountRulesPagination.paginatedItems.map((d) => (
                           <TableRow key={d.id}>
                             <TableCell>{d.name}</TableCell>
                             <TableCell>{d.appliesTo}</TableCell>
@@ -1671,6 +1855,16 @@ export default function CustomerManagementPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    <TablePagination
+                      page={discountRulesPagination.page}
+                      totalPages={discountRulesPagination.totalPages}
+                      total={discountRulesPagination.total}
+                      startIndex={discountRulesPagination.startIndex}
+                      endIndex={discountRulesPagination.endIndex}
+                      pageSize={discountRulesPagination.pageSize}
+                      onPageChange={discountRulesPagination.setPage}
+                      onPageSizeChange={discountRulesPagination.setPageSize}
+                    />
                     </ResponsiveTableWrap>
                   </SectionCard>
                 </>
@@ -1809,7 +2003,7 @@ export default function CustomerManagementPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {dashboard.billing.recentInvoices.map((inv) => (
+                        {invoicesPagination.paginatedItems.map((inv) => (
                           <TableRow
                             key={inv.id}
                             className={inv.status === "overdue" ? "bg-red-50/50 dark:bg-red-950/20" : undefined}
@@ -1826,6 +2020,16 @@ export default function CustomerManagementPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    <TablePagination
+                      page={invoicesPagination.page}
+                      totalPages={invoicesPagination.totalPages}
+                      total={invoicesPagination.total}
+                      startIndex={invoicesPagination.startIndex}
+                      endIndex={invoicesPagination.endIndex}
+                      pageSize={invoicesPagination.pageSize}
+                      onPageChange={invoicesPagination.setPage}
+                      onPageSizeChange={invoicesPagination.setPageSize}
+                    />
                     </ResponsiveTableWrap>
                   </SectionCard>
                 </>
@@ -2061,7 +2265,7 @@ export default function CustomerManagementPage() {
               )}
           </div>
         </div>
-      </main>
+    </ModuleShell>
 
       <GrantAccessModal open={grantOpen} onOpenChange={setGrantOpen} target={grantTarget} />
       <CreateProgrammeModal
@@ -2111,8 +2315,8 @@ export default function CustomerManagementPage() {
                 : "Schedule renewal follow-up"}
             </DialogTitle>
             <DialogDescription>
-              Logs a follow-up on the customer timeline and updates last-contact tracking. Add a note
-              describing the planned outreach or meeting.
+              Pick a date for CSM re-engagement. The check-in appears in the Upcoming check-ins
+              schedule on the Health scores tab.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-1">
@@ -2120,6 +2324,17 @@ export default function CustomerManagementPage() {
               <span className="text-muted-foreground">Customer: </span>
               <span className="font-medium">{followUpPending?.customerName}</span>
             </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="follow-up-date">Check-in date</Label>
+              <Input
+                id="follow-up-date"
+                type="date"
+                value={followUpScheduledAt}
+                onChange={(e) => setFollowUpScheduledAt(e.target.value)}
+                min={new Date().toISOString().slice(0, 10)}
+                className="text-sm"
+              />
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="follow-up-note">Note (optional)</Label>
               <Textarea
@@ -2132,9 +2347,9 @@ export default function CustomerManagementPage() {
               />
             </div>
             <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-1">
-              <li>Activity is recorded in the commercial activity log</li>
-              <li>Health and renewal queues refresh after confirmation</li>
-              <li>Book a calendar invite separately if you need a scheduled meeting</li>
+              <li>Scheduled check-ins appear in the Upcoming check-ins table on this tab</li>
+              <li>Mark complete after the call to update last-contact tracking</li>
+              <li>Book a calendar invite separately if you need a video meeting</li>
             </ul>
           </div>
           <DialogFooter>
@@ -2143,27 +2358,28 @@ export default function CustomerManagementPage() {
             </Button>
             <Button
               onClick={() => {
-                if (!followUpPending) return;
+                if (!followUpPending || !followUpScheduledAt) return;
                 customerActionMut.mutate({
                   action: followUpPending.action,
                   customerExternalId: followUpPending.customerExternalId,
                   note: followUpNote.trim() || followUpPending.defaultNote,
+                  scheduledAt: followUpScheduledAt,
                 });
                 setFollowUpPending(null);
               }}
-              disabled={customerActionMut.isPending}
+              disabled={customerActionMut.isPending || !followUpScheduledAt}
             >
               {customerActionMut.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
               ) : (
                 <CalendarClock className="h-4 w-4 mr-1.5" />
               )}
-              Confirm &amp; log follow-up
+              {followUpPending?.action === "health_follow_up" ? "Schedule check-in" : "Schedule follow-up"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
 

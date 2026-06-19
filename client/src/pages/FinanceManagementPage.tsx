@@ -6,8 +6,7 @@ import { CLIENT_WORKSPACE_ALWAYS_HIDDEN_KEYS } from "@shared/client-workspace-mo
 import { useClientContext } from "@/hooks/use-client-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Sidebar } from "@/components/Sidebar";
-import { useShellLayout } from "@/hooks/use-shell-layout";
+import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Wallet, Clock, Receipt, FileText, CreditCard, Link2, Settings,
@@ -40,7 +39,6 @@ export default function FinanceManagementPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [searchTerm, setSearchTerm] = useState("");
   const tabsListRef = useRef<HTMLDivElement>(null);
-  const { mainOffset, mobileTopOffset } = useShellLayout();
 
   const { data: dashboard, isLoading: dashboardLoading } = useQuery<FinanceDashboardData>({
     queryKey: ["/api/finance/dashboard"],
@@ -110,12 +108,9 @@ export default function FinanceManagementPage() {
 
   if (isLoading) {
     return (
-      <div className="h-screen overflow-hidden bg-background" data-testid="finance-loading">
-        <Sidebar />
-        <main className={cn("transition-all duration-300 h-full flex items-center justify-center overflow-hidden", mainOffset, mobileTopOffset)}>
+      <ModuleShell className="h-screen overflow-hidden bg-background" testId="finance-loading" mainClassName="h-full flex items-center justify-center overflow-hidden">
           <FinancePageLoading />
-        </main>
-      </div>
+      </ModuleShell>
     );
   }
 
@@ -131,9 +126,7 @@ export default function FinanceManagementPage() {
   ];
 
   return (
-    <div className="h-screen overflow-hidden bg-background" data-testid="finance-mgmt-page">
-      <Sidebar />
-      <main className={cn("transition-all duration-300 h-full flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
+    <ModuleShell className="h-screen overflow-hidden bg-background" testId="finance-mgmt-page" mainClassName="h-full flex flex-col overflow-hidden">
         <div className="px-3 sm:px-4 pt-3 sm:pt-4 hidden md:block">
           <ModuleWelcomeBanner
             moduleKey="finance-mgmt"
@@ -218,7 +211,6 @@ export default function FinanceManagementPage() {
             </TabsContent>
           </Tabs>
         </div>
-      </main>
-    </div>
+    </ModuleShell>
   );
 }

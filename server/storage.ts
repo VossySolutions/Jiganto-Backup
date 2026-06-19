@@ -46,6 +46,7 @@ import {
   type DocumentFolder, type InsertDocumentFolder, type Document, type InsertDocument,
   type DocumentVersion, type InsertDocumentVersion, type Tag as DocTag, type InsertTag as InsertDocTag,
   type DocumentTag, type InsertDocumentTag, type DocumentAcl, type InsertDocumentAcl,
+  type DocumentAccessEntry, type DocumentAccessSummary, type DocumentAccessPermission,
   type DocumentComment, type InsertDocumentComment, type DocumentTemplate, type InsertDocumentTemplate,
   type DocumentAuditLog, type InsertDocumentAuditLog, type DocumentInitiativeLink, type InsertDocumentInitiativeLink,
   type Task, type InsertTask, type TaskBoard, type InsertTaskBoard,
@@ -684,6 +685,7 @@ export interface IStorage {
   createDocumentAcl(acl: InsertDocumentAcl): Promise<DocumentAcl>;
   updateDocumentAcl(id: number, updates: Partial<InsertDocumentAcl>): Promise<DocumentAcl | undefined>;
   deleteDocumentAcl(id: number): Promise<void>;
+  getDocumentAccessSummary(documentId: number): Promise<DocumentAccessSummary | undefined>;
 
   // Document Management - Comments
   getDocumentComments(documentId: number): Promise<(DocumentComment & { author: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]>;
@@ -5005,6 +5007,155 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDocumentAcl(id: number): Promise<void> {
     await db.delete(documentAcl).where(eq(documentAcl.id, id));
+  }
+
+  async getDocumentAccessSummary(documentId: number): Promise<DocumentAccessSummary | undefined> {
+    const doc = await this.getDocument(documentId);
+    if (!doc) return undefined;
+
+    const PERMISSION_RANK: Record<DocumentAccessPermission, number> = {
+      owner: 5,
+      admin: 4,
+      share: 3,
+      write: 2,
+      read: 1,
+    };
+
+    const entries: DocumentAccessEntry[] = [];
+    const bestByUser = new Map<string, DocumentAccessEntry>();
+
+    const upsertEntry = (entry: DocumentAccessEntry) => {
+      if (entry.subjectType !== "user") {
+        entries.push(entry);
+        return;
+      }
+      const existing = bestByUser.get(entry.subjectId);
+      if (!existing || PERMISSION_RANK[entry.permission] > PERMISSION_RANK[existing.permission]) {
+        bestByUser.set(entry.subjectId, entry);
+      }
+    };
+
+    const userIds = new Set<string>();
+    if (doc.ownerId) userIds.add(doc.ownerId);
+
+    const directAcl = await db.select().from(documentAcl).where(eq(documentAcl.documentId, documentId));
+
+    const folderAclRows: (DocumentAcl & { folderName: string })[] = [];
+    let currentFolderId = doc.folderId ?? null;
+    while (currentFolderId != null) {
+      const folder = await this.getDocumentFolder(currentFolderId);
+      if (!folder) break;
+      const folderAcls = await db.select().from(documentAcl).where(eq(documentAcl.folderId, currentFolderId));
+      for (const acl of folderAcls) {
+        folderAclRows.push({ ...acl, folderName: folder.name });
+      }
+      currentFolderId = folder.parentId ?? null;
+    }
+
+    for (const acl of [...directAcl, ...folderAclRows]) {
+      if (acl.subjectType === "user") userIds.add(acl.subjectId);
+    }
+
+    const userRows = userIds.size
+      ? await db
+          .select({
+            id: users.id,
+            email: users.email,
+            firstName: users.firstName,
+            lastName: users.lastName,
+          })
+          .from(users)
+          .where(inArray(users.id, [...userIds]))
+      : [];
+
+    const userById = new Map(userRows.map((u) => [u.id, u]));
+
+    const displayNameFor = (userId: string) => {
+      const u = userById.get(userId);
+      if (!u) return userId;
+      const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
+      return name || u.email || userId;
+    };
+
+    if (doc.ownerId) {
+      const owner = userById.get(doc.ownerId);
+      upsertEntry({
+        id: "owner",
+        subjectType: "user",
+        subjectId: doc.ownerId,
+        displayName: owner ? displayNameFor(doc.ownerId) : (doc.ownerId as string),
+        email: owner?.email ?? null,
+        permission: "owner",
+        source: "owner",
+        sourceLabel: "Document owner",
+        editable: false,
+      });
+    }
+
+    for (const acl of directAcl) {
+      if (acl.subjectType !== "user") continue;
+      upsertEntry({
+        id: `acl-${acl.id}`,
+        aclId: acl.id,
+        subjectType: "user",
+        subjectId: acl.subjectId,
+        displayName: displayNameFor(acl.subjectId),
+        email: userById.get(acl.subjectId)?.email ?? null,
+        permission: (acl.permission as DocumentAccessPermission) || "read",
+        source: "document",
+        sourceLabel: "Direct share",
+        grantedAt: acl.createdAt?.toISOString() ?? null,
+        expiresAt: acl.expiresAt?.toISOString() ?? null,
+        editable: acl.subjectId !== doc.ownerId,
+      });
+    }
+
+    for (const acl of folderAclRows) {
+      if (acl.subjectType !== "user") continue;
+      upsertEntry({
+        id: `folder-acl-${acl.id}`,
+        aclId: acl.id,
+        subjectType: "user",
+        subjectId: acl.subjectId,
+        displayName: displayNameFor(acl.subjectId),
+        email: userById.get(acl.subjectId)?.email ?? null,
+        permission: (acl.permission as DocumentAccessPermission) || "read",
+        source: "folder",
+        sourceLabel: `Folder: ${acl.folderName}`,
+        grantedAt: acl.createdAt?.toISOString() ?? null,
+        expiresAt: acl.expiresAt?.toISOString() ?? null,
+        editable: false,
+      });
+    }
+
+    entries.push(...bestByUser.values());
+
+    entries.sort((a, b) => {
+      const rank = (p: DocumentAccessPermission) => PERMISSION_RANK[p] ?? 0;
+      if (rank(b.permission) !== rank(a.permission)) return rank(b.permission) - rank(a.permission);
+      return a.displayName.localeCompare(b.displayName);
+    });
+
+    const publicToken = (doc.metadata as { publicToken?: string } | null)?.publicToken;
+    if (publicToken) {
+      entries.push({
+        id: "public",
+        subjectType: "public",
+        subjectId: publicToken,
+        displayName: "Anyone with the link",
+        email: null,
+        permission: "read",
+        source: "public",
+        sourceLabel: "Public link (read-only)",
+        editable: false,
+      });
+    }
+
+    return {
+      documentId,
+      publicLinkEnabled: Boolean(publicToken),
+      entries,
+    };
   }
 
   // Document Management - Comments

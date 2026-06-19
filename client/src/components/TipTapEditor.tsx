@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useEditor, EditorContent, ReactRenderer } from '@tiptap/react';
+import { BubbleMenu } from '@tiptap/react/menus';
 import Mention from '@tiptap/extension-mention';
 import StarterKit from '@tiptap/starter-kit';
 import { Table } from '@tiptap/extension-table';
@@ -9,7 +10,6 @@ import TableHeaderBase from '@tiptap/extension-table-header';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Link from '@tiptap/extension-link';
-import Image from '@tiptap/extension-image';
 import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -40,6 +40,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { uploadDocumentImage } from '@/lib/document-image-upload';
+import { normalizeDocumentHtmlForEditor } from '@/lib/document-html-normalize';
+import {
+  DocumentImage,
+  HeadingWithAnchor,
+  HeadingAnchorPlugin,
+  ImageInteraction,
+  extractDocumentHeadings,
+  scrollEditorToHeading,
+  type DocumentTocHeading,
+} from '@/lib/tiptap-document-extensions';
+import { DocumentSectionNav } from '@/components/editor/DocumentSectionNav';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code,
   Heading1, Heading2, Heading3, Heading4, Type, ChevronDown,
@@ -749,6 +761,7 @@ export function TipTapEditor({
   const [showReplaceRow, setShowReplaceRow] = useState(false);
   const findInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceImageInputRef = useRef<HTMLInputElement>(null);
   const editorContentRef = useRef<HTMLDivElement>(null);
   const isInternalUpdate = useRef(false);
   const lastExternalContent = useRef(content || '');
@@ -758,7 +771,8 @@ export function TipTapEditor({
   const capturedMarks = useRef<Array<{ type: string; attrs: Record<string, any> }>>([]);
   const capturedNodeType = useRef<{ type: string; level?: number } | null>(null);
   // TOC
-  const [tocHeadings, setTocHeadings] = useState<Array<{ level: number; text: string; id: string }>>([]);
+  const [tocHeadings, setTocHeadings] = useState<DocumentTocHeading[]>([]);
+  const [sectionNavOpen, setSectionNavOpen] = useState(true);
   const [tocOpen, setTocOpen] = useState(false);
   // Emoji picker
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -789,13 +803,16 @@ export function TipTapEditor({
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         codeBlock: false,
-        heading: {
-          levels: [1, 2, 3, 4],
-        },
+        heading: false,
       }),
+      HeadingWithAnchor.configure({
+        levels: [1, 2, 3, 4],
+      }),
+      HeadingAnchorPlugin,
       Underline,
       TextStyle,
       Color,
@@ -811,32 +828,12 @@ export function TipTapEditor({
           class: 'text-primary underline cursor-pointer',
         },
       }),
-      Image.configure({
-        inline: false,
-        allowBase64: true,
-        HTMLAttributes: {
-          class: 'max-w-full h-auto rounded-lg cursor-pointer',
-        },
-      }),
+      DocumentImage,
+      ImageInteraction,
       Extension.create({
         name: 'imagePasteHandler',
         addProseMirrorPlugins() {
-          const uploadImage = async (file: File): Promise<string | null> => {
-            try {
-              const formData = new FormData();
-              formData.append('image', file);
-              const res = await fetch('/api/documents/upload-image', {
-                method: 'POST',
-                body: formData,
-                credentials: 'include',
-              });
-              if (!res.ok) return null;
-              const { url } = await res.json();
-              return url;
-            } catch {
-              return null;
-            }
-          };
+          const uploadImage = uploadDocumentImage;
 
           return [
             new Plugin({
@@ -1006,7 +1003,7 @@ export function TipTapEditor({
         suggestion: buildSlashSuggestion(getSlashItems),
       }),
     ],
-    content: content || '',
+    content: normalizeDocumentHtmlForEditor(content || ''),
     editable: true,
     onCreate: ({ editor: ed }) => {
       editorRef.current = ed;
@@ -1045,11 +1042,15 @@ export function TipTapEditor({
       prevDocumentId.current = documentId;
       isInternalUpdate.current = false;
       lastExternalContent.current = content || '';
-      editor.commands.setContent(content || '', { emitUpdate: false });
+      const nextContent = normalizeDocumentHtmlForEditor(content || '');
+      queueMicrotask(() => {
+        if (editor.isDestroyed) return;
+        editor.commands.setContent(nextContent, { emitUpdate: false });
+      });
       return;
     }
     prevDocumentId.current = documentId;
-  }, [documentId, editor]);
+  }, [documentId, editor, content]);
 
   // Sync content changes from outside the editor (e.g. programmatic updates)
   useEffect(() => {
@@ -1059,7 +1060,11 @@ export function TipTapEditor({
     }
     if (editor && content !== lastExternalContent.current) {
       lastExternalContent.current = content || '';
-      editor.commands.setContent(content || '', { emitUpdate: false });
+      const nextContent = normalizeDocumentHtmlForEditor(content || '');
+      queueMicrotask(() => {
+        if (editor.isDestroyed) return;
+        editor.commands.setContent(nextContent, { emitUpdate: false });
+      });
     }
   }, [content, editor]);
 
@@ -1068,6 +1073,10 @@ export function TipTapEditor({
       editor.setEditable(editable);
     }
   }, [editable, editor]);
+
+  const scrollToHeading = useCallback((heading: DocumentTocHeading) => {
+    scrollEditorToHeading(editor, heading.pos);
+  }, [editor]);
 
   // Format painter — apply captured marks on next mouseup inside the editor content area
   useEffect(() => {
@@ -1129,20 +1138,7 @@ export function TipTapEditor({
   useEffect(() => {
     if (!editor) return;
     const extractHeadings = () => {
-      const headings: Array<{ level: number; text: string; id: string }> = [];
-      editor.state.doc.descendants((node, _pos) => {
-        if (node.type.name === 'heading') {
-          const text = node.textContent.trim();
-          if (text) {
-            headings.push({
-              level: node.attrs.level,
-              text,
-              id: text.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
-            });
-          }
-        }
-      });
-      setTocHeadings(headings);
+      setTocHeadings(extractDocumentHeadings(editor.state.doc));
     };
     extractHeadings();
     editor.on('update', extractHeadings);
@@ -1173,20 +1169,32 @@ export function TipTapEditor({
 
     setIsUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('image', file);
-      const res = await fetch('/api/documents/upload-image', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const { url } = await res.json();
+      const url = await uploadDocumentImage(file);
+      if (!url) throw new Error('Upload failed');
       editor.chain().focus().setImage({ src: url, alt: file.name }).run();
     } catch {
       // silently fail
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, [editor]);
+
+  const handleReplaceImageFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!editor || !e.target.files?.length) return;
+    const file = e.target.files[0];
+    if (!file.type.startsWith('image/')) return;
+
+    setIsUploading(true);
+    try {
+      const url = await uploadDocumentImage(file);
+      if (!url) throw new Error('Upload failed');
+      editor.chain().focus().updateAttributes('image', { src: url, alt: file.name }).run();
+    } catch {
+      // silently fail
+    } finally {
+      setIsUploading(false);
+      if (replaceImageInputRef.current) replaceImageInputRef.current.value = '';
     }
   }, [editor]);
 
@@ -1271,6 +1279,18 @@ export function TipTapEditor({
       findInputRef.current.focus();
     }
   }, [showFindReplace]);
+
+  useEffect(() => {
+    const el = editorContentRef.current;
+    if (!el) return;
+    const stopBubble = (e: Event) => e.stopPropagation();
+    el.addEventListener("keydown", stopBubble);
+    el.addEventListener("keyup", stopBubble);
+    return () => {
+      el.removeEventListener("keydown", stopBubble);
+      el.removeEventListener("keyup", stopBubble);
+    };
+  }, [editor]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1381,7 +1401,7 @@ export function TipTapEditor({
   );
 
   return (
-    <div className="border rounded-lg overflow-visible bg-background" data-testid="tiptap-editor">
+    <div className="border rounded-lg overflow-visible bg-background" data-testid="tiptap-editor" data-editable-region="document-body">
       {editable && (
         <div className="border-b bg-muted sticky top-0 z-50" data-testid="tiptap-toolbar">
           <div className="flex flex-wrap items-center gap-0.5 p-1.5">
@@ -2150,7 +2170,34 @@ export function TipTapEditor({
               </PopoverTrigger>
               <PopoverContent className="w-80">
                 <div className="space-y-3">
-                  <h4 className="font-medium text-sm">Insert Image</h4>
+                  <h4 className="font-medium text-sm">{editor.isActive('image') ? 'Edit Image' : 'Insert Image'}</h4>
+                  {editor.isActive('image') && (
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 gap-1.5"
+                        onClick={() => replaceImageInputRef.current?.click()}
+                        disabled={isUploading}
+                        data-testid="toolbar-replace-image"
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                        Replace
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        className="flex-1 gap-1.5"
+                        onClick={() => editor.chain().focus().deleteSelection().run()}
+                        data-testid="toolbar-delete-image"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </Button>
+                    </div>
+                  )}
                   <div className="space-y-3">
                     <div>
                       <Label className="text-xs mb-1 block">Upload from device</Label>
@@ -2306,11 +2353,10 @@ export function TipTapEditor({
                     tocHeadings.map((h, i) => (
                       <button
                         key={`${h.id}-${i}`}
-                        className="flex items-baseline gap-2 w-full text-left px-3 py-1.5 hover:bg-muted transition-colors text-sm"
+                        className="flex items-baseline gap-2 w-full text-left px-3 py-1.5 hover:bg-muted transition-colors text-sm text-primary underline underline-offset-2"
                         style={{ paddingLeft: `${(h.level - 1) * 12 + 12}px` }}
                         onClick={() => {
-                          const found = document.querySelector(`[data-toc-id="${h.id}"]`) as HTMLElement | null;
-                          if (found) found.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          scrollToHeading(h);
                           setTocOpen(false);
                         }}
                         data-testid={`toc-item-${i}`}
@@ -2484,7 +2530,7 @@ export function TipTapEditor({
         </div>
       )}
 
-      <div ref={editorContentRef} className={cn("relative bg-background", printPreview && "print-preview-container")} data-testid="editor-content-wrapper">
+      <div ref={editorContentRef} className={cn("relative bg-background", printPreview && "print-preview-container")} data-testid="editor-content-wrapper" onKeyDown={(e) => e.stopPropagation()}>
         {showFindReplace && editable && (
           <div className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur-sm px-3 py-2 space-y-2 shadow-sm" data-testid="find-replace-bar">
             <div className="flex items-center gap-2">
@@ -2566,8 +2612,62 @@ export function TipTapEditor({
           </div>
         )}
         {printPreview && <PrintPreviewOverlay editorContentRef={editorContentRef} pageSize={pageSize} />}
+        {tocHeadings.length > 0 ? (
+          <DocumentSectionNav
+            headings={tocHeadings}
+            open={sectionNavOpen}
+            onToggle={() => setSectionNavOpen((open) => !open)}
+            onJump={scrollToHeading}
+            className="mx-4 mt-4"
+          />
+        ) : editable ? (
+          <div className="mx-4 mt-4 rounded-lg border border-dashed border-border/60 bg-muted/10 px-3 py-2 text-xs text-muted-foreground" data-testid="document-section-nav-empty">
+            Add <strong className="font-medium text-foreground">Heading 1–4</strong> styles to create sections. Section links will appear here for quick navigation (like Confluence).
+          </div>
+        ) : null}
         <div className="relative" onContextMenu={handleEditorContextMenu}>
-        <EditorContent 
+        {editor && editable && (
+          <BubbleMenu
+            editor={editor}
+            shouldShow={({ editor: ed }) => ed.isActive('image')}
+            options={{ placement: 'top' }}
+          >
+            <div className="flex items-center gap-1 rounded-md border bg-popover p-1 shadow-md">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 gap-1.5"
+                onClick={() => replaceImageInputRef.current?.click()}
+                disabled={isUploading}
+                data-testid="bubble-replace-image"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                Replace
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 gap-1.5 text-destructive hover:text-destructive"
+                onClick={() => editor.chain().focus().deleteSelection().run()}
+                data-testid="bubble-delete-image"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </Button>
+            </div>
+          </BubbleMenu>
+        )}
+        <input
+          ref={replaceImageInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleReplaceImageFile}
+          data-testid="input-replace-image-file"
+        />
+        <EditorContent
           editor={editor} 
           className={cn(
             "prose prose-neutral dark:prose-invert max-w-none p-4 min-h-[400px] focus:outline-none bg-background",
@@ -2597,6 +2697,7 @@ export function TipTapEditor({
             "[&_blockquote]:border-l-4 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:italic",
             "[&_hr]:border-border [&_hr]:my-4",
             "[&_img]:rounded-lg [&_img]:max-w-full",
+            "[&_.ProseMirror-selectednode]:outline [&_.ProseMirror-selectednode]:outline-2 [&_.ProseMirror-selectednode]:outline-primary/50 [&_.ProseMirror-selectednode]:outline-offset-2",
             "[&_sub]:text-xs",
             "[&_sup]:text-xs",
             printPreview && "relative z-0"

@@ -234,6 +234,19 @@ export interface CustomerMgmtOverview {
   customers: CommercialCustomer[];
 }
 
+export interface ScheduledCheckInRow {
+  id: string;
+  customerId: string;
+  customerSlug: string;
+  customerName: string;
+  initials: string;
+  avatarColor: string;
+  scheduledDate: string;
+  note: string;
+  csmName: string;
+  isOverdue: boolean;
+}
+
 export interface CustomerMgmtDashboard {
   overview: CustomerMgmtOverview;
   health: {
@@ -242,6 +255,7 @@ export interface CustomerMgmtDashboard {
     atRisk: number;
     averageScore: number;
     averageDelta: string;
+    scheduledCheckIns: ScheduledCheckInRow[];
     attentionRows: Array<{
       customerId: string;
       customerName: string;

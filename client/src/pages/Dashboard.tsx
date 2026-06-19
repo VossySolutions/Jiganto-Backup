@@ -30,7 +30,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 
 import { HelpMenu } from "@/components/HelpMenu";
 
-import { cn } from "@/lib/utils";
+import { cn, isTypingInEditableField } from "@/lib/utils";
 
 import {
 
@@ -173,7 +173,8 @@ export function Dashboard() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.isComposing) return;
+      if (isTypingInEditableField(e.target)) return;
       if (e.key === "Escape" && presentationMode) {
         setPresentationMode(false);
       }
@@ -640,14 +641,6 @@ export function Dashboard() {
                 <Sparkles className="h-4 w-4" />
 
                 AI Insights
-
-              </Button>
-
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowAiDialog(true)}>
-
-                <Sparkles className="h-4 w-4" />
-
-                AI
 
               </Button>
 

@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { motion } from "framer-motion";
-import { Sidebar } from "@/components/Sidebar";
+import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -34,7 +34,7 @@ import {
 } from "@/components/chat/ChatDialogs";
 
 export function ChatPage() {
-  const { mainOffset, mobileTopOffset, isMobile } = useShellLayout();
+  const { isMobile } = useShellLayout();
   const { user } = useAuth();
   const { permissions } = usePermissions();
   const tenantId = permissions?.orgId ?? 1;
@@ -390,9 +390,8 @@ export function ChatPage() {
   }, [typingUsers, selectedChannelId]);
 
   return (
-    <div className="min-h-screen bg-background" data-testid="chat-page">
-      <Sidebar />
-      <main className={cn("transition-all duration-300 h-screen flex flex-col", mainOffset, mobileTopOffset)}>
+    <>
+    <ModuleShell className="min-h-screen bg-background" testId="chat-page" mainClassName="h-screen flex flex-col">
         <div className="border-b border-border/30 bg-card shrink-0">
           <ModuleHeader
             icon={MessageSquare}
@@ -556,7 +555,7 @@ export function ChatPage() {
             </div>
           ) : null}
         </div>
-      </main>
+    </ModuleShell>
 
       <NewChatDialog
         open={isNewChatOpen}
@@ -605,6 +604,6 @@ export function ChatPage() {
         }}
         pending={renameTeam.isPending}
       />
-    </div>
+    </>
   );
 }

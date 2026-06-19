@@ -3,9 +3,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useShellLayout } from "@/hooks/use-shell-layout";
 import { cn } from "@/lib/utils";
-import { Sidebar } from "@/components/Sidebar";
+import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { UniversalViewSystem, ColumnDef as ViewColumnDef } from "@/components/UniversalViewSystem";
@@ -51,7 +50,6 @@ type RowTask = AggregatedTask & {
 
 export default function TaskManagementPage() {
   const { toast } = useToast();
-  const { mainOffset, mobileTopOffset } = useShellLayout();
   const [location, setLocation] = useLocation();
   const search = location.includes("?") ? location.slice(location.indexOf("?")) : "";
   const [filters, setFilters] = useState<TaskFilters>(() => parseFiltersFromSearch(search));
@@ -193,9 +191,7 @@ export default function TaskManagementPage() {
   const metaLoading = workspacesQuery.isLoading || projectsQuery.isLoading;
 
   return (
-    <div className="min-h-screen bg-background" data-testid="task-mgmt-page">
-      <Sidebar />
-      <main className={cn("transition-all duration-300 min-h-screen flex flex-col", mainOffset, mobileTopOffset)}>
+    <ModuleShell className="min-h-screen bg-background" testId="task-mgmt-page" mainClassName="min-h-screen flex flex-col">
         <div className="px-3 sm:px-4 pt-3 sm:pt-4">
           <ModuleWelcomeBanner
             moduleKey="tasks"
@@ -324,7 +320,6 @@ export default function TaskManagementPage() {
           onOpenChange={setDetailOpen}
           filters={filters}
         />
-      </main>
-    </div>
+    </ModuleShell>
   );
 }

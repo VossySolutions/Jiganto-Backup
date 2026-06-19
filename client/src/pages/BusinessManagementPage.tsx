@@ -15,8 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Sidebar } from "@/components/Sidebar";
-import { useShellLayout } from "@/hooks/use-shell-layout";
+import { ModuleShell } from "@/components/ModuleShell";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -297,7 +296,6 @@ export default function BusinessManagementPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const { open: openAiInsights } = useAIInsightsPanel();
   const { toast } = useToast();
-  const { mainOffset, mobileTopOffset } = useShellLayout();
   const { isAuthenticated, sessionReady } = useAuth();
 
   const { data: stats, isLoading: statsLoading } = useQuery<BusinessStats>({
@@ -442,9 +440,7 @@ export default function BusinessManagementPage() {
   const currentManageItem = manageSubmenu.find(item => item.id === activeTab);
 
   return (
-    <div className="h-screen overflow-hidden bg-background" data-testid="business-page">
-      <Sidebar />
-      <main className={cn("transition-all duration-300 h-full flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
+    <ModuleShell className="h-screen overflow-hidden bg-background" testId="business-page" mainClassName="h-full flex flex-col overflow-hidden">
         <div className="px-3 sm:px-4 pt-3 sm:pt-4">
           <ModuleWelcomeBanner moduleKey="business-mgmt" features={["Strategy mapping", "Governance layer", "RAG status rollup", "AI insights"]} />
         </div>
@@ -644,8 +640,7 @@ export default function BusinessManagementPage() {
             </Tabs>
           </div>
         </div>
-      </main>
-    </div>
+    </ModuleShell>
   );
 }
 

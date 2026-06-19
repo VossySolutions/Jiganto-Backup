@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db";
 import {
   commercialActivityLog,
@@ -65,15 +65,20 @@ async function logActivity(
   detail: string,
   entryType = "event",
   dotColor = "#534AB7",
-): Promise<void> {
-  await db.insert(commercialActivityLog).values({
-    customerId,
-    entryType,
-    title,
-    detail,
-    entryDate: new Date().toISOString().slice(0, 10),
-    dotColor,
-  });
+  entryDate?: string,
+): Promise<number> {
+  const [row] = await db
+    .insert(commercialActivityLog)
+    .values({
+      customerId,
+      entryType,
+      title,
+      detail,
+      entryDate: entryDate ?? new Date().toISOString().slice(0, 10),
+      dotColor,
+    })
+    .returning({ id: commercialActivityLog.id });
+  return row?.id ?? 0;
 }
 
 export async function updateCustomerInDb(
@@ -392,13 +397,41 @@ export async function updateProgrammeParticipantsInDb(
 
 export async function runCustomerActionInDb(
   slug: string,
-  action: "health_follow_up" | "renewal_follow_up" | "convert_trial",
+  action: "health_follow_up" | "renewal_follow_up" | "convert_trial" | "complete_scheduled_check_in",
   note?: string,
+  scheduledAt?: string,
+  activityLogId?: number,
 ) {
   const customerId = await customerIdBySlug(slug);
   if (!customerId) return null;
 
   const now = new Date().toISOString().slice(0, 10);
+
+  if (action === "complete_scheduled_check_in") {
+    if (!activityLogId) return null;
+    const [logRow] = await db
+      .select()
+      .from(commercialActivityLog)
+      .where(
+        and(
+          eq(commercialActivityLog.id, activityLogId),
+          eq(commercialActivityLog.customerId, customerId),
+          eq(commercialActivityLog.entryType, "scheduled_check_in"),
+        ),
+      )
+      .limit(1);
+    if (!logRow) return null;
+    await db
+      .update(commercialActivityLog)
+      .set({
+        entryType: "call",
+        title: "Check-in completed",
+        detail: note?.trim() || logRow.detail,
+        entryDate: now,
+      })
+      .where(eq(commercialActivityLog.id, activityLogId));
+    return loadCustomerDetailFromDb(slug);
+  }
 
   if (action === "convert_trial") {
     const settings = (await loadSettings()) ?? DEFAULT_COMMERCIAL_SETTINGS;
@@ -428,21 +461,47 @@ export async function runCustomerActionInDb(
       .where(eq(commercialCustomers.id, customerId));
     await logActivity(customerId, "Trial converted to paid", note ?? `Converted on ${now}`, "event", "#0F6E56");
   } else if (action === "health_follow_up") {
-    await logActivity(
-      customerId,
-      "Health follow-up logged",
-      note ?? `CSM action recorded · ${now}`,
-      "call",
-      "#E24B4A",
-    );
+    const scheduleDate = scheduledAt?.trim() || now;
+    const isFutureSchedule = scheduleDate > now;
+    if (isFutureSchedule || scheduleDate === now) {
+      await logActivity(
+        customerId,
+        "Check-in scheduled",
+        note ?? `CSM check-in planned · ${scheduleDate}`,
+        "scheduled_check_in",
+        "#378ADD",
+        scheduleDate,
+      );
+    } else {
+      await logActivity(
+        customerId,
+        "Health follow-up logged",
+        note ?? `CSM action recorded · ${now}`,
+        "call",
+        "#E24B4A",
+      );
+    }
   } else {
-    await logActivity(
-      customerId,
-      "Renewal follow-up logged",
-      note ?? `Renewal action recorded · ${now}`,
-      "call",
-      "#EF9F27",
-    );
+    const scheduleDate = scheduledAt?.trim() || now;
+    const isFutureSchedule = scheduleDate > now;
+    if (isFutureSchedule || scheduleDate === now) {
+      await logActivity(
+        customerId,
+        "Renewal follow-up scheduled",
+        note ?? `Renewal outreach planned · ${scheduleDate}`,
+        "scheduled_check_in",
+        "#EF9F27",
+        scheduleDate,
+      );
+    } else {
+      await logActivity(
+        customerId,
+        "Renewal follow-up logged",
+        note ?? `Renewal action recorded · ${now}`,
+        "call",
+        "#EF9F27",
+      );
+    }
   }
 
   return loadCustomerDetailFromDb(slug);

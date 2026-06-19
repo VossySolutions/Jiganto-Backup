@@ -11,8 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Sidebar } from "@/components/Sidebar";
-import { useShellLayout } from "@/hooks/use-shell-layout";
+import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
 import type { GanttTask, GanttResource, GanttDependency } from "@/components/projects/gantt.types";
 
@@ -2338,7 +2337,6 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
 }
 
 export default function ProjectsManagementPage() {
-  const { mainMargin, mobileTopOffset } = useShellLayout();
   const [, setLocation] = useLocation();
   const params = useParams<{ projectId?: string }>();
 
@@ -2383,14 +2381,7 @@ export default function ProjectsManagementPage() {
   };
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
-      <main
-        className={cn(
-          "flex-1 flex flex-col overflow-hidden transition-all duration-300",
-          mainMargin, mobileTopOffset
-        )}
-      >
+    <ModuleShell className="flex h-screen bg-background" mainClassName="flex-1 flex flex-col overflow-hidden">
         <ScrollArea className="flex-1">
           <div className="flex flex-col min-h-full">
             {currentView === "dashboard" && (
@@ -2430,7 +2421,6 @@ export default function ProjectsManagementPage() {
             )}
           </div>
         </ScrollArea>
-      </main>
-    </div>
+    </ModuleShell>
   );
 }

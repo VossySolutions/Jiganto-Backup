@@ -1,11 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Sidebar } from "@/components/Sidebar";
+import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { TemplatesIcon } from "@/components/icons/ModuleIcons";
-import { useShellLayout } from "@/hooks/use-shell-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -243,7 +242,6 @@ function DiscoveryStrip({
 }
 
 export default function TemplatesPage() {
-  const { mainOffset, mobileTopOffset } = useShellLayout();
   const isMobile = useIsMobile();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -435,9 +433,8 @@ export default function TemplatesPage() {
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar />
-      <main className={cn("transition-all duration-300", mainOffset, mobileTopOffset)}>
+    <>
+    <ModuleShell className="min-h-screen bg-background">
         <ModuleWelcomeBanner moduleKey="templates" />
         <ModuleHeader
           icon={TemplatesIcon}
@@ -639,7 +636,7 @@ export default function TemplatesPage() {
             </div>
           </div>
         </div>
-      </main>
+    </ModuleShell>
 
       <Dialog open={!!previewTpl} onOpenChange={() => setPreviewTpl(null)}>
         <DialogContent className="max-w-lg sm:max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="template-preview-dialog">
@@ -831,6 +828,6 @@ export default function TemplatesPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

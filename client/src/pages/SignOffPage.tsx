@@ -3,8 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Sidebar } from "@/components/Sidebar";
-import { useShellLayout } from "@/hooks/use-shell-layout";
+import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -113,7 +112,6 @@ td{padding:8px 10px;border-bottom:1px solid #f3f4f6}</style></head><body>
 export default function SignOffPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { mainOffset, mobileTopOffset } = useShellLayout();
 
   const [view, setView] = useState<View>("dashboard");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -609,12 +607,9 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
   });
 
   const shell = (children: React.ReactNode) => (
-    <div className="esign-page h-screen overflow-hidden bg-background">
-      <Sidebar />
-      <main className={cn("transition-all duration-300 h-full overflow-y-auto", mainOffset, mobileTopOffset)}>
-        {children}
-      </main>
-    </div>
+    <ModuleShell className="esign-page h-screen overflow-hidden bg-background" mainClassName="h-full overflow-y-auto">
+      {children}
+    </ModuleShell>
   );
 
   // ── DETAIL / AUDIT ────────────────────────────────────────────────────────

@@ -41,6 +41,10 @@ export function ClientsCardGridLoading() {
   );
 }
 
+export function ClientsTableLoading() {
+  return <Skeleton className="h-[320px] w-full rounded-xl" />;
+}
+
 export function ClientsDetailLoading() {
   return (
     <div className="space-y-6">

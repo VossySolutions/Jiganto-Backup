@@ -2,19 +2,25 @@
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
-import { DOCX_MAMMOTH_STYLE_MAP, prepareDocxImport, applyDocxStyles, isIgnorableMammothWarning } from "@/lib/docx-import";
+import { DOCX_MAMMOTH_STYLE_MAP, prepareDocxImport, applyDocxStyles, isIgnorableMammothWarning, extractDocxHeaderFooter } from "@/lib/docx-import";
 import {
   ALLOW_UNCATEGORISED_DOCS,
   UNCATEGORISED_FOLDER_VALUE,
   folderSelectValue,
   parseFolderSelectValue,
 } from "@/lib/document-folder-policy";
+import {
+  findDocumentByTitleInFolder,
+  suggestUniqueDocumentTitle,
+  type DocumentImportConflictAction,
+} from "@/lib/document-names";
+import { normalizeDocumentHtmlForEditor } from "@/lib/document-html-normalize";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useShellLayout } from "@/hooks/use-shell-layout";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { cn } from "@/lib/utils";
-import { Sidebar } from "@/components/Sidebar";
+import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { Button } from "@/components/ui/button";
@@ -28,6 +34,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
@@ -44,7 +51,7 @@ import {
   GripVertical, FolderInput, Save, X, FileUp,
   File, FileImage, FileSpreadsheet, FileArchive, Paperclip,
   Mail, Copy, Check, BookCopy, Globe, Building2, Layers, Palette, Users,
-  FileSignature, Bell, XCircle, Eye, Loader2, RotateCcw, Info
+  FileSignature, Bell, XCircle, Eye, Loader2, RotateCcw, Info, Maximize2, Minimize2, AlertTriangle
 } from "lucide-react";
 import {
   DocAllIcon,
@@ -60,6 +67,8 @@ import type { MentionUser } from "@/components/TipTapEditor";
 const TipTapEditor = lazy(() =>
   import("@/components/TipTapEditor").then((m) => ({ default: m.TipTapEditor })),
 );
+import { DocumentHeaderFooterEditor } from "@/components/DocumentHeaderFooterEditor";
+import { DocumentAccessSection, DocumentAccessHeaderChip } from "@/components/documents/DocumentAccessSection";
 import type { Document, DocumentFolder, DocumentVersion, DocumentComment, DocumentFile, DocumentTemplate } from "@shared/schema";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -236,7 +245,7 @@ function TableLoadingSkeleton({ rows = 6 }: { rows?: number }) {
 export default function DocumentManagementPage() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { mainOffset, mobileTopOffset, isMobile } = useShellLayout();
+  const { isMobile } = useShellLayout();
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [highlightedDocument, setHighlightedDocument] = useState<Document | null>(null);
@@ -252,10 +261,12 @@ export default function DocumentManagementPage() {
   const [newDocType, setNewDocType] = useState("document");
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContentState] = useState("");
+  const [editHeaderContent, setEditHeaderContentState] = useState("");
+  const [editFooterContent, setEditFooterContentState] = useState("");
+  const editHeaderContentRef = useRef("");
+  const editFooterContentRef = useRef("");
   const editContentRef = useRef("");
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastAutoSavedContent = useRef<string>("");
-  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const selectedDocumentRef = useRef<Document | null>(null);
   const isEditingRef = useRef(false);
 
@@ -263,9 +274,17 @@ export default function DocumentManagementPage() {
     if (!selectedDocument?.id || selectedDocument.content != null) return;
     let cancelled = false;
     void fetchWithAuth(`/api/documents/${selectedDocument.id}`)
-      .then((res) => res.json())
-      .then((full: Document) => {
-        if (cancelled) return;
+      .then(async (res) => {
+        if (cancelled) return null;
+        if (res.status === 404) {
+          setSelectedDocument(null);
+          return null;
+        }
+        if (!res.ok) return null;
+        return res.json() as Promise<Document>;
+      })
+      .then((full) => {
+        if (cancelled || !full) return;
         setSelectedDocument(full);
         if (!isEditingRef.current) {
           setEditContentState(full.content || "");
@@ -276,61 +295,11 @@ export default function DocumentManagementPage() {
     };
   }, [selectedDocument?.id, selectedDocument?.content]);
 
-  const doSave = useCallback(async (docId: number, contentStr: string) => {
-    setAutoSaveStatus("saving");
-    try {
-      const formData = new FormData();
-      formData.append("content", new Blob([contentStr], { type: "text/html" }), "content.html");
-      const res = await fetchWithAuth(`/api/documents/${docId}/content`, {
-        method: "POST",
-        body: formData,
-      });
-      if (res.ok) {
-        lastAutoSavedContent.current = contentStr;
-        setAutoSaveStatus("saved");
-        setTimeout(() => setAutoSaveStatus("idle"), 2500);
-      } else {
-        setAutoSaveStatus("idle");
-      }
-    } catch {
-      setAutoSaveStatus("idle");
-    }
-  }, []);
-
-  const flushPendingSave = useCallback((overrideDocId?: number) => {
-    if (!autoSaveTimer.current) return;
-    clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = null;
-    const docId = overrideDocId ?? selectedDocumentRef.current?.id;
-    if (!docId) return;
-    const contentStr = editContentRef.current;
-    if (contentStr === lastAutoSavedContent.current) return;
-    lastAutoSavedContent.current = contentStr;
-    const formData = new FormData();
-    formData.append("content", new Blob([contentStr], { type: "text/html" }), "content.html");
-    fetchWithAuth(`/api/documents/${docId}/content`, {
-      method: "POST",
-      body: formData,
-      keepalive: true,
-    }).catch(() => {});
-  }, []);
-
   const setEditContent = useCallback((val: string) => {
     editContentRef.current = val;
     setEditContentState(val);
-
-    if (!isEditingRef.current || !selectedDocumentRef.current) return;
-    if (val === lastAutoSavedContent.current) return;
-
-    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = setTimeout(async () => {
-      const docId = selectedDocumentRef.current?.id;
-      if (!docId || !isEditingRef.current) return;
-      if (editContentRef.current === lastAutoSavedContent.current) return;
-      await doSave(docId, editContentRef.current);
-    }, 1500);
-  }, [doSave]);
-  const [activeTab, setActiveTab] = useState<"content" | "comments" | "versions" | "properties" | "signoff">("content");
+  }, []);
+  const [activeTab, setActiveTab] = useState<"content" | "comments" | "versions" | "properties" | "signoff" | "members">("content");
   const [, setLocation] = useLocation();
   const [selectedTagColor, setSelectedTagColor] = useState("#3B82F6");
   const [showSearch, setShowSearch] = useState(false);
@@ -339,6 +308,7 @@ export default function DocumentManagementPage() {
   const [renamingDocument, setRenamingDocument] = useState<Document | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [isFolderPanelOpen, setIsFolderPanelOpen] = useState(true);
+  const [isDocumentFullScreen, setIsDocumentFullScreen] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
   const [dragOverFolderId, setDragOverFolderId] = useState<number | null | "root">(null);
   const [draggingFolderId, setDraggingFolderId] = useState<number | null>(null);
@@ -384,8 +354,12 @@ export default function DocumentManagementPage() {
   const [pendingAnchoredComment, setPendingAnchoredComment] = useState<{ id: string; text: string } | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importTitle, setImportTitle] = useState("");
+  const [importSourceTitle, setImportSourceTitle] = useState("");
+  const [importConflictAction, setImportConflictAction] = useState<DocumentImportConflictAction>("keep_both");
   const [importFolderId, setImportFolderId] = useState<number | null>(null);
   const [importContent, setImportContent] = useState("");
+  const [importHeaderContent, setImportHeaderContent] = useState("");
+  const [importFooterContent, setImportFooterContent] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -420,6 +394,19 @@ export default function DocumentManagementPage() {
     if (!selectedDocument) return;
     
     let content = editContent || selectedDocument.content || "";
+    const headerHtml = editHeaderContent || (selectedDocument.metadata as any)?.headerHtml || "";
+    const footerHtml = editFooterContent || (selectedDocument.metadata as any)?.footerHtml || "";
+    const wrapWithPageRegions = (body: string) => {
+      const parts: string[] = [];
+      if (headerHtml.trim()) {
+        parts.push(`<header class="document-header" style="border-bottom:1px solid #e5e7eb;padding-bottom:0.75rem;margin-bottom:1.5rem;">${headerHtml}</header>`);
+      }
+      parts.push(`<div class="document-body">${body}</div>`);
+      if (footerHtml.trim()) {
+        parts.push(`<footer class="document-footer" style="border-top:1px solid #e5e7eb;padding-top:0.75rem;margin-top:1.5rem;">${footerHtml}</footer>`);
+      }
+      return parts.join("\n");
+    };
     const filename = selectedDocument.title.replace(/[^a-z0-9]/gi, '_');
     let mimeType = "text/plain";
     let extension = "txt";
@@ -445,7 +432,7 @@ export default function DocumentManagementPage() {
     `;
     
     if (format === "html") {
-      content = `<!DOCTYPE html>\n<html>\n<head>\n  <title>${selectedDocument.title}</title>\n  <style>${htmlStyles}</style>\n</head>\n<body>\n  <h1>${selectedDocument.title}</h1>\n  <div class="content">${content}</div>\n</body>\n</html>`;
+      content = `<!DOCTYPE html>\n<html>\n<head>\n  <title>${selectedDocument.title}</title>\n  <style>${htmlStyles}</style>\n</head>\n<body>\n  <h1>${selectedDocument.title}</h1>\n  ${wrapWithPageRegions(`<div class="content">${content}</div>`)}\n</body>\n</html>`;
       mimeType = "text/html";
       extension = "html";
     } else if (format === "markdown") {
@@ -666,6 +653,50 @@ export default function DocumentManagementPage() {
       return res.json();
     },
   });
+
+  const importNameConflict = useMemo(() => {
+    if (!importSourceTitle.trim()) return null;
+    return findDocumentByTitleInFolder(allDocuments, importSourceTitle, importFolderId) ?? null;
+  }, [allDocuments, importSourceTitle, importFolderId]);
+
+  const importTitleDuplicate = useMemo(() => {
+    if (!importTitle.trim() || importConflictAction === "replace") return null;
+    return findDocumentByTitleInFolder(allDocuments, importTitle, importFolderId) ?? null;
+  }, [allDocuments, importTitle, importFolderId, importConflictAction]);
+
+  const resetImportDialog = useCallback(() => {
+    setImportContent("");
+    setImportHeaderContent("");
+    setImportFooterContent("");
+    setImportTitle("");
+    setImportSourceTitle("");
+    setImportConflictAction("keep_both");
+    setImportWarnings([]);
+  }, []);
+
+  const handleImportFolderChange = useCallback((folderId: number | null) => {
+    setImportFolderId(folderId);
+    const existing = findDocumentByTitleInFolder(allDocuments, importSourceTitle, folderId);
+    if (!existing) {
+      setImportConflictAction("keep_both");
+      setImportTitle(importSourceTitle);
+      return;
+    }
+    if (importConflictAction === "replace") {
+      setImportTitle(existing.title);
+      return;
+    }
+    setImportTitle(suggestUniqueDocumentTitle(importSourceTitle, folderId, allDocuments));
+  }, [allDocuments, importSourceTitle, importConflictAction]);
+
+  const handleImportConflictActionChange = useCallback((action: DocumentImportConflictAction) => {
+    setImportConflictAction(action);
+    if (action === "replace" && importNameConflict) {
+      setImportTitle(importNameConflict.title);
+      return;
+    }
+    setImportTitle(suggestUniqueDocumentTitle(importSourceTitle, importFolderId, allDocuments));
+  }, [importNameConflict, importSourceTitle, importFolderId, allDocuments]);
 
   const { data: searchResults = [], isLoading: searchLoading, isFetching: searchFetching } = useQuery<(Document & { ownerName: string | null })[]>({
     queryKey: ["/api/documents/search", searchQuery],
@@ -1018,6 +1049,11 @@ export default function DocumentManagementPage() {
         }
         if (selectedDocument?.id === updatedDoc.id) {
           setSelectedDocument(updatedDoc);
+          if (variables.updates.metadata) {
+            const md = (updatedDoc.metadata as Record<string, unknown>) || {};
+            editHeaderContentRef.current = (md.headerHtml as string) || "";
+            editFooterContentRef.current = (md.footerHtml as string) || "";
+          }
         }
       } else {
         setSelectedDocument(updatedDoc);
@@ -1035,6 +1071,22 @@ export default function DocumentManagementPage() {
       toast({ title: "Save failed", description: error.message, variant: "destructive" });
     },
   });
+
+  const buildDocumentMetadataWithHeaderFooter = useCallback((baseMetadata?: Record<string, unknown>) => ({
+    ...(baseMetadata || {}),
+    headerHtml: editHeaderContentRef.current.trim() ? editHeaderContentRef.current : null,
+    footerHtml: editFooterContentRef.current.trim() ? editFooterContentRef.current : null,
+  }), []);
+
+  const setEditHeaderContent = useCallback((val: string) => {
+    editHeaderContentRef.current = val;
+    setEditHeaderContentState(val);
+  }, []);
+
+  const setEditFooterContent = useCallback((val: string) => {
+    editFooterContentRef.current = val;
+    setEditFooterContentState(val);
+  }, []);
 
   const uploadFileMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -1097,6 +1149,7 @@ export default function DocumentManagementPage() {
       let imgIndex = 0;
 
       const importPrep = await prepareDocxImport(arrayBuffer);
+      const pageRegions = await extractDocxHeaderFooter(arrayBuffer);
       const combinedStyleMap = [
         ...(importPrep?.styleMapEntries ?? []),
         ...DOCX_MAMMOTH_STYLE_MAP,
@@ -1125,6 +1178,7 @@ export default function DocumentManagementPage() {
       );
 
       let html = applyDocxStyles(result.value || "", importPrep);
+      html = normalizeDocumentHtmlForEditor(html);
       html = html.replace(/<img[^>]*src=["'](?:\s*)["'][^>]*\/?>/gi, '');
       let imageFailCount = 0;
       for (const img of pendingImages) {
@@ -1165,10 +1219,20 @@ export default function DocumentManagementPage() {
       if (imageFailCount > 0) {
         setImportWarnings(prev => [...prev, `${imageFailCount} image(s) could not be imported`]);
       }
-      const title = file.name.replace(/\.docx$/i, '');
-      setImportTitle(title || "Imported Document");
+      const baseTitle = file.name.replace(/\.docx$/i, "") || "Imported Document";
+      const targetFolderId = selectedFolderId ?? (ALLOW_UNCATEGORISED_DOCS ? null : folders[0]?.id ?? null);
+      const existingDoc = findDocumentByTitleInFolder(allDocuments, baseTitle, targetFolderId);
+      setImportSourceTitle(baseTitle);
+      setImportConflictAction("keep_both");
+      setImportTitle(
+        existingDoc
+          ? suggestUniqueDocumentTitle(baseTitle, targetFolderId, allDocuments)
+          : baseTitle,
+      );
       setImportContent(html);
-      setImportFolderId(selectedFolderId ?? (ALLOW_UNCATEGORISED_DOCS ? null : folders[0]?.id ?? null));
+      setImportHeaderContent(pageRegions.headerHtml);
+      setImportFooterContent(pageRegions.footerHtml);
+      setImportFolderId(targetFolderId);
       const warnings = result.messages
         .filter((m: any) => m.type === "warning")
         .map((m: any) => m.message as string)
@@ -1183,19 +1247,42 @@ export default function DocumentManagementPage() {
       setIsImporting(false);
       if (docxInputRef.current) docxInputRef.current.value = "";
     }
-  }, [selectedFolderId, folders, toast]);
+  }, [selectedFolderId, folders, toast, allDocuments]);
 
   const deleteDocMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest("DELETE", `/api/documents/${id}`),
-    onSuccess: () => {
+    mutationFn: async (id: number) => {
+      try {
+        await apiRequest("DELETE", `/api/documents/${id}`);
+      } catch (err) {
+        if (err instanceof Error && err.message.startsWith("404:")) return;
+        throw err;
+      }
+    },
+    onSuccess: (_data, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedFolderId] });
       queryClient.invalidateQueries({ queryKey: ["/api/documents/all"] });
-      setSelectedDocument(null);
-      setHighlightedDocument(null);
-      setIsPreviewMode(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/recent"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/favorites"] });
+      if (selectedDocumentRef.current?.id === deletedId) {
+        setSelectedDocument(null);
+        setHighlightedDocument(null);
+        setIsPreviewMode(false);
+      }
       toast({ title: "Document deleted" });
     },
+    onError: (err) => {
+      toast({
+        title: "Failed to delete document",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    },
   });
+
+  const handleDeleteDocument = useCallback((id: number) => {
+    if (deleteDocMutation.isPending) return;
+    deleteDocMutation.mutate(id);
+  }, [deleteDocMutation]);
 
   const deleteFolderMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/documents/folders/${id}`),
@@ -1254,6 +1341,7 @@ export default function DocumentManagementPage() {
       if (!res.ok) throw new Error("Failed to generate public link");
       const data = await res.json() as { token: string };
       setPublicToken(data.token);
+      queryClient.invalidateQueries({ queryKey: ["/api/documents", shareDialogDocId, "access"] });
       toast({ title: "Public link created", description: "Anyone with this link can view the document (read-only)." });
     } catch {
       toast({ title: "Failed to generate public link", variant: "destructive" });
@@ -1268,6 +1356,7 @@ export default function DocumentManagementPage() {
     try {
       await fetchWithAuth(`/api/documents/${shareDialogDocId}/public-token`, { method: "DELETE" });
       setPublicToken(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/documents", shareDialogDocId, "access"] });
       toast({ title: "Public link revoked" });
     } catch { /* ignore */ } finally {
       setPublicLinkLoading(false);
@@ -1453,23 +1542,57 @@ export default function DocumentManagementPage() {
     setIsEditing(false);
     setIsPreviewMode(false);
     setIsFolderPanelOpen(true);
+    setIsDocumentFullScreen(false);
+    setEditHeaderContentState("");
+    setEditFooterContentState("");
+    editHeaderContentRef.current = "";
+    editFooterContentRef.current = "";
+  }, []);
+
+  const toggleDocumentFullScreen = useCallback(() => {
+    setIsDocumentFullScreen((prev) => {
+      const next = !prev;
+      if (next) setIsFolderPanelOpen(false);
+      return next;
+    });
   }, []);
 
   const saveDocumentContent = useCallback((doc: Document) => {
-    if (autoSaveTimer.current) {
-      clearTimeout(autoSaveTimer.current);
-      autoSaveTimer.current = null;
-    }
+    const metadata = buildDocumentMetadataWithHeaderFooter(
+      (doc.metadata as Record<string, unknown>) || {},
+    );
     if (doc.folderId != null) {
-      updateDocMutation.mutate({ id: doc.id, updates: { content: editContentRef.current }, silent: true });
+      updateDocMutation.mutate(
+        {
+          id: doc.id,
+          updates: {
+            content: editContentRef.current,
+            metadata: metadata as Document["metadata"],
+          },
+          silent: true,
+        },
+        { onSuccess: () => toast({ title: "Document saved" }) },
+      );
       return;
     }
     promptSaveLocation();
-  }, [promptSaveLocation, updateDocMutation]);
+  }, [buildDocumentMetadataWithHeaderFooter, promptSaveLocation, updateDocMutation, toast]);
 
   useEffect(() => {
     if (isNewDocOpen) setNewDocFolderId(newDocDefaultFolderId);
   }, [isNewDocOpen, newDocDefaultFolderId]);
+
+  useEffect(() => {
+    if (!selectedDocument) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === "F") {
+        e.preventDefault();
+        toggleDocumentFullScreen();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedDocument, toggleDocumentFullScreen]);
 
   useEffect(() => {
     if (isImportOpen && importFolderId == null && !ALLOW_UNCATEGORISED_DOCS) {
@@ -1504,37 +1627,28 @@ export default function DocumentManagementPage() {
     );
   };
 
-  // Keep refs in sync with state for use inside autosave closure
+  // Keep refs in sync when opening or switching documents
   useEffect(() => {
-    // Flush any pending save for the PREVIOUS document before switching
-    const prevDocId = selectedDocumentRef.current?.id;
-    if (prevDocId && selectedDocument?.id !== prevDocId) {
-      flushPendingSave(prevDocId);
-    } else if (autoSaveTimer.current) {
-      clearTimeout(autoSaveTimer.current);
-      autoSaveTimer.current = null;
-    }
+    const prevDocId = selectedDocumentRef.current?.id ?? null;
+    const nextDocId = selectedDocument?.id ?? null;
+
     selectedDocumentRef.current = selectedDocument;
     lastAutoSavedContent.current = selectedDocument?.content ?? "";
-    setAutoSaveStatus("idle");
-  }, [selectedDocument?.id, flushPendingSave]);
+
+    if (nextDocId !== prevDocId) {
+      const md = (selectedDocument?.metadata as Record<string, unknown>) || {};
+      const header = (md.headerHtml as string) || "";
+      const footer = (md.footerHtml as string) || "";
+      editHeaderContentRef.current = header;
+      editFooterContentRef.current = footer;
+      setEditHeaderContentState(header);
+      setEditFooterContentState(footer);
+    }
+  }, [selectedDocument?.id]);
 
   useEffect(() => {
     isEditingRef.current = isEditing;
-    if (!isEditing) {
-      flushPendingSave();
-      setAutoSaveStatus("idle");
-    }
-  }, [isEditing, flushPendingSave]);
-
-  // Save when the browser tab is hidden or closed
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") flushPendingSave();
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [flushPendingSave]);
+  }, [isEditing]);
 
   // Fetch users for @mention suggestions
   const { data: settingsUsers = [] } = useQuery<any[]>({
@@ -1743,7 +1857,7 @@ export default function DocumentManagementPage() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-destructive"
-          onClick={(e) => { e.stopPropagation(); deleteDocMutation.mutate(doc.id); }}
+          onClick={(e) => { e.stopPropagation(); handleDeleteDocument(doc.id); }}
         >
           <Trash2 className="h-4 w-4 mr-2" /> Delete
         </DropdownMenuItem>
@@ -2133,7 +2247,7 @@ export default function DocumentManagementPage() {
                             <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
                           </ContextMenuItem>
                           <ContextMenuSeparator />
-                          <ContextMenuItem className="text-destructive" onClick={() => deleteDocMutation.mutate(doc.id)}>
+                          <ContextMenuItem className="text-destructive" onClick={() => handleDeleteDocument(doc.id)}>
                             <Trash2 className="h-4 w-4 mr-2" /> Delete
                           </ContextMenuItem>
                         </ContextMenuContent>
@@ -2217,7 +2331,7 @@ export default function DocumentManagementPage() {
                                 <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
                               </ContextMenuItem>
                               <ContextMenuSeparator />
-                              <ContextMenuItem className="text-destructive" onClick={() => deleteDocMutation.mutate(doc.id)}>
+                              <ContextMenuItem className="text-destructive" onClick={() => handleDeleteDocument(doc.id)}>
                                 <Trash2 className="h-4 w-4 mr-2" /> Delete
                               </ContextMenuItem>
                             </ContextMenuContent>
@@ -2309,16 +2423,6 @@ export default function DocumentManagementPage() {
       <div className="flex flex-col h-full overflow-hidden">
         <div className="border-b px-3 sm:px-4 py-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-card sticky top-0 z-10 shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            {!isFolderPanelOpen && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsFolderPanelOpen(true)}
-                data-testid="button-open-folder-panel-detail"
-              >
-                <PanelLeft className="h-4 w-4" />
-              </Button>
-            )}
             <Button
               variant="ghost"
               size="icon"
@@ -2336,18 +2440,6 @@ export default function DocumentManagementPage() {
           <div className="flex items-center gap-1 shrink-0 overflow-x-auto max-w-full">
             {isEditing ? (
               <>
-                {autoSaveStatus === "saving" && (
-                  <span className="text-xs text-muted-foreground mr-1 flex items-center gap-1 shrink-0" data-testid="text-autosave-saving">
-                    <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-pulse inline-block" />
-                    <span className="hidden sm:inline">Saving…</span>
-                  </span>
-                )}
-                {autoSaveStatus === "saved" && (
-                  <span className="text-xs text-green-600 dark:text-green-400 mr-1 flex items-center gap-1 shrink-0" data-testid="text-autosave-saved">
-                    <Check className="h-3 w-3" />
-                    <span className="hidden sm:inline">Autosaved</span>
-                  </span>
-                )}
                 <Button
                   size="sm"
                   onClick={() => saveDocumentContent(selectedDocument)}
@@ -2486,17 +2578,31 @@ export default function DocumentManagementPage() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem 
                   className="text-destructive"
-                  onClick={() => { deleteDocMutation.mutate(selectedDocument.id); }}
+                  onClick={() => { handleDeleteDocument(selectedDocument.id); }}
                 >
                   <Trash2 className="h-4 w-4 mr-2" /> Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleDocumentFullScreen}
+              title={isDocumentFullScreen ? "Exit full screen (Ctrl+Shift+F)" : "Full screen (Ctrl+Shift+F)"}
+              data-testid="document-fullscreen-toggle"
+            >
+              {isDocumentFullScreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
           </div>
         </div>
 
         <ScrollArea className="flex-1">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div
+            className={cn(
+              "mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6",
+              isDocumentFullScreen ? "max-w-none w-full" : "max-w-4xl",
+            )}
+          >
             {selectedDocument.folderId == null && (
               <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-4 py-3">
                 <p className="text-sm text-blue-900 dark:text-blue-200">
@@ -2592,6 +2698,10 @@ export default function DocumentManagementPage() {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <DocumentAccessHeaderChip
+                  documentId={selectedDocument.id}
+                  onOpenMembers={() => setActiveTab("members")}
+                />
               </div>
             </div>
 
@@ -2630,9 +2740,17 @@ export default function DocumentManagementPage() {
                       </span>
                     )}
                   </TabsTrigger>
+                  <TabsTrigger
+                    value="members"
+                    className="shrink-0 text-xs sm:text-sm px-2.5 sm:px-3 text-red-600 data-[state=active]:text-red-700 data-[state=active]:shadow-sm"
+                    data-testid="tab-members"
+                  >
+                    Members
+                  </TabsTrigger>
                 </TabsList>
               </div>
 
+              {activeTab === "content" && (
               <div className="flex items-center justify-end gap-2 mb-3 pb-3 border-b" data-testid="inline-tags-section">
                 <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide shrink-0">Tags</span>
@@ -2713,8 +2831,15 @@ export default function DocumentManagementPage() {
                   </div>
                 )}
               </div>
+              )}
 
               <TabsContent value="content" className="mt-0">
+                <DocumentHeaderFooterEditor
+                  kind="header"
+                  content={editHeaderContent}
+                  onChange={setEditHeaderContent}
+                  editable={isEditing}
+                />
                 <Suspense fallback={<div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
                   <TipTapEditor
                     content={editContent}
@@ -2731,6 +2856,12 @@ export default function DocumentManagementPage() {
                     }}
                   />
                 </Suspense>
+                <DocumentHeaderFooterEditor
+                  kind="footer"
+                  content={editFooterContent}
+                  onChange={setEditFooterContent}
+                  editable={isEditing}
+                />
               </TabsContent>
 
               <TabsContent value="comments" className="mt-0">
@@ -2986,6 +3117,19 @@ export default function DocumentManagementPage() {
                     </div>
                   )}
                 </div>
+              </TabsContent>
+
+              <TabsContent value="members" className="mt-0">
+                <DocumentAccessSection
+                  documentId={selectedDocument.id}
+                  ownerId={selectedDocument.ownerId}
+                  orgUsers={settingsUsers.map((u: { id: string; email?: string; firstName?: string; lastName?: string }) => ({
+                    id: String(u.id),
+                    email: u.email,
+                    firstName: u.firstName,
+                    lastName: u.lastName,
+                  }))}
+                />
               </TabsContent>
 
               <TabsContent value="signoff" className="mt-0">
@@ -3759,7 +3903,7 @@ export default function DocumentManagementPage() {
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="text-destructive"
-                                onClick={(e) => { e.stopPropagation(); deleteDocMutation.mutate(doc.id); }}
+                                onClick={(e) => { e.stopPropagation(); handleDeleteDocument(doc.id); }}
                               >
                                 <Trash2 className="h-4 w-4 mr-2" /> Delete
                               </DropdownMenuItem>
@@ -3887,19 +4031,28 @@ export default function DocumentManagementPage() {
 
   if (foldersLoading && docsLoading) {
     return (
-      <div className="min-h-screen bg-background" data-testid="documents-page">
-        <Sidebar />
-        <main className={cn("transition-all duration-300 h-screen flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
+      <ModuleShell className="min-h-screen bg-background" testId="documents-page" mainClassName="h-screen flex flex-col overflow-hidden">
           <DocumentsPageSkeleton />
-        </main>
-      </div>
+      </ModuleShell>
     );
   }
 
+  const inDocumentFocus = isDocumentFullScreen && !!selectedDocument;
+
   return (
-    <div className="min-h-screen bg-background" data-testid="documents-page">
-      <Sidebar />
-      <main className={cn("transition-all duration-300 h-screen flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
+    <>
+    <ModuleShell
+      className="min-h-screen bg-background"
+      testId="documents-page"
+      showSidebar={!inDocumentFocus}
+      fullBleed={inDocumentFocus}
+      mainClassName={cn(
+        "h-screen flex flex-col overflow-hidden",
+        inDocumentFocus && "fixed inset-0 z-50 bg-background",
+      )}
+    >
+        {!inDocumentFocus && (
+        <>
         <div className="px-3 sm:px-4 pt-3 sm:pt-4 hidden md:block">
           <ModuleWelcomeBanner moduleKey="documents" features={["Rich text editing", "Version control", "Folder hierarchy", "Access control"]} />
         </div>
@@ -4212,8 +4365,14 @@ export default function DocumentManagementPage() {
             </div>
           </div>
         </header>
+        </>
+        )}
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
+          {inDocumentFocus ? (
+            renderDocumentView()
+          ) : (
+          <>
           {!isMobile && !isFolderPanelOpen && (
             <div className="w-10 shrink-0 border-r bg-muted/30 flex flex-col items-center pt-2 gap-1">
               <Button
@@ -4256,8 +4415,10 @@ export default function DocumentManagementPage() {
               </ResizablePanel>
             </ResizablePanelGroup>
           )}
+          </>
+          )}
         </div>
-      </main>
+    </ModuleShell>
 
       <Dialog open={!!renamingFolder} onOpenChange={(open) => { if (!open) setRenamingFolder(null); else if (renamingFolder) setRenamingFolderColor(renamingFolder.color || "#f97316"); }}>
         <DialogContent>
@@ -4483,13 +4644,15 @@ export default function DocumentManagementPage() {
                 variant="secondary"
                 onClick={() => {
                   if (!selectedDocument) return;
-                  if (autoSaveTimer.current) {
-                    clearTimeout(autoSaveTimer.current);
-                    autoSaveTimer.current = null;
-                  }
+                  const metadata = buildDocumentMetadataWithHeaderFooter(
+                    (selectedDocument.metadata as Record<string, unknown>) || {},
+                  );
                   updateDocMutation.mutate({
                     id: selectedDocument.id,
-                    updates: { content: editContentRef.current },
+                    updates: {
+                      content: editContentRef.current,
+                      metadata: metadata as Document["metadata"],
+                    },
                     silent: true,
                   });
                   setIsSaveLocationOpen(false);
@@ -4508,11 +4671,13 @@ export default function DocumentManagementPage() {
                   toast({ title: "Folder required", description: "Please choose a folder.", variant: "destructive" });
                   return;
                 }
-                if (autoSaveTimer.current) {
-                  clearTimeout(autoSaveTimer.current);
-                  autoSaveTimer.current = null;
-                }
-                const updates: Partial<Document> = { content: editContentRef.current };
+                const metadata = buildDocumentMetadataWithHeaderFooter(
+                  (selectedDocument.metadata as Record<string, unknown>) || {},
+                );
+                const updates: Partial<Document> = {
+                  content: editContentRef.current,
+                  metadata: metadata as Document["metadata"],
+                };
                 if (saveLocationTitle.trim()) {
                   updates.title = saveLocationTitle.trim();
                 }
@@ -4609,20 +4774,26 @@ export default function DocumentManagementPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+      <Dialog
+        open={isImportOpen}
+        onOpenChange={(open) => {
+          setIsImportOpen(open);
+          if (!open) resetImportDialog();
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Import Word Document</DialogTitle>
             <DialogDescription>
-              Review the title and choose a destination folder. Word import supports headings, lists, tables, and images; complex styles, headers/footers, and some embedded objects may not convert fully.
+              Review the title and choose a destination folder. Word import supports headings, lists, tables, images, and header/footer text; complex styles and some embedded objects may not convert fully.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
             <p className="font-medium text-foreground">Before you import</p>
             <ul className="list-disc pl-4 space-y-0.5">
-              <li>Supported: headings, paragraphs, lists, basic tables, hyperlinks, most inline images</li>
+              <li>Supported: headings, paragraphs, lists, basic tables, hyperlinks, header/footer text, most inline images</li>
               <li>May simplify: multi-column layouts, text boxes, TOC fields, custom Word styles</li>
-              <li>Not imported: headers, footers, page numbers, macros, EMF/WMF images</li>
+              <li>Not imported: page-number fields, macros, EMF/WMF images</li>
               <li>Maximum file size: 25 MB</li>
             </ul>
           </div>
@@ -4633,14 +4804,65 @@ export default function DocumentManagementPage() {
                 value={importTitle}
                 onChange={(e) => setImportTitle(e.target.value)}
                 placeholder="Enter document title"
+                disabled={importConflictAction === "replace" && !!importNameConflict}
                 data-testid="input-import-title"
               />
+              {importTitleDuplicate && (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  This title is already used in the selected folder. A numbered copy name will be used on import.
+                </p>
+              )}
             </div>
+            {importNameConflict && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-3 text-sm space-y-3">
+                <div className="flex gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-amber-900 dark:text-amber-100">Name already exists</p>
+                    <p className="text-amber-800 dark:text-amber-200 text-xs mt-1">
+                      A document named <span className="font-medium">&quot;{importNameConflict.title}&quot;</span> already exists in this folder.
+                    </p>
+                  </div>
+                </div>
+                <RadioGroup
+                  value={importConflictAction}
+                  onValueChange={(value) => handleImportConflictActionChange(value as DocumentImportConflictAction)}
+                  className="space-y-2"
+                  data-testid="import-name-conflict-options"
+                >
+                  <div className="flex items-start gap-2">
+                    <RadioGroupItem value="keep_both" id="import-keep-both" className="mt-0.5" />
+                    <Label htmlFor="import-keep-both" className="font-normal leading-snug cursor-pointer">
+                      Import as a new copy
+                      <span className="block text-xs text-muted-foreground">
+                        Keeps the existing document and saves this file under a new name.
+                      </span>
+                    </Label>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <RadioGroupItem value="replace" id="import-replace" className="mt-0.5" />
+                    <Label htmlFor="import-replace" className="font-normal leading-snug cursor-pointer">
+                      Replace existing document
+                      <span className="block text-xs text-muted-foreground">
+                        Overwrites the content of &quot;{importNameConflict.title}&quot;. Previous content is kept in version history.
+                      </span>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            )}
+            {(importHeaderContent || importFooterContent) && (
+              <div className="rounded-md border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30 p-3 text-xs space-y-1">
+                <p className="font-medium text-green-800 dark:text-green-200">Header &amp; footer detected</p>
+                {importHeaderContent && <p className="text-green-700 dark:text-green-300">Header text will be preserved.</p>}
+                {importFooterContent && <p className="text-green-700 dark:text-green-300">Footer text will be preserved.</p>}
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Save location</Label>
               <Select
                 value={folderSelectValue(importFolderId)}
-                onValueChange={(val) => setImportFolderId(parseFolderSelectValue(val))}
+                onValueChange={(val) => handleImportFolderChange(parseFolderSelectValue(val))}
               >
                 <SelectTrigger data-testid="select-import-folder">
                   <SelectValue placeholder="Choose save location" />
@@ -4675,22 +4897,38 @@ export default function DocumentManagementPage() {
                 }
                 setIsImporting(true);
                 try {
-                  const createRes = await apiRequest("POST", "/api/documents", {
-                    title: importTitle.trim(),
-                    type: "document",
-                    folderId: importFolderId,
-                    content: "",
-                    tenantId: 1,
-                    status: "draft",
-                  });
-                  const newDoc = await createRes.json();
+                  const replaceTarget = importConflictAction === "replace" ? importNameConflict : null;
+                  let targetDocId: number;
+                  let importedTitle = importTitle.trim();
+                  let didReplace = false;
+
+                  if (replaceTarget) {
+                    targetDocId = replaceTarget.id;
+                    importedTitle = replaceTarget.title;
+                    didReplace = true;
+                  } else {
+                    if (findDocumentByTitleInFolder(allDocuments, importedTitle, importFolderId)) {
+                      importedTitle = suggestUniqueDocumentTitle(importedTitle, importFolderId, allDocuments);
+                    }
+                    const createRes = await apiRequest("POST", "/api/documents", {
+                      title: importedTitle,
+                      type: "document",
+                      folderId: importFolderId,
+                      content: "",
+                      tenantId: 1,
+                      status: "draft",
+                    });
+                    const newDoc = await createRes.json();
+                    targetDocId = newDoc.id;
+                  }
+
                   let contentRes: Response | null = null;
                   for (let attempt = 0; attempt < 3; attempt++) {
                     try {
                       const contentBlob = new Blob([importContent], { type: "text/html" });
                       const formData = new FormData();
                       formData.append("content", contentBlob, "content.html");
-                      contentRes = await fetchWithAuth(`/api/documents/${newDoc.id}/content`, {
+                      contentRes = await fetchWithAuth(`/api/documents/${targetDocId}/content`, {
                         method: "POST",
                         body: formData,
                       });
@@ -4700,25 +4938,46 @@ export default function DocumentManagementPage() {
                     }
                   }
                   if (!contentRes || !contentRes.ok) throw new Error("Failed to save content");
+
+                  const savedDoc = await contentRes.json();
+                  let fullDoc = savedDoc;
+                  if (importHeaderContent.trim() || importFooterContent.trim()) {
+                    const metaRes = await apiRequest("PUT", `/api/documents/${targetDocId}`, {
+                      metadata: {
+                        ...(savedDoc.metadata || {}),
+                        headerHtml: importHeaderContent.trim() || null,
+                        footerHtml: importFooterContent.trim() || null,
+                      },
+                    });
+                    fullDoc = await metaRes.json();
+                  }
                   queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedFolderId] });
                   queryClient.invalidateQueries({ queryKey: ["/api/documents/all"] });
                   queryClient.invalidateQueries({ queryKey: ["/api/documents/recent"] });
                   if (importFolderId !== null && importFolderId !== selectedFolderId) {
                     queryClient.invalidateQueries({ queryKey: ["/api/documents", importFolderId] });
                   }
-                  const savedDoc = await contentRes.json();
                   lastAutoSavedContent.current = importContent;
-                  setSelectedDocument(savedDoc);
+                  setSelectedDocument(fullDoc);
                   setIsEditing(true);
                   setIsPreviewMode(false);
                   setEditContent(importContent);
+                  const headerFromDoc = (fullDoc.metadata as Record<string, unknown> | undefined)?.headerHtml as string || importHeaderContent;
+                  const footerFromDoc = (fullDoc.metadata as Record<string, unknown> | undefined)?.footerHtml as string || importFooterContent;
+                  setEditHeaderContentState(headerFromDoc);
+                  setEditFooterContentState(footerFromDoc);
+                  editHeaderContentRef.current = headerFromDoc;
+                  editFooterContentRef.current = footerFromDoc;
                   setActiveTab("content");
                   setSelectedFile(null);
-                  toast({ title: "Document imported successfully" });
+                  toast({
+                    title: didReplace ? "Document replaced" : "Document imported successfully",
+                    description: didReplace
+                      ? `"${importedTitle}" was updated with the imported content.`
+                      : `"${importedTitle}" was added to your library.`,
+                  });
                   setIsImportOpen(false);
-                  setImportContent("");
-                  setImportTitle("");
-                  setImportWarnings([]);
+                  resetImportDialog();
                 } catch (err: any) {
                   toast({ title: "Import failed", description: err.message || "Failed to save document", variant: "destructive" });
                 } finally {
@@ -4727,8 +4986,11 @@ export default function DocumentManagementPage() {
               }}
               disabled={!importTitle.trim() || !importContent || (!ALLOW_UNCATEGORISED_DOCS && importFolderId == null) || isImporting}
               data-testid="button-confirm-import"
+              variant={importConflictAction === "replace" && importNameConflict ? "destructive" : "default"}
             >
-              {isImporting ? "Importing..." : "Import"}
+              {isImporting
+                ? (importConflictAction === "replace" && importNameConflict ? "Replacing..." : "Importing...")
+                : (importConflictAction === "replace" && importNameConflict ? "Replace" : "Import")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4987,7 +5249,7 @@ export default function DocumentManagementPage() {
           </Tabs>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
 

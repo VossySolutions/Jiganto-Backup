@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Sidebar } from "@/components/Sidebar";
-import { useShellLayout } from "@/hooks/use-shell-layout";
+import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -45,7 +44,6 @@ export function WhiteboardCanvasPage() {
   const [, params] = useRoute("/modules/whiteboarding/:id");
   const boardId = Number(params?.id);
   const [, navigate] = useLocation();
-  const { mainOffset, mobileTopOffset } = useShellLayout();
   const { toast } = useToast();
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -167,20 +165,15 @@ export function WhiteboardCanvasPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background wb-page">
-        <Sidebar />
-        <div className={cn("flex flex-col min-h-screen", mainOffset, mobileTopOffset)}>
+      <ModuleShell className="min-h-screen bg-background wb-page" mainClassName="flex flex-col min-h-screen">
           <WhiteboardCanvasSkeleton />
-        </div>
-      </div>
+      </ModuleShell>
     );
   }
 
   if (isError || !board) {
     return (
-      <div className="min-h-screen bg-background wb-page">
-        <Sidebar />
-        <div className={cn("flex flex-col min-h-screen items-center justify-center p-6", mainOffset, mobileTopOffset)}>
+      <ModuleShell className="min-h-screen bg-background wb-page" mainClassName="flex flex-col min-h-screen items-center justify-center p-6">
           <div className="wb-error-state max-w-md w-full">
             <p className="font-medium text-destructive mb-1">
               {error && apiErrorMessage(error).includes("404") ? "Whiteboard not found" : "Could not load whiteboard"}
@@ -193,8 +186,7 @@ export function WhiteboardCanvasPage() {
               <Button size="sm" onClick={() => navigate("/modules/whiteboarding")}>Back to list</Button>
             </div>
           </div>
-        </div>
-      </div>
+      </ModuleShell>
     );
   }
 
@@ -207,9 +199,8 @@ export function WhiteboardCanvasPage() {
   ].slice(0, 6);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col wb-page h-[100dvh] overflow-hidden">
-      <Sidebar />
-      <div className={cn("flex flex-col flex-1 min-h-0", mainOffset, mobileTopOffset)}>
+    <>
+    <ModuleShell className="min-h-screen bg-background flex flex-col wb-page h-[100dvh] overflow-hidden" mainClassName="flex flex-col flex-1 min-h-0">
         <header className="wb-header">
           <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8" onClick={() => navigate("/modules/whiteboarding")} data-testid="wb-back">
             <ArrowLeft className="h-4 w-4" />
@@ -346,7 +337,7 @@ export function WhiteboardCanvasPage() {
             onZoomChange={setZoomLabel}
           />
         </div>
-      </div>
+    </ModuleShell>
 
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="sm:max-w-md">
@@ -514,6 +505,6 @@ export function WhiteboardCanvasPage() {
           defaultDescription={board.description ?? ""}
         />
       )}
-    </div>
+    </>
   );
 }

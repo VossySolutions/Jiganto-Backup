@@ -8,8 +8,7 @@ import { CrmUsersProvider } from "@/components/crm/CrmUsersProvider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Sidebar } from "@/components/Sidebar";
-import { useShellLayout } from "@/hooks/use-shell-layout";
+import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
 import {
   Building2, Users, Target, TrendingUp,
@@ -299,7 +298,6 @@ function CRMPageContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAccount, setSelectedAccount] = useState<CrmAccount | null>(null);
   const tabsListRef = useRef<HTMLDivElement>(null);
-  const { mainOffset, mobileTopOffset } = useShellLayout();
 
   const { data: dashboardStats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/crm/dashboard-stats"],
@@ -357,15 +355,12 @@ function CRMPageContent() {
 
   if (isLoading) {
     return (
-      <div className="h-screen overflow-hidden bg-background" data-testid="crm-loading">
-        <Sidebar />
-        <main className={cn("transition-all duration-300 h-full flex items-center justify-center overflow-hidden", mainOffset, mobileTopOffset)}>
+      <ModuleShell className="h-screen overflow-hidden bg-background" testId="crm-loading" mainClassName="h-full flex items-center justify-center overflow-hidden">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 text-[#0ea5e9] animate-spin" />
             <p className="text-sm text-muted-foreground">Loading CRM...</p>
           </div>
-        </main>
-      </div>
+      </ModuleShell>
     );
   }
 
@@ -384,9 +379,7 @@ function CRMPageContent() {
   ];
 
   return (
-    <div className="h-screen overflow-hidden bg-background" data-testid="crm-page">
-      <Sidebar />
-      <main className={cn("transition-all duration-300 h-full flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
+    <ModuleShell className="h-screen overflow-hidden bg-background" testId="crm-page" mainClassName="h-full flex flex-col overflow-hidden">
         <div className="px-3 sm:px-4 pt-3 sm:pt-4 hidden md:block">
           <ModuleWelcomeBanner moduleKey="crm" features={["Pipeline management", "Lead tracking", "Sales forecasting", "Activity analytics"]} />
         </div>
@@ -506,7 +499,6 @@ function CRMPageContent() {
             </>
           )}
         </div>
-      </main>
-    </div>
+    </ModuleShell>
   );
 }

@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { Sidebar } from "@/components/Sidebar";
+import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { useShellLayout } from "@/hooks/use-shell-layout";
 import { cn } from "@/lib/utils";
 import { RP_ACCENT } from "@/components/resource-planning/ui";
 import { RpPersonaProvider, type RpPersonaId } from "@/components/resource-planning/persona-context";
@@ -73,7 +72,6 @@ function ResourcePlanningInner({ persona, setPersona }: { persona: RpPersonaId; 
     : "exec";
   const [activeTab, setActiveTab] = useState(initialTab);
   const [searchTerm, setSearchTerm] = useState("");
-  const { mainOffset, mobileTopOffset } = useShellLayout();
   const { data: dash, isLoading: dashLoading } = useRpDashboard();
   const { data: recruit } = useRpRecruitment();
   const { data: pipeline } = useRpPipeline();
@@ -102,9 +100,7 @@ function ResourcePlanningInner({ persona, setPersona }: { persona: RpPersonaId; 
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-background" data-testid="resource-planning-page">
-      <Sidebar />
-      <main className={cn("transition-all duration-300 h-full flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
+    <ModuleShell className="h-screen overflow-hidden bg-background" testId="resource-planning-page" mainClassName="h-full flex flex-col overflow-hidden">
         <div className="px-3 sm:px-4 pt-3 sm:pt-4 hidden md:block">
           <ModuleWelcomeBanner
             moduleKey="resource-planning"
@@ -194,7 +190,6 @@ function ResourcePlanningInner({ persona, setPersona }: { persona: RpPersonaId; 
             <TabsContent value="scenario" className={TAB_CONTENT_CLASS}><ScenarioPlanningTab /></TabsContent>
           </Tabs>
         </div>
-      </main>
-    </div>
+    </ModuleShell>
   );
 }

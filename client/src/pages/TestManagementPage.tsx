@@ -2,8 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { Sidebar } from "@/components/Sidebar";
-import { useShellLayout } from "@/hooks/use-shell-layout";
+import { ModuleShell } from "@/components/ModuleShell";
 import { TmProjectProvider, useTmProject } from "@/contexts/TmProjectContext";
 import { CommandCentreScreen } from "@/components/testmgmt/CommandCentreScreen";
 import { TestCasesScreen } from "@/components/testmgmt/TestCasesScreen";
@@ -223,7 +222,6 @@ function NavPanel({ activeScreen, onNavigate }: { activeScreen: TmScreen; onNavi
 function TestManagementInner() {
   const [activeScreen, setActiveScreen] = useState<TmScreen>("command-centre");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const { mainMargin, mobileTopOffset } = useShellLayout();
   const { activeProject, isLoading: projectLoading } = useTmProject();
 
   const navigate = (screen: TmScreen) => {
@@ -256,9 +254,7 @@ function TestManagementInner() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar />
-      <div className={cn("flex flex-1 flex-col lg:flex-row h-screen overflow-hidden transition-all duration-300", mainMargin, mobileTopOffset)}>
+    <ModuleShell className="flex h-screen overflow-hidden bg-background" mainClassName="flex flex-1 flex-col lg:flex-row h-screen overflow-hidden">
         {/* Desktop sidebar */}
         <div className="hidden lg:flex w-[220px] min-w-[220px] border-r border-border bg-card flex-col overflow-hidden">
           <NavPanel activeScreen={activeScreen} onNavigate={navigate} />
@@ -288,8 +284,7 @@ function TestManagementInner() {
             {renderScreen(activeScreen)}
           </TmScreenShell>
         </div>
-      </div>
-    </div>
+    </ModuleShell>
   );
 }
 

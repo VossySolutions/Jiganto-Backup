@@ -336,3 +336,30 @@ export type InsertDocumentTemplate = z.infer<typeof insertDocumentTemplateSchema
 export type InsertDocumentInitiativeLink = z.infer<typeof insertDocumentInitiativeLinkSchema>;
 export type DocumentFile = typeof documentFiles.$inferSelect;
 export type InsertDocumentFile = z.infer<typeof insertDocumentFileSchema>;
+
+/** Resolved access entry for document Properties → User Access (Problem 4). */
+export type DocumentAccessPermission = "owner" | (typeof permissionLevelEnum)[number];
+
+export type DocumentAccessSource = "owner" | "document" | "folder" | "public";
+
+export type DocumentAccessEntry = {
+  /** Stable row id: owner | acl-{id} | folder-acl-{id} | public */
+  id: string;
+  aclId?: number;
+  subjectType: "user" | "public";
+  subjectId: string;
+  displayName: string;
+  email: string | null;
+  permission: DocumentAccessPermission;
+  source: DocumentAccessSource;
+  sourceLabel?: string | null;
+  grantedAt?: string | null;
+  expiresAt?: string | null;
+  editable: boolean;
+};
+
+export type DocumentAccessSummary = {
+  documentId: number;
+  publicLinkEnabled: boolean;
+  entries: DocumentAccessEntry[];
+};

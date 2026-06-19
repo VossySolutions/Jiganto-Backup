@@ -26,6 +26,7 @@ import type {
   HealthBand,
   InvoiceRow,
   TrialRow,
+  ScheduledCheckInRow,
 } from "@shared/models/customer-mgmt";
 import { sendGrantAccessEmail } from "./grant-email";
 import { resolveLiveUsage, planUsageLimits } from "./usage";
@@ -291,6 +292,38 @@ async function enrichCustomersWithLiveHealth(
   return metrics;
 }
 
+export async function loadScheduledCheckIns(): Promise<ScheduledCheckInRow[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = await db
+    .select({
+      log: commercialActivityLog,
+      customer: commercialCustomers,
+    })
+    .from(commercialActivityLog)
+    .innerJoin(commercialCustomers, eq(commercialActivityLog.customerId, commercialCustomers.id))
+    .where(eq(commercialActivityLog.entryType, "scheduled_check_in"))
+    .orderBy(asc(commercialActivityLog.entryDate));
+
+  return rows
+    .filter(({ log }) => log.entryDate != null)
+    .map(({ log, customer }) => ({
+      id: String(log.id),
+      customerId: customer.externalId,
+      customerSlug: customer.slug,
+      customerName: customer.name,
+      initials: customer.initials,
+      avatarColor: customer.avatarColor,
+      scheduledDate: log.entryDate!,
+      note: log.detail,
+      csmName: customer.csmName ?? "Unassigned",
+      isOverdue: log.entryDate! < today,
+    }))
+    .sort((a, b) => {
+      if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+      return a.scheduledDate.localeCompare(b.scheduledDate);
+    });
+}
+
 export async function loadDashboardFromDb(): Promise<CustomerMgmtDashboard> {
   const [settings, customerRows, grantRows, programmeRows, invoiceRows, discountRows] =
     await Promise.all([
@@ -376,7 +409,7 @@ export async function loadDashboardFromDb(): Promise<CustomerMgmtDashboard> {
     automatic: d.automatic,
   }));
 
-  return computeDashboardMetrics({
+  const dashboard = computeDashboardMetrics({
     customers,
     trials,
     programmes,
@@ -385,6 +418,14 @@ export async function loadDashboardFromDb(): Promise<CustomerMgmtDashboard> {
     settings,
     activityByExternalId,
   });
+
+  return {
+    ...dashboard,
+    health: {
+      ...dashboard.health,
+      scheduledCheckIns: await loadScheduledCheckIns(),
+    },
+  };
 }
 
 export async function loadCustomerDetailFromDb(slug: string): Promise<CustomerDetail | null> {

@@ -5,7 +5,7 @@ import crypto from "crypto";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, and, isNull, inArray } from "drizzle-orm";
-import { setupAuth, registerAuthRoutes, registerPermissionsRoutes } from "./auth";
+import { setupAuth, registerAuthRoutes, registerPermissionsRoutes, isAuthenticated } from "./auth";
 import {
   attachPermissionContext,
   enforceOrgMembershipAccess,
@@ -5592,11 +5592,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     },
   });
 
-  app.post("/api/documents/upload-image", (req: any, res, next) => {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    next();
-  }, imageUpload.single("image"), (req: any, res) => {
+  app.post("/api/documents/upload-image", isAuthenticated, imageUpload.single("image"), (req: any, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
     const url = `/uploads/${req.file.filename}`;
     res.json({ url });
@@ -6218,12 +6214,17 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   });
 
   app.delete("/api/documents/:id", async (req, res) => {
+    if (!/^\d+$/.test(req.params.id)) {
+      return res.status(400).json({ message: "Invalid document id" });
+    }
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    
-    const doc = await storage.getDocument(Number(req.params.id));
-    if (!doc) return res.status(404).json({ message: "Document not found" });
-    
+
+    const id = Number(req.params.id);
+    const doc = await storage.getDocument(id);
+    if (!doc) return res.status(204).send();
+    if (!assertRecordInWorkspace(req, res, doc.clientId)) return;
+
     // Audit log before deletion
     await storage.createDocumentAuditLog({
       tenantId: doc.tenantId,
@@ -6232,8 +6233,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       action: "delete",
       details: { title: doc.title },
     });
-    
-    await storage.deleteDocument(Number(req.params.id));
+
+    await storage.deleteDocument(id);
     res.status(204).send();
   });
 
@@ -6343,6 +6344,15 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   });
 
   // Document Access Control
+  app.get("/api/documents/:id/access", async (req, res, next) => {
+    if (!/^\d+$/.test(req.params.id)) return next();
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const summary = await storage.getDocumentAccessSummary(Number(req.params.id));
+    if (!summary) return res.status(404).json({ message: "Document not found" });
+    res.json(summary);
+  });
+
   app.get("/api/documents/:id/acl", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });

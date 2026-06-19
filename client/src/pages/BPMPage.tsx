@@ -17,8 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import MondayTable, { type ColumnDef, type GroupDef, defaultStatusColors } from "@/components/MondayTable";
 import { useToast } from "@/hooks/use-toast";
-import { Sidebar } from "@/components/Sidebar";
-import { useShellLayout } from "@/hooks/use-shell-layout";
+import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
@@ -3069,7 +3068,6 @@ function ProcessPortal() {
 }
 
 export default function BPMPage() {
-  const { mainOffset, mobileTopOffset } = useShellLayout();
   const { toast } = useToast();
   const [view, setView] = useState<"catalogue" | "editor" | "compare">("catalogue");
   const [compareAsIsId, setCompareAsIsId] = useState<number | null>(null);
@@ -3421,12 +3419,12 @@ export default function BPMPage() {
   }, [userTemplates, libraries]);
 
   return (
-    <div className="h-screen bg-background">
-      {view === "catalogue" && <Sidebar />}
-      <div className={cn(
-        "flex flex-col h-full min-w-0 transition-all duration-300",
-        view === "catalogue" ? cn(mainOffset, mobileTopOffset) : ""
-      )}>
+    <ModuleShell
+      className="h-screen bg-background"
+      showSidebar={view === "catalogue"}
+      fullBleed={view !== "catalogue"}
+      mainClassName="flex flex-col h-full min-w-0"
+    >
         {view === "catalogue" && (
           <>
             <div className="px-4 pt-4">
@@ -3529,7 +3527,6 @@ export default function BPMPage() {
             />
           </Suspense>
         ) : null}
-      </div>
 
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="sm:max-w-[540px]">
@@ -4185,6 +4182,6 @@ export default function BPMPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </ModuleShell>
   );
 }

@@ -13,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { SubmitForm } from "@/components/ui/submit-form";
 import {
@@ -140,18 +139,40 @@ export function ClientFormDialog({ open, onClose, editing, siMembers = [] }: Pro
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
-        <SubmitForm onSubmit={handleSubmit} disabled={!form.name.trim() || isPending}>
-          <DialogHeader>
-            <DialogTitle>{editing ? "Edit Client Workspace" : "Add Client Workspace"}</DialogTitle>
-            <DialogDescription>
-              {editing
-                ? "Update workspace details and engagement settings."
-                : "Create a new customer workspace to scope data by client."}
-            </DialogDescription>
-          </DialogHeader>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[520px] max-h-[90vh] flex flex-col gap-0 overflow-hidden p-0">
+        <SubmitForm onSubmit={handleSubmit} disabled={!form.name.trim() || isPending} className="flex min-h-0 flex-1 flex-col">
+          <div className="shrink-0 space-y-4 border-b border-border/60 px-6 pt-6 pb-4">
+            <DialogHeader className="space-y-1.5 text-left">
+              <DialogTitle>{editing ? "Edit Client Workspace" : "Add Client Workspace"}</DialogTitle>
+              <DialogDescription>
+                {editing
+                  ? "Update workspace details and engagement settings."
+                  : "Create a new customer workspace to scope data by client."}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                disabled={isPending}
+                className="w-full sm:w-auto"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                data-testid="button-save-client"
+                className="w-full sm:w-auto"
+                disabled={isPending}
+              >
+                {isPending ? "Saving…" : editing ? "Save Changes" : "Create Client"}
+              </Button>
+            </div>
+          </div>
 
-          <div className="space-y-4 py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Client Name <span className="text-destructive">*</span></Label>
               <Input
@@ -299,13 +320,7 @@ export function ClientFormDialog({ open, onClose, editing, siMembers = [] }: Pro
               </>
             )}
           </div>
-
-          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
-            <Button type="button" variant="outline" onClick={onClose} disabled={isPending} className="w-full sm:w-auto">Cancel</Button>
-            <Button type="submit" data-testid="button-save-client" className="w-full sm:w-auto" disabled={isPending}>
-              {isPending ? "Saving…" : editing ? "Save Changes" : "Create Client"}
-            </Button>
-          </DialogFooter>
+          </div>
         </SubmitForm>
       </DialogContent>
     </Dialog>

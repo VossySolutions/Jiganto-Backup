@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo, t
 import { useLocation } from "wouter";
 import { DASHBOARD_PATH } from "@shared/app-routes";
 import { useToast } from "@/hooks/use-toast";
+import { isTypingInEditableField } from "@/lib/utils";
 import { useReadOnly } from "@/hooks/use-read-only";
 import { useClientContext } from "@/hooks/use-client-context";
 import { isCommandActionAllowedInWorkspace, NAV_ACTION_PATHS } from "@/lib/workspace-nav-filter";
@@ -409,11 +410,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const isInputFocused =
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable;
+      if (e.isComposing) return;
 
       // Ctrl+K / ⌘K → command palette (works on all browsers)
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
@@ -431,8 +428,11 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Don't intercept when user is typing in an input
-      if (isInputFocused) return;
+      // Don't intercept when user is typing in an input or rich-text editor
+      if (isTypingInEditableField(e.target)) {
+        clearPrefix();
+        return;
+      }
 
       // ── Prefix key pressed (G or N) ──────────────────────────────────
       if ((e.key === "g" || e.key === "n") && !e.ctrlKey && !e.metaKey && !e.altKey) {

@@ -3,8 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sidebar } from "@/components/Sidebar";
-import { useShellLayout } from "@/hooks/use-shell-layout";
+import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, PieChart, Pie, Cell,
@@ -1007,7 +1006,6 @@ function ResponseModal({ response, survey, idx, total, onNav, onClose }: {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function SurveysPage() {
-  const { mainOffset, mobileTopOffset } = useShellLayout();
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -1240,9 +1238,7 @@ export default function SurveysPage() {
   // RENDER: DASHBOARD
   // ════════════════════════════════════════════════════════════════════════════
   if (view === "dashboard") return (
-    <div className="h-screen overflow-hidden bg-background flex">
-      <Sidebar />
-      <main className={cn("transition-all duration-300 h-full overflow-y-auto flex-1 w-full min-w-0", mainOffset, mobileTopOffset)}>
+    <ModuleShell className="h-screen overflow-hidden bg-background flex" mainClassName="h-full overflow-y-auto flex-1 w-full min-w-0">
         <div className="survey-page-wrap">
           <SurveyAiTokenBanner />
           {/* Header */}
@@ -1429,8 +1425,7 @@ export default function SurveysPage() {
 
         {wizardOpen && <NewSurveyWizard onClose={() => setWizardOpen(false)} onCreated={id => { setWizardOpen(false); setActiveSurveyId(id); openBuilder(surveys.find(s => s.id === id) || { id, title: "", questions: [], responseCount: 0 } as any); }} />}
         {shareModal && <ShareModal survey={shareModal} onClose={() => setShareModal(null)} />}
-      </main>
-    </div>
+    </ModuleShell>
   );
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -1441,9 +1436,8 @@ export default function SurveysPage() {
     const panelClass = (panel: typeof builderMobilePanel) =>
       cn("survey-builder-panel", panel === builderMobilePanel ? "survey-builder-panel--active-mobile" : "survey-builder-panel--hidden-mobile");
     return (
-      <div className="h-screen overflow-hidden bg-background flex">
-        <Sidebar />
-        <main className={cn("transition-all duration-300 h-full overflow-hidden flex flex-col", mainOffset, mobileTopOffset)}>
+      <>
+      <ModuleShell className="h-screen overflow-hidden bg-background flex" mainClassName="h-full overflow-hidden flex flex-col">
           {/* Top bar */}
           <div className="survey-builder-topbar" style={{ background: "#fff", borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
@@ -1595,9 +1589,9 @@ export default function SurveysPage() {
             </div>
           </div>
           )}
-        </main>
+    </ModuleShell>
         {shareModal && <ShareModal survey={shareModal} onClose={() => setShareModal(null)} />}
-      </div>
+      </>
     );
   }
 
@@ -1607,12 +1601,9 @@ export default function SurveysPage() {
   if (view === "results" && (!activeSurvey || surveyDetailLoading || responsesLoading)) {
     const loadingLabel = !activeSurvey || surveyDetailLoading ? "Loading survey…" : "Loading responses…";
     return (
-      <div className="h-screen overflow-hidden bg-background flex">
-        <Sidebar />
-        <main className={cn("survey-page-loading-main transition-all duration-300 h-full overflow-hidden", mainOffset, mobileTopOffset)}>
+      <ModuleShell className="h-screen overflow-hidden bg-background flex" mainClassName="survey-page-loading-main h-full overflow-hidden">
           <SurveyLoadingState label={loadingLabel} size="lg" />
-        </main>
-      </div>
+      </ModuleShell>
     );
   }
 
@@ -1652,9 +1643,7 @@ export default function SurveysPage() {
     const viewingResp = responseModal != null ? completedResponses[responseModal.idx] : null;
 
     return (
-      <div className="h-screen overflow-hidden bg-background flex">
-        <Sidebar />
-        <main className={cn("transition-all duration-300 h-full overflow-y-auto flex-1 w-full min-w-0", mainOffset, mobileTopOffset)}>
+      <ModuleShell className="h-screen overflow-hidden bg-background flex" mainClassName="h-full overflow-y-auto flex-1 w-full min-w-0">
           <div className="survey-page-wrap survey-results-page">
             <SurveyAiTokenBanner />
             {/* Header */}
@@ -1902,17 +1891,13 @@ export default function SurveysPage() {
               onClose={() => setResponseModal(null)}
             />
           )}
-        </main>
-      </div>
+    </ModuleShell>
     );
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-background flex">
-      <Sidebar />
-      <main className={cn("survey-page-loading-main transition-all duration-300 h-full overflow-hidden", mainOffset, mobileTopOffset)}>
+    <ModuleShell className="h-screen overflow-hidden bg-background flex" mainClassName="survey-page-loading-main h-full overflow-hidden">
         <SurveyLoadingState label="Loading survey…" size="lg" />
-      </main>
-    </div>
+    </ModuleShell>
   );
 }

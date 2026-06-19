@@ -3,8 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Sidebar } from "@/components/Sidebar";
-import { useShellLayout } from "@/hooks/use-shell-layout";
+import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
@@ -46,7 +45,6 @@ export default function ResourceManagementPage() {
       : "entry",
   );
   const { toast } = useToast();
-  const { mainOffset, mobileTopOffset } = useShellLayout();
 
   const { data: scope } = useResourceScope();
 
@@ -164,34 +162,26 @@ export default function ResourceManagementPage() {
 
   if (isLoading) {
     return (
-      <div className="h-screen overflow-hidden bg-background">
-        <Sidebar />
-        <main className={cn("transition-all duration-300 h-full flex items-center justify-center", mainOffset, mobileTopOffset)}>
+      <ModuleShell className="h-screen overflow-hidden bg-background" mainClassName="h-full flex items-center justify-center">
           <ResourcesPageLoading />
-        </main>
-      </div>
+      </ModuleShell>
     );
   }
 
   if (isError) {
     return (
-      <div className="h-screen overflow-hidden bg-background">
-        <Sidebar />
-        <main className={cn("transition-all duration-300 h-full flex items-center justify-center p-4", mainOffset, mobileTopOffset)}>
+      <ModuleShell className="h-screen overflow-hidden bg-background" mainClassName="h-full flex items-center justify-center p-4">
           <div className="max-w-md w-full">
             <ResourcesErrorState message="Could not load resources" onRetry={() => refetch()} />
           </div>
-        </main>
-      </div>
+      </ModuleShell>
     );
   }
 
   const tabContentClass = "p-4 sm:p-6 m-0";
 
   return (
-    <div className="h-screen overflow-hidden bg-background">
-      <Sidebar />
-      <main className={cn("transition-all duration-300 h-full flex flex-col overflow-hidden", mainOffset, mobileTopOffset)}>
+    <ModuleShell className="h-screen overflow-hidden bg-background" mainClassName="h-full flex flex-col overflow-hidden">
         <div className="px-3 sm:px-4 pt-3 sm:pt-4 space-y-3">
           <ModuleWelcomeBanner moduleKey="resource-mgmt" features={["Skills matrix", "Capacity board", "Timesheets & approvals", "Pipeline planning"]} />
           {scope?.isContractorPortal && (
@@ -340,7 +330,6 @@ export default function ResourceManagementPage() {
             </TabsContent>
           </Tabs>
         </div>
-      </main>
-    </div>
+    </ModuleShell>
   );
 }

@@ -412,8 +412,15 @@ export function registerCustomerMgmtRoutes(app: Express): void {
     try {
       const input = z
         .object({
-          action: z.enum(["health_follow_up", "renewal_follow_up", "convert_trial"]),
+          action: z.enum([
+            "health_follow_up",
+            "renewal_follow_up",
+            "convert_trial",
+            "complete_scheduled_check_in",
+          ]),
           note: z.string().optional(),
+          scheduledAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+          activityLogId: z.number().int().positive().optional(),
           customerExternalId: z.string().optional(),
         })
         .parse(req.body);
@@ -423,7 +430,13 @@ export function registerCustomerMgmtRoutes(app: Express): void {
         if (!resolved) return res.status(404).json({ message: "Customer not found" });
         slug = resolved;
       }
-      const detail = await runCustomerActionInDb(slug, input.action, input.note);
+      const detail = await runCustomerActionInDb(
+        slug,
+        input.action,
+        input.note,
+        input.scheduledAt,
+        input.activityLogId,
+      );
       if (!detail) return res.status(404).json({ message: "Customer not found" });
       res.json({ detail, dashboard: await getCustomerMgmtDashboard() });
     } catch (err) {

@@ -1,12 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useQuery, useMutation } from "@tanstack/react-query";
 
 import { Redirect } from "wouter";
 
-import { Sidebar } from "@/components/Sidebar";
-
-import { useShellLayout } from "@/hooks/use-shell-layout";
+import { ModuleShell } from "@/components/ModuleShell";
 
 import { useClientContext } from "@/hooks/use-client-context";
 
@@ -42,11 +40,13 @@ import {
 
 } from "@/components/ui/alert-dialog";
 
-import { Plus, Briefcase, TrendingUp, Users, AlertTriangle } from "lucide-react";
+import { Plus, Briefcase, TrendingUp, Users, AlertTriangle, Search, LayoutGrid, List, X } from "lucide-react";
 
 import { ClientFormDialog } from "@/components/clients/ClientFormDialog";
 
 import { ClientCard } from "@/components/clients/ClientCard";
+
+import { ClientTable, type ClientSortDir, type ClientSortKey } from "@/components/clients/ClientTable";
 
 import { ClientDetailPanel } from "@/components/clients/ClientDetailPanel";
 
@@ -64,6 +64,8 @@ import {
 
   ClientsCardGridLoading,
 
+  ClientsTableLoading,
+
   ClientsPanelState,
 
 } from "@/components/clients/ClientLoadingStates";
@@ -72,6 +74,27 @@ import { clientDetailPath } from "@shared/app-routes";
 import { useLocation } from "wouter";
 
 import type { ClientKpis, ClientWorkspace } from "@/components/clients/types";
+import { userDisplayName } from "@/components/clients/types";
+
+import { Input } from "@/components/ui/input";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import {
+  collectUniqueTags,
+  filterClientWorkspaces,
+  sortClientWorkspaces,
+} from "@/lib/client-workspace-list";
+
+import { useTablePagination } from "@/hooks/use-table-pagination";
+
+import { TablePagination } from "@/components/TablePagination";
 
 
 
@@ -139,8 +162,6 @@ function KpiCard({
 
 export default function ClientsPage() {
 
-  const { mainOffset, mobileTopOffset } = useShellLayout();
-
   const { toast } = useToast();
 
   const { isClientUser } = useClientContext();
@@ -172,6 +193,23 @@ export default function ClientsPage() {
 
 
   const [filter, setFilter] = useState<"active" | "archived" | "all">("active");
+
+  const [viewMode, setViewMode] = useState<"cards" | "table">(() => {
+    const saved = localStorage.getItem("clients-view-mode");
+    return saved === "cards" ? "cards" : "table";
+  });
+
+  const [search, setSearch] = useState("");
+
+  const [accountManagerFilter, setAccountManagerFilter] = useState("all");
+
+  const [engagementFilter, setEngagementFilter] = useState("all");
+
+  const [tagFilter, setTagFilter] = useState("all");
+
+  const [sortKey, setSortKey] = useState<ClientSortKey>("name");
+
+  const [sortDir, setSortDir] = useState<ClientSortDir>("asc");
 
   const [showForm, setShowForm] = useState(false);
 
@@ -323,23 +361,83 @@ export default function ClientsPage() {
 
 
 
+  const displayed = useMemo(() => {
+    const filtered = filterClientWorkspaces(clients, {
+      tab: filter,
+      search,
+      accountManagerId: accountManagerFilter,
+      engagementStatus: engagementFilter,
+      tag: tagFilter,
+    });
+    return sortClientWorkspaces(filtered, sortKey, sortDir);
+  }, [
+    clients,
+    filter,
+    search,
+    accountManagerFilter,
+    engagementFilter,
+    tagFilter,
+    sortKey,
+    sortDir,
+  ]);
+
+  const allTags = useMemo(() => collectUniqueTags(clients), [clients]);
+
+  const accountManagerOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const client of clients) {
+      if (client.accountManagerId && client.accountManagerUser) {
+        map.set(client.accountManagerId, userDisplayName(client.accountManagerUser));
+      }
+    }
+    for (const member of siMembers) {
+      if (!map.has(member.userId)) map.set(member.userId, member.label);
+    }
+    return Array.from(map.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [clients, siMembers]);
+
+  const hasActiveFilters =
+    search.trim() !== "" ||
+    accountManagerFilter !== "all" ||
+    engagementFilter !== "all" ||
+    tagFilter !== "all";
+
+  const handleSort = (key: ClientSortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setAccountManagerFilter("all");
+    setEngagementFilter("all");
+    setTagFilter("all");
+  };
+
+  const setView = (mode: "cards" | "table") => {
+    setViewMode(mode);
+    localStorage.setItem("clients-view-mode", mode);
+  };
+
+  const clientsListResetKey = `${filter}-${search}-${accountManagerFilter}-${engagementFilter}-${tagFilter}-${sortKey}-${sortDir}`;
+
+  const clientsPagination = useTablePagination(displayed, {
+    resetKey: clientsListResetKey,
+  });
+
+
+
   if (isClientUser || !canAccess) {
 
     return <Redirect to="/" />;
 
   }
-
-
-
-  const displayed = clients.filter((c) => {
-
-    if (filter === "active") return c.status === "active";
-
-    if (filter === "archived") return c.status === "archived" || c.status === "pending_delete";
-
-    return true;
-
-  });
 
 
 
@@ -381,11 +479,9 @@ export default function ClientsPage() {
 
   return (
 
-    <div className="flex h-screen bg-background">
+    <>
 
-      <Sidebar />
-
-      <main className={cn("flex-1 flex flex-col overflow-hidden transition-all duration-300", mainOffset, mobileTopOffset)}>
+    <ModuleShell className="flex h-screen bg-background" mainClassName="flex-1 flex flex-col overflow-hidden">
 
         <div className="flex-1 overflow-y-auto">
 
@@ -545,6 +641,100 @@ export default function ClientsPage() {
 
 
 
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search clients, tags, industry…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9"
+                    data-testid="input-clients-search"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select value={accountManagerFilter} onValueChange={setAccountManagerFilter}>
+                    <SelectTrigger className="w-[160px] h-9" data-testid="filter-account-manager">
+                      <SelectValue placeholder="Account manager" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All managers</SelectItem>
+                      <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                      {accountManagerOptions.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={engagementFilter} onValueChange={setEngagementFilter}>
+                    <SelectTrigger className="w-[150px] h-9" data-testid="filter-engagement-status">
+                      <SelectValue placeholder="Engagement" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="on_hold">On hold</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="archived">Archived</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={tagFilter} onValueChange={setTagFilter}>
+                    <SelectTrigger className="w-[130px] h-9" data-testid="filter-tags">
+                      <SelectValue placeholder="Tags" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All tags</SelectItem>
+                      {allTags.map((tag) => (
+                        <SelectItem key={tag} value={tag}>
+                          {tag}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {hasActiveFilters && (
+                    <Button variant="ghost" size="sm" className="h-9 gap-1" onClick={clearFilters}>
+                      <X className="h-3.5 w-3.5" />
+                      Clear
+                    </Button>
+                  )}
+                  <div className="flex items-center rounded-lg border p-0.5 ml-auto lg:ml-0">
+                    <Button
+                      type="button"
+                      variant={viewMode === "table" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-8 px-2.5"
+                      onClick={() => setView("table")}
+                      data-testid="clients-view-table"
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={viewMode === "cards" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-8 px-2.5"
+                      onClick={() => setView("cards")}
+                      data-testid="clients-view-cards"
+                    >
+                      <LayoutGrid className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {displayed.length} client{displayed.length === 1 ? "" : "s"}
+                {hasActiveFilters ? " matching filters" : ""}
+                {viewMode === "table" ? " · Click column headers to sort" : ""}
+                {displayed.length > clientsPagination.pageSize
+                  ? ` · Page ${clientsPagination.page} of ${clientsPagination.totalPages}`
+                  : ""}
+              </p>
+            </div>
+
+
+
             <ClientsPanelState
 
               isLoading={clientsInitialLoad}
@@ -555,7 +745,7 @@ export default function ClientsPage() {
 
               onRetry={() => void refetchClients()}
 
-              loadingFallback={<ClientsCardGridLoading />}
+              loadingFallback={viewMode === "table" ? <ClientsTableLoading /> : <ClientsCardGridLoading />}
 
             >
 
@@ -571,7 +761,11 @@ export default function ClientsPage() {
 
                 <h3 className="font-semibold text-lg mb-1">
 
-                  {filter === "archived" ? "No archived clients" : "No client workspaces yet"}
+                  {filter === "archived"
+                    ? "No archived clients"
+                    : hasActiveFilters
+                      ? "No clients match your filters"
+                      : "No client workspaces yet"}
 
                 </h3>
 
@@ -581,11 +775,21 @@ export default function ClientsPage() {
 
                     ? "Archived clients will appear here."
 
-                    : "Add a client workspace to isolate projects, tasks, and CRM data for each customer engagement."}
+                    : hasActiveFilters
+
+                      ? "Try adjusting search or filter criteria."
+
+                      : "Add a client workspace to isolate projects, tasks, and CRM data for each customer engagement."}
 
                 </p>
 
-                {filter !== "archived" && canCreate && (
+                {hasActiveFilters && (
+                  <Button size="sm" variant="outline" className="mb-3" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                )}
+
+                {filter !== "archived" && canCreate && !hasActiveFilters && (
 
                   <Button size="sm" className="gap-2" onClick={() => openForm()}>
 
@@ -599,11 +803,49 @@ export default function ClientsPage() {
 
               </div>
 
+            ) : viewMode === "table" ? (
+
+              <ClientTable
+
+                clients={clientsPagination.paginatedItems}
+
+                sortKey={sortKey}
+
+                sortDir={sortDir}
+
+                onSort={handleSort}
+
+                onViewDetails={(c) => navigate(clientDetailPath(c.id))}
+
+                onArchive={setArchiving}
+
+                onDelete={setDeleting}
+
+                onUnarchive={(c) => unarchiveMutation.mutate(c.id)}
+
+                canCreate={canCreate}
+
+                canDelete={canDelete}
+
+                pagination={{
+                  page: clientsPagination.page,
+                  totalPages: clientsPagination.totalPages,
+                  total: clientsPagination.total,
+                  startIndex: clientsPagination.startIndex,
+                  endIndex: clientsPagination.endIndex,
+                  pageSize: clientsPagination.pageSize,
+                  onPageChange: clientsPagination.setPage,
+                  onPageSizeChange: clientsPagination.setPageSize,
+                }}
+
+              />
+
             ) : (
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
+              <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4 p-3 sm:p-4">
 
-                {displayed.map((client) => (
+                {clientsPagination.paginatedItems.map((client) => (
 
                   <ClientCard
 
@@ -628,6 +870,17 @@ export default function ClientsPage() {
                 ))}
 
               </div>
+              <TablePagination
+                page={clientsPagination.page}
+                totalPages={clientsPagination.totalPages}
+                total={clientsPagination.total}
+                startIndex={clientsPagination.startIndex}
+                endIndex={clientsPagination.endIndex}
+                pageSize={clientsPagination.pageSize}
+                onPageChange={clientsPagination.setPage}
+                onPageSizeChange={clientsPagination.setPageSize}
+              />
+              </div>
 
             )}
 
@@ -637,7 +890,7 @@ export default function ClientsPage() {
 
         </div>
 
-      </main>
+    </ModuleShell>
 
 
 
@@ -739,7 +992,7 @@ export default function ClientsPage() {
 
       </AlertDialog>
 
-    </div>
+    </>
 
   );
 

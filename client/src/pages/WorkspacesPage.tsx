@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
-import { Sidebar } from "@/components/Sidebar";
+import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { WorkspacesIcon } from "@/components/icons/ModuleIcons";
-import { useShellLayout } from "@/hooks/use-shell-layout";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { TipTapEditor } from "@/components/TipTapEditor";
 import { Button } from "@/components/ui/button";
@@ -1276,7 +1275,6 @@ function NewPageDialog({
 type NavigationState = "landing" | "overview" | "page";
 
 export default function WorkspacesPage() {
-  const { mainOffset, mobileTopOffset } = useShellLayout();
   const isMobile = useIsMobile();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -1673,13 +1671,16 @@ export default function WorkspacesPage() {
   const sidebarVisible = showSidebar && (!isMobile || sidebarPanelOpen);
 
   return (
-    <div
+    <ModuleShell
       className={cn(navState === "landing" ? "min-h-screen bg-background" : "h-screen")}
-      data-testid="workspaces-page"
+      testId="workspaces-page"
+      mainClassName={cn(
+        "transition-all duration-300",
+        navState === "landing" ? "min-h-screen flex flex-col" : "flex h-full",
+      )}
     >
-      <Sidebar />
       {navState === "landing" ? (
-        <main className={cn("transition-all duration-300 min-h-screen flex flex-col", mainOffset, mobileTopOffset)}>
+        <>
           <div className="px-3 sm:px-4 pt-3 sm:pt-4">
             <ModuleWelcomeBanner
               moduleKey="workspaces"
@@ -1720,9 +1721,9 @@ export default function WorkspacesPage() {
             searchQuery={landingSearch}
             onSearchQueryChange={setLandingSearch}
           />
-        </main>
+        </>
       ) : (
-      <div className={cn("flex h-full transition-all duration-300", mainOffset, mobileTopOffset)}>
+      <>
         {showSidebar && isMobile && sidebarPanelOpen && (
           <button
             type="button"
@@ -1998,7 +1999,7 @@ export default function WorkspacesPage() {
             />
           )}
         </div>
-      </div>
+      </>
       )}
 
       <NewPageDialog
@@ -2334,6 +2335,6 @@ export default function WorkspacesPage() {
         onOpenChange={setSharePanelOpen}
         readOnly={workspaceReadOnly}
       />
-    </div>
+    </ModuleShell>
   );
 }

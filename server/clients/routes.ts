@@ -262,14 +262,16 @@ export function registerClientRoutes(app: Express): void {
       const tid = tenantId(req);
       if (!(await assertClientAccess(req, res, id))) return;
 
-      const [client, users, invitations, visibility] = await Promise.all([
+      const [client, users, invitations, visibility, summaries] = await Promise.all([
         storage.getClientById(id, tid),
         storage.getClientUsers(id),
         storage.getClientInvitations(id),
         storage.getClientModuleVisibility(id),
+        storage.getClientProjectSummary(tid),
       ]);
       if (!client) return res.status(404).json({ message: "Client not found" });
 
+      const summary = summaries.find((s) => s.clientId === id);
       const enriched = await enrichClientWithUsers(client);
       res.json({
         ...enriched,
@@ -277,6 +279,9 @@ export function registerClientRoutes(app: Express): void {
         invitations,
         moduleVisibility: visibility,
         memberCount: users.length,
+        projectCount: summary?.projectCount ?? 0,
+        atRiskCount: summary?.atRiskCount ?? 0,
+        activeProjectCount: summary?.activeProjectCount ?? 0,
       });
     } catch (e: unknown) {
       res.status(500).json({ message: e instanceof Error ? e.message : "Error" });

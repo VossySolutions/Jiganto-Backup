@@ -3,6 +3,7 @@ export {
   ClientsLoadingPanel,
   ClientsKpiLoading,
   ClientsCardGridLoading,
+  ClientsTableLoading,
   ClientsDetailLoading,
   ClientsSheetLoading,
   ClientsAdminLoading,
