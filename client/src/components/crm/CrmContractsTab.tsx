@@ -1,80 +1,38 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useCrmPagination } from "@/hooks/use-crm-pagination";
 import { CrmTablePagination } from "./CrmTablePagination";
 import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { MetricCard } from "@/components/ui/metric-card";
+import { buildContractSignoffUrl } from "@/lib/crm-contract-signoff";
+import { ContractFormDialog } from "./ContractFormDialog";
+import { resolveDocumentTitle, type LinkedDocument } from "./DocumentLinkSelect";
 import {
   Plus, Download, Upload, Search, ArrowUpDown, Layers,
-  ChevronDown, X, Trash2, Paintbrush, Bookmark, MoreHorizontal, Pencil,
-  FileSignature, Clock, CheckCircle2, XCircle, Eye
+  X, Trash2, Paintbrush, MoreHorizontal, Pencil,
+  FileSignature, Clock, CheckCircle2, XCircle, FileText, Link2
 } from "lucide-react";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
 import { evaluateConditionalFormatting, type ConditionalFormatRule } from "@/lib/conditionalFormatting";
 import type { ColumnDef as MondayColumnDef } from "@/components/MondayTable";
 import { useCrmUsers } from "./CrmUsersProvider";
-
-type CrmAccount = {
-  id: number;
-  tenantId: number;
-  parentAccountId: number | null;
-  name: string;
-  type: string;
-  industry: string | null;
-  website: string | null;
-  phone: string | null;
-  email: string | null;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  country: string | null;
-  postalCode: string | null;
-  ownerUserId: string | null;
-  description: string | null;
-  annualRevenue: string | null;
-  employeeCount: number | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type CrmContract = {
-  id: number;
-  tenantId: number;
-  accountId: number | null;
-  opportunityId: number | null;
-  projectId: number | null;
-  name: string;
-  type: string | null;
-  status: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  value: string | null;
-  recurringValue: string | null;
-  terms: string | null;
-  signedDate: string | null;
-  signedByContactId: number | null;
-  ownerUserId: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+import type { CrmAccountDetail, CrmContract } from "./types";
 
 interface CrmContractsTabProps {
   contracts: CrmContract[];
-  accounts: CrmAccount[];
+  accounts: CrmAccountDetail[];
   searchTerm: string;
+  initialContractId?: number | null;
 }
 
 const VIBRANT_LOGO_COLORS = [
@@ -180,10 +138,10 @@ function RenewalIcon({ className }: { className?: string }) {
   );
 }
 
-export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContractsTabProps) {
+export function CrmContractsTab({ contracts, accounts, searchTerm, initialContractId = null }: CrmContractsTabProps) {
   const { resolveOwner } = useCrmUsers();
-  const [isOpen, setIsOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingContract, setEditingContract] = useState<CrmContract | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [localSearch, setLocalSearch] = useState("");
@@ -193,16 +151,30 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
   const [groupBy, setGroupBy] = useState<"none" | "status" | "type" | "account">("none");
   const [formatPanelOpen, setFormatPanelOpen] = useState(false);
   const [formatRules, setFormatRules] = useState<ConditionalFormatRule[]>([]);
-  const [formData, setFormData] = useState({
-    name: "", accountId: "", type: "service", status: "draft",
-    startDate: "", endDate: "", value: "",
-  });
   const [importOpen, setImportOpen] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (!initialContractId || contracts.length === 0) return;
+    const match = contracts.find((c) => c.id === initialContractId);
+    if (match) {
+      setEditingContract(match);
+      setFormOpen(true);
+    }
+  }, [initialContractId, contracts]);
+
   const { data: allSignoffRequests = [] } = useQuery<any[]>({
     queryKey: ["/api/signoff"],
+  });
+
+  const { data: linkedDocuments = [] } = useQuery<LinkedDocument[]>({
+    queryKey: ["/api/documents", "contracts-tab"],
+    queryFn: async () => {
+      const res = await fetchWithAuth("/api/documents");
+      if (!res.ok) throw new Error("Failed to load documents");
+      return res.json();
+    },
   });
 
   const importMutation = useMutation({
@@ -215,24 +187,6 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
     onError: () => toast({ title: "Import failed", variant: "destructive" }),
   });
 
-  const createMutation = useMutation({
-    mutationFn: (data: typeof formData) =>
-      apiRequest("POST", "/api/crm/contracts", {
-        ...data,
-        accountId: data.accountId ? parseInt(data.accountId) : null,
-        value: data.value || null,
-        startDate: data.startDate || null,
-        endDate: data.endDate || null,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/contracts"] });
-      setIsOpen(false);
-      setFormData({ name: "", accountId: "", type: "service", status: "draft", startDate: "", endDate: "", value: "" });
-      toast({ title: "Contract created successfully" });
-    },
-    onError: () => toast({ title: "Failed to create contract", variant: "destructive" }),
-  });
-
   const bulkDeleteMutation = useMutation({
     mutationFn: (ids: number[]) => apiRequest("POST", "/api/crm/contracts/bulk-delete", { ids }),
     onSuccess: () => {
@@ -243,16 +197,6 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
     onError: () => toast({ title: "Failed to delete contracts", variant: "destructive" }),
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, updates }: { id: number; updates: Record<string, unknown> }) =>
-      apiRequest("PUT", `/api/crm/contracts/${id}`, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/contracts"] });
-      toast({ title: "Contract updated" });
-    },
-    onError: () => toast({ title: "Failed to update contract", variant: "destructive" }),
-  });
-
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/crm/contracts/${id}`),
     onSuccess: () => {
@@ -261,6 +205,42 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
     },
     onError: () => toast({ title: "Failed to delete contract", variant: "destructive" }),
   });
+
+  function openCreateForm() {
+    setEditingContract(null);
+    setFormOpen(true);
+  }
+
+  function openEditForm(contract: CrmContract) {
+    setEditingContract(contract);
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setEditingContract(null);
+  }
+
+  function requestSignoff(contract: CrmContract) {
+    const documentTitle = resolveDocumentTitle(linkedDocuments, contract.documentId);
+    const url = buildContractSignoffUrl({
+      id: contract.id,
+      name: contract.name,
+      documentId: contract.documentId,
+      documentTitle,
+    });
+    if (!url) {
+      toast({
+        title: "Link a document first",
+        description: "Open the contract and link a document from the Documents module before sending for sign-off.",
+        variant: "destructive",
+      });
+      setEditingContract(contract);
+      setFormOpen(true);
+      return;
+    }
+    setLocation(url);
+  }
 
   function getContractSignoffStatus(contractId: number) {
     const reqs = allSignoffRequests.filter((r: any) => r.crmContractId === contractId);
@@ -283,6 +263,7 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
         daysUntilExpiry,
         owner,
         valueNum,
+        documentTitle: resolveDocumentTitle(linkedDocuments, c.documentId),
       };
     });
 
@@ -323,7 +304,7 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
     });
 
     return result;
-  }, [contracts, accounts, localSearch, searchTerm, statusFilter, typeFilter, sortField, sortDir, resolveOwner]);
+  }, [contracts, accounts, localSearch, searchTerm, statusFilter, typeFilter, sortField, sortDir, resolveOwner, linkedDocuments]);
 
   const pagination = useCrmPagination(enrichedContracts, {
     resetKey: `${localSearch}|${searchTerm}|${statusFilter}|${typeFilter}|${sortField}|${sortDir}|${groupBy}`,
@@ -460,17 +441,7 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
   };
 
   const handleEdit = (c: typeof enrichedContracts[0]) => {
-    setEditingId(c.id);
-    setFormData({
-      name: c.name,
-      accountId: c.accountId ? String(c.accountId) : "",
-      type: c.type || "service",
-      status: c.status || "draft",
-      startDate: c.startDate ? c.startDate.split("T")[0] : "",
-      endDate: c.endDate ? c.endDate.split("T")[0] : "",
-      value: c.value || "",
-    });
-    setIsOpen(true);
+    openEditForm(c);
   };
 
   const renderRow = (c: typeof enrichedContracts[0]) => {
@@ -524,15 +495,18 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
             if (!req) {
               return (
                 <button
-                  onClick={() => {
-                    const params = new URLSearchParams({ compose: "1", crmContractId: String(c.id), crmContractTitle: c.name });
-                    setLocation(`/modules/e-sign?${params.toString()}`);
-                  }}
-                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                  onClick={() => requestSignoff(c)}
+                  className={cn(
+                    "inline-flex items-center gap-1 text-xs transition-colors",
+                    c.documentId
+                      ? "text-muted-foreground hover:text-primary"
+                      : "text-amber-600 dark:text-amber-400 hover:text-amber-700",
+                  )}
+                  title={c.documentId ? "Send for sign-off" : "Link a document before sending for sign-off"}
                   data-testid={`button-signoff-contract-${c.id}`}
                 >
                   <FileSignature className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Send</span>
+                  <span className="hidden sm:inline">{c.documentId ? "Send" : "Link doc"}</span>
                 </button>
               );
             }
@@ -584,16 +558,36 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
                 <Pencil className="h-3.5 w-3.5 mr-2" />
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  const params = new URLSearchParams({ compose: "1", crmContractId: String(c.id), crmContractTitle: c.name });
-                  setLocation(`/modules/e-sign?${params.toString()}`);
-                }}
-                data-testid={`action-signoff-contract-${c.id}`}
-              >
-                <FileSignature className="h-3.5 w-3.5 mr-2" />
-                Send for Sign-off
-              </DropdownMenuItem>
+              {c.documentId ? (
+                <>
+                  <DropdownMenuItem asChild>
+                    <a href={`/modules/documents?doc=${c.documentId}`} data-testid={`action-view-document-contract-${c.id}`}>
+                      <FileText className="h-3.5 w-3.5 mr-2" />
+                      View linked document
+                    </a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => requestSignoff(c)} data-testid={`action-signoff-contract-${c.id}`}>
+                    <FileSignature className="h-3.5 w-3.5 mr-2" />
+                    Send for sign-off
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <>
+                  <DropdownMenuItem onClick={() => openEditForm(c)} data-testid={`action-link-document-contract-${c.id}`}>
+                    <Link2 className="h-3.5 w-3.5 mr-2" />
+                    Link document
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled
+                    className="opacity-60"
+                    data-testid={`action-signoff-disabled-contract-${c.id}`}
+                  >
+                    <FileSignature className="h-3.5 w-3.5 mr-2" />
+                    Send for sign-off (needs document)
+                  </DropdownMenuItem>
+                </>
+              )}
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => deleteMutation.mutate(c.id)}
                 className="text-red-600 focus:text-red-600"
@@ -611,37 +605,20 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-total-contracts">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <ContractIcon className="h-5 w-5" />
-            Total Contracts
-          </div>
-          <div className="text-2xl font-bold" data-testid="text-total-contracts">{enrichedContracts.length}</div>
-        </div>
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-total-value">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <ValueIcon className="h-5 w-5" />
-            Total Value
-          </div>
-          <div className="text-2xl font-bold text-[#22c55e]" data-testid="text-total-value">£{totalValue.toLocaleString()}</div>
-        </div>
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-expiring-contracts">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <ExpiringIcon className="h-5 w-5" />
-            Expiring (30 days)
-          </div>
-          <div className="text-2xl font-bold text-[#f97316]" data-testid="text-expiring-contracts">{expiringCount}</div>
-        </div>
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-renewal-rate">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <RenewalIcon className="h-5 w-5" />
-            Active Rate
-          </div>
-          <div className="text-2xl font-bold text-[#8b5cf6]" data-testid="text-renewal-rate">
-            {contracts.length > 0 ? Math.round((statusCounts.active / contracts.length) * 100) : 0}%
-          </div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <MetricCard title="Total Contracts" value={enrichedContracts.length} subtitle="Matching filters" helpText="All contracts visible after status and search filters." icon={ContractIcon} testId="card-total-contracts" />
+        <MetricCard title="Total Value" value={`£${totalValue.toLocaleString()}`} subtitle="Sum of contract values" helpText="Combined value of all filtered contracts." icon={ValueIcon} borderColor="#22c55e" valueClassName="text-[#22c55e]" testId="card-total-value" />
+        <MetricCard title="Expiring (30 days)" value={expiringCount} subtitle="End date within 30d" helpText="Active contracts whose end date falls within the next 30 days." icon={ExpiringIcon} borderColor="#f97316" valueClassName="text-[#f97316]" testId="card-expiring-contracts" />
+        <MetricCard
+          title="Active Contracts"
+          value={contracts.length > 0 ? `${Math.round((statusCounts.active / contracts.length) * 100)}%` : "0%"}
+          subtitle={`${statusCounts.active} of ${contracts.length} contracts`}
+          helpText="Percentage of all contracts currently in active status (not draft, expired, or terminated)."
+          icon={RenewalIcon}
+          borderColor="#8b5cf6"
+          valueClassName="text-[#8b5cf6]"
+          testId="card-renewal-rate"
+        />
       </div>
 
       {selectedIds.size > 0 && (
@@ -745,16 +722,16 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
-                "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                "inline-flex items-center justify-center h-9 w-9 rounded-lg border transition-colors",
                 groupBy !== "none"
                   ? "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"
                   : "bg-background border-border text-foreground hover:bg-muted"
               )}
+              title={groupBy === "none" ? "Group" : `Grouped by ${groupBy}`}
+              aria-label={groupBy === "none" ? "Group contracts" : `Grouped by ${groupBy}`}
               data-testid="button-group-contracts"
             >
-              <Layers className="h-3.5 w-3.5" />
-              Group
-              <ChevronDown className="h-3 w-3" />
+              <Layers className="h-4 w-4" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -827,145 +804,23 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
           onApplyView={applySavedView}
         />
 
-        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setEditingId(null); setFormData({ name: "", accountId: "", type: "service", status: "draft", startDate: "", endDate: "", value: "" }); } }}>
-          <DialogTrigger asChild>
-            <button
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white transition-colors"
-              data-testid="button-add-contract"
-            >
-              <Plus className="h-4 w-4" />
-              New Contract
-            </button>
-          </DialogTrigger>
-          <DialogContent>
-            <SubmitForm
-              onSubmit={() => {
-                if (editingId) {
-                  updateMutation.mutate({
-                    id: editingId,
-                    updates: {
-                      name: formData.name,
-                      accountId: formData.accountId ? parseInt(formData.accountId) : null,
-                      type: formData.type,
-                      status: formData.status,
-                      startDate: formData.startDate || null,
-                      endDate: formData.endDate || null,
-                      value: formData.value || null,
-                    },
-                  });
-                  setIsOpen(false);
-                  setEditingId(null);
-                  setFormData({ name: "", accountId: "", type: "service", status: "draft", startDate: "", endDate: "", value: "" });
-                } else {
-                  createMutation.mutate(formData);
-                }
-              }}
-              disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
-            >
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Contract" : "Create New Contract"}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div>
-                <Label htmlFor="contract-name">Name *</Label>
-                <Input
-                  id="contract-name"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  data-testid="input-contract-name"
-                />
-              </div>
-              <div>
-                <Label htmlFor="contract-account">Account</Label>
-                <Select value={formData.accountId} onValueChange={(v) => setFormData(prev => ({ ...prev, accountId: v }))}>
-                  <SelectTrigger data-testid="select-contract-account">
-                    <SelectValue placeholder="Select account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map(account => (
-                      <SelectItem key={account.id} value={account.id.toString()}>{account.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="contract-type">Type</Label>
-                  <Select value={formData.type} onValueChange={(v) => setFormData(prev => ({ ...prev, type: v }))}>
-                    <SelectTrigger data-testid="select-contract-type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="service">Service</SelectItem>
-                      <SelectItem value="subscription">Subscription</SelectItem>
-                      <SelectItem value="license">License</SelectItem>
-                      <SelectItem value="maintenance">Maintenance</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="contract-status">Status</Label>
-                  <Select value={formData.status} onValueChange={(v) => setFormData(prev => ({ ...prev, status: v }))}>
-                    <SelectTrigger data-testid="select-contract-status">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="draft">Draft</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="contract-start">Start Date</Label>
-                  <Input
-                    id="contract-start"
-                    type="date"
-                    value={formData.startDate}
-                    onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
-                    data-testid="input-contract-start-date"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="contract-end">End Date</Label>
-                  <Input
-                    id="contract-end"
-                    type="date"
-                    value={formData.endDate}
-                    onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
-                    data-testid="input-contract-end-date"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="contract-value">Value</Label>
-                <Input
-                  id="contract-value"
-                  type="number"
-                  value={formData.value}
-                  onChange={(e) => setFormData(prev => ({ ...prev, value: e.target.value }))}
-                  data-testid="input-contract-value"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button
-                type="submit"
-                disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
-                data-testid="button-save-contract"
-              >
-                {editingId
-                  ? (updateMutation.isPending ? "Updating..." : "Update Contract")
-                  : (createMutation.isPending ? "Creating..." : "Create Contract")}
-              </Button>
-            </DialogFooter>
-            </SubmitForm>
-          </DialogContent>
-        </Dialog>
+        {enrichedContracts.length > 0 && (
+        <button
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white transition-colors"
+          onClick={openCreateForm}
+          data-testid="button-add-contract"
+        >
+          <Plus className="h-4 w-4" />
+          New Contract
+        </button>
+        )}
+
+        <ContractFormDialog
+          open={formOpen}
+          onClose={closeForm}
+          editing={editingContract}
+          accounts={accounts}
+        />
       </div>
 
       <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden w-full" data-testid="contracts-table">
@@ -1017,7 +872,7 @@ export function CrmContractsTab({ contracts, accounts, searchTerm }: CrmContract
                       <Button
                         size="sm"
                         className="mt-2 bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
-                        onClick={() => setIsOpen(true)}
+                        onClick={openCreateForm}
                       >
                         <Plus className="h-4 w-4 mr-1" />
                         New Contract

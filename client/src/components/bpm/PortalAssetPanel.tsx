@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -35,7 +35,6 @@ const TYPE_ICON: Record<string, typeof FileText> = Object.fromEntries(
 );
 
 type Props = {
-  tenantId: number;
   entryIds: number[];
   entryLabel: string;
   resources: ProcessResource[];
@@ -45,7 +44,7 @@ type Props = {
   onPlayVideo?: (url: string) => void;
 };
 
-export function PortalAssetPanel({ tenantId, entryIds, entryLabel, resources, resourcesLoading, diagramId, onViewDiagram, onPlayVideo }: Props) {
+export function PortalAssetPanel({ entryIds, entryLabel, resources, resourcesLoading, diagramId, onViewDiagram, onPlayVideo }: Props) {
   const { toast } = useToast();
   const [assetFilter, setAssetFilter] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
@@ -166,51 +165,48 @@ export function PortalAssetPanel({ tenantId, entryIds, entryLabel, resources, re
         )}
       </div>
 
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent data-testid="dialog-add-asset">
-          <DialogHeader><DialogTitle>Add Asset</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Asset Type</Label>
-              <Select value={newType} onValueChange={setNewType}>
-                <SelectTrigger data-testid="select-asset-type"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {RESOURCE_TYPE_OPTIONS.map(o => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Title</Label>
-              <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} data-testid="input-asset-title" />
-            </div>
-            <div>
-              <Label>URL / Link</Label>
-              <Input value={newUrl} onChange={e => setNewUrl(e.target.value)} placeholder="https:// or document link" data-testid="input-asset-url" />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea value={newDesc} onChange={e => setNewDesc(e.target.value)} rows={2} />
-            </div>
+      <FormDialogShell
+        open={showAdd}
+        onOpenChange={setShowAdd}
+        title="Add Asset"
+        saveLabel="Add"
+        onCancel={() => setShowAdd(false)}
+        onSubmit={() => createMutation.mutate({
+          entryId: entryIds[0], resourceType: newType,
+          title: newTitle.trim(), url: newUrl.trim() || null,
+          description: newDesc.trim() || null, sortOrder: entryResources.length,
+        })}
+        saving={createMutation.isPending}
+        disabled={!newTitle.trim()}
+        testId="dialog-add-asset"
+        saveTestId="button-confirm-add-asset"
+      >
+        <FormSection title="Asset details">
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Asset Type</FieldLabel>
+            <Select value={newType} onValueChange={setNewType}>
+              <SelectTrigger data-testid="select-asset-type"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {RESOURCE_TYPE_OPTIONS.map(o => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button
-              disabled={!newTitle.trim() || createMutation.isPending}
-              onClick={() => createMutation.mutate({
-                tenantId, entryId: entryIds[0], resourceType: newType,
-                title: newTitle.trim(), url: newUrl.trim() || null,
-                description: newDesc.trim() || null, sortOrder: entryResources.length,
-              })}
-              data-testid="button-confirm-add-asset"
-            >
-              {createMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              Add
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel required>Title</FieldLabel>
+            <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} data-testid="input-asset-title" />
+          </div>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>URL / Link</FieldLabel>
+            <Input value={newUrl} onChange={e => setNewUrl(e.target.value)} placeholder="https:// or document link" data-testid="input-asset-url" />
+          </div>
+          <div className="space-y-1.5">
+            <FieldLabel>Description</FieldLabel>
+            <Textarea value={newDesc} onChange={e => setNewDesc(e.target.value)} rows={2} />
+          </div>
+        </FormSection>
+      </FormDialogShell>
     </div>
   );
 }

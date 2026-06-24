@@ -220,6 +220,8 @@ const invoiceCreateSchema = z.object({
   milestoneLineIds: z.array(z.number().int().positive()).optional(),
   includeTimesheets: z.boolean().optional(),
   includeExpenses: z.boolean().optional(),
+  periodStart: z.string().optional(),
+  periodEnd: z.string().optional(),
   manualLines: z.array(z.object({
     lineType: z.string().optional(),
     description: z.string(),
@@ -227,6 +229,8 @@ const invoiceCreateSchema = z.object({
     unitRate: z.number().optional(),
     amount: z.number(),
   })).optional(),
+  taxAmount: z.union([z.string(), z.number()]).nullable().optional(),
+  vatAmount: z.union([z.string(), z.number()]).nullable().optional(),
 });
 
 const paymentSchema = z.object({
@@ -588,6 +592,16 @@ export function registerFinanceRoutes(app: Express): void {
     const period = await getTimesheetPeriod(tenantId, id);
     if (!period) return res.status(404).json({ message: "Timesheet period not found" });
     res.json(await listTimesheetEntries(id));
+  });
+
+  app.get("/api/finance/timesheets/projects/:projectId/entries", async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const tenantId = requireTenant(req, res);
+    if (tenantId == null) return;
+    const projectId = parseId(req.params.projectId);
+    if (!projectId) return res.status(400).json({ message: "Invalid project id" });
+    const { storage } = await import("../storage");
+    res.json(await storage.getTimesheetEntriesByProject(tenantId, projectId));
   });
 
   app.post("/api/finance/timesheets/periods/:id/submit", async (req, res) => {

@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { Users, XCircle, Star, Plus, Trash2, AlertTriangle, FileText, Link2, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -259,37 +259,40 @@ export function ResourceProfilePanel({ resource, skills, resourceSkills, onClose
         </div>
       </ScrollArea>
 
-      <Dialog open={showLinkDialog} onOpenChange={setShowLinkDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Link document</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Document</Label>
-              <Select value={linkDocId} onValueChange={setLinkDocId}>
-                <SelectTrigger><SelectValue placeholder="Select document" /></SelectTrigger>
-                <SelectContent>
-                  {allDocuments.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.title}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Link type</Label>
-              <Select value={linkType} onValueChange={setLinkType}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {["general", "contract", "cv", "certification", "sow"].map((t) => (
-                    <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <FormDialogShell
+        open={showLinkDialog}
+        onOpenChange={setShowLinkDialog}
+        title="Link document"
+        saveLabel="Link"
+        onCancel={() => setShowLinkDialog(false)}
+        onSubmit={() => linkDocMutation.mutate({ documentId: Number(linkDocId), linkType })}
+        saving={linkDocMutation.isPending}
+        disabled={!linkDocId}
+        size="sm"
+      >
+        <FormSection title="Document link">
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel required>Document</FieldLabel>
+            <Select value={linkDocId} onValueChange={setLinkDocId}>
+              <SelectTrigger><SelectValue placeholder="Select document" /></SelectTrigger>
+              <SelectContent>
+                {allDocuments.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.title}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowLinkDialog(false)}>Cancel</Button>
-            <Button disabled={!linkDocId} onClick={() => linkDocMutation.mutate({ documentId: Number(linkDocId), linkType })}>Link</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="space-y-1.5">
+            <FieldLabel>Link type</FieldLabel>
+            <Select value={linkType} onValueChange={setLinkType}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {["general", "contract", "cv", "certification", "sow"].map((t) => (
+                  <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </FormSection>
+      </FormDialogShell>
     </div>
     </>
   );

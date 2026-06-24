@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { fetchWithAuth } from "@/lib/queryClient";
@@ -22,16 +22,29 @@ type PollData = {
   status: string;
 };
 
+const VOTER_SESSION_KEY = "jiganto_poll_voter_session";
+
+function getOrCreateVoterSession(): string {
+  let session = localStorage.getItem(VOTER_SESSION_KEY);
+  if (!session) {
+    session = crypto.randomUUID();
+    localStorage.setItem(VOTER_SESSION_KEY, session);
+  }
+  return session;
+}
+
 export default function PollPortalPage() {
   const { token } = useParams<{ token: string }>();
   const [selected, setSelected] = useState<number[]>([]);
+  const voterSession = useMemo(() => getOrCreateVoterSession(), []);
   const { data: chatConfig } = useChatConfig();
   const realtime = Boolean(chatConfig?.supabaseRealtime);
 
   const { data: poll, isLoading, refetch } = useQuery<PollData>({
-    queryKey: ["/api/polls/by-token", token],
+    queryKey: ["/api/polls/by-token", token, voterSession],
     queryFn: async () => {
-      const res = await fetchWithAuth(`/api/polls/by-token/${token}`, { credentials: "include" });
+      const url = `/api/polls/by-token/${token}?voterSession=${encodeURIComponent(voterSession)}`;
+      const res = await fetchWithAuth(url, { credentials: "include" });
       if (!res.ok) throw new Error("Poll not found");
       return res.json();
     },
@@ -47,9 +60,12 @@ export default function PollPortalPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ optionIndexes }),
+        body: JSON.stringify({ optionIndexes, voterSession }),
       });
-      if (!res.ok) throw new Error("Vote failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Vote failed");
+      }
       return res.json();
     },
     onSuccess: () => refetch(),
@@ -103,9 +119,13 @@ export default function PollPortalPage() {
           })}
           {poll.pollType === "multi" && !poll.isClosed && selected.length > 0 && (
             <button onClick={() => voteMut.mutate(selected)} disabled={voteMut.isPending}
-              style={{ width: "100%", padding: "12px", background: C.teal, color: "#fff", border: "none", borderRadius: 10, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>
+              style={{ width: "100%", padding: "12px", background: C.teal, color: "#fff", border: "none", borderRadius: 10, fontWeight: 600, cursor: "pointer", marginTop: 8, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              {voteMut.isPending && <SurveyButtonSpinner />}
               Submit vote
             </button>
+          )}
+          {voteMut.isError && (
+            <p style={{ color: C.rose, fontSize: 13, marginTop: 12 }}>{(voteMut.error as Error).message}</p>
           )}
         </div>
       </div>

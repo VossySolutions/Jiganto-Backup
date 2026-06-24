@@ -17,6 +17,7 @@ export function PortfolioProgrammeDetail({ programmeId, source }: { programmeId:
   const [, setLocation] = useLocation();
   const { data, isLoading } = useQuery<Detail>({
     queryKey: [`/api/portfolio/programmes/${source}/${programmeId}`],
+    staleTime: 30_000,
   });
 
   if (isLoading || !data) {

@@ -11,9 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -65,23 +63,34 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
   const [formIssueDate, setFormIssueDate] = useState(new Date().toISOString().slice(0, 10));
   const [formDueDate, setFormDueDate] = useState("");
   const [formNotes, setFormNotes] = useState("");
+  const [formTaxPct, setFormTaxPct] = useState("0");
   const [formLines, setFormLines] = useState([{ description: "", quantity: "1", unitRate: "", lineType: "fixed_fee" }]);
 
   const { data: fetchedInvoices = [], isLoading: fetchLoading } = useQuery<FinanceInvoiceRow[]>({
     queryKey: ["/api/finance/invoices"],
     enabled: invoicesProp === undefined,
+    staleTime: 30_000,
   });
   const invoices = invoicesProp ?? fetchedInvoices;
   const isLoading = isLoadingProp ?? fetchLoading;
 
   const { data: projects = [] } = useQuery<Array<{ id: number; name: string }>>({
     queryKey: ["/api/pm/projects"],
+    staleTime: 60_000,
   });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/finance/invoices"] });
     queryClient.invalidateQueries({ queryKey: ["/api/finance/dashboard"] });
   };
+
+  const formSubtotal = formLines.reduce((s, l) => {
+    const qty = parseFloat(l.quantity || "1") || 0;
+    const rate = parseFloat(l.unitRate || "0") || 0;
+    return s + qty * rate;
+  }, 0);
+  const formTaxAmount = formSubtotal * (parseFloat(formTaxPct || "0") || 0) / 100;
+  const formTotal = formSubtotal + formTaxAmount;
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -91,6 +100,7 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
         issueDate: formIssueDate,
         dueDate: formDueDate || formIssueDate,
         notes: formNotes || null,
+        taxAmount: formTaxAmount || null,
         includeTimesheets: formContractType === "time_materials" || formContractType === "mixed",
         includeExpenses: formContractType === "time_materials" || formContractType === "mixed",
         manualLines: formLines.filter((l) => l.description).map((l) => ({
@@ -107,6 +117,8 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
       invalidate();
       toast({ title: "Invoice created" });
       setShowCreate(false);
+      setFormTaxPct("0");
+      setFormLines([{ description: "", quantity: "1", unitRate: "", lineType: "fixed_fee" }]);
     },
     onError: () => toast({ title: "Failed to create invoice", variant: "destructive" }),
   });
@@ -198,10 +210,12 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
             ))}
           </SelectContent>
         </Select>
+        {invoices.length > 0 && (
         <Button onClick={() => setShowCreate(true)} className="sm:ml-auto w-full sm:w-auto" data-testid="button-create-invoice">
           <Plus className="h-4 w-4 mr-1" />
           Create Invoice
         </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -308,162 +322,190 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
         </Card>
       )}
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" data-testid="invoice-create-dialog">
-          <DialogHeader>
-            <DialogTitle>Create Invoice</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Project</Label>
-                <Select value={formProjectId} onValueChange={setFormProjectId}>
-                  <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
+      <FormDialogShell
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        title="Create invoice"
+        subtitle="Bill a project with line items and due dates"
+        meta="Invoice will be created as draft"
+        saveLabel="Create invoice"
+        onCancel={() => setShowCreate(false)}
+        onSubmit={() => createMutation.mutate()}
+        saving={createMutation.isPending}
+        disabled={!formProjectId}
+        size="lg"
+        testId="invoice-create-dialog"
+      >
+        <FormSection icon={<FileText className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Invoice details">
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5">
+              <FieldLabel required>Project</FieldLabel>
+              <Select value={formProjectId} onValueChange={setFormProjectId}>
+                <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <FieldLabel>Contract type</FieldLabel>
+              <Select value={formContractType} onValueChange={setFormContractType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CONTRACT_TYPES.map((t) => (
+                    <SelectItem key={t} value={t} className="capitalize">{t.replace(/_/g, " ")}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </FieldGrid>
+          <FieldGrid>
+            <div className="space-y-1.5">
+              <FieldLabel>Issue date</FieldLabel>
+              <Input type="date" value={formIssueDate} onChange={(e) => setFormIssueDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <FieldLabel>Due date</FieldLabel>
+              <Input type="date" value={formDueDate} onChange={(e) => setFormDueDate(e.target.value)} />
+            </div>
+          </FieldGrid>
+        </FormSection>
+
+        <FormDivider />
+
+        <FormSection icon={<CreditCard className="h-3.5 w-3.5 text-emerald-600" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Line items">
+          {formLines.map((line, idx) => (
+            <div key={idx} className="grid grid-cols-12 gap-2 items-end mb-2">
+              <div className="col-span-5">
+                <Input
+                  placeholder="Description"
+                  value={line.description}
+                  onChange={(e) => {
+                    const next = [...formLines];
+                    next[idx] = { ...line, description: e.target.value };
+                    setFormLines(next);
+                  }}
+                />
+              </div>
+              <div className="col-span-2">
+                <Input
+                  placeholder="Qty"
+                  value={line.quantity}
+                  onChange={(e) => {
+                    const next = [...formLines];
+                    next[idx] = { ...line, quantity: e.target.value };
+                    setFormLines(next);
+                  }}
+                />
+              </div>
+              <div className="col-span-3">
+                <Input
+                  placeholder="Rate"
+                  value={line.unitRate}
+                  onChange={(e) => {
+                    const next = [...formLines];
+                    next[idx] = { ...line, unitRate: e.target.value };
+                    setFormLines(next);
+                  }}
+                />
+              </div>
+              <div className="col-span-2">
+                <Select
+                  value={line.lineType}
+                  onValueChange={(v) => {
+                    const next = [...formLines];
+                    next[idx] = { ...line, lineType: v };
+                    setFormLines(next);
+                  }}
+                >
+                  <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {projects.map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                    ))}
+                    <SelectItem value="fixed_fee">Fixed</SelectItem>
+                    <SelectItem value="time_materials">T&amp;M</SelectItem>
+                    <SelectItem value="expense">Expense</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>Contract type</Label>
-                <Select value={formContractType} onValueChange={setFormContractType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CONTRACT_TYPES.map((t) => (
-                      <SelectItem key={t} value={t} className="capitalize">{t.replace(/_/g, " ")}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Issue date</Label>
-                <Input type="date" value={formIssueDate} onChange={(e) => setFormIssueDate(e.target.value)} />
+          ))}
+          <Button type="button" variant="outline" size="sm" onClick={() => setFormLines([...formLines, { description: "", quantity: "1", unitRate: "", lineType: "fixed_fee" }])}>
+            <Plus className="h-3 w-3 mr-1" /> Add line
+          </Button>
+          <div className="mt-3 pt-3 border-t border-border/40 space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <FieldLabel>Tax %</FieldLabel>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  className="w-20 h-7 text-xs"
+                  value={formTaxPct}
+                  onChange={(e) => setFormTaxPct(e.target.value)}
+                  placeholder="0"
+                />
               </div>
-              <div className="space-y-2">
-                <Label>Due date</Label>
-                <Input type="date" value={formDueDate} onChange={(e) => setFormDueDate(e.target.value)} />
+              <div className="text-xs text-right space-y-0.5">
+                <div className="text-muted-foreground">Subtotal: {formatCurrency(formSubtotal)}</div>
+                {formTaxAmount > 0 && <div className="text-muted-foreground">Tax: {formatCurrency(formTaxAmount)}</div>}
+                <div className="font-semibold">Total: {formatCurrency(formTotal)}</div>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Line items</Label>
-              {formLines.map((line, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-5">
-                    <Input
-                      placeholder="Description"
-                      value={line.description}
-                      onChange={(e) => {
-                        const next = [...formLines];
-                        next[idx] = { ...line, description: e.target.value };
-                        setFormLines(next);
-                      }}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Input
-                      placeholder="Qty"
-                      value={line.quantity}
-                      onChange={(e) => {
-                        const next = [...formLines];
-                        next[idx] = { ...line, quantity: e.target.value };
-                        setFormLines(next);
-                      }}
-                    />
-                  </div>
-                  <div className="col-span-3">
-                    <Input
-                      placeholder="Rate"
-                      value={line.unitRate}
-                      onChange={(e) => {
-                        const next = [...formLines];
-                        next[idx] = { ...line, unitRate: e.target.value };
-                        setFormLines(next);
-                      }}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Select
-                      value={line.lineType}
-                      onValueChange={(v) => {
-                        const next = [...formLines];
-                        next[idx] = { ...line, lineType: v };
-                        setFormLines(next);
-                      }}
-                    >
-                      <SelectTrigger className="text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fixed_fee">Fixed</SelectItem>
-                        <SelectItem value="time_materials">T&amp;M</SelectItem>
-                        <SelectItem value="expense">Expense</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              ))}
-              <Button type="button" variant="outline" size="sm" onClick={() => setFormLines([...formLines, { description: "", quantity: "1", unitRate: "", lineType: "fixed_fee" }])}>
-                <Plus className="h-3 w-3 mr-1" /> Add line
-              </Button>
-            </div>
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <Textarea value={formNotes} onChange={(e) => setFormNotes(e.target.value)} rows={2} />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={() => createMutation.mutate()} disabled={!formProjectId || createMutation.isPending}>
-              {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </FormSection>
 
-      <Dialog open={showEmail != null} onOpenChange={(open) => !open && setShowEmail(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Send Invoice by Email</DialogTitle></DialogHeader>
-          <div className="space-y-2 py-2">
-            <Label>Recipient email</Label>
+        <FormDivider />
+
+        <FormSection icon={<FileText className="h-3.5 w-3.5 text-muted-foreground" />} title="Notes">
+          <Textarea value={formNotes} onChange={(e) => setFormNotes(e.target.value)} rows={2} placeholder="Payment terms or client notes…" />
+        </FormSection>
+      </FormDialogShell>
+
+      <FormDialogShell
+        open={showEmail != null}
+        onOpenChange={(open) => !open && setShowEmail(null)}
+        title="Send Invoice by Email"
+        saveLabel="Send"
+        onCancel={() => setShowEmail(null)}
+        onSubmit={() => showEmail && sendEmailMutation.mutate({ id: showEmail, email: emailTo })}
+        saving={sendEmailMutation.isPending}
+        disabled={!emailTo}
+      >
+        <FormSection title="Recipient">
+          <div className="space-y-1.5">
+            <FieldLabel required>Recipient email</FieldLabel>
             <Input type="email" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} placeholder="client@example.com" />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEmail(null)}>Cancel</Button>
-            <Button
-              onClick={() => showEmail && sendEmailMutation.mutate({ id: showEmail, email: emailTo })}
-              disabled={!emailTo || sendEmailMutation.isPending}
-            >
-              {sendEmailMutation.isPending ? <FinanceButtonSpinner /> : "Send"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </FormSection>
+      </FormDialogShell>
 
-      <Dialog open={showPayment != null} onOpenChange={(open) => !open && setShowPayment(null)}>
-        <DialogContent data-testid="invoice-payment-dialog">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><FileText className="h-4 w-4" /> Record Payment</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Payment date</Label>
+      <FormDialogShell
+        open={showPayment != null}
+        onOpenChange={(open) => !open && setShowPayment(null)}
+        title="Record Payment"
+        saveLabel="Record"
+        onCancel={() => setShowPayment(null)}
+        onSubmit={() => showPayment && paymentMutation.mutate(showPayment)}
+        saving={paymentMutation.isPending}
+        disabled={!paymentAmount}
+        testId="invoice-payment-dialog"
+      >
+        <FormSection icon={<FileText className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Payment details">
+          <FieldGrid>
+            <div className="space-y-1.5">
+              <FieldLabel>Payment date</FieldLabel>
               <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
             </div>
-            <div className="space-y-2">
-              <Label>Amount</Label>
+            <div className="space-y-1.5">
+              <FieldLabel required>Amount</FieldLabel>
               <Input type="number" step="0.01" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} />
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPayment(null)}>Cancel</Button>
-            <Button onClick={() => showPayment && paymentMutation.mutate(showPayment)} disabled={!paymentAmount || paymentMutation.isPending}>
-              {paymentMutation.isPending ? <FinanceButtonSpinner /> : "Record"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </FieldGrid>
+        </FormSection>
+      </FormDialogShell>
     </div>
   );
 }

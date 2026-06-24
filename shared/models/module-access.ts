@@ -18,6 +18,10 @@ export const SETTINGS_MODULE_KEYS = [
   { key: "test-mgmt", name: "Testing" },
   { key: "bpm", name: "BPM" },
   { key: "workspaces", name: "Workspaces" },
+  { key: "service-desk", name: "Service Desk" },
+  { key: "help-desk", name: "Help Desk" },
+  { key: "surveys", name: "Surveys" },
+  { key: "e-sign", name: "e-Sign" },
   { key: "whiteboard", name: "Whiteboard" },
   { key: "templates", name: "Templates" },
 ] as const;

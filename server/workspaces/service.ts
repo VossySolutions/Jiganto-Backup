@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 import { randomBytes } from "crypto";
@@ -23,6 +23,7 @@ import {
   workspaceTemplates,
 } from "@shared/schema";
 import { SPEC_DEFAULT_COLUMNS } from "./defaults";
+import { moduleTrackerBoardName } from "../../shared/workspace-task-tracker";
 
 export type WorkspaceFilter = "all" | "favorites" | "recent" | "shared" | "mine";
 
@@ -1098,15 +1099,118 @@ export async function createProjectTrackingBoard(
   return createdBoard;
 }
 
+/** Add any missing columns from the canonical task tracker schema. */
+async function ensureTrackingBoardColumns(databaseId: number) {
+  const existing = await db
+    .select({ name: workspaceDatabaseColumns.name })
+    .from(workspaceDatabaseColumns)
+    .where(eq(workspaceDatabaseColumns.databaseId, databaseId));
+  const have = new Set(existing.map((c) => c.name));
+  const missing = SPEC_DEFAULT_COLUMNS.filter((col) => !have.has(col.name));
+  if (missing.length === 0) return;
+  const maxOrder = existing.length;
+  await db.insert(workspaceDatabaseColumns).values(
+    missing.map((column, i) => ({
+      databaseId,
+      name: column.name,
+      type: column.type,
+      sortOrder: column.sortOrder ?? maxOrder + i,
+      options: column.options ?? null,
+      width: column.width ?? null,
+      isVisible: true,
+    })),
+  );
+}
+
+export async function createWorkspaceFromSnapshot(
+  tenantId: number,
+  userId: string,
+  snapshot: Record<string, unknown>,
+  displayName: string,
+) {
+  const structure = normalizeTemplateStructure(snapshot.structure ?? snapshot);
+  return db.transaction(async () => {
+    const workspace = await storage.createWorkspace({
+      tenantId,
+      name: displayName || structure.name || "New Workspace",
+      description: structure.description ?? null,
+      icon: structure.icon ?? null,
+      color: structure.color ?? null,
+      status: "active",
+      isFavorite: false,
+      createdBy: userId,
+    });
+
+    await storage.addWorkspaceMember({
+      workspaceId: workspace.id,
+      userId,
+      role: "owner",
+      permission: "admin",
+      invitedBy: userId,
+    });
+
+    const pages = safeArray<TemplatePageStructure>(structure.pages);
+    for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+      const page = pages[pageIndex];
+      const createdPage = await storage.createWorkspacePage({
+        workspaceId: workspace.id,
+        parentId: null,
+        title: page.title || `Page ${pageIndex + 1}`,
+        description: page.description ?? null,
+        icon: page.icon ?? null,
+        content: page.content ?? null,
+        pageType: page.pageType ?? "page",
+        documentStatus: page.documentStatus ?? "Draft",
+        sortOrder: page.sortOrder ?? pageIndex,
+        createdBy: userId,
+        updatedBy: userId,
+      });
+
+      const databases = safeArray<TemplateDatabaseStructure>(page.databases);
+      for (const templateDb of databases) {
+        const createdDb = await storage.createWorkspaceDatabase({
+          pageId: createdPage.id,
+          name: templateDb.name,
+          activeView: templateDb.activeView ?? "table",
+        });
+
+        const columns = safeArray<TemplateDatabaseStructure["columns"][number]>(templateDb.columns);
+        for (let colIndex = 0; colIndex < columns.length; colIndex++) {
+          const column = columns[colIndex];
+          await storage.createWorkspaceDatabaseColumn({
+            databaseId: createdDb.id,
+            name: column.name,
+            type: column.type,
+            options: column.options ?? null,
+            sortOrder: column.sortOrder ?? colIndex,
+            width: column.width ?? null,
+            isVisible: column.isVisible ?? true,
+          });
+        }
+      }
+    }
+
+    return workspace;
+  });
+}
+
 export async function getProjectTrackingBoard(projectId: number) {
   const [existing] = await db
     .select()
     .from(workspaceDatabases)
-    .where(eq(workspaceDatabases.projectId, projectId))
+    .where(
+      and(
+        eq(workspaceDatabases.projectId, projectId),
+        eq(workspaceDatabases.name, "Project Tracking Board"),
+      ),
+    )
     .orderBy(desc(workspaceDatabases.id))
     .limit(1);
 
-  if (existing) return existing;
+  if (existing) {
+    await ensureTrackingBoardColumns(existing.id);
+    return existing;
+  }
 
   const [created] = await db
     .insert(workspaceDatabases)
@@ -1114,6 +1218,56 @@ export async function getProjectTrackingBoard(projectId: number) {
       pageId: null,
       projectId,
       name: "Project Tracking Board",
+      activeView: "table",
+    })
+    .returning();
+
+  const columnsPayload = SPEC_DEFAULT_COLUMNS.map((column, index) => ({
+    databaseId: created.id,
+    name: column.name,
+    type: column.type,
+    sortOrder: column.sortOrder ?? index,
+    options: column.options ?? null,
+    width: column.width ?? null,
+    isVisible: true,
+  }));
+
+  if (columnsPayload.length > 0) {
+    await db.insert(workspaceDatabaseColumns).values(columnsPayload);
+  }
+
+  return created;
+}
+
+/** Module-level task tracker board (Service Desk, Help Desk, BPM, TM, etc.) */
+export async function getModuleTrackingBoard(moduleKey: string, scopeId?: number | null, tenantId?: number | null) {
+  const name = moduleTrackerBoardName(moduleKey, scopeId, tenantId);
+  const [existing] = await db
+    .select()
+    .from(workspaceDatabases)
+    .where(
+      and(
+        or(
+          eq(workspaceDatabases.name, name),
+          eq(workspaceDatabases.name, moduleTrackerBoardName(moduleKey, scopeId)),
+        ),
+        isNull(workspaceDatabases.pageId),
+      ),
+    )
+    .orderBy(desc(workspaceDatabases.id))
+    .limit(1);
+
+  if (existing) {
+    await ensureTrackingBoardColumns(existing.id);
+    return existing;
+  }
+
+  const [created] = await db
+    .insert(workspaceDatabases)
+    .values({
+      pageId: null,
+      projectId: scopeId && scopeId > 0 ? scopeId : null,
+      name,
       activeView: "table",
     })
     .returning();

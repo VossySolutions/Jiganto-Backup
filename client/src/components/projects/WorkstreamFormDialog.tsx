@@ -1,14 +1,11 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2 } from "lucide-react";
 import type { PmWorkstream, PmProjectPhase } from "@shared/models/projects";
 
 interface WorkstreamFormDialogProps {
@@ -121,15 +118,13 @@ export function WorkstreamFormDialog({
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     if (!name.trim()) {
       toast({ title: "Missing name", description: "Please enter a workstream name.", variant: "destructive" });
       return;
     }
 
     const data = {
-      tenantId: 1,
       projectId,
       name: name.trim(),
       description: description.trim() || null,
@@ -157,163 +152,160 @@ export function WorkstreamFormDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]" data-testid="workstream-form-dialog">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Workstream" : "Add New Workstream"}</DialogTitle>
-          <DialogDescription>
-            {isEditing ? "Update the workstream details below." : "Create a new workstream to organize your project work."}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="workstream-name">Name *</Label>
+    <FormDialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      onCancel={() => onOpenChange(false)}
+      onSubmit={handleSubmit}
+      title={isEditing ? "Edit Workstream" : "Add New Workstream"}
+      subtitle={isEditing ? "Update the workstream details below." : "Create a new workstream to organize your project work."}
+      saveLabel={isPending ? "Saving..." : isEditing ? "Update Workstream" : "Create Workstream"}
+      saving={isPending}
+      saveTestId="button-save-workstream"
+      testId="workstream-form-dialog"
+    >
+      <FormSection title="Workstream details" icon={<span className="h-2 w-2 rounded-full bg-blue-500" />}>
+        <div className="space-y-1.5 mb-3.5">
+          <FieldLabel required>Name</FieldLabel>
+          <Input
+            id="workstream-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., Backend Development"
+            data-testid="input-workstream-name"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <FieldLabel>Description</FieldLabel>
+          <Textarea
+            id="workstream-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe the workstream scope..."
+            rows={2}
+            data-testid="input-workstream-description"
+          />
+        </div>
+      </FormSection>
+
+      <FormDivider />
+
+      <FormSection title="Planning" icon={<span className="h-2 w-2 rounded-full bg-violet-500" />}>
+        <FieldGrid className="mb-3.5">
+          <div className="space-y-1.5">
+            <FieldLabel>Phase</FieldLabel>
+            <Select value={phaseId || "__none__"} onValueChange={(v) => setPhaseId(v === "__none__" ? "" : v)}>
+              <SelectTrigger id="workstream-phase" data-testid="select-workstream-phase">
+                <SelectValue placeholder="Select phase..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No Phase</SelectItem>
+                {phases.map((phase) => (
+                  <SelectItem key={phase.id} value={phase.id.toString()}>{phase.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <FieldLabel>Parent Workstream</FieldLabel>
+            <Select value={parentWorkstreamId || "__none__"} onValueChange={(v) => setParentWorkstreamId(v === "__none__" ? "" : v)}>
+              <SelectTrigger id="workstream-parent" data-testid="select-workstream-parent">
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
+                {availableParentWorkstreams.map((ws) => (
+                  <SelectItem key={ws.id} value={ws.id.toString()}>{ws.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </FieldGrid>
+
+        <FieldGrid className="mb-3.5">
+          <div className="space-y-1.5">
+            <FieldLabel>WBS Code</FieldLabel>
             <Input
-              id="workstream-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Backend Development"
-              data-testid="input-workstream-name"
+              id="workstream-wbs"
+              value={wbsCode}
+              onChange={(e) => setWbsCode(e.target.value)}
+              placeholder="e.g., 1.2.3"
+              data-testid="input-workstream-wbs"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="workstream-description">Description</Label>
-            <Textarea
-              id="workstream-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe the workstream scope..."
-              rows={2}
-              data-testid="input-workstream-description"
+          <div className="space-y-1.5">
+            <FieldLabel>Estimated Hours</FieldLabel>
+            <Input
+              id="workstream-hours"
+              type="number"
+              min="0"
+              step="0.5"
+              value={estimatedHours}
+              onChange={(e) => setEstimatedHours(e.target.value)}
+              placeholder="e.g., 80"
+              data-testid="input-workstream-hours"
+            />
+          </div>
+        </FieldGrid>
+
+        <FieldGrid className="mb-3.5">
+          <div className="space-y-1.5">
+            <FieldLabel>Status</FieldLabel>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger id="workstream-status" data-testid="select-workstream-status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {statusOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <FieldLabel>RAG Status</FieldLabel>
+            <Select value={ragStatus} onValueChange={setRagStatus}>
+              <SelectTrigger id="workstream-rag" data-testid="select-workstream-rag">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ragOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </FieldGrid>
+
+        <FieldGrid>
+          <div className="space-y-1.5">
+            <FieldLabel>Planned Start Date</FieldLabel>
+            <Input
+              id="workstream-start-date"
+              type="date"
+              value={plannedStartDate}
+              onChange={(e) => setPlannedStartDate(e.target.value)}
+              data-testid="input-workstream-start-date"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="workstream-phase">Phase</Label>
-              <Select value={phaseId || "__none__"} onValueChange={(v) => setPhaseId(v === "__none__" ? "" : v)}>
-                <SelectTrigger id="workstream-phase" data-testid="select-workstream-phase">
-                  <SelectValue placeholder="Select phase..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No Phase</SelectItem>
-                  {phases.map((phase) => (
-                    <SelectItem key={phase.id} value={phase.id.toString()}>{phase.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="workstream-parent">Parent Workstream</Label>
-              <Select value={parentWorkstreamId || "__none__"} onValueChange={(v) => setParentWorkstreamId(v === "__none__" ? "" : v)}>
-                <SelectTrigger id="workstream-parent" data-testid="select-workstream-parent">
-                  <SelectValue placeholder="None" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
-                  {availableParentWorkstreams.map((ws) => (
-                    <SelectItem key={ws.id} value={ws.id.toString()}>{ws.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1.5">
+            <FieldLabel>Planned End Date</FieldLabel>
+            <Input
+              id="workstream-end-date"
+              type="date"
+              value={plannedEndDate}
+              onChange={(e) => setPlannedEndDate(e.target.value)}
+              data-testid="input-workstream-end-date"
+            />
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="workstream-wbs">WBS Code</Label>
-              <Input
-                id="workstream-wbs"
-                value={wbsCode}
-                onChange={(e) => setWbsCode(e.target.value)}
-                placeholder="e.g., 1.2.3"
-                data-testid="input-workstream-wbs"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="workstream-hours">Estimated Hours</Label>
-              <Input
-                id="workstream-hours"
-                type="number"
-                min="0"
-                step="0.5"
-                value={estimatedHours}
-                onChange={(e) => setEstimatedHours(e.target.value)}
-                placeholder="e.g., 80"
-                data-testid="input-workstream-hours"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="workstream-status">Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger id="workstream-status" data-testid="select-workstream-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {statusOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="workstream-rag">RAG Status</Label>
-              <Select value={ragStatus} onValueChange={setRagStatus}>
-                <SelectTrigger id="workstream-rag" data-testid="select-workstream-rag">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ragOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="workstream-start-date">Planned Start Date</Label>
-              <Input
-                id="workstream-start-date"
-                type="date"
-                value={plannedStartDate}
-                onChange={(e) => setPlannedStartDate(e.target.value)}
-                data-testid="input-workstream-start-date"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="workstream-end-date">Planned End Date</Label>
-              <Input
-                id="workstream-end-date"
-                type="date"
-                value={plannedEndDate}
-                onChange={(e) => setPlannedEndDate(e.target.value)}
-                data-testid="input-workstream-end-date"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-workstream">
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isPending} data-testid="button-save-workstream">
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isEditing ? "Update Workstream" : "Create Workstream"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </FieldGrid>
+      </FormSection>
+    </FormDialogShell>
   );
 }
 

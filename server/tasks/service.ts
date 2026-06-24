@@ -600,7 +600,17 @@ export async function updateAggregatedTaskStatus(
     return getAggregatedTask(scope, compositeId);
   }
   if (parsed.kind === "helpdesk") {
-    const id = Number(parsed.ref);
+    const ref = parsed.ref;
+    if (ref.startsWith("sd-")) {
+      const ticketId = Number(ref.slice(3));
+      if (!Number.isFinite(ticketId)) return null;
+      const sdStatus = status === "completed" ? "resolved" : status === "in_progress" ? "in_progress" : "pending";
+      const { sdTickets } = await import("@shared/schema");
+      await db.update(sdTickets).set({ status: sdStatus, updatedAt: new Date() }).where(eq(sdTickets.id, ticketId));
+      return getAggregatedTask(scope, compositeId);
+    }
+    const id = Number(ref);
+    if (!Number.isFinite(id)) return null;
     const crmStatus = status === "completed" ? "completed" : status === "in_progress" ? "in_progress" : "pending";
     await db.update(crmTasks).set({ status: crmStatus, updatedAt: new Date() }).where(eq(crmTasks.id, id));
     return getAggregatedTask(scope, compositeId);

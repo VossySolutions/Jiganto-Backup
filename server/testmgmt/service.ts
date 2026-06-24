@@ -21,6 +21,16 @@ export function getTmLabels(methodology?: string | null) {
   return TM_LABELS[m] ?? TM_LABELS.waterfall;
 }
 
+export function groupResultsByRunId(results: TmTestResult[]): Map<number, TmTestResult[]> {
+  const map = new Map<number, TmTestResult[]>();
+  for (const result of results) {
+    const list = map.get(result.testRunId) ?? [];
+    list.push(result);
+    map.set(result.testRunId, list);
+  }
+  return map;
+}
+
 /** Map legacy execution statuses to spec statuses */
 export function normalizeExecutionStatus(status?: string | null): string {
   if (!status || status === "not_run") return "not_started";

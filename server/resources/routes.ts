@@ -6,7 +6,7 @@ import {
   insertDocumentResourceLinkSchema,
 } from "@shared/schema";
 import { effectiveUserId } from "../auth/impersonationRoutes";
-import { getApiTenantIdWithFallback } from "../lib/api-tenant-id";
+import { getApiTenantId } from "../lib/api-tenant-id";
 import { resolveUserPermissions } from "../lib/permissions";
 import { storage } from "../storage";
 import {
@@ -27,6 +27,7 @@ import {
   logTimesheetAudit,
   runSkillsGapAnalysis,
   searchResourcesBySkills,
+  getPersonalResourceDashboard,
 } from "./service";
 import {
   approveTimesheetPm,
@@ -58,7 +59,8 @@ function getUserId(req: Request): string | null {
 async function getScope(req: Request): Promise<{ userId: string; tenantId: number; scope: ResourceScope } | null> {
   const userId = getUserId(req);
   if (!userId) return null;
-  const tenantId = getApiTenantIdWithFallback(req);
+  const tenantId = getApiTenantId(req);
+  if (tenantId == null) return null;
   const perms = await resolveUserPermissions(userId, tenantId);
   const scope = await resolveResourceScope(userId, tenantId, perms.platformRole);
   return { userId, tenantId, scope };
@@ -99,23 +101,49 @@ export function registerResourcesRoutes(app: Express): void {
     }
   });
 
+  app.get("/api/resources/stats", async (req, res) => {
+    const ctx = await getScope(req);
+    if (!ctx) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const resourceIds = ctx.scope.visibleResourceIds === "all"
+        ? undefined
+        : ctx.scope.visibleResourceIds;
+      res.json(await getExtendedResourceStats(ctx.tenantId, resourceIds));
+    } catch (err: any) {
+      console.error("[resources/stats]", err);
+      res.status(500).json({ message: err.message ?? "Failed to load stats" });
+    }
+  });
+
   app.get("/api/resources/dashboard", async (req, res) => {
     const ctx = await getScope(req);
     if (!ctx) return res.status(401).json({ message: "Not authenticated" });
     if (ctx.scope.role === "self") {
-      return res.json({
-        stats: { utilisationPct: 0, onBench: 0, overAllocated: 0, activeResources: 1, utilByResource: {} },
-        trend: [],
-        capacityDemand: [],
-        skillsHeatmap: { roles: [], weekLabels: [], matrix: {} },
-      });
+      if (ctx.scope.ownResourceId == null) {
+        return res.json({
+          linked: false,
+          stats: { utilisationPct: 0, onBench: 0, overAllocated: 0, activeResources: 0, utilByResource: {} },
+          trend: [],
+          capacityDemand: [],
+          skillsHeatmap: { roles: [], weekLabels: [], matrix: {} },
+        });
+      }
+      try {
+        return res.json(await getPersonalResourceDashboard(ctx.tenantId, ctx.scope.ownResourceId));
+      } catch (err: any) {
+        console.error("[resources/dashboard self]", err);
+        return res.status(500).json({ message: err.message ?? "Failed to load dashboard" });
+      }
     }
+    const scopedIds = ctx.scope.visibleResourceIds === "all"
+      ? undefined
+      : ctx.scope.visibleResourceIds;
     try {
       const [stats, trend, capacityDemand, skillsHeatmap] = await Promise.all([
-        getExtendedResourceStats(ctx.tenantId),
-        getUtilisationTrend(ctx.tenantId, 12),
-        getCapacityVsDemand(ctx.tenantId, 8),
-        getSkillsDemandHeatmap(ctx.tenantId, 8),
+        getExtendedResourceStats(ctx.tenantId, scopedIds),
+        getUtilisationTrend(ctx.tenantId, 12, scopedIds),
+        ctx.scope.role === "manager" ? getCapacityVsDemand(ctx.tenantId, 8) : Promise.resolve([]),
+        ctx.scope.role === "manager" ? getSkillsDemandHeatmap(ctx.tenantId, 8) : Promise.resolve({ roles: [], weekLabels: [], matrix: {} }),
       ]);
       res.json({ stats, trend, capacityDemand, skillsHeatmap });
     } catch (err: any) {
@@ -454,6 +482,24 @@ export function registerResourcesRoutes(app: Express): void {
     const ctx = await getScope(req);
     if (!ctx) return res.status(401).json({ message: "Not authenticated" });
     if (!ctx.scope.canViewPipeline) return res.status(403).json({ message: "Access denied" });
-    res.json({ message: "Capacity concern flagged to opportunity owner", opportunityId: Number(req.params.oppId) });
+    const oppId = Number(req.params.oppId);
+    if (!Number.isFinite(oppId)) return res.status(400).json({ message: "Invalid opportunity id" });
+    const opp = await storage.getCrmOpportunity(oppId);
+    if (!opp || opp.tenantId !== ctx.tenantId) return res.status(404).json({ message: "Opportunity not found" });
+    const note = typeof req.body?.note === "string" && req.body.note.trim()
+      ? req.body.note.trim()
+      : "Resource capacity concern flagged from pipeline review";
+    await storage.createCrmActivity({
+      tenantId: ctx.tenantId,
+      opportunityId: oppId,
+      accountId: opp.accountId ?? null,
+      type: "task",
+      subject: "Capacity concern flagged",
+      description: note,
+      status: "pending",
+      priority: "high",
+      ownerUserId: opp.ownerUserId ?? ctx.userId,
+    });
+    res.json({ message: "Capacity concern flagged to opportunity owner", opportunityId: oppId });
   });
 }

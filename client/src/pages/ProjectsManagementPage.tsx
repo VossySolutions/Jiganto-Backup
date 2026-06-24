@@ -287,7 +287,7 @@ const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
 };
 
 const MASTER_TOOL_ORDER: string[] = [
-  "gantt_chart", "milestone_plan", "project_dashboard", "sprint_board", "backlog",
+  "gantt_chart", "milestone_plan", "project_dashboard", "tracking_board", "sprint_board", "backlog",
   "epics", "stories", "sprints", "defects", "roadmap",
   "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log",
   "dependencies_log", "decisions_log", "change_log", "documentation", "org_chart",
@@ -298,7 +298,7 @@ const MASTER_TOOL_ORDER: string[] = [
 ];
 
 const DEFAULT_TOOLS: Record<string, string[]> = {
-  project: ["gantt_chart", "milestone_plan", "project_dashboard", "sprint_board", "backlog", "epics", "stories", "sprints", "defects", "roadmap", "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log", "dependencies_log", "decisions_log", "change_log", "documentation", "org_chart", "stakeholder_map", "business_process_model", "deliverables_tracker", "kanban_board", "raci_model", "resource_tracker", "test_tracker", "timesheets", "finance_tracker", "sow_tracker", "wbs", "whiteboard"],
+  project: ["gantt_chart", "milestone_plan", "project_dashboard", "tracking_board", "sprint_board", "backlog", "epics", "stories", "sprints", "defects", "roadmap", "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log", "dependencies_log", "decisions_log", "change_log", "documentation", "org_chart", "stakeholder_map", "business_process_model", "deliverables_tracker", "kanban_board", "raci_model", "resource_tracker", "test_tracker", "timesheets", "finance_tracker", "sow_tracker", "wbs", "whiteboard"],
   programme: ["gantt_chart", "milestone_plan", "status_reporting", "project_dashboard", "risk_log", "issues_log"],
   initiative: ["milestone_plan", "status_reporting", "project_dashboard", "risk_log"],
   campaign: ["kanban_board", "milestone_plan", "status_reporting"],
@@ -871,11 +871,9 @@ function AllProjectsView({
 function WizardView({
   onCancel,
   onComplete,
-  tenantId,
 }: {
   onCancel: () => void;
   onComplete: () => void;
-  tenantId: number;
 }) {
   const { toast } = useToast();
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -918,7 +916,6 @@ function WizardView({
   const createMutation = useMutation({
     mutationFn: async (data: WizardData) => {
       const project = await apiRequest("POST", "/api/pm/projects", {
-        tenantId,
         name: data.name,
         description: data.description || null,
         workType: data.workType,
@@ -938,7 +935,6 @@ function WizardView({
           tools: data.selectedTools.map((toolId, index) => {
             const toolDef = findToolDefinition(toolId);
             return {
-              tenantId,
               toolType: toolId,
               toolCategory: toolDef?.category || "planning_scheduling",
               label: toolDef?.name || toolId,
@@ -950,7 +946,7 @@ function WizardView({
       return projectData;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/pm/projects?tenantId=1`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/pm/projects`] });
       toast({ title: "Work item created successfully" });
       onComplete();
     },
@@ -1291,11 +1287,9 @@ function WizardView({
 
 function ProjectDetailView({
   projectId,
-  tenantId,
   onBack,
 }: {
   projectId: number;
-  tenantId: number;
   onBack: () => void;
 }) {
   const [activeTool, setActiveTool] = useState<string>("");
@@ -1326,7 +1320,7 @@ function ProjectDetailView({
       apiRequest("PUT", `/api/pm/projects/${projectId}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId] });
-      queryClient.invalidateQueries({ queryKey: [`/api/pm/projects?tenantId=${tenantId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects"] });
     },
   });
 
@@ -1458,7 +1452,6 @@ function ProjectDetailView({
       const toolDef = findToolDefinition(toolId);
       await apiRequest("POST", `/api/pm/projects/${projectId}/tools/bulk`, {
         tools: [{
-          tenantId,
           toolType: toolId,
           toolCategory: toolDef?.category || "planning_scheduling",
           label: toolDef?.name || toolId,
@@ -2320,7 +2313,7 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
             <Button variant="outline" size="sm" onClick={toggleMaximize} data-testid={`button-tool-fullscreen-${toolId}`}>
               {isMaximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
             </Button>
-            <Button variant="outline" size="sm" data-testid={`button-tool-add-${toolId}`}>
+            <Button variant="outline" size="sm" disabled title="Use in-tool controls to add items" data-testid={`button-tool-add-${toolId}`}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Add
             </Button>
           </div>
@@ -2339,9 +2332,6 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
 export default function ProjectsManagementPage() {
   const [, setLocation] = useLocation();
   const params = useParams<{ projectId?: string }>();
-
-  const { data: tenants } = useQuery<{ id: number }[]>({ queryKey: ["/api/tenants"] });
-  const tenantId = tenants?.[0]?.id ?? 1;
 
   const [currentView, setCurrentView] = useState<ViewMode>(() =>
     params.projectId ? "project" : "dashboard"
@@ -2364,8 +2354,8 @@ export default function ProjectsManagementPage() {
   }, [params.projectId]);
 
   const { data: projects = [], isLoading } = useQuery<any[]>({
-    queryKey: [`/api/pm/projects?tenantId=${tenantId}`],
-    enabled: !!tenantId,
+    queryKey: ["/api/pm/projects"],
+    staleTime: 30_000,
   });
 
   const handleOpenProject = (id: number) => {
@@ -2408,14 +2398,12 @@ export default function ProjectsManagementPage() {
               <WizardView
                 onCancel={() => setCurrentView("dashboard")}
                 onComplete={() => setCurrentView("dashboard")}
-                tenantId={tenantId}
               />
             )}
 
             {currentView === "project" && selectedProjectId && (
               <ProjectDetailView
                 projectId={selectedProjectId}
-                tenantId={tenantId}
                 onBack={handleBackFromProject}
               />
             )}

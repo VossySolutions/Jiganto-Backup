@@ -35,8 +35,10 @@ import {
   requireOrgAdmin,
 } from "./lib/workspace-access";
 import { resolveListClientId } from "./lib/list-client-id";
+import { resolveDefaultOpenStage } from "./lib/crm-pipeline";
+import { opportunityMatchesPipeline } from "@shared/crm-pipeline";
 import { ensureDefaultModuleRoles } from "./lib/default-module-roles";
-import { getApiTenantIdWithFallback, requireApiTenantId } from "./lib/api-tenant-id";
+import { requireApiTenantId, getApiTenantId } from "./lib/api-tenant-id";
 import { isRequestAuthenticated } from "./auth/supabaseAuth";
 import { registerOrgMembershipRoutes } from "./auth/orgMembershipRoutes";
 import { registerImpersonationRoutes } from "./auth/impersonationRoutes";
@@ -1367,7 +1369,8 @@ export async function registerRoutes(
       if (!isRequestAuthenticated(req)) {
         return res.status(401).json({ message: "Authentication required" });
       }
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const profilesWithUsers = await storage.getProfiles(tenantId);
       const result = profilesWithUsers.map((p: any) => ({
         id: p.user?.id || p.userId,
@@ -1803,7 +1806,8 @@ export async function registerRoutes(
     if (!isRequestAuthenticated(req) || !req.user) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const projects = await storage.getProjects(tenantId);
     res.json(projects);
   });
@@ -1813,7 +1817,8 @@ export async function registerRoutes(
     if (!userId) {
       return res.status(401).json({ message: "Not authenticated" });
     }
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const projects = await storage.getUserProjects(userId, tenantId);
     res.json(projects);
   });
@@ -1824,7 +1829,8 @@ export async function registerRoutes(
       return res.status(401).json({ message: "Not authenticated" });
     }
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const project = await storage.createProject({ ...req.body, tenantId });
       // Add creator as project owner
       await storage.addProjectMember({
@@ -1854,7 +1860,9 @@ export async function registerRoutes(
     const project = await storage.getProject(projectId);
     if (!project) return res.status(404).json({ message: "Team not found" });
 
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+
+    if (tenantId == null) return;
     if (project.tenantId !== tenantId) return res.status(403).json({ message: "Access denied" });
 
     const isMember = await storage.isProjectMember(projectId, userId);
@@ -1908,7 +1916,8 @@ export async function registerRoutes(
       return res.status(401).json({ message: "Not authenticated" });
     }
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const projectId = req.query.projectId === "null" ? null : req.query.projectId ? Number(req.query.projectId) : undefined;
       const channels = await storage.getChannels(tenantId, userId, projectId);
       res.json(channels);
@@ -1924,7 +1933,8 @@ export async function registerRoutes(
       return res.status(401).json({ message: "Not authenticated" });
     }
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const channel = await storage.createChannel({
         ...req.body,
         tenantId,
@@ -2188,7 +2198,8 @@ export async function registerRoutes(
   app.get("/api/chat/inbox", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
       const scopedClientId = workspaceClientId(req);
       const inbox = await storage.getChatInbox(userId, tenantId, scopedClientId);
@@ -2202,7 +2213,8 @@ export async function registerRoutes(
   app.post("/api/chat/channel-favorites/:channelId", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     await storage.addChannelFavorite(userId, Number(req.params.channelId), tenantId);
     res.status(201).json({ success: true });
   });
@@ -2210,7 +2222,8 @@ export async function registerRoutes(
   app.delete("/api/chat/channel-favorites/:channelId", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     await storage.removeChannelFavorite(userId, Number(req.params.channelId), tenantId);
     res.status(204).send();
   });
@@ -2218,7 +2231,8 @@ export async function registerRoutes(
   app.post("/api/chat/teams", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const { name, description, isPrivate, memberIds } = req.body;
     if (!name?.trim()) return res.status(400).json({ message: "Team name is required" });
     try {
@@ -2238,7 +2252,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const q = String(req.query.q ?? "");
       const channelId = req.query.channelId ? Number(req.query.channelId) : undefined;
       const hits = await storage.searchChatMessages(userId, tenantId, q, channelId);
@@ -2363,7 +2378,8 @@ export async function registerRoutes(
   app.get("/api/chat/favorites", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const favorites = await storage.getUserFavorites(userId, tenantId);
     res.json(favorites);
   });
@@ -2372,7 +2388,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const favorite = await storage.addUserFavorite(userId, req.body.favoriteUserId, tenantId);
       res.status(201).json(favorite);
     } catch (err) {
@@ -2383,7 +2400,8 @@ export async function registerRoutes(
   app.delete("/api/chat/favorites/:favoriteUserId", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     await storage.removeUserFavorite(userId, req.params.favoriteUserId, tenantId);
     res.status(204).send();
   });
@@ -2392,7 +2410,8 @@ export async function registerRoutes(
   app.get("/api/chat/users/search", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const query = (req.query.q as string) || "";
     const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
     const users = await storage.searchUsers(tenantId, query, projectId);
@@ -2403,7 +2422,8 @@ export async function registerRoutes(
   app.get("/api/chat/users", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const users = await storage.getTenantUsers(tenantId);
     res.json(users);
   });
@@ -2413,7 +2433,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const otherUserId = req.body.otherUserId;
       const channel = await storage.getOrCreateDMChannel(userId, otherUserId, tenantId);
       res.json(channel);
@@ -2426,36 +2447,28 @@ export async function registerRoutes(
   app.get("/api/chat/dm", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const dms = await storage.getDirectMessageChannels(userId, tenantId);
     res.json(dms);
   });
 
   const { registerExtendedChatRoutes } = await import("./chat/extended-routes");
-  await registerExtendedChatRoutes(app, getUserId, getApiTenantIdWithFallback);
+  await registerExtendedChatRoutes(app, getUserId, (req) => getApiTenantId(req) ?? 0);
 
   // === CRM MODULE ROUTES ===
 
-  app.post("/api/crm/seed-demo-data", async (req, res) => {
-    if (process.env.NODE_ENV === "production") {
-      return res.status(403).json({ message: "Demo seed is disabled in production" });
-    }
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const { seedCrmDemoData } = await import("./seed-crm-demo");
-      const counts = await seedCrmDemoData();
-      res.json({ success: true, counts });
-    } catch (err) {
-      console.error("Failed to seed CRM demo data:", err);
-      res.status(500).json({ message: "Failed to seed demo data" });
-    }
+  app.post("/api/crm/seed-demo-data", async (_req, res) => {
+    return res.status(403).json({
+      message: "CRM demo seed is disabled. Create records via the CRM UI or your data migration — all modules read live database data only.",
+    });
   });
 
   app.get("/api/crm/dashboard-stats", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
       const listClientId = resolveListClientId(req);
       const [accounts, leads, opportunities, stages, contracts] = await Promise.all([
@@ -2515,7 +2528,7 @@ export async function registerRoutes(
 
       const hotOpportunities = [...openOpps]
         .sort((a: any, b: any) => (parseFloat(b.amount || "0") || 0) - (parseFloat(a.amount || "0") || 0))
-        .slice(0, 10)
+        .slice(0, 5)
         .map((o: any) => {
           const stage = stages.find((s: any) => s.id === o.stageId);
           const account = accounts.find((a: any) => a.id === o.accountId);
@@ -2529,7 +2542,7 @@ export async function registerRoutes(
         .map((a: any) => ({ id: a.id, type: a.type, subject: a.subject, createdAt: a.createdAt }));
 
       const ownerLeaderboard: Record<string, { ownerId: string; total: number; count: number }> = {};
-      for (const o of openOpps) {
+      for (const o of wonOpps) {
         const owner = o.ownerUserId || "unassigned";
         if (!ownerLeaderboard[owner]) ownerLeaderboard[owner] = { ownerId: owner, total: 0, count: 0 };
         ownerLeaderboard[owner].total += parseFloat(o.amount || "0") || 0;
@@ -2542,11 +2555,15 @@ export async function registerRoutes(
         const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
         const key = d.toLocaleString("en-US", { month: "short", year: "2-digit" });
         const monthOpps = openOpps.filter((o: any) => {
-          if (!o.expectedCloseDate) return i === 0;
+          if (!o.expectedCloseDate) return false;
           const cd = new Date(o.expectedCloseDate);
           return cd.getMonth() === d.getMonth() && cd.getFullYear() === d.getFullYear();
         });
-        const value = monthOpps.reduce((s: number, o: any) => s + (parseFloat(o.amount || "0") || 0) * ((o.probability || 0) / 100), 0);
+        const value = monthOpps.reduce((s: number, o: any) => {
+          const stage = stages.find((st: any) => st.id === o.stageId);
+          const prob = o.probability ?? stage?.probability ?? 0;
+          return s + (parseFloat(o.amount || "0") || 0) * (prob / 100);
+        }, 0);
         revenueForecast.push({ month: key, value: Math.round(value) });
       }
 
@@ -2582,6 +2599,8 @@ export async function registerRoutes(
         newLeadsThisMonth,
         leadConversionRate,
         winRate90d,
+        wonDeals90d: recentWon.length,
+        lostDeals90d: recentLost.length,
         avgSalesCycle,
         activeContracts: activeContracts.length,
         expiringContracts: expiringContracts.length,
@@ -2602,7 +2621,8 @@ export async function registerRoutes(
   app.get("/api/crm/accounts", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const accounts = await storage.getCrmAccounts(tenantId, resolveListClientId(req));
     res.json(accounts);
   });
@@ -2622,7 +2642,8 @@ export async function registerRoutes(
     const account = await storage.getCrmAccount(Number(req.params.id));
     if (!account) return res.status(404).json({ message: "Account not found" });
     if (!assertRecordInWorkspace(req, res, account.clientId)) return;
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const tickets = await storage.getCrmAccountTickets(tenantId, account.id, resolveListClientId(req));
     res.json(tickets);
   });
@@ -2633,7 +2654,8 @@ export async function registerRoutes(
     const account = await storage.getCrmAccount(Number(req.params.id));
     if (!account) return res.status(404).json({ message: "Account not found" });
     if (!assertRecordInWorkspace(req, res, account.clientId)) return;
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const clientId = account.clientId ?? resolveListClientId(req);
     if (clientId === undefined) {
       return res.json([]);
@@ -2653,7 +2675,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const account = await storage.createCrmAccount({ ...req.body, tenantId, ownerUserId: userId });
       res.status(201).json(account);
     } catch (err) {
@@ -2680,7 +2703,8 @@ export async function registerRoutes(
   app.get("/api/crm/contacts", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const accountId = req.query.accountId ? Number(req.query.accountId) : undefined;
     const contacts = await storage.getCrmContacts(tenantId, accountId, resolveListClientId(req));
     res.json(contacts);
@@ -2702,7 +2726,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const contact = await storage.createCrmContact({ ...req.body, tenantId, ownerUserId: userId });
       res.status(201).json(contact);
     } catch (err) {
@@ -2729,15 +2754,104 @@ export async function registerRoutes(
   app.get("/api/crm/contacts/:id/relationships", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const relationships = await storage.getCrmContactRelationships(Number(req.params.id));
-    res.json(relationships);
+    const contactId = Number(req.params.id);
+    const contact = await storage.getCrmContact(contactId);
+    if (!contact) return res.status(404).json({ message: "Contact not found" });
+    const relationships = await storage.getCrmContactRelationships(contactId);
+    const enriched = await Promise.all(
+      relationships.map(async (r) => {
+        const related = await storage.getCrmContact(r.relatedContactId);
+        const sameAccount =
+          !!contact.accountId &&
+          !!related?.accountId &&
+          contact.accountId === related.accountId;
+        return { ...r, sameAccount };
+      }),
+    );
+    res.json(enriched);
   });
 
   app.post("/api/crm/contact-relationships", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const relationship = await storage.createCrmContactRelationship(req.body);
-    res.status(201).json(relationship);
+    try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const contactId = Number(req.body.contactId);
+      const relatedContactId = Number(req.body.relatedContactId);
+      if (!Number.isFinite(contactId) || !Number.isFinite(relatedContactId)) {
+        return res.status(400).json({ message: "Invalid contact IDs" });
+      }
+      const [contact, related] = await Promise.all([
+        storage.getCrmContact(contactId),
+        storage.getCrmContact(relatedContactId),
+      ]);
+      if (!contact || !related) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      if (contact.id === related.id) {
+        return res.status(400).json({ message: "A contact cannot have a relationship with themselves" });
+      }
+      if (!contact.accountId || !related.accountId || contact.accountId !== related.accountId) {
+        return res.status(400).json({
+          message: "Relationships can only be created between contacts at the same account",
+        });
+      }
+      const relationship = await storage.createCrmContactRelationship({
+        ...req.body,
+        tenantId,
+        contactId,
+        relatedContactId,
+      });
+      res.status(201).json(relationship);
+    } catch (err) {
+      console.error("Failed to create contact relationship:", err);
+      res.status(400).json({ message: "Failed to create contact relationship" });
+    }
+  });
+
+  app.put("/api/crm/contact-relationships/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getCrmContactRelationship(id);
+      if (!existing) return res.status(404).json({ message: "Relationship not found" });
+
+      const contactId = existing.contactId;
+      const relatedContactId = Number(req.body.relatedContactId ?? existing.relatedContactId);
+      const relationshipType = req.body.relationshipType ?? existing.relationshipType;
+      if (!Number.isFinite(relatedContactId)) {
+        return res.status(400).json({ message: "Invalid related contact ID" });
+      }
+
+      const [contact, related] = await Promise.all([
+        storage.getCrmContact(contactId),
+        storage.getCrmContact(relatedContactId),
+      ]);
+      if (!contact || !related) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      if (contact.id === related.id) {
+        return res.status(400).json({ message: "A contact cannot have a relationship with themselves" });
+      }
+      if (!contact.accountId || !related.accountId || contact.accountId !== related.accountId) {
+        return res.status(400).json({
+          message: "Relationships can only be created between contacts at the same account",
+        });
+      }
+
+      const relationship = await storage.updateCrmContactRelationship(id, {
+        relatedContactId,
+        relationshipType,
+        reverseRelationshipType: req.body.reverseRelationshipType ?? existing.reverseRelationshipType,
+        notes: req.body.notes ?? existing.notes,
+      });
+      res.json(relationship);
+    } catch (err) {
+      console.error("Failed to update contact relationship:", err);
+      res.status(400).json({ message: "Failed to update contact relationship" });
+    }
   });
 
   app.delete("/api/crm/contact-relationships/:id", async (req, res) => {
@@ -2751,7 +2865,8 @@ export async function registerRoutes(
   app.get("/api/crm/saved-views", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const entityType = req.query.entityType as string | undefined;
     const views = await storage.getCrmSavedViews(tenantId, entityType, userId);
     res.json(views);
@@ -2761,7 +2876,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const view = await storage.createCrmSavedView({ ...req.body, tenantId, userId });
       res.status(201).json(view);
     } catch (err) {
@@ -2789,7 +2905,8 @@ export async function registerRoutes(
   app.get("/api/crm/email-templates", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const templates = await storage.getCrmEmailTemplates(tenantId);
     res.json(templates);
   });
@@ -2798,7 +2915,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const template = await storage.createCrmEmailTemplate({ ...req.body, tenantId, createdByUserId: userId });
       res.status(201).json(template);
     } catch (err) {
@@ -2826,7 +2944,13 @@ export async function registerRoutes(
   app.get("/api/crm/email-logs", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
+    const accountId = req.query.accountId ? Number(req.query.accountId) : undefined;
+    if (accountId) {
+      const logs = await storage.getCrmEmailLogsForAccount(tenantId, accountId);
+      return res.json(logs);
+    }
     const entityType = req.query.entityType as string | undefined;
     const entityId = req.query.entityId ? Number(req.query.entityId) : undefined;
     const logs = await storage.getCrmEmailLogs(tenantId, entityType, entityId);
@@ -2837,7 +2961,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const log = await storage.createCrmEmailLog({ ...req.body, tenantId, sentByUserId: userId });
       res.status(201).json(log);
     } catch (err) {
@@ -2850,7 +2975,8 @@ export async function registerRoutes(
   app.get("/api/crm/forecasts", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const userIdFilter = req.query.userId as string | undefined;
     const forecasts = await storage.getCrmForecasts(tenantId, userIdFilter);
     res.json(forecasts);
@@ -2860,7 +2986,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const forecastData = {
         ...req.body,
         tenantId,
@@ -2907,7 +3034,8 @@ export async function registerRoutes(
   app.get("/api/crm/territories", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const territories = await storage.getCrmTerritories(tenantId);
     res.json(territories);
   });
@@ -2916,7 +3044,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const territory = await storage.createCrmTerritory({ ...req.body, tenantId });
       res.status(201).json(territory);
     } catch (err) {
@@ -2944,7 +3073,8 @@ export async function registerRoutes(
   app.get("/api/crm/custom-fields", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const entityType = req.query.entityType as string | undefined;
     const fields = await storage.getCrmCustomFields(tenantId, entityType);
     res.json(fields);
@@ -2954,7 +3084,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const existing = await storage.getCrmCustomFields(tenantId, req.body.entityType);
       if (existing.length >= 20) return res.status(400).json({ message: "Maximum 20 custom fields per entity" });
       const field = await storage.createCrmCustomField({ ...req.body, tenantId });
@@ -2982,23 +3113,27 @@ export async function registerRoutes(
   app.get("/api/crm/forecast-matrix", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const period = (req.query.period as string) || "monthly";
     const scenario = (req.query.scenario as string) || "expected";
     const pipelineId = req.query.pipelineId ? Number(req.query.pipelineId) : undefined;
     const ownerUserId = req.query.ownerUserId as string | undefined;
     const monthsAhead = req.query.monthsAhead ? Number(req.query.monthsAhead) : undefined;
     const listClientId = resolveListClientId(req);
-    const [opportunities, stages, accounts] = await Promise.all([
+    const [opportunities, stages, accounts, pipelines] = await Promise.all([
       storage.getCrmOpportunities(tenantId, undefined, undefined, listClientId),
       storage.getCrmOpportunityStages(tenantId),
       storage.getCrmAccounts(tenantId, listClientId),
+      storage.getCrmPipelines(tenantId),
     ]);
+    const stageById = new Map(stages.map((s: any) => [s.id, s]));
     const openStages = new Set(stages.filter((s: any) => !s.isClosed).map((s: any) => s.id));
     let openOpps = opportunities.filter((o: any) => openStages.has(o.stageId));
     if (pipelineId) {
-      const pipelineStageIds = new Set(stages.filter((s: any) => s.pipelineId === pipelineId).map((s: any) => s.id));
-      openOpps = openOpps.filter((o: any) => pipelineStageIds.has(o.stageId));
+      openOpps = openOpps.filter((o: any) =>
+        opportunityMatchesPipeline(o, stages, pipelines, pipelineId),
+      );
     }
     if (ownerUserId) {
       if (ownerUserId === "unassigned") {
@@ -3031,7 +3166,8 @@ export async function registerRoutes(
     const rows = openOpps.map((o: any) => {
       const account = accounts.find((a: any) => a.id === o.accountId);
       const amount = parseFloat(o.amount || "0") || 0;
-      const prob = o.probability || 0;
+      const stage = o.stageId ? stageById.get(o.stageId) : undefined;
+      const prob = o.probability ?? stage?.probability ?? 0;
       const cellValues = columns.map((_, i) => {
         if (!o.expectedCloseDate) return 0;
         const cd = new Date(o.expectedCloseDate);
@@ -3066,7 +3202,8 @@ export async function registerRoutes(
   app.get("/api/crm/automation-rules", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const entityType = req.query.entityType as string | undefined;
     const rules = await storage.getCrmAutomationRules(tenantId, entityType);
     res.json(rules);
@@ -3076,7 +3213,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const rule = await storage.createCrmAutomationRule({ ...req.body, tenantId, createdByUserId: userId });
       res.status(201).json(rule);
     } catch (err) {
@@ -3104,7 +3242,8 @@ export async function registerRoutes(
   app.get("/api/crm/leads", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const leads = await storage.getCrmLeads(tenantId, resolveListClientId(req));
     res.json(leads);
   });
@@ -3121,7 +3260,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const lead = await storage.createCrmLead({ ...req.body, tenantId, ownerUserId: userId });
       res.status(201).json(lead);
     } catch (err) {
@@ -3151,7 +3291,8 @@ export async function registerRoutes(
     const { rows, mode } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const result = await storage.bulkImportCrmLeads(tenantId, rows, mode || "append");
       res.json(result);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -3163,7 +3304,8 @@ export async function registerRoutes(
     const { rows, mode } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const result = await storage.bulkImportCrmContacts(tenantId, rows, mode || "append");
       res.json(result);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -3175,7 +3317,8 @@ export async function registerRoutes(
     const { rows, mode } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const result = await storage.bulkImportCrmAccounts(tenantId, rows, mode || "append");
       res.json(result);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -3187,7 +3330,8 @@ export async function registerRoutes(
     const { rows, mode } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const result = await storage.bulkImportCrmOpportunities(tenantId, rows, mode || "append");
       res.json(result);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -3199,7 +3343,8 @@ export async function registerRoutes(
     const { rows, mode } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const result = await storage.bulkImportCrmContracts(tenantId, rows, mode || "append");
       res.json(result);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -3297,9 +3442,12 @@ export async function registerRoutes(
       }
       
       if (createOpportunity && accountId) {
-        const stages = await storage.getCrmOpportunityStages(tenantId);
-        const firstStage = stages.find(s => s.order === 1) || stages[0];
-        
+        const [pipelines, allStages] = await Promise.all([
+          storage.getCrmPipelines(tenantId),
+          storage.getCrmOpportunityStages(tenantId),
+        ]);
+        const firstStage = resolveDefaultOpenStage(pipelines, allStages);
+
         const opportunity = await storage.createCrmOpportunity({
           tenantId,
           accountId,
@@ -3307,9 +3455,9 @@ export async function registerRoutes(
           stageId: firstStage?.id || null,
           name: opportunityName || `${lead.company || lead.firstName} - Opportunity`,
           amount: opportunityAmount || null,
-          probability: 20,
+          probability: firstStage?.probability ?? 20,
           source: lead.source || null,
-          ownerUserId: userId,
+          ownerUserId: lead.ownerUserId || userId,
         });
         opportunityId = opportunity.id;
       }
@@ -3337,7 +3485,8 @@ export async function registerRoutes(
   app.get("/api/crm/pipelines", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const pipelines = await storage.getCrmPipelines(tenantId);
     res.json(pipelines);
   });
@@ -3345,7 +3494,9 @@ export async function registerRoutes(
   app.post("/api/crm/pipelines", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const pipeline = await storage.createCrmPipeline({ ...req.body, tenantId: getApiTenantIdWithFallback(req) });
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
+    const pipeline = await storage.createCrmPipeline({ ...req.body, tenantId });
     res.status(201).json(pipeline);
   });
 
@@ -3360,7 +3511,8 @@ export async function registerRoutes(
   app.delete("/api/crm/pipelines/:id", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const pipelineId = Number(req.params.id);
     const stages = await storage.getCrmOpportunityStages(tenantId, pipelineId);
     const stageIds = stages.map((s: any) => s.id);
@@ -3380,7 +3532,8 @@ export async function registerRoutes(
   app.get("/api/crm/stages", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const pipelineId = req.query.pipelineId ? Number(req.query.pipelineId) : undefined;
     const stages = await storage.getCrmOpportunityStages(tenantId, pipelineId);
     res.json(stages);
@@ -3390,7 +3543,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const stage = await storage.createCrmOpportunityStage({ ...req.body, tenantId });
       res.status(201).json(stage);
     } catch (err) {
@@ -3417,7 +3571,8 @@ export async function registerRoutes(
   app.get("/api/crm/opportunities", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const stageId = req.query.stageId ? Number(req.query.stageId) : undefined;
     const accountId = req.query.accountId ? Number(req.query.accountId) : undefined;
     const opportunities = await storage.getCrmOpportunities(
@@ -3445,7 +3600,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const opportunityData = { 
         ...req.body, 
         tenantId, 
@@ -3471,14 +3627,24 @@ export async function registerRoutes(
   app.put("/api/crm/opportunities/:id", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const opportunity = await storage.updateCrmOpportunity(Number(req.params.id), req.body);
-    if (!opportunity) return res.status(404).json({ message: "Opportunity not found" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
-      const { triggerCrmPipelineSync } = await import("./resource-planning/routes");
-      await triggerCrmPipelineSync(tenantId, userId);
-    } catch { /* non-blocking */ }
-    res.json(opportunity);
+      const { normalizeCrmOpportunityBody } = await import("./lib/crm-api-body");
+      const opportunity = await storage.updateCrmOpportunity(
+        Number(req.params.id),
+        normalizeCrmOpportunityBody(req.body as Record<string, unknown>),
+      );
+      if (!opportunity) return res.status(404).json({ message: "Opportunity not found" });
+      try {
+        const tenantId = requireApiTenantId(req, res);
+        if (tenantId == null) return;
+        const { triggerCrmPipelineSync } = await import("./resource-planning/routes");
+        await triggerCrmPipelineSync(tenantId, userId);
+      } catch { /* non-blocking */ }
+      res.json(opportunity);
+    } catch (err) {
+      console.error("Failed to update opportunity:", err);
+      res.status(400).json({ message: err instanceof Error ? err.message : "Failed to update opportunity" });
+    }
   });
 
   app.delete("/api/crm/opportunities/:id", async (req, res) => {
@@ -3510,7 +3676,8 @@ export async function registerRoutes(
     try {
       const opp = await storage.getCrmOpportunity(Number(req.params.id));
       if (!opp) return res.status(404).json({ message: "Opportunity not found" });
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const project = await storage.createProject({
         tenantId,
         name: opp.name,
@@ -3530,7 +3697,8 @@ export async function registerRoutes(
   app.get("/api/crm/activities", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const entityType = req.query.entityType as string | undefined;
     const entityId = req.query.entityId ? Number(req.query.entityId) : undefined;
     const accountId = req.query.accountId ? Number(req.query.accountId) : undefined;
@@ -3542,7 +3710,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const activityData = {
         ...req.body,
         tenantId,
@@ -3564,9 +3733,18 @@ export async function registerRoutes(
   app.put("/api/crm/activities/:id", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const activity = await storage.updateCrmActivity(Number(req.params.id), req.body);
-    if (!activity) return res.status(404).json({ message: "Activity not found" });
-    res.json(activity);
+    try {
+      const { normalizeCrmActivityBody } = await import("./lib/crm-api-body");
+      const activity = await storage.updateCrmActivity(
+        Number(req.params.id),
+        normalizeCrmActivityBody(req.body as Record<string, unknown>),
+      );
+      if (!activity) return res.status(404).json({ message: "Activity not found" });
+      res.json(activity);
+    } catch (err) {
+      console.error("Failed to update activity:", err);
+      res.status(400).json({ message: "Failed to update activity" });
+    }
   });
 
   app.delete("/api/crm/activities/:id", async (req, res) => {
@@ -3590,7 +3768,8 @@ export async function registerRoutes(
   app.get("/api/crm/tasks", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const entityType = req.query.entityType as string | undefined;
     const entityId = req.query.entityId ? Number(req.query.entityId) : undefined;
     const accountId = req.query.accountId ? Number(req.query.accountId) : undefined;
@@ -3602,7 +3781,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const task = await storage.createCrmTask({ ...req.body, tenantId, ownerUserId: userId });
       res.status(201).json(task);
     } catch (err) {
@@ -3613,9 +3793,18 @@ export async function registerRoutes(
   app.put("/api/crm/tasks/:id", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const task = await storage.updateCrmTask(Number(req.params.id), req.body);
-    if (!task) return res.status(404).json({ message: "Task not found" });
-    res.json(task);
+    try {
+      const { normalizeCrmTaskBody } = await import("./lib/crm-api-body");
+      const task = await storage.updateCrmTask(
+        Number(req.params.id),
+        normalizeCrmTaskBody(req.body as Record<string, unknown>),
+      );
+      if (!task) return res.status(404).json({ message: "Task not found" });
+      res.json(task);
+    } catch (err) {
+      console.error("Failed to update task:", err);
+      res.status(400).json({ message: "Failed to update task" });
+    }
   });
 
   app.delete("/api/crm/tasks/:id", async (req, res) => {
@@ -3629,7 +3818,8 @@ export async function registerRoutes(
   app.get("/api/crm/notes", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const entityType = req.query.entityType as string;
     const entityId = Number(req.query.entityId);
     if (!entityType || !entityId) return res.status(400).json({ message: "entityType and entityId required" });
@@ -3641,7 +3831,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const note = await storage.createCrmNote({ ...req.body, tenantId, createdByUserId: userId });
       res.status(201).json(note);
     } catch (err) {
@@ -3668,7 +3859,8 @@ export async function registerRoutes(
   app.get("/api/crm/contracts", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const accountId = req.query.accountId ? Number(req.query.accountId) : undefined;
     const contracts = await storage.getCrmContracts(tenantId, accountId, resolveListClientId(req));
     res.json(contracts);
@@ -3686,7 +3878,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const contract = await storage.createCrmContract({ ...req.body, tenantId, ownerUserId: userId });
       res.status(201).json(contract);
     } catch (err) {
@@ -3697,9 +3890,18 @@ export async function registerRoutes(
   app.put("/api/crm/contracts/:id", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const contract = await storage.updateCrmContract(Number(req.params.id), req.body);
-    if (!contract) return res.status(404).json({ message: "Contract not found" });
-    res.json(contract);
+    try {
+      const { normalizeCrmContractBody } = await import("./lib/crm-api-body");
+      const contract = await storage.updateCrmContract(
+        Number(req.params.id),
+        normalizeCrmContractBody(req.body as Record<string, unknown>),
+      );
+      if (!contract) return res.status(404).json({ message: "Contract not found" });
+      res.json(contract);
+    } catch (err) {
+      console.error("Failed to update contract:", err);
+      res.status(400).json({ message: "Failed to update contract" });
+    }
   });
 
   app.delete("/api/crm/contracts/:id", async (req, res) => {
@@ -3713,7 +3915,8 @@ export async function registerRoutes(
   app.get("/api/crm/systems", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const accountId = req.query.accountId ? Number(req.query.accountId) : undefined;
     const systems = await storage.getCrmCustomerSystems(tenantId, accountId, resolveListClientId(req));
     res.json(systems);
@@ -3731,7 +3934,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const system = await storage.createCrmCustomerSystem({ ...req.body, tenantId });
       res.status(201).json(system);
     } catch (err) {
@@ -3759,7 +3963,8 @@ export async function registerRoutes(
   app.get("/api/crm/rate-cards", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const cards = await storage.getRateCardsWithItems(tenantId);
     res.json(cards);
   });
@@ -3796,7 +4001,8 @@ export async function registerRoutes(
   app.get("/api/crm/resource-plan-templates", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const templates = await storage.getResourcePlanTemplatesWithRows(tenantId);
     res.json(templates);
   });
@@ -3805,7 +4011,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const { rows: inlineRows, ...tmplData } = req.body;
       const template = await storage.createResourcePlanTemplate({ ...tmplData, tenantId });
       if (Array.isArray(inlineRows)) {
@@ -3874,11 +4081,26 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  app.get("/api/crm/resource-plans/summaries", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const summaries = await storage.getResourcePlanSummaries(tenantId);
+      res.json(summaries);
+    } catch (err) {
+      console.error("Failed to get resource plan summaries:", err);
+      res.status(500).json({ message: "Failed to get resource plan summaries" });
+    }
+  });
+
   app.get("/api/crm/resource-plans/all-rows", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const allRows = await storage.getAllOpportunityResourceRowsWithPlans(tenantId);
       const safeDateStr = (d: unknown): string | null => {
         if (!d) return null;
@@ -3949,7 +4171,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const oppId = Number(req.params.oppId);
       const { rows, planId, createNew, planName, ...planData } = req.body;
 
@@ -4136,7 +4359,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const existing = await storage.getResourcePlanTemplates(tenantId);
       if (existing.length > 0) return res.json({ message: "Seed data already exists", count: existing.length });
 
@@ -4228,7 +4452,8 @@ export async function registerRoutes(
   app.get("/api/business/strategy", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const templateType = req.query.templateType as string | undefined;
     const items = await storage.getStrategyItems(tenantId, templateType, resolveListClientId(req));
     res.json(items);
@@ -4245,7 +4470,8 @@ export async function registerRoutes(
   app.post("/api/business/bulk-import", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const { rows } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
     try {
@@ -4262,7 +4488,8 @@ export async function registerRoutes(
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
       const { rows, mode = "append" } = req.body;
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const result = await storage.bulkImportStrategyItems(tenantId, rows, mode);
       res.json(result);
     } catch (error: any) {
@@ -4274,7 +4501,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertStrategyItemSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const item = await storage.createStrategyItem(validated);
       const refSeq = await storage.assignEntityRef(tenantId, "strategy", item.id);
@@ -4314,7 +4542,8 @@ export async function registerRoutes(
   app.get("/api/business/risks", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const strategyItemId = req.query.strategyItemId ? Number(req.query.strategyItemId) : undefined;
     const risks = await storage.getRisks(tenantId, strategyItemId, resolveListClientId(req));
     res.json(risks);
@@ -4324,7 +4553,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertRiskSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const risk = await storage.createRisk(validated);
       res.status(201).json(risk);
@@ -4355,7 +4585,8 @@ export async function registerRoutes(
   app.get("/api/business/departments", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const departments = await storage.getDepartments(tenantId);
     res.json(departments);
   });
@@ -4364,7 +4595,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertDepartmentSchema.parse({ ...req.body, tenantId });
       const dept = await storage.createDepartment(validated);
       res.status(201).json(dept);
@@ -4395,7 +4627,8 @@ export async function registerRoutes(
   app.get("/api/business/processes", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const departmentId = req.query.departmentId ? Number(req.query.departmentId) : undefined;
     const processes = await storage.getProcesses(tenantId, departmentId);
     res.json(processes);
@@ -4405,7 +4638,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertProcessSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const process = await storage.createProcess(validated);
       res.status(201).json(process);
@@ -4436,7 +4670,8 @@ export async function registerRoutes(
   app.get("/api/business/tools", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const tools = await storage.getTools(tenantId);
     res.json(tools);
   });
@@ -4445,7 +4680,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertToolSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const tool = await storage.createTool(validated);
       res.status(201).json(tool);
@@ -4476,7 +4712,8 @@ export async function registerRoutes(
   app.get("/api/business/goals", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const strategyItemId = req.query.strategyItemId ? Number(req.query.strategyItemId) : undefined;
     const goals = await storage.getGoals(tenantId, strategyItemId, resolveListClientId(req));
     res.json(goals);
@@ -4492,7 +4729,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertGoalSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const goal = await storage.createGoal(validated);
       const refSeq = await storage.assignEntityRef(tenantId, "goal", goal.id);
@@ -4531,7 +4769,8 @@ export async function registerRoutes(
   app.get("/api/business/key-results", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const goalId = req.query.goalId ? Number(req.query.goalId) : undefined;
     const keyResults = await storage.getKeyResults(tenantId, goalId);
     res.json(keyResults);
@@ -4541,7 +4780,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertKeyResultSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const kr = await storage.createKeyResult(validated);
       res.status(201).json(kr);
@@ -4572,7 +4812,8 @@ export async function registerRoutes(
   app.get("/api/business/kpis", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const goalId = req.query.goalId ? Number(req.query.goalId) : undefined;
     const kpis = await storage.getKpis(tenantId, goalId, resolveListClientId(req));
     res.json(kpis);
@@ -4582,7 +4823,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertKpiSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const kpi = await storage.createKpi(validated);
       const refSeq = await storage.assignEntityRef(tenantId, "kpi", kpi.id);
@@ -4621,7 +4863,8 @@ export async function registerRoutes(
   app.get("/api/business/objectives", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const goalId = req.query.goalId ? Number(req.query.goalId) : undefined;
     const objectivesList = await storage.getObjectives(tenantId, goalId, resolveListClientId(req));
     res.json(objectivesList);
@@ -4637,7 +4880,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertObjectiveSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const objective = await storage.createObjective(validated);
       const refSeq = await storage.assignEntityRef(tenantId, "objective", objective.id);
@@ -4676,7 +4920,8 @@ export async function registerRoutes(
   app.get("/api/business/okrs", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const initiativeId = req.query.initiativeId ? Number(req.query.initiativeId) : undefined;
     const okrsList = await storage.getOkrs(tenantId, initiativeId, resolveListClientId(req));
     res.json(okrsList);
@@ -4692,7 +4937,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertOkrSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const okr = await storage.createOkr(validated);
       const refSeq = await storage.assignEntityRef(tenantId, "okr", okr.id);
@@ -4731,7 +4977,8 @@ export async function registerRoutes(
   app.get("/api/business/initiatives", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const goalId = req.query.goalId ? Number(req.query.goalId) : undefined;
     const initiatives = await storage.getInitiatives(tenantId, goalId, resolveListClientId(req));
     res.json(initiatives);
@@ -4748,7 +4995,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertInitiativeSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const initiative = await storage.createInitiative(validated);
       const refSeq = await storage.assignEntityRef(tenantId, "initiative", initiative.id);
@@ -4787,7 +5035,8 @@ export async function registerRoutes(
   app.get("/api/business/tasks", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const initiativeId = req.query.initiativeId ? Number(req.query.initiativeId) : undefined;
     const tasks = await storage.getBusinessTasks(tenantId, initiativeId, resolveListClientId(req));
     res.json(tasks);
@@ -4797,7 +5046,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertBusinessTaskSchema.parse({ ...req.body, tenantId, assigneeId: userId });
       const task = await storage.createBusinessTask(validated);
       res.status(201).json(task);
@@ -4828,7 +5078,8 @@ export async function registerRoutes(
   app.get("/api/business/meetings", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const initiativeId = req.query.initiativeId ? Number(req.query.initiativeId) : undefined;
     const meetings = await storage.getMeetings(tenantId, initiativeId);
     res.json(meetings);
@@ -4838,7 +5089,8 @@ export async function registerRoutes(
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertMeetingSchema.parse({ ...req.body, tenantId, organizerId: userId });
       const meeting = await storage.createMeeting(validated);
       res.status(201).json(meeting);
@@ -4869,7 +5121,8 @@ export async function registerRoutes(
   app.get("/api/business/stats", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     
     const statsClientId = resolveListClientId(req);
     const [strategyItemsList, goalsList, initiativesList, kpisList, risksList] = await Promise.all([
@@ -4917,7 +5170,8 @@ export async function registerRoutes(
   app.get("/api/business/review-notes", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const { entityType, entityId } = req.query;
     if (entityType && entityId) {
       const notes = await storage.getStrategyReviewNotes(tenantId, String(entityType), Number(entityId));
@@ -4935,8 +5189,10 @@ export async function registerRoutes(
       ? `${claims.first_name} ${claims.last_name}`.trim()
       : claims?.email || "Unknown";
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const note = await storage.createStrategyReviewNote({
-        tenantId: getApiTenantIdWithFallback(req),
+        tenantId,
         entityType: req.body.entityType,
         entityId: Number(req.body.entityId),
         content: req.body.content,
@@ -4973,7 +5229,8 @@ export async function registerRoutes(
   app.get("/api/business/rag-history", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const entityType = req.query.entityType ? String(req.query.entityType) : undefined;
     const entityId = req.query.entityId ? Number(req.query.entityId) : undefined;
     const history = await storage.getStrategyRagHistory(tenantId, entityType, entityId);
@@ -4984,7 +5241,8 @@ export async function registerRoutes(
   app.get("/api/business/overdue-reviews", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const overdue = await storage.getOverdueReviews(tenantId);
     res.json(overdue);
   });
@@ -4993,7 +5251,8 @@ export async function registerRoutes(
   app.get("/api/business/strategy-map", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     
     const groupBy = req.query.groupBy as string | undefined;
     const filterStatus = req.query.status as string | undefined;
@@ -5269,7 +5528,8 @@ export async function registerRoutes(
   app.post("/api/business/ai-insights", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
 
     // Gather strategy data
     const [strategies, goals, objectives, initiatives, okrs, kpis, govItems] = await Promise.all([
@@ -5401,7 +5661,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/business/entity-refs", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const refs = await storage.getEntityRefs(tenantId);
     const map: Record<string, number> = {};
     refs.forEach(r => { map[`${r.entityType}-${r.entityId}`] = r.refSeq; });
@@ -5411,7 +5672,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/business/entity-refs/backfill", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const result = await storage.backfillEntityRefs(tenantId);
     res.json(result);
   });
@@ -5419,7 +5681,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/business/governance", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const items = await storage.getGovernanceItems(tenantId);
     res.json(items);
   });
@@ -5427,7 +5690,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/business/governance", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
       const item = await storage.createGovernanceItem({ ...req.body, tenantId });
       const refSeq = await storage.assignEntityRef(tenantId, "governance", item.id);
@@ -5461,7 +5725,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/business/doc-links", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const layerType = req.query.layerType ? String(req.query.layerType) : undefined;
     const layerItemId = req.query.layerItemId ? Number(req.query.layerItemId) : undefined;
     const links = await storage.getStrategyDocLinks(tenantId, layerType, layerItemId);
@@ -5475,7 +5740,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const addedByName = claims?.first_name && claims?.last_name
       ? `${claims.first_name} ${claims.last_name}`.trim()
       : claims?.email || "Unknown";
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
       const link = await storage.createStrategyDocLink({
         ...req.body,
@@ -5501,7 +5767,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/business/kpi-values", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const kpiId = req.query.kpiId ? Number(req.query.kpiId) : undefined;
     const values = await storage.getStrategyKpiValues(tenantId, kpiId);
     res.json(values);
@@ -5510,7 +5777,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/business/kpi-values", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
       const val = await storage.createStrategyKpiValue({ ...req.body, tenantId, createdBy: userId });
       res.status(201).json(val);
@@ -5530,7 +5798,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/business/seed-demo", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     
     try {
       const { seedApexBusinessData } = await import("./seeds/apexBusiness");
@@ -5546,7 +5815,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.delete("/api/business/seed-demo", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     
     try {
       const { clearApexBusinessData } = await import("./seeds/apexBusiness");
@@ -5656,7 +5926,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     try {
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
       const userId = getUserId(req);
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const folderId = req.body.folderId ? Number(req.body.folderId) : null;
       const [file] = await db.insert(documentFiles).values({
         tenantId,
@@ -5676,7 +5947,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/document-files", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const folderId = req.query.folderId === "null" ? null : req.query.folderId ? Number(req.query.folderId) : undefined;
     let query = db.select().from(documentFiles).where(eq(documentFiles.tenantId, tenantId));
     if (folderId === null) {
@@ -5691,7 +5963,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/document-files/all", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const files = await db.select().from(documentFiles).where(eq(documentFiles.tenantId, tenantId));
     res.json(files);
   });
@@ -5808,7 +6081,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/documents/folders", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const parentId = req.query.parentId === "null" ? null : req.query.parentId ? Number(req.query.parentId) : undefined;
     const folders = await storage.getDocumentFolders(tenantId, parentId, resolveListClientId(req));
     res.json(folders);
@@ -5827,7 +6101,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const input = insertDocumentFolderSchema.parse({ ...req.body, ownerId: userId });
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const input = insertDocumentFolderSchema.parse({ ...req.body, ownerId: userId, tenantId });
       const folder = await storage.createDocumentFolder(input);
       res.status(201).json(folder);
     } catch (err) {
@@ -5869,7 +6145,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const folderId = req.query.folderId === "null" ? null : req.query.folderId ? Number(req.query.folderId) : undefined;
       const docs = await storage.getDocumentsWithOwner(tenantId, folderId, resolveListClientId(req));
       res.json(docs);
@@ -5882,7 +6159,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/search", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const query = String(req.query.q || "").trim();
     if (!query) return res.json([]);
     try {
@@ -5902,7 +6180,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/documents/search", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const query = String(req.query.q || "");
     const docs = await storage.searchDocuments(tenantId, query, resolveListClientId(req));
     res.json(docs);
@@ -5911,7 +6190,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/documents/favorites", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const docs = await storage.getFavoriteDocuments(tenantId, userId, resolveListClientId(req));
     res.json(docs);
   });
@@ -5919,7 +6199,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/documents/recent", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const limit = Number(req.query.limit) || 10;
     const docs = await storage.getRecentDocuments(tenantId, userId, limit, resolveListClientId(req));
     res.json(docs);
@@ -5929,7 +6210,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/documents/shared-with-me", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
       const docs = await storage.getSharedWithMeDocuments(tenantId, userId, resolveListClientId(req));
       res.json(docs);
@@ -6059,7 +6341,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     
     try {
-      const input = insertDocumentSchema.parse({ ...req.body, ownerId: userId });
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const input = insertDocumentSchema.parse({ ...req.body, ownerId: userId, tenantId });
       const doc = await storage.createDocument(input);
       
       // Create initial version
@@ -6268,7 +6552,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/documents/tags", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const docTags = await storage.getTags(tenantId);
     res.json(docTags);
   });
@@ -6458,7 +6743,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/documents/templates", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const category = req.query.category as string | undefined;
     const scope = req.query.scope as string | undefined;
     const department = req.query.department as string | undefined;
@@ -6523,7 +6809,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/documents/audit-logs", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const documentId = req.query.documentId ? Number(req.query.documentId) : undefined;
     const logs = await storage.getDocumentAuditLogs(tenantId, documentId);
     res.json(logs);
@@ -6534,7 +6821,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const initiativeIdParam = req.query.initiativeId;
       const documentIdParam = req.query.documentId;
       const initiativeId = initiativeIdParam && !isNaN(Number(initiativeIdParam)) ? Number(initiativeIdParam) : undefined;
@@ -6575,7 +6863,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/pm/portfolios", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const portfolios = await storage.getPmPortfolios(tenantId, resolveListClientId(req));
     res.json(portfolios);
   });
@@ -6622,7 +6911,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/pm/programs", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const portfolioId = req.query.portfolioId ? Number(req.query.portfolioId) : undefined;
     const programs = await storage.getPmPrograms(tenantId, portfolioId, resolveListClientId(req));
     res.json(programs);
@@ -6670,7 +6960,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/pm/projects", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const filters: {
       portfolioId?: number;
       programId?: number;
@@ -6703,7 +6994,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const input = insertPmProjectSchema.parse(req.body);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const input = insertPmProjectSchema.parse({ ...req.body, tenantId });
       const project = await storage.createPmProject(input);
       res.status(201).json(project);
     } catch (err: any) {
@@ -6733,7 +7026,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/pm/seed-erp-portfolio", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
       const { seedErpPortfolio } = await import("./seeds/erpPortfolioSeed");
       const result = await seedErpPortfolio(tenantId);
@@ -6747,7 +7041,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/pm/projects/:id/seed-s4hana", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const projectId = Number(req.params.id);
     
     try {
@@ -6785,9 +7080,11 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const projectId = Number(req.params.projectId);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
       const toolsArray = req.body.tools || [];
-      const validatedTools = toolsArray.map((t: any) => insertPmProjectToolSchema.parse({ ...t, projectId }));
+      const validatedTools = toolsArray.map((t: any) => insertPmProjectToolSchema.parse({ ...t, projectId, tenantId }));
       const tools = await storage.bulkCreatePmProjectTools(validatedTools);
       res.status(201).json(tools);
     } catch (err: any) {
@@ -6835,7 +7132,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/pm/projects/:projectId/documents", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const projectId = Number(req.params.projectId);
     const project = await storage.getPmProject(projectId);
     const meta = (project?.metadata as Record<string, unknown>) || {};
@@ -6849,11 +7147,11 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/finance/timesheet-entries", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
     if (!projectId) return res.status(400).json({ message: "projectId is required" });
-    const entries = await storage.getTimesheetEntriesByProject(tenantId, projectId);
-    res.json(entries);
+    res.redirect(307, `/api/finance/timesheets/projects/${projectId}/entries`);
   });
 
   // ── Agile Workstreams ────────────────────────────────────────────────────
@@ -6874,9 +7172,10 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/pm/projects/:projectId/agile/workstreams", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenant = await storage.getDefaultTenant();
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
-      const input = insertPmAgileWorkstreamSchema.parse({ ...req.body, projectId: Number(req.params.projectId), tenantId: tenant?.id || 1 });
+      const input = insertPmAgileWorkstreamSchema.parse({ ...req.body, projectId: Number(req.params.projectId), tenantId });
       const ws = await storage.createPmAgileWorkstream(input);
       res.status(201).json(ws);
     } catch (err: any) {
@@ -6910,9 +7209,10 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/pm/agile/workstreams/:wsId/epics", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenant = await storage.getDefaultTenant();
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
-      const input = insertPmEpicSchema.parse({ ...req.body, agileWorkstreamId: Number(req.params.wsId), tenantId: tenant?.id || 1 });
+      const input = insertPmEpicSchema.parse({ ...req.body, agileWorkstreamId: Number(req.params.wsId), tenantId });
       res.status(201).json(await storage.createPmEpic(input));
     } catch (err: any) {
       if (err?.name === "ZodError") return res.status(400).json({ message: err.errors?.[0]?.message });
@@ -6945,9 +7245,10 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/pm/agile/workstreams/:wsId/sprints", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenant = await storage.getDefaultTenant();
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
-      const input = insertPmAgileSprintSchema.parse({ ...req.body, agileWorkstreamId: Number(req.params.wsId), tenantId: tenant?.id || 1 });
+      const input = insertPmAgileSprintSchema.parse({ ...req.body, agileWorkstreamId: Number(req.params.wsId), tenantId });
       res.status(201).json(await storage.createPmAgileSprint(input));
     } catch (err: any) {
       if (err?.name === "ZodError") return res.status(400).json({ message: err.errors?.[0]?.message });
@@ -6980,9 +7281,10 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/pm/agile/workstreams/:wsId/stories", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenant = await storage.getDefaultTenant();
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
-      const input = insertPmAgileStorySchema.parse({ ...req.body, agileWorkstreamId: Number(req.params.wsId), tenantId: tenant?.id || 1 });
+      const input = insertPmAgileStorySchema.parse({ ...req.body, agileWorkstreamId: Number(req.params.wsId), tenantId });
       res.status(201).json(await storage.createPmAgileStory(input));
     } catch (err: any) {
       if (err?.name === "ZodError") return res.status(400).json({ message: err.errors?.[0]?.message });
@@ -7015,9 +7317,10 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/pm/agile/workstreams/:wsId/defects", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenant = await storage.getDefaultTenant();
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
-      const input = insertPmAgileDefectSchema.parse({ ...req.body, agileWorkstreamId: Number(req.params.wsId), tenantId: tenant?.id || 1 });
+      const input = insertPmAgileDefectSchema.parse({ ...req.body, agileWorkstreamId: Number(req.params.wsId), tenantId });
       res.status(201).json(await storage.createPmAgileDefect(input));
     } catch (err: any) {
       if (err?.name === "ZodError") return res.status(400).json({ message: err.errors?.[0]?.message });
@@ -7060,7 +7363,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const input = insertPmProjectPhaseSchema.parse(req.body);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const input = insertPmProjectPhaseSchema.parse({ ...req.body, tenantId });
       const phase = await storage.createPmProjectPhase(input);
       res.status(201).json(phase);
     } catch (err) {
@@ -7090,7 +7395,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/pm/milestones", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const milestones = await storage.getAllPmMilestones(tenantId);
     res.json(milestones);
   });
@@ -7178,7 +7484,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const input = insertPmTaskSchema.parse(req.body);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const input = insertPmTaskSchema.parse({ ...req.body, tenantId });
       const task = await storage.createPmTask(input);
       res.status(201).json(task);
     } catch (err) {
@@ -7216,10 +7524,13 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const projectId = Number(req.params.projectId);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     try {
       const { tasks } = req.body as { tasks: { tempId: string; parentTempId: string | null; data: any }[] };
       if (!Array.isArray(tasks)) return res.status(400).json({ message: "tasks array required" });
-      const results = await storage.bulkImportPmTasks(projectId, tasks);
+      const scoped = tasks.map((t) => ({ ...t, data: { ...t.data, tenantId, projectId } }));
+      const results = await storage.bulkImportPmTasks(projectId, scoped);
       res.json({ results });
     } catch (err: any) {
       console.error("POST bulk-import error:", err?.message || err);
@@ -7259,7 +7570,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const suiteId = req.query.suiteId ? Number(req.query.suiteId) : undefined;
       const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
       const cases = await storage.getTmTestCases(tenantId, suiteId, projectId);
@@ -7330,7 +7642,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     try {
       const { rows, mode = "append" } = req.body;
       const projectId = Number(req.params.projectId);
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const result = await storage.bulkImportPmRaiddItems(projectId, tenantId, rows, mode);
       res.json(result);
     } catch (error: any) {
@@ -7342,7 +7655,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const input = insertPmRaiddItemSchema.parse(req.body);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const input = insertPmRaiddItemSchema.parse({ ...req.body, tenantId });
       const item = await storage.createPmRaiddItem(input);
       res.status(201).json(item);
     } catch (err) {
@@ -7379,7 +7694,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/pm/deliverable-phases", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const input = insertPmDeliverablePhaseSchema.parse(req.body);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
+    const input = insertPmDeliverablePhaseSchema.parse({ ...req.body, tenantId });
     const phase = await storage.createPmDeliverablePhase(input);
     res.status(201).json(phase);
   });
@@ -7416,7 +7733,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/pm/projects/:projectId/deliverable-phases/template", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const { template, tenantId } = req.body;
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
+    const { template } = req.body;
     const TPLS: Record<string, { name: string; color: string }[]> = {
       agile: [
         { name: "Discovery", color: "#3b6cf4" }, { name: "Sprint Planning", color: "#7c3aed" },
@@ -7467,7 +7786,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/pm/deliverables", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const input = insertPmDeliverableSchema.parse(req.body);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
+    const input = insertPmDeliverableSchema.parse({ ...req.body, tenantId });
     const item = await storage.createPmDeliverable(input);
     res.status(201).json(item);
   });
@@ -7602,7 +7923,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const input = insertPmWorkstreamSchema.parse(req.body);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const input = insertPmWorkstreamSchema.parse({ ...req.body, tenantId });
       const workstream = await storage.createPmWorkstream(input);
       res.status(201).json(workstream);
     } catch (err) {
@@ -7650,7 +7973,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const input = insertPmSprintSchema.parse(req.body);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const input = insertPmSprintSchema.parse({ ...req.body, tenantId });
       const sprint = await storage.createPmSprint(input);
       res.status(201).json(sprint);
     } catch (err) {
@@ -7733,7 +8058,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/pm/raci/roles", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
     const roles = await storage.getPmRaciRoles(tenantId, projectId);
     res.json(roles);
@@ -7751,8 +8077,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenant = await storage.getDefaultTenant();
-      const role = await storage.createPmRaciRole({ ...req.body, tenantId: req.body.tenantId || tenant?.id || 1 });
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const role = await storage.createPmRaciRole({ ...req.body, tenantId });
       res.status(201).json(role);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -7777,7 +8104,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/pm/raci/activities", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
     const activities = await storage.getPmRaciActivities(tenantId, projectId);
     res.json(activities);
@@ -7795,8 +8123,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenant = await storage.getDefaultTenant();
-      const activity = await storage.createPmRaciActivity({ ...req.body, tenantId: req.body.tenantId || tenant?.id || 1 });
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const activity = await storage.createPmRaciActivity({ ...req.body, tenantId });
       res.status(201).json(activity);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -7821,7 +8150,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/pm/raci/types", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const types = await storage.getPmRaciTypes(tenantId);
     res.json(types);
   });
@@ -7863,7 +8193,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/pm/raci/assignments", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
     const assignments = await storage.getPmRaciAssignments(tenantId, projectId);
     res.json(assignments);
@@ -7906,7 +8237,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/pm/raci/templates", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const templates = await storage.getPmRaciTemplates(tenantId);
     res.json(templates);
   });
@@ -7950,7 +8282,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/resources/rate-cards", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const cards = await storage.getRateCardsWithItems(tenantId);
     res.json(cards);
   });
@@ -7959,7 +8292,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const card = await storage.createRateCard({ ...req.body, tenantId });
       res.status(201).json(card);
     } catch (err) {
@@ -8004,24 +8338,18 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/resources", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const resourcesList = await storage.getResources(tenantId);
     res.json(resourcesList);
-  });
-
-  app.get("/api/resources/stats", async (req, res) => {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
-    const { getExtendedResourceStats } = await import("./resources/service");
-    res.json(await getExtendedResourceStats(tenantId));
   });
 
   // Skill Categories (must be before /api/resources/:id)
   app.get("/api/resources/skill-categories", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const categories = await storage.getSkillCategories(tenantId);
     res.json(categories);
   });
@@ -8030,7 +8358,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertSkillCategorySchema.parse({ ...req.body, tenantId });
       const category = await storage.createSkillCategory(validated);
       res.status(201).json(category);
@@ -8063,7 +8392,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/resources/skills", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const skillsList = await storage.getSkills(tenantId);
     res.json(skillsList);
   });
@@ -8072,7 +8402,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertSkillSchema.parse({ ...req.body, tenantId });
       const skill = await storage.createSkill(validated);
       res.status(201).json(skill);
@@ -8105,7 +8436,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/resources/allocations", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
     const allocationsList = await storage.getAllocations(tenantId, projectId);
     res.json(allocationsList);
@@ -8123,7 +8455,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const body = { ...req.body, tenantId };
       Object.keys(body).forEach(k => { if (body[k] === "") body[k] = undefined; });
       const validated = insertResourceAllocationSchema.parse(body);
@@ -8158,7 +8491,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/resources/timesheets", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const resourceId = req.query.resourceId ? Number(req.query.resourceId) : undefined;
     const periods = await storage.getTimesheetPeriods(tenantId, resourceId);
     res.json(periods);
@@ -8176,7 +8510,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const body = { ...req.body, tenantId };
       Object.keys(body).forEach(k => { if (body[k] === "") body[k] = undefined; });
       const validated = insertTimesheetPeriodSchema.parse(body);
@@ -8246,7 +8581,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/resources/project-codes", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const codes = await storage.getProjectCodes(tenantId);
     res.json(codes);
   });
@@ -8255,7 +8591,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const validated = insertProjectCodeSchema.parse({ ...req.body, tenantId });
       const code = await storage.createProjectCode(validated);
       res.status(201).json(code);
@@ -8297,7 +8634,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const body = { ...req.body, tenantId };
       Object.keys(body).forEach(k => { if (body[k] === "") body[k] = undefined; });
       const validated = insertResourceSchema.parse(body);
@@ -8379,7 +8717,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/bpm/diagrams", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const diagrams = await storage.getBpmDiagrams(tenantId);
     res.json(diagrams);
   });
@@ -8396,7 +8735,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const data = insertBpmDiagramSchema.parse({ ...req.body, ownerId: userId });
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const data = insertBpmDiagramSchema.parse({ ...req.body, tenantId, ownerId: userId });
       const diagram = await storage.createBpmDiagram(data);
       res.status(201).json(diagram);
     } catch (error: any) {
@@ -8598,7 +8939,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/bpm/libraries", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const libraries = await storage.getBpmLibraries(tenantId);
     res.json(libraries);
   });
@@ -8668,7 +9010,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     try {
       const data = insertBpmTemplateSchema.parse(req.body);
       const template = await storage.createBpmTemplate(data);
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const { registerFromSource } = await import("./templates/register-helper");
       await registerFromSource({
         tenantId, userId,
@@ -8762,7 +9105,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/portal/menu-nodes", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const nodes = await storage.getPortalMenuNodes(tenantId);
     res.json(nodes);
   });
@@ -8801,7 +9145,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/portal/assignments", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const menuNodeId = req.query.menuNodeId ? Number(req.query.menuNodeId) : undefined;
     if (menuNodeId) {
       const assignments = await storage.getPortalDiagramAssignments(menuNodeId);
@@ -8848,7 +9193,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/process-resources", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const entryId = req.query.entryId ? Number(req.query.entryId) : undefined;
     const menuNodeId = req.query.menuNodeId ? Number(req.query.menuNodeId) : undefined;
     if (entryId) {
@@ -8867,7 +9213,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const resource = await storage.createProcessResource(req.body);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const resource = await storage.createProcessResource({ ...req.body, tenantId });
       res.status(201).json(resource);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -8898,13 +9246,15 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const { nodes, tenantId } = req.body;
+      const { nodes } = req.body;
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const created: any[] = [];
       const idMap: Record<string, number> = {};
       for (const node of nodes) {
         const parentId = node.parentKey ? idMap[node.parentKey] : null;
         const result = await storage.createPortalMenuNode({
-          tenantId: getApiTenantIdWithFallback(req),
+          tenantId,
           name: node.name,
           parentId,
           sortOrder: node.sortOrder || 0,
@@ -8924,7 +9274,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/frameworks", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const fws = await storage.getFrameworks(tenantId);
     res.json(fws);
   });
@@ -8942,7 +9293,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
       const { rows, mode = "append" } = req.body;
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const result = await storage.bulkImportFrameworks(tenantId, rows, mode);
       res.json(result);
     } catch (error: any) {
@@ -8954,7 +9306,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const fw = await storage.createFramework(req.body);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const fw = await storage.createFramework({ ...req.body, tenantId });
       res.status(201).json(fw);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -8990,7 +9344,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const templates = await storage.getBpmlTemplates(tenantId);
       res.json(templates);
     } catch (error: any) {
@@ -9049,7 +9404,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
       const templateId = Number(req.query.templateId);
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       if (!templateId) return res.status(400).json({ message: "templateId required" });
       const entries = await storage.getBpmlEntries(templateId, tenantId);
       res.json(entries);
@@ -9086,7 +9442,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
       const { rows, mode = "append", templateId } = req.body;
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const result = await storage.bulkImportBpmlEntries(Number(templateId), tenantId, rows, mode);
       res.json(result);
     } catch (error: any) {
@@ -9149,7 +9506,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/org-chart-templates", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const templates = await storage.getOrgChartTemplates(tenantId);
     res.json(templates);
   });
@@ -9199,7 +9557,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/org-charts", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const charts = await storage.getOrgCharts(tenantId);
     res.json(charts);
   });
@@ -9381,7 +9740,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
       const { rows, mode = "append" } = req.body;
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const result = await storage.bulkImportResources(tenantId, rows, mode);
       res.json(result);
     } catch (error: any) {
@@ -9394,7 +9754,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   // Workspaces CRUD
   app.get("/api/workspaces", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const results = await storage.getWorkspaces(tenantId);
       res.json(results);
     } catch (error: any) {
@@ -9404,8 +9765,12 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
 
   app.get("/api/workspaces/:id", async (req, res) => {
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const result = await storage.getWorkspace(Number(req.params.id));
-      if (!result) return res.status(404).json({ message: "Workspace not found" });
+      if (!result || result.tenantId !== tenantId) {
+        return res.status(404).json({ message: "Workspace not found" });
+      }
       res.json(result);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -9414,8 +9779,14 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
 
   app.post("/api/workspaces", async (req, res) => {
     try {
-      const result = await storage.createWorkspace(req.body);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const userId = req.body.createdBy || req.user?.claims?.sub;
+      const result = await storage.createWorkspace({
+        ...req.body,
+        tenantId,
+        createdBy: userId ?? req.body.createdBy,
+      });
       if (userId) {
         try {
           await storage.addWorkspaceMember({
@@ -9910,11 +10281,19 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   // Test Suites
   // TM Projects
   app.get("/api/tm/projects", async (req, res) => {
-    try { res.json(await storage.getTmProjects(1)); }
+    try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      res.json(await storage.getTmProjects(tenantId));
+    }
     catch (e: any) { res.status(500).json({ message: e.message }); }
   });
   app.post("/api/tm/projects", async (req, res) => {
-    try { res.json(await storage.createTmProject({ ...req.body, tenantId: 1 })); }
+    try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      res.json(await storage.createTmProject({ ...req.body, tenantId }));
+    }
     catch (e: any) { res.status(400).json({ message: e.message }); }
   });
   app.patch("/api/tm/projects/:id", async (req, res) => {
@@ -9928,14 +10307,18 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
 
   app.get("/api/tm/suites", async (req, res) => {
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-      const suites = await storage.getTmTestSuites(1, projectId);
+      const suites = await storage.getTmTestSuites(tenantId, projectId);
       res.json(suites);
     } catch (error: any) { res.status(500).json({ message: error.message }); }
   });
   app.post("/api/tm/suites", async (req, res) => {
     try {
-      const suite = await storage.createTmTestSuite({ ...req.body, tenantId: 1 });
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const suite = await storage.createTmTestSuite({ ...req.body, tenantId });
       res.json(suite);
     } catch (error: any) { res.status(400).json({ message: error.message }); }
   });
@@ -9955,9 +10338,11 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   // Test Cases
   app.get("/api/tm/cases", async (req, res) => {
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const suiteId = req.query.suiteId ? Number(req.query.suiteId) : undefined;
       const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-      const cases = await storage.getTmTestCases(1, suiteId, projectId);
+      const cases = await storage.getTmTestCases(tenantId, suiteId, projectId);
       res.json(cases);
     } catch (error: any) { res.status(500).json({ message: error.message }); }
   });
@@ -9970,7 +10355,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   });
   app.post("/api/tm/cases", async (req, res) => {
     try {
-      const tc = await storage.createTmTestCase({ ...req.body, tenantId: 1 });
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const tc = await storage.createTmTestCase({ ...req.body, tenantId });
       res.json(tc);
     } catch (error: any) { res.status(400).json({ message: error.message }); }
   });
@@ -10010,14 +10397,18 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   // Test Runs
   app.get("/api/tm/runs", async (req, res) => {
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-      const runs = await storage.getTmTestRuns(1, projectId);
+      const runs = await storage.getTmTestRuns(tenantId, projectId);
       res.json(runs);
     } catch (error: any) { res.status(500).json({ message: error.message }); }
   });
   app.post("/api/tm/runs", async (req, res) => {
     try {
-      const run = await storage.createTmTestRun({ ...req.body, tenantId: 1 });
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const run = await storage.createTmTestRun({ ...req.body, tenantId });
       res.json(run);
     } catch (error: any) { res.status(400).json({ message: error.message }); }
   });
@@ -10071,7 +10462,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   // Demo seed
   app.post("/api/tm/seed-demo", async (req, res) => {
     try {
-      const existing = await storage.getTmTestSuites(1);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const existing = await storage.getTmTestSuites(tenantId);
       if (existing.length > 0) {
         return res.status(409).json({ message: "Demo data already loaded. Clear existing suites first." });
       }
@@ -10087,7 +10480,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       ];
       const suites: any[] = [];
       for (const s of suiteData) {
-        suites.push(await storage.createTmTestSuite({ tenantId: 1, ...s }));
+        suites.push(await storage.createTmTestSuite({ tenantId, ...s }));
       }
       const [sOrd, sFin, sPro, sCus, sBil, sInt] = suites;
 
@@ -10250,7 +10643,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       const createdCases: any[] = [];
       for (const c of caseRows) {
         const { steps, ...caseFields } = c;
-        const tc = await storage.createTmTestCase({ tenantId: 1, ...caseFields });
+        const tc = await storage.createTmTestCase({ tenantId, ...caseFields });
         createdCases.push(tc);
         for (let i = 0; i < steps.length; i++) {
           await storage.createTmTestStep({ testCaseId: tc.id, stepOrder: i + 1, ...steps[i] });
@@ -10259,17 +10652,17 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
 
       // ── Test Runs ────────────────────────────────────────────────────────
       const sitRun = await storage.createTmTestRun({
-        tenantId: 1, name: "SIT Cycle 2 — ERP Implementation", status: "in_progress",
+        tenantId, name: "SIT Cycle 2 — ERP Implementation", status: "in_progress",
         description: "System Integration Testing cycle 2. Covers Order Mgmt, Finance, and Procurement modules.",
         startDate: "2026-03-01", endDate: "2026-03-14",
       });
       const uatRun = await storage.createTmTestRun({
-        tenantId: 1, name: "UAT Cycle 1 — ERP Implementation", status: "planned",
+        tenantId, name: "UAT Cycle 1 — ERP Implementation", status: "planned",
         description: "User Acceptance Testing cycle 1. Business users validate end-to-end flows.",
         startDate: "2026-03-17", endDate: "2026-03-28",
       });
       const regRun = await storage.createTmTestRun({
-        tenantId: 1, name: "Regression — Billing Module v4.2", status: "completed",
+        tenantId, name: "Regression — Billing Module v4.2", status: "completed",
         description: "Regression suite after billing module hotfix patch v4.2.1.",
         startDate: "2026-02-20", endDate: "2026-02-22",
       });
@@ -10349,12 +10742,12 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       ];
 
       for (const d of defectData) {
-        await storage.createTmDefect({ tenantId: 1, ...d });
+        await storage.createTmDefect({ tenantId, ...d });
       }
 
       // ── Requirements ────────────────────────────────────────────────────────
       // Get the created cases so we can reference them by index
-      const allCreatedCases = await storage.getTmTestCases(1);
+      const allCreatedCases = await storage.getTmTestCases(tenantId);
       const caseIdsByIndex = (indices: number[]) => indices.map(i => allCreatedCases[i]?.id).filter(Boolean) as number[];
 
       const reqData = [
@@ -10385,7 +10778,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       ];
 
       for (const r of reqData) {
-        await storage.createTmRequirement({ tenantId: 1, ...r });
+        await storage.createTmRequirement({ tenantId, ...r });
       }
 
       // ── Demo Scenarios ────────────────────────────────────────────────────
@@ -10434,7 +10827,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
         },
       ];
       for (const s of scenarioData) {
-        await storage.createTmScenario({ tenantId: 1, ...s });
+        await storage.createTmScenario({ tenantId, ...s });
       }
 
       res.json({ message: "Demo data loaded successfully", suites: suites.length, cases: caseRows.length, defects: defectData.length, requirements: reqData.length, scenarios: scenarioData.length });
@@ -10446,25 +10839,25 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   // All results (cross-run) — used by RTM, Digital Twin, Test Navigator
   app.get("/api/tm/results/all", async (req, res) => {
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-      const runs = await storage.getTmTestRuns(1, projectId);
-      const all: any[] = [];
-      for (const run of runs) {
-        const results = await storage.getTmTestResults(run.id);
-        all.push(...results);
-      }
-      res.json(all);
+      const runs = await storage.getTmTestRuns(tenantId, projectId);
+      const results = await storage.getTmTestResultsForRuns(runs.map((r) => r.id));
+      res.json(results);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
   // Migrate existing TM data to a project (idempotent — safe to call multiple times)
   app.post("/api/tm/migrate-project", async (req, res) => {
     try {
-      const projects = await storage.getTmProjects(1);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const projects = await storage.getTmProjects(tenantId);
       let project = projects[0];
       if (!project) {
         project = await storage.createTmProject({
-          tenantId: 1,
+          tenantId,
           name: "ERP Implementation — Phase 1",
           description: "End-to-end ERP system implementation covering Order Management, Finance, Procurement, CRM, Billing, and Integrations.",
           status: "active",
@@ -10488,15 +10881,24 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   // Audit Trail — derives events from existing data
   app.get("/api/tm/audit", async (req, res) => {
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-      const runs = await storage.getTmTestRuns(1, projectId);
-      const cases = await storage.getTmTestCases(1, undefined, projectId);
-      const defects = await storage.getTmDefects(1, projectId);
+      const runs = await storage.getTmTestRuns(tenantId, projectId);
+      const cases = await storage.getTmTestCases(tenantId, undefined, projectId);
+      const defects = await storage.getTmDefects(tenantId, projectId);
       const events: any[] = [];
+      const allResults = await storage.getTmTestResultsForRuns(runs.map((r) => r.id));
+      const resultsByRun = new Map<number, typeof allResults>();
+      for (const result of allResults) {
+        const list = resultsByRun.get(result.testRunId) ?? [];
+        list.push(result);
+        resultsByRun.set(result.testRunId, list);
+      }
 
       // Execution events from test results
       for (const run of runs) {
-        const results = await storage.getTmTestResults(run.id);
+        const results = resultsByRun.get(run.id) ?? [];
         for (const r of results) {
           const tc = cases.find(c => c.id === r.testCaseId);
           events.push({
@@ -10562,13 +10964,19 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   // Requirements (RTM)
   app.get("/api/tm/requirements", async (req, res) => {
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-      res.json(await storage.getTmRequirements(1, projectId));
+      res.json(await storage.getTmRequirements(tenantId, projectId));
     }
     catch (e: any) { res.status(500).json({ message: e.message }); }
   });
   app.post("/api/tm/requirements", async (req, res) => {
-    try { res.json(await storage.createTmRequirement({ ...req.body, tenantId: 1 })); }
+    try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      res.json(await storage.createTmRequirement({ ...req.body, tenantId }));
+    }
     catch (e: any) { res.status(400).json({ message: e.message }); }
   });
   app.patch("/api/tm/requirements/:id", async (req, res) => {
@@ -10583,11 +10991,13 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   // Seed demo scenarios (idempotent — skips if any exist)
   app.post("/api/tm/seed-scenarios", async (req, res) => {
     try {
-      const existing = await storage.getTmScenarios(1);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const existing = await storage.getTmScenarios(tenantId);
       if (existing.length > 0) {
         return res.json({ skipped: true, count: existing.length });
       }
-      const cases = await storage.getTmTestCases(1);
+      const cases = await storage.getTmTestCases(tenantId);
       const caseIdsByIndex = (indices: number[]) =>
         indices.map(i => cases[i]?.id).filter(Boolean) as number[];
       const demoScenarios = [
@@ -10635,10 +11045,10 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
         },
       ];
       // Get current project ID and link scenarios
-      const projects = await storage.getTmProjects(1);
+      const projects = await storage.getTmProjects(tenantId);
       const projectId = projects[0]?.id;
       for (const s of demoScenarios) {
-        await storage.createTmScenario({ tenantId: 1, projectId, ...s });
+        await storage.createTmScenario({ tenantId, projectId, ...s });
       }
       res.json({ seeded: true, count: demoScenarios.length });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -10647,13 +11057,19 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   // Test Scenarios
   app.get("/api/tm/scenarios", async (req, res) => {
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-      res.json(await storage.getTmScenarios(1, projectId));
+      res.json(await storage.getTmScenarios(tenantId, projectId));
     }
     catch (e: any) { res.status(500).json({ message: e.message }); }
   });
   app.post("/api/tm/scenarios", async (req, res) => {
-    try { res.json(await storage.createTmScenario({ ...req.body, tenantId: 1 })); }
+    try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      res.json(await storage.createTmScenario({ ...req.body, tenantId }));
+    }
     catch (e: any) { res.status(400).json({ message: e.message }); }
   });
   app.patch("/api/tm/scenarios/:id", async (req, res) => {
@@ -10668,14 +11084,18 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   // Defects
   app.get("/api/tm/defects", async (req, res) => {
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-      const defects = await storage.getTmDefects(1, projectId);
+      const defects = await storage.getTmDefects(tenantId, projectId);
       res.json(defects);
     } catch (error: any) { res.status(500).json({ message: error.message }); }
   });
   app.post("/api/tm/defects", async (req, res) => {
     try {
-      const defect = await storage.createTmDefect({ ...req.body, tenantId: 1 });
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const defect = await storage.createTmDefect({ ...req.body, tenantId });
       res.json(defect);
     } catch (error: any) { res.status(400).json({ message: error.message }); }
   });

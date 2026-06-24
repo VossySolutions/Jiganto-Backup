@@ -24,8 +24,10 @@ import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 import {
   LayoutDashboard, GitBranch, Map, BookOpen, FlaskConical, Network,
   Upload, Play, Bug, LayoutGrid, ScrollText, ShieldCheck, RotateCcw,
-  ChevronDown, FolderKanban, Plus, Check, X, Loader2, Layers, Menu, GitCompare, LayoutTemplate,
+  ChevronDown, FolderKanban, Plus, Check, X, Loader2, Layers, Menu, GitCompare, LayoutTemplate, ClipboardList,
 } from "lucide-react";
+import { TmProjectRequiredEmpty } from "@/components/testmgmt/TmProjectRequiredEmpty";
+import { ModuleTrackingBoard } from "@/components/workspaces/ModuleTrackingBoard";
 import { TmScreen } from "@/types/testmgmt";
 export type { TmScreen };
 import { useToast } from "@/hooks/use-toast";
@@ -53,6 +55,7 @@ const navSections: NavSection[] = [
   {
     label: "PLANNING",
     items: [
+      { id: "task-tracker", label: "Task Tracker", icon: ClipboardList },
       { id: "test-library", label: "Test Library", icon: Layers },
       { id: "test-cycles", label: "Test Cycles", icon: RotateCcw },
       { id: "scenarios", label: "Test Scenarios", icon: BookOpen },
@@ -222,7 +225,7 @@ function NavPanel({ activeScreen, onNavigate }: { activeScreen: TmScreen; onNavi
 function TestManagementInner() {
   const [activeScreen, setActiveScreen] = useState<TmScreen>("command-centre");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const { activeProject, isLoading: projectLoading } = useTmProject();
+  const { activeProject, activeProjectId, isLoading: projectLoading } = useTmProject();
 
   const navigate = (screen: TmScreen) => {
     setActiveScreen(screen);
@@ -232,6 +235,9 @@ function TestManagementInner() {
   const currentLabel = navSections.flatMap(s => s.items).find(i => i.id === activeScreen)?.label ?? "Test Management";
 
   function renderScreen(screen: TmScreen) {
+    if (!activeProjectId && screen !== "access") {
+      return <TmProjectRequiredEmpty />;
+    }
     switch (screen) {
       case "command-centre": return <CommandCentreScreen onNavigate={navigate} />;
       case "digital-twin": return <DigitalTwinScreen onNavigate={navigate} />;
@@ -249,6 +255,19 @@ function TestManagementInner() {
       case "audit": return <AuditTrailScreen />;
       case "access": return <AccessRolesScreen />;
       case "phase-comparison": return <PhaseComparisonScreen />;
+      case "task-tracker":
+        return activeProjectId ? (
+          <ModuleTrackingBoard
+            apiPath={`/api/tm/projects/${activeProjectId}/tracking-board`}
+            queryKey={["/api/tm/projects", activeProjectId, "tracking-board"]}
+            title="Test Management Task Tracker"
+            description={`Track remediation and delivery tasks for ${activeProject?.name ?? "this project"}.`}
+          />
+        ) : (
+          <div className="p-8 text-center text-sm text-muted-foreground">
+            Select a test project to open its task tracker.
+          </div>
+        );
       default: return <CommandCentreScreen onNavigate={navigate} />;
     }
   }

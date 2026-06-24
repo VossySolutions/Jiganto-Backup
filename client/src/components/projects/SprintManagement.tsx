@@ -4,9 +4,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
@@ -16,7 +14,8 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
 import { z } from "zod";
 import { format, addDays, differenceInDays } from "date-fns";
 import { Plus, Calendar as CalendarIcon, Play, Pause, CheckCircle, Clock, Target, TrendingUp, Settings } from "lucide-react";
@@ -79,7 +78,6 @@ export function SprintManagement({ projectId }: SprintManagementProps) {
     mutationFn: async (values: SprintFormValues) => {
       const endDate = addDays(values.startDate, values.durationDays);
       const payload = {
-        tenantId: 1,
         projectId,
         name: values.name,
         goal: values.goal,
@@ -161,25 +159,30 @@ export function SprintManagement({ projectId }: SprintManagementProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Sprint Management</h2>
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-create-sprint">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Sprint
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Create New Sprint</DialogTitle>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <Button data-testid="button-create-sprint" onClick={() => setCreateDialogOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Create Sprint
+        </Button>
+        <FormDialogShell
+          open={createDialogOpen}
+          onOpenChange={setCreateDialogOpen}
+          onCancel={() => setCreateDialogOpen(false)}
+          onSubmit={form.handleSubmit(onSubmit)}
+          title="Create New Sprint"
+          saveLabel={createSprintMutation.isPending ? "Creating..." : "Create Sprint"}
+          saving={createSprintMutation.isPending}
+          saveTestId="button-submit-sprint"
+          size="md"
+        >
+          <Form {...form}>
+            <FormSection title="Sprint details" icon={<span className="h-2 w-2 rounded-full bg-blue-500" />}>
+              <div className="space-y-1.5 mb-3.5">
+                <FieldLabel>Sprint Name</FieldLabel>
                 <FormField
                   control={form.control}
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Sprint Name</FormLabel>
                       <FormControl>
                         <Input placeholder="Sprint 1" {...field} data-testid="input-sprint-name" />
                       </FormControl>
@@ -187,13 +190,15 @@ export function SprintManagement({ projectId }: SprintManagementProps) {
                     </FormItem>
                   )}
                 />
+              </div>
 
+              <div className="space-y-1.5">
+                <FieldLabel>Sprint Goal</FieldLabel>
                 <FormField
                   control={form.control}
                   name="goal"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Sprint Goal</FormLabel>
                       <FormControl>
                         <Textarea placeholder="What is the goal for this sprint?" {...field} data-testid="input-sprint-goal" />
                       </FormControl>
@@ -201,14 +206,20 @@ export function SprintManagement({ projectId }: SprintManagementProps) {
                     </FormItem>
                   )}
                 />
+              </div>
+            </FormSection>
 
-                <div className="grid grid-cols-2 gap-4">
+            <FormDivider />
+
+            <FormSection title="Schedule & velocity" icon={<span className="h-2 w-2 rounded-full bg-violet-500" />}>
+              <FieldGrid className="mb-3.5">
+                <div className="space-y-1.5">
+                  <FieldLabel>Start Date</FieldLabel>
                   <FormField
                     control={form.control}
                     name="startDate"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>Start Date</FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
@@ -231,13 +242,15 @@ export function SprintManagement({ projectId }: SprintManagementProps) {
                       </FormItem>
                     )}
                   />
+                </div>
 
+                <div className="space-y-1.5">
+                  <FieldLabel>Duration (days)</FieldLabel>
                   <FormField
                     control={form.control}
                     name="durationDays"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Duration (days)</FormLabel>
                         <Select
                           value={field.value?.toString()}
                           onValueChange={(val) => field.onChange(parseInt(val))}
@@ -261,13 +274,15 @@ export function SprintManagement({ projectId }: SprintManagementProps) {
                     )}
                   />
                 </div>
+              </FieldGrid>
 
+              <div className="space-y-1.5">
+                <FieldLabel>Target Velocity (story points)</FieldLabel>
                 <FormField
                   control={form.control}
                   name="velocity"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Target Velocity (story points)</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -282,16 +297,10 @@ export function SprintManagement({ projectId }: SprintManagementProps) {
                     </FormItem>
                   )}
                 />
-
-                <DialogFooter>
-                  <Button type="submit" disabled={createSprintMutation.isPending} data-testid="button-submit-sprint">
-                    {createSprintMutation.isPending ? "Creating..." : "Create Sprint"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+              </div>
+            </FormSection>
+          </Form>
+        </FormDialogShell>
       </div>
 
       {activeSprint && (

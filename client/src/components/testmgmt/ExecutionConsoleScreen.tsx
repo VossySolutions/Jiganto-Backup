@@ -15,7 +15,7 @@ import { useTmFetch, useTmFetchById } from "@/hooks/use-tm-fetch";
 import { tmFetchFormData } from "@/lib/tm-api";
 import { normalizeStatus, STATUS_DOT, STATUS_LABELS } from "@/lib/tm-utils";
 import type { TmHierarchyNode } from "@/types/testmgmt";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 
 type StepStatus = "not_started" | "pass" | "fail" | "blocked";
 
@@ -420,55 +420,54 @@ export function ExecutionConsoleScreen() {
       </div>
 
       {/* Fail dialog */}
-      <Dialog open={failOpen} onOpenChange={setFailOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Record Failure</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs font-medium">Actual Result *</label>
-              <textarea className="w-full border rounded-lg p-2 text-sm mt-1 min-h-[80px]" value={failForm.actualResult}
-                onChange={e => setFailForm(f => ({ ...f, actualResult: e.target.value }))} placeholder="Describe what actually happened..." />
-            </div>
-            <div>
-              <label className="text-xs font-medium">Severity</label>
-              <select className="w-full border rounded-lg p-2 text-sm mt-1" value={failForm.defectSeverity}
-                onChange={e => setFailForm(f => ({ ...f, defectSeverity: e.target.value }))}>
-                {["critical", "high", "medium", "low"].map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={failForm.raiseDefect} onChange={e => setFailForm(f => ({ ...f, raiseDefect: e.target.checked }))} />
-              Raise Defect in Help Desk (pre-ticked)
-            </label>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setFailOpen(false)}>Cancel</Button>
-              <Button variant="destructive" onClick={submitFail} disabled={submitMutation.isPending}>
-                {submitMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Fail"}
-              </Button>
-            </div>
+      <FormDialogShell
+        open={failOpen}
+        onOpenChange={setFailOpen}
+        title="Record Failure"
+        saveLabel="Submit Fail"
+        onCancel={() => setFailOpen(false)}
+        onSubmit={submitFail}
+        saving={submitMutation.isPending}
+        disabled={!failForm.actualResult.trim()}
+      >
+        <FormSection title="Failure details">
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel required>Actual Result</FieldLabel>
+            <textarea className="w-full border rounded-lg p-2 text-sm min-h-[80px]" value={failForm.actualResult}
+              onChange={e => setFailForm(f => ({ ...f, actualResult: e.target.value }))} placeholder="Describe what actually happened..." />
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Severity</FieldLabel>
+            <select className="w-full border rounded-lg p-2 text-sm" value={failForm.defectSeverity}
+              onChange={e => setFailForm(f => ({ ...f, defectSeverity: e.target.value }))}>
+              {["critical", "high", "medium", "low"].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={failForm.raiseDefect} onChange={e => setFailForm(f => ({ ...f, raiseDefect: e.target.checked }))} />
+            Raise Defect in Help Desk (pre-ticked)
+          </label>
+        </FormSection>
+      </FormDialogShell>
 
-      {/* Blocked dialog */}
-      <Dialog open={blockedOpen} onOpenChange={setBlockedOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Record Blocked</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs font-medium">Reason why blocked *</label>
-              <textarea className="w-full border rounded-lg p-2 text-sm mt-1 min-h-[60px]" value={blockedForm.blockedReason}
-                onChange={e => setBlockedForm(f => ({ ...f, blockedReason: e.target.value }))} placeholder="e.g. Test data not available" />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setBlockedOpen(false)}>Cancel</Button>
-              <Button onClick={submitBlocked} disabled={submitMutation.isPending} className="bg-amber-600 hover:bg-amber-700 text-white">
-                Submit Blocked
-              </Button>
-            </div>
+      <FormDialogShell
+        open={blockedOpen}
+        onOpenChange={setBlockedOpen}
+        title="Record Blocked"
+        saveLabel="Submit Blocked"
+        onCancel={() => setBlockedOpen(false)}
+        onSubmit={submitBlocked}
+        saving={submitMutation.isPending}
+        disabled={!blockedForm.blockedReason.trim()}
+      >
+        <FormSection title="Blocked details">
+          <div className="space-y-1.5">
+            <FieldLabel required>Reason why blocked</FieldLabel>
+            <textarea className="w-full border rounded-lg p-2 text-sm min-h-[60px]" value={blockedForm.blockedReason}
+              onChange={e => setBlockedForm(f => ({ ...f, blockedReason: e.target.value }))} placeholder="e.g. Test data not available" />
           </div>
-        </DialogContent>
-      </Dialog>
+        </FormSection>
+      </FormDialogShell>
     </div>
     </TmScreenShell>
   );

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +46,10 @@ export function ResourcesPipelineTab({ onViewPlan, onGapAnalysis }: Props) {
 
   const flagMutation = useMutation({
     mutationFn: (oppId: number) => apiRequest("POST", `/api/resources/pipeline/${oppId}/flag-capacity`, {}),
-    onSuccess: () => toast({ title: "Capacity concern flagged to opportunity owner" }),
+    onSuccess: () => {
+      toast({ title: "Capacity concern flagged to opportunity owner" });
+      queryClient.invalidateQueries({ queryKey: ["/api/resources/pipeline-view"] });
+    },
   });
 
   if (isLoading) return <ResourcesTableSkeleton rows={6} cols={8} />;

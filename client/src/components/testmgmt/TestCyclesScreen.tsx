@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { TmTestRun } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import { useTmProject } from "@/contexts/TmProjectContext";
 import { CYCLE_STATUS_COLORS, TEST_PHASES, getTmLabels } from "@/lib/tm-utils";
 import type { TmCycleMetrics } from "@/types/testmgmt";
 import { Plus, Loader2, ShieldCheck, Play, Calendar, FileDown, FileSignature } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel } from "@/components/ui/form-dialog-shell";
+import { useAuth } from "@/hooks/use-auth";
 import { useTmFetch } from "@/hooks/use-tm-fetch";
 import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 import { tmDownloadPdf } from "@/lib/tm-api";
@@ -20,6 +21,8 @@ type EnrichedCycle = TmTestRun & { metrics: TmCycleMetrics };
 
 export function TestCyclesScreen() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const signedOffBy = user?.email ?? user?.id ?? "unknown";
   const [, setLocation] = useLocation();
   const { activeProjectId, activeProject, qsParam } = useTmProject();
   const labels = getTmLabels(activeProject?.methodology);
@@ -39,7 +42,12 @@ export function TestCyclesScreen() {
 
   const { data: esignRequests = [] } = useQuery<SignoffRequest[]>({
     queryKey: ["/api/signoff"],
-    queryFn: () => fetch("/api/signoff").then(r => r.json()),
+    queryFn: async () => {
+      const res = await fetchWithAuth("/api/signoff");
+      if (!res.ok) throw new Error("Failed to load e-sign requests");
+      return res.json();
+    },
+    staleTime: 30_000,
   });
 
   function esignForCycle(cycleId: number) {
@@ -68,7 +76,7 @@ export function TestCyclesScreen() {
   }
 
   const createMutation = useMutation({
-    mutationFn: (body: Record<string, unknown>) => apiRequest("POST", "/api/tm/runs", { ...body, tenantId: 1, projectId: activeProjectId, status: "planning" }),
+    mutationFn: (body: Record<string, unknown>) => apiRequest("POST", "/api/tm/runs", { ...body, projectId: activeProjectId, status: "planning" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tm/cycles"] });
       setCreateOpen(false);
@@ -87,7 +95,7 @@ export function TestCyclesScreen() {
   });
 
   const signOffMutation = useMutation({
-    mutationFn: (cycleId: number) => apiRequest("POST", `/api/tm/cycles/${cycleId}/sign-off`, { signedOffBy: "current-user" }),
+    mutationFn: (cycleId: number) => apiRequest("POST", `/api/tm/cycles/${cycleId}/sign-off`, { signedOffBy }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tm/cycles"] });
       toast({ title: "Test cycle signed off" });
@@ -209,39 +217,64 @@ export function TestCyclesScreen() {
         )}
       </div>
 
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Create Test Cycle</DialogTitle></DialogHeader>
-            <div className="space-y-3">
+        <FormDialogShell
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          title="Create Test Cycle"
+          saveLabel="Create Cycle"
+          onCancel={() => setCreateOpen(false)}
+          onSubmit={() => createMutation.mutate(form)}
+          saving={createMutation.isPending}
+          disabled={!form.name.trim()}
+        >
+          <FormSection title="Cycle details">
+            <div className="space-y-1.5 mb-3.5">
+              <FieldLabel required>Cycle name</FieldLabel>
               <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Cycle name (e.g. UAT Sprint 3)"
                 value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-              <select className="w-full border rounded-lg px-3 py-2 text-sm" value={form.testPhase}
-                onChange={e => setForm(f => ({ ...f, testPhase: e.target.value }))}>
-                {TEST_PHASES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-              <select className="w-full border rounded-lg px-3 py-2 text-sm" value={form.methodology}
-                onChange={e => setForm(f => ({ ...f, methodology: e.target.value }))}>
-                <option value="waterfall">Waterfall</option>
-                <option value="agile">Agile</option>
-                <option value="hybrid">Hybrid</option>
-              </select>
-              <div className="grid grid-cols-2 gap-2">
-                <input type="date" className="border rounded-lg px-3 py-2 text-sm" value={form.startDate}
+            </div>
+            <FieldGrid className="mb-3.5">
+              <div>
+                <FieldLabel>Test phase</FieldLabel>
+                <select className="w-full border rounded-lg px-3 py-2 text-sm" value={form.testPhase}
+                  onChange={e => setForm(f => ({ ...f, testPhase: e.target.value }))}>
+                  {TEST_PHASES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <FieldLabel>Methodology</FieldLabel>
+                <select className="w-full border rounded-lg px-3 py-2 text-sm" value={form.methodology}
+                  onChange={e => setForm(f => ({ ...f, methodology: e.target.value }))}>
+                  <option value="waterfall">Waterfall</option>
+                  <option value="agile">Agile</option>
+                  <option value="hybrid">Hybrid</option>
+                </select>
+              </div>
+            </FieldGrid>
+            <FieldGrid className="mb-3.5">
+              <div>
+                <FieldLabel>Start date</FieldLabel>
+                <input type="date" className="w-full border rounded-lg px-3 py-2 text-sm" value={form.startDate}
                   onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
-                <input type="date" className="border rounded-lg px-3 py-2 text-sm" value={form.endDate}
+              </div>
+              <div>
+                <FieldLabel>End date</FieldLabel>
+                <input type="date" className="w-full border rounded-lg px-3 py-2 text-sm" value={form.endDate}
                   onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
               </div>
+            </FieldGrid>
+            <div className="space-y-1.5 mb-3.5">
+              <FieldLabel>Build / Version</FieldLabel>
               <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Build / Version"
                 value={form.buildVersion} onChange={e => setForm(f => ({ ...f, buildVersion: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <FieldLabel>Notes</FieldLabel>
               <textarea className="w-full border rounded-lg px-3 py-2 text-sm min-h-[60px]" placeholder="Planning notes, entry/exit criteria..."
                 value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-              <Button className="w-full" disabled={!form.name.trim() || createMutation.isPending}
-                onClick={() => createMutation.mutate(form)}>
-                {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Cycle"}
-              </Button>
             </div>
-          </DialogContent>
-        </Dialog>
+          </FormSection>
+        </FormDialogShell>
       </div>
     </TmScreenShell>
   );

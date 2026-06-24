@@ -36,7 +36,10 @@ export const SORT_OPTIONS = [
   { value: "recently_updated", label: "Recently updated" },
 ] as const;
 
-export const AI_GENERATE_MODULES = ["bpm_framework", "survey", "project", "bpml", "esign"] as const;
+export const AI_GENERATE_MODULES = [
+  "bpm_framework", "bpm_diagram", "bpm_orgchart", "survey", "project", "bpml", "esign",
+  "workspace", "whiteboard", "test_mgmt",
+] as const;
 
 export function moduleLabel(key: string) {
   return TEMPLATE_MODULES.find(m => m.key === key)?.label ?? key;

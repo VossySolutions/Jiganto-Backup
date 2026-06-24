@@ -581,7 +581,7 @@ function normalizeZipPath(path: string): string {
 }
 
 async function resolveDocxPartPath(
-  zip: Awaited<ReturnType<(typeof import("jszip"))["default"]["loadAsync"]>>,
+  zip: Awaited<ReturnType<typeof import("jszip")["loadAsync"]>>,
   kind: "header" | "footer",
 ): Promise<string | null> {
   const tag = kind === "header" ? "headerReference" : "footerReference";
@@ -632,7 +632,7 @@ async function resolveDocxPartPath(
 /** Extract default header/footer HTML from a .docx file. */
 export async function extractDocxHeaderFooter(arrayBuffer: ArrayBuffer): Promise<DocxPageRegions> {
   try {
-    const JSZip = (await import("jszip")).default;
+    const JSZip = await import("jszip");
     const zip = await JSZip.loadAsync(arrayBuffer);
     let headerHtml = "";
     let footerHtml = "";
@@ -660,7 +660,7 @@ export async function prepareDocxImport(
   arrayBuffer: ArrayBuffer,
 ): Promise<DocxImportPrep | null> {
   try {
-    const JSZip = (await import("jszip")).default;
+    const JSZip = await import("jszip");
     const zip = await JSZip.loadAsync(arrayBuffer);
     const docXmlFile = zip.file("word/document.xml");
     if (!docXmlFile) return null;

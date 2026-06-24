@@ -41,6 +41,9 @@ export type TicketFilters = {
   slaFilter?: "all" | "at_risk" | "breached" | "within";
   agentFilter?: "all" | "me" | "unassigned";
   clientId?: number | null;
+  projectId?: number | null;
+  /** Skip per-ticket maintenance SLA lookups (faster dashboards). */
+  lightweight?: boolean;
   search?: string;
   view?: "list" | "calendar";
   userId?: string;
@@ -390,18 +393,25 @@ export async function addTicketAttachment(
   return att;
 }
 
-export async function enrichTicket(ticket: typeof sdTickets.$inferSelect, tenant?: typeof tenants.$inferSelect | null) {
+export async function enrichTicket(
+  ticket: typeof sdTickets.$inferSelect,
+  tenant?: typeof tenants.$inferSelect | null,
+  precomputedTimeLogged?: number,
+  options?: { skipMaintenancePause?: boolean },
+) {
   const t = tenant ?? (await storage.getTenant(ticket.tenantId));
   let maintenancePauseMs = 0;
-  try {
-    const { maintenancePauseForTicket } = await import("../help-desk/maintenance-sla");
-    maintenancePauseMs = await maintenancePauseForTicket(
-      ticket.tenantId,
-      ticket.clientId,
-      new Date(ticket.createdAt),
-    );
-  } catch {
-    /* optional */
+  if (!options?.skipMaintenancePause) {
+    try {
+      const { maintenancePauseForTicket } = await import("../help-desk/maintenance-sla");
+      maintenancePauseMs = await maintenancePauseForTicket(
+        ticket.tenantId,
+        ticket.clientId,
+        new Date(ticket.createdAt),
+      );
+    } catch {
+      /* optional */
+    }
   }
   const sla = slaStateForTicket(ticket, t, new Date(), maintenancePauseMs);
   const effectiveDeadline = effectiveResolutionDeadline(ticket, t, new Date(), maintenancePauseMs);
@@ -410,8 +420,21 @@ export async function enrichTicket(ticket: typeof sdTickets.$inferSelect, tenant
     slaState: sla,
     effectiveResolutionDeadline: effectiveDeadline?.toISOString() ?? null,
     maintenancePauseMs,
-    totalTimeLogged: await getTotalTimeLogged(ticket.id),
+    totalTimeLogged: precomputedTimeLogged ?? await getTotalTimeLogged(ticket.id),
   };
+}
+
+async function batchTotalTimeLogged(ticketIds: number[]): Promise<Map<number, number>> {
+  if (ticketIds.length === 0) return new Map();
+  const logs = await db
+    .select()
+    .from(sdTicketTimeLogs)
+    .where(inArray(sdTicketTimeLogs.ticketId, ticketIds));
+  const map = new Map<number, number>();
+  for (const log of logs) {
+    map.set(log.ticketId, (map.get(log.ticketId) ?? 0) + Number(log.hours));
+  }
+  return map;
 }
 
 async function getTotalTimeLogged(ticketId: number): Promise<number> {
@@ -426,6 +449,7 @@ export async function listTickets(tenantId: number, filters: TicketFilters) {
   if (filters.priority && filters.priority !== "all") conditions.push(eq(sdTickets.priority, filters.priority));
   if (filters.status && filters.status !== "all") conditions.push(eq(sdTickets.status, filters.status));
   if (filters.clientId) conditions.push(eq(sdTickets.clientId, filters.clientId));
+  if (filters.projectId) conditions.push(eq(sdTickets.projectId, filters.projectId));
   if (filters.agentFilter === "me" && filters.userId) {
     conditions.push(eq(sdTickets.assignedAgentId, filters.userId));
   }
@@ -460,9 +484,11 @@ export async function listTickets(tenantId: number, filters: TicketFilters) {
   }
 
   const tenant = await storage.getTenant(tenantId);
+  const timeLoggedByTicket = await batchTotalTimeLogged(rows.map((r) => r.ticket.id));
+  const enrichOpts = filters.lightweight ? { skipMaintenancePause: true } : undefined;
   let enriched = await Promise.all(
     rows.map(async (r) => ({
-      ...(await enrichTicket(r.ticket, tenant)),
+      ...(await enrichTicket(r.ticket, tenant, timeLoggedByTicket.get(r.ticket.id) ?? 0, enrichOpts)),
       serviceName: r.serviceName,
       teamName: r.teamName,
       clientName: r.clientName,
@@ -1077,8 +1103,18 @@ export async function setCabMembers(tenantId: number, memberIds: string[]) {
 
 // --- Dashboard ---
 
+function resolveSlaComplianceTarget(configs: Awaited<ReturnType<typeof listSlaConfigs>>): number {
+  if (!configs.length) return 95;
+  const avgResolutionHours =
+    configs.reduce((sum, row) => sum + parseFloat(String(row.config.resolutionHours)), 0) / configs.length;
+  if (avgResolutionHours <= 4) return 98;
+  if (avgResolutionHours <= 8) return 95;
+  if (avgResolutionHours <= 24) return 92;
+  return 88;
+}
+
 export async function loadServiceDeskDashboard(tenantId: number, clientId?: number | null) {
-  const filters: TicketFilters = { source: "service_desk", clientId: clientId ?? undefined };
+  const filters: TicketFilters = { source: "service_desk", clientId: clientId ?? undefined, lightweight: true };
   const tickets = await listTickets(tenantId, filters);
   const now = new Date();
   const thirtyDaysAgo = new Date(now);
@@ -1114,6 +1150,8 @@ export async function loadServiceDeskDashboard(tenantId: number, clientId?: numb
   const slaWithin = resolvedRecent.filter((t) => t.slaState.resolution === "within").length;
   const slaTotal = resolvedRecent.length || 1;
   const slaPerformancePct = Math.round((slaWithin / slaTotal) * 100);
+  const slaConfigs = await listSlaConfigs(tenantId);
+  const slaComplianceTarget = resolveSlaComplianceTarget(slaConfigs);
 
   const volumeTrend: { day: string; count: number }[] = [];
   for (let i = 29; i >= 0; i--) {
@@ -1156,7 +1194,7 @@ export async function loadServiceDeskDashboard(tenantId: number, clientId?: numb
       pendingApproval: pendingApproval.length,
     },
     volumeByType: Object.entries(byType).map(([type, countVal]) => ({ type, count: countVal })),
-    slaPerformance: { withinPct: slaPerformancePct, target: 95 },
+    slaPerformance: { withinPct: slaPerformancePct, target: slaComplianceTarget },
     volumeTrend,
     breachedTable,
   };

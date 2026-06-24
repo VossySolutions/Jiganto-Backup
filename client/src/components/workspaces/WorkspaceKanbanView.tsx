@@ -1,15 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Plus, User, CalendarDays, GripVertical } from "lucide-react";
 import type { WorkspaceDatabaseColumn, WorkspaceDatabaseRow } from "@shared/schema";
-
-interface KanbanGroup {
-  value: string;
-  rows: WorkspaceDatabaseRow[];
-}
+import { AppKanbanBoard } from "@/components/kanban";
 
 export function WorkspaceKanbanView({
   columns,
@@ -24,9 +20,6 @@ export function WorkspaceKanbanView({
   onAddRow: (statusColId: number, statusValue: string) => void;
   onOpenRowDetail: (rowId: number) => void;
 }) {
-  const [draggingRowId, setDraggingRowId] = useState<number | null>(null);
-  const [dragOverValue, setDragOverValue] = useState<string | null>(null);
-
   const statusColumn = useMemo(() => {
     const byName = columns.find(
       (column) => column.type === "select" && column.name.trim().toLowerCase() === "status",
@@ -57,18 +50,6 @@ export function WorkspaceKanbanView({
     return Array.from(new Set([...options, ...fromRows]));
   }, [rows, statusColumn]);
 
-  const groups = useMemo<KanbanGroup[]>(() => {
-    if (!statusColumn) return [];
-    return groupValues.map((value) => ({
-      value,
-      rows: rows.filter((row) => {
-        const data = (row.data || {}) as Record<string, unknown>;
-        const current = String(data[String(statusColumn.id)] || "Unassigned");
-        return current === value;
-      }),
-    }));
-  }, [groupValues, rows, statusColumn]);
-
   if (!statusColumn) {
     return (
       <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
@@ -77,108 +58,101 @@ export function WorkspaceKanbanView({
     );
   }
 
-  return (
-    <div className="flex gap-3 overflow-x-auto pb-3" data-testid="workspace-kanban-view">
-      {groups.map((group) => (
-        <div
-          key={group.value}
-          className={cn(
-            "w-[290px] flex-shrink-0 rounded-md border bg-muted/20 p-2",
-            dragOverValue === group.value && "border-primary/50 bg-primary/5",
-          )}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOverValue(group.value);
-          }}
-          onDragLeave={() => setDragOverValue((prev) => (prev === group.value ? null : prev))}
-          onDrop={async (e) => {
-            e.preventDefault();
-            if (!draggingRowId || draggingRowId <= 0) return;
-            const row = rows.find((item) => item.id === draggingRowId);
-            if (!row) return;
-            const rowData = ((row.data || {}) as Record<string, unknown>) ?? {};
-            await onUpdateRow(row.id, { ...rowData, [String(statusColumn.id)]: group.value });
-            setDraggingRowId(null);
-            setDragOverValue(null);
-          }}
-        >
-          <div className="mb-2 flex items-center justify-between px-1">
-            <div className="flex items-center gap-2">
-              <h4 className="text-sm font-medium">{group.value}</h4>
-              <Badge variant="secondary">{group.rows.length}</Badge>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => onAddRow(statusColumn.id, group.value)}
-              data-testid={`kanban-add-row-${group.value}`}
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </div>
+  const statusColId = String(statusColumn.id);
 
-          <div className="space-y-2">
-            {group.rows.map((row) => {
-              const data = ((row.data || {}) as Record<string, unknown>) ?? {};
-              const title = titleColumn ? String(data[String(titleColumn.id)] || "Untitled") : `Row #${row.id}`;
-              const assignee = assigneeColumn ? String(data[String(assigneeColumn.id)] || "") : "";
-              const due = dueDateColumn ? String(data[String(dueDateColumn.id)] || "") : "";
-              const priority = priorityColumn ? String(data[String(priorityColumn.id)] || "") : "";
-              return (
-                <Card
-                  key={row.id}
-                  draggable
-                  onDragStart={() => setDraggingRowId(row.id)}
-                  onDragEnd={() => {
-                    setDraggingRowId(null);
-                    setDragOverValue(null);
-                  }}
-                  className="cursor-pointer p-3 hover:shadow-sm"
-                  onClick={() => onOpenRowDetail(row.id)}
-                  data-testid={`kanban-card-${row.id}`}
-                >
-                  <div className="mb-2 flex items-start justify-between gap-2">
-                    <p className="line-clamp-2 text-sm font-medium">{title}</p>
-                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                  </div>
-                  <div className="space-y-1.5 text-xs text-muted-foreground">
-                    {assignee && (
-                      <div className="flex items-center gap-1.5">
-                        <User className="h-3 w-3" />
-                        <span className="truncate">{assignee}</span>
-                      </div>
-                    )}
-                    {due && (
-                      <div className="flex items-center gap-1.5">
-                        <CalendarDays className="h-3 w-3" />
-                        <span>{formatDate(due)}</span>
-                      </div>
-                    )}
-                    {priority && (
-                      <Badge variant="secondary" className={cn("text-[10px]", getPriorityClasses(priority))}>
-                        {priority}
-                      </Badge>
-                    )}
-                  </div>
-                </Card>
-              );
-            })}
-            {group.rows.length === 0 && (
-              <div className="rounded-md border border-dashed bg-background/60 px-3 py-5 text-center text-xs text-muted-foreground">
-                Drop cards here
+  const getRowStatus = (row: WorkspaceDatabaseRow) =>
+    String(((row.data || {}) as Record<string, unknown>)[statusColId] || "Unassigned");
+
+  return (
+    <AppKanbanBoard
+      columns={groupValues.map((value) => ({
+        id: value,
+        title: value,
+        header: (
+          <div className="rounded-t-md border border-b-0 border-border/40 bg-muted/20 px-2 py-2 mb-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-medium">{value}</h4>
+                <Badge variant="secondary">{rows.filter((r) => getRowStatus(r) === value).length}</Badge>
               </div>
-            )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => onAddRow(statusColumn.id, value)}
+                data-testid={`kanban-add-row-${value}`}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ),
+        className: "w-[290px]",
+      }))}
+      items={rows}
+      getItemId={(row) => String(row.id)}
+      getColumnId={getRowStatus}
+      setColumnIdOnItem={(row, columnId) => ({
+        ...row,
+        data: { ...((row.data || {}) as Record<string, unknown>), [statusColId]: columnId },
+      })}
+      onMove={(move) => {
+        const row = move.item;
+        const rowData = ((row.data || {}) as Record<string, unknown>) ?? {};
+        return Promise.resolve(onUpdateRow(row.id, { ...rowData, [statusColId]: move.toColumnId }));
+      }}
+      testIdPrefix="workspace-kanban"
+      columnWidthClass="w-[290px]"
+      renderCard={(row, { dragHandleProps, isDragging }) => {
+        const data = ((row.data || {}) as Record<string, unknown>) ?? {};
+        const title = titleColumn ? String(data[String(titleColumn.id)] || "Untitled") : `Row #${row.id}`;
+        const assignee = assigneeColumn ? String(data[String(assigneeColumn.id)] || "") : "";
+        const due = dueDateColumn ? String(data[String(dueDateColumn.id)] || "") : "";
+        const priority = priorityColumn ? String(data[String(priorityColumn.id)] || "") : "";
+        return (
+          <Card
+            className={cn(
+              "cursor-pointer p-3 hover:shadow-sm transition-shadow",
+              isDragging && "shadow-md ring-2 ring-primary/20",
+            )}
+            onClick={() => onOpenRowDetail(row.id)}
+            data-testid={`kanban-card-${row.id}`}
+          >
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <p className="line-clamp-2 text-sm font-medium flex-1">{title}</p>
+              <div {...(dragHandleProps ?? {})} className="shrink-0 cursor-grab text-muted-foreground" onClick={(e) => e.stopPropagation()}>
+                <GripVertical className="h-3.5 w-3.5" />
+              </div>
+            </div>
+            <div className="space-y-1.5 text-xs text-muted-foreground">
+              {assignee && (
+                <div className="flex items-center gap-1.5">
+                  <User className="h-3 w-3" />
+                  <span className="truncate">{assignee}</span>
+                </div>
+              )}
+              {due && (
+                <div className="flex items-center gap-1.5">
+                  <CalendarDays className="h-3 w-3" />
+                  <span>{formatDate(due)}</span>
+                </div>
+              )}
+              {priority && (
+                <Badge variant="secondary" className={cn("text-[10px]", getPriorityClasses(priority))}>
+                  {priority}
+                </Badge>
+              )}
+            </div>
+          </Card>
+        );
+      }}
+    />
   );
 }
 
 function getSelectChoices(options: unknown): string[] {
   if (!options || typeof options !== "object") return [];
-  const choices = (options as any).choices;
+  const choices = (options as { choices?: unknown }).choices;
   if (!Array.isArray(choices)) return [];
   return choices.map((choice) => String(choice));
 }

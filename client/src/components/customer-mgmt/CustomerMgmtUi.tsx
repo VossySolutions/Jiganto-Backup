@@ -11,11 +11,39 @@ import {
 } from "@shared/models/customer-mgmt";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { MetricCard } from "@/components/ui/metric-card";
 import { AlertTriangle, Info, Lock, Loader2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PlatformRole } from "@shared/models/permissions";
 
 export const CUSTOMER_MGMT_COLOR = "#534AB7";
+
+export const CUSTOMER_KPI_HELP: Record<string, string> = {
+  "Active customers": "Paying or active commercial tenants on a live plan.",
+  "On trial / extension": "Customers on trial, admin extension, or free-access period.",
+  "Monthly recurring revenue": "Normalised monthly subscription revenue (MRR).",
+  "At-risk customers": "Accounts with health score in the red band (0–39).",
+  "Healthy (70–100)": "Customers with strong product usage and engagement signals.",
+  "Watch (40–69)": "Customers needing CSM outreach before health declines.",
+  "At risk (0–39)": "Customers requiring urgent retention intervention.",
+  "Average health score": "Mean composite health score across all active customers.",
+  "Standard trials": "Self-serve 30-day trials started automatically.",
+  "Admin extensions": "Trial extensions granted manually by staff.",
+  "Free access periods": "Paid customers moved to complimentary credit periods.",
+  "Expiring this week": "Trials or extensions ending within 7 days.",
+  "Trial → paid (90d)": "Share of trials that converted to paid in the last 90 days.",
+  "Active programmes": "Beta or pilot programmes currently running.",
+  "Total participants": "Organisations enrolled across all programmes.",
+  "Free access cost": "Estimated monthly cost of complimentary access.",
+  "Converted to paid": "Programme participants who moved to a paid plan.",
+  "Renewing in 30 days": "MRR from contracts renewing within 30 days.",
+  "Renewing in 31–90 days": "MRR from contracts renewing in 31–90 days.",
+  "At-risk renewals": "Renewals where customer health is below 40.",
+  "Expected renewal rate": "Forecast renewal rate based on current health scores.",
+  MRR: "Monthly recurring revenue from active subscriptions.",
+  "ARR (run rate)": "Annualised recurring revenue at current MRR.",
+  "Overdue invoices": "Unpaid invoices past their due date.",
+};
 
 export function AsyncButton({
   pending,
@@ -107,6 +135,7 @@ export function KpiCard({
   valueClassName,
   icon: Icon,
   color = CUSTOMER_MGMT_COLOR,
+  helpText,
 }: {
   label: string;
   value: React.ReactNode;
@@ -115,31 +144,19 @@ export function KpiCard({
   valueClassName?: string;
   icon?: LucideIcon;
   color?: string;
+  helpText?: string;
 }) {
-  const subColor =
-    subTone === "up"
-      ? "text-emerald-600 dark:text-emerald-400"
-      : subTone === "warn"
-        ? "text-amber-600 dark:text-amber-400"
-        : subTone === "dn"
-          ? "text-red-600 dark:text-red-400"
-          : "text-muted-foreground";
   return (
-    <div className="rounded-xl border bg-card p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 shadow-sm">
-      {Icon && (
-        <div
-          className="h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ backgroundColor: `${color}20` }}
-        >
-          <Icon className="h-5 w-5" style={{ color }} />
-        </div>
-      )}
-      <div className="min-w-0">
-        <p className={cn("text-2xl font-bold tabular-nums leading-none", valueClassName)}>{value}</p>
-        <p className="text-xs text-muted-foreground mt-1">{label}</p>
-        {sub && <p className={cn("text-[10px] mt-0.5", subColor)}>{sub}</p>}
-      </div>
-    </div>
+    <MetricCard
+      title={label}
+      value={value}
+      subtitle={sub}
+      helpText={helpText ?? CUSTOMER_KPI_HELP[label]}
+      icon={Icon}
+      iconBgClassName={Icon ? "bg-muted" : undefined}
+      borderColor={color}
+      valueClassName={valueClassName}
+    />
   );
 }
 

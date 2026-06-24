@@ -17,7 +17,7 @@ function RagBadge({ status }: { status: string | null }) {
   return <Badge variant="outline" className={cn("text-[10px]", cls)}>{status || "green"}</Badge>;
 }
 
-export function PortfolioProgrammesTab() {
+export function PortfolioProgrammesTab({ searchTerm = "" }: { searchTerm?: string }) {
   const [, setLocation] = useLocation();
   const [view, setView] = useState<"table" | "card" | "cascade">("table");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -27,14 +27,23 @@ export function PortfolioProgrammesTab() {
 
   const { data: programmes = [], isLoading } = useQuery<ProgrammeListItem[]>({
     queryKey: ["/api/portfolio/programmes"],
+    staleTime: 30_000,
   });
 
   const filtered = useMemo(() => {
     let rows = programmes;
     if (filterPortfolio) rows = rows.filter((p) => p.portfolioName === filterPortfolio);
     if (filterRag) rows = rows.filter((p) => (p.ragStatus || "").toLowerCase() === filterRag.toLowerCase());
+    const q = searchTerm.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter((p) =>
+        p.name.toLowerCase().includes(q)
+        || (p.portfolioName ?? "").toLowerCase().includes(q)
+        || p.clientNames.some((c) => c.toLowerCase().includes(q)),
+      );
+    }
     return rows;
-  }, [programmes, filterPortfolio, filterRag]);
+  }, [programmes, filterPortfolio, filterRag, searchTerm]);
 
   const portfolios = useMemo(() => Array.from(new Set(programmes.map((p) => p.portfolioName).filter(Boolean))), [programmes]);
 

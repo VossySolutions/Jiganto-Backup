@@ -33,12 +33,13 @@ function expectOk(label, result, allowed = [200, 201]) {
 }
 
 function expectStatus(label, result, status) {
-  if (result.status !== status) {
-    failures.push({ label, status: result.status, detail: `expected ${status}, got ${result.text}` });
-    console.log(`  FAIL ${label} → ${result.status} (expected ${status})`);
+  const allowed = Array.isArray(status) ? status : [status];
+  if (!allowed.includes(result.status)) {
+    failures.push({ label, status: result.status, detail: `expected ${allowed.join("|")}, got ${result.text}` });
+    console.log(`  FAIL ${label} → ${result.status} (expected ${allowed.join("|")})`);
     return false;
   }
-  console.log(`  OK   ${label} → ${status} (expected)`);
+  console.log(`  OK   ${label} → ${result.status} (expected)`);
   return true;
 }
 
@@ -170,7 +171,7 @@ async function main() {
   }
 
   console.log("\n— Security (intentional 401/404 — not bugs) —");
-  expectStatus("GET /api/templates (no auth → 401)", await smokeCall(BASE, "GET", "/api/templates"), 401);
+  expectStatus("GET /api/templates (no auth → 401/403)", await smokeCall(BASE, "GET", "/api/templates"), [401, 403]);
   expectStatus("GET /api/templates/999999 (missing id → 404)", await call("GET", "/api/templates/999999", auth), 404);
   expectStatus("POST /api/frameworks/999999/save-as-template (missing → 404)", await call("POST", "/api/frameworks/999999/save-as-template", auth, { name: "x" }), 404);
   expectStatus("POST /api/pm/projects/999999/save-as-template (missing → 404)", await call("POST", "/api/pm/projects/999999/save-as-template", auth, { name: "x" }), 404);

@@ -3,10 +3,9 @@
  * Usage: SMOKE_BEARER_TOKEN=<jwt> npm run smoke:tasks
  */
 import "dotenv/config";
+import { obtainSmokeAuth, smokeCall } from "./smoke-auth.mjs";
 
 const BASE = process.env.SMOKE_BASE_URL ?? "http://localhost:5000";
-const TENANT = process.env.SEED_TENANT_ID ?? "1";
-const TOKEN = process.env.SMOKE_BEARER_TOKEN ?? "";
 
 const ENDPOINTS = [
   "GET /api/tasks",
@@ -20,23 +19,20 @@ const ENDPOINTS = [
   "POST /api/tasks/ai/summarise-week",
 ];
 
-async function callEndpoint(spec, body) {
+async function callEndpoint(spec, auth, body) {
   const [method, path] = spec.split(" ");
-  const url = `${BASE}${path}${path.includes("?") ? "&" : "?"}tenantId=${TENANT}`;
-  const headers = { "Content-Type": "application/json" };
-  if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
-  const init = { method, credentials: "include", headers };
-  if (body && method !== "GET") init.body = JSON.stringify(body);
-  const res = await fetch(url, init);
-  const text = await res.text();
-  let json = null;
-  try { json = JSON.parse(text); } catch { /* */ }
-  return { spec, status: res.status, ok: res.ok, size: text.length, json };
+  const r = await smokeCall(BASE, method, path, { ...auth, body });
+  return { spec, status: r.status, ok: r.status >= 200 && r.status < 300, size: r.text.length, json: r.json };
 }
 
 async function main() {
   console.log(`Smoke testing Tasks APIs at ${BASE}...\n`);
-  if (!TOKEN) console.log("(No SMOKE_BEARER_TOKEN — expecting 401 unless session cookie present)\n");
+  const auth = await obtainSmokeAuth(BASE);
+  if (!auth.bearer && !auth.cookie) {
+    console.error("No auth available.");
+    process.exit(1);
+  }
+  console.log(`Auth via: ${auth.via}\n`);
 
   let passed = 0;
   let failed = 0;
@@ -49,8 +45,8 @@ async function main() {
       : ep.includes("from-text") ? { text: "- Review proposal\n- Send timesheet" }
       : undefined;
     try {
-      const r = await callEndpoint(ep, body);
-      if (!TOKEN && r.status === 401) {
+      const r = await callEndpoint(ep, auth, body);
+      if (r.status === 401) {
         authSkipped++;
         console.log(`○ ${r.spec} → 401 (auth required — route reachable)`);
         continue;
@@ -66,13 +62,13 @@ async function main() {
   }
 
   try {
-    const create = await callEndpoint("POST /api/tasks", {
+    const create = await callEndpoint("POST /api/tasks", auth, {
       title: `Smoke test task ${Date.now()}`,
       source: "personal",
       isPersonal: true,
       priority: "medium",
     });
-    if (!TOKEN && create.status === 401) {
+    if (create.status === 401) {
       authSkipped++;
       console.log(`○ POST /api/tasks → 401 (auth required — route reachable)`);
     } else if (create.ok && create.json?.id) {
@@ -98,7 +94,7 @@ async function main() {
       [`POST /api/tasks/${createdId}/time-logs`, { hours: 1.5, notes: "Smoke" }],
     ]) {
       try {
-        const r = await callEndpoint(ep[0], ep[1]);
+        const r = await callEndpoint(ep[0], auth, ep[1]);
         const mark = r.ok ? "✓" : "✗";
         if (r.ok) passed++; else failed++;
         console.log(`${mark} ${ep[0]} → ${r.status}`);
@@ -108,7 +104,7 @@ async function main() {
       }
     }
     try {
-      const del = await callEndpoint(`DELETE /api/tasks/${createdId}`, null);
+      const del = await callEndpoint(`DELETE /api/tasks/${createdId}`, auth, null);
       if (del.ok || del.status === 204) { passed++; console.log(`✓ DELETE /api/tasks/${createdId} → ${del.status}`); }
       else { failed++; console.log(`✗ DELETE /api/tasks/${createdId} → ${del.status}`); }
     } catch (e) {

@@ -1,5 +1,5 @@
 import type { Express, Request } from "express";
-import { getApiTenantIdWithFallback } from "../lib/api-tenant-id";
+import { requireApiTenantId } from "../lib/api-tenant-id";
 import * as tplService from "./service";
 import { generateTemplateWithAi } from "./ai";
 import type { TemplateModule } from "@shared/models/templates";
@@ -17,7 +17,8 @@ function userName(req: Request): string {
 export function registerTemplateRoutes(app: Express): void {
   app.get("/api/templates", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       if (!userId(req)) return res.status(401).json({ message: "Unauthorized" });
       await tplService.ensureTemplatesReady(tenantId);
       const templates = await tplService.listTemplates({
@@ -37,7 +38,8 @@ export function registerTemplateRoutes(app: Express): void {
 
   app.get("/api/templates/marketplace", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       if (!userId(req)) return res.status(401).json({ message: "Unauthorized" });
       await tplService.ensureTemplatesReady(tenantId);
       const items = await tplService.listMarketplaceTemplates(tenantId);
@@ -47,7 +49,8 @@ export function registerTemplateRoutes(app: Express): void {
 
   app.get("/api/templates/discovery", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       if (!uid) return res.status(401).json({ message: "Unauthorized" });
       await tplService.ensureTemplatesReady(tenantId);
@@ -58,7 +61,8 @@ export function registerTemplateRoutes(app: Express): void {
 
   app.get("/api/templates/module-counts", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       if (!userId(req)) return res.status(401).json({ message: "Unauthorized" });
       await tplService.ensureTemplatesReady(tenantId);
       const counts = await tplService.getModuleCounts(tenantId);
@@ -68,7 +72,8 @@ export function registerTemplateRoutes(app: Express): void {
 
   app.get("/api/templates/snapshot", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       if (!userId(req)) return res.status(401).json({ message: "Unauthorized" });
       const module = req.query.module as TemplateModule;
       const sourceId = Number(req.query.sourceId);
@@ -80,7 +85,8 @@ export function registerTemplateRoutes(app: Express): void {
 
   app.get("/api/templates/:id", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       if (!userId(req)) return res.status(401).json({ message: "Unauthorized" });
       const tpl = await tplService.getTemplate(Number(req.params.id), tenantId);
       if (!tpl) return res.status(404).json({ message: "Template not found" });
@@ -90,7 +96,8 @@ export function registerTemplateRoutes(app: Express): void {
 
   app.post("/api/templates", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       if (!uid) return res.status(401).json({ message: "Unauthorized" });
       const tpl = await tplService.registerTemplate({
@@ -102,7 +109,8 @@ export function registerTemplateRoutes(app: Express): void {
 
   app.post("/api/templates/register", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       if (!uid) return res.status(401).json({ message: "Unauthorized" });
       const tpl = await tplService.registerTemplate({
@@ -114,7 +122,8 @@ export function registerTemplateRoutes(app: Express): void {
 
   app.patch("/api/templates/:id", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       if (!userId(req)) return res.status(401).json({ message: "Unauthorized" });
       const tpl = await tplService.updateTemplate(Number(req.params.id), tenantId, req.body);
       res.json(tpl);
@@ -123,7 +132,8 @@ export function registerTemplateRoutes(app: Express): void {
 
   app.delete("/api/templates/:id", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       if (!userId(req)) return res.status(401).json({ message: "Unauthorized" });
       await tplService.deleteTemplate(Number(req.params.id), tenantId);
       res.status(204).send();
@@ -132,7 +142,8 @@ export function registerTemplateRoutes(app: Express): void {
 
   app.post("/api/templates/apply", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       if (!uid) return res.status(401).json({ message: "Unauthorized" });
       const { templateId, name, workspaceId, projectId } = req.body;
@@ -148,7 +159,8 @@ export function registerTemplateRoutes(app: Express): void {
 
   app.post("/api/templates/:id/submit", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       if (!userId(req)) return res.status(401).json({ message: "Unauthorized" });
       const tpl = await tplService.submitForReview(Number(req.params.id), tenantId, req.body.note);
       res.json(tpl);
@@ -167,7 +179,8 @@ export function registerTemplateRoutes(app: Express): void {
 
   app.post("/api/templates/ai-generate", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       if (!uid) return res.status(401).json({ message: "Unauthorized" });
       const { module, prompt, categoryTags } = req.body;
@@ -186,7 +199,8 @@ export function registerTemplateRoutes(app: Express): void {
 
   app.post("/api/templates/sync", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       if (!userId(req)) return res.status(401).json({ message: "Unauthorized" });
       await tplService.ensureTemplatesReady(tenantId);
       res.json({ success: true });
@@ -205,7 +219,8 @@ export function registerTemplateRoutes(app: Express): void {
     categoryTags?: string[],
   ) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       if (!uid) return res.status(401).json({ message: "Unauthorized" });
       const tpl = await tplService.registerTemplate({
@@ -218,21 +233,24 @@ export function registerTemplateRoutes(app: Express): void {
   };
 
   app.post("/api/frameworks/:id/save-as-template", async (req, res) => {
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const fw = await (await import("../storage")).storage.getFramework(Number(req.params.id));
     if (!fw || fw.tenantId !== tenantId) return res.status(404).json({ message: "Framework not found" });
     await sourceSave(req, res, "bpm_framework", "bpm_framework", fw.id, req.body.name ?? fw.name, req.body.description ?? fw.description ?? undefined, req.body.categoryTags);
   });
 
   app.post("/api/pm/projects/:id/save-as-template", async (req, res) => {
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const project = await (await import("../storage")).storage.getPmProject(Number(req.params.id));
     if (!project || project.tenantId !== tenantId) return res.status(404).json({ message: "Project not found" });
     await sourceSave(req, res, "project", "project", project.id, req.body.name ?? project.name, req.body.description ?? project.description ?? undefined, req.body.categoryTags);
   });
 
   app.post("/api/org-charts/:id/save-as-template", async (req, res) => {
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
     const { orgCharts } = await import("@shared/schema");
     const { db } = await import("../db");
     const { eq, and } = await import("drizzle-orm");
@@ -244,7 +262,8 @@ export function registerTemplateRoutes(app: Express): void {
   });
 
   app.post("/api/bpml/templates/:id/save-as-template", async (req, res) => {
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
     const { storage } = await import("../storage");
     const template = await storage.getBpmlTemplate(Number(req.params.id));
     if (!template || template.tenantId !== tenantId) return res.status(404).json({ message: "BPML library not found" });
@@ -252,7 +271,8 @@ export function registerTemplateRoutes(app: Express): void {
   });
 
   app.post("/api/tm/projects/:id/save-as-template", async (req, res) => {
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
     const { storage } = await import("../storage");
     const project = await storage.getTmProject(Number(req.params.id));
     if (!project || project.tenantId !== tenantId) return res.status(404).json({ message: "Test project not found" });
@@ -260,7 +280,8 @@ export function registerTemplateRoutes(app: Express): void {
   });
 
   app.post("/api/whiteboard/:id/save-as-template", async (req, res) => {
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
     const { whiteboards } = await import("@shared/schema");
     const { db } = await import("../db");
     const { eq, and } = await import("drizzle-orm");

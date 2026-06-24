@@ -13,6 +13,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel } from "@/components/ui/form-dialog-shell";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -188,9 +189,11 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
         <Button variant="outline" size="sm" onClick={() => csvRef.current?.click()}>
           <Upload className="h-4 w-4 mr-1" /> Import CSV
         </Button>
+        {rateCards.length > 0 && (
         <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }} className="ml-auto" data-testid="button-create-rate-card">
           <Plus className="h-4 w-4 mr-1" /> New Rate Card
         </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -292,62 +295,59 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
         </div>
       )}
 
-      <Dialog open={showForm} onOpenChange={(open) => !open && resetForm()}>
-        <DialogContent data-testid="rate-card-form-dialog">
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Edit Rate Card" : "New Rate Card"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Name</Label>
-              <Input value={formName} onChange={(e) => setFormName(e.target.value)} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Type</Label>
-                <Select value={formType} onValueChange={setFormType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {RATE_CARD_TYPES.map((t) => (
-                      <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Currency</Label>
-                <Select value={formCurrency} onValueChange={setFormCurrency}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="GBP">GBP</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="EUR">EUR</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Input value={formDescription} onChange={(e) => setFormDescription(e.target.value)} />
-            </div>
+      <FormDialogShell
+        open={showForm}
+        onOpenChange={(open) => !open && resetForm()}
+        title={editingId ? "Edit rate card" : "New rate card"}
+        subtitle="Define billing rates and currency for projects"
+        saveLabel={editingId ? "Save changes" : "Create rate card"}
+        onCancel={resetForm}
+        onSubmit={() => {
+          if (editingId) {
+            updateCardMutation.mutate({ id: editingId, data: { name: formName, cardType: formType, currency: formCurrency, description: formDescription } });
+          } else {
+            createCardMutation.mutate();
+          }
+        }}
+        saving={createCardMutation.isPending || updateCardMutation.isPending}
+        disabled={!formName.trim()}
+        testId="rate-card-form-dialog"
+      >
+        <FormSection icon={<CreditCard className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Rate card details">
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel required>Name</FieldLabel>
+            <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g. Standard consulting rates" />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={resetForm}>Cancel</Button>
-            <Button
-              onClick={() => {
-                if (editingId) {
-                  updateCardMutation.mutate({ id: editingId, data: { name: formName, cardType: formType, currency: formCurrency, description: formDescription } });
-                } else {
-                  createCardMutation.mutate();
-                }
-              }}
-              disabled={!formName.trim() || createCardMutation.isPending || updateCardMutation.isPending}
-            >
-              {(createCardMutation.isPending || updateCardMutation.isPending) ? <FinanceButtonSpinner /> : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5">
+              <FieldLabel>Type</FieldLabel>
+              <Select value={formType} onValueChange={setFormType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {RATE_CARD_TYPES.map((t) => (
+                    <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <FieldLabel>Currency</FieldLabel>
+              <Select value={formCurrency} onValueChange={setFormCurrency}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="GBP">GBP</SelectItem>
+                  <SelectItem value="USD">USD</SelectItem>
+                  <SelectItem value="EUR">EUR</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </FieldGrid>
+          <div className="space-y-1.5">
+            <FieldLabel>Description</FieldLabel>
+            <Input value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Optional notes" />
+          </div>
+        </FormSection>
+      </FormDialogShell>
     </div>
   );
 }

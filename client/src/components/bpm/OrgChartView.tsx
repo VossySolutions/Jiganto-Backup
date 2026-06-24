@@ -9,6 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  FormDialogShell,
+  FormDialogViewShell,
+  FieldGrid,
+  FieldLabel,
+} from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -743,7 +749,7 @@ function OrgChartEditorInner({
   });
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<OrgChartTemplate[]>({
-    queryKey: [`/api/org-chart-templates?tenantId=1`],
+    queryKey: [`/api/org-chart-templates`],
   });
 
   const activeTemplate = useMemo(() => {
@@ -1801,11 +1807,17 @@ function OrgChartEditorInner({
         onChartTitleChange={setChartTitle}
       />
 
-      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Import from CSV</DialogTitle>
-          </DialogHeader>
+      <FormDialogShell
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        title="Import from CSV"
+        saveLabel={members.length > 0 ? "Replace All" : "Import"}
+        saveTestId="button-import-replace"
+        size="md"
+        onCancel={() => setShowImportDialog(false)}
+        onSubmit={() => handleImportConfirm("replace")}
+        disabled={!importPreview || importPreview.length === 0}
+      >
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Upload a CSV file with columns: Name, Title, Department, Email, Phone, Reports To, Photo URL.
@@ -1861,10 +1873,10 @@ function OrgChartEditorInner({
                     This chart currently has {members.length} members. Choose how to handle the import:
                   </p>
                 )}
-                <DialogFooter className="gap-2">
-                  <Button variant="outline" onClick={() => setShowImportDialog(false)}>Cancel</Button>
+                <div className="flex flex-wrap gap-2 justify-end">
                   {members.length > 0 && (
                     <Button
+                      type="button"
                       variant="outline"
                       onClick={() => handleImportConfirm("merge")}
                       data-testid="button-import-merge"
@@ -1878,15 +1890,14 @@ function OrgChartEditorInner({
                   >
                     {members.length > 0 ? "Replace All" : "Import"}
                   </Button>
-                </DialogFooter>
+                </div>
               </div>
             )}
             {importPreview && importPreview.length === 0 && (
               <p className="text-sm text-destructive">No valid rows found in the CSV file. Make sure the file has a header row.</p>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
       <Dialog open={showUnsavedPrompt} onOpenChange={setShowUnsavedPrompt}>
         <DialogContent>
@@ -1955,7 +1966,7 @@ function TemplateDialog({
   const createTemplateMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/org-chart-templates", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/org-chart-templates?tenantId=1`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/org-chart-templates`] });
       toast({ title: "Template created" });
       setNewName("");
       setTab("apply");
@@ -1965,7 +1976,7 @@ function TemplateDialog({
   const deleteTemplateMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/org-chart-templates/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/org-chart-templates?tenantId=1`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/org-chart-templates`] });
       toast({ title: "Template deleted" });
     },
   });
@@ -1973,7 +1984,6 @@ function TemplateDialog({
   const handleCreateTemplate = () => {
     if (!newName.trim()) return;
     createTemplateMutation.mutate({
-      tenantId: 1,
       name: newName.trim(),
       nodeHeaderColor: newHeaderColor,
       nodeBodyColor: newBodyColor,
@@ -1998,15 +2008,17 @@ function TemplateDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Chart Theme & Title</DialogTitle>
-        </DialogHeader>
+    <FormDialogViewShell
+      open={open}
+      onOpenChange={onOpenChange}
+      onClose={() => onOpenChange(false)}
+      title="Chart Theme & Title"
+      size="md"
+    >
 
         <div className="space-y-3 mb-3">
           <div>
-            <Label className="text-xs text-muted-foreground">Chart Title (displayed above the org chart)</Label>
+            <FieldLabel>Chart Title (displayed above the org chart)</FieldLabel>
             <Input
               value={chartTitle}
               onChange={e => onChartTitleChange(e.target.value)}
@@ -2104,53 +2116,53 @@ function TemplateDialog({
 
           <TabsContent value="create" className="mt-3 space-y-3">
             <div>
-              <Label className="text-xs text-muted-foreground">Theme Name *</Label>
+              <FieldLabel>Theme Name *</FieldLabel>
               <Input value={newName} onChange={e => setNewName(e.target.value)} className="h-8 text-sm" placeholder="e.g., My Brand" data-testid="input-template-name" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <FieldGrid cols={2}>
               <div>
-                <Label className="text-xs text-muted-foreground">Header Color</Label>
+                <FieldLabel>Header Color</FieldLabel>
                 <div className="flex items-center gap-2">
                   <input type="color" value={newHeaderColor} onChange={e => setNewHeaderColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer border-0" data-testid="color-header" />
                   <Input value={newHeaderColor} onChange={e => setNewHeaderColor(e.target.value)} className="h-8 text-sm flex-1 font-mono" />
                 </div>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Body Color</Label>
+                <FieldLabel>Body Color</FieldLabel>
                 <div className="flex items-center gap-2">
                   <input type="color" value={newBodyColor} onChange={e => setNewBodyColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer border-0" data-testid="color-body" />
                   <Input value={newBodyColor} onChange={e => setNewBodyColor(e.target.value)} className="h-8 text-sm flex-1 font-mono" />
                 </div>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Text Color</Label>
+                <FieldLabel>Text Color</FieldLabel>
                 <div className="flex items-center gap-2">
                   <input type="color" value={newTextColor} onChange={e => setNewTextColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer border-0" data-testid="color-text" />
                   <Input value={newTextColor} onChange={e => setNewTextColor(e.target.value)} className="h-8 text-sm flex-1 font-mono" />
                 </div>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Border Color</Label>
+                <FieldLabel>Border Color</FieldLabel>
                 <div className="flex items-center gap-2">
                   <input type="color" value={newBorderColor} onChange={e => setNewBorderColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer border-0" data-testid="color-border" />
                   <Input value={newBorderColor} onChange={e => setNewBorderColor(e.target.value)} className="h-8 text-sm flex-1 font-mono" />
                 </div>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Edge/Line Color</Label>
+                <FieldLabel>Edge/Line Color</FieldLabel>
                 <div className="flex items-center gap-2">
                   <input type="color" value={newEdgeColor} onChange={e => setNewEdgeColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer border-0" data-testid="color-edge" />
                   <Input value={newEdgeColor} onChange={e => setNewEdgeColor(e.target.value)} className="h-8 text-sm flex-1 font-mono" />
                 </div>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Badge Color</Label>
+                <FieldLabel>Badge Color</FieldLabel>
                 <div className="flex items-center gap-2">
                   <input type="color" value={newBadgeColor} onChange={e => setNewBadgeColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer border-0" data-testid="color-badge" />
                   <Input value={newBadgeColor} onChange={e => setNewBadgeColor(e.target.value)} className="h-8 text-sm flex-1 font-mono" />
                 </div>
               </div>
-            </div>
+            </FieldGrid>
             <div className="border rounded-md p-3 bg-muted/30">
               <p className="text-xs text-muted-foreground mb-2">Preview</p>
               <div className="flex justify-center">
@@ -2174,8 +2186,7 @@ function TemplateDialog({
             </DialogFooter>
           </TabsContent>
         </Tabs>
-      </DialogContent>
-    </Dialog>
+    </FormDialogViewShell>
   );
 }
 
@@ -2206,7 +2217,7 @@ function AddMemberDialog({
   const [manualParent, setManualParent] = useState<string>("none");
 
   const { data: resources = [], isLoading: resourcesLoading } = useQuery<Resource[]>({
-    queryKey: [`/api/resources?tenantId=1`],
+    queryKey: [`/api/resources`],
     enabled: open,
   });
 
@@ -2267,11 +2278,13 @@ function AddMemberDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) handleReset(); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Add Member</DialogTitle>
-        </DialogHeader>
+    <FormDialogViewShell
+      open={open}
+      onOpenChange={(v) => { onOpenChange(v); if (!v) handleReset(); }}
+      onClose={() => { onOpenChange(false); handleReset(); }}
+      title="Add Member"
+      size="md"
+    >
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="w-full">
             <TabsTrigger value="resources" className="flex-1" data-testid="tab-from-resources">From Resources</TabsTrigger>
@@ -2320,7 +2333,7 @@ function AddMemberDialog({
               )}
             </ScrollArea>
             <div>
-              <Label className="text-xs text-muted-foreground">Reports To</Label>
+              <FieldLabel>Reports To</FieldLabel>
               <Select value={parentMemberId} onValueChange={setParentMemberId}>
                 <SelectTrigger className="h-8 text-sm" data-testid="select-parent-resource">
                   <SelectValue />
@@ -2344,35 +2357,35 @@ function AddMemberDialog({
 
           <TabsContent value="manual" className="mt-4 space-y-3">
             <div>
-              <Label className="text-xs text-muted-foreground">Name *</Label>
+              <FieldLabel>Name *</FieldLabel>
               <Input value={manualName} onChange={e => setManualName(e.target.value)} className="h-8 text-sm" data-testid="input-manual-name" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <FieldGrid cols={2}>
               <div>
-                <Label className="text-xs text-muted-foreground">Title</Label>
+                <FieldLabel>Title</FieldLabel>
                 <Input value={manualTitle} onChange={e => setManualTitle(e.target.value)} className="h-8 text-sm" data-testid="input-manual-title" />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Department</Label>
+                <FieldLabel>Department</FieldLabel>
                 <Input value={manualDept} onChange={e => setManualDept(e.target.value)} className="h-8 text-sm" data-testid="input-manual-department" />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+            </FieldGrid>
+            <FieldGrid cols={2}>
               <div>
-                <Label className="text-xs text-muted-foreground">Email</Label>
+                <FieldLabel>Email</FieldLabel>
                 <Input value={manualEmail} onChange={e => setManualEmail(e.target.value)} className="h-8 text-sm" data-testid="input-manual-email" />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Phone</Label>
+                <FieldLabel>Phone</FieldLabel>
                 <Input value={manualPhone} onChange={e => setManualPhone(e.target.value)} className="h-8 text-sm" data-testid="input-manual-phone" />
               </div>
-            </div>
+            </FieldGrid>
             <div>
-              <Label className="text-xs text-muted-foreground">Photo URL</Label>
+              <FieldLabel>Photo URL</FieldLabel>
               <Input value={manualPhotoUrl} onChange={e => setManualPhotoUrl(e.target.value)} className="h-8 text-sm" data-testid="input-manual-photo" />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Reports To</Label>
+              <FieldLabel>Reports To</FieldLabel>
               <Select value={manualParent} onValueChange={setManualParent}>
                 <SelectTrigger className="h-8 text-sm" data-testid="select-parent-manual">
                   <SelectValue />
@@ -2394,8 +2407,7 @@ function AddMemberDialog({
             </DialogFooter>
           </TabsContent>
         </Tabs>
-      </DialogContent>
-    </Dialog>
+    </FormDialogViewShell>
   );
 }
 
@@ -2427,7 +2439,7 @@ function OrgChartCatalogue({ onSelectChart }: { onSelectChart: (chart: OrgChart)
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const { data: charts = [], isLoading } = useQuery<OrgChart[]>({
-    queryKey: [`/api/org-charts?tenantId=1`],
+    queryKey: [`/api/org-charts`],
   });
 
   const filteredAndSortedCharts = useMemo(() => {
@@ -2495,7 +2507,6 @@ function OrgChartCatalogue({ onSelectChart }: { onSelectChart: (chart: OrgChart)
   const handleCreate = () => {
     if (!createName.trim()) return;
     createMutation.mutate({
-      tenantId: 1,
       name: createName.trim(),
       description: createDescription || null,
       chartType: createType,
@@ -2763,14 +2774,20 @@ function OrgChartCatalogue({ onSelectChart }: { onSelectChart: (chart: OrgChart)
         )}
       </div>
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New Org Chart</DialogTitle>
-          </DialogHeader>
+      <FormDialogShell
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        title="New Org Chart"
+        saveLabel="Create"
+        saveTestId="button-submit-create"
+        onCancel={() => setShowCreate(false)}
+        onSubmit={handleCreate}
+        disabled={!createName.trim() || createMutation.isPending}
+        saving={createMutation.isPending}
+      >
           <div className="space-y-3">
             <div>
-              <Label className="text-xs text-muted-foreground">Name *</Label>
+              <FieldLabel>Name *</FieldLabel>
               <Input
                 value={createName}
                 onChange={e => setCreateName(e.target.value)}
@@ -2780,7 +2797,7 @@ function OrgChartCatalogue({ onSelectChart }: { onSelectChart: (chart: OrgChart)
               />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Description</Label>
+              <FieldLabel>Description</FieldLabel>
               <Textarea
                 value={createDescription}
                 onChange={e => setCreateDescription(e.target.value)}
@@ -2791,7 +2808,7 @@ function OrgChartCatalogue({ onSelectChart }: { onSelectChart: (chart: OrgChart)
               />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Chart Type</Label>
+              <FieldLabel>Chart Type</FieldLabel>
               <Select value={createType} onValueChange={setCreateType}>
                 <SelectTrigger className="h-8 text-sm" data-testid="select-create-type">
                   <SelectValue />
@@ -2804,19 +2821,7 @@ function OrgChartCatalogue({ onSelectChart }: { onSelectChart: (chart: OrgChart)
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button
-              onClick={handleCreate}
-              disabled={!createName.trim() || createMutation.isPending}
-              data-testid="button-submit-create"
-            >
-              {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Create
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
       <Dialog open={showDeleteConfirm !== null} onOpenChange={() => setShowDeleteConfirm(null)}>
         <DialogContent>
@@ -2844,16 +2849,22 @@ function OrgChartCatalogue({ onSelectChart }: { onSelectChart: (chart: OrgChart)
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showDuplicateDialog !== null} onOpenChange={() => { setShowDuplicateDialog(null); setDuplicateName(""); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Duplicate Org Chart</DialogTitle>
-          </DialogHeader>
+      <FormDialogShell
+        open={showDuplicateDialog !== null}
+        onOpenChange={() => { setShowDuplicateDialog(null); setDuplicateName(""); }}
+        title="Duplicate Org Chart"
+        saveLabel="Duplicate"
+        saveTestId="button-submit-duplicate"
+        onCancel={() => { setShowDuplicateDialog(null); setDuplicateName(""); }}
+        onSubmit={handleDuplicate}
+        disabled={!duplicateName.trim() || duplicateMutation.isPending}
+        saving={duplicateMutation.isPending}
+      >
           <p className="text-sm text-muted-foreground mb-2">
             Create a copy of <strong className="text-foreground">{showDuplicateDialog?.name}</strong> with all its members.
           </p>
           <div>
-            <Label className="text-xs text-muted-foreground">New Chart Name *</Label>
+            <FieldLabel>New Chart Name *</FieldLabel>
             <Input
               value={duplicateName}
               onChange={e => setDuplicateName(e.target.value)}
@@ -2863,19 +2874,7 @@ function OrgChartCatalogue({ onSelectChart }: { onSelectChart: (chart: OrgChart)
               data-testid="input-duplicate-name"
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowDuplicateDialog(null); setDuplicateName(""); }}>Cancel</Button>
-            <Button
-              onClick={handleDuplicate}
-              disabled={!duplicateName.trim() || duplicateMutation.isPending}
-              data-testid="button-submit-duplicate"
-            >
-              {duplicateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Duplicate
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
     </div>
   );
 }

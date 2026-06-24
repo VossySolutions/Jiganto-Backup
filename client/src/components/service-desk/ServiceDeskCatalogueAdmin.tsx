@@ -7,8 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from "@/components/ui/dialog";
+  FormDialogShell, FormSection, FieldGrid, FieldLabel,
+} from "@/components/ui/form-dialog-shell";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -232,121 +232,124 @@ export function ServiceDeskCatalogueAdmin({ categories, services }: Props) {
         </div>
       )}
 
-      <Dialog open={catDialog != null} onOpenChange={() => setCatDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{catDialog === "new" ? "New category" : "Edit category"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div><Label>Name</Label><Input value={catName} onChange={(e) => setCatName(e.target.value)} /></div>
-            <div><Label>Description</Label><Textarea value={catDesc} onChange={(e) => setCatDesc(e.target.value)} rows={2} /></div>
-            <Button className="w-full" disabled={!catName || catMut.isPending} onClick={() => catMut.mutate()}>
-              Save category
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <FormDialogShell
+        open={catDialog != null}
+        onOpenChange={() => setCatDialog(null)}
+        title={catDialog === "new" ? "New category" : "Edit category"}
+        saveLabel="Save category"
+        onCancel={() => setCatDialog(null)}
+        onSubmit={() => catMut.mutate()}
+        saving={catMut.isPending}
+        disabled={!catName}
+      >
+        <FormSection title="Category">
+          <div className="space-y-1.5 mb-3.5"><FieldLabel required>Name</FieldLabel><Input value={catName} onChange={(e) => setCatName(e.target.value)} /></div>
+          <div className="space-y-1.5"><FieldLabel>Description</FieldLabel><Textarea value={catDesc} onChange={(e) => setCatDesc(e.target.value)} rows={2} /></div>
+        </FormSection>
+      </FormDialogShell>
 
-      <Dialog open={svcDialog != null} onOpenChange={() => setSvcDialog(null)}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{svcDialog === "new" ? "New service" : "Edit service"}</DialogTitle>
-            <DialogDescription>Configure SLA targets per priority and routing team.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div><Label>Name</Label><Input value={svcName} onChange={(e) => setSvcName(e.target.value)} /></div>
-            <div><Label>Description</Label><Textarea value={svcDesc} onChange={(e) => setSvcDesc(e.target.value)} rows={2} /></div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label>Category</Label>
-                <Select value={svcCategoryId} onValueChange={setSvcCategoryId}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">None</SelectItem>
-                    {categories.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Owner team</Label>
-                <Select value={svcTeamId} onValueChange={setSvcTeamId}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">Unassigned</SelectItem>
-                    {teams.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label>Availability</Label>
-                <Select value={svcAvailability} onValueChange={setSvcAvailability}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {AVAILABILITY.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Visibility</Label>
-                <Select value={svcVisibility} onValueChange={setSvcVisibility}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {VISIBILITY.map((v) => <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+      <FormDialogShell
+        open={svcDialog != null}
+        onOpenChange={() => setSvcDialog(null)}
+        title={svcDialog === "new" ? "New service" : "Edit service"}
+        subtitle="Configure SLA targets per priority and routing team."
+        saveLabel="Save service"
+        onCancel={() => setSvcDialog(null)}
+        onSubmit={() => svcMut.mutate()}
+        saving={svcMut.isPending}
+        disabled={!svcName}
+        size="lg"
+      >
+        <FormSection title="Service details">
+          <div className="space-y-1.5 mb-3.5"><FieldLabel required>Name</FieldLabel><Input value={svcName} onChange={(e) => setSvcName(e.target.value)} /></div>
+          <div className="space-y-1.5 mb-3.5"><FieldLabel>Description</FieldLabel><Textarea value={svcDesc} onChange={(e) => setSvcDesc(e.target.value)} rows={2} /></div>
+          <FieldGrid className="mb-3.5">
             <div>
-              <Label>Cost model</Label>
-              <Select value={svcCostModel} onValueChange={setSvcCostModel}>
+              <FieldLabel>Category</FieldLabel>
+              <Select value={svcCategoryId} onValueChange={setSvcCategoryId}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {COST_MODELS.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                  <SelectItem value="__none">None</SelectItem>
+                  {categories.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
-              <Switch checked={svcActive} onCheckedChange={setSvcActive} id="svc-active" />
-              <Label htmlFor="svc-active">Active in catalogue</Label>
+            <div>
+              <FieldLabel>Owner team</FieldLabel>
+              <Select value={svcTeamId} onValueChange={setSvcTeamId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Unassigned</SelectItem>
+                  {teams.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-2">
-              <Label>SLA targets (hours)</Label>
-              {svcSlas.map((s, i) => (
-                <div key={s.priority} className="grid grid-cols-3 gap-2 items-center text-sm">
-                  <span>{PRIORITY_LABELS[s.priority as keyof typeof PRIORITY_LABELS]}</span>
-                  <Input
-                    type="number"
-                    step="0.5"
-                    placeholder="Response"
-                    value={s.responseHours}
-                    onChange={(e) => {
-                      const next = [...svcSlas];
-                      next[i] = { ...next[i], responseHours: Number(e.target.value) };
-                      setSvcSlas(next);
-                    }}
-                  />
-                  <Input
-                    type="number"
-                    step="0.5"
-                    placeholder="Resolution"
-                    value={s.resolutionHours}
-                    onChange={(e) => {
-                      const next = [...svcSlas];
-                      next[i] = { ...next[i], resolutionHours: Number(e.target.value) };
-                      setSvcSlas(next);
-                    }}
-                  />
-                </div>
-              ))}
+          </FieldGrid>
+          <FieldGrid className="mb-3.5">
+            <div>
+              <FieldLabel>Availability</FieldLabel>
+              <Select value={svcAvailability} onValueChange={setSvcAvailability}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {AVAILABILITY.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-            <Button className="w-full" disabled={!svcName || svcMut.isPending} onClick={() => svcMut.mutate()}>
-              Save service
-            </Button>
+            <div>
+              <FieldLabel>Visibility</FieldLabel>
+              <Select value={svcVisibility} onValueChange={setSvcVisibility}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {VISIBILITY.map((v) => <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </FieldGrid>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Cost model</FieldLabel>
+            <Select value={svcCostModel} onValueChange={setSvcCostModel}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {COST_MODELS.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="flex items-center gap-2 mb-3.5">
+            <Switch checked={svcActive} onCheckedChange={setSvcActive} id="svc-active" />
+            <Label htmlFor="svc-active">Active in catalogue</Label>
+          </div>
+          <div className="space-y-2">
+            <FieldLabel>SLA targets (hours)</FieldLabel>
+            {svcSlas.map((s, i) => (
+              <div key={s.priority} className="grid grid-cols-3 gap-2 items-center text-sm">
+                <span>{PRIORITY_LABELS[s.priority as keyof typeof PRIORITY_LABELS]}</span>
+                <Input
+                  type="number"
+                  step="0.5"
+                  placeholder="Response"
+                  value={s.responseHours}
+                  onChange={(e) => {
+                    const next = [...svcSlas];
+                    next[i] = { ...next[i], responseHours: Number(e.target.value) };
+                    setSvcSlas(next);
+                  }}
+                />
+                <Input
+                  type="number"
+                  step="0.5"
+                  placeholder="Resolution"
+                  value={s.resolutionHours}
+                  onChange={(e) => {
+                    const next = [...svcSlas];
+                    next[i] = { ...next[i], resolutionHours: Number(e.target.value) };
+                    setSvcSlas(next);
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </FormSection>
+      </FormDialogShell>
     </>
   );
 }

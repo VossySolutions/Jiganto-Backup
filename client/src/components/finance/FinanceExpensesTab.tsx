@@ -14,6 +14,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -69,17 +70,20 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
   const { data: fetchedReports = [], isLoading: fetchLoading } = useQuery<ExpenseReportRow[]>({
     queryKey: ["/api/finance/expenses/reports"],
     enabled: reportsProp === undefined,
+    staleTime: 30_000,
   });
   const reports = reportsProp ?? fetchedReports;
   const isLoading = isLoadingProp ?? fetchLoading;
 
   const { data: projects = [] } = useQuery<Array<{ id: number; name: string }>>({
     queryKey: ["/api/pm/projects"],
+    staleTime: 60_000,
   });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/finance/expenses/reports"] });
     queryClient.invalidateQueries({ queryKey: ["/api/finance/dashboard"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/finance/budgets"] });
   };
 
   const mileageMutation = useMutation({
@@ -195,10 +199,12 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
             <SelectItem value="paid">Paid</SelectItem>
           </SelectContent>
         </Select>
+        {reports.length > 0 && (
         <Button onClick={() => setShowCreate(true)} className="sm:ml-auto w-full sm:w-auto" data-testid="button-create-expense">
           <Plus className="h-4 w-4 mr-1" />
           New Expense Report
         </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -291,18 +297,26 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
         </Card>
       )}
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-lg" data-testid="expense-create-dialog">
-          <DialogHeader>
-            <DialogTitle>Create Expense Report</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Report name</Label>
-              <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g. Client visit — March" />
-            </div>
-            <div className="space-y-2">
-              <Label>Project</Label>
+      <FormDialogShell
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        title="Create expense report"
+        subtitle="Submit project expenses for approval"
+        saveLabel="Create report"
+        onCancel={() => setShowCreate(false)}
+        onSubmit={() => createMutation.mutate()}
+        saving={createMutation.isPending}
+        disabled={!formName || !formProjectId || !formAmount}
+        testId="expense-create-dialog"
+      >
+        <FormSection icon={<Receipt className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Report details">
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel required>Report name</FieldLabel>
+            <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g. Client visit — March" />
+          </div>
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5">
+              <FieldLabel required>Project</FieldLabel>
               <Select value={formProjectId} onValueChange={setFormProjectId}>
                 <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
                 <SelectContent>
@@ -312,113 +326,97 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select value={formCategory} onValueChange={setFormCategory}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {EXPENSE_CATEGORIES.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Date</Label>
-                <Input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} />
-              </div>
+            <div className="space-y-1.5">
+              <FieldLabel>Category</FieldLabel>
+              <Select value={formCategory} onValueChange={setFormCategory}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {EXPENSE_CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} rows={2} />
+          </FieldGrid>
+          <FieldGrid>
+            <div className="space-y-1.5">
+              <FieldLabel>Date</FieldLabel>
+              <Input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} />
             </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="mileage" checked={useMileage} onChange={(e) => setUseMileage(e.target.checked)} />
-              <Label htmlFor="mileage">Mileage claim</Label>
+            <div className="space-y-1.5">
+              <FieldLabel>Description</FieldLabel>
+              <Input value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Brief description" />
             </div>
-            {useMileage ? (
-              <div className="grid grid-cols-3 gap-2">
-                <Input placeholder="Distance (miles)" value={mileageDistance} onChange={(e) => setMileageDistance(e.target.value)} />
-                <Select value={mileageVehicle} onValueChange={(v) => setMileageVehicle(v as typeof mileageVehicle)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="car">Car</SelectItem>
-                    <SelectItem value="motorcycle">Motorcycle</SelectItem>
-                    <SelectItem value="bicycle">Bicycle</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => mileageMutation.mutate()}
-                  disabled={!mileageDistance || mileageMutation.isPending}
-                >
-                  {mileageMutation.isPending ? <FinanceButtonSpinner /> : "Calculate"}
-                </Button>
-              </div>
-            ) : null}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Amount (£)</Label>
-                <Input type="number" step="0.01" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>VAT (£)</Label>
-                <Input type="number" step="0.01" value={formVat} onChange={(e) => setFormVat(e.target.value)} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Payment method</Label>
-                <Select value={formPaymentMethod} onValueChange={setFormPaymentMethod}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="personal_card">Personal card</SelectItem>
-                    <SelectItem value="company_card">Company card</SelectItem>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="bank_transfer">Bank transfer</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-end gap-2 pb-2">
-                <input type="checkbox" id="billable" checked={formBillable} onChange={(e) => setFormBillable(e.target.checked)} />
-                <Label htmlFor="billable">Billable to client</Label>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Receipt</Label>
-              <div className="flex items-center gap-2">
-                <input
-                  ref={receiptRef}
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
-                />
-                <Button type="button" variant="outline" size="sm" onClick={() => receiptRef.current?.click()}>
-                  <Upload className="h-4 w-4 mr-1" />
-                  Upload
-                </Button>
-                {receiptFile && (
-                  <span className="text-xs text-emerald-600 flex items-center gap-1">
-                    <Receipt className="h-3 w-3" /> {receiptFile.name}
-                  </span>
-                )}
-              </div>
-            </div>
+          </FieldGrid>
+        </FormSection>
+
+        <FormDivider />
+
+        <FormSection icon={<Receipt className="h-3.5 w-3.5 text-emerald-600" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Amount & payment">
+          <div className="flex items-center gap-2 mb-3.5">
+            <input type="checkbox" id="mileage" checked={useMileage} onChange={(e) => setUseMileage(e.target.checked)} />
+            <Label htmlFor="mileage" className="text-xs font-semibold">Mileage claim</Label>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button
-              onClick={() => createMutation.mutate()}
-              disabled={!formName || !formProjectId || !formAmount || createMutation.isPending}
-            >
-              {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          {useMileage ? (
+            <div className="grid grid-cols-3 gap-2 mb-3.5">
+              <Input placeholder="Distance (miles)" value={mileageDistance} onChange={(e) => setMileageDistance(e.target.value)} />
+              <Select value={mileageVehicle} onValueChange={(v) => setMileageVehicle(v as typeof mileageVehicle)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="car">Car</SelectItem>
+                  <SelectItem value="motorcycle">Motorcycle</SelectItem>
+                  <SelectItem value="bicycle">Bicycle</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button type="button" variant="outline" onClick={() => mileageMutation.mutate()} disabled={!mileageDistance || mileageMutation.isPending}>
+                {mileageMutation.isPending ? <FinanceButtonSpinner /> : "Calculate"}
+              </Button>
+            </div>
+          ) : null}
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5">
+              <FieldLabel required>Amount (£)</FieldLabel>
+              <Input type="number" step="0.01" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <FieldLabel>VAT (£)</FieldLabel>
+              <Input type="number" step="0.01" value={formVat} onChange={(e) => setFormVat(e.target.value)} />
+            </div>
+          </FieldGrid>
+          <FieldGrid>
+            <div className="space-y-1.5">
+              <FieldLabel>Payment method</FieldLabel>
+              <Select value={formPaymentMethod} onValueChange={setFormPaymentMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="personal_card">Personal card</SelectItem>
+                  <SelectItem value="company_card">Company card</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="bank_transfer">Bank transfer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end gap-2 pb-2">
+              <input type="checkbox" id="billable" checked={formBillable} onChange={(e) => setFormBillable(e.target.checked)} />
+              <Label htmlFor="billable" className="text-xs font-semibold">Billable to client</Label>
+            </div>
+          </FieldGrid>
+        </FormSection>
+
+        <FormDivider />
+
+        <FormSection icon={<Upload className="h-3.5 w-3.5 text-muted-foreground" />} title="Receipt">
+          <input ref={receiptRef} type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} />
+          <Button type="button" variant="outline" size="sm" onClick={() => receiptRef.current?.click()}>
+            <Upload className="h-4 w-4 mr-1" /> Upload receipt
+          </Button>
+          {receiptFile && (
+            <p className="text-xs text-emerald-600 flex items-center gap-1 mt-2">
+              <Receipt className="h-3 w-3" /> {receiptFile.name}
+            </p>
+          )}
+        </FormSection>
+      </FormDialogShell>
     </div>
   );
 }

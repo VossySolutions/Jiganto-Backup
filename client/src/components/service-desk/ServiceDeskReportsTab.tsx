@@ -34,6 +34,7 @@ export function ServiceDeskReportsTab() {
   const { toast } = useToast();
   const { data, isLoading, isError, refetch } = useQuery<TimeAnalysisReport>({
     queryKey: ["/api/service-desk/reports/time-analysis"],
+    staleTime: 60_000,
   });
 
   const syncMut = useMutation({

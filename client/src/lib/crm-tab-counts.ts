@@ -1,5 +1,13 @@
 /** Tab badge counts — must match each CRM tab's default table row set (no search/filters). */
 
+import {
+  getDefaultPipelineId,
+  opportunityMatchesPipeline,
+  stagesForActivePipeline,
+} from "@shared/crm-pipeline";
+
+export { getDefaultPipelineId, opportunityMatchesPipeline, stagesForActivePipeline };
+
 type CrmPipeline = { id: number; isDefault: boolean | null };
 type CrmStage = {
   id: number;
@@ -10,10 +18,6 @@ type CrmOpportunity = {
   stageId: number | null;
   isArchived?: boolean | null;
 };
-
-export function getDefaultPipelineId(pipelines: CrmPipeline[]): number | null {
-  return pipelines.find(p => p.isDefault)?.id ?? pipelines[0]?.id ?? null;
-}
 
 /** CrmLeadsTab default: all leads, no status/temperature filters. */
 export function countCrmLeads(leads: unknown[]): number {
@@ -27,12 +31,10 @@ export function countCrmOpportunities(
   pipelines: CrmPipeline[],
 ): number {
   const pipelineId = getDefaultPipelineId(pipelines);
-  if (!pipelineId) return 0;
-  return opportunities.filter(o => {
-    if (o.isArchived) return false;
-    const stage = stages.find(s => s.id === o.stageId);
-    return !!stage && stage.pipelineId === pipelineId;
-  }).length;
+  if (!pipelineId) return opportunities.filter(o => !o.isArchived).length;
+  return opportunities.filter(o =>
+    opportunityMatchesPipeline(o, stages, pipelines, pipelineId),
+  ).length;
 }
 
 /** CrmPipelineTab default: non-archived open-stage opps in the active (default) pipeline. */
@@ -43,11 +45,9 @@ export function countCrmPipelineDeals(
 ): number {
   const pipelineId = getDefaultPipelineId(pipelines);
   if (!pipelineId) return 0;
-  return opportunities.filter(o => {
-    if (o.isArchived) return false;
-    const stage = stages.find(s => s.id === o.stageId);
-    return !!stage && stage.pipelineId === pipelineId && !stage.isClosed;
-  }).length;
+  return opportunities.filter(o =>
+    opportunityMatchesPipeline(o, stages, pipelines, pipelineId, { openOnly: true }),
+  ).length;
 }
 
 /** CrmCustomersTab default: all accounts (type filter = all). */

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { TmTestCase, TmTestRun, TmDefect } from "@shared/schema";
+import { TmTestCase, TmTestRun } from "@shared/schema";
+import type { TmHdDefect } from "@/types/testmgmt";
 import { CheckCircle2, XCircle, AlertCircle, Clock, FlaskConical, Bug, PlayCircle, Sparkles, Loader2, ExternalLink, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -9,34 +10,14 @@ import { useTmProject } from "@/contexts/TmProjectContext";
 import { TmScreen } from "@/types/testmgmt";
 import { cn } from "@/lib/utils";
 import { useTmFetch } from "@/hooks/use-tm-fetch";
+import { TmProjectRequiredEmpty } from "@/components/testmgmt/TmProjectRequiredEmpty";
 import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 import { TmBurndownChart, TmDefectTrendChart, TmPassRateTrendChart, TmAreaHealthChart } from "@/components/testmgmt/TmCharts";
+import { MetricCard } from "@/components/ui/metric-card";
 import type { TmDashboardData } from "@/types/testmgmt";
 
 interface Props {
   onNavigate: (screen: TmScreen) => void;
-}
-
-function StatCard({ label, value, sub, color, onClick }: {
-  label: string; value: string | number; sub?: string; color: string; onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      data-testid={`kpi-card-${label.toLowerCase().replace(/\s+/g, "-")}`}
-      className={cn(
-        "bg-card border border-border rounded-xl p-5 flex flex-col gap-1 text-left w-full transition-all",
-        onClick ? "hover:border-primary/40 hover:shadow-md cursor-pointer group" : "cursor-default"
-      )}
-    >
-      <span className="text-xs text-muted-foreground uppercase tracking-widest font-mono flex items-center gap-1">
-        {label}
-        {onClick && <ExternalLink className="h-2.5 w-2.5 opacity-0 group-hover:opacity-60 transition-opacity" />}
-      </span>
-      <span className={`text-3xl font-bold font-mono ${color}`}>{value}</span>
-      {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
-    </button>
-  );
 }
 
 export function CommandCentreScreen({ onNavigate }: Props) {
@@ -46,7 +27,7 @@ export function CommandCentreScreen({ onNavigate }: Props) {
   const dashboardQuery = useTmFetch<TmDashboardData>(["/api/tm/dashboard"], "/api/tm/dashboard");
   const casesQuery = useTmFetch<TmTestCase[]>(["/api/tm/cases"], "/api/tm/cases");
   const runsQuery = useTmFetch<TmTestRun[]>(["/api/tm/runs"], "/api/tm/runs");
-  const defectsQuery = useTmFetch<TmDefect[]>(["/api/tm/defects"], "/api/tm/defects");
+  const defectsQuery = useTmFetch<TmHdDefect[]>(["/api/tm/defects/hd"], "/api/tm/defects/hd");
 
   const dashboard = dashboardQuery.data;
   const cases = casesQuery.data ?? [];
@@ -67,7 +48,7 @@ export function CommandCentreScreen({ onNavigate }: Props) {
       queryClient.invalidateQueries({ queryKey: ["/api/tm/cases"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tm/runs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tm/cycles"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tm/defects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tm/defects/hd"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tm/suites"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tm/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tm/hierarchy"] });
@@ -85,6 +66,10 @@ export function CommandCentreScreen({ onNavigate }: Props) {
   const activeRuns = runs.filter(r => r.status === "in_progress").length;
   const openDefects = kpis?.openDefects ?? defects.filter(d => d.status !== "resolved" && d.status !== "closed" && d.status !== "wont_fix").length;
   const criticalDefects = kpis?.criticalDefects ?? defects.filter(d => d.severity === "critical" && d.status !== "resolved" && d.status !== "closed").length;
+
+  if (!activeProjectId) {
+    return <TmProjectRequiredEmpty title="Command Centre" />;
+  }
 
   if (isEmpty) {
     return (
@@ -138,11 +123,11 @@ export function CommandCentreScreen({ onNavigate }: Props) {
 
       {/* KPI Row — spec dashboard */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard label="Total Cases" value={kpis?.totalCases ?? cases.length} sub={`${activeCases} active`} color="text-primary" onClick={() => onNavigate("test-cases")} />
-        <StatCard label="Executed" value={kpis ? `${kpis.executed} (${kpis.executedPct}%)` : activeRuns} color="text-blue-500" onClick={() => onNavigate("execution")} />
-        <StatCard label="Passed" value={kpis ? `${kpis.passed} (${kpis.passedPct}%)` : "—"} color="text-green-600" onClick={() => onNavigate("execution")} />
-        <StatCard label="Failed" value={kpis ? `${kpis.failed} (${kpis.failedPct}%)` : "—"} color="text-red-500" onClick={() => onNavigate("defect-triage")} />
-        <StatCard label="Open Defects" value={openDefects} sub={`${criticalDefects} critical`} color="text-amber-500" onClick={() => onNavigate("defect-board")} />
+        <MetricCard title="Total Cases" value={kpis?.totalCases ?? cases.length} subtitle={`${activeCases} active`} helpText="All test cases in the selected project." valueClassName="text-primary font-mono" onClick={() => onNavigate("test-cases")} testId="kpi-card-total-cases" />
+        <MetricCard title="Executed" value={kpis?.executed ?? activeRuns} subtitle={kpis ? `${kpis.executedPct}% of total cases` : undefined} helpText="Test cases with at least one execution run." valueClassName="text-blue-500 font-mono" onClick={() => onNavigate("execution")} testId="kpi-card-executed" />
+        <MetricCard title="Passed" value={kpis?.passed ?? "—"} subtitle={kpis ? `${kpis.passedPct}% pass rate` : undefined} helpText="Executions with a passed result." valueClassName="text-green-600 font-mono" onClick={() => onNavigate("execution")} testId="kpi-card-passed" />
+        <MetricCard title="Failed" value={kpis?.failed ?? "—"} subtitle={kpis ? `${kpis.failedPct}% of executed` : undefined} helpText="Executions with a failed result." valueClassName="text-red-500 font-mono" onClick={() => onNavigate("defect-triage")} testId="kpi-card-failed" />
+        <MetricCard title="Open Defects" value={openDefects} subtitle={`${criticalDefects} critical`} helpText="Defects not resolved, closed, or won't-fix." valueClassName="text-amber-500 font-mono" onClick={() => onNavigate("defect-board")} testId="kpi-card-open-defects" />
       </div>
 
       {(kpis || dashboard) && (
@@ -150,16 +135,19 @@ export function CommandCentreScreen({ onNavigate }: Props) {
           <div className="bg-card border rounded-xl p-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Completion</div>
             <div className="text-3xl font-bold font-mono text-primary">{kpis?.completionPct ?? 0}%</div>
+            <div className="text-[10px] text-muted-foreground mt-1">Executed ÷ total cases</div>
             <div className="mt-2 bg-muted rounded-full h-2"><div className="h-full bg-primary rounded-full" style={{ width: `${kpis?.completionPct ?? 0}%` }} /></div>
           </div>
           <div className="bg-card border rounded-xl p-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Pass Rate</div>
             <div className="text-3xl font-bold font-mono text-green-600">{kpis?.passRatePct ?? 0}%</div>
+            <div className="text-[10px] text-muted-foreground mt-1">Passed ÷ executed runs</div>
             <div className="mt-2 bg-muted rounded-full h-2"><div className="h-full bg-green-500 rounded-full" style={{ width: `${kpis?.passRatePct ?? 0}%` }} /></div>
           </div>
           <div className="bg-card border rounded-xl p-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Release Readiness</div>
             <div className={cn("text-3xl font-bold font-mono", (kpis?.releaseReadiness ?? 0) >= 80 ? "text-green-600" : "text-amber-600")}>{kpis?.releaseReadiness ?? 0}%</div>
+            <div className="text-[10px] text-muted-foreground mt-1">Weighted pass rate + defect penalty</div>
             {dashboard?.activeCycle && <div className="text-xs text-muted-foreground mt-1">Active cycle: {dashboard.activeCycle.name}</div>}
           </div>
         </div>
@@ -194,33 +182,17 @@ export function CommandCentreScreen({ onNavigate }: Props) {
       {/* Legacy KPI row hidden when dashboard loaded — keep runs/defects panels below */}
       {!kpis && (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Total Test Cases"
-          value={cases.length}
-          sub={`${activeCases} active · ${draftCases} draft`}
-          color="text-primary"
-          onClick={() => onNavigate("test-cases")}
-        />
-        <StatCard
-          label="Active Runs"
-          value={activeRuns}
-          sub={`${runs.length} total cycles`}
-          color="text-blue-500"
-          onClick={() => onNavigate("execution")}
-        />
-        <StatCard
-          label="Open Defects"
-          value={openDefects}
-          sub={`${defects.length} total raised`}
-          color="text-amber-500"
-          onClick={() => onNavigate("defect-triage")}
-        />
-        <StatCard
-          label="Critical Defects"
+        <MetricCard title="Total Test Cases" value={cases.length} subtitle={`${activeCases} active · ${draftCases} draft`} helpText="All test cases in the selected project." valueClassName="text-primary font-mono" onClick={() => onNavigate("test-cases")} testId="kpi-card-total-test-cases" />
+        <MetricCard title="Active Runs" value={activeRuns} subtitle={`${runs.length} total cycles`} helpText="Test cycles currently in progress." valueClassName="text-blue-500 font-mono" onClick={() => onNavigate("execution")} testId="kpi-card-active-runs" />
+        <MetricCard title="Open Defects" value={openDefects} subtitle={`${defects.length} total raised`} helpText="Defects not yet resolved or closed." valueClassName="text-amber-500 font-mono" onClick={() => onNavigate("defect-triage")} testId="kpi-card-open-defects-legacy" />
+        <MetricCard
+          title="Critical Defects"
           value={criticalDefects}
-          sub="requiring immediate attention"
-          color={criticalDefects > 0 ? "text-red-500" : "text-green-500"}
+          subtitle={criticalDefects > 0 ? "Needs immediate attention" : "None open"}
+          helpText="Open defects marked critical or blocker severity."
+          valueClassName={cn("font-mono", criticalDefects > 0 ? "text-red-500" : "text-muted-foreground")}
           onClick={() => onNavigate("defect-board")}
+          testId="kpi-card-critical-defects"
         />
       </div>
       )}

@@ -4,15 +4,17 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { parseFieldOptions, normalizeMultiSelectValue, type CrmCustomFieldDef } from "@/lib/crm-custom-fields";
+import { cn } from "@/lib/utils";
 import { useCrmUsers } from "./CrmUsersProvider";
 
 interface CrmCustomFieldsFormProps {
   entityType: "lead" | "opportunity" | "account" | "contact";
   values: Record<string, unknown>;
   onChange: (fieldName: string, value: unknown) => void;
+  embedded?: boolean;
 }
 
-export function CrmCustomFieldsForm({ entityType, values, onChange }: CrmCustomFieldsFormProps) {
+export function CrmCustomFieldsForm({ entityType, values, onChange, embedded }: CrmCustomFieldsFormProps) {
   const { users, resolveOwner } = useCrmUsers();
   const { data: fields = [] } = useQuery<CrmCustomFieldDef[]>({
     queryKey: [`/api/crm/custom-fields?entityType=${entityType}`],
@@ -21,8 +23,10 @@ export function CrmCustomFieldsForm({ entityType, values, onChange }: CrmCustomF
   if (fields.length === 0) return null;
 
   return (
-    <div className="space-y-3 pt-2 border-t" data-testid={`custom-fields-${entityType}`}>
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Custom Fields</p>
+    <div className={cn("space-y-3", !embedded && "pt-2 border-t")} data-testid={`custom-fields-${entityType}`}>
+      {!embedded && (
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Custom Fields</p>
+      )}
       {fields.map(field => {
         const val = values[field.fieldName];
         const strVal = val != null ? String(val) : "";

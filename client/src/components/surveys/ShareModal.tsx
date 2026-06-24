@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { C, surveyLink, qrCodeUrl, embedCode } from "@/lib/survey-constants";
 import { SurveyButtonSpinner } from "@/components/surveys/SurveyLoadingState";
@@ -13,6 +13,7 @@ export function ShareModal({ survey, onClose }: { survey: SurveyWithDetails; onC
   const [tab, setTab] = useState<Tab>("link");
   const [emails, setEmails] = useState("");
   const [reminderDays, setReminderDays] = useState(3);
+  const [allowExternal, setAllowExternal] = useState(survey.allowExternal ?? true);
   const link = surveyLink(survey.token!);
 
   const distributeMut = useMutation({
@@ -24,10 +25,26 @@ export function ShareModal({ survey, onClose }: { survey: SurveyWithDetails; onC
     onError: () => toast({ title: "Distribution failed", variant: "destructive" }),
   });
 
+  const settingsMut = useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiRequest("PATCH", `/api/surveys/${survey.id}`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/surveys"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/surveys/${survey.id}`] });
+    },
+    onError: () => toast({ title: "Could not update settings", variant: "destructive" }),
+  });
+
+  function toggleAllowExternal(checked: boolean) {
+    setAllowExternal(checked);
+    settingsMut.mutate({ allowExternal: checked });
+  }
+
   const tabs: { id: Tab; label: string }[] = [
     { id: "link", label: "Link" }, { id: "workspace", label: "Workspace" },
     { id: "users", label: "Users" }, { id: "embed", label: "Embed" }, { id: "qr", label: "QR" },
   ];
+
+  const workspaceId = survey.workspaceId ?? undefined;
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,14,12,.6)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -53,23 +70,41 @@ export function ShareModal({ survey, onClose }: { survey: SurveyWithDetails; onC
                 <button onClick={() => { navigator.clipboard.writeText(link); toast({ title: "Copied ✓" }); }}
                   style={{ padding: "9px 14px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 500 }}>Copy</button>
               </div>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.ink3 }}>
-                <input type="checkbox" checked={survey.allowExternal ?? true} readOnly /> Anyone with link can respond
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.ink3, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={allowExternal}
+                  disabled={settingsMut.isPending}
+                  onChange={e => toggleAllowExternal(e.target.checked)}
+                />
+                Anyone with link can respond
               </label>
+              {!allowExternal && (
+                <p style={{ fontSize: 12, color: C.amber, marginTop: 10, lineHeight: 1.5 }}>
+                  Link-only access is off. Only people you invite via Workspace or Users can respond (or signed-in invitees).
+                </p>
+              )}
             </>
           )}
           {tab === "workspace" && (
             <>
-              <p style={{ fontSize: 13, color: C.ink3, marginBottom: 16 }}>Send to all members of the current workspace via notification.</p>
+              <p style={{ fontSize: 13, color: C.ink3, marginBottom: 16 }}>
+                Send to all members of {workspaceId ? "this survey's workspace" : "the current workspace context"} via notification.
+              </p>
+              {!workspaceId && (
+                <p style={{ fontSize: 12, color: C.amber, marginBottom: 12 }}>
+                  This survey has no workspace assigned. Open it from a workspace context or assign a workspace first.
+                </p>
+              )}
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 11, fontWeight: 600, color: C.ink4, textTransform: "uppercase" }}>Reminder before close</label>
                 <select value={reminderDays} onChange={e => setReminderDays(Number(e.target.value))} style={{ width: "100%", marginTop: 6, padding: "8px", borderRadius: 8, border: `1px solid ${C.line2}` }}>
                   <option value={0}>No reminder</option><option value={1}>1 day before</option><option value={3}>3 days before</option><option value={7}>1 week before</option>
                 </select>
               </div>
-              <button onClick={() => distributeMut.mutate({ type: "workspace", reminderDays: reminderDays || undefined })}
-                disabled={distributeMut.isPending}
-                style={{ width: "100%", padding: "10px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <button onClick={() => distributeMut.mutate({ type: "workspace", workspaceId, reminderDays: reminderDays || undefined })}
+                disabled={distributeMut.isPending || !workspaceId}
+                style={{ width: "100%", padding: "10px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: workspaceId ? "pointer" : "not-allowed", fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: workspaceId ? 1 : 0.5 }}>
                 {distributeMut.isPending && <SurveyButtonSpinner />} Send to workspace members
               </button>
             </>

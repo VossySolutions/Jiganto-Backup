@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
@@ -314,15 +314,19 @@ export function SavedViewsDropdown({
         )}
       </div>
 
-      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <SubmitForm
-            onSubmit={handleSaveView}
-            disabled={createViewMutation.isPending}
-          >
-          <DialogHeader>
-            <DialogTitle>Save View</DialogTitle>
-          </DialogHeader>
+      <FormDialogShell
+        open={saveDialogOpen}
+        onOpenChange={setSaveDialogOpen}
+        title="Save View"
+        subtitle="Store current filters, sorts, and column setup for quick reuse."
+        saveLabel="Save View"
+        saveTestId="button-save-view"
+        onCancel={() => setSaveDialogOpen(false)}
+        onSubmit={handleSaveView}
+        disabled={createViewMutation.isPending}
+        saving={createViewMutation.isPending}
+        size="sm"
+      >
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="view-name">View Name</Label>
@@ -363,21 +367,7 @@ export function SavedViewsDropdown({
               </ul>
             </div>
           </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button
-              type="submit"
-              disabled={createViewMutation.isPending}
-              data-testid="button-save-view"
-            >
-              {createViewMutation.isPending ? "Saving..." : "Save View"}
-            </Button>
-          </DialogFooter>
-          </SubmitForm>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
       <Dialog open={columnsDialogOpen} onOpenChange={setColumnsDialogOpen}>
         <DialogContent className="sm:max-w-md">

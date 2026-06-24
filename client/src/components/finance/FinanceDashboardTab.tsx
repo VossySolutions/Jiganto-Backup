@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { MetricCard } from "@/components/ui/metric-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, TrendingUp, AlertTriangle, Clock, Percent, Receipt } from "lucide-react";
 import { FinanceKpiSkeleton, FinanceChartSkeleton, FinanceEmptyState, FinanceErrorState } from "./FinanceUi";
@@ -26,6 +27,7 @@ export function FinanceDashboardTab({ data: dataProp, isLoading: isLoadingProp, 
   const { data: fetched, isLoading: fetchLoading, isError, refetch } = useQuery<FinanceDashboardData>({
     queryKey: ["/api/finance/dashboard"],
     enabled: dataProp === undefined,
+    staleTime: 30_000,
   });
 
   const data = dataProp ?? fetched;
@@ -67,49 +69,57 @@ export function FinanceDashboardTab({ data: dataProp, isLoading: isLoadingProp, 
       title: "Revenue (Month)",
       value: formatMoney(kpis.revenueThisMonth),
       subtitle: "Invoiced this month",
+      helpText: "Total value of invoices issued in the current calendar month.",
       icon: DollarSign,
-      color: "#10B981",
+      borderColor: "#10B981",
       testId: "kpi-revenue-month",
     },
     {
       title: "Outstanding",
       value: formatMoney(kpis.outstandingInvoices),
       subtitle: "Unpaid invoice balance",
+      helpText: "Sum of all invoice amounts not yet marked as paid.",
       icon: TrendingUp,
-      color: "#0ea5e9",
+      borderColor: "#0ea5e9",
       testId: "kpi-outstanding",
     },
     {
       title: "Billed YTD",
       value: formatMoney(kpis.totalBilledYtd),
       subtitle: `${kpis.totalBilledYtdYoYPct >= 0 ? "+" : ""}${kpis.totalBilledYtdYoYPct}% vs last year`,
+      helpText: "Year-to-date invoiced amount compared to the same period last year.",
       icon: TrendingUp,
-      color: "#8b5cf6",
+      borderColor: "#8b5cf6",
       testId: "kpi-billed-ytd",
     },
     {
       title: "Avg Margin",
       value: `${kpis.avgProjectMarginPct}%`,
       subtitle: "Across active projects",
+      helpText: "Average profit margin (revenue minus cost) across active projects.",
       icon: Percent,
-      color: "#f59e0b",
+      borderColor: "#f59e0b",
       testId: "kpi-margin",
     },
     {
       title: "Unapproved Timesheets",
       value: String(kpis.unapprovedTimesheets),
       subtitle: "Awaiting approval",
+      helpText: "Timesheet submissions pending manager or PM approval. Click to review.",
       icon: Clock,
-      color: "#6366f1",
+      borderColor: "#6366f1",
       testId: "kpi-timesheets",
+      onClick: onNavigateTab ? () => onNavigateTab("timesheets") : undefined,
     },
     {
       title: "Unapproved Expenses",
       value: String(kpis.unapprovedExpenses),
       subtitle: "Pending review",
+      helpText: "Expense reports submitted but not yet approved. Click to review.",
       icon: Receipt,
-      color: "#ef4444",
+      borderColor: "#ef4444",
       testId: "kpi-expenses",
+      onClick: onNavigateTab ? () => onNavigateTab("expenses") : undefined,
     },
   ];
 
@@ -134,29 +144,18 @@ export function FinanceDashboardTab({ data: dataProp, isLoading: isLoadingProp, 
     <div className="space-y-4 sm:space-y-6" data-testid="finance-dashboard">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
         {kpiCards.map((kpi) => (
-          <Card
+          <MetricCard
             key={kpi.testId}
-            className={`rounded-xl border-border/50 overflow-hidden ${(kpi.testId === "kpi-timesheets" || kpi.testId === "kpi-expenses") && onNavigateTab ? "cursor-pointer hover:border-emerald-500/50" : ""}`}
-            data-testid={kpi.testId}
-            onClick={() => {
-              if (kpi.testId === "kpi-timesheets") onNavigateTab?.("timesheets");
-              if (kpi.testId === "kpi-expenses") onNavigateTab?.("expenses");
-            }}
-          >
-            <div className="h-1" style={{ backgroundColor: kpi.color }} />
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground truncate">{kpi.title}</p>
-                  <p className="text-xl sm:text-2xl font-bold mt-1 tabular-nums">{kpi.value}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{kpi.subtitle}</p>
-                </div>
-                <div className="p-2 rounded-lg bg-muted/50 shrink-0">
-                  <kpi.icon className="h-4 w-4" style={{ color: kpi.color }} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            title={kpi.title}
+            value={kpi.value}
+            subtitle={kpi.subtitle}
+            helpText={kpi.helpText}
+            icon={kpi.icon}
+            borderColor={kpi.borderColor}
+            onClick={kpi.onClick}
+            className="border-border/50"
+            testId={kpi.testId}
+          />
         ))}
       </div>
 

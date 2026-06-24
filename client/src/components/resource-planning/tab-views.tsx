@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { cn } from "@/lib/utils";
 import {
   RpAlertBanner, RpAvatar, RpSectionCard, RpDemandBar, RpDsCell, RpHmCell, RpKpiCard,
@@ -33,16 +35,6 @@ export function ExecutiveDashboardTab({ onNavigate }: { onNavigate: TabNav }) {
     <RpQueryShell query={query} skeleton="grid" kpiCount={5}>
       {data && (
     <div className="space-y-4 sm:space-y-6" data-testid="rp-exec-dashboard">
-      <RpTabToolbar>
-        <Select defaultValue="q2">
-          <SelectTrigger className="h-8 w-32 text-xs rounded-xl"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="q2">Q2 2026</SelectItem>
-            <SelectItem value="q3">Q3 2026</SelectItem>
-          </SelectContent>
-        </Select>
-      </RpTabToolbar>
-
       {data.alert && (
         <RpAlertBanner
           action={
@@ -356,10 +348,20 @@ export function SchedulerTab() {
   };
 
   const extendBookingWeeks = (weeks: number) => {
-    if (!dragBooking) return;
-    const end = new Date();
-    end.setDate(end.getDate() + weeks * 7);
-    updateBooking.mutate({ id: dragBooking.id, endDate: end.toISOString().slice(0, 10) }, { onSuccess: () => setDragBooking(null) });
+    if (!dragBooking || !data) return;
+    let currentEndWeek = 0;
+    for (const row of data.rows) {
+      for (const bar of row.bars) {
+        if (bar.id === dragBooking.id) {
+          currentEndWeek = bar.endWeek ?? ((bar.startWeek ?? 0) + bar.span - 1);
+          break;
+        }
+      }
+    }
+    extendBookingMut.mutate(
+      { id: dragBooking.id, endWeek: currentEndWeek + weeks },
+      { onSuccess: () => setDragBooking(null) },
+    );
   };
 
   const handleExtendDrop = (endWeek: number) => {
@@ -465,21 +467,59 @@ export function SchedulerTab() {
         </RpTableWrap>
       </RpSectionCard>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>New Booking</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Project name</Label><Input value={form.projectName} onChange={(e) => setForm({ ...form, projectName: e.target.value })} /></div>
-            <div><Label>Role</Label><Input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label>Start</Label><Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
-              <div><Label>End</Label><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>
-            </div>
-            <div><Label>Days/week</Label><Input type="number" value={form.daysPerWeek} onChange={(e) => setForm({ ...form, daysPerWeek: Number(e.target.value) })} /></div>
+      <FormDialogShell
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onCancel={() => setDialogOpen(false)}
+        onSubmit={handleCreate}
+        title="New Booking"
+        saveLabel={createBooking.isPending ? "Creating..." : "Create booking"}
+        saving={createBooking.isPending}
+        disabled={!form.resourceId || !form.startDate || !form.endDate}
+      >
+        <FormSection title="Booking details" icon={<span className="h-2 w-2 rounded-full bg-blue-500" />}>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel required>Resource</FieldLabel>
+            <Select
+              value={form.resourceId ? String(form.resourceId) : ""}
+              onValueChange={(v) => setForm({ ...form, resourceId: Number(v) })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select resource" />
+              </SelectTrigger>
+              <SelectContent>
+                {(data?.resources ?? []).map((r) => (
+                  <SelectItem key={r.id} value={String(r.id)}>
+                    {r.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <DialogFooter><Button onClick={handleCreate} disabled={createBooking.isPending}>{createBooking.isPending ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Creating…</> : "Create booking"}</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Project name</FieldLabel>
+            <Input value={form.projectName} onChange={(e) => setForm({ ...form, projectName: e.target.value })} />
+          </div>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Role</FieldLabel>
+            <Input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} />
+          </div>
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5">
+              <FieldLabel required>Start</FieldLabel>
+              <Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <FieldLabel required>End</FieldLabel>
+              <Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+            </div>
+          </FieldGrid>
+          <div className="space-y-1.5">
+            <FieldLabel>Days/week</FieldLabel>
+            <Input type="number" min={1} max={5} value={form.daysPerWeek} onChange={(e) => setForm({ ...form, daysPerWeek: Number(e.target.value) })} />
+          </div>
+        </FormSection>
+      </FormDialogShell>
 
       <Dialog open={!!dragBooking} onOpenChange={() => setDragBooking(null)}>
         <DialogContent>
@@ -515,13 +555,14 @@ export function SkillsInventoryTab({ searchTerm = "" }: { searchTerm?: string })
   const query = useRpSkillsInventory(searchTerm);
   const data = query.data;
   const matrixVirtual = useVirtualRows(data?.matrix ?? [], { rowHeight: 52, maxHeight: 480 });
+  const [, setLocation] = useLocation();
 
   return (
     <RpQueryShell query={query} skeleton="grid" kpiCount={2}>
       {data && (
     <div className="space-y-4 sm:space-y-6">
       <RpTabToolbar>
-        <Button size="sm" className="text-xs h-8 rounded-xl" onClick={() => window.location.href = "/modules/resource-mgmt"}>+ Manage Skills</Button>
+        <Button size="sm" className="text-xs h-8 rounded-xl" onClick={() => setLocation("/modules/resource-mgmt")}>+ Manage Skills</Button>
       </RpTabToolbar>
       <div className="grid lg:grid-cols-2 gap-4 sm:gap-6">
         <RpSectionCard title="Skills Distribution" subtitle="By practice area">

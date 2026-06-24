@@ -1,42 +1,20 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MetricCard } from "@/components/ui/metric-card";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { DollarSign, TrendingUp, Target, Users, Building2, Loader2, Plus, ArrowRight } from "lucide-react";
+import { DollarSign, TrendingUp, Target, Users, Building2, Loader2, Plus, ArrowRight, Clock } from "lucide-react";
 import { useCrmUsers } from "./CrmUsersProvider";
-
-interface DashboardStats {
-  totalPipelineValue: number;
-  weightedPipelineValue: number;
-  revenueWon: number;
-  winRate: number;
-  avgDealSize: number;
-  openOpportunities: number;
-  wonDeals: number;
-  lostDeals: number;
-  totalAccounts: number;
-  activeLeads: number;
-  hotLeads: number;
-  newLeads: number;
-  newLeadsThisMonth?: number;
-  leadConversionRate?: number;
-  winRate90d?: number;
-  avgSalesCycle?: number;
-  activeContracts: number;
-  expiringContracts: number;
-  stageBreakdown: { name: string; count: number; value: number; color: string }[];
-  topAccounts: { id: number; name: string; type: string; industry: string | null; totalValue: number; openDeals: number; dealCount: number }[];
-  hotOpportunities?: { id: number; name: string; accountName: string; stage: string; amount: number; expectedCloseDate: string | null }[];
-  recentActivity?: { id: number; type: string; subject: string; createdAt: string }[];
-  leaderboard?: { ownerId: string; total: number; count: number }[];
-  revenueForecast?: { month: string; value: number }[];
-}
+import { ActivityAnalytics } from "./ActivityAnalytics";
+import { getAccountTypeInfo } from "@/lib/crm-account-types";
+import type { CrmActivity, CrmDashboardStats } from "./types";
 
 interface CrmDashboardTabProps {
-  stats: DashboardStats | undefined;
+  stats: CrmDashboardStats | undefined;
   isLoading: boolean;
+  activities?: CrmActivity[];
   onNavigateToTab?: (tab: string) => void;
+  onNavigateToAccount360?: (accountId: number) => void;
 }
 
 const VIBRANT_BAR_COLORS = [
@@ -67,7 +45,7 @@ function formatValue(value: number): string {
   return `$${value.toLocaleString()}`;
 }
 
-export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashboardTabProps) {
+export function CrmDashboardTab({ stats, isLoading, activities = [], onNavigateToTab, onNavigateToAccount360 }: CrmDashboardTabProps) {
   const { resolveOwner } = useCrmUsers();
 
   if (isLoading) {
@@ -92,22 +70,89 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
     stats.activeLeads === 0 &&
     stats.totalAccounts === 0;
 
+  const displayWinRate = stats.winRate90d ?? stats.winRate;
+  const wonRecent = stats.wonDeals90d ?? stats.wonDeals;
+  const lostRecent = stats.lostDeals90d ?? stats.lostDeals;
+  const totalClosedRecent = wonRecent + lostRecent;
+
   const kpiCards = [
-    { title: "Pipeline Value", value: `$${stats.totalPipelineValue.toLocaleString()}`, subtitle: `${stats.openOpportunities} open opportunities`, icon: DollarSign, borderColor: "#0ea5e9", iconBg: "bg-sky-100 dark:bg-sky-900/30", iconColor: "text-[#0ea5e9]", mono: true, testId: "kpi-pipeline-value" },
-    { title: "Weighted Pipeline", value: `$${(stats.weightedPipelineValue || 0).toLocaleString()}`, subtitle: "Probability-adjusted", icon: TrendingUp, borderColor: "#8b5cf6", iconBg: "bg-purple-100 dark:bg-purple-900/30", iconColor: "text-purple-500", mono: true, testId: "kpi-weighted-pipeline" },
-    { title: "Win Rate (90d)", value: `${stats.winRate90d ?? stats.winRate}%`, subtitle: `${stats.wonDeals} won · ${stats.lostDeals} lost`, icon: Target, borderColor: "#a855f7", iconBg: "bg-purple-100 dark:bg-purple-900/30", iconColor: "text-purple-500", mono: false, testId: "kpi-win-rate" },
-    { title: "Avg Sales Cycle", value: stats.avgSalesCycle ? `${stats.avgSalesCycle}d` : "—", subtitle: "Creation to close", icon: Target, borderColor: "#06b6d4", iconBg: "bg-cyan-100 dark:bg-cyan-900/30", iconColor: "text-cyan-500", mono: false, testId: "kpi-sales-cycle" },
-    { title: "New Leads (Month)", value: String(stats.newLeadsThisMonth ?? stats.newLeads), subtitle: `${stats.hotLeads} hot leads`, icon: Users, borderColor: "#f59e0b", iconBg: "bg-amber-100 dark:bg-amber-900/30", iconColor: "text-amber-500", mono: false, testId: "kpi-new-leads" },
-    { title: "Lead Conversion", value: `${stats.leadConversionRate ?? 0}%`, subtitle: `${stats.activeLeads} active leads`, icon: Users, borderColor: "#22c55e", iconBg: "bg-green-100 dark:bg-green-900/30", iconColor: "text-green-500", mono: false, testId: "kpi-lead-conversion" },
+    {
+      title: "Pipeline Value",
+      value: `$${stats.totalPipelineValue.toLocaleString()}`,
+      subtitle: `${stats.openOpportunities} open opportunities`,
+      helpText: "Sum of deal amounts for all open (not closed-won/lost) opportunities in your workspace.",
+      icon: DollarSign,
+      borderColor: "#0ea5e9",
+      iconBgClassName: "bg-sky-100 dark:bg-sky-900/30",
+      iconClassName: "text-[#0ea5e9]",
+      valueClassName: "font-mono",
+      testId: "kpi-pipeline-value",
+    },
+    {
+      title: "Weighted Pipeline",
+      value: `$${(stats.weightedPipelineValue || 0).toLocaleString()}`,
+      subtitle: "Amount × stage probability",
+      helpText: "Expected revenue from open deals: each opportunity amount multiplied by its stage win probability.",
+      icon: TrendingUp,
+      borderColor: "#8b5cf6",
+      iconBgClassName: "bg-purple-100 dark:bg-purple-900/30",
+      iconClassName: "text-purple-500",
+      valueClassName: "font-mono",
+      testId: "kpi-weighted-pipeline",
+    },
+    {
+      title: "Win Rate (90d)",
+      value: `${displayWinRate}%`,
+      subtitle: totalClosedRecent > 0 ? `${wonRecent} won · ${lostRecent} lost (90 days)` : "No closed deals in 90 days",
+      helpText: "Percentage of opportunities closed-won vs closed-lost in the last 90 days. Excludes still-open deals.",
+      icon: Target,
+      borderColor: "#a855f7",
+      iconBgClassName: "bg-purple-100 dark:bg-purple-900/30",
+      iconClassName: "text-purple-500",
+      testId: "kpi-win-rate",
+    },
+    {
+      title: "Avg Sales Cycle",
+      value: stats.avgSalesCycle ? `${stats.avgSalesCycle} days` : "—",
+      subtitle: "Create date → close date",
+      helpText: "Average number of days from opportunity creation to close for won deals. Longer cycles may indicate complex sales.",
+      icon: Clock,
+      borderColor: "#06b6d4",
+      iconBgClassName: "bg-cyan-100 dark:bg-cyan-900/30",
+      iconClassName: "text-cyan-500",
+      testId: "kpi-sales-cycle",
+    },
+    {
+      title: "New Leads (Month)",
+      value: String(stats.newLeadsThisMonth ?? stats.newLeads),
+      subtitle: `${stats.hotLeads} marked hot`,
+      helpText: "Leads created in the current calendar month. The subtitle shows leads flagged as hot priority.",
+      icon: Users,
+      borderColor: "#f59e0b",
+      iconBgClassName: "bg-amber-100 dark:bg-amber-900/30",
+      iconClassName: "text-amber-500",
+      testId: "kpi-new-leads",
+    },
+    {
+      title: "Lead Conversion",
+      value: `${stats.leadConversionRate ?? 0}%`,
+      subtitle: `${stats.activeLeads} leads not yet converted`,
+      helpText: "Share of all leads that have been converted to customer accounts. Active leads are still in the funnel.",
+      icon: Users,
+      borderColor: "#22c55e",
+      iconBgClassName: "bg-green-100 dark:bg-green-900/30",
+      iconClassName: "text-green-500",
+      testId: "kpi-lead-conversion",
+    },
   ];
 
   const maxStageCount = Math.max(...stats.stageBreakdown.map(s => s.count), 1);
-  const lossRate = 100 - stats.winRate;
-  const totalClosedDeals = stats.wonDeals + stats.lostDeals;
+  const lossRate = totalClosedRecent > 0 ? 100 - displayWinRate : 0;
 
   const revenueForecast = stats.revenueForecast || [];
   const months = revenueForecast.map(r => r.month);
   const monthlyValues = revenueForecast.map(r => r.value);
+  const hasForecastData = monthlyValues.some(v => v > 0);
   const maxMonthly = Math.max(...monthlyValues, 1);
 
   return (
@@ -147,29 +192,18 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
           >
-            <Card
-              className="rounded-xl"
-              style={{ borderTop: `3px solid ${kpi.borderColor}` }}
-              data-testid={kpi.testId}
-            >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {kpi.title}
-                </CardTitle>
-                <div className={cn("p-2 rounded-lg", kpi.iconBg)}>
-                  <kpi.icon className={cn("h-4 w-4", kpi.iconColor)} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className={cn("text-2xl font-bold", kpi.mono && "font-mono")}
-                  data-testid={`${kpi.testId}-value`}
-                >
-                  {kpi.value}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">{kpi.subtitle}</p>
-              </CardContent>
-            </Card>
+            <MetricCard
+              title={kpi.title}
+              value={kpi.value}
+              subtitle={kpi.subtitle}
+              helpText={kpi.helpText}
+              icon={kpi.icon}
+              iconBgClassName={kpi.iconBgClassName}
+              iconClassName={kpi.iconClassName}
+              borderColor={kpi.borderColor}
+              valueClassName={kpi.valueClassName}
+              testId={kpi.testId}
+            />
           </motion.div>
         ))}
       </div>
@@ -250,9 +284,9 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
                 <button
                   onClick={() => onNavigateToTab?.("customers")}
                   className="text-sm text-[#0ea5e9] hover:text-[#0ea5e9]/80 font-medium flex items-center gap-1 transition-colors"
-                  data-testid="link-360-view"
+                  data-testid="link-view-customers"
                 >
-                  360° View →
+                  View customers →
                 </button>
               </div>
             </CardHeader>
@@ -271,14 +305,10 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
                       .join("")
                       .toUpperCase();
                     const logoColor = ACCOUNT_LOGO_COLORS[index % ACCOUNT_LOGO_COLORS.length];
-                    const segment = account.totalValue >= 1000000 ? "Enterprise" :
-                                    account.totalValue >= 100000 ? "Mid-Market" : "SMB";
-                    return (
-                      <div
-                        key={account.id}
-                        className="flex flex-1 items-center gap-4 py-3 first:pt-0 last:pb-0 min-h-[2.75rem]"
-                        data-testid={`top-account-${account.id}`}
-                      >
+                    const typeLabel = getAccountTypeInfo(account.type).label;
+                    const subtitle = [account.industry, typeLabel].filter(Boolean).join(" · ") || typeLabel;
+                    const rowContent = (
+                      <>
                         <span className="text-sm font-semibold text-muted-foreground w-4 shrink-0">
                           {index + 1}
                         </span>
@@ -291,7 +321,8 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold truncate">{account.name}</p>
                           <p className="text-xs text-muted-foreground truncate">
-                            {segment} · {account.type === "customer" ? "Active" : account.type}
+                            {subtitle}
+                            {account.openDeals > 0 ? ` · ${account.openDeals} open deal${account.openDeals === 1 ? "" : "s"}` : ""}
                           </p>
                         </div>
                         <div className="shrink-0 text-right">
@@ -299,6 +330,25 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
                             {formatValue(account.totalValue)}
                           </span>
                         </div>
+                      </>
+                    );
+                    return onNavigateToAccount360 ? (
+                      <button
+                        key={account.id}
+                        type="button"
+                        onClick={() => onNavigateToAccount360(account.id)}
+                        className="flex flex-1 items-center gap-4 py-3 first:pt-0 last:pb-0 min-h-[2.75rem] w-full text-left hover:bg-muted/30 rounded-lg transition-colors -mx-1 px-1"
+                        data-testid={`top-account-${account.id}`}
+                      >
+                        {rowContent}
+                      </button>
+                    ) : (
+                      <div
+                        key={account.id}
+                        className="flex flex-1 items-center gap-4 py-3 first:pt-0 last:pb-0 min-h-[2.75rem]"
+                        data-testid={`top-account-${account.id}`}
+                      >
+                        {rowContent}
                       </div>
                     );
                   })}
@@ -319,8 +369,14 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
           <Card className="rounded-xl flex flex-1 flex-col" data-testid="win-loss-rate">
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold">Win / Loss Rate</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Last 90 days · closed opportunities</p>
             </CardHeader>
             <CardContent className="flex flex-1 items-center">
+              {totalClosedRecent === 0 ? (
+                <div className="text-center w-full py-6 text-muted-foreground text-sm" data-testid="win-loss-empty">
+                  No closed deals in the last 90 days
+                </div>
+              ) : (
               <div className="flex items-center gap-6 w-full">
                 <div className="relative shrink-0" data-testid="win-loss-donut">
                   <svg viewBox="0 0 100 100" className="w-28 h-28 -rotate-90">
@@ -328,24 +384,24 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
                     <circle
                       cx="50" cy="50" r="38" fill="none" stroke="#22c55e" strokeWidth="14"
                       strokeDasharray={`${2 * Math.PI * 38}`}
-                      strokeDashoffset={`${2 * Math.PI * 38 * (1 - stats.winRate / 100)}`}
+                      strokeDashoffset={`${2 * Math.PI * 38 * (1 - displayWinRate / 100)}`}
                       strokeLinecap="round"
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-2xl font-bold text-green-500" data-testid="win-rate-value">{stats.winRate}%</span>
+                    <span className="text-2xl font-bold text-green-500" data-testid="win-rate-value">{displayWinRate}%</span>
                     <span className="text-[10px] text-muted-foreground">Win rate</span>
                   </div>
                 </div>
                 <div className="flex-1 space-y-2 text-sm">
-                  <div className="font-medium">{stats.wonDeals} Won · {stats.lostDeals} Lost</div>
-                  <div className="text-muted-foreground">Q1 {new Date().getFullYear()}</div>
+                  <div className="font-medium">{wonRecent} Won · {lostRecent} Lost</div>
                   <div className="flex items-center gap-3 pt-1">
-                    <span className="inline-flex items-center gap-1.5 text-green-500 font-medium"><span className="h-2.5 w-2.5 rounded-full bg-green-500" /> Won {stats.winRate}%</span>
+                    <span className="inline-flex items-center gap-1.5 text-green-500 font-medium"><span className="h-2.5 w-2.5 rounded-full bg-green-500" /> Won {displayWinRate}%</span>
                     <span className="inline-flex items-center gap-1.5 text-red-500 font-medium"><span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Lost {lossRate}%</span>
                   </div>
                 </div>
               </div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -357,13 +413,19 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
         >
           <Card className="rounded-xl" data-testid="monthly-revenue">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">Monthly Revenue</CardTitle>
+              <CardTitle className="text-base font-semibold">Revenue Forecast</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Weighted pipeline by expected close month</p>
             </CardHeader>
             <CardContent className="flex flex-1 flex-col justify-end">
+              {!hasForecastData ? (
+                <div className="text-center py-8 text-muted-foreground text-sm" data-testid="revenue-forecast-empty">
+                  No forecasted revenue from open opportunities
+                </div>
+              ) : (
               <div className="flex items-end gap-2 h-36">
                 {months.map((month, i) => {
                   const heightPercent = (monthlyValues[i] / maxMonthly) * 100;
-                  const isCurrentMonth = i === months.length - 1;
+                  const isCurrentMonth = i === 0;
                   return (
                     <div key={month} className="flex-1 flex flex-col items-center gap-1.5">
                       <div className="w-full relative flex items-end justify-center" style={{ height: "120px" }}>
@@ -374,7 +436,8 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
                               ? "bg-gradient-to-t from-[#0ea5e9] to-[#22c55e]"
                               : "bg-[#0ea5e9]/70"
                           )}
-                          style={{ height: `${Math.max(heightPercent, 5)}%` }}
+                          style={{ height: `${heightPercent}%` }}
+                          title={`$${monthlyValues[i].toLocaleString()}`}
                         />
                       </div>
                       <span className={cn(
@@ -387,6 +450,7 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
                   );
                 })}
               </div>
+              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -394,17 +458,44 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="rounded-xl" data-testid="hot-opportunities">
-          <CardHeader className="pb-3"><CardTitle className="text-base font-semibold">Hot Opportunities</CardTitle></CardHeader>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-semibold">Hot Opportunities</CardTitle>
+              {onNavigateToTab && (stats.hotOpportunities || []).length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab("opportunities")}
+                  className="text-sm text-[#0ea5e9] hover:text-[#0ea5e9]/80 font-medium"
+                >
+                  View all →
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">Highest-value open deals</p>
+          </CardHeader>
           <CardContent>
             {(stats.hotOpportunities || []).length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">No open opportunities</p>
             ) : (
               <div className="space-y-2">
                 {(stats.hotOpportunities || []).map(o => (
-                  <div key={o.id} className="flex justify-between text-sm border-b border-border/30 pb-2 last:border-0">
-                    <div><span className="font-medium">{o.name}</span><span className="text-xs text-muted-foreground block">{o.accountName} · {o.stage}</span></div>
-                    <span className="font-semibold shrink-0">${o.amount.toLocaleString()}</span>
-                  </div>
+                  onNavigateToTab ? (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => onNavigateToTab("opportunities")}
+                      className="flex justify-between text-sm border-b border-border/30 pb-2 last:border-0 w-full text-left hover:bg-muted/30 rounded-md px-1 -mx-1 transition-colors"
+                      data-testid={`hot-opp-${o.id}`}
+                    >
+                      <div><span className="font-medium text-primary hover:underline">{o.name}</span><span className="text-xs text-muted-foreground block">{o.accountName} · {o.stage}</span></div>
+                      <span className="font-semibold shrink-0">${o.amount.toLocaleString()}</span>
+                    </button>
+                  ) : (
+                    <div key={o.id} className="flex justify-between text-sm border-b border-border/30 pb-2 last:border-0">
+                      <div><span className="font-medium">{o.name}</span><span className="text-xs text-muted-foreground block">{o.accountName} · {o.stage}</span></div>
+                      <span className="font-semibold shrink-0">${o.amount.toLocaleString()}</span>
+                    </div>
+                  )
                 ))}
               </div>
             )}
@@ -428,10 +519,13 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
           </CardContent>
         </Card>
         <Card className="rounded-xl" data-testid="leaderboard">
-          <CardHeader className="pb-3"><CardTitle className="text-base font-semibold">Leaderboard</CardTitle></CardHeader>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">Leaderboard</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">Closed-won revenue by owner</p>
+          </CardHeader>
           <CardContent>
             {(stats.leaderboard || []).length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No owner data</p>
+              <p className="text-sm text-muted-foreground text-center py-4">No closed-won deals yet</p>
             ) : (
               <div className="space-y-3">
                 {(() => {
@@ -468,6 +562,12 @@ export function CrmDashboardTab({ stats, isLoading, onNavigateToTab }: CrmDashbo
           </CardContent>
         </Card>
       </div>
+
+      {activities.length > 0 && (
+        <div className="border-t border-border/40 pt-6">
+          <ActivityAnalytics activities={activities} />
+        </div>
+      )}
     </div>
   );
 }

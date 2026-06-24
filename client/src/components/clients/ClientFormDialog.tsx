@@ -8,13 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
+  FormDialogShell,
+  FormSection,
+  FieldGrid,
+  FieldLabel,
+  FormDivider,
+} from "@/components/ui/form-dialog-shell";
 import {
   Select,
   SelectContent,
@@ -138,43 +137,22 @@ export function ClientFormDialog({ open, onClose, editing, siMembers = [] }: Pro
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[520px] max-h-[90vh] flex flex-col gap-0 overflow-hidden p-0">
-        <SubmitForm onSubmit={handleSubmit} disabled={!form.name.trim() || isPending} className="flex min-h-0 flex-1 flex-col">
-          <div className="shrink-0 space-y-4 border-b border-border/60 px-6 pt-6 pb-4">
-            <DialogHeader className="space-y-1.5 text-left">
-              <DialogTitle>{editing ? "Edit Client Workspace" : "Add Client Workspace"}</DialogTitle>
-              <DialogDescription>
-                {editing
-                  ? "Update workspace details and engagement settings."
-                  : "Create a new customer workspace to scope data by client."}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                disabled={isPending}
-                className="w-full sm:w-auto"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                data-testid="button-save-client"
-                className="w-full sm:w-auto"
-                disabled={isPending}
-              >
-                {isPending ? "Saving…" : editing ? "Save Changes" : "Create Client"}
-              </Button>
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Client Name <span className="text-destructive">*</span></Label>
+    <FormDialogShell
+      open={open}
+      onOpenChange={(v) => !v && onClose()}
+      title={editing ? "Edit Client Workspace" : "Add Client Workspace"}
+      subtitle={editing ? "Update workspace details and engagement settings." : "Create a new customer workspace to scope data by client."}
+      saveLabel={isPending ? "Saving..." : editing ? "Save Changes" : "Create Client"}
+      onCancel={onClose}
+      onSubmit={handleSubmit}
+      saving={isPending}
+      disabled={!form.name.trim()}
+      saveTestId="button-save-client"
+      size="md"
+    >
+      <FormSection title="Workspace profile">
+        <div className="space-y-1.5 mb-3.5">
+          <FieldLabel required>Client Name</FieldLabel>
               <Input
                 data-testid="input-client-name"
                 placeholder="e.g. Apex Global Bank"
@@ -182,11 +160,11 @@ export function ClientFormDialog({ open, onClose, editing, siMembers = [] }: Pro
                 value={form.name}
                 onChange={(e) => handleNameChange(e.target.value)}
               />
-            </div>
+        </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <FieldGrid className="mb-3.5">
               <div className="space-y-1.5">
-                <Label>Short Code</Label>
+                <FieldLabel>Short Code</FieldLabel>
                 <Input
                   placeholder="e.g. AGB"
                   maxLength={5}
@@ -196,7 +174,7 @@ export function ClientFormDialog({ open, onClose, editing, siMembers = [] }: Pro
                 <p className="text-[11px] text-muted-foreground">Up to 5 characters, shown in badge</p>
               </div>
               <div className="space-y-1.5">
-                <Label>Industry</Label>
+                <FieldLabel>Industry</FieldLabel>
                 <Select
                   value={form.industry || "__none__"}
                   onValueChange={(v) => setForm((f) => ({ ...f, industry: v === "__none__" ? "" : v }))}
@@ -210,10 +188,10 @@ export function ClientFormDialog({ open, onClose, editing, siMembers = [] }: Pro
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+            </FieldGrid>
 
-            <div className="space-y-1.5">
-              <Label>Brand Colour</Label>
+            <div className="space-y-1.5 mb-3.5">
+              <FieldLabel>Brand Colour</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {CLIENT_PRESET_COLORS.map((c) => (
                   <button
@@ -237,8 +215,8 @@ export function ClientFormDialog({ open, onClose, editing, siMembers = [] }: Pro
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Website</Label>
+            <div className="space-y-1.5 mb-3.5">
+              <FieldLabel>Website</FieldLabel>
               <Input
                 placeholder="https://example.com"
                 value={form.website}
@@ -256,7 +234,7 @@ export function ClientFormDialog({ open, onClose, editing, siMembers = [] }: Pro
             </div>
 
             <div className="space-y-1.5">
-              <Label>Notes</Label>
+              <FieldLabel>Notes</FieldLabel>
               <Textarea
                 placeholder="Engagement overview, key contacts, context…"
                 rows={3}
@@ -264,12 +242,14 @@ export function ClientFormDialog({ open, onClose, editing, siMembers = [] }: Pro
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
               />
             </div>
-
+      </FormSection>
             {editing && (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FormDivider />
+                <FormSection title="Engagement settings">
+                <FieldGrid className="mb-3.5">
                   <div className="space-y-1.5">
-                    <Label>Engagement status</Label>
+                    <FieldLabel>Engagement status</FieldLabel>
                     <Select
                       value={form.engagementStatus}
                       onValueChange={(v) => setForm((f) => ({ ...f, engagementStatus: v }))}
@@ -284,7 +264,7 @@ export function ClientFormDialog({ open, onClose, editing, siMembers = [] }: Pro
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Account manager</Label>
+                    <FieldLabel>Account manager</FieldLabel>
                     <Select
                       value={form.accountManagerId || "__none__"}
                       onValueChange={(v) => setForm((f) => ({ ...f, accountManagerId: v === "__none__" ? "" : v }))}
@@ -298,31 +278,28 @@ export function ClientFormDialog({ open, onClose, editing, siMembers = [] }: Pro
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                </FieldGrid>
+                <FieldGrid className="mb-3.5">
                   <div className="space-y-1.5">
-                    <Label>Engagement start</Label>
+                    <FieldLabel>Engagement start</FieldLabel>
                     <Input type="date" value={form.contractStart} onChange={(e) => setForm((f) => ({ ...f, contractStart: e.target.value }))} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Engagement end</Label>
+                    <FieldLabel>Engagement end</FieldLabel>
                     <Input type="date" value={form.contractEnd} onChange={(e) => setForm((f) => ({ ...f, contractEnd: e.target.value }))} />
                   </div>
-                </div>
+                </FieldGrid>
                 <div className="space-y-1.5">
-                  <Label>Tags</Label>
+                  <FieldLabel>Tags</FieldLabel>
                   <Input
                     placeholder="ERP, SAP, NHS, Public Sector"
                     value={form.tags}
                     onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
                   />
                 </div>
+                </FormSection>
               </>
             )}
-          </div>
-          </div>
-        </SubmitForm>
-      </DialogContent>
-    </Dialog>
+    </FormDialogShell>
   );
 }

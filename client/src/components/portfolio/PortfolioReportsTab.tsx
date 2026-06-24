@@ -25,15 +25,18 @@ export function PortfolioReportsTab() {
   const { data: projects = [], isLoading: loadingProjects } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["/api/portfolio/dashboard"],
     select: (d: any) => d.projects?.map((p: any) => ({ id: p.id, name: p.name })) ?? [],
+    staleTime: 30_000,
   });
 
-  const { data: summary = [] } = useQuery<any[]>({ queryKey: ["/api/portfolio/reports/summary"] });
-  const { data: milestones = [] } = useQuery<any[]>({ queryKey: ["/api/portfolio/milestones"] });
-  const { data: raid = [] } = useQuery<any[]>({ queryKey: ["/api/portfolio/reports/raid-consolidated"] });
-  const { data: schedules = [], refetch: refetchSchedules } = useQuery<any[]>({ queryKey: ["/api/portfolio/reports/schedules"] });
+  const reportStale = { staleTime: 30_000 as const };
+  const { data: summary = [] } = useQuery<any[]>({ queryKey: ["/api/portfolio/reports/summary"], ...reportStale });
+  const { data: milestones = [] } = useQuery<any[]>({ queryKey: ["/api/portfolio/milestones"], ...reportStale });
+  const { data: raid = [] } = useQuery<any[]>({ queryKey: ["/api/portfolio/reports/raid-consolidated"], ...reportStale });
+  const { data: schedules = [], refetch: refetchSchedules } = useQuery<any[]>({ queryKey: ["/api/portfolio/reports/schedules"], ...reportStale });
 
   const { data: orgUsers = [] } = useQuery<{ user: { id: string; email: string | null; firstName: string | null; lastName: string | null } }[]>({
     queryKey: ["/api/settings/users"],
+    staleTime: 60_000,
   });
 
   const createSchedule = async () => {

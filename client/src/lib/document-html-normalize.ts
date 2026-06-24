@@ -74,7 +74,7 @@ export function normalizeDocumentHtmlForEditor(html: string): string {
       if (text === imgAlt || text.length === 0 || el.querySelectorAll("img").length === 1) {
         const onlyImg = paragraphIsImageOnly(el);
         if (onlyImg || el.querySelectorAll("img").length === 1) {
-          el.replaceWith(cloneImg(doc, img));
+          el.replaceWith(cloneImg(doc, img as HTMLImageElement));
         }
       }
     });

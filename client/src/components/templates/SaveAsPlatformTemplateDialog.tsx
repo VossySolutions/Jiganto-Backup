@@ -2,13 +2,10 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from "@/components/ui/dialog";
-import { LayoutTemplate, Loader2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
+import { LayoutTemplate } from "lucide-react";
 
 export function SaveAsPlatformTemplateDialog({
   open,
@@ -39,34 +36,30 @@ export function SaveAsPlatformTemplateDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" data-testid="save-platform-template-dialog">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <LayoutTemplate className="h-5 w-5" /> Save as Template
-          </DialogTitle>
-          <DialogDescription>Registers this item in the platform Templates library.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Template name</Label>
-            <Input value={name} onChange={e => setName(e.target.value)} data-testid="platform-template-name" />
-          </div>
-          <div className="space-y-2">
-            <Label>Description</Label>
-            <Input value={description} onChange={e => setDescription(e.target.value)} />
-          </div>
-          <Button
-            className="w-full"
-            disabled={!name.trim() || saveMut.isPending}
-            onClick={() => saveMut.mutate()}
-            data-testid="confirm-save-platform-template"
-          >
-            {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save to Templates library"}
-          </Button>
+    <FormDialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Save as template"
+      subtitle="Registers this item in the platform Templates library"
+      saveLabel="Save to Templates library"
+      onCancel={() => onOpenChange(false)}
+      onSubmit={() => saveMut.mutate()}
+      saving={saveMut.isPending}
+      disabled={!name.trim()}
+      size="sm"
+      testId="save-platform-template-dialog"
+    >
+      <FormSection icon={<LayoutTemplate className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Template details">
+        <div className="space-y-1.5 mb-3.5">
+          <FieldLabel required>Template name</FieldLabel>
+          <Input value={name} onChange={e => setName(e.target.value)} data-testid="platform-template-name" />
         </div>
-      </DialogContent>
-    </Dialog>
+        <div className="space-y-1.5">
+          <FieldLabel>Description</FieldLabel>
+          <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} placeholder="What does this template include?" />
+        </div>
+      </FormSection>
+    </FormDialogShell>
   );
 }
 

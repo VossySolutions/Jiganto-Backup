@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { ModuleShell } from "@/components/ModuleShell";
@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -29,6 +30,7 @@ import {
   EsignDetailSkeleton, EsignErrorState, EsignButtonSpinner,
 } from "@/components/esign/EsignLoadingState";
 import { FieldPlacementEditor, type PlacedField } from "@/components/esign/FieldPlacementEditor";
+import { MetricCard } from "@/components/ui/metric-card";
 import "@/styles/esign.css";
 
 type View = "dashboard" | "templates" | "compose" | "detail" | "audit";
@@ -148,6 +150,7 @@ export default function SignOffPage() {
   const [signatureLevel, setSignatureLevel] = useState<"ses" | "ades">("ses");
   const [pendingUatTemplate, setPendingUatTemplate] = useState(false);
   const [signatureFields, setSignatureFields] = useState<PlacedField[]>([]);
+  const [draftFields, setDraftFields] = useState<PlacedField[]>([]);
   const [signerList, setSignerList] = useState<ComposeSigner[]>([]);
   const [newSignerName, setNewSignerName] = useState("");
   const [newSignerEmail, setNewSignerEmail] = useState("");
@@ -224,24 +227,33 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
       const contractId = Number(deepCrmContractId);
       setCrmContractId(contractId);
       setDocTitle(deepCrmContractTitle || "Contract Sign-off");
-      setContentHtml(`<h1>${deepCrmContractTitle || "Contract"}</h1><p>Loading contract terms…</p>`);
-      fetch(`/api/crm/contracts/${contractId}`)
+      fetchWithAuth(`/api/crm/contracts/${contractId}`)
         .then(r => (r.ok ? r.json() : null))
-        .then((c: { name?: string; terms?: string; value?: string; type?: string } | null) => {
-          if (!c) return;
+        .then((c: { name?: string; terms?: string; value?: string; type?: string; documentId?: number | null } | null) => {
+          if (!c) {
+            setContentHtml(`<h1>${deepCrmContractTitle || "Contract"}</h1><p>Please review and sign this contract.</p>`);
+            setSrcType("inline_doc");
+            return;
+          }
           const title = c.name || deepCrmContractTitle || "Contract";
           setDocTitle(title);
+          if (c.documentId) {
+            setSrcType("jiganto_doc");
+            setSelectedDocId(c.documentId);
+            return;
+          }
           const meta = [c.type, c.value ? `Value: ${c.value}` : null].filter(Boolean).join(" · ");
           setContentHtml(
             c.terms
               ? `<h1>${title}</h1>${meta ? `<p><em>${meta}</em></p>` : ""}<div>${c.terms}</div>`
               : `<h1>${title}</h1>${meta ? `<p>${meta}</p>` : ""}<p>Please review and sign this contract.</p>`,
           );
+          setSrcType("inline_doc");
         })
         .catch(() => {
           setContentHtml(`<h1>${deepCrmContractTitle || "Contract"}</h1><p>Please review and sign this contract.</p>`);
+          setSrcType("inline_doc");
         });
-      setSrcType("inline_doc");
     } else if (deepDeliverableTitle) {
       setDocTitle(deepDeliverableTitle);
       if (!jigantoDocId) {
@@ -265,11 +277,12 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
     return qs ? `/api/signoff?${qs}` : "/api/signoff";
   }, [statusFilter, search, sort]);
 
-  const { data: requests = [], isLoading: listLoading, isFetching: listFetching, isError: listError, refetch: refetchList } = useQuery<SignoffRequest[]>({ queryKey: [listUrl] });
-  const { data: allRequests = [], isLoading: kpiLoading } = useQuery<SignoffRequest[]>({ queryKey: ["/api/signoff"] });
+  const { data: requests = [], isLoading: listLoading, isFetching: listFetching, isError: listError, refetch: refetchList } = useQuery<SignoffRequest[]>({ queryKey: [listUrl], staleTime: 30_000 });
+  const { data: allRequests = [], isLoading: kpiLoading } = useQuery<SignoffRequest[]>({ queryKey: ["/api/signoff"], staleTime: 30_000 });
   const { data: templates = [], isLoading: templatesLoading, isError: templatesError, refetch: refetchTemplates } = useQuery<SignoffTemplate[]>({
     queryKey: ["/api/signoff/templates"],
     enabled: view === "templates" || view === "compose",
+    staleTime: 60_000,
   });
 
   useEffect(() => {
@@ -296,7 +309,8 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
   });
   const { data: projectDeliverables = [], isLoading: deliverablesLoading } = useQuery<PmDeliverable[]>({
     queryKey: [`/api/pm/projects/${projectId}/deliverables`],
-    queryFn: () => fetch(`/api/pm/projects/${projectId}/deliverables`).then(r => r.json()),
+    queryFn: () => fetchWithAuth(`/api/pm/projects/${projectId}/deliverables`).then(r => r.json()),
+    staleTime: 30_000,
     enabled: view === "compose" && projectId !== null,
   });
   const { data: tenantUsers = [], isLoading: usersLoading } = useQuery<TenantUser[]>({
@@ -364,6 +378,47 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
       toast({ title: "Saved as template ✓" });
     },
   });
+
+  const saveFieldsMut = useMutation({
+    mutationFn: ({ id, fields }: { id: number; fields: PlacedField[] }) =>
+      apiRequest("PUT", `/api/signoff/${id}/fields`, {
+        fields: fields.map(f => ({
+          signerEmail: f.signerEmail,
+          fieldType: f.fieldType,
+          pageNumber: f.pageNumber,
+          xPercent: f.xPercent,
+          yPercent: f.yPercent,
+          widthPercent: f.widthPercent,
+          heightPercent: f.heightPercent,
+          isRequired: f.isRequired,
+          label: f.label,
+        })),
+      }).then(r => r.json()),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/signoff/${id}`] });
+      toast({ title: "Signature fields saved ✓" });
+    },
+    onError: (e: Error) => toast({ title: "Could not save fields", description: e.message, variant: "destructive" }),
+  });
+
+  useEffect(() => {
+    if (!selectedRequest?.signatureFields) {
+      setDraftFields([]);
+      return;
+    }
+    setDraftFields(selectedRequest.signatureFields.map(f => ({
+      id: f.id,
+      signerEmail: f.signerEmail,
+      fieldType: f.fieldType as PlacedField["fieldType"],
+      pageNumber: f.pageNumber,
+      xPercent: Number(f.xPercent),
+      yPercent: Number(f.yPercent),
+      widthPercent: Number(f.widthPercent),
+      heightPercent: Number(f.heightPercent),
+      isRequired: f.isRequired,
+      label: f.label ?? undefined,
+    })));
+  }, [selectedRequest?.id, selectedRequest?.signatureFields]);
 
   const total = allRequests.length;
   const awaiting = allRequests.filter(r => r.status === "pending" || r.status === "partially_signed").length;
@@ -760,6 +815,33 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
                     <span className="font-medium">Message from sender:</span> {r.message}
                   </div>
                 )}
+
+                {r.status === "draft" && r.fileType === "pdf" && (
+                  <div className="mt-6 bg-muted/30 border border-border rounded-xl p-4">
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="text-sm font-medium">Signature field placement</div>
+                      <button
+                        onClick={() => saveFieldsMut.mutate({ id: r.id, fields: draftFields })}
+                        disabled={saveFieldsMut.isPending}
+                        className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        {saveFieldsMut.isPending && <EsignButtonSpinner />}
+                        Save fields
+                      </button>
+                    </div>
+                    <FieldPlacementEditor
+                      signers={r.signers.map(s => ({
+                        name: s.name,
+                        email: s.email,
+                        roleTitle: s.roleTitle ?? undefined,
+                        isInternal: s.isInternal ?? false,
+                      }))}
+                      fields={draftFields}
+                      onChange={setDraftFields}
+                      pdfPreviewUrl={`/api/signoff/${r.id}/file`}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="space-y-4">
@@ -910,28 +992,39 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
           </div>
         )}
 
-        <Dialog open={addSignerOpen} onOpenChange={setAddSignerOpen}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add Signer</DialogTitle></DialogHeader>
-            <div className="space-y-3 py-2">
+        <FormDialogShell
+          open={addSignerOpen}
+          onOpenChange={setAddSignerOpen}
+          title="Add Signer"
+          saveLabel={addSignerMut.isPending ? "Adding..." : "Add Signer"}
+          onCancel={() => setAddSignerOpen(false)}
+          onSubmit={handleAddSignerSubmit}
+          saving={addSignerMut.isPending}
+          disabled={!addSignerName.trim() || !addSignerEmail.trim()}
+        >
+          <FormSection icon={<User className="h-4 w-4" />} title="Signer details">
+            <div className="space-y-1.5 mb-3.5">
+              <FieldLabel required>Full name</FieldLabel>
               <input value={addSignerName} onChange={e => setAddSignerName(e.target.value)} placeholder="Full name"
                 className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+            </div>
+            <div className="space-y-1.5 mb-3.5">
+              <FieldLabel required>Email</FieldLabel>
               <input value={addSignerEmail} onChange={e => setAddSignerEmail(e.target.value)} placeholder="Email" type="email"
                 className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+            </div>
+            <div className="space-y-1.5 mb-3.5">
+              <FieldLabel>Role / title (optional)</FieldLabel>
               <input value={addSignerRole} onChange={e => setAddSignerRole(e.target.value)} placeholder="Role / title (optional)"
                 className="w-full px-3 py-2 border border-border rounded-lg text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <FieldLabel>Private message (optional)</FieldLabel>
               <textarea value={addSignerMessage} onChange={e => setAddSignerMessage(e.target.value)} placeholder="Private message (optional)" rows={2}
                 className="w-full px-3 py-2 border border-border rounded-lg text-sm resize-none" />
             </div>
-            <DialogFooter>
-              <button onClick={() => setAddSignerOpen(false)} className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-muted">Cancel</button>
-              <button onClick={handleAddSignerSubmit} disabled={addSignerMut.isPending}
-                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2">
-                {addSignerMut.isPending ? <><EsignButtonSpinner /> Adding…</> : "Add Signer"}
-              </button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          </FormSection>
+        </FormDialogShell>
 
         <Dialog open={voidDialogOpen} onOpenChange={setVoidDialogOpen}>
           <DialogContent>
@@ -1419,20 +1512,23 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
         ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
           {[
-            { label: "Total", val: total, filter: "all", color: "text-foreground" },
-            { label: "Awaiting", val: awaiting, filter: "awaiting", color: "text-amber-600" },
-            { label: "Completed", val: completed, filter: "completed", color: "text-green-600" },
-            { label: "Declined", val: declined, filter: "declined", color: "text-red-600" },
-            { label: "Expired", val: expired, filter: "expired", color: "text-muted-foreground" },
-            { label: "Drafts", val: drafts, filter: "draft", color: "text-muted-foreground" },
-          ].map(({ label, val, filter, color }) => (
-            <button key={filter} onClick={() => setStatusFilter(statusFilter === filter ? "all" : filter)}
-              data-testid={`kpi-${filter}`}
-              className={cn("bg-card border rounded-xl px-4 py-3 text-left transition-all hover:shadow-md hover:-translate-y-0.5",
-                statusFilter === filter ? "border-primary ring-2 ring-primary/20 shadow" : "border-border")}>
-              <div className={cn("text-2xl font-bold font-mono", color)}>{val}</div>
-              <div className="text-xs text-muted-foreground mt-1">{label}</div>
-            </button>
+            { label: "Total", val: total, filter: "all", color: "text-foreground", helpText: "All e-sign requests in your tenant." },
+            { label: "Awaiting", val: awaiting, filter: "awaiting", color: "text-amber-600", helpText: "Requests sent and waiting for one or more signatures." },
+            { label: "Completed", val: completed, filter: "completed", color: "text-green-600", helpText: "Fully signed and closed requests." },
+            { label: "Declined", val: declined, filter: "declined", color: "text-red-600", helpText: "Requests where a signer declined to sign." },
+            { label: "Expired", val: expired, filter: "expired", color: "text-muted-foreground", helpText: "Requests past their signing deadline." },
+            { label: "Drafts", val: drafts, filter: "draft", color: "text-muted-foreground", helpText: "Requests saved but not yet sent." },
+          ].map(({ label, val, filter, color, helpText }) => (
+            <MetricCard
+              key={filter}
+              title={label}
+              value={val}
+              helpText={helpText}
+              valueClassName={cn("font-mono", color)}
+              className={cn(statusFilter === filter && "border-primary ring-2 ring-primary/20 shadow")}
+              onClick={() => setStatusFilter(statusFilter === filter ? "all" : filter)}
+              testId={`kpi-${filter}`}
+            />
           ))}
         </div>
         )}

@@ -31,16 +31,27 @@ export async function pushToErp(
           body: JSON.stringify({ entityType, entityId, ...payload }),
         });
         if (!resp.ok) throw new Error(`Webhook returned ${resp.status}`);
+        await db.insert(erpSyncLog).values({
+          tenantId,
+          integrationId: integration.id,
+          entityType,
+          entityId,
+          direction: "outbound",
+          status: "success",
+        });
+        continue;
       }
-      // Xero/QuickBooks/NetSuite: credentials stored; full OAuth sync requires env keys
+      const msg = `${integration.system} sync is not configured — add OAuth credentials or use a generic webhook integration`;
       await db.insert(erpSyncLog).values({
         tenantId,
         integrationId: integration.id,
         entityType,
         entityId,
         direction: "outbound",
-        status: "success",
+        status: "failed",
+        errorMessage: msg,
       });
+      return { success: false, error: msg };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Sync failed";
       await db.insert(erpSyncLog).values({

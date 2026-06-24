@@ -79,7 +79,7 @@ export function computeAllocationPctForResource(
   return pct;
 }
 
-export async function getExtendedResourceStats(tenantId: number) {
+export async function getExtendedResourceStats(tenantId: number, resourceIds?: number[]) {
   const [people, allocations, periods, entries, oppRows, stages] = await Promise.all([
     db.select().from(resources).where(eq(resources.tenantId, tenantId)),
     db.select().from(resourceAllocations).where(eq(resourceAllocations.tenantId, tenantId)),
@@ -93,11 +93,15 @@ export async function getExtendedResourceStats(tenantId: number) {
     db.select().from(crmOpportunityStages).where(eq(crmOpportunityStages.tenantId, tenantId)),
   ]);
 
+  const scopedPeople = resourceIds?.length
+    ? people.filter((p) => resourceIds.includes(p.id))
+    : people;
+
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-  const activePeople = people.filter((p) => p.status === "active" || p.status === "available");
+  const activePeople = scopedPeople.filter((p) => p.status === "active" || p.status === "available");
   const contractors = activePeople.filter((p) => p.personType === "contractor");
   const employees = activePeople.filter((p) => p.personType === "employee" || !p.personType);
 
@@ -215,7 +219,7 @@ export async function getExtendedResourceStats(tenantId: number) {
     forecastSurplusDeficit,
     avgUtilisation3m,
     contractorRatio,
-    totalResources: people.length,
+    totalResources: scopedPeople.length,
     availableResources: activePeople.length,
     avgUtilization: utilisationPct,
     pendingTimesheetApprovals: pendingApprovals,
@@ -224,21 +228,89 @@ export async function getExtendedResourceStats(tenantId: number) {
   };
 }
 
-export async function getUtilisationTrend(tenantId: number, months = 12) {
-  const people = await db.select().from(resources).where(eq(resources.tenantId, tenantId));
-  const active = people.filter((p) => p.status === "active" || p.status === "available");
+export async function getPersonalResourceDashboard(tenantId: number, resourceId: number) {
+  const full = await getExtendedResourceStats(tenantId, [resourceId]);
+  const util = full.utilByResource?.[resourceId] ?? 0;
+  const trend = await getResourceUtilisationTrend(tenantId, resourceId, 12);
+  const avgUtilisation3m = trend.length >= 3
+    ? Math.round(trend.slice(-3).reduce((s, t) => s + t.utilisation, 0) / 3)
+    : util;
+  return {
+    linked: true,
+    stats: {
+      utilisationPct: util,
+      onBench: util <= 5 ? 1 : 0,
+      overAllocated: util > 100 ? 1 : 0,
+      activeResources: 1,
+      utilByResource: { [resourceId]: util },
+      pendingTimesheetApprovals: 0,
+      benchCount: util <= 5 ? 1 : 0,
+      contractorRatio: full.contractorRatio ?? 0,
+      forecastSurplusDeficit: 0,
+      avgUtilisation3m,
+    },
+    trend,
+    capacityDemand: [],
+    skillsHeatmap: { roles: [], weekLabels: [], matrix: {} },
+  };
+}
+
+export async function getResourceUtilisationTrend(tenantId: number, resourceId: number, months = 12) {
+  const [person] = await db.select().from(resources).where(and(eq(resources.tenantId, tenantId), eq(resources.id, resourceId))).limit(1);
+  if (!person) return [];
   const now = new Date();
   const result: { month: string; utilisation: number }[] = [];
+
+  // Fetch periods and entries once to avoid N+1 inside loop
+  const allPeriods = await db.select({ id: timesheetPeriods.id }).from(timesheetPeriods)
+    .where(and(eq(timesheetPeriods.tenantId, tenantId), eq(timesheetPeriods.approvalStatus, "fully_approved")));
+  const allPeriodIds = allPeriods.map((p) => p.id);
+  const allEntries = allPeriodIds.length
+    ? await db.select().from(timesheetEntries)
+      .where(and(inArray(timesheetEntries.timesheetPeriodId, allPeriodIds), eq(timesheetEntries.resourceId, resourceId)))
+    : [];
+
+  for (let i = months - 1; i >= 0; i--) {
+    const ms = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const me = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    const label = ms.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+    const capacity = (resourceWeeklyCapacityHours(person) / 5) * workingDaysBetween(ms, me);
+
+    let billable = 0;
+    for (const e of allEntries) {
+      if (e.activityType && e.activityType !== "billable") continue;
+      const d = e.entryDate ? new Date(e.entryDate) : null;
+      if (!d || (d >= ms && d <= me)) billable += parseNum(e.hours);
+    }
+    result.push({ month: label, utilisation: capacity > 0 ? Math.round((billable / capacity) * 100) : 0 });
+  }
+  return result;
+}
+
+export async function getUtilisationTrend(tenantId: number, months = 12, resourceIds?: number[]) {
+  let people = await db.select().from(resources).where(eq(resources.tenantId, tenantId));
+  if (resourceIds?.length) {
+    const allowed = new Set(resourceIds);
+    people = people.filter((p) => allowed.has(p.id));
+  }
+  const active = people.filter((p) => p.status === "active" || p.status === "available");
+  const scopedResourceIds = resourceIds?.length ? new Set(resourceIds) : null;
+  const now = new Date();
+  const result: { month: string; utilisation: number }[] = [];
+
+  // Fetch all approved periods once to avoid N+1
+  const allPeriods = await db.select().from(timesheetPeriods)
+    .where(and(eq(timesheetPeriods.tenantId, tenantId), eq(timesheetPeriods.approvalStatus, "fully_approved")));
+  const allPeriodIds = allPeriods.map((p) => p.id);
+  const allEntries = allPeriodIds.length
+    ? await db.select().from(timesheetEntries).where(inArray(timesheetEntries.timesheetPeriodId, allPeriodIds))
+    : [];
 
   for (let i = months - 1; i >= 0; i--) {
     const ms = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const me = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
     const label = ms.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 
-    const periods = await db.select().from(timesheetPeriods)
-      .where(and(eq(timesheetPeriods.tenantId, tenantId), eq(timesheetPeriods.approvalStatus, "fully_approved")));
-
-    const periodIds = periods.map((p) => p.id);
     let billable = 0;
     let capacity = 0;
 
@@ -246,14 +318,11 @@ export async function getUtilisationTrend(tenantId: number, months = 12) {
       capacity += (resourceWeeklyCapacityHours(p) / 5) * workingDaysBetween(ms, me);
     }
 
-    if (periodIds.length) {
-      const ents = await db.select().from(timesheetEntries)
-        .where(and(inArray(timesheetEntries.timesheetPeriodId, periodIds)));
-      for (const e of ents) {
-        if (e.activityType && e.activityType !== "billable") continue;
-        const d = e.entryDate ? new Date(e.entryDate) : null;
-        if (!d || (d >= ms && d <= me)) billable += parseNum(e.hours);
-      }
+    for (const e of allEntries) {
+      if (scopedResourceIds && !scopedResourceIds.has(e.resourceId)) continue;
+      if (e.activityType && e.activityType !== "billable") continue;
+      const d = e.entryDate ? new Date(e.entryDate) : null;
+      if (!d || (d >= ms && d <= me)) billable += parseNum(e.hours);
     }
 
     result.push({ month: label, utilisation: capacity > 0 ? Math.round((billable / capacity) * 100) : 0 });

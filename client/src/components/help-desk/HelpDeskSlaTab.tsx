@@ -27,12 +27,14 @@ export function HelpDeskSlaTab() {
     usage: { contract: { id: number; clientId: number | null }; usedHours: number; contractedHours: number; pctUsed: number; alertAt80: boolean; overageHours: number }[];
   }>({
     queryKey: ["/api/help-desk/contracted-hours"],
+    staleTime: 60_000,
   });
 
   const { data: windows = [], isLoading: mwLoading, isError: mwError, isFetching: mwFetching, refetch: refetchMw } = useQuery<{
     id: number; name: string; startAt: string; endAt: string;
   }[]>({
     queryKey: ["/api/help-desk/maintenance-windows"],
+    staleTime: 60_000,
   });
 
   const contractMut = useMutation({
@@ -78,7 +80,7 @@ export function HelpDeskSlaTab() {
   if (contractError || mwError) {
     return (
       <HelpDeskErrorState
-        message="Could not load SLA settings. Run npm run db:patch-help-desk."
+        message="Could not load SLA settings. Run npm run db:push."
         onRetry={() => { refetchContract(); refetchMw(); }}
       />
     );

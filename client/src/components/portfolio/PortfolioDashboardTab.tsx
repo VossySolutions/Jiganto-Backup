@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { MetricCard } from "@/components/ui/metric-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,27 +19,15 @@ function RagDot({ status }: { status: string | null }) {
   return <div className={cn("h-2.5 w-2.5 rounded-full shrink-0", cls)} />;
 }
 
-function StatCard({ title, value, subtitle, color, onClick }: {
-  title: string; value: string | number; subtitle: string; color: string; onClick?: () => void;
-}) {
-  return (
-    <Card className="border-border/30 cursor-pointer hover:shadow-md transition-all border-t-2" style={{ borderTopColor: color }} onClick={onClick}>
-      <CardContent className="p-4">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{title}</span>
-        <div className="text-2xl font-extrabold mt-1" style={{ color }}>{value}</div>
-        <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-export function PortfolioDashboardTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+export function PortfolioDashboardTab({ onNavigate, headerSearch }: { onNavigate?: (tab: string) => void; headerSearch?: string }) {
   const [, setLocation] = useLocation();
-  const [search, setSearch] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
+  const search = headerSearch?.trim() ? headerSearch : localSearch;
   const [filter, setFilter] = useState("all");
 
   const { data, isLoading } = useQuery<PortfolioDashboardData>({
     queryKey: ["/api/portfolio/dashboard"],
+    staleTime: 30_000,
   });
 
   const hierarchy = useMemo(() => {
@@ -76,16 +65,19 @@ export function PortfolioDashboardTab({ onNavigate }: { onNavigate?: (tab: strin
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
-        <StatCard title="Active Projects" value={kpis.activeProjects} subtitle={`${kpis.greenCount} on track`} color="#22C55E"
-          onClick={() => setLocation("/modules/projects")} />
-        <StatCard title="At Risk / Behind" value={kpis.atRiskCount} subtitle="Amber + Red RAG" color="#F59E0B"
-          onClick={() => onNavigate?.("health")} />
-        <StatCard title="Portfolio Budget" value={formatBudget(kpis.totalBudget)} subtitle={`${formatBudget(kpis.totalSpent)} spent`} color="#3B82F6" />
-        <StatCard title="Milestones Due (30d)" value={kpis.milestonesDue30d} subtitle="Across all projects" color="#8B5CF6"
-          onClick={() => onNavigate?.("milestones")} />
-        <StatCard title="Avg Project Health" value={`${kpis.avgHealth}%`} subtitle={kpis.avgHealthTrend >= 0 ? "Stable vs last month" : "Declining"} color="#14B8A6" />
-        <StatCard title="Programmes" value={kpis.programmeCount} subtitle={`${kpis.childProjectCount} child projects`} color="#7C3AED"
-          onClick={() => onNavigate?.("programmes")} />
+        <MetricCard title="Active Projects" value={kpis.activeProjects} subtitle={`${kpis.greenCount} on track`} helpText="Projects currently in active status across all portfolios." borderColor="#22C55E" onClick={() => setLocation("/modules/projects")} testId="pf-kpi-active-projects" />
+        <MetricCard title="At Risk / Behind" value={kpis.atRiskCount} subtitle="Amber + Red RAG" helpText="Projects flagged amber (at risk) or red (behind) on the RAG health scale." borderColor="#F59E0B" onClick={() => onNavigate?.("health")} testId="pf-kpi-at-risk" />
+        <MetricCard title="Portfolio Budget" value={formatBudget(kpis.totalBudget)} subtitle={`${formatBudget(kpis.totalSpent)} spent`} helpText="Total approved budget across portfolios and spend to date." borderColor="#3B82F6" testId="pf-kpi-budget" />
+        <MetricCard title="Milestones Due (30d)" value={kpis.milestonesDue30d} subtitle="Across all projects" helpText="Milestones with target dates in the next 30 days." borderColor="#8B5CF6" onClick={() => onNavigate?.("milestones")} testId="pf-kpi-milestones" />
+        <MetricCard
+          title="Avg Project Health"
+          value={`${kpis.avgHealth}%`}
+          subtitle={kpis.avgHealthTrend > 0 ? `+${kpis.avgHealthTrend}% vs 4 wks ago` : kpis.avgHealthTrend < 0 ? `${kpis.avgHealthTrend}% vs 4 wks ago` : "No prior snapshot"}
+          helpText="Weighted average RAG health score (0–100) across active projects."
+          borderColor="#14B8A6"
+          testId="pf-kpi-health"
+        />
+        <MetricCard title="Programmes" value={kpis.programmeCount} subtitle={`${kpis.childProjectCount} child projects`} helpText="Top-level programmes and their linked child projects." borderColor="#7C3AED" onClick={() => onNavigate?.("programmes")} testId="pf-kpi-programmes" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -158,7 +150,7 @@ export function PortfolioDashboardTab({ onNavigate }: { onNavigate?: (tab: strin
               ))}
               <div className="flex items-center gap-1 bg-muted/50 border rounded-lg px-2 py-1 flex-1 sm:flex-none min-w-[120px]">
                 <Search className="h-3 w-3 text-muted-foreground shrink-0" />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." className="bg-transparent border-none outline-none text-xs w-full sm:w-24" />
+                <input value={headerSearch != null ? search : localSearch} onChange={(e) => { if (headerSearch == null) setLocalSearch(e.target.value); }} placeholder="Search..." className="bg-transparent border-none outline-none text-xs w-full sm:w-24" />
               </div>
             </div>
           </CardHeader>
@@ -224,6 +216,7 @@ export function PortfolioDashboardTab({ onNavigate }: { onNavigate?: (tab: strin
             <CardHeader className="py-3 px-4 flex-row items-center gap-2">
               <Target className="h-4 w-4 text-primary" />
               <CardTitle className="text-sm font-bold flex-1">Resource Utilisation</CardTitle>
+              <span className="text-[10px] text-muted-foreground hidden sm:inline">Allocation ÷ capacity this week</span>
               {resourceUtilisation.filter((r) => r.utilisation > 90).length > 0 && (
                 <Badge variant="outline" className="text-xs text-red-600">{resourceUtilisation.filter((r) => r.utilisation > 90).length} overloaded</Badge>
               )}

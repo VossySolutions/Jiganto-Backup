@@ -1,14 +1,11 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2 } from "lucide-react";
 import type { PmProjectPhase } from "@shared/models/projects";
 
 interface PhaseFormDialogProps {
@@ -103,15 +100,13 @@ export function PhaseFormDialog({
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     if (!name.trim()) {
       toast({ title: "Missing name", description: "Please enter a phase name.", variant: "destructive" });
       return;
     }
 
     const data = {
-      tenantId: 1,
       projectId,
       name: name.trim(),
       description: description.trim() || null,
@@ -134,118 +129,115 @@ export function PhaseFormDialog({
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]" data-testid="phase-form-dialog">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Phase" : "Add New Phase"}</DialogTitle>
-          <DialogDescription>
-            {isEditing ? "Update the phase details below." : "Create a new phase for your project timeline."}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="phase-name">Name *</Label>
+    <FormDialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      onCancel={() => onOpenChange(false)}
+      onSubmit={handleSubmit}
+      title={isEditing ? "Edit Phase" : "Add New Phase"}
+      subtitle={isEditing ? "Update the phase details below." : "Create a new phase for your project timeline."}
+      saveLabel={isPending ? "Saving..." : isEditing ? "Update Phase" : "Create Phase"}
+      saving={isPending}
+      saveTestId="button-save-phase"
+      testId="phase-form-dialog"
+    >
+      <FormSection title="Phase details" icon={<span className="h-2 w-2 rounded-full bg-blue-500" />}>
+        <div className="space-y-1.5 mb-3.5">
+          <FieldLabel required>Name</FieldLabel>
+          <Input
+            id="phase-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., Requirements Gathering"
+            data-testid="input-phase-name"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <FieldLabel>Description</FieldLabel>
+          <Textarea
+            id="phase-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe the phase objectives..."
+            rows={3}
+            data-testid="input-phase-description"
+          />
+        </div>
+      </FormSection>
+
+      <FormDivider />
+
+      <FormSection title="Planning" icon={<span className="h-2 w-2 rounded-full bg-violet-500" />}>
+        <FieldGrid className="mb-3.5">
+          <div className="space-y-1.5">
+            <FieldLabel>Methodology</FieldLabel>
+            <Select value={methodology} onValueChange={setMethodology}>
+              <SelectTrigger id="phase-methodology" data-testid="select-phase-methodology">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {methodologyOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <FieldLabel>Status</FieldLabel>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger id="phase-status" data-testid="select-phase-status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {statusOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </FieldGrid>
+
+        <FieldGrid className="mb-3.5">
+          <div className="space-y-1.5">
+            <FieldLabel>Planned Start Date</FieldLabel>
             <Input
-              id="phase-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Requirements Gathering"
-              data-testid="input-phase-name"
+              id="phase-start-date"
+              type="date"
+              value={plannedStartDate}
+              onChange={(e) => setPlannedStartDate(e.target.value)}
+              data-testid="input-phase-start-date"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="phase-description">Description</Label>
-            <Textarea
-              id="phase-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe the phase objectives..."
-              rows={3}
-              data-testid="input-phase-description"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="phase-methodology">Methodology</Label>
-              <Select value={methodology} onValueChange={setMethodology}>
-                <SelectTrigger id="phase-methodology" data-testid="select-phase-methodology">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {methodologyOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="phase-status">Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger id="phase-status" data-testid="select-phase-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {statusOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="phase-start-date">Planned Start Date</Label>
-              <Input
-                id="phase-start-date"
-                type="date"
-                value={plannedStartDate}
-                onChange={(e) => setPlannedStartDate(e.target.value)}
-                data-testid="input-phase-start-date"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="phase-end-date">Planned End Date</Label>
-              <Input
-                id="phase-end-date"
-                type="date"
-                value={plannedEndDate}
-                onChange={(e) => setPlannedEndDate(e.target.value)}
-                data-testid="input-phase-end-date"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="phase-hours">Estimated Hours</Label>
+          <div className="space-y-1.5">
+            <FieldLabel>Planned End Date</FieldLabel>
             <Input
-              id="phase-hours"
-              type="number"
-              min="0"
-              step="0.5"
-              value={estimatedHours}
-              onChange={(e) => setEstimatedHours(e.target.value)}
-              placeholder="e.g., 40"
-              data-testid="input-phase-hours"
+              id="phase-end-date"
+              type="date"
+              value={plannedEndDate}
+              onChange={(e) => setPlannedEndDate(e.target.value)}
+              data-testid="input-phase-end-date"
             />
           </div>
+        </FieldGrid>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-phase">
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isPending} data-testid="button-save-phase">
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isEditing ? "Update Phase" : "Create Phase"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <div className="space-y-1.5">
+          <FieldLabel>Estimated Hours</FieldLabel>
+          <Input
+            id="phase-hours"
+            type="number"
+            min="0"
+            step="0.5"
+            value={estimatedHours}
+            onChange={(e) => setEstimatedHours(e.target.value)}
+            placeholder="e.g., 40"
+            data-testid="input-phase-hours"
+          />
+        </div>
+      </FormSection>
+    </FormDialogShell>
   );
 }
 

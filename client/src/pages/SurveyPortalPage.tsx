@@ -4,6 +4,7 @@ import { SubmitForm } from "@/components/ui/submit-form";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import type { SurveyWithDetails, SurveyQuestion } from "@shared/models/surveys";
 import { LIKERT_OPTIONS, EMOJI_RATINGS } from "@/lib/survey-constants";
+import { applyLogicSkip, visibleSurveyQuestions } from "@/lib/survey-logic";
 import { SurveyLoadingState, SurveyButtonSpinner } from "@/components/surveys/SurveyLoadingState";
 import "@/styles/surveys.css";
 
@@ -88,8 +89,12 @@ export default function SurveyPortalPage() {
   }
 
   function handleNext() {
-    if (currentQ < total - 1) setCurrentQ(q => q + 1);
-    else if (!survey?.anonymous) setNameStep(true);
+    const nextIdx = applyLogicSkip(questions, answers, currentQ);
+    if (nextIdx < total) {
+      setCurrentQ(nextIdx);
+      return;
+    }
+    if (!survey?.anonymous) setNameStep(true);
     else handleSubmit();
   }
 
@@ -149,6 +154,7 @@ export default function SurveyPortalPage() {
 
   // ── All questions on one page ─────────────────────────────────────────────
   if (!onePerPage && survey) {
+    const visibleQuestions = visibleSurveyQuestions(questions, answers);
     return (
       <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${C.teal} 0%, #0F3D31 100%)`, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px" }}>
         <div style={{ background: "#fff", borderRadius: 20, maxWidth: 640, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
@@ -157,8 +163,8 @@ export default function SurveyPortalPage() {
             {survey.description && <p style={{ fontSize: 13, color: C.ink3, marginTop: 8 }}>{survey.description}</p>}
           </div>
           <SubmitForm onSubmit={() => { if (!survey.anonymous) setNameStep(true); else handleSubmit(); }} style={{ padding: "28px 36px" }}>
-            {questions.map((q, i) => (
-              <div key={q.id} style={{ marginBottom: 28, paddingBottom: 28, borderBottom: i < questions.length - 1 ? `1px solid ${C.line}` : "none" }}>
+            {visibleQuestions.map((q, i) => (
+              <div key={q.id} style={{ marginBottom: 28, paddingBottom: 28, borderBottom: i < visibleQuestions.length - 1 ? `1px solid ${C.line}` : "none" }}>
                 <div style={{ fontWeight: 500, marginBottom: 8 }}>{q.text}{q.required && " *"}</div>
                 {q.helpText && <div style={{ fontSize: 12, color: C.ink3, marginBottom: 8 }}>{q.helpText}</div>}
                 <QuestionInput q={q} token={token!} value={answers[q.id] ?? null} onChange={val => setAnswer(q.id, val)} />

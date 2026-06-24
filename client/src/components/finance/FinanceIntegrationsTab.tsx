@@ -10,9 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel } from "@/components/ui/form-dialog-shell";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -26,10 +24,10 @@ import { TablePagination } from "@/components/TablePagination";
 import type { ErpIntegrationRow, ErpSyncLogRow } from "./types";
 
 const ERP_SYSTEMS = [
-  { id: "xero", label: "Xero", description: "Cloud accounting for SMBs" },
-  { id: "quickbooks", label: "QuickBooks", description: "Intuit accounting platform" },
-  { id: "netsuite", label: "NetSuite", description: "Enterprise ERP suite" },
-  { id: "generic", label: "Generic Webhook", description: "Custom REST endpoint" },
+  { id: "xero", label: "Xero", description: "Cloud accounting for SMBs", oauthRequired: true },
+  { id: "quickbooks", label: "QuickBooks", description: "Intuit accounting platform", oauthRequired: true },
+  { id: "netsuite", label: "NetSuite", description: "Enterprise ERP suite", oauthRequired: true },
+  { id: "generic", label: "Generic Webhook", description: "Custom REST endpoint — live sync supported", oauthRequired: false },
 ] as const;
 
 const DEFAULT_FIELD_MAPPING: Record<string, string> = {
@@ -52,24 +50,31 @@ interface FinanceIntegrationsTabProps {
   isLoading?: boolean;
 }
 
+const FINANCE_QUERY_STALE_MS = 30_000;
+
 export function FinanceIntegrationsTab({ integrations: integrationsProp, isLoading: isLoadingProp }: FinanceIntegrationsTabProps) {
   const { toast } = useToast();
   const [showConnect, setShowConnect] = useState(false);
   const [selectedSystem, setSelectedSystem] = useState<string>("xero");
   const [webhookUrl, setWebhookUrl] = useState("");
   const [autoSync, setAutoSync] = useState(false);
+  const [netsuiteAccountId, setNetsuiteAccountId] = useState("");
+  const [netsuiteConsumerKey, setNetsuiteConsumerKey] = useState("");
+  const [netsuiteTokenId, setNetsuiteTokenId] = useState("");
   const [mappingOpen, setMappingOpen] = useState<number | null>(null);
   const [fieldMapping, setFieldMapping] = useState<Record<string, string>>(DEFAULT_FIELD_MAPPING);
 
   const { data: fetchedIntegrations = [], isLoading: fetchLoading } = useQuery<ErpIntegrationRow[]>({
     queryKey: ["/api/finance/erp/integrations"],
     enabled: integrationsProp === undefined,
+    staleTime: FINANCE_QUERY_STALE_MS,
   });
   const integrations = integrationsProp ?? fetchedIntegrations;
   const isLoading = isLoadingProp ?? fetchLoading;
 
   const { data: syncLog = [], isLoading: logLoading } = useQuery<ErpSyncLogRow[]>({
     queryKey: ["/api/finance/erp/sync-log"],
+    staleTime: FINANCE_QUERY_STALE_MS,
   });
 
   const logPagination = useTablePagination(syncLog, { resetKey: syncLog.length });
@@ -80,17 +85,31 @@ export function FinanceIntegrationsTab({ integrations: integrationsProp, isLoadi
   };
 
   const connectMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/finance/erp/integrations", {
-      system: selectedSystem,
-      webhookUrl: selectedSystem === "generic" ? webhookUrl : null,
-      autoSync,
-      fieldMappingJson: fieldMapping,
-      isActive: true,
-    }),
+    mutationFn: () => {
+      const credentialsJson =
+        selectedSystem === "netsuite"
+          ? {
+              accountId: netsuiteAccountId.trim(),
+              consumerKey: netsuiteConsumerKey.trim(),
+              tokenId: netsuiteTokenId.trim(),
+            }
+          : null;
+      return apiRequest("POST", "/api/finance/erp/integrations", {
+        system: selectedSystem,
+        webhookUrl: selectedSystem === "generic" ? webhookUrl : null,
+        credentialsJson,
+        autoSync,
+        fieldMappingJson: fieldMapping,
+        isActive: true,
+      });
+    },
     onSuccess: () => {
       invalidate();
       toast({ title: "Integration connected" });
       setShowConnect(false);
+      setNetsuiteAccountId("");
+      setNetsuiteConsumerKey("");
+      setNetsuiteTokenId("");
     },
     onError: () => toast({ title: "Failed to connect integration", variant: "destructive" }),
   });
@@ -105,10 +124,10 @@ export function FinanceIntegrationsTab({ integrations: integrationsProp, isLoadi
     },
   });
 
-  const toggleMutation = useMutation({
-    mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
-      apiRequest("PUT", `/api/finance/erp/integrations/${id}`, { isActive }),
-    onSuccess: () => { invalidate(); toast({ title: "Integration updated" }); },
+  const toggleAutoSyncMutation = useMutation({
+    mutationFn: ({ id, autoSync: nextAutoSync }: { id: number; autoSync: boolean }) =>
+      apiRequest("PUT", `/api/finance/erp/integrations/${id}`, { autoSync: nextAutoSync }),
+    onSuccess: () => { invalidate(); toast({ title: "Auto sync updated" }); },
   });
 
   const syncMutation = useMutation({
@@ -158,7 +177,14 @@ export function FinanceIntegrationsTab({ integrations: integrationsProp, isLoadi
                         <Link2 className="h-4 w-4 text-emerald-500" />
                         {sys.label}
                       </CardTitle>
-                      <CardDescription>{sys.description}</CardDescription>
+                      <CardDescription>
+                        {sys.description}
+                        {sys.oauthRequired && !connected && (
+                          <span className="block text-[11px] mt-1 text-amber-600 dark:text-amber-400">
+                            Stores integration profile only until OAuth is configured on the server.
+                          </span>
+                        )}
+                      </CardDescription>
                     </div>
                     {connected ? (
                       <Badge className={connected.isActive ? "bg-emerald-500 hover:bg-emerald-500" : "bg-muted text-muted-foreground"}>
@@ -176,7 +202,7 @@ export function FinanceIntegrationsTab({ integrations: integrationsProp, isLoadi
                         <span className="text-muted-foreground">Auto sync</span>
                         <Switch
                           checked={connected.autoSync ?? false}
-                          onCheckedChange={(v) => toggleMutation.mutate({ id: connected.id, isActive: v })}
+                          onCheckedChange={(v) => toggleAutoSyncMutation.mutate({ id: connected.id, autoSync: v })}
                         />
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -278,62 +304,75 @@ export function FinanceIntegrationsTab({ integrations: integrationsProp, isLoadi
         </CardContent>
       </Card>
 
-      <Dialog open={showConnect} onOpenChange={setShowConnect}>
-        <DialogContent data-testid="connect-integration-dialog">
-          <DialogHeader>
-            <DialogTitle>Connect ERP Integration</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>System</Label>
-              <Select value={selectedSystem} onValueChange={setSelectedSystem}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ERP_SYSTEMS.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {selectedSystem === "generic" && (
-              <div className="space-y-2">
-                <Label>Webhook URL</Label>
-                <Input value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} placeholder="https://..." />
-              </div>
-            )}
-            {selectedSystem === "netsuite" && (
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>Enter NetSuite credentials after connecting. REST API token auth is stored securely per organisation.</p>
-                <Input placeholder="Account ID" />
-                <Input placeholder="Consumer Key" />
-                <Input placeholder="Token ID" type="password" />
-              </div>
-            )}
-            {(selectedSystem === "xero" || selectedSystem === "quickbooks") && (
-              <p className="text-sm text-muted-foreground">
-                OAuth connection requires {selectedSystem === "xero" ? "XERO_CLIENT_ID" : "QUICKBOOKS_CLIENT_ID"} in server environment. Click Connect to store integration profile; complete OAuth when keys are configured.
-              </p>
-            )}
-            <div className="flex items-center justify-between">
-              <Label>Enable auto sync</Label>
-              <Switch checked={autoSync} onCheckedChange={setAutoSync} />
-            </div>
+      <FormDialogShell
+        open={showConnect}
+        onOpenChange={setShowConnect}
+        title="Connect ERP Integration"
+        saveLabel="Connect"
+        onCancel={() => setShowConnect(false)}
+        onSubmit={() => connectMutation.mutate()}
+        saving={connectMutation.isPending}
+        testId="connect-integration-dialog"
+      >
+        <FormSection title="Connection settings">
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>System</FieldLabel>
+            <Select value={selectedSystem} onValueChange={setSelectedSystem}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ERP_SYSTEMS.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConnect(false)}>Cancel</Button>
-            <Button onClick={() => connectMutation.mutate()} disabled={connectMutation.isPending}>
-              {connectMutation.isPending ? <FinanceButtonSpinner /> : "Connect"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          {selectedSystem === "generic" && (
+            <div className="space-y-1.5 mb-3.5">
+              <FieldLabel>Webhook URL</FieldLabel>
+              <Input value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} placeholder="https://..." />
+            </div>
+          )}
+          {selectedSystem === "netsuite" && (
+            <FieldGrid className="mb-3.5">
+              <div className="space-y-1.5">
+                <FieldLabel>Account ID</FieldLabel>
+                <Input value={netsuiteAccountId} onChange={(e) => setNetsuiteAccountId(e.target.value)} placeholder="1234567" />
+              </div>
+              <div className="space-y-1.5">
+                <FieldLabel>Consumer Key</FieldLabel>
+                <Input value={netsuiteConsumerKey} onChange={(e) => setNetsuiteConsumerKey(e.target.value)} placeholder="Consumer key" />
+              </div>
+              <div className="space-y-1.5">
+                <FieldLabel>Token ID</FieldLabel>
+                <Input value={netsuiteTokenId} onChange={(e) => setNetsuiteTokenId(e.target.value)} placeholder="Token ID" type="password" />
+              </div>
+            </FieldGrid>
+          )}
+          {(selectedSystem === "xero" || selectedSystem === "quickbooks") && (
+            <p className="text-sm text-muted-foreground">
+              OAuth connection requires {selectedSystem === "xero" ? "XERO_CLIENT_ID" : "QUICKBOOKS_CLIENT_ID"} in server environment. Click Connect to store integration profile; complete OAuth when keys are configured.
+            </p>
+          )}
+          <div className="flex items-center justify-between mt-3">
+            <FieldLabel>Enable auto sync</FieldLabel>
+            <Switch checked={autoSync} onCheckedChange={setAutoSync} />
+          </div>
+        </FormSection>
+      </FormDialogShell>
 
-      <Dialog open={mappingOpen != null} onOpenChange={(open) => !open && setMappingOpen(null)}>
-        <DialogContent className="max-w-md" data-testid="field-mapping-dialog">
-          <DialogHeader>
-            <DialogTitle>Field Mapping</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2 max-h-[400px] overflow-y-auto">
+      <FormDialogShell
+        open={mappingOpen != null}
+        onOpenChange={(open) => !open && setMappingOpen(null)}
+        title="Field Mapping"
+        saveLabel="Save mapping"
+        onCancel={() => setMappingOpen(null)}
+        onSubmit={() => mappingOpen && updateMappingMutation.mutate({ id: mappingOpen, mapping: fieldMapping })}
+        saving={updateMappingMutation.isPending}
+        size="sm"
+        testId="field-mapping-dialog"
+      >
+        <FormSection title="Map Jiganto fields">
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
             {Object.entries(fieldMapping).map(([jigantoField, erpField]) => (
               <div key={jigantoField} className="grid grid-cols-2 gap-2 items-center">
                 <Label className="text-xs text-muted-foreground capitalize">{jigantoField.replace(/([A-Z])/g, " $1")}</Label>
@@ -345,17 +384,8 @@ export function FinanceIntegrationsTab({ integrations: integrationsProp, isLoadi
               </div>
             ))}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMappingOpen(null)}>Cancel</Button>
-            <Button
-              onClick={() => mappingOpen && updateMappingMutation.mutate({ id: mappingOpen, mapping: fieldMapping })}
-              disabled={updateMappingMutation.isPending}
-            >
-              {updateMappingMutation.isPending ? <FinanceButtonSpinner /> : "Save mapping"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </FormSection>
+      </FormDialogShell>
     </div>
   );
 }

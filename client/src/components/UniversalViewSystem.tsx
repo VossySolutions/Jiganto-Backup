@@ -24,8 +24,9 @@ import {
   Link2, BarChart3, AlertCircle, Copy, Archive, Trash2, Edit, Eye,
   Filter, Search, Settings2, Save, Star, Columns, Grid3X3, List,
   GanttChart, FileText, PieChart, Layers, X, Check, Grip,
-  ArrowUpDown, SortAsc, SortDesc, Group, FolderOpen, LayoutGrid, Clock
+  ArrowUpDown, SortAsc, SortDesc, Group, FolderOpen, LayoutGrid, Clock, GripVertical
 } from "lucide-react";
+import { AppKanbanBoard } from "@/components/kanban";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, addDays } from "date-fns";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
@@ -129,7 +130,7 @@ export interface UniversalViewSystemProps<T extends { id: number | string }> {
   data: T[];
   onRowClick?: (row: T) => void;
   onRowDoubleClick?: (row: T) => void;
-  onCellEdit?: (rowId: number | string, columnId: string, value: unknown) => void;
+  onCellEdit?: (rowId: number | string, columnId: string, value: unknown) => void | Promise<void>;
   onAddItem?: () => void;
   onInlineAddItem?: (data: Partial<T>) => void;
   onDeleteItems?: (ids: (number | string)[]) => void;
@@ -1398,7 +1399,7 @@ function TableView<T extends { id: number | string }>({
   columns: ColumnDef<T>[];
   data: T[];
   onRowDoubleClick?: (row: T) => void;
-  onCellEdit?: (rowId: number | string, columnId: string, value: unknown) => void;
+  onCellEdit?: (rowId: number | string, columnId: string, value: unknown) => void | Promise<void>;
   onInlineAddItem?: (data: Partial<T>) => void;
   onDeleteItems?: (ids: (number | string)[]) => void;
   selectedIds: Set<number | string>;
@@ -1663,6 +1664,8 @@ function KanbanView<T extends { id: number | string }>({
   data,
   statusField,
   titleField,
+  dateField,
+  onRowClick,
   onRowDoubleClick,
   onCellEdit,
 }: {
@@ -1670,8 +1673,10 @@ function KanbanView<T extends { id: number | string }>({
   data: T[];
   statusField?: keyof T;
   titleField?: keyof T;
+  dateField?: keyof T;
+  onRowClick?: (row: T) => void;
   onRowDoubleClick?: (row: T) => void;
-  onCellEdit?: (rowId: number | string, columnId: string, value: unknown) => void;
+  onCellEdit?: (rowId: number | string, columnId: string, value: unknown) => void | Promise<void>;
 }) {
   const statusColumn = columns.find(c => c.id === statusField || c.type === "status");
   const statusOptions = statusColumn?.options || [
@@ -1680,85 +1685,81 @@ function KanbanView<T extends { id: number | string }>({
     { value: "complete", label: "Complete", color: "bg-status-green" },
   ];
 
-  const groupedData = useMemo(() => {
-    const groups: Record<string, T[]> = {};
-    statusOptions.forEach(opt => { groups[opt.value] = []; });
-    
-    data.forEach(item => {
-      const status = statusField ? String(item[statusField] || "not_started") : "not_started";
-      if (!groups[status]) groups[status] = [];
-      groups[status].push(item);
-    });
-    
-    return groups;
-  }, [data, statusField, statusOptions]);
+  const kanbanColumns = statusOptions.map((opt) => ({
+    id: opt.value,
+    title: (
+      <span className="flex items-center gap-2">
+        <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", opt.color.replace("text-", "bg-").split(" ")[0])} />
+        {opt.label}
+      </span>
+    ),
+  }));
 
-  const handleDragStart = (e: React.DragEvent, item: T) => {
-    e.dataTransfer.setData("itemId", String(item.id));
-  };
+  if (!statusField || !onCellEdit) {
+    return (
+      <div className="text-sm text-muted-foreground py-8 text-center">
+        Kanban view requires a status field and edit handler.
+      </div>
+    );
+  }
 
-  const handleDrop = (e: React.DragEvent, targetStatus: string) => {
-    e.preventDefault();
-    const itemId = e.dataTransfer.getData("itemId");
-    if (itemId && statusField && onCellEdit) {
-      onCellEdit(itemId, String(statusField), targetStatus);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
+  const sf = statusField;
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
-      {statusOptions.map((status) => (
-        <div 
-          key={status.value}
-          className="flex-shrink-0 w-72 bg-muted/30 rounded-lg p-3"
-          onDrop={(e) => handleDrop(e, status.value)}
-          onDragOver={handleDragOver}
-          data-testid={`kanban-column-${status.value}`}
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <div className={cn("h-3 w-3 rounded-full", status.color.replace("text-", "bg-").split(" ")[0])} />
-            <span className="font-medium text-sm">{status.label}</span>
-            <Badge variant="secondary" className="ml-auto">{groupedData[status.value]?.length || 0}</Badge>
-          </div>
-          <div className="space-y-2">
-            {(groupedData[status.value] || []).map((item) => {
-              const title = titleField ? String(item[titleField] || "") : String((item as Record<string, unknown>).title || item.id);
-              
-              return (
-                <Card 
-                  key={item.id}
-                  className="cursor-pointer hover-elevate"
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, item)}
-                  onDoubleClick={() => onRowDoubleClick?.(item)}
-                  data-testid={`kanban-card-${item.id}`}
+    <AppKanbanBoard
+      columns={kanbanColumns}
+      items={data}
+      getItemId={(item) => String(item.id)}
+      getColumnId={(item) => String(item[sf] || statusOptions[0]?.value || "not_started")}
+      setColumnIdOnItem={(item, columnId) => ({ ...item, [sf]: columnId } as T)}
+      onMove={(move) => Promise.resolve(onCellEdit(move.itemId, String(sf), move.toColumnId))}
+      testIdPrefix="kanban"
+      renderCard={(item, { dragHandleProps, isDragging, isSaving }) => {
+        const title = titleField ? String(item[titleField] || "") : String((item as Record<string, unknown>).title || item.id);
+        const dueRaw = dateField ? item[dateField] : (item as Record<string, unknown>).dueDate;
+        const dueLabel = dueRaw ? String(dueRaw).slice(0, 10) : null;
+        const priorityCol = columns.find((c) => c.type === "priority");
+        const priorityValue = priorityCol ? getCellValue(item, priorityCol.accessor) : null;
+        return (
+          <Card
+            className={cn(
+              "hover-elevate transition-shadow cursor-pointer",
+              isDragging && "shadow-md ring-2 ring-primary/20",
+              isSaving && "pointer-events-none",
+            )}
+            onClick={() => onRowClick?.(item)}
+            onDoubleClick={() => onRowDoubleClick?.(item)}
+          >
+            <CardContent className="p-3">
+              <div className="flex items-start gap-2">
+                <div
+                  {...(dragHandleProps ?? {})}
+                  className="text-muted-foreground mt-0.5 shrink-0 cursor-grab active:cursor-grabbing touch-none"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <CardContent className="p-3">
-                    <p className="font-medium text-sm">{title}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      {columns.filter(c => c.type === "priority" || c.type === "person").slice(0, 2).map((col) => {
-                        const value = getCellValue(item, col.accessor);
-                        if (col.type === "priority") {
-                          return <PriorityPill key={col.id} value={value as string} />;
-                        }
-                        if (col.type === "person") {
-                          return <PersonDisplay key={col.id} value={value as PersonValue | null} />;
-                        }
-                        return null;
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
+                  <GripVertical className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm leading-snug line-clamp-2">{title}</p>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {priorityValue != null && priorityValue !== "" && (
+                      <PriorityPill value={priorityValue as string} />
+                    )}
+                    {dueLabel && (
+                      <span className="text-[11px] text-muted-foreground tabular-nums">{dueLabel}</span>
+                    )}
+                    {columns.filter(c => c.type === "person").slice(0, 1).map((col) => {
+                      const value = getCellValue(item, col.accessor);
+                      return <PersonDisplay key={col.id} value={value as PersonValue | null} />;
+                    })}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      }}
+    />
   );
 }
 
@@ -2390,6 +2391,8 @@ export function UniversalViewSystem<T extends { id: number | string }>({
               data={filteredData}
               statusField={statusField}
               titleField={titleField}
+              dateField={dateField}
+              onRowClick={onRowClick}
               onRowDoubleClick={onRowDoubleClick || onRowClick}
               onCellEdit={onCellEdit}
             />

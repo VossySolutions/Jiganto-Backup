@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,19 +9,20 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { SubmitForm } from "@/components/ui/submit-form";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
   Search, Plus, Download, Upload, Bell, X, Trash2, Calendar, Clock,
-  LayoutList, CalendarDays, ChevronRight, Users, Briefcase,
+  LayoutList, LayoutGrid, CalendarDays, ChevronRight, Users, Briefcase,
   DollarSign, Target, TrendingUp, CheckCircle2, AlertTriangle,
   Scissors, MoreHorizontal, GripVertical, Loader2, FileText,
   CreditCard, ArrowLeft, Filter, Save, Building2, GitCompare, Copy
 } from "lucide-react";
 import { RateCardManager } from "./RateCardManager";
-import { CapacityBoard } from "./CapacityBoard";
+import { CrmIntegratedCapacityBoard } from "./CrmIntegratedCapacityBoard";
 import { useCrmUsers } from "./CrmUsersProvider";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
@@ -175,6 +176,21 @@ type Opportunity = {
   stageId: number | null;
 };
 
+type ResourcePlanSummary = {
+  opportunityId: number;
+  planCount: number;
+  primaryPlanId: number;
+  primaryPlanName: string | null;
+  currency: string;
+  rowCount: number;
+  totalCost: number;
+};
+
+type OpportunityWithPlan = {
+  opp: Opportunity;
+  summary: ResourcePlanSummary;
+};
+
 type ResourcePlan = {
   id: number;
   opportunityId: number;
@@ -223,6 +239,7 @@ interface CrmResourcePlanTabProps {
   opportunities: Opportunity[];
   accounts?: Account[];
   stages?: Stage[];
+  initialPlanId?: number | null;
 }
 
 function wksBetween(s: string, e: string): number {
@@ -275,7 +292,7 @@ function getWeekStarts(startDate: string, endDate: string): Date[] {
   return weeks;
 }
 
-export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }: CrmResourcePlanTabProps) {
+export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], initialPlanId = null }: CrmResourcePlanTabProps) {
   const { toast } = useToast();
   const { users, resolveOwner } = useCrmUsers();
   const [selectedOppId, setSelectedOppId] = useState<number | null>(null);
@@ -293,8 +310,26 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
   const [oppSearch, setOppSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [oppSelectorView, setOppSelectorView] = useState<"tiles" | "list">("tiles");
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(initialPlanId);
+
+  const { data: initialPlanData } = useQuery<ResourcePlan | null>({
+    queryKey: initialPlanId ? [`/api/crm/resource-plans/${initialPlanId}`] : ["/api/crm/resource-plans/skip"],
+    queryFn: async () => {
+      const res = await fetchWithAuth(`/api/crm/resource-plans/${initialPlanId}`);
+      if (!res.ok) throw new Error("Failed to load resource plan");
+      return res.json();
+    },
+    enabled: !!initialPlanId,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (!initialPlanData?.opportunityId) return;
+    setSelectedOppId(initialPlanData.opportunityId);
+    setSelectedPlanId(initialPlanData.id);
+  }, [initialPlanData]);
   const [compareOpen, setCompareOpen] = useState(false);
   const [saveAsNewOpen, setSaveAsNewOpen] = useState(false);
   const [newPlanName, setNewPlanName] = useState("");
@@ -302,6 +337,10 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
   const selectedOpp = opportunities.find(o => o.id === selectedOppId);
   const selectedAccount = selectedOpp?.accountId ? accounts.find(a => a.id === selectedOpp.accountId) : null;
   const selectedStage = selectedOpp?.stageId ? stages.find(s => s.id === selectedOpp.stageId) : null;
+
+  const { data: planSummaries = [], isLoading: summariesLoading } = useQuery<ResourcePlanSummary[]>({
+    queryKey: ["/api/crm/resource-plans/summaries"],
+  });
 
   const { data: allPlans = [] } = useQuery<ResourcePlan[]>({
     queryKey: selectedOppId
@@ -318,12 +357,13 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
   });
 
   useEffect(() => {
+    if (initialPlanId) return;
     if (allPlans.length > 0 && !selectedPlanId) {
       setSelectedPlanId(allPlans[0].id);
     } else if (allPlans.length === 0) {
       setSelectedPlanId(null);
     }
-  }, [allPlans, selectedPlanId]);
+  }, [allPlans, selectedPlanId, initialPlanId]);
 
   useEffect(() => {
     setSelectedPlanId(null);
@@ -377,6 +417,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
     },
     onSuccess: (result: ResourcePlan) => {
       queryClient.invalidateQueries({ queryKey: [`/api/crm/opportunities/${selectedOppId}/resource-plans`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/resource-plans/summaries"] });
       if (result?.id) setSelectedPlanId(result.id);
       toast({ title: "Resource plan saved" });
     },
@@ -392,6 +433,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
     },
     onSuccess: (result: ResourcePlan) => {
       queryClient.invalidateQueries({ queryKey: [`/api/crm/opportunities/${selectedOppId}/resource-plans`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/resource-plans/summaries"] });
       if (result?.id) setSelectedPlanId(result.id);
       toast({ title: "Plan cloned" });
     },
@@ -535,16 +577,28 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
     return users.map(u => u.id);
   }, [opportunities, users]);
 
-  const filteredOpps = useMemo(() => {
-    let list = [...opportunities];
-    if (oppSearch) list = list.filter(o => o.name.toLowerCase().includes(oppSearch.toLowerCase()));
+  const filteredOppsWithPlans = useMemo((): OpportunityWithPlan[] => {
+    const summaryMap = new Map(planSummaries.map((s) => [s.opportunityId, s]));
+    let list: OpportunityWithPlan[] = opportunities
+      .filter((o) => summaryMap.has(o.id))
+      .map((o) => ({ opp: o, summary: summaryMap.get(o.id)! }));
+
+    if (oppSearch) {
+      const q = oppSearch.toLowerCase();
+      list = list.filter(({ opp, summary }) =>
+        opp.name.toLowerCase().includes(q) ||
+        (summary.primaryPlanName?.toLowerCase().includes(q) ?? false),
+      );
+    }
     if (stageFilter !== "all") {
       const stageId = parseInt(stageFilter);
-      list = list.filter(o => o.stageId === stageId);
+      list = list.filter(({ opp }) => opp.stageId === stageId);
     }
-    if (ownerFilter !== "all") list = list.filter(o => o.ownerUserId === ownerFilter);
+    if (ownerFilter !== "all") {
+      list = list.filter(({ opp }) => opp.ownerUserId === ownerFilter);
+    }
     return list;
-  }, [opportunities, oppSearch, stageFilter, ownerFilter]);
+  }, [opportunities, planSummaries, oppSearch, stageFilter, ownerFilter]);
 
   const allTablePhases = useMemo(() => {
     const set = new Set(DEFAULT_PHASES);
@@ -574,15 +628,21 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
   }, [rows]);
 
   if (!selectedOppId) {
+    const renderOppSelectorRow = ({ opp, summary }: OpportunityWithPlan) => {
+      const acct = opp.accountId ? accounts.find(a => a.id === opp.accountId) : null;
+      const stg = opp.stageId ? stages.find(s => s.id === opp.stageId) : null;
+      return { opp, summary, acct, stg };
+    };
+
     return (
       <div className="space-y-5" data-testid="resource-plan-opp-selector">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <Briefcase className="h-5 w-5 text-[#0ea5e9]" />
             <h3 className="text-lg font-bold">Opportunity Resource Plan</h3>
           </div>
           <div className="text-sm text-muted-foreground">
-            {filteredOpps.length} of {opportunities.length} opportunities
+            {summariesLoading ? "Loading…" : `${filteredOppsWithPlans.length} of ${planSummaries.length} resource plans`}
           </div>
         </div>
 
@@ -590,7 +650,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
           <div className="relative flex-1 min-w-[200px] max-w-[340px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search opportunities..."
+              placeholder="Search resource plans..."
               className="pl-9"
               value={oppSearch}
               onChange={e => setOppSearch(e.target.value)}
@@ -622,6 +682,24 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
               ))}
             </select>
           </div>
+          <div className="flex border border-border rounded-lg overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setOppSelectorView("list")}
+              className={cn("px-3 py-2 text-xs font-medium flex items-center gap-1.5", oppSelectorView === "list" ? "bg-[#0ea5e9] text-white" : "bg-background text-muted-foreground hover:bg-muted/50")}
+              data-testid="view-resource-plan-list"
+            >
+              <LayoutList className="h-3.5 w-3.5" /> List
+            </button>
+            <button
+              type="button"
+              onClick={() => setOppSelectorView("tiles")}
+              className={cn("px-3 py-2 text-xs font-medium flex items-center gap-1.5 border-l", oppSelectorView === "tiles" ? "bg-[#0ea5e9] text-white" : "bg-background text-muted-foreground hover:bg-muted/50")}
+              data-testid="view-resource-plan-tiles"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Tiles
+            </button>
+          </div>
           {(stageFilter !== "all" || ownerFilter !== "all" || oppSearch) && (
             <button
               onClick={() => { setStageFilter("all"); setOwnerFilter("all"); setOppSearch(""); }}
@@ -633,55 +711,120 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[calc(100vh-340px)] overflow-auto pr-1">
-          {filteredOpps.map(opp => {
-            const acct = opp.accountId ? accounts.find(a => a.id === opp.accountId) : null;
-            const stg = opp.stageId ? stages.find(s => s.id === opp.stageId) : null;
-            return (
-              <button
-                key={opp.id}
-                onClick={() => setSelectedOppId(opp.id)}
-                className="text-left border rounded-lg p-4 hover:border-[#0ea5e9] hover:shadow-md transition-all bg-card group"
-                data-testid={`opp-select-${opp.id}`}
-              >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="text-sm font-bold truncate group-hover:text-[#0ea5e9] transition-colors">{opp.name}</div>
-                  {opp.probability !== null && (
-                    <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded shrink-0">
-                      {opp.probability}%
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
-                  <Building2 className="h-3 w-3" />
-                  <span className="truncate">{acct?.name || "No account"}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  {stg && (
-                    <Badge variant="outline" className="text-[10px]" style={{ borderColor: stg.color || undefined, color: stg.color || undefined }}>
-                      {stg.name}
-                    </Badge>
-                  )}
-                  {opp.amount && (
-                    <span className="text-xs font-mono font-semibold text-muted-foreground">
-                      {fmtCurrency(Number(opp.amount))}
-                    </span>
-                  )}
-                </div>
-                {opp.ownerUserId && (
-                  <div className="mt-2 text-[10px] text-muted-foreground truncate">
-                    Owner: {resolveOwner(opp.ownerUserId).name}
+        {summariesLoading ? (
+          <div className="flex items-center justify-center py-16 text-sm text-muted-foreground gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading resource plans…
+          </div>
+        ) : planSummaries.length === 0 ? (
+          <div className="text-center py-16 px-6 border rounded-xl bg-muted/10" data-testid="resource-plan-empty">
+            <Briefcase className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-sm font-semibold mb-1">No resource plans yet</p>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              Only opportunities with a saved resource plan appear here. Open an opportunity, add staffing rows from a template or manually, then save the plan.
+            </p>
+          </div>
+        ) : oppSelectorView === "tiles" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[calc(100vh-340px)] overflow-auto pr-1">
+            {filteredOppsWithPlans.map(({ opp, summary }) => {
+              const { acct, stg } = renderOppSelectorRow({ opp, summary });
+              return (
+                <button
+                  key={opp.id}
+                  onClick={() => setSelectedOppId(opp.id)}
+                  className="text-left border rounded-lg p-4 hover:border-[#0ea5e9] hover:shadow-md transition-all bg-card group"
+                  data-testid={`opp-select-${opp.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="text-sm font-bold truncate group-hover:text-[#0ea5e9] transition-colors">{opp.name}</div>
+                    {opp.probability !== null && (
+                      <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded shrink-0">
+                        {opp.probability}%
+                      </span>
+                    )}
                   </div>
-                )}
-              </button>
-            );
-          })}
-          {filteredOpps.length === 0 && (
-            <div className="col-span-full text-center py-12 text-sm text-muted-foreground">
-              No opportunities match the current filters
-            </div>
-          )}
-        </div>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                    <Building2 className="h-3 w-3" />
+                    <span className="truncate">{acct?.name || "No account"}</span>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mb-2 truncate">
+                    {summary.primaryPlanName || "Resource plan"}
+                    {summary.planCount > 1 ? ` · ${summary.planCount} scenarios` : ""}
+                    {" · "}{summary.rowCount} role{summary.rowCount !== 1 ? "s" : ""}
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    {stg && (
+                      <Badge variant="outline" className="text-[10px]" style={{ borderColor: stg.color || undefined, color: stg.color || undefined }}>
+                        {stg.name}
+                      </Badge>
+                    )}
+                    <span className="text-xs font-mono font-semibold text-[#0ea5e9]">
+                      {fmtCurrency(summary.totalCost, summary.currency)}
+                    </span>
+                  </div>
+                  {opp.ownerUserId && (
+                    <div className="mt-2 text-[10px] text-muted-foreground truncate">
+                      Owner: {resolveOwner(opp.ownerUserId).name}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+            {filteredOppsWithPlans.length === 0 && (
+              <div className="col-span-full text-center py-12 text-sm text-muted-foreground">
+                No resource plans match the current filters
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden max-h-[calc(100vh-340px)] overflow-auto">
+            <table className="w-full min-w-[880px]">
+              <thead>
+                <tr className="border-b border-border/30 bg-muted/20">
+                  <th className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Opportunity</th>
+                  <th className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Account</th>
+                  <th className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Plan</th>
+                  <th className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Stage</th>
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Roles</th>
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Plan cost</th>
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Win %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredOppsWithPlans.map(({ opp, summary }) => {
+                  const { acct, stg } = renderOppSelectorRow({ opp, summary });
+                  return (
+                    <tr
+                      key={opp.id}
+                      onClick={() => setSelectedOppId(opp.id)}
+                      className="border-b border-border/20 hover:bg-muted/20 transition-colors cursor-pointer"
+                      data-testid={`opp-select-row-${opp.id}`}
+                    >
+                      <td className="px-4 py-3 text-sm font-medium text-primary">{opp.name}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{acct?.name || "—"}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {summary.primaryPlanName || "Resource plan"}
+                        {summary.planCount > 1 ? ` (${summary.planCount})` : ""}
+                      </td>
+                      <td className="px-4 py-3">
+                        {stg ? (
+                          <Badge variant="outline" className="text-[10px]" style={{ borderColor: stg.color || undefined, color: stg.color || undefined }}>
+                            {stg.name}
+                          </Badge>
+                        ) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right tabular-nums">{summary.rowCount}</td>
+                      <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">{fmtCurrency(summary.totalCost, summary.currency)}</td>
+                      <td className="px-4 py-3 text-sm text-right tabular-nums text-muted-foreground">{opp.probability ?? "—"}{opp.probability !== null ? "%" : ""}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {filteredOppsWithPlans.length === 0 && (
+              <p className="text-center py-12 text-sm text-muted-foreground">No resource plans match the current filters</p>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -1143,7 +1286,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [] }
       )}
 
       {activePanel === "capacity" && (
-        <CapacityBoard />
+        <CrmIntegratedCapacityBoard />
       )}
 
       {/* Week Popover */}
@@ -1586,12 +1729,18 @@ function AddRowModal({ open, onClose, skillsList, resourcesList, rateCardItems, 
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md" data-testid="add-row-modal">
-        <SubmitForm onSubmit={handleAdd}>
-        <DialogHeader>
-          <DialogTitle>Add Resource Requirement</DialogTitle>
-        </DialogHeader>
+    <FormDialogShell
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      title="Add Resource Requirement"
+      subtitle="Add a new row to this resource plan"
+      saveLabel="Add Resource"
+      onCancel={onClose}
+      onSubmit={handleAdd}
+      testId="add-row-modal"
+      saveTestId="button-confirm-add"
+      size="sm"
+    >
         <div className="space-y-3">
           <div className="space-y-1">
             <Label className="text-xs uppercase text-muted-foreground">Phase</Label>
@@ -1683,15 +1832,7 @@ function AddRowModal({ open, onClose, skillsList, resourcesList, rateCardItems, 
             </select>
           </div>
         </div>
-        <DialogFooter className="mt-4">
-          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="submit" className="bg-[#0ea5e9] hover:bg-[#0284c7]" data-testid="button-confirm-add">
-            Add Resource
-          </Button>
-        </DialogFooter>
-        </SubmitForm>
-      </DialogContent>
-    </Dialog>
+    </FormDialogShell>
   );
 }
 
@@ -1720,12 +1861,17 @@ function BreakModal({ row, onClose, onUpdate }: {
   const reasonIcon: Record<string, string> = { Holiday: "🏖", Training: "📚", "Business Travel": "✈", Bench: "⏸", Other: "📌" };
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md" data-testid="break-modal">
-        <SubmitForm onSubmit={() => onUpdate(breaks)}>
-        <DialogHeader>
-          <DialogTitle>Breaks — {row.roleName}{row.namedResourceLabel ? ` (${row.namedResourceLabel})` : ""}</DialogTitle>
-        </DialogHeader>
+    <FormDialogShell
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={`Breaks — ${row.roleName}${row.namedResourceLabel ? ` (${row.namedResourceLabel})` : ""}`}
+      subtitle="Manage unavailability periods"
+      saveLabel="Save Breaks"
+      onCancel={onClose}
+      onSubmit={() => onUpdate(breaks)}
+      testId="break-modal"
+      size="sm"
+    >
         <div className="space-y-4">
           <div>
             <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2 pb-1 border-b">
@@ -1781,13 +1927,7 @@ function BreakModal({ row, onClose, onUpdate }: {
             <Button type="button" size="sm" className="text-xs bg-[#0ea5e9] hover:bg-[#0284c7]" onClick={addBreak}>Add Break</Button>
           </div>
         </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="submit" className="bg-[#0ea5e9] hover:bg-[#0284c7]">Save Breaks</Button>
-        </DialogFooter>
-        </SubmitForm>
-      </DialogContent>
-    </Dialog>
+    </FormDialogShell>
   );
 }
 
@@ -1867,15 +2007,20 @@ function SaveTemplateModal({ open, onClose, rows, onSaved }: {
   };
 
   return (
-    <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-md" data-testid="save-template-modal">
-        <SubmitForm onSubmit={handleSave} disabled={!name.trim() || saving}>
-        <DialogHeader>
-          <DialogTitle>Save as Template</DialogTitle>
-          <DialogDescription>
-            Save the current {rows.length} resource rows as a reusable template.
-          </DialogDescription>
-        </DialogHeader>
+    <FormDialogShell
+      open={open}
+      onOpenChange={v => !v && onClose()}
+      title="Save as Template"
+      subtitle={`Save the current ${rows.length} resource rows as a reusable template.`}
+      saveLabel={saving ? "Saving..." : "Save Template"}
+      onCancel={onClose}
+      onSubmit={handleSave}
+      saving={saving}
+      disabled={!name.trim()}
+      testId="save-template-modal"
+      saveTestId="button-save-template-confirm"
+      size="sm"
+    >
         <div className="space-y-3 py-2">
           <label className="text-sm font-medium">Template Name</label>
           <Input
@@ -1886,15 +2031,7 @@ function SaveTemplateModal({ open, onClose, rows, onSaved }: {
             data-testid="input-template-name"
           />
         </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={!name.trim() || saving} data-testid="button-save-template-confirm">
-            {saving ? "Saving..." : "Save Template"}
-          </Button>
-        </DialogFooter>
-        </SubmitForm>
-      </DialogContent>
-    </Dialog>
+    </FormDialogShell>
   );
 }
 

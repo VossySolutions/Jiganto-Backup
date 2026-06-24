@@ -276,7 +276,7 @@ async function applyEsign(snap: Record<string, unknown>, params: { tenantId: num
 }
 
 async function applyWorkspace(
-  tpl: { id: number; sourceId: number | null },
+  tpl: { id: number; sourceId: number | null; snapshotJsonb: unknown },
   params: { tenantId: number; userId: string },
   name: string,
 ): Promise<ApplyResult> {
@@ -284,7 +284,17 @@ async function applyWorkspace(
     const workspace = await wsService.createWorkspaceFromTemplate(params.tenantId, params.userId, tpl.sourceId, { name });
     return { targetId: workspace.id, targetModule: "workspace", navigateUrl: "/modules/workspaces", name: workspace.name };
   }
-  throw new Error("Workspace template requires source reference");
+  const snapshot = tpl.snapshotJsonb as Record<string, unknown>;
+  if (snapshot && (snapshot.pages || snapshot.structure)) {
+    const workspace = await wsService.createWorkspaceFromSnapshot(
+      params.tenantId,
+      params.userId,
+      snapshot,
+      name,
+    );
+    return { targetId: workspace.id, targetModule: "workspace", navigateUrl: "/modules/workspaces", name: workspace.name };
+  }
+  throw new Error("Workspace template has no structure to apply");
 }
 
 async function applyBpml(snap: Record<string, unknown>, params: { tenantId: number }, name: string): Promise<ApplyResult> {

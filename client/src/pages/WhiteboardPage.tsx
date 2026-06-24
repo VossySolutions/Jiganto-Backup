@@ -7,7 +7,7 @@ import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, RefreshCw, LayoutGrid } from "lucide-react";
@@ -58,10 +58,12 @@ export function WhiteboardPage() {
   const { data: boards = [], isLoading, isError, error, refetch, isFetching } = useQuery<WhiteboardListItem[]>({
     queryKey,
     queryFn: () => fetchWhiteboards({ filter, sort, search: debouncedSearch }),
+    staleTime: 30_000,
   });
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["/api/pm/projects"],
+    staleTime: 60_000,
     queryFn: async () => {
       const { apiRequest } = await import("@/lib/queryClient");
       const res = await apiRequest("GET", "/api/pm/projects");
@@ -215,65 +217,56 @@ export function WhiteboardPage() {
         </div>
     </ModuleShell>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create Whiteboard</DialogTitle>
-            <DialogDescription>Start with a blank canvas. Add sticky notes once inside.</DialogDescription>
-          </DialogHeader>
-          <form
-            className="space-y-4"
-            onSubmit={(e) => { e.preventDefault(); if (name.trim()) createMut.mutate(); }}
-          >
-            <div>
-              <Label>Name *</Label>
-              <Input
-                className="mt-1"
-                maxLength={80}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Sprint retrospective"
-                data-testid="wb-create-name"
-                autoFocus
-              />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Input
-                className="mt-1"
-                maxLength={300}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Optional context for this board"
-              />
-            </div>
-            <div>
-              <Label>Link to project (optional)</Label>
-              {projectsLoading ? (
-                <WhiteboardLoadingState label="Loading projects…" size="sm" inline className="mt-2" />
-              ) : (
-                <Select value={projectId || "none"} onValueChange={(v) => setProjectId(v === "none" ? "" : v)}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="None" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {projects.map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} className="w-full sm:w-auto">
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!name.trim() || createMut.isPending} className="w-full sm:w-auto">
-                {createMut.isPending ? <><WhiteboardButtonSpinner /> Creating…</> : "Create & open"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <FormDialogShell
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        title="Create Whiteboard"
+        subtitle="Start with a blank canvas. Add sticky notes once inside."
+        saveLabel="Create & open"
+        onCancel={() => setCreateOpen(false)}
+        onSubmit={() => { if (name.trim()) createMut.mutate(); }}
+        saving={createMut.isPending}
+        disabled={!name.trim()}
+      >
+        <FormSection title="Whiteboard details">
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel required>Name</FieldLabel>
+            <Input
+              maxLength={80}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Sprint retrospective"
+              data-testid="wb-create-name"
+              autoFocus
+            />
+          </div>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Description</FieldLabel>
+            <Input
+              maxLength={300}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional context for this board"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <FieldLabel>Link to project (optional)</FieldLabel>
+            {projectsLoading ? (
+              <WhiteboardLoadingState label="Loading projects…" size="sm" inline className="mt-2" />
+            ) : (
+              <Select value={projectId || "none"} onValueChange={(v) => setProjectId(v === "none" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+        </FormSection>
+      </FormDialogShell>
     </>
   );
 }

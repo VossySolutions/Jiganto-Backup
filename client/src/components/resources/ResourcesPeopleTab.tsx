@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Upload, Download, UserCheck, List, Grid3X3, MapPin, Pencil } from "lucide-react";
+import { Plus, Trash2, Upload, Download, UserCheck, List, Grid3X3, MapPin, Pencil, UserRound, Building2, DollarSign, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getInitials, getProficiencyConfig, statusColors, PERSON_TYPES, RESOURCE_STATUSES } from "./constants";
 import { ResourceProfilePanel } from "./ResourceProfilePanel";
@@ -310,29 +310,51 @@ export function ResourcesPeopleTab({
         />
       )}
 
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] sm:w-full">
-          <DialogHeader><DialogTitle>{editing ? "Edit Person" : "Add Person"}</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><Label>First name</Label><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
-            <div><Label>Last name</Label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
-            <div><Label>Email</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-            <div><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-            <div><Label>Type</Label>
+      <FormDialogShell
+        open={showDialog}
+        onOpenChange={setShowDialog}
+        title={editing ? "Edit person" : "Add person"}
+        subtitle={editing ? `${form.firstName} ${form.lastName}`.trim() : "Add a team member or contractor to your resource pool"}
+        saveLabel={editing ? "Save changes" : "Create person"}
+        onCancel={() => setShowDialog(false)}
+        onSubmit={save}
+        disabled={!form.firstName || !form.lastName}
+        size="lg"
+      >
+        <FormSection icon={<UserRound className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Personal details">
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5"><FieldLabel required>First name</FieldLabel><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
+            <div className="space-y-1.5"><FieldLabel required>Last name</FieldLabel><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
+          </FieldGrid>
+          <FieldGrid>
+            <div className="space-y-1.5"><FieldLabel>Email</FieldLabel><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+            <div className="space-y-1.5"><FieldLabel>Phone</FieldLabel><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+          </FieldGrid>
+        </FormSection>
+
+        <FormDivider />
+
+        <FormSection icon={<Building2 className="h-3.5 w-3.5 text-emerald-600" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Role & organisation">
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5"><FieldLabel>Type</FieldLabel>
               <Select value={form.personType} onValueChange={(v) => setForm({ ...form, personType: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{PERSON_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>Status</Label>
+            <div className="space-y-1.5"><FieldLabel>Status</FieldLabel>
               <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{RESOURCE_STATUSES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>Job title</Label><Input value={form.jobTitle} onChange={(e) => setForm({ ...form, jobTitle: e.target.value })} /></div>
-            <div><Label>Department</Label><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></div>
-            <div><Label>Reports to</Label>
+          </FieldGrid>
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5"><FieldLabel>Job title</FieldLabel><Input value={form.jobTitle} onChange={(e) => setForm({ ...form, jobTitle: e.target.value })} /></div>
+            <div className="space-y-1.5"><FieldLabel>Department</FieldLabel><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></div>
+          </FieldGrid>
+          <FieldGrid>
+            <div className="space-y-1.5"><FieldLabel>Reports to</FieldLabel>
               <Select value={form.reportsToId || "none"} onValueChange={(v) => setForm({ ...form, reportsToId: v === "none" ? "" : v })}>
                 <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
                 <SelectContent>
@@ -343,11 +365,16 @@ export function ResourcesPeopleTab({
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Location</Label><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></div>
-            <div><Label>FTE</Label><Input type="number" step="0.1" min="0.1" max="1" value={form.fte} onChange={(e) => setForm({ ...form, fte: e.target.value })} /></div>
-            <div><Label>Charge rate (daily)</Label><Input value={form.billRate} onChange={(e) => setForm({ ...form, billRate: e.target.value })} /></div>
-            <div><Label>Cost rate (daily)</Label><Input value={form.costRate} onChange={(e) => setForm({ ...form, costRate: e.target.value })} /></div>
-            <div><Label>Rate card</Label>
+            <div className="space-y-1.5"><FieldLabel>Location</FieldLabel><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></div>
+          </FieldGrid>
+        </FormSection>
+
+        <FormDivider />
+
+        <FormSection icon={<DollarSign className="h-3.5 w-3.5 text-amber-600" />} iconClassName="bg-amber-50 dark:bg-amber-950/40" title="Rates & capacity">
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5"><FieldLabel>FTE</FieldLabel><Input type="number" step="0.1" min="0.1" max="1" value={form.fte} onChange={(e) => setForm({ ...form, fte: e.target.value })} /></div>
+            <div className="space-y-1.5"><FieldLabel>Rate card</FieldLabel>
               <Select value={form.rateCardId || "none"} onValueChange={(v) => setForm({ ...form, rateCardId: v === "none" ? "" : v })}>
                 <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
                 <SelectContent>
@@ -356,17 +383,24 @@ export function ResourcesPeopleTab({
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Cost centre</Label><Input value={form.costCentre} onChange={(e) => setForm({ ...form, costCentre: e.target.value })} /></div>
-            <div><Label>Start date</Label><Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
-            <div><Label>End date</Label><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>
-            <div className="col-span-2"><Label>Internal notes</Label><Textarea value={form.internalNotes} onChange={(e) => setForm({ ...form, internalNotes: e.target.value })} /></div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
-            <Button onClick={save} disabled={!form.firstName || !form.lastName}>{editing ? "Save" : "Create"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </FieldGrid>
+          <FieldGrid>
+            <div className="space-y-1.5"><FieldLabel>Charge rate (daily)</FieldLabel><Input value={form.billRate} onChange={(e) => setForm({ ...form, billRate: e.target.value })} /></div>
+            <div className="space-y-1.5"><FieldLabel>Cost rate (daily)</FieldLabel><Input value={form.costRate} onChange={(e) => setForm({ ...form, costRate: e.target.value })} /></div>
+          </FieldGrid>
+          <div className="space-y-1.5 mt-3.5"><FieldLabel>Cost centre</FieldLabel><Input value={form.costCentre} onChange={(e) => setForm({ ...form, costCentre: e.target.value })} /></div>
+        </FormSection>
+
+        <FormDivider />
+
+        <FormSection icon={<Clock className="h-3.5 w-3.5 text-violet-600" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Dates & notes">
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5"><FieldLabel>Start date</FieldLabel><Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
+            <div className="space-y-1.5"><FieldLabel>End date</FieldLabel><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>
+          </FieldGrid>
+          <div className="space-y-1.5"><FieldLabel>Internal notes</FieldLabel><Textarea value={form.internalNotes} onChange={(e) => setForm({ ...form, internalNotes: e.target.value })} rows={3} /></div>
+        </FormSection>
+      </FormDialogShell>
     </div>
   );
 }

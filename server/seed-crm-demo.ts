@@ -10,6 +10,9 @@ import {
   crmNotes,
   crmForecasts,
   crmPipelines,
+  crmEmailLogs,
+  opportunityResourcePlans,
+  opportunityResourceRows,
 } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 
@@ -27,12 +30,19 @@ function daysFromNow(n: number): Date {
   return d;
 }
 
+function randBetween(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function randBetween(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+const repOwners = ["Sales Manager", "Account Executive", "Solutions Architect", "VP of Sales"];
+
+function quarterCloseDate(year: number, quarter: number): Date {
+  const month = (quarter - 1) * 3 + 1;
+  return new Date(year, month, 15);
 }
 
 const opportunityStagesData = [
@@ -331,11 +341,163 @@ export async function seedCrmDemoData() {
         probability: oppData.probability,
         type: oppData.type,
         source: pick(["Website", "Referral", "Partner", "Event", "Cold Call"]),
-        expectedCloseDate: daysFromNow(randBetween(30, 120)),
+        ownerUserId: repOwners[i % repOwners.length],
+        expectedCloseDate: quarterCloseDate(new Date().getFullYear(), (i % 4) + 1),
       }).returning();
       opportunityIds.push(opp.id);
     }
     console.log(`Created ${opportunityIds.length} opportunities`);
+  }
+
+  // Spread close dates and owners across quarters so period filters show varied demo data
+  const oppsForForecast = await db.select().from(crmOpportunities).where(eq(crmOpportunities.tenantId, TENANT_ID));
+  const forecastYear = new Date().getFullYear();
+  for (let i = 0; i < oppsForForecast.length; i++) {
+    const opp = oppsForForecast[i];
+    await db.update(crmOpportunities).set({
+      ownerUserId: opp.ownerUserId || repOwners[i % repOwners.length],
+      expectedCloseDate: quarterCloseDate(forecastYear, (i % 4) + 1),
+    }).where(eq(crmOpportunities.id, opp.id));
+  }
+  if (oppsForForecast.length > 0) {
+    console.log(`Enriched ${oppsForForecast.length} opportunities for forecasting (owners + quarter close dates)`);
+  }
+
+  // === OPPORTUNITY RESOURCE PLANS (for CRM Resource Plan tab) ===
+  const existingResourcePlans = await db.select().from(opportunityResourcePlans).where(eq(opportunityResourcePlans.tenantId, TENANT_ID));
+  if (existingResourcePlans.length === 0) {
+    const tenantStages = await db.select().from(crmOpportunityStages).where(eq(crmOpportunityStages.tenantId, TENANT_ID));
+    const closedStageIds = new Set(tenantStages.filter((s) => s.isClosed).map((s) => s.id));
+    const openOpps = oppsForForecast.filter((o) => !o.stageId || !closedStageIds.has(o.stageId)).slice(0, 8);
+
+    const planRoles = [
+      { phase: "Discovery", roleName: "Project Manager", daysPerWeek: "5", dailyRate: "950", weeks: 4 },
+      { phase: "Discovery", roleName: "Solution Architect", daysPerWeek: "4", dailyRate: "1050", weeks: 3 },
+      { phase: "Build", roleName: "Business Analyst", daysPerWeek: "5", dailyRate: "700", weeks: 8 },
+      { phase: "Build", roleName: "Developer", daysPerWeek: "5", dailyRate: "750", weeks: 10 },
+      { phase: "UAT", roleName: "Test Manager", daysPerWeek: "5", dailyRate: "800", weeks: 4 },
+    ];
+
+    let planCount = 0;
+    for (const opp of openOpps) {
+      const start = daysFromNow(14 + planCount * 7);
+      const [plan] = await db.insert(opportunityResourcePlans).values({
+        tenantId: TENANT_ID,
+        opportunityId: opp.id,
+        planName: `${opp.name} — Baseline`,
+        templateName: "CRM Demo",
+        currency: "GBP",
+        notes: "Demo resource plan seeded for CRM Resource Plan tab",
+      }).returning();
+
+      let cursor = new Date(start);
+      for (let i = 0; i < planRoles.length; i++) {
+        const role = planRoles[i];
+        const rowStart = new Date(cursor);
+        const rowEnd = new Date(cursor);
+        rowEnd.setDate(rowEnd.getDate() + role.weeks * 7);
+        await db.insert(opportunityResourceRows).values({
+          planId: plan.id,
+          phase: role.phase,
+          roleName: role.roleName,
+          namedResourceLabel: role.roleName,
+          startDate: rowStart,
+          endDate: rowEnd,
+          daysPerWeek: role.daysPerWeek,
+          dailyRate: role.dailyRate,
+          discountPercent: "0",
+          status: i < 2 ? "Confirmed" : "Proposed",
+          sortOrder: i,
+          breaks: [],
+          weekOverrides: {},
+        });
+        cursor = new Date(rowEnd);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      planCount++;
+    }
+    console.log(`Created ${planCount} opportunity resource plans with staffing rows`);
+  } else {
+    console.log(`Skipping resource plans — already have ${existingResourcePlans.length}`);
+  }
+
+  // === PIPELINES (before contracts — links stages to pipelines for matrix filtering) ===
+  const existingPipelines = await db.select().from(crmPipelines).where(eq(crmPipelines.tenantId, TENANT_ID));
+  if (existingPipelines.length === 0) {
+    console.log("Creating pipelines...");
+    const pipelineData = [
+      { name: "Enterprise Sales", description: "Pipeline for enterprise-level deals above 100K", isDefault: true, color: "#3b82f6" },
+      { name: "SMB Pipeline", description: "Small and medium business deals", isDefault: false, color: "#22c55e" },
+      { name: "Partner Channel", description: "Deals sourced through partner network", isDefault: false, color: "#8b5cf6" },
+    ];
+    for (const p of pipelineData) {
+      await db.insert(crmPipelines).values({ tenantId: TENANT_ID, ...p });
+    }
+    console.log(`Created ${pipelineData.length} pipelines`);
+  }
+
+  const allPipelines = await db.select().from(crmPipelines).where(eq(crmPipelines.tenantId, TENANT_ID));
+  const defaultPipeline = allPipelines.find((p) => p.isDefault) ?? allPipelines[0];
+  const smbPipeline = allPipelines.find((p) => p.name === "SMB Pipeline");
+  const partnerPipeline = allPipelines.find((p) => p.name === "Partner Channel");
+
+  if (defaultPipeline) {
+    const tenantStages = await db.select().from(crmOpportunityStages).where(eq(crmOpportunityStages.tenantId, TENANT_ID));
+    for (const stage of tenantStages) {
+      if (stage.pipelineId == null) {
+        await db.update(crmOpportunityStages)
+          .set({ pipelineId: defaultPipeline.id })
+          .where(eq(crmOpportunityStages.id, stage.id));
+      }
+    }
+
+    const ensurePipelineStages = async (
+      pipelineId: number,
+      prefix: string,
+      stageTemplates: typeof opportunityStagesData,
+    ) => {
+      const currentStages = await db.select().from(crmOpportunityStages).where(eq(crmOpportunityStages.tenantId, TENANT_ID));
+      const existing = currentStages.filter((s) => s.pipelineId === pipelineId);
+      if (existing.length > 0) return existing.map((s) => ({ id: s.id, name: s.name }));
+      const created: { id: number; name: string }[] = [];
+      for (const stage of stageTemplates) {
+        const [row] = await db.insert(crmOpportunityStages).values({
+          tenantId: TENANT_ID,
+          pipelineId,
+          ...stage,
+          name: `${prefix}${stage.name}`,
+        }).returning();
+        created.push({ id: row.id, name: row.name });
+      }
+      return created;
+    };
+
+    const smbStages = smbPipeline
+      ? await ensurePipelineStages(smbPipeline.id, "SMB — ", opportunityStagesData.filter((s) => !s.isClosed).slice(0, 4))
+      : [];
+    const partnerStages = partnerPipeline
+      ? await ensurePipelineStages(partnerPipeline.id, "Partner — ", opportunityStagesData.filter((s) => !s.isClosed).slice(0, 4))
+      : [];
+
+    const smbStageIds = new Set(smbStages.map((s) => s.id));
+    const partnerStageIds = new Set(partnerStages.map((s) => s.id));
+    const allOpps = await db.select().from(crmOpportunities).where(eq(crmOpportunities.tenantId, TENANT_ID));
+    for (let i = 0; i < allOpps.length; i++) {
+      const opp = allOpps[i];
+      if (smbStageIds.has(opp.stageId ?? -1) || partnerStageIds.has(opp.stageId ?? -1)) continue;
+      let targetStageId: number | undefined;
+      if (i % 3 === 1 && smbStages.length > 0) {
+        targetStageId = smbStages[i % smbStages.length]?.id;
+      } else if (i % 3 === 2 && partnerStages.length > 0) {
+        targetStageId = partnerStages[i % partnerStages.length]?.id;
+      }
+      if (targetStageId) {
+        await db.update(crmOpportunities)
+          .set({ stageId: targetStageId })
+          .where(eq(crmOpportunities.id, opp.id));
+      }
+    }
+    console.log("Linked CRM stages to pipelines for forecast matrix filtering");
   }
 
   // === LEADS ===
@@ -445,6 +607,67 @@ export async function seedCrmDemoData() {
     console.log(`Skipping notes - already have ${existingNotesList.length}`);
   }
 
+  // === EMAIL CORRESPONDENCE (demo logs for account detail) ===
+  const existingEmailLogs = await db.select().from(crmEmailLogs).where(eq(crmEmailLogs.tenantId, TENANT_ID));
+  if (existingEmailLogs.length === 0 && allAccountIds.length > 0) {
+    console.log("Creating CRM email correspondence logs...");
+    const sampleAccountId = allAccountIds[0];
+    const sampleContactId = contactIdsByAccount.get(sampleAccountId)?.[0];
+    const demoEmails: Array<{
+      entityType: "account" | "contact";
+      entityId: number;
+      recipientEmail: string;
+      subject: string;
+      body: string;
+      status: string;
+      daysAgo: number;
+    }> = [
+      {
+        entityType: "account" as const,
+        entityId: sampleAccountId,
+        recipientEmail: "info@techflow.com",
+        subject: "Re: Q2 platform renewal discussion",
+        body: "Thanks for the proposal summary. Our team will review pricing options and revert by Friday.",
+        status: "opened",
+        daysAgo: 3,
+      },
+      {
+        entityType: "account" as const,
+        entityId: sampleAccountId,
+        recipientEmail: "procurement@techflow.com",
+        subject: "Follow-up: Enterprise licence expansion",
+        body: "Attaching the updated scope document for 250 additional seats as discussed on our call.",
+        status: "sent",
+        daysAgo: 7,
+      },
+    ];
+    if (sampleContactId) {
+      demoEmails.push({
+        entityType: "contact" as const,
+        entityId: sampleContactId,
+        recipientEmail: "j.smith@example.com",
+        subject: "Meeting notes — technical discovery",
+        body: "Summary of SSO and audit log requirements captured during yesterday's workshop.",
+        status: "sent",
+        daysAgo: 5,
+      });
+    }
+    for (const e of demoEmails) {
+      await db.insert(crmEmailLogs).values({
+        tenantId: TENANT_ID,
+        entityType: e.entityType,
+        entityId: e.entityId,
+        recipientEmail: e.recipientEmail,
+        subject: e.subject,
+        body: e.body,
+        status: e.status,
+        sentByUserId: "Account Executive",
+        sentAt: daysAgo(e.daysAgo),
+      });
+    }
+    console.log(`Created ${demoEmails.length} email correspondence logs`);
+  }
+
   // === FORECASTS ===
   const existingForecastsList = await db.select().from(crmForecasts).where(eq(crmForecasts.tenantId, TENANT_ID));
   if (existingForecastsList.length < 3) {
@@ -488,23 +711,6 @@ export async function seedCrmDemoData() {
     console.log(`Created ${forecastEntries.length} forecast entries`);
   } else {
     console.log(`Skipping forecasts - already have ${existingForecastsList.length}`);
-  }
-
-  // === PIPELINES ===
-  const existingPipelines = await db.select().from(crmPipelines).where(eq(crmPipelines.tenantId, TENANT_ID));
-  if (existingPipelines.length === 0) {
-    console.log("Creating pipelines...");
-    const pipelineData = [
-      { name: "Enterprise Sales", description: "Pipeline for enterprise-level deals above 100K", isDefault: true, color: "#3b82f6" },
-      { name: "SMB Pipeline", description: "Small and medium business deals", isDefault: false, color: "#22c55e" },
-      { name: "Partner Channel", description: "Deals sourced through partner network", isDefault: false, color: "#8b5cf6" },
-    ];
-    for (const p of pipelineData) {
-      await db.insert(crmPipelines).values({ tenantId: TENANT_ID, ...p });
-    }
-    console.log(`Created ${pipelineData.length} pipelines`);
-  } else {
-    console.log(`Skipping pipelines - already have ${existingPipelines.length}`);
   }
 
   const finalCounts = await Promise.all([

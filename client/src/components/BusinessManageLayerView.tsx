@@ -447,7 +447,7 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
       queryClient.invalidateQueries({ queryKey: ["/api/business/strategy-map"] });
     }
     addNoteMutation.mutate({
-      tenantId: 1, entityType, entityId: checkinItem.id,
+      entityType, entityId: checkinItem.id,
       content: checkinNote.trim(),
       ragSnapshot: newRag || null,
     }, {
@@ -1338,7 +1338,7 @@ export function EnhancedInitiativesTab({
   const goalMap = useMemo(() => Object.fromEntries(goals.map(g => [g.id, g])), [goals]);
   const goalOptions = useMemo(() => goals.map(g => ({ value: String(g.id), label: g.title })), [goals]);
   const { data: projects = [] } = useQuery<Array<{ id: number; name: string; workType?: string | null; code?: string | null }>>({
-    queryKey: ["/api/pm/projects?tenantId=1"],
+    queryKey: ["/api/pm/projects"],
   });
   const linkedRecordOptions = useMemo(() => [
     { value: "", label: "None" },

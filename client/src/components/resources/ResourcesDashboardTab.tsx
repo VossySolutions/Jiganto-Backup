@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { CircleHelp } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Users, Activity, AlertTriangle, Clock, TrendingUp, Briefcase, BarChart3, Percent,
 } from "lucide-react";
@@ -43,16 +45,18 @@ type DashboardData = {
 type Props = {
   resources: Resource[];
   allocations: ResourceAllocation[];
+  allowedTabs?: string[];
   onNavigate: (tab: string, filter?: string) => void;
   onOpenProfile: (id: number) => void;
 };
 
 function KpiCard({
-  label, value, subtitle, icon: Icon, color, badge, onClick, testId,
+  label, value, subtitle, helpText, icon: Icon, color, badge, onClick, testId,
 }: {
   label: string;
   value: string | number;
   subtitle?: string;
+  helpText?: string;
   icon: typeof Users;
   color?: string;
   badge?: string;
@@ -73,7 +77,19 @@ function KpiCard({
       <CardContent className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-xs sm:text-sm text-muted-foreground truncate">{label}</p>
+            <div className="flex items-center gap-1">
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">{label}</p>
+              {helpText ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="text-muted-foreground/60 hover:text-muted-foreground shrink-0" aria-label={`About ${label}`}>
+                      <CircleHelp className="h-3 w-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[240px] text-xs">{helpText}</TooltipContent>
+                </Tooltip>
+              ) : null}
+            </div>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <p className={cn("text-2xl sm:text-3xl font-bold tabular-nums", color)}>{value}</p>
               {badge && <Badge variant="destructive" className="text-xs shrink-0">{badge}</Badge>}
@@ -89,10 +105,27 @@ function KpiCard({
   );
 }
 
-export function ResourcesDashboardTab({ resources, onNavigate, onOpenProfile }: Props) {
+export function ResourcesDashboardTab({ resources, allowedTabs, onNavigate, onOpenProfile }: Props) {
   const { data, isLoading, isError, refetch } = useQuery<DashboardData>({
     queryKey: ["/api/resources/dashboard"],
+    staleTime: 30_000,
   });
+
+  const canNav = (tab: string) => !allowedTabs || allowedTabs.includes(tab);
+
+  if (!isLoading && (data as any)?.linked === false) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-[420px] text-center gap-3">
+        <div className="bg-amber-100 dark:bg-amber-950/40 rounded-full p-4">
+          <svg className="h-8 w-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+        </div>
+        <h2 className="text-lg font-semibold">No resource profile linked</h2>
+        <p className="text-sm text-muted-foreground max-w-md">
+          Your user account is not linked to a resource record. Contact your manager or an admin to link your profile before personal utilisation data appears here.
+        </p>
+      </div>
+    );
+  }
 
   const stats = data?.stats;
   const utilMap = stats?.utilByResource ?? {};
@@ -148,14 +181,14 @@ export function ResourcesDashboardTab({ resources, onNavigate, onOpenProfile }: 
       )}
 
       <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-        <KpiCard label="Utilisation %" value={`${stats?.utilisationPct ?? 0}%`} subtitle={`Target ${UTILISATION_TARGET}%`} icon={Activity} color={utilColor(stats?.utilisationPct ?? 0)} onClick={() => onNavigate("timesheets")} testId="kpi-utilisation" />
-        <KpiCard label="On the Bench" value={stats?.onBench ?? 0} subtitle="Zero allocation this week" icon={Users} color={stats?.onBench ? "text-red-600" : undefined} badge={stats?.onBench ? "!" : undefined} onClick={() => onNavigate("people", "bench")} testId="kpi-bench" />
-        <KpiCard label="Over-allocated" value={stats?.overAllocated ?? 0} subtitle="Next 4 weeks > 100%" icon={AlertTriangle} color={stats?.overAllocated ? "text-amber-600" : undefined} onClick={() => onNavigate("allocations", "overallocated")} testId="kpi-overallocated" />
-        <KpiCard label="Active Resources" value={stats?.activeResources ?? 0} subtitle={`${stats?.permanentCount ?? 0} permanent / ${stats?.contractorCount ?? 0} contractors`} icon={Briefcase} onClick={() => onNavigate("people")} testId="kpi-headcount" />
-        <KpiCard label="Unapproved Timesheets" value={stats?.unapprovedTimesheets ?? 0} subtitle="Awaiting approval" icon={Clock} color={(stats?.unapprovedTimesheets ?? 0) > 5 ? "text-red-600" : undefined} badge={(stats?.unapprovedTimesheets ?? 0) > 5 ? "!" : undefined} onClick={() => onNavigate("timesheets", "approvals")} testId="kpi-unapproved" />
-        <KpiCard label="Forecast Demand (90d)" value={`${stats?.forecastDemand90d ?? 0}d`} subtitle={(stats?.forecastSurplusDeficit ?? 0) >= 0 ? `Surplus ${stats?.forecastSurplusDeficit}d` : `Deficit ${Math.abs(stats?.forecastSurplusDeficit ?? 0)}d`} icon={TrendingUp} color={(stats?.forecastSurplusDeficit ?? 0) < 0 ? "text-red-600" : "text-emerald-600"} onClick={() => onNavigate("pipeline")} testId="kpi-forecast" />
-        <KpiCard label="Avg Utilisation (3m)" value={`${stats?.avgUtilisation3m ?? 0}%`} subtitle="Rolling 3-month average" icon={BarChart3} color={utilColor(stats?.avgUtilisation3m ?? 0)} testId="kpi-avg-3m" />
-        <KpiCard label="Contractor Ratio" value={`${stats?.contractorRatio ?? 0}%`} subtitle="Of active workforce" icon={Percent} testId="kpi-contractor-ratio" />
+        <KpiCard label="Utilisation %" value={`${stats?.utilisationPct ?? 0}%`} subtitle={`Target ${UTILISATION_TARGET}%`} helpText="Billable hours ÷ available hours for the current period." icon={Activity} color={utilColor(stats?.utilisationPct ?? 0)} onClick={canNav("timesheets") ? () => onNavigate("timesheets") : undefined} testId="kpi-utilisation" />
+        <KpiCard label="On the Bench" value={stats?.onBench ?? 0} subtitle="Zero allocation this week" helpText="Active resources with no hours allocated in the current week." icon={Users} color={stats?.onBench ? "text-red-600" : undefined} badge={stats?.onBench ? "!" : undefined} onClick={canNav("people") ? () => onNavigate("people", "bench") : undefined} testId="kpi-bench" />
+        <KpiCard label="Over-allocated" value={stats?.overAllocated ?? 0} subtitle="Next 4 weeks > 100%" helpText="Resources booked above 100% capacity in the next four weeks." icon={AlertTriangle} color={stats?.overAllocated ? "text-amber-600" : undefined} onClick={canNav("allocations") ? () => onNavigate("allocations", "overallocated") : undefined} testId="kpi-overallocated" />
+        <KpiCard label="Active Resources" value={stats?.activeResources ?? 0} subtitle={`${stats?.permanentCount ?? 0} permanent / ${stats?.contractorCount ?? 0} contractors`} helpText="People currently active in the resource pool." icon={Briefcase} onClick={canNav("people") ? () => onNavigate("people") : undefined} testId="kpi-headcount" />
+        <KpiCard label="Unapproved Timesheets" value={stats?.unapprovedTimesheets ?? 0} subtitle="Awaiting approval" helpText="Timesheet submissions pending manager approval." icon={Clock} color={(stats?.unapprovedTimesheets ?? 0) > 5 ? "text-red-600" : undefined} badge={(stats?.unapprovedTimesheets ?? 0) > 5 ? "!" : undefined} onClick={canNav("timesheets") ? () => onNavigate("timesheets", "approvals") : undefined} testId="kpi-unapproved" />
+        <KpiCard label="Forecast Demand (90d)" value={`${stats?.forecastDemand90d ?? 0} resource-days`} subtitle={(stats?.forecastSurplusDeficit ?? 0) >= 0 ? `Surplus ${stats?.forecastSurplusDeficit}d` : `Deficit ${Math.abs(stats?.forecastSurplusDeficit ?? 0)}d`} helpText="Planned resource-days from CRM pipeline deals expected to close in 90 days." icon={TrendingUp} color={(stats?.forecastSurplusDeficit ?? 0) < 0 ? "text-red-600" : "text-emerald-600"} onClick={canNav("pipeline") ? () => onNavigate("pipeline") : undefined} testId="kpi-forecast" />
+        <KpiCard label="Avg Utilisation (3m)" value={`${stats?.avgUtilisation3m ?? 0}%`} subtitle="Rolling 3-month average" helpText="Average utilisation percentage over the last three months." icon={BarChart3} color={utilColor(stats?.avgUtilisation3m ?? 0)} testId="kpi-avg-3m" />
+        <KpiCard label="Contractor Ratio" value={`${stats?.contractorRatio ?? 0}%`} subtitle="Of active workforce" helpText="Contractors as a percentage of all active resources." icon={Percent} testId="kpi-contractor-ratio" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">

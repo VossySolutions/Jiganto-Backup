@@ -28,6 +28,7 @@ import {
   Bell, Send, Upload, Brain, X, RefreshCw, CheckCircle, TriangleAlert, Info, Zap, Copy
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { MetricCard } from "@/components/ui/metric-card";
 import { BusinessLoadingState } from "@/components/business/BusinessLoadingState";
 import { BusinessTableScroll } from "@/components/business/BusinessTableScroll";
 import { useTablePagination } from "@/hooks/use-table-pagination";
@@ -291,6 +292,19 @@ const statusColors: Record<string, string> = {
   open: "bg-status-amber text-status-amber-foreground",
 };
 
+function filterBusinessSearch<T extends { title?: string | null; name?: string | null; description?: string | null }>(
+  items: T[],
+  searchTerm: string,
+): T[] {
+  const q = searchTerm.trim().toLowerCase();
+  if (!q) return items;
+  return items.filter((item) => {
+    const label = (item.title ?? item.name ?? "").toLowerCase();
+    const desc = (item.description ?? "").toLowerCase();
+    return label.includes(q) || desc.includes(q);
+  });
+}
+
 export default function BusinessManagementPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [searchTerm, setSearchTerm] = useState("");
@@ -298,60 +312,91 @@ export default function BusinessManagementPage() {
   const { toast } = useToast();
   const { isAuthenticated, sessionReady } = useAuth();
 
+  const BUSINESS_STALE_MS = 60_000;
+  const tabActive = (tabs: string[]) => tabs.includes(activeTab);
+
   const { data: stats, isLoading: statsLoading } = useQuery<BusinessStats>({
     queryKey: ["/api/business/stats"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["dashboard"]),
   });
 
   const { data: strategyItems = [], isLoading: strategyLoading } = useQuery<StrategyItem[]>({
     queryKey: ["/api/business/strategy"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["dashboard", "strategy", "goals"]),
   });
 
   const { data: goals = [], isLoading: goalsLoading } = useQuery<Goal[]>({
     queryKey: ["/api/business/goals"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["dashboard", "goals"]),
   });
 
   const { data: keyResults = [], isLoading: krLoading } = useQuery<KeyResult[]>({
     queryKey: ["/api/business/key-results"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["okrs"]),
   });
 
   const { data: kpis = [], isLoading: kpisLoading } = useQuery<Kpi[]>({
     queryKey: ["/api/business/kpis"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["kpis"]),
   });
 
   const { data: initiatives = [], isLoading: initiativesLoading } = useQuery<Initiative[]>({
     queryKey: ["/api/business/initiatives"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["dashboard", "initiatives"]),
   });
 
   const { data: departments = [], isLoading: deptsLoading } = useQuery<Department[]>({
     queryKey: ["/api/business/departments"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["operations"]),
   });
 
   const { data: processes = [], isLoading: processLoading } = useQuery<Process[]>({
     queryKey: ["/api/business/processes"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["operations"]),
   });
 
   const { data: tools = [], isLoading: toolsLoading } = useQuery<Tool[]>({
     queryKey: ["/api/business/tools"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["operations"]),
   });
 
   const { data: risks = [], isLoading: risksLoading } = useQuery<Risk[]>({
     queryKey: ["/api/business/risks"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["dashboard"]),
   });
 
   const { data: objectives = [], isLoading: objectivesLoading } = useQuery<Objective[]>({
     queryKey: ["/api/business/objectives"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["objectives"]),
   });
 
   const { data: okrs = [], isLoading: okrsLoading } = useQuery<Okr[]>({
     queryKey: ["/api/business/okrs"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["okrs"]),
   });
 
   const { data: businessTasks = [], isLoading: tasksLoading } = useQuery<BusinessTask[]>({
     queryKey: ["/api/business/tasks"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["reviews"]),
   });
 
   const { data: governanceItems = [], isLoading: governanceLoading } = useQuery<GovernanceItemEx[]>({
     queryKey: ["/api/business/governance"],
+    staleTime: BUSINESS_STALE_MS,
+    enabled: tabActive(["governance"]),
   });
 
   const { data: entityRefs } = useQuery<Record<string, number>>({
@@ -366,6 +411,21 @@ export default function BusinessManagementPage() {
       .catch(() => {});
   }, [sessionReady, isAuthenticated]);
 
+  const filteredStrategyItems = useMemo(
+    () => filterBusinessSearch(strategyItems, searchTerm),
+    [strategyItems, searchTerm],
+  );
+  const filteredGoals = useMemo(() => filterBusinessSearch(goals, searchTerm), [goals, searchTerm]);
+  const filteredObjectives = useMemo(() => filterBusinessSearch(objectives, searchTerm), [objectives, searchTerm]);
+  const filteredInitiatives = useMemo(() => filterBusinessSearch(initiatives, searchTerm), [initiatives, searchTerm]);
+  const filteredOkrs = useMemo(() => filterBusinessSearch(okrs, searchTerm), [okrs, searchTerm]);
+  const filteredKpis = useMemo(() => filterBusinessSearch(kpis, searchTerm), [kpis, searchTerm]);
+  const filteredGovernanceItems = useMemo(
+    () => filterBusinessSearch(governanceItems, searchTerm),
+    [governanceItems, searchTerm],
+  );
+  const filteredRisks = useMemo(() => filterBusinessSearch(risks, searchTerm), [risks, searchTerm]);
+
   const tabLoading: Record<string, boolean> = {
     dashboard: statsLoading,
     "strategy-map": false,
@@ -376,7 +436,7 @@ export default function BusinessManagementPage() {
     okrs: okrsLoading,
     kpis: kpisLoading,
     governance: governanceLoading,
-    reviews: false,
+    reviews: tasksLoading,
     documents: false,
     operations: deptsLoading || processLoading || toolsLoading,
   };
@@ -548,10 +608,10 @@ export default function BusinessManagementPage() {
                 ) : (
                   <DashboardTab 
                     stats={stats} 
-                    goals={goals} 
-                    initiatives={initiatives} 
-                    risks={risks}
-                    strategyItems={strategyItems}
+                    goals={filteredGoals} 
+                    initiatives={filteredInitiatives} 
+                    risks={filteredRisks}
+                    strategyItems={filteredStrategyItems}
                     onNavigate={setActiveTab}
                   />
                 )}
@@ -563,7 +623,7 @@ export default function BusinessManagementPage() {
 
               <TabsContent value="strategy" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <EnhancedStrategyTab
-                  strategyItems={strategyItems as unknown as StrategyItemEx[]}
+                  strategyItems={filteredStrategyItems as unknown as StrategyItemEx[]}
                   loading={tabLoading.strategy}
                   addButton={<AddStrategyButton onSave={(d) => createStrategyMutation.mutate(d)} isCreating={createStrategyMutation.isPending} />}
                 />
@@ -571,8 +631,8 @@ export default function BusinessManagementPage() {
 
               <TabsContent value="goals" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <EnhancedGoalsTab
-                  goals={goals as unknown as GoalEx[]}
-                  strategyItems={strategyItems as unknown as StrategyItemEx[]}
+                  goals={filteredGoals as unknown as GoalEx[]}
+                  strategyItems={filteredStrategyItems as unknown as StrategyItemEx[]}
                   loading={tabLoading.goals}
                   addButton={<AddGoalButton strategyItems={strategyItems} onSave={(d) => createGoalMutation.mutate(d)} isCreating={createGoalMutation.isPending} />}
                 />
@@ -583,6 +643,7 @@ export default function BusinessManagementPage() {
                   departments={departments} 
                   processes={processes}
                   tools={tools}
+                  searchTerm={searchTerm}
                   onCreateDepartment={(data) => createDepartmentMutation.mutate(data)}
                   isCreating={createDepartmentMutation.isPending}
                 />
@@ -590,8 +651,8 @@ export default function BusinessManagementPage() {
 
               <TabsContent value="initiatives" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <EnhancedInitiativesTab
-                  initiatives={initiatives as unknown as InitiativeEx[]}
-                  goals={goals as unknown as GoalEx[]}
+                  initiatives={filteredInitiatives as unknown as InitiativeEx[]}
+                  goals={filteredGoals as unknown as GoalEx[]}
                   loading={tabLoading.initiatives}
                   addButton={<AddInitiativeButton goals={goals} onSave={(d) => createInitiativeMutation.mutate(d)} isCreating={createInitiativeMutation.isPending} />}
                 />
@@ -599,43 +660,43 @@ export default function BusinessManagementPage() {
 
               <TabsContent value="objectives" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <EnhancedObjectivesTab
-                  objectives={objectives as unknown as ObjectiveEx[]}
-                  goals={goals as unknown as GoalEx[]}
+                  objectives={filteredObjectives as unknown as ObjectiveEx[]}
+                  goals={filteredGoals as unknown as GoalEx[]}
                   loading={tabLoading.objectives}
                 />
               </TabsContent>
 
               <TabsContent value="okrs" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <EnhancedOkrsTab
-                  okrs={okrs as unknown as OkrEx[]}
-                  objectives={objectives as unknown as ObjectiveEx[]}
-                  goals={goals as unknown as GoalEx[]}
+                  okrs={filteredOkrs as unknown as OkrEx[]}
+                  objectives={filteredObjectives as unknown as ObjectiveEx[]}
+                  goals={filteredGoals as unknown as GoalEx[]}
                   loading={tabLoading.okrs}
                 />
               </TabsContent>
 
               <TabsContent value="kpis" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <EnhancedKpisTab
-                  kpis={kpis as unknown as KpiEx[]}
-                  goals={goals as unknown as GoalEx[]}
+                  kpis={filteredKpis as unknown as KpiEx[]}
+                  goals={filteredGoals as unknown as GoalEx[]}
                   loading={tabLoading.kpis}
                 />
               </TabsContent>
 
               <TabsContent value="governance" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
-                <EnhancedGovernanceTab items={governanceItems} loading={tabLoading.governance} />
+                <EnhancedGovernanceTab items={filteredGovernanceItems} loading={tabLoading.governance} />
               </TabsContent>
 
               <TabsContent value="reviews" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 <ReviewsTab
-                  strategyItems={strategyItems} goals={goals} objectives={objectives}
-                  initiatives={initiatives} okrs={okrs} kpis={kpis}
-                  entityRefs={entityRefs}
+                  strategyItems={filteredStrategyItems} goals={filteredGoals} objectives={filteredObjectives}
+                  initiatives={filteredInitiatives} okrs={filteredOkrs} kpis={filteredKpis}
+                  entityRefs={entityRefs} searchTerm={searchTerm}
                 />
               </TabsContent>
 
               <TabsContent value="documents" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
-                <DocumentsTab initiatives={initiatives} />
+                <DocumentsTab initiatives={filteredInitiatives} />
               </TabsContent>
             </Tabs>
           </div>
@@ -856,10 +917,10 @@ function DashboardTab({ stats, goals, initiatives, risks, strategyItems, onNavig
   onNavigate?: (tab: string) => void;
 }) {
   const metrics = [
-    { title: "Strategy Items", value: stats?.strategyItems || 0, icon: Target, color: "bg-status-purple", testId: "strategy" },
-    { title: "Goals", value: stats?.goals || 0, icon: Flag, color: "bg-status-green", testId: "goals", subtitle: `${stats?.goalsOnTrack || 0} on track` },
-    { title: "Initiatives", value: stats?.initiatives || 0, icon: TrendingUp, color: "bg-status-blue", testId: "initiatives", subtitle: `${stats?.initiativesInProgress || 0} in progress` },
-    { title: "Open Risks", value: stats?.openRisks || 0, icon: AlertTriangle, color: "bg-status-red", testId: "risks" },
+    { title: "Strategy Items", value: stats?.strategyItems || 0, icon: Target, color: "bg-status-purple", testId: "strategy", helpText: "Strategic themes, pillars, and map items in your business plan." },
+    { title: "Goals", value: stats?.goals || 0, icon: Flag, color: "bg-status-green", testId: "goals", subtitle: `${stats?.goalsOnTrack || 0} on track`, helpText: "Measurable objectives linked to your strategy." },
+    { title: "Initiatives", value: stats?.initiatives || 0, icon: TrendingUp, color: "bg-status-blue", testId: "initiatives", subtitle: `${stats?.initiativesInProgress || 0} in progress`, helpText: "Programmes and projects delivering strategic outcomes." },
+    { title: "Open Risks", value: stats?.openRisks || 0, icon: AlertTriangle, color: "bg-status-red", testId: "risks", helpText: "Risks not yet closed or accepted." },
   ];
 
   return (
@@ -881,28 +942,18 @@ function DashboardTab({ stats, goals, initiatives, risks, strategyItems, onNavig
         </Button>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {metrics.map((metric, i) => (
-          <motion.div
+        {metrics.map((metric) => (
+          <MetricCard
             key={metric.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-          >
-            <Card className="rounded-xl sm:rounded-2xl border-border/20 shadow-sm hover:shadow-md transition-all h-full" data-testid={`card-metric-${metric.testId}`}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2 p-4 sm:p-6">
-                <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">
-                  {metric.title}
-                </CardTitle>
-                <div className={cn("p-1.5 sm:p-2 rounded-lg shrink-0", metric.color)}>
-                  <metric.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
-                </div>
-              </CardHeader>
-              <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6 pt-0">
-                <div className="text-2xl sm:text-3xl font-bold" data-testid={`stat-${metric.testId}`}>{metric.value}</div>
-                <p className="text-xs text-muted-foreground mt-1 min-h-[1rem]">{metric.subtitle || "\u00A0"}</p>
-              </CardContent>
-            </Card>
-          </motion.div>
+            title={metric.title}
+            value={metric.value}
+            subtitle={metric.subtitle}
+            helpText={metric.helpText}
+            icon={metric.icon}
+            iconBgClassName={metric.color}
+            iconClassName="text-white"
+            testId={`card-metric-${metric.testId}`}
+          />
         ))}
       </div>
 
@@ -1328,15 +1379,36 @@ function GoalsTab({ goals, keyResults, kpis, strategyItems, onCreateGoal, isCrea
   );
 }
 
-function OperationsTab({ departments, processes, tools, onCreateDepartment, isCreating }: {
+function OperationsTab({ departments, processes, tools, onCreateDepartment, isCreating, searchTerm = "" }: {
   departments: Department[];
   processes: Process[];
   tools: Tool[];
   onCreateDepartment: (data: { name: string; description?: string }) => void;
   isCreating: boolean;
+  searchTerm?: string;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newDept, setNewDept] = useState({ name: "", description: "" });
+
+  const q = searchTerm.trim().toLowerCase();
+  const visibleDepartments = useMemo(() => {
+    if (!q) return departments;
+    return departments.filter((d) =>
+      d.name.toLowerCase().includes(q) || (d.description ?? "").toLowerCase().includes(q),
+    );
+  }, [departments, q]);
+  const visibleProcesses = useMemo(() => {
+    if (!q) return processes;
+    return processes.filter((p) =>
+      p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q),
+    );
+  }, [processes, q]);
+  const visibleTools = useMemo(() => {
+    if (!q) return tools;
+    return tools.filter((t) =>
+      t.name.toLowerCase().includes(q) || (t.description ?? "").toLowerCase().includes(q),
+    );
+  }, [tools, q]);
 
   const handleCreate = () => {
     if (!newDept.name) return;
@@ -1403,15 +1475,15 @@ function OperationsTab({ departments, processes, tools, onCreateDepartment, isCr
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-status-purple" />
-              Departments ({departments.length})
+              Departments ({visibleDepartments.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {departments.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No departments defined</p>
+            {visibleDepartments.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">{q ? "No departments match your search" : "No departments defined"}</p>
             ) : (
               <div className="space-y-2">
-                {departments.map((dept) => (
+                {visibleDepartments.map((dept) => (
                   <div key={dept.id} className="p-3 rounded-xl bg-muted/30 hover-elevate" data-testid={`department-${dept.id}`}>
                     <h4 className="font-medium">{dept.name}</h4>
                     {dept.description && (
@@ -1428,15 +1500,15 @@ function OperationsTab({ departments, processes, tools, onCreateDepartment, isCr
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Workflow className="h-5 w-5 text-status-blue" />
-              Processes ({processes.length})
+              Processes ({visibleProcesses.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {processes.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No processes defined</p>
+            {visibleProcesses.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">{q ? "No processes match your search" : "No processes defined"}</p>
             ) : (
               <div className="space-y-2">
-                {processes.map((process) => (
+                {visibleProcesses.map((process) => (
                   <div key={process.id} className="p-3 rounded-xl bg-muted/30 hover-elevate" data-testid={`process-${process.id}`}>
                     <div className="flex items-center justify-between">
                       <h4 className="font-medium">{process.name}</h4>
@@ -1455,15 +1527,15 @@ function OperationsTab({ departments, processes, tools, onCreateDepartment, isCr
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Wrench className="h-5 w-5 text-status-amber" />
-              Tools & Systems ({tools.length})
+              Tools & Systems ({visibleTools.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {tools.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No tools defined</p>
+            {visibleTools.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">{q ? "No tools match your search" : "No tools defined"}</p>
             ) : (
               <div className="space-y-2">
-                {tools.map((tool) => (
+                {visibleTools.map((tool) => (
                   <div key={tool.id} className="p-3 rounded-xl bg-muted/30 hover-elevate" data-testid={`tool-${tool.id}`}>
                     <div className="flex items-center justify-between">
                       <h4 className="font-medium">{tool.name}</h4>
@@ -1637,34 +1709,6 @@ function InitiativesTab({ initiatives, goals, onCreateInitiative, isCreating }: 
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-function PlaceholderTab({ title, description, icon: Icon }: { 
-  title: string; 
-  description: string;
-  icon: typeof Target;
-}) {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold" data-testid={`title-${title.toLowerCase()}`}>{title}</h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
-        </div>
-        <Button className="gap-2 whitespace-nowrap" data-testid={`button-add-${title.toLowerCase()}`}>
-          <Plus className="h-4 w-4" />
-          Add {title.endsWith('s') ? title.slice(0, -1) : title}
-        </Button>
-      </div>
-
-      <Card className="rounded-2xl">
-        <CardContent className="p-12 text-center">
-          <Icon className="h-12 w-12 mx-auto mb-3 opacity-50" />
-          <p className="text-muted-foreground">No {title.toLowerCase()} yet. This feature is coming soon.</p>
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -1927,11 +1971,12 @@ function OverdueCard({ item }: { item: OverdueItem }) {
 const REVIEWS_PAGE_SIZE = 20;
 
 function ReviewsTab({
-  strategyItems, goals, objectives, initiatives, okrs, kpis, entityRefs,
+  strategyItems, goals, objectives, initiatives, okrs, kpis, entityRefs, searchTerm = "",
 }: {
   strategyItems: StrategyItem[]; goals: Goal[]; objectives: Objective[];
   initiatives: Initiative[]; okrs: Okr[]; kpis: Kpi[];
   entityRefs?: Record<string, number>;
+  searchTerm?: string;
 }) {
   const [entityFilter, setEntityFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -1961,10 +2006,17 @@ function ReviewsTab({
     kpi:        Object.fromEntries(kpis.map(k => [k.id, k.name])),
   }), [strategyItems, goals, objectives, initiatives, okrs, kpis]);
 
-  const filteredNotes = useMemo(() =>
-    entityFilter === "all" ? [...allNotes].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      : allNotes.filter(n => n.entityType === entityFilter).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-  [allNotes, entityFilter]);
+  const filteredNotes = useMemo(() => {
+    let notes = entityFilter === "all" ? [...allNotes] : allNotes.filter(n => n.entityType === entityFilter);
+    const q = searchTerm.trim().toLowerCase();
+    if (q) {
+      notes = notes.filter((n) => {
+        const title = titleMap[n.entityType]?.[n.entityId]?.toLowerCase() ?? "";
+        return title.includes(q) || n.content.toLowerCase().includes(q) || n.authorName.toLowerCase().includes(q);
+      });
+    }
+    return notes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [allNotes, entityFilter, searchTerm, titleMap]);
 
   const paginatedNotes = useMemo(() => filteredNotes.slice(0, page * REVIEWS_PAGE_SIZE), [filteredNotes, page]);
   const hasMore = paginatedNotes.length < filteredNotes.length;
@@ -2900,12 +2952,6 @@ type ReviewNote = {
   authorId: string; signoffRequestId: number | null; createdAt: string;
 };
 
-type RagHistoryEntry = {
-  id: number; tenantId: number; entityType: string; entityId: number;
-  entityTitle: string; fromRag: string | null; toRag: string | null;
-  changedByName: string; changedById: string; changedAt: string;
-};
-
 type OverdueItem = {
   id: number; type: string; title: string;
   reviewCadence: string | null; nextReviewDate: string | null;
@@ -2934,365 +2980,4 @@ function RagChip({ rag }: { rag: string | null }) {
             : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400";
   const label = rag === "green" ? "🟢 Green" : rag === "amber" ? "🟡 Amber" : "🔴 Red";
   return <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${cls}`}>{label}</span>;
-}
-
-function GovernanceTab({ tenantId }: { tenantId: number }) {
-  const { toast } = useToast();
-  const [noteForm, setNoteForm] = useState({ entityType: "strategy", entityId: "", content: "", ragSnapshot: "" });
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [ragFilter, setRagFilter] = useState("all");
-  const [historyFilter, setHistoryFilter] = useState("all");
-
-  const { data: overdue = [], isLoading: overdueLoading } = useQuery<OverdueItem[]>({
-    queryKey: ["/api/business/overdue-reviews", tenantId],
-    queryFn: () => fetch(`/api/business/overdue-reviews?tenantId=${tenantId}`, { credentials: "include" }).then(r => r.json()),
-  });
-
-  const { data: ragHistory = [], isLoading: historyLoading } = useQuery<RagHistoryEntry[]>({
-    queryKey: ["/api/business/rag-history", tenantId],
-    queryFn: () => fetch(`/api/business/rag-history?tenantId=${tenantId}`, { credentials: "include" }).then(r => r.json()),
-  });
-
-  const { data: notesRaw, isLoading: notesLoading } = useQuery<ReviewNote[]>({
-    queryKey: ["/api/business/review-notes"],
-  });
-  const notes = useMemo(
-    () => (Array.isArray(notesRaw) ? notesRaw : []),
-    [notesRaw],
-  );
-
-  const addNoteMutation = useMutation({
-    mutationFn: (body: Record<string, unknown>) => apiRequest("POST", "/api/business/review-notes", body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/business/review-notes", tenantId] });
-      setNoteForm({ entityType: "strategy", entityId: "", content: "", ragSnapshot: "" });
-      setNoteOpen(false);
-      toast({ title: "Note added", description: "Review note saved successfully." });
-    },
-    onError: () => toast({ title: "Error", description: "Failed to save note.", variant: "destructive" }),
-  });
-
-  const deleteNoteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/business/review-notes/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/business/review-notes", tenantId] });
-      toast({ title: "Deleted", description: "Review note removed." });
-    },
-    onError: () => toast({ title: "Error", description: "Failed to delete note.", variant: "destructive" }),
-  });
-
-  const filteredHistory = useMemo(
-    () => (ragFilter === "all" ? ragHistory : ragHistory.filter(h => h.entityType === ragFilter)),
-    [ragHistory, ragFilter],
-  );
-  const filteredNotes = useMemo(
-    () => (historyFilter === "all" ? notes : notes.filter(n => n.entityType === historyFilter)),
-    [notes, historyFilter],
-  );
-
-  const historyPagination = useTablePagination(filteredHistory, {
-    resetKey: `${ragFilter}-${filteredHistory.length}`,
-    enabled: !historyLoading,
-  });
-  const notesPagination = useTablePagination(filteredNotes, {
-    resetKey: `${historyFilter}-${filteredNotes.length}`,
-    enabled: !notesLoading,
-  });
-
-  const saveNote = () => {
-    if (!noteForm.content.trim() || !noteForm.entityId) return;
-    addNoteMutation.mutate({
-      tenantId,
-      entityType: noteForm.entityType,
-      entityId: Number(noteForm.entityId),
-      content: noteForm.content.trim(),
-      ragSnapshot: noteForm.ragSnapshot || null,
-    });
-  };
-
-  const formatDate = (d: string) => {
-    try { return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
-    catch { return d; }
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-violet-500/10">
-          <ShieldCheck className="h-5 w-5 text-violet-500" />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold">Strategy Governance</h2>
-          <p className="text-xs text-muted-foreground">Overdue review alerts · RAG change history · Progress notes</p>
-        </div>
-        <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
-          <Button
-            size="sm" className="ml-auto h-8 gap-1.5 text-xs rounded-lg"
-            onClick={() => setNoteOpen(true)}
-            data-testid="button-add-review-note"
-          >
-            <MessageSquarePlus className="h-3.5 w-3.5" /> Add Review Note
-          </Button>
-          <DialogContent className="max-w-lg">
-            <SubmitForm onSubmit={saveNote} disabled={addNoteMutation.isPending || !noteForm.content.trim() || !noteForm.entityId}>
-            <DialogHeader><DialogTitle>Add Review Note</DialogTitle></DialogHeader>
-            <div className="space-y-3 py-2">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Entity Type</Label>
-                  <Select value={noteForm.entityType} onValueChange={v => setNoteForm(f => ({ ...f, entityType: v }))}>
-                    <SelectTrigger className="h-8 text-sm" data-testid="select-note-entity-type"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {ENTITY_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Entity ID</Label>
-                  <Input
-                    type="number" placeholder="e.g. 3"
-                    value={noteForm.entityId}
-                    onChange={e => setNoteForm(f => ({ ...f, entityId: e.target.value }))}
-                    className="h-8 text-sm" data-testid="input-note-entity-id"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">RAG Snapshot (optional)</Label>
-                <Select value={noteForm.ragSnapshot || "none"} onValueChange={v => setNoteForm(f => ({ ...f, ragSnapshot: v === "none" ? "" : v }))}>
-                  <SelectTrigger className="h-8 text-sm" data-testid="select-note-rag"><SelectValue placeholder="No RAG snapshot" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No snapshot</SelectItem>
-                    <SelectItem value="green">🟢 Green — On Track</SelectItem>
-                    <SelectItem value="amber">🟡 Amber — At Risk</SelectItem>
-                    <SelectItem value="red">🔴 Red — Behind</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Note Content</Label>
-                <Textarea
-                  placeholder="Enter review notes, decisions, or observations…"
-                  value={noteForm.content}
-                  onChange={e => setNoteForm(f => ({ ...f, content: e.target.value }))}
-                  rows={4} className="text-sm resize-none" data-testid="textarea-note-content"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild><Button type="button" variant="outline" size="sm">Cancel</Button></DialogClose>
-              <Button
-                type="submit"
-                size="sm"
-                data-testid="button-save-note"
-              >
-                {addNoteMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                Save Note
-              </Button>
-            </DialogFooter>
-            </SubmitForm>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* ── Overdue Reviews ─────────────────────────────────────────────────── */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Bell className="h-4 w-4 text-amber-500" />
-          <h3 className="text-sm font-semibold">Overdue Reviews</h3>
-          {overdue.length > 0 && (
-            <span className="text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full">
-              {overdue.length} overdue
-            </span>
-          )}
-        </div>
-        {overdueLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
-        ) : overdue.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-500 opacity-60" />
-            All reviews are up to date — nothing overdue.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {overdue.map(item => (
-              <div key={`${item.type}-${item.id}`}
-                className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 p-3 space-y-1.5"
-                data-testid={`overdue-${item.type}-${item.id}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-xs font-semibold leading-snug line-clamp-2">{item.title}</span>
-                  <RagChip rag={item.ragStatus} />
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 capitalize">
-                    {ENTITY_LABELS[item.type] ?? item.type}
-                  </span>
-                  {item.reviewCadence && (
-                    <span className="text-[10px] text-muted-foreground capitalize">{item.reviewCadence} review</span>
-                  )}
-                  {item.ownerName && (
-                    <span className="text-[10px] text-muted-foreground">· {item.ownerName}</span>
-                  )}
-                </div>
-                {item.nextReviewDate && (
-                  <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
-                    Review was due {new Date(item.nextReviewDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── RAG Change History ──────────────────────────────────────────────── */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <History className="h-4 w-4 text-blue-500" />
-          <h3 className="text-sm font-semibold">RAG Change History</h3>
-          <span className="text-[10px] text-muted-foreground">{ragHistory.length} change{ragHistory.length !== 1 ? "s" : ""} logged</span>
-          <div className="ml-auto">
-            <Select value={ragFilter} onValueChange={setRagFilter}>
-              <SelectTrigger className="h-7 text-xs w-[130px]" data-testid="select-rag-history-filter">
-                <SelectValue placeholder="All types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All types</SelectItem>
-                {ENTITY_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        {historyLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
-        ) : filteredHistory.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            No RAG status changes recorded yet. Changes will appear here automatically when a RAG status is updated.
-          </div>
-        ) : (
-          <div className="rounded-xl border border-border bg-card w-full min-w-0 max-w-full">
-            <BusinessTableScroll minWidth={800}>
-              <table className="text-xs border-collapse w-max min-w-full table-auto">
-                <thead>
-                  <tr className="border-b-2 border-border bg-muted/60">
-                    <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap w-[160px]">Date</th>
-                    <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground w-[80px]">Type</th>
-                    <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground">Entity</th>
-                    <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground w-[100px]">From</th>
-                    <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground w-[100px]">To</th>
-                    <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground w-[140px]">Changed By</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {historyPagination.paginatedItems.map((entry, i) => (
-                    <tr key={entry.id} className={`border-t border-border/30 hover:bg-muted/30 transition-colors ${i % 2 !== 0 ? "bg-muted/10" : ""}`}
-                      data-testid={`rag-history-row-${entry.id}`}>
-                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{formatDate(entry.changedAt)}</td>
-                      <td className="px-3 py-2">
-                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted capitalize">
-                          {ENTITY_LABELS[entry.entityType] ?? entry.entityType}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 font-medium max-w-[240px] truncate">{entry.entityTitle}</td>
-                      <td className="px-3 py-2"><RagChip rag={entry.fromRag} /></td>
-                      <td className="px-3 py-2"><RagChip rag={entry.toRag} /></td>
-                      <td className="px-3 py-2 text-muted-foreground">{entry.changedByName}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </BusinessTableScroll>
-            <TablePagination
-              page={historyPagination.page}
-              totalPages={historyPagination.totalPages}
-              total={historyPagination.total}
-              startIndex={historyPagination.startIndex}
-              endIndex={historyPagination.endIndex}
-              pageSize={historyPagination.pageSize}
-              onPageChange={historyPagination.setPage}
-              onPageSizeChange={historyPagination.setPageSize}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* ── Review Notes ────────────────────────────────────────────────────── */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-violet-500" />
-          <h3 className="text-sm font-semibold">Review Notes</h3>
-          <span className="text-[10px] text-muted-foreground">{notes.length} note{notes.length !== 1 ? "s" : ""}</span>
-          <div className="ml-auto">
-            <Select value={historyFilter} onValueChange={setHistoryFilter}>
-              <SelectTrigger className="h-7 text-xs w-[130px]" data-testid="select-notes-filter">
-                <SelectValue placeholder="All types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All types</SelectItem>
-                {ENTITY_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        {notesLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
-        ) : filteredNotes.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-            <MessageSquarePlus className="h-8 w-8 mx-auto mb-2 opacity-30" />
-            No review notes yet. Click "Add Review Note" to record observations, decisions, or sign-off comments.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {notesPagination.paginatedItems.map(note => (
-              <div key={note.id}
-                className="rounded-xl border border-border bg-card p-4 space-y-2 hover:border-border/80 transition-colors"
-                data-testid={`review-note-${note.id}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted capitalize">
-                      {ENTITY_LABELS[note.entityType] ?? note.entityType} #{note.entityId}
-                    </span>
-                    {note.ragSnapshot && <RagChip rag={note.ragSnapshot} />}
-                    {note.signoffRequestId && (
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                        Sign-off #{note.signoffRequestId}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => deleteNoteMutation.mutate(note.id)}
-                    disabled={deleteNoteMutation.isPending}
-                    className="text-muted-foreground hover:text-destructive p-1 rounded hover:bg-muted transition-colors shrink-0"
-                    title="Delete note"
-                    data-testid={`button-delete-note-${note.id}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">{note.content}</p>
-                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <span className="font-medium">{note.authorName}</span>
-                  <span>·</span>
-                  <span>{formatDate(note.createdAt)}</span>
-                </div>
-              </div>
-            ))}
-            <TablePagination
-              page={notesPagination.page}
-              totalPages={notesPagination.totalPages}
-              total={notesPagination.total}
-              startIndex={notesPagination.startIndex}
-              endIndex={notesPagination.endIndex}
-              pageSize={notesPagination.pageSize}
-              onPageChange={notesPagination.setPage}
-              onPageSizeChange={notesPagination.setPageSize}
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  );
 }

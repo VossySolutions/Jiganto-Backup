@@ -22,11 +22,11 @@ export function BpmTemplatePipeline({ templateId, templateName, tier, isSystem }
   const [feedback, setFeedback] = useState("");
 
   const { data: submissions = [], isLoading } = useQuery<any[]>({
-    queryKey: [`/api/bpm/template-submissions?tenantId=1`],
+    queryKey: [`/api/bpm/template-submissions`],
   });
 
   const submitMutation = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/bpm/templates/${templateId}/submit`, { tenantId: 1 }),
+    mutationFn: () => apiRequest("POST", `/api/bpm/templates/${templateId}/submit`, "/api/frameworks"),
     onSuccess: () => {
       queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith("/api/bpm/templates") });
       toast({ title: "Submitted to Jiganto", description: "Your template is pending review." });
@@ -37,7 +37,7 @@ export function BpmTemplatePipeline({ templateId, templateName, tier, isSystem }
     mutationFn: ({ id, status, feedback }: { id: number; status: string; feedback: string }) =>
       apiRequest("PATCH", `/api/bpm/template-submissions/${id}/review`, { status, feedback }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/bpm/template-submissions?tenantId=1`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/bpm/template-submissions`] });
       queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith("/api/bpm/templates") });
       setReviewOpen(false);
       toast({ title: "Review submitted" });

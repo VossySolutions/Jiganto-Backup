@@ -7,47 +7,41 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
+import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { MetricCard } from "@/components/ui/metric-card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
-  Plus, Download, Upload, Search, ArrowUpDown, Layers,
+  Plus, Search, ArrowUpDown, Layers,
   ChevronDown, X, Trash2, UserCheck, Paintbrush, Calendar,
-  MoreHorizontal, Pencil, Copy, Archive, Briefcase
+  MoreHorizontal, Pencil, Copy, Archive, Briefcase, Settings2
 } from "lucide-react";
-import { OpportunityFormFields } from "@/components/crm/OpportunityFormFields";
-import {
-  EMPTY_OPPORTUNITY_FORM,
-  opportunityToForm,
-  formToOpportunityPayload,
-  type OpportunityFormData,
-} from "@/lib/crm-form";
+import { OpportunityFormDialog } from "@/components/crm/OpportunityFormDialog";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
 import { evaluateConditionalFormatting, type ConditionalFormatRule } from "@/lib/conditionalFormatting";
 import type { ColumnDef as MondayColumnDef } from "@/components/MondayTable";
-import { useCrmUsers } from "./CrmUsersProvider";
+import { opportunityMatchesPipeline, stagesForActivePipeline } from "@/lib/crm-tab-counts";
 import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
 import { CrmCustomFieldTableHeaders, CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
 import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
-
-type CrmAccount = { id: number; tenantId: number; name: string; type: string; industry: string | null; };
-type CrmPipeline = { id: number; tenantId: number; name: string; description: string | null; isDefault: boolean | null; color: string | null; };
-type CrmOpportunityStage = { id: number; tenantId: number; pipelineId: number | null; name: string; order: number; probability: number | null; color: string | null; isClosed: boolean | null; isWon: boolean | null; };
-type CrmOpportunity = { id: number; tenantId: number; accountId: number | null; contactId?: number | null; stageId: number | null; name: string; amount: string | null; probability: number | null; expectedCloseDate: string | null; ownerUserId: string | null; isArchived?: boolean | null; customData?: Record<string, unknown> | null; createdAt: string; };
-type CrmContact = { id: number; firstName: string; lastName: string; accountId: number | null };
+import { findSegmentField, getSegmentColor, resolveAccountSegment } from "@/lib/crm-segment";
+import { useCrmUsers } from "./CrmUsersProvider";
+import type { CrmAccount, CrmPipeline, CrmOpportunity, CrmOpportunityStage, CrmContactPicklist } from "./types";
 
 interface CrmOpportunitiesTabProps {
   opportunities: CrmOpportunity[];
   stages: CrmOpportunityStage[];
   accounts: CrmAccount[];
   pipelines: CrmPipeline[];
-  contacts: CrmContact[];
+  contacts: CrmContactPicklist[];
   searchTerm?: string;
+  onNavigateToTab?: (tab: string) => void;
+  onOpenCustomFieldsSettings?: () => void;
 }
 
 const VIBRANT_LOGO_COLORS = [
@@ -162,11 +156,14 @@ function StageBadge({ stage }: { stage: { name: string; color: string | null } |
   );
 }
 
-export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines, contacts, searchTerm = "" }: CrmOpportunitiesTabProps) {
+export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines, contacts, searchTerm = "", onNavigateToTab, onOpenCustomFieldsSettings }: CrmOpportunitiesTabProps) {
   const { resolveOwner } = useCrmUsers();
   const { fields: customFields } = useCrmCustomFields("opportunity");
-  const tableColSpan = 10 + customFields.length;
-  const [isOpen, setIsOpen] = useState(false);
+  const { fields: accountCustomFields } = useCrmCustomFields("account");
+  const segmentField = useMemo(() => findSegmentField(accountCustomFields), [accountCustomFields]);
+  const tableColSpan = 11 + customFields.length;
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingOpportunity, setEditingOpportunity] = useState<CrmOpportunity | null>(null);
   const [isCreatePipelineOpen, setIsCreatePipelineOpen] = useState(false);
   const [selectedPipelineId, setSelectedPipelineId] = useState<number | null>(null);
   const [pipelineName, setPipelineName] = useState("");
@@ -179,9 +176,6 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   const [groupBy, setGroupBy] = useState<"none" | "stage" | "account" | "probability" | "owner">("none");
   const [formatPanelOpen, setFormatPanelOpen] = useState(false);
   const [formatRules, setFormatRules] = useState<ConditionalFormatRule[]>([]);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [formData, setFormData] = useState<OpportunityFormData>(EMPTY_OPPORTUNITY_FORM);
-  const [customData, setCustomData] = useState<Record<string, unknown>>({});
   const [importOpen, setImportOpen] = useState(false);
   const { toast } = useToast();
 
@@ -214,7 +208,8 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   });
 
   const activePipelineId = selectedPipelineId || pipelines.find(p => p.isDefault)?.id || pipelines[0]?.id || null;
-  const pipelineStages = activePipelineId ? stages.filter(s => s.pipelineId === activePipelineId) : stages;
+  const pipelineStages = stagesForActivePipeline(stages, pipelines, activePipelineId);
+  const formStages = pipelineStages;
 
   const createPipelineMutation = useMutation({
     mutationFn: (data: { name: string }) => apiRequest("POST", "/api/crm/pipelines", data),
@@ -225,28 +220,6 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
       toast({ title: "Pipeline created successfully" });
     },
     onError: () => toast({ title: "Failed to create pipeline", variant: "destructive" }),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: (data: OpportunityFormData) => apiRequest("POST", "/api/crm/opportunities", formToOpportunityPayload(data, customData)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/opportunities"] });
-      setIsOpen(false);
-      setFormData(EMPTY_OPPORTUNITY_FORM);
-      setCustomData({});
-      toast({ title: "Opportunity created successfully" });
-    },
-    onError: () => toast({ title: "Failed to create opportunity", variant: "destructive" }),
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, updates }: { id: number; updates: Record<string, unknown> }) =>
-      apiRequest("PUT", `/api/crm/opportunities/${id}`, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/opportunities"] });
-      toast({ title: "Opportunity updated" });
-    },
-    onError: () => toast({ title: "Failed to update opportunity", variant: "destructive" }),
   });
 
   const bulkDeleteMutation = useMutation({
@@ -268,22 +241,23 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
     onError: () => toast({ title: "Failed to delete opportunity", variant: "destructive" }),
   });
 
+  const openCreateForm = () => {
+    setEditingOpportunity(null);
+    setFormOpen(true);
+  };
+
   const handleEdit = (opp: typeof enrichedOpportunities[0]) => {
-    setFormData(opportunityToForm(opp as Record<string, unknown>));
-    setCustomData((opp.customData as Record<string, unknown>) || {});
-    setEditingId(opp.id);
-    setIsOpen(true);
+    setEditingOpportunity(opp as CrmOpportunity);
+    setFormOpen(true);
   };
 
   const toggleStageFilter = (filter: "all" | "closing-this-month") => {
     setStageFilter(prev => prev === filter ? "all" : filter);
   };
 
-  let pipelineOpportunities = opportunities.filter(o => {
-    if (o.isArchived) return false;
-    const stage = stages.find(s => s.id === o.stageId);
-    return stage && stage.pipelineId === activePipelineId;
-  });
+  let pipelineOpportunities = opportunities.filter(o =>
+    opportunityMatchesPipeline(o, stages, pipelines, activePipelineId),
+  );
 
   if (stageFilter === "closing-this-month") {
     const now = new Date();
@@ -306,6 +280,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
       return {
         ...opp,
         accountName: account?.name || "—",
+        accountSegment: account ? resolveAccountSegment(account, segmentField) : "—",
         stage,
         stageName: stage?.name || "—",
         amountNum: parseFloat(opp.amount || "0"),
@@ -337,7 +312,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
     });
 
     return result;
-  }, [pipelineOpportunities, accounts, stages, localSearch, searchTerm, sortField, sortDir]);
+  }, [pipelineOpportunities, accounts, stages, localSearch, searchTerm, sortField, sortDir, segmentField]);
 
   const pagination = useCrmPagination(enrichedOpportunities, {
     resetKey: `${searchTerm}|${localSearch}|${stageFilter}|${selectedStageId}|${sortField}|${sortDir}|${groupBy}|${activePipelineId}`,
@@ -347,6 +322,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   const formatColumns: MondayColumnDef<any>[] = [
     { id: "name", header: "Opportunity", type: "text", accessor: "name" },
     { id: "accountName", header: "Account", type: "text", accessor: "accountName" },
+    { id: "accountSegment", header: "Segment", type: "text", accessor: "accountSegment" },
     { id: "stageName", header: "Stage", type: "text", accessor: "stageName" },
     { id: "amount", header: "Amount", type: "currency", accessor: "amount" },
     { id: "probabilityNum", header: "Probability", type: "number", accessor: (row: any) => row.probabilityNum },
@@ -516,6 +492,9 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
         <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "accountName"))} style={getCellStyle(opp.id, "accountName")}>
           <span className="text-sm">{opp.accountName}</span>
         </td>
+        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "accountSegment"))} style={getCellStyle(opp.id, "accountSegment")}>
+          <span className="text-sm" style={{ color: getSegmentColor(opp.accountSegment) }}>{opp.accountSegment}</span>
+        </td>
         <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "stageName"))} style={getCellStyle(opp.id, "stageName")}>
           <StageBadge stage={opp.stage} />
         </td>
@@ -577,34 +556,43 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="rounded-xl border border-border/60 bg-card p-4" data-testid="card-opp-count">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <OpportunityIcon className="h-5 w-5" />
-            Opportunities
-          </div>
-          <div className="text-2xl font-bold" data-testid="text-opp-count">{enrichedOpportunities.length}</div>
-        </div>
-        <div className="rounded-xl border border-border/60 bg-card p-4" data-testid="card-total-value">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <DollarIcon className="h-5 w-5" />
-            Total Value
-          </div>
-          <div className="text-2xl font-bold" data-testid="text-total-value">${totalValue.toLocaleString()}</div>
-        </div>
-        <div className="rounded-xl border border-border/60 bg-card p-4" data-testid="card-weighted-value">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <WeightedIcon className="h-5 w-5" />
-            Weighted Value
-          </div>
-          <div className="text-2xl font-bold text-[#8b5cf6]" data-testid="text-weighted-value">${weightedValue.toLocaleString()}</div>
-        </div>
-        <div className="rounded-xl border border-border/60 bg-card p-4" data-testid="card-avg-deal">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <AvgDealIcon className="h-5 w-5" />
-            Avg Deal Size
-          </div>
-          <div className="text-2xl font-bold" data-testid="text-avg-deal">${avgDeal.toLocaleString()}</div>
-        </div>
+        <MetricCard
+          title="Opportunities"
+          value={enrichedOpportunities.length}
+          subtitle="Matching current filters"
+          helpText="Count of opportunities shown in the table below, after pipeline, stage, and search filters are applied."
+          icon={OpportunityIcon}
+          testId="card-opp-count"
+        />
+        <MetricCard
+          title="Total Value"
+          value={`$${totalValue.toLocaleString()}`}
+          subtitle="Sum of deal amounts"
+          helpText="Combined amount of all filtered opportunities before probability weighting."
+          icon={DollarIcon}
+          borderColor="#22c55e"
+          valueClassName="text-[#22c55e]"
+          testId="card-total-value"
+        />
+        <MetricCard
+          title="Weighted Value"
+          value={`$${weightedValue.toLocaleString()}`}
+          subtitle="Amount × probability"
+          helpText="Expected revenue: each deal amount multiplied by its win probability (from stage or deal field)."
+          icon={WeightedIcon}
+          borderColor="#8b5cf6"
+          valueClassName="text-[#8b5cf6]"
+          testId="card-weighted-value"
+        />
+        <MetricCard
+          title="Avg Deal Size"
+          value={`$${avgDeal.toLocaleString()}`}
+          subtitle="Per opportunity"
+          helpText="Average deal amount across the filtered opportunities. Useful for spotting outliers."
+          icon={AvgDealIcon}
+          borderColor="#f97316"
+          testId="card-avg-deal"
+        />
       </div>
 
       {selectedIds.size > 0 && (
@@ -767,16 +755,16 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
-                "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                "inline-flex items-center justify-center h-9 w-9 rounded-lg border transition-colors",
                 groupBy !== "none"
                   ? "bg-[#0ea5e9]/10 border-[#0ea5e9]/30 text-[#0ea5e9]"
                   : "border-border bg-background text-foreground hover:bg-muted"
               )}
+              title={groupBy === "none" ? "Group" : `Grouped by ${groupBy}`}
+              aria-label={groupBy === "none" ? "Group opportunities" : `Grouped by ${groupBy}`}
               data-testid="button-group-opp"
             >
-              <Layers className="h-3.5 w-3.5" />
-              {groupBy === "none" ? "Group" : `Group: ${groupBy.charAt(0).toUpperCase() + groupBy.slice(1)}`}
-              <ChevronDown className="h-3 w-3" />
+              <Layers className="h-4 w-4" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -816,39 +804,40 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
           />
         </div>
 
-        <Button variant="outline" size="sm" onClick={exportToCSV} className="gap-1.5" data-testid="button-export-opportunities">
-          <Download className="h-3.5 w-3.5" />
-          Export
-        </Button>
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportOpen(true)} data-testid="button-import-opp">
-          <Upload className="h-3.5 w-3.5" />
-          Import
-        </Button>
-        <ImportModal
-          isOpen={importOpen}
-          onClose={() => setImportOpen(false)}
-          entityName="Opportunities"
-          templateHeaders={["name","description","amount","probability","expectedCloseDate","type","source","nextStep","stageName","accountName"]}
-          exampleRow={{ name:"Acme ERP Upgrade",description:"Full ERP modernisation project",amount:"125000",probability:"60",expectedCloseDate:"2026-09-30",type:"new_business",source:"Referral",nextStep:"Technical workshop",stageName:"Proposal",accountName:"Acme Ltd" }}
-          currentCount={opportunities.length}
-          onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
-        />
-
-        <Dialog open={isCreatePipelineOpen} onOpenChange={setIsCreatePipelineOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-create-pipeline-opp">
-              <Plus className="h-3.5 w-3.5" />
-              New Pipeline
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-setup-opp">
+              <Settings2 className="h-3.5 w-3.5" />
+              Setup
+              <ChevronDown className="h-3 w-3" />
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <SubmitForm
-              onSubmit={() => createPipelineMutation.mutate({ name: pipelineName })}
-              disabled={!pipelineName || createPipelineMutation.isPending}
-            >
-            <DialogHeader>
-              <DialogTitle>Create New Pipeline</DialogTitle>
-            </DialogHeader>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setIsCreatePipelineOpen(true)} data-testid="button-create-pipeline-opp">
+              Add pipeline…
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={exportToCSV} data-testid="button-export-opportunities-menu">
+              Export CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setImportOpen(true)} data-testid="button-import-opp-menu">
+              Import CSV
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+          <FormDialogShell
+            open={isCreatePipelineOpen}
+            onOpenChange={setIsCreatePipelineOpen}
+            title="Create New Pipeline"
+            subtitle="Add a pipeline for opportunity workflows"
+            saveLabel={createPipelineMutation.isPending ? "Creating..." : "Create Pipeline"}
+            onCancel={() => setIsCreatePipelineOpen(false)}
+            onSubmit={() => createPipelineMutation.mutate({ name: pipelineName })}
+            saving={createPipelineMutation.isPending}
+            disabled={!pipelineName}
+            saveTestId="button-save-pipeline-opp"
+            size="sm"
+          >
             <div className="space-y-4 py-4">
               <div>
                 <Label htmlFor="pipelineNameOpp">Pipeline Name *</Label>
@@ -861,63 +850,30 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
                 />
               </div>
             </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline" data-testid="button-cancel-pipeline-opp">Cancel</Button>
-              </DialogClose>
-              <Button
-                type="submit"
-                disabled={!pipelineName || createPipelineMutation.isPending}
-                data-testid="button-save-pipeline-opp"
-              >
-                {createPipelineMutation.isPending ? "Creating..." : "Create Pipeline"}
-              </Button>
-            </DialogFooter>
-            </SubmitForm>
-          </DialogContent>
-        </Dialog>
+          </FormDialogShell>
 
-        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setEditingId(null); setFormData(EMPTY_OPPORTUNITY_FORM); setCustomData({}); } }}>
-          <DialogTrigger asChild>
-            <Button className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white gap-1.5" data-testid="button-add-opportunity-table">
+        {enrichedOpportunities.length > 0 && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white gap-1.5" data-testid="button-add-opportunity-table" onClick={openCreateForm}>
               <Plus className="h-4 w-4" />
               New Opportunity
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <SubmitForm
-              onSubmit={() => {
-                if (editingId) {
-                  updateMutation.mutate({ id: editingId, updates: formToOpportunityPayload(formData, customData) });
-                  setIsOpen(false);
-                  setEditingId(null);
-                  setFormData(EMPTY_OPPORTUNITY_FORM);
-                  setCustomData({});
-                } else {
-                  createMutation.mutate(formData);
-                }
-              }}
-              disabled={!formData.name || createMutation.isPending}
-            >
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Opportunity" : "Create New Opportunity"}</DialogTitle>
-            </DialogHeader>
-            <OpportunityFormFields formData={formData} setFormData={setFormData} stages={pipelineStages} accounts={accounts} contacts={contacts} customData={customData} onCustomDataChange={(k, v) => setCustomData(prev => ({ ...prev, [k]: v }))} />
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline" data-testid="button-cancel-opp">Cancel</Button>
-              </DialogClose>
-              <Button
-                type="submit"
-                disabled={!formData.name || createMutation.isPending}
-                data-testid="button-save-opp"
-              >
-                {editingId ? (updateMutation.isPending ? "Updating..." : "Update Opportunity") : (createMutation.isPending ? "Creating..." : "Create Opportunity")}
-              </Button>
-            </DialogFooter>
-            </SubmitForm>
-          </DialogContent>
-        </Dialog>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            Create a new sales deal. Pipelines and stages are configured under Setup.
+          </TooltipContent>
+        </Tooltip>
+        )}
+        <ImportModal
+          isOpen={importOpen}
+          onClose={() => setImportOpen(false)}
+          entityName="Opportunities"
+          templateHeaders={["name","description","amount","probability","expectedCloseDate","type","source","nextStep","stageName","accountName"]}
+          exampleRow={{ name:"Acme ERP Upgrade",description:"Full ERP modernisation project",amount:"125000",probability:"60",expectedCloseDate:"2026-09-30",type:"new_business",source:"Referral",nextStep:"Technical workshop",stageName:"Proposal",accountName:"Acme Ltd" }}
+          currentCount={opportunities.length}
+          onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
+        />
       </div>
 
       <div className="rounded-xl border border-border/60 bg-card overflow-x-auto w-full" data-testid="opp-table">
@@ -933,6 +889,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
               </th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Opportunity</th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Account</th>
+              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Segment</th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Stage</th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Amount</th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Probability</th>
@@ -952,7 +909,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
                     <Button
                       size="sm"
                       className="mt-2 bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
-                      onClick={() => setIsOpen(true)}
+                      onClick={openCreateForm}
                     >
                       <Plus className="h-4 w-4 mr-1" />
                       New Opportunity
@@ -1014,6 +971,20 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
         onRulesChange={setFormatRules}
         columns={formatColumns}
         data={enrichedOpportunities as any[]}
+      />
+
+      <OpportunityFormDialog
+        open={formOpen}
+        onClose={() => { setFormOpen(false); setEditingOpportunity(null); }}
+        editing={editingOpportunity}
+        stages={formStages}
+        accounts={accounts}
+        contacts={contacts}
+        onOpenCustomFieldsSettings={() => {
+          setFormOpen(false);
+          setEditingOpportunity(null);
+          onOpenCustomFieldsSettings?.();
+        }}
       />
     </div>
   );

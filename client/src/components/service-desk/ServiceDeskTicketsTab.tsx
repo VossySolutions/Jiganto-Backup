@@ -27,17 +27,26 @@ import { useToast } from "@/hooks/use-toast";
 import type { TicketRow, TicketDetail, TicketType, TicketPriority } from "./types";
 import { TYPE_LABELS, PRIORITY_LABELS, slaBadgeClass } from "./types";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
+  FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider,
+} from "@/components/ui/form-dialog-shell";
 
 interface Props {
   initialFilters?: { slaFilter?: string; status?: string; priority?: string; type?: string };
   searchQuery?: string;
   apiBase?: string;
   includeDefect?: boolean;
+  initialProjectId?: number | null;
+  initialTicketId?: number | null;
 }
 
-export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "", apiBase = "/api/service-desk", includeDefect = false }: Props) {
+export function ServiceDeskTicketsTab({
+  initialFilters,
+  searchQuery = "",
+  apiBase = "/api/service-desk",
+  includeDefect = false,
+  initialProjectId = null,
+  initialTicketId = null,
+}: Props) {
   const { toast } = useToast();
   const [view, setView] = useState<"list" | "calendar">("list");
   const [typeFilter, setTypeFilter] = useState(initialFilters?.type ?? "all");
@@ -57,14 +66,24 @@ export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "", apiBas
     if (initialFilters?.priority) setPriorityFilter(initialFilters.priority);
     if (initialFilters?.status) setStatusFilter(initialFilters.status);
   }, [initialFilters]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(initialTicketId);
   const [showCreate, setShowCreate] = useState(false);
   const [newTicket, setNewTicket] = useState({
     title: "", type: "incident" as TicketType, priority: "p3" as TicketPriority, description: "",
-    projectId: "", defectSeverity: "medium", defectEnvironment: "uat", defectStepsToReproduce: "",
+    projectId: initialProjectId ? String(initialProjectId) : "", defectSeverity: "medium", defectEnvironment: "uat", defectStepsToReproduce: "",
     defectExpectedResult: "", defectActualResult: "", sprintPhase: "",
     defectBuildVersion: "", defectWorkaround: "", defectFixVersion: "",
   });
+
+  useEffect(() => {
+    if (initialProjectId) {
+      setNewTicket((t) => ({ ...t, projectId: String(initialProjectId) }));
+    }
+  }, [initialProjectId]);
+
+  useEffect(() => {
+    if (initialTicketId) setSelectedId(initialTicketId);
+  }, [initialTicketId]);
 
   const queryParams = new URLSearchParams();
   if (typeFilter !== "all") queryParams.set("type", typeFilter);
@@ -78,11 +97,13 @@ export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "", apiBas
 
   const { data: tickets = [], isLoading, isError, refetch, isFetching } = useQuery<TicketRow[]>({
     queryKey: [`${apiBase}/tickets${qs ? `?${qs}` : ""}`],
+    staleTime: 30_000,
   });
 
   const { data: detail, isLoading: detailLoading } = useQuery<TicketDetail>({
     queryKey: [`${apiBase}/tickets/${selectedId}`],
     enabled: selectedId != null,
+    staleTime: 30_000,
   });
 
   const createMut = useMutation({
@@ -246,9 +267,11 @@ export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "", apiBas
           <Button variant={view === "calendar" ? "default" : "outline"} size="sm" className="flex-1 sm:flex-none" onClick={() => setView("calendar")}>
             <Calendar className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Calendar</span>
           </Button>
+          {tickets.length > 0 && (
           <Button size="sm" className="flex-1 sm:flex-none" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">New</span>
           </Button>
+          )}
         </div>
       </div>
 
@@ -533,72 +556,77 @@ export function ServiceDeskTicketsTab({ initialFilters, searchQuery = "", apiBas
         </SheetContent>
       </Sheet>
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>New Ticket</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div><Label>Title</Label><Input value={newTicket.title} onChange={(e) => setNewTicket({ ...newTicket, title: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label>Type</Label>
-                <Select value={newTicket.type} onValueChange={(v) => setNewTicket({ ...newTicket, type: v as TicketType })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(TYPE_LABELS)
-                      .filter(([k]) => includeDefect || k !== "defect")
-                      .map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Priority</Label>
-                <Select value={newTicket.priority} onValueChange={(v) => setNewTicket({ ...newTicket, priority: v as TicketPriority })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{Object.entries(PRIORITY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
+      <FormDialogShell
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        title="New Ticket"
+        saveLabel="Create ticket"
+        onCancel={() => setShowCreate(false)}
+        onSubmit={() => createMut.mutate()}
+        saving={createMut.isPending}
+        disabled={!newTicket.title}
+      >
+        <FormSection title="Ticket details">
+          <div className="space-y-1.5 mb-3.5"><FieldLabel required>Title</FieldLabel><Input value={newTicket.title} onChange={(e) => setNewTicket({ ...newTicket, title: e.target.value })} /></div>
+          <FieldGrid className="mb-3.5">
+            <div>
+              <FieldLabel>Type</FieldLabel>
+              <Select value={newTicket.type} onValueChange={(v) => setNewTicket({ ...newTicket, type: v as TicketType })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(TYPE_LABELS)
+                    .filter(([k]) => includeDefect || k !== "defect")
+                    .map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-            <div><Label>Description</Label><Textarea value={newTicket.description} onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })} /></div>
-            {includeDefect && newTicket.type === "defect" && (
-              <div className="space-y-3 border-t pt-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label>Severity</Label>
-                    <Select value={newTicket.defectSeverity} onValueChange={(v) => setNewTicket({ ...newTicket, defectSeverity: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {["critical", "high", "medium", "low"].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Environment</Label>
-                    <Select value={newTicket.defectEnvironment} onValueChange={(v) => setNewTicket({ ...newTicket, defectEnvironment: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {["dev", "sit", "uat", "staging", "production"].map((s) => <SelectItem key={s} value={s}>{s.toUpperCase()}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
+            <div>
+              <FieldLabel>Priority</FieldLabel>
+              <Select value={newTicket.priority} onValueChange={(v) => setNewTicket({ ...newTicket, priority: v as TicketPriority })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(PRIORITY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </FieldGrid>
+          <div className="space-y-1.5"><FieldLabel>Description</FieldLabel><Textarea value={newTicket.description} onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })} /></div>
+        </FormSection>
+        {includeDefect && newTicket.type === "defect" && (
+          <>
+            <FormDivider />
+            <FormSection title="Defect details">
+              <FieldGrid className="mb-3.5">
+                <div>
+                  <FieldLabel>Severity</FieldLabel>
+                  <Select value={newTicket.defectSeverity} onValueChange={(v) => setNewTicket({ ...newTicket, defectSeverity: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {["critical", "high", "medium", "low"].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div><Label>Sprint / Phase</Label><Input value={newTicket.sprintPhase} onChange={(e) => setNewTicket({ ...newTicket, sprintPhase: e.target.value })} /></div>
-                <div><Label>Steps to Reproduce</Label><Textarea value={newTicket.defectStepsToReproduce} onChange={(e) => setNewTicket({ ...newTicket, defectStepsToReproduce: e.target.value })} /></div>
-                <div><Label>Expected Result</Label><Textarea value={newTicket.defectExpectedResult} onChange={(e) => setNewTicket({ ...newTicket, defectExpectedResult: e.target.value })} /></div>
-                <div><Label>Actual Result</Label><Textarea value={newTicket.defectActualResult} onChange={(e) => setNewTicket({ ...newTicket, defectActualResult: e.target.value })} /></div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div><Label>Build / Version</Label><Input value={newTicket.defectBuildVersion} onChange={(e) => setNewTicket({ ...newTicket, defectBuildVersion: e.target.value })} /></div>
-                  <div><Label>Fix Version</Label><Input value={newTicket.defectFixVersion} onChange={(e) => setNewTicket({ ...newTicket, defectFixVersion: e.target.value })} /></div>
+                <div>
+                  <FieldLabel>Environment</FieldLabel>
+                  <Select value={newTicket.defectEnvironment} onValueChange={(v) => setNewTicket({ ...newTicket, defectEnvironment: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {["dev", "sit", "uat", "staging", "production"].map((s) => <SelectItem key={s} value={s}>{s.toUpperCase()}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div><Label>Workaround</Label><Textarea value={newTicket.defectWorkaround} onChange={(e) => setNewTicket({ ...newTicket, defectWorkaround: e.target.value })} rows={2} /></div>
-              </div>
-            )}
-            <Button className="w-full" disabled={!newTicket.title || createMut.isPending} onClick={() => createMut.mutate()}>
-              {createMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Create ticket
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+              </FieldGrid>
+              <div className="space-y-1.5 mb-3.5"><FieldLabel>Sprint / Phase</FieldLabel><Input value={newTicket.sprintPhase} onChange={(e) => setNewTicket({ ...newTicket, sprintPhase: e.target.value })} /></div>
+              <div className="space-y-1.5 mb-3.5"><FieldLabel>Steps to Reproduce</FieldLabel><Textarea value={newTicket.defectStepsToReproduce} onChange={(e) => setNewTicket({ ...newTicket, defectStepsToReproduce: e.target.value })} /></div>
+              <div className="space-y-1.5 mb-3.5"><FieldLabel>Expected Result</FieldLabel><Textarea value={newTicket.defectExpectedResult} onChange={(e) => setNewTicket({ ...newTicket, defectExpectedResult: e.target.value })} /></div>
+              <div className="space-y-1.5 mb-3.5"><FieldLabel>Actual Result</FieldLabel><Textarea value={newTicket.defectActualResult} onChange={(e) => setNewTicket({ ...newTicket, defectActualResult: e.target.value })} /></div>
+              <FieldGrid className="mb-3.5">
+                <div><FieldLabel>Build / Version</FieldLabel><Input value={newTicket.defectBuildVersion} onChange={(e) => setNewTicket({ ...newTicket, defectBuildVersion: e.target.value })} /></div>
+                <div><FieldLabel>Fix Version</FieldLabel><Input value={newTicket.defectFixVersion} onChange={(e) => setNewTicket({ ...newTicket, defectFixVersion: e.target.value })} /></div>
+              </FieldGrid>
+              <div className="space-y-1.5"><FieldLabel>Workaround</FieldLabel><Textarea value={newTicket.defectWorkaround} onChange={(e) => setNewTicket({ ...newTicket, defectWorkaround: e.target.value })} rows={2} /></div>
+            </FormSection>
+          </>
+        )}
+      </FormDialogShell>
     </div>
   );
 }

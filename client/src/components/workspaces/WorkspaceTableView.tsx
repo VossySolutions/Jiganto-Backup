@@ -16,12 +16,9 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  FormDialogShell,
+  FormSection,
+} from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
@@ -90,6 +87,7 @@ import { WorkspaceKanbanView } from "./WorkspaceKanbanView";
 import { WorkspaceCalendarView } from "./WorkspaceCalendarView";
 import { WorkspaceRowDetailPanel } from "./WorkspaceRowDetailPanel";
 import { combineWorkspaceQueries, WorkspaceQueryShell } from "./loading";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const TEMPLATE_ICONS: Record<string, React.ElementType> = {
   "clipboard-list": ClipboardList,
@@ -566,6 +564,15 @@ export function WorkspaceTableView({
   });
   const rowsQuery = useQuery<WorkspaceDatabaseRow[]>({
     queryKey: ["/api/workspace-databases", databaseId, "rows"],
+  });
+  const { data: orgUsers = [] } = useQuery<{ id: string; firstName?: string | null; lastName?: string | null; displayName?: string | null }[]>({
+    queryKey: ["/api/chat/users"],
+    queryFn: async () => {
+      const res = await fetchWithAuth("/api/chat/users");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 60_000,
   });
   const columns = columnsQuery.data ?? [];
   const rows = rowsQuery.data ?? [];
@@ -1063,6 +1070,131 @@ export function WorkspaceTableView({
         );
       }
       return <span className="text-sm block min-h-[20px] text-muted-foreground">Add URL...</span>;
+    }
+
+    if (colType === "person") {
+      const display = cellValue || "";
+      const initials = display
+        ? display.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase()
+        : "?";
+      return (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              className="w-full text-left text-sm min-h-[20px] flex items-center gap-1.5"
+              data-testid={`cell-person-trigger-${row.id}-${col.id}`}
+              disabled={readOnly}
+            >
+              {display ? (
+                <>
+                  <Avatar className="h-5 w-5 shrink-0">
+                    <AvatarFallback className="text-[9px]">{initials}</AvatarFallback>
+                  </Avatar>
+                  <span className="truncate">{display}</span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">Assign person...</span>
+              )}
+            </button>
+          </PopoverTrigger>
+          {!readOnly && (
+            <PopoverContent className="w-52 p-1 max-h-56 overflow-y-auto" align="start">
+              {orgUsers.length === 0 ? (
+                <p className="px-2 py-3 text-xs text-muted-foreground">No users available to assign</p>
+              ) : orgUsers.map((u) => {
+                const name = u.displayName || [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.id;
+                return (
+                  <button
+                    key={u.id}
+                    onClick={() => {
+                      const rd = (row.data as Record<string, unknown>) || {};
+                      updateRowMutation.mutate({ id: row.id, data: { ...rd, [String(col.id)]: name } });
+                    }}
+                    className={cn(
+                      "flex items-center gap-2 w-full px-2 py-1.5 rounded text-sm hover-elevate",
+                      display === name && "bg-accent",
+                    )}
+                    data-testid={`person-option-${u.id}-${row.id}-${col.id}`}
+                  >
+                    <Avatar className="h-5 w-5 shrink-0">
+                      <AvatarFallback className="text-[9px]">{name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <span className="truncate">{name}</span>
+                  </button>
+                );
+              })}
+              {display && (
+                <button
+                  onClick={() => {
+                    const rd = (row.data as Record<string, unknown>) || {};
+                    updateRowMutation.mutate({ id: row.id, data: { ...rd, [String(col.id)]: "" } });
+                  }}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-sm text-muted-foreground hover-elevate"
+                >
+                  <X className="h-3 w-3" />
+                  Clear
+                </button>
+              )}
+            </PopoverContent>
+          )}
+        </Popover>
+      );
+    }
+
+    if (colType === "multi_select" && !isEditing) {
+      const options = getSelectChoices(col.options);
+      let selected: string[] = [];
+      if (cellValue) {
+        try {
+          const parsed = JSON.parse(cellValue);
+          selected = Array.isArray(parsed) ? parsed.map(String) : cellValue.split(",").map((s) => s.trim()).filter(Boolean);
+        } catch {
+          selected = cellValue.split(",").map((s) => s.trim()).filter(Boolean);
+        }
+      }
+      const toggleTag = (opt: string) => {
+        const rd = (row.data as Record<string, unknown>) || {};
+        const next = selected.includes(opt) ? selected.filter((v) => v !== opt) : [...selected, opt];
+        updateRowMutation.mutate({ id: row.id, data: { ...rd, [String(col.id)]: next.length ? JSON.stringify(next) : "" } });
+      };
+      return (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button className="w-full text-left text-sm min-h-[20px] flex flex-wrap gap-1" data-testid={`cell-multiselect-trigger-${row.id}-${col.id}`} disabled={readOnly}>
+              {selected.length > 0 ? selected.map((tag) => {
+                const colors = getSelectColors(tag);
+                return (
+                  <span key={tag} className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium", colors.bg, colors.text)}>
+                    {tag}
+                  </span>
+                );
+              }) : (
+                <span className="text-muted-foreground">Select tags...</span>
+              )}
+            </button>
+          </PopoverTrigger>
+          {!readOnly && (
+            <PopoverContent className="w-52 p-1 max-h-56 overflow-y-auto" align="start">
+              {options.map((opt: string) => {
+                const colors = getSelectColors(opt);
+                const active = selected.includes(opt);
+                return (
+                  <button
+                    key={opt}
+                    onClick={() => toggleTag(opt)}
+                    className={cn("flex items-center gap-2 w-full px-2 py-1.5 rounded text-sm hover-elevate", active && "bg-accent")}
+                    data-testid={`multiselect-option-${opt}-${row.id}-${col.id}`}
+                  >
+                    <span className={cn("h-2.5 w-2.5 rounded-full flex-shrink-0", colors.dot)} />
+                    {opt}
+                    {active && <Check className="h-3 w-3 ml-auto" />}
+                  </button>
+                );
+              })}
+            </PopoverContent>
+          )}
+        </Popover>
+      );
     }
 
     if (colType === "select" && !isEditing) {
@@ -1890,14 +2022,17 @@ export function WorkspaceTableView({
       </div>
       </WorkspaceQueryShell>
 
-      <Dialog open={showInlineTemplateDialog} onOpenChange={setShowInlineTemplateDialog}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Apply Template to Board</DialogTitle>
-            <DialogDescription>
-              Choose a template to populate this board with pre-configured columns and sample data.
-            </DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={showInlineTemplateDialog}
+        onOpenChange={setShowInlineTemplateDialog}
+        title="Apply Template to Board"
+        subtitle="Choose a template to populate this board with pre-configured columns and sample data."
+        saveLabel="Close"
+        onCancel={() => setShowInlineTemplateDialog(false)}
+        onSubmit={() => setShowInlineTemplateDialog(false)}
+        size="xl"
+      >
+        <FormSection title="Template library">
           <div className="flex items-center gap-2 px-1">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1963,8 +2098,8 @@ export function WorkspaceTableView({
               <span className="text-sm text-muted-foreground">Applying template...</span>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </FormSection>
+      </FormDialogShell>
 
       <BulkActionsBar
         selectedCount={selectedRows.size}

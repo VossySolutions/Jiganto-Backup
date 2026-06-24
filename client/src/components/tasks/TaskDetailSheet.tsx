@@ -264,6 +264,7 @@ export function TaskDetailSheet({ task, open, onOpenChange, filters }: TaskDetai
               <Label className="text-xs text-muted-foreground">Status</Label>
               <Select
                 value={current.status}
+                disabled={task.isReadOnly}
                 onValueChange={(status) => updateMutation.mutate({ status })}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>

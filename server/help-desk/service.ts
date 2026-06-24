@@ -12,7 +12,11 @@ import {
 import * as sd from "../service-desk/service";
 
 export async function loadHelpDeskDashboard(tenantId: number, clientId?: number | null) {
-  const tickets = await sd.listTickets(tenantId, { source: "help_desk", clientId: clientId ?? undefined });
+  const tickets = await sd.listTickets(tenantId, {
+    source: "help_desk",
+    clientId: clientId ?? undefined,
+    lightweight: true,
+  });
   const now = new Date();
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);

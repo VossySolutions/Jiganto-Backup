@@ -13,22 +13,17 @@ export async function registerFromSource(params: {
   description?: string;
   categoryTags?: string[];
 }) {
-  try {
-    return await tplService.registerTemplate({
-      tenantId: params.tenantId,
-      userId: params.userId,
-      userName: params.userName,
-      name: params.name,
-      description: params.description,
-      module: params.module,
-      sourceModule: params.sourceModule,
-      sourceId: params.sourceId,
-      categoryTags: params.categoryTags,
-      tier: "customer",
-      status: "active",
-    });
-  } catch (err) {
-    console.warn("[templates] registerFromSource failed:", (err as Error).message);
-    return null;
-  }
+  return tplService.registerTemplate({
+    tenantId: params.tenantId,
+    userId: params.userId,
+    userName: params.userName,
+    name: params.name,
+    description: params.description,
+    module: params.module,
+    sourceModule: params.sourceModule,
+    sourceId: params.sourceId,
+    categoryTags: params.categoryTags,
+    tier: "customer",
+    status: "active",
+  });
 }

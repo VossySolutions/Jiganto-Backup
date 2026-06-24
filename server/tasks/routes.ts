@@ -9,7 +9,7 @@ import {
   taskSourceEnum,
 } from "@shared/models/tasks";
 import { storage } from "../storage";
-import { getApiTenantIdWithFallback } from "../lib/api-tenant-id";
+import { getApiTenantId } from "../lib/api-tenant-id";
 import {
   listAggregatedTasks,
   getAggregatedTask,
@@ -40,9 +40,11 @@ function getUserId(req: Request): string | undefined {
 function buildScope(req: Request): TaskScope | null {
   const userId = getUserId(req);
   if (!userId) return null;
+  const tenantId = getApiTenantId(req);
+  if (tenantId == null) return null;
   return {
     userId,
-    tenantId: getApiTenantIdWithFallback(req),
+    tenantId,
     platformRole: req.permissions?.platformRole,
     isJigantoStaff: req.permissions?.isJigantoStaff,
     lockedWorkspaceId: req.workspace?.clientId ?? req.permissions?.lockedWorkspaceId ?? null,

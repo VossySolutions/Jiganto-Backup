@@ -11,6 +11,7 @@ import {
   computeCycleMetrics,
   computeReleaseReadiness,
   enrichCycle,
+  groupResultsByRunId,
   normalizeExecutionStatus,
   isPassRateEligible,
   isExecutedStatus,
@@ -22,7 +23,11 @@ import * as sd from "../service-desk/service";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-const TENANT_ID = 1;
+import { requireApiTenantId } from "../lib/api-tenant-id";
+
+function tmTenantId(req: Request): number {
+  return (req as Request & { tmTenantId?: number }).tmTenantId!;
+}
 
 type TmStorage = {
   getTmProjects: (tenantId: number) => Promise<any[]>;
@@ -52,6 +57,7 @@ type TmStorage = {
   createTmTestRun: (data: Record<string, unknown>) => Promise<any>;
   updateTmTestRun: (id: number, data: Record<string, unknown>) => Promise<any | undefined>;
   getTmTestResults: (testRunId: number) => Promise<TmTestResult[]>;
+  getTmTestResultsForRuns: (runIds: number[]) => Promise<TmTestResult[]>;
   getTmTestResult: (id: number) => Promise<TmTestResult | undefined>;
   createTmTestResult: (data: Record<string, unknown>) => Promise<TmTestResult>;
   updateTmTestResult: (id: number, data: Record<string, unknown>) => Promise<TmTestResult | undefined>;
@@ -109,6 +115,12 @@ function tmHandler(
   fn: (req: Request, res: Response) => unknown | Promise<unknown>,
 ): RequestHandler {
   return async (req, res) => {
+    if (!isRequestAuthenticated(req)) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
+    (req as Request & { tmTenantId?: number }).tmTenantId = tenantId;
     try {
       await fn(req, res);
     } catch (err) {
@@ -150,6 +162,7 @@ function parseSqlStatements(content: string): string[] {
 
 async function ensureChildrenSignedOff(
   storage: TmStorage,
+  tenantId: number,
   entityType: "scenario" | "business_process" | "business_area",
   entityId: number,
   cycleId: number,
@@ -171,9 +184,9 @@ async function ensureChildrenSignedOff(
     return { ok: true };
   }
 
-  const signOffs = await storage.getTmSignOffs(TENANT_ID, undefined, cycleId);
+  const signOffs = await storage.getTmSignOffs(tenantId, undefined, cycleId);
   if (entityType === "business_process") {
-    const scenarios = await storage.getTmScenarios(TENANT_ID);
+    const scenarios = await storage.getTmScenarios(tenantId);
     const childScenarioIds = scenarios.filter((scenario) => scenario.businessProcessId === entityId).map((scenario) => scenario.id);
     const signedChildren = signOffs
       .filter((item) => item.entityType === "scenario")
@@ -185,7 +198,7 @@ async function ensureChildrenSignedOff(
     return { ok: true };
   }
 
-  const processes = await storage.getTmBusinessProcesses(TENANT_ID);
+  const processes = await storage.getTmBusinessProcesses(tenantId);
   const childProcessIds = processes.filter((process) => process.businessAreaId === entityId).map((process) => process.id);
   const signedProcesses = signOffs
     .filter((item) => item.entityType === "business_process")
@@ -205,11 +218,11 @@ export function registerTestMgmtExtensionRoutes(
 
   app.get("/api/tm/business-areas", tmHandler(async (req, res) => {
     const projectId = parseId(req.query.projectId as string | string[] | undefined) ?? undefined;
-    res.json(await storage.getTmBusinessAreas(TENANT_ID, projectId));
+    res.json(await storage.getTmBusinessAreas(tmTenantId(req), projectId));
   }));
 
   app.post("/api/tm/business-areas", tmHandler(async (req, res) => {
-    const payload = { ...req.body, tenantId: TENANT_ID };
+    const payload = { ...req.body, tenantId: tmTenantId(req) };
     res.status(201).json(await storage.createTmBusinessArea(payload));
   }));
 
@@ -246,11 +259,11 @@ export function registerTestMgmtExtensionRoutes(
   app.get("/api/tm/business-processes", tmHandler(async (req, res) => {
     const projectId = parseId(req.query.projectId as string | string[] | undefined) ?? undefined;
     const businessAreaId = parseId(req.query.businessAreaId as string | string[] | undefined) ?? undefined;
-    res.json(await storage.getTmBusinessProcesses(TENANT_ID, projectId, businessAreaId));
+    res.json(await storage.getTmBusinessProcesses(tmTenantId(req), projectId, businessAreaId));
   }));
 
   app.post("/api/tm/business-processes", tmHandler(async (req, res) => {
-    const payload = { ...req.body, tenantId: TENANT_ID };
+    const payload = { ...req.body, tenantId: tmTenantId(req) };
     res.status(201).json(await storage.createTmBusinessProcess(payload));
   }));
 
@@ -289,11 +302,11 @@ export function registerTestMgmtExtensionRoutes(
     if (!projectId) return;
     try {
       const [project, areas, processes, scenarios, testCases] = await Promise.all([
-        storage.getTmProjects(TENANT_ID).then((items) => items.find((item) => item.id === projectId)),
-        storage.getTmBusinessAreas(TENANT_ID, projectId).catch(() => []),
-        storage.getTmBusinessProcesses(TENANT_ID, projectId).catch(() => []),
-        storage.getTmScenarios(TENANT_ID, projectId),
-        storage.getTmTestCases(TENANT_ID, undefined, projectId),
+        storage.getTmProjects(tmTenantId(req)).then((items) => items.find((item) => item.id === projectId)),
+        storage.getTmBusinessAreas(tmTenantId(req), projectId).catch(() => []),
+        storage.getTmBusinessProcesses(tmTenantId(req), projectId).catch(() => []),
+        storage.getTmScenarios(tmTenantId(req), projectId),
+        storage.getTmTestCases(tmTenantId(req), undefined, projectId),
       ]);
       if (!project) return res.status(404).json({ message: "Project not found" });
       const tree = buildHierarchyTree(areas, processes, scenarios, testCases);
@@ -307,10 +320,11 @@ export function registerTestMgmtExtensionRoutes(
   app.get("/api/tm/cycles", tmHandler(async (req, res) => {
     const projectId = getRequiredQueryId(req, res, "projectId");
     if (!projectId) return;
-    const cycles = await storage.getTmTestRuns(TENANT_ID, projectId);
-    const enriched = await Promise.all(
-      cycles.map(async (cycle) => enrichCycle(cycle, await storage.getTmTestResults(cycle.id))),
-    );
+    const cycles = await storage.getTmTestRuns(tmTenantId(req), projectId);
+    const runIds = cycles.map((c) => c.id);
+    const allResults = await storage.getTmTestResultsForRuns(runIds);
+    const byRun = groupResultsByRunId(allResults);
+    const enriched = cycles.map((cycle) => enrichCycle(cycle, byRun.get(cycle.id) ?? []));
     res.json(enriched);
   }));
 
@@ -337,28 +351,31 @@ export function registerTestMgmtExtensionRoutes(
     const projectId = getRequiredQueryId(req, res, "projectId");
     if (!projectId) return;
 
-    const [cycles, areas, processes, scenarios, testCases] = await Promise.all([
-      storage.getTmTestRuns(TENANT_ID, projectId),
-      storage.getTmBusinessAreas(TENANT_ID, projectId),
-      storage.getTmBusinessProcesses(TENANT_ID, projectId),
-      storage.getTmScenarios(TENANT_ID, projectId),
-      storage.getTmTestCases(TENANT_ID, undefined, projectId),
+    const [cycles, areas, processes, scenarios, testCases, suites] = await Promise.all([
+      storage.getTmTestRuns(tmTenantId(req), projectId),
+      storage.getTmBusinessAreas(tmTenantId(req), projectId),
+      storage.getTmBusinessProcesses(tmTenantId(req), projectId),
+      storage.getTmScenarios(tmTenantId(req), projectId),
+      storage.getTmTestCases(tmTenantId(req), undefined, projectId),
+      db.select().from(tmTestSuites).where(and(eq(tmTestSuites.tenantId, tmTenantId(req)), eq(tmTestSuites.projectId, projectId))),
     ]);
 
-    const cycleRows = await Promise.all(
-      cycles.map(async (cycle) => {
-        const results = await storage.getTmTestResults(cycle.id);
-        return { cycle, results, metrics: computeCycleMetrics(results) };
-      }),
-    );
+    const runIds = cycles.map((c) => c.id);
+    const allResultsFlat = await storage.getTmTestResultsForRuns(runIds);
+    const resultsByRun = groupResultsByRunId(allResultsFlat);
+    const cycleRows = cycles.map((cycle) => {
+      const results = resultsByRun.get(cycle.id) ?? [];
+      return { cycle, results, metrics: computeCycleMetrics(results) };
+    });
 
-    const allResults = cycleRows.flatMap((row) => row.results);
+    const allResults = allResultsFlat;
     const overall = computeCycleMetrics(allResults);
-    const defectTickets = await sd.listTickets(TENANT_ID, {
+    const defects = await sd.listTickets(tmTenantId(req), {
       source: "help_desk",
       type: "defect",
+      projectId,
+      lightweight: true,
     } as any);
-    const defects = defectTickets.filter((item) => item.projectId === projectId);
     const criticalDefects = defects.filter((item) => item.defectSeverity === "critical" && item.status !== "closed").length;
     const openDefects = defects.filter((item) => !["closed", "resolved", "wont_fix"].includes(item.status ?? "")).length;
     const readiness = computeReleaseReadiness(overall.passRatePct, criticalDefects);
@@ -394,6 +411,54 @@ export function registerTestMgmtExtensionRoutes(
         completionPct: stats.completionPct,
         executed: stats.executed,
         total: stats.total,
+      };
+    });
+
+    const latestByCase = new Map<number, TmTestResult>();
+    for (const result of allResults) {
+      const prev = latestByCase.get(result.testCaseId);
+      const resultTime = new Date(result.executedAt ?? result.updatedAt ?? result.createdAt ?? 0).getTime();
+      const prevTime = prev
+        ? new Date(prev.executedAt ?? prev.updatedAt ?? prev.createdAt ?? 0).getTime()
+        : 0;
+      if (!prev || resultTime > prevTime) latestByCase.set(result.testCaseId, result);
+    }
+
+    const bySuite = suites.map((suite) => {
+      const suiteCases = testCases.filter((tc) => tc.suiteId === suite.id);
+      const caseIds = new Set(suiteCases.map((c) => c.id));
+      let pass = 0;
+      let fail = 0;
+      let blocked = 0;
+      let notRun = 0;
+      for (const testCase of suiteCases) {
+        const latest = latestByCase.get(testCase.id);
+        const status = normalizeExecutionStatus(latest?.status) ?? "not_started";
+        if (status === "pass") pass++;
+        else if (status === "fail") fail++;
+        else if (status === "blocked") blocked++;
+        else notRun++;
+      }
+      const executed = pass + fail + blocked;
+      const passRatePct = executed > 0 ? Math.round((pass / executed) * 100) : 0;
+      const openSuiteDefects = defects.filter(
+        (d) =>
+          !["closed", "resolved", "wont_fix"].includes(d.status ?? "")
+          && d.linkedTestCaseId != null
+          && caseIds.has(d.linkedTestCaseId),
+      );
+      return {
+        suiteId: suite.id,
+        suiteName: suite.name,
+        total: suiteCases.length,
+        pass,
+        fail,
+        blocked,
+        notRun,
+        passRatePct,
+        completionPct: suiteCases.length > 0 ? Math.round((executed / suiteCases.length) * 100) : 0,
+        openDefects: openSuiteDefects.length,
+        criticalDefects: openSuiteDefects.filter((d) => d.defectSeverity === "critical").length,
       };
     });
 
@@ -455,6 +520,7 @@ export function registerTestMgmtExtensionRoutes(
         blocked: 0,
         notStarted: Math.max(a.total - a.executed, 0),
       })),
+      bySuite,
       defectTrend,
       passRateTrend,
       activeCycle: activeCycleRow
@@ -472,7 +538,7 @@ export function registerTestMgmtExtensionRoutes(
   app.get("/api/tm/sign-offs", tmHandler(async (req, res) => {
     const projectId = parseId(req.query.projectId as string | string[] | undefined) ?? undefined;
     const cycleId = parseId(req.query.testCycleId as string | string[] | undefined) ?? undefined;
-    res.json(await storage.getTmSignOffs(TENANT_ID, projectId, cycleId));
+    res.json(await storage.getTmSignOffs(tmTenantId(req), projectId, cycleId));
   }));
 
   app.post("/api/tm/sign-offs", tmHandler(async (req, res) => {
@@ -481,7 +547,7 @@ export function registerTestMgmtExtensionRoutes(
     const payload = {
       ...req.body,
       signedOffBy,
-      tenantId: TENANT_ID,
+      tenantId: tmTenantId(req),
     };
     res.status(201).json(await storage.createTmSignOff(payload));
   }));
@@ -497,12 +563,12 @@ export function registerTestMgmtExtensionRoutes(
 
     if ((payload.entityType === "scenario" || payload.entityType === "business_process" || payload.entityType === "business_area")) {
       if (!cycleId) return res.status(400).json({ message: "testCycleId is required for scenario/process/area sign-off" });
-      const validation = await ensureChildrenSignedOff(storage, payload.entityType, payload.entityId, cycleId);
+      const validation = await ensureChildrenSignedOff(storage, tmTenantId(req), payload.entityType, payload.entityId, cycleId);
       if (!validation.ok) return res.status(400).json({ message: validation.message });
     }
 
     const created = await storage.createTmSignOff({
-      tenantId: TENANT_ID,
+      tenantId: tmTenantId(req),
       projectId: payload.projectId,
       entityType: payload.entityType,
       entityId: payload.entityId,
@@ -529,8 +595,8 @@ export function registerTestMgmtExtensionRoutes(
     const cycle = await storage.getTmTestRun(cycleId);
     if (!cycle) return res.status(404).json({ message: "Cycle not found" });
     if (!cycle.projectId) return res.status(400).json({ message: "Cycle is not linked to a project" });
-    const areas = await storage.getTmBusinessAreas(TENANT_ID, cycle.projectId);
-    const signOffs = await storage.getTmSignOffs(TENANT_ID, cycle.projectId, cycleId);
+    const areas = await storage.getTmBusinessAreas(tmTenantId(req), cycle.projectId);
+    const signOffs = await storage.getTmSignOffs(tmTenantId(req), cycle.projectId, cycleId);
     const signedAreaIds = signOffs.filter((item) => item.entityType === "business_area").map((item) => item.entityId);
     const missing = areas.filter((area) => !signedAreaIds.includes(area.id));
     if (missing.length > 0) {
@@ -542,7 +608,7 @@ export function registerTestMgmtExtensionRoutes(
     const results = await storage.getTmTestResults(cycleId);
     const metrics = computeCycleMetrics(results);
     const entry = await storage.createTmSignOff({
-      tenantId: TENANT_ID,
+      tenantId: tmTenantId(req),
       projectId: cycle.projectId,
       entityType: "test_cycle",
       entityId: cycleId,
@@ -591,19 +657,19 @@ export function registerTestMgmtExtensionRoutes(
 
     let defectTicket: unknown = null;
     if (normalizedStatus === "fail" && payload.raiseDefect) {
-      defectTicket = await createDefectFromTestResult(TENANT_ID, executedBy, executionId, {
+      defectTicket = await createDefectFromTestResult(tmTenantId(req), executedBy, executionId, {
         comment: payload.actualResult ?? payload.notes,
       });
       if (defectTicket && payload.defectSeverity) {
         const ticketAny = defectTicket as { id?: number };
         if (ticketAny.id) {
-          await sd.updateTicket(TENANT_ID, ticketAny.id, executedBy, { defectSeverity: payload.defectSeverity } as any);
+          await sd.updateTicket(tmTenantId(req), ticketAny.id, executedBy, { defectSeverity: payload.defectSeverity } as any);
         }
       }
     }
 
     if (normalizedStatus === "pass") {
-      await handleRetestResult(TENANT_ID, executionId, "pass", executedBy);
+      await handleRetestResult(tmTenantId(req), executionId, "pass", executedBy);
     }
 
     res.json({ execution: updated, defectTicket });
@@ -613,7 +679,11 @@ export function registerTestMgmtExtensionRoutes(
     const projectId = getRequiredQueryId(req, res, "projectId");
     if (!projectId) return;
     const cycleId = parseId(req.query.cycleId as string | string[] | undefined) ?? undefined;
-    const ticketRows = await sd.listTickets(TENANT_ID, { source: "help_desk", type: "defect" } as any);
+    const ticketRows = await sd.listTickets(tmTenantId(req), {
+      source: "help_desk",
+      type: "defect",
+      lightweight: true,
+    } as any);
     let tickets = ticketRows.filter((ticket) => ticket.projectId === projectId || ticket.projectId == null);
     if (cycleId) {
       const results = await storage.getTmTestResults(cycleId);
@@ -647,7 +717,7 @@ export function registerTestMgmtExtensionRoutes(
     if (!status) return res.status(400).json({ message: "status or column is required" });
 
     const uid = getUserId(req) ?? "system";
-    const tickets = await sd.listTickets(TENANT_ID, { source: "help_desk", type: "defect" } as any);
+    const tickets = await sd.listTickets(tmTenantId(req), { source: "help_desk", type: "defect" } as any);
     const ticket = tickets.find((t) => t.id === ticketId);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
@@ -662,7 +732,7 @@ export function registerTestMgmtExtensionRoutes(
     let updated: Awaited<ReturnType<typeof sd.updateTicketStatus>> = ticket;
     try {
       for (const step of path) {
-        updated = await sd.updateTicketStatus(TENANT_ID, ticketId, uid, step, req.body?.reason ?? "Defect board update");
+        updated = await sd.updateTicketStatus(tmTenantId(req), ticketId, uid, step, req.body?.reason ?? "Defect board update");
         if (!updated) return res.status(404).json({ message: "Ticket not found" });
       }
     } catch (err) {
@@ -686,10 +756,10 @@ export function registerTestMgmtExtensionRoutes(
     if (!projectId) return res.status(400).json({ message: "projectId is required" });
 
     const [scenarios, existingAreas, existingProcesses, suites] = await Promise.all([
-      storage.getTmScenarios(TENANT_ID, projectId),
-      storage.getTmBusinessAreas(TENANT_ID, projectId),
-      storage.getTmBusinessProcesses(TENANT_ID, projectId),
-      db.select().from(tmTestSuites).where(and(eq(tmTestSuites.tenantId, TENANT_ID), eq(tmTestSuites.projectId, projectId))),
+      storage.getTmScenarios(tmTenantId(req), projectId),
+      storage.getTmBusinessAreas(tmTenantId(req), projectId),
+      storage.getTmBusinessProcesses(tmTenantId(req), projectId),
+      db.select().from(tmTestSuites).where(and(eq(tmTestSuites.tenantId, tmTenantId(req)), eq(tmTestSuites.projectId, projectId))),
     ]);
 
     const areaByName = new Map(existingAreas.map((area) => [area.name.trim().toLowerCase(), area]));
@@ -719,7 +789,7 @@ export function registerTestMgmtExtensionRoutes(
       let area = areaByName.get(areaKey);
       if (!area) {
         area = await storage.createTmBusinessArea({
-          tenantId: TENANT_ID,
+          tenantId: tmTenantId(req),
           projectId,
           name: row.areaName,
           description: `Auto-seeded from existing suites/scenarios for project ${projectId}`,
@@ -732,7 +802,7 @@ export function registerTestMgmtExtensionRoutes(
       let process = processByComposite.get(processKey);
       if (!process) {
         process = await storage.createTmBusinessProcess({
-          tenantId: TENANT_ID,
+          tenantId: tmTenantId(req),
           projectId,
           businessAreaId: area.id,
           name: row.processName,
@@ -764,16 +834,27 @@ export function registerTestMgmtExtensionRoutes(
     const projectId = getRequiredQueryId(req, res, "projectId");
     if (!projectId) return;
 
-    const cycles = await storage.getTmTestRuns(TENANT_ID, projectId);
-    const cycleRows = await Promise.all(
-      cycles.map(async (cycle) => {
-        const results = await storage.getTmTestResults(cycle.id);
-        const metrics = computeCycleMetrics(results);
-        const defectTickets = await sd.listTickets(TENANT_ID, { source: "help_desk", type: "defect" } as any);
-        const cycleDefects = defectTickets.filter((t) => t.projectId === projectId && t.sprintPhase === cycle.testPhase);
-        return { cycle, metrics, defectCount: cycleDefects.length, openDefects: cycleDefects.filter((t) => !["closed", "resolved", "wont_fix"].includes(t.status ?? "")).length };
-      }),
-    );
+    const cycles = await storage.getTmTestRuns(tmTenantId(req), projectId);
+    const runIds = cycles.map((c) => c.id);
+    const allResults = await storage.getTmTestResultsForRuns(runIds);
+    const resultsByRun = groupResultsByRunId(allResults);
+    const defectTickets = await sd.listTickets(tmTenantId(req), {
+      source: "help_desk",
+      type: "defect",
+      projectId,
+      lightweight: true,
+    } as any);
+    const cycleRows = cycles.map((cycle) => {
+      const results = resultsByRun.get(cycle.id) ?? [];
+      const metrics = computeCycleMetrics(results);
+      const cycleDefects = defectTickets.filter((t) => t.sprintPhase === cycle.testPhase);
+      return {
+        cycle,
+        metrics,
+        defectCount: cycleDefects.length,
+        openDefects: cycleDefects.filter((t) => !["closed", "resolved", "wont_fix"].includes(t.status ?? "")).length,
+      };
+    });
 
     const phaseMap = new Map<string, typeof cycleRows>();
     for (const row of cycleRows) {
@@ -827,7 +908,7 @@ export function registerTestMgmtExtensionRoutes(
     const entityId = parseId(req.query.entityId as string | string[] | undefined) ?? cycleId;
 
     const project = await storage.getTmProject(projectId);
-    const signOffs = await storage.getTmSignOffs(TENANT_ID, projectId, cycleId);
+    const signOffs = await storage.getTmSignOffs(tmTenantId(req), projectId, cycleId);
     const latest = signOffs
       .filter((s) => s.entityType === entityType && (!entityId || s.entityId === entityId))
       .sort((a, b) => new Date(b.signedOffAt ?? 0).getTime() - new Date(a.signedOffAt ?? 0).getTime())[0];
@@ -845,13 +926,13 @@ export function registerTestMgmtExtensionRoutes(
       const results = await storage.getTmTestResults(entityId);
       metrics = computeCycleMetrics(results);
     } else if (entityType === "business_area" && entityId) {
-      const areas = await storage.getTmBusinessAreas(TENANT_ID, projectId);
+      const areas = await storage.getTmBusinessAreas(tmTenantId(req), projectId);
       entityName = areas.find((a) => a.id === entityId)?.name ?? `Area #${entityId}`;
     } else if (entityType === "business_process" && entityId) {
-      const processes = await storage.getTmBusinessProcesses(TENANT_ID, projectId);
+      const processes = await storage.getTmBusinessProcesses(tmTenantId(req), projectId);
       entityName = processes.find((p) => p.id === entityId)?.name ?? `Process #${entityId}`;
     } else if (entityType === "scenario" && entityId) {
-      const scenarios = await storage.getTmScenarios(TENANT_ID, projectId);
+      const scenarios = await storage.getTmScenarios(tmTenantId(req), projectId);
       const sc = scenarios.find((s) => s.id === entityId);
       entityName = sc?.title ?? sc?.scenarioId ?? `Scenario #${entityId}`;
     }
@@ -866,11 +947,11 @@ export function registerTestMgmtExtensionRoutes(
       signOffs.slice(0, 30).map(async (s) => {
         let name = `#${s.entityId}`;
         if (s.entityType === "business_area") {
-          name = (await storage.getTmBusinessAreas(TENANT_ID, projectId)).find((a) => a.id === s.entityId)?.name ?? name;
+          name = (await storage.getTmBusinessAreas(tmTenantId(req), projectId)).find((a) => a.id === s.entityId)?.name ?? name;
         } else if (s.entityType === "test_cycle") {
           name = (await storage.getTmTestRun(s.entityId))?.name ?? name;
         } else if (s.entityType === "scenario") {
-          const sc = (await storage.getTmScenarios(TENANT_ID, projectId)).find((x) => x.id === s.entityId);
+          const sc = (await storage.getTmScenarios(tmTenantId(req), projectId)).find((x) => x.id === s.entityId);
           name = sc?.title ?? name;
         }
         return {
@@ -910,7 +991,7 @@ export function registerTestMgmtExtensionRoutes(
     const count = Math.min(Math.max(Number(req.body?.count ?? 3), 1), 8);
     const create = req.body?.create === true;
 
-    const scenarios = await storage.getTmScenarios(TENANT_ID, projectId ?? undefined);
+    const scenarios = await storage.getTmScenarios(tmTenantId(req), projectId ?? undefined);
     const scenario = scenarios.find((s) => s.id === scenarioId);
     if (!scenario) return res.status(404).json({ message: "Scenario not found" });
 
@@ -927,7 +1008,7 @@ export function registerTestMgmtExtensionRoutes(
     const created: any[] = [];
     for (const tc of generated.testCases) {
       const testCase = await storage.createTmTestCase({
-        tenantId: TENANT_ID,
+        tenantId: tmTenantId(req),
         projectId: projectId ?? scenario.projectId,
         scenarioId: scenario.id,
         title: tc.title,

@@ -11,6 +11,9 @@ import {
 import { workspaceMembers } from "@shared/models/workspaces";
 import { SYSTEM_SURVEY_TEMPLATES, LIKERT_OPTIONS } from "./system-templates";
 import { notifyUser } from "../lib/user-notify";
+import { sendOrgEmail } from "../lib/org-email";
+import { tenants } from "@shared/schema";
+import { applyLogicSkip as sharedApplyLogicSkip } from "../../shared/survey-logic";
 
 function genToken() {
   return crypto.randomBytes(16).toString("hex");
@@ -97,7 +100,35 @@ export async function getSurveyByToken(token: string) {
   const rows = await db.select().from(surveys).where(eq(surveys.token, token));
   if (!rows.length) return undefined;
   const [result] = await attachSurveyDetails(rows);
-  return result;
+  const distributions = await db.select().from(surveyDistributions).where(eq(surveyDistributions.surveyId, result.id));
+  return { ...result, distributions };
+}
+
+/** Restrict portal access when allowExternal is false (invited users / org members only). */
+export async function assertSurveyPortalAccess(
+  survey: SurveyWithDetails & { distributions?: typeof surveyDistributions.$inferSelect[] },
+  opts: { userId?: string | null; email?: string | null },
+) {
+  if (survey.allowExternal !== false) return;
+
+  const userId = opts.userId?.trim() || null;
+  const email = opts.email?.trim().toLowerCase() || null;
+
+  if (survey.createdBy && userId === survey.createdBy) return;
+
+  const distributions = survey.distributions ?? await db
+    .select()
+    .from(surveyDistributions)
+    .where(eq(surveyDistributions.surveyId, survey.id));
+
+  for (const d of distributions) {
+    const userIds = (d.targetUserIds as string[] | null) ?? [];
+    if (userId && userIds.includes(userId)) return;
+    const emails = ((d.targetEmails as string[] | null) ?? []).map(e => e.trim().toLowerCase());
+    if (email && emails.includes(email)) return;
+  }
+
+  throw new Error("This survey is restricted to invited participants. Sign in or use the email address you were invited with.");
 }
 
 export async function createSurvey(data: Partial<Survey> & { tenantId: number; token?: string }) {
@@ -359,9 +390,15 @@ export async function distributeSurvey(params: {
     : null;
   const link = `/survey/${survey.token}`;
 
-  if (params.type === "workspace" && params.workspaceId) {
+  if (params.type === "workspace") {
+    if (!params.workspaceId) {
+      throw new Error("Workspace distribution requires a workspace to be selected");
+    }
     const members = await db.select().from(workspaceMembers)
       .where(eq(workspaceMembers.workspaceId, params.workspaceId));
+    if (members.length === 0) {
+      throw new Error("Selected workspace has no members to invite");
+    }
     invited = members.length;
     notifyIds.push(...members.map(m => m.userId));
     await db.insert(surveyDistributions).values({
@@ -413,6 +450,28 @@ export async function distributeSurvey(params: {
       sourceId: String(survey.id),
       emailSubject: `Survey invitation: ${survey.title}`,
     }).catch(() => undefined);
+  }
+
+  const emails = params.type === "specific_users" ? (params.targetEmails ?? []) : [];
+  if (emails.length > 0) {
+    const [tenantRow] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+    const baseUrl = process.env.APP_URL?.trim() || process.env.PUBLIC_APP_URL?.trim() || "http://localhost:5000";
+    const surveyUrl = `${baseUrl.replace(/\/$/, "")}/survey/${survey.token}`;
+    const html = `
+      <p>You have been invited to complete the survey <strong>${survey.title}</strong>.</p>
+      <p><a href="${surveyUrl}">Open survey</a></p>
+      <p style="color:#666;font-size:12px">If the link does not work, copy and paste: ${surveyUrl}</p>
+    `;
+    for (const email of emails) {
+      const trimmed = email.trim().toLowerCase();
+      if (!trimmed || !trimmed.includes("@")) continue;
+      await sendOrgEmail({
+        tenant: tenantRow ?? null,
+        to: trimmed,
+        subject: `Survey invitation: ${survey.title}`,
+        html,
+      }).catch(() => undefined);
+    }
   }
 
   return { success: true, invited, link };
@@ -474,7 +533,11 @@ export async function listPolls(tenantId: number, workspaceId?: number | null, p
   return db.select().from(modulePolls).where(conditions).orderBy(desc(modulePolls.createdAt));
 }
 
-async function attachPollVotes(poll: typeof modulePolls.$inferSelect, viewerId?: string): Promise<ModulePollWithVotes & { myVote?: number[] }> {
+async function attachPollVotes(
+  poll: typeof modulePolls.$inferSelect,
+  viewerId?: string,
+  voterSession?: string,
+): Promise<ModulePollWithVotes & { myVote?: number[] }> {
   const votes = await db.select().from(modulePollVotes).where(eq(modulePollVotes.pollId, poll.id));
   const options = (poll.options as string[]) ?? [];
   const voteCounts = options.map((_, i) => votes.filter(v => (v.optionIndexes as number[]).includes(i)).length);
@@ -486,9 +549,12 @@ async function attachPollVotes(poll: typeof modulePolls.$inferSelect, viewerId?:
         .map(v => ({ id: v.voterId, name: v.voterName }));
     });
   }
+  const sessionKey = voterSession ? `anon:${voterSession}` : null;
   const myVote = viewerId
     ? votes.find(v => v.voterId === viewerId)?.optionIndexes as number[] | undefined
-    : undefined;
+    : sessionKey
+      ? votes.find(v => v.voterName === sessionKey)?.optionIndexes as number[] | undefined
+      : undefined;
   const isClosed = poll.status === "closed" || (poll.closeAt ? new Date(poll.closeAt) < new Date() : false);
   return {
     ...poll,
@@ -501,16 +567,16 @@ async function attachPollVotes(poll: typeof modulePolls.$inferSelect, viewerId?:
   } as ModulePollWithVotes & { myVote?: number[]; isClosed?: boolean };
 }
 
-export async function getPollByToken(token: string, viewerId?: string) {
+export async function getPollByToken(token: string, viewerId?: string, voterSession?: string) {
   const [poll] = await db.select().from(modulePolls).where(eq(modulePolls.token, token));
   if (!poll) return undefined;
-  return attachPollVotes(poll, viewerId);
+  return attachPollVotes(poll, viewerId, voterSession);
 }
 
-export async function getPollById(id: number, viewerId?: string) {
+export async function getPollById(id: number, viewerId?: string, voterSession?: string) {
   const [poll] = await db.select().from(modulePolls).where(eq(modulePolls.id, id));
   if (!poll) return undefined;
-  return attachPollVotes(poll, viewerId);
+  return attachPollVotes(poll, viewerId, voterSession);
 }
 
 export async function createPoll(data: Partial<typeof modulePolls.$inferInsert> & { tenantId: number; question: string; options: string[] }) {
@@ -527,6 +593,7 @@ export async function castPollVote(params: {
   pollId: number;
   voterId?: string;
   voterName?: string;
+  voterSession?: string;
   optionIndexes: number[];
 }) {
   const poll = await getPollById(params.pollId);
@@ -548,6 +615,22 @@ export async function castPollVote(params: {
         optionIndexes: params.optionIndexes,
       });
     }
+  } else if (params.voterSession) {
+    const sessionKey = `anon:${params.voterSession}`;
+    const [existing] = await db.select().from(modulePollVotes)
+      .where(and(eq(modulePollVotes.pollId, params.pollId), eq(modulePollVotes.voterName, sessionKey)));
+    if (existing && !poll.allowVoteChange) throw new Error("Vote change not allowed");
+    if (existing) {
+      await db.update(modulePollVotes).set({ optionIndexes: params.optionIndexes, votedAt: new Date() })
+        .where(eq(modulePollVotes.id, existing.id));
+    } else {
+      await db.insert(modulePollVotes).values({
+        pollId: params.pollId,
+        voterId: null,
+        voterName: sessionKey,
+        optionIndexes: params.optionIndexes,
+      });
+    }
   } else {
     await db.insert(modulePollVotes).values({
       pollId: params.pollId,
@@ -556,7 +639,7 @@ export async function castPollVote(params: {
       optionIndexes: params.optionIndexes,
     });
   }
-  return getPollById(params.pollId, params.voterId);
+  return getPollById(params.pollId, params.voterId, params.voterSession);
 }
 
 export async function postPollCloseSummary(poll: typeof modulePolls.$inferSelect) {
@@ -699,18 +782,5 @@ export function orderQuestionsForRespondent(questions: SurveyQuestion[], randomi
 }
 
 export function applyLogicSkip(questions: SurveyQuestion[], answers: Record<number, unknown>, currentIndex: number): number {
-  const q = questions[currentIndex];
-  if (!q?.logicJson?.length) return currentIndex + 1;
-  for (const rule of q.logicJson as { operator: string; value: unknown; skipToQuestionId: number }[]) {
-    const ans = answers[q.id];
-    let match = false;
-    if (rule.operator === "equals") match = ans === rule.value;
-    else if (rule.operator === "not_equals") match = ans !== rule.value;
-    else if (rule.operator === "contains") match = String(ans ?? "").includes(String(rule.value));
-    if (match) {
-      const targetIdx = questions.findIndex(x => x.id === rule.skipToQuestionId);
-      return targetIdx >= 0 ? targetIdx : currentIndex + 1;
-    }
-  }
-  return currentIndex + 1;
+  return sharedApplyLogicSkip(questions, answers, currentIndex);
 }

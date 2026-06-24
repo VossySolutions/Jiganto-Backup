@@ -1,7 +1,18 @@
-type GeoCoord = { lat: number; lon: number };
+export type GeoCoord = { lat: number; lon: number };
+
+export type GeoPin = {
+  id: number;
+  name: string;
+  country?: string | null;
+  city?: string | null;
+  state?: string | null;
+  segment: string;
+  color: string;
+};
 
 const COUNTRY_COORDS: Record<string, GeoCoord> = {
   "united states": { lat: 39.8, lon: -98.5 },
+  "united states of america": { lat: 39.8, lon: -98.5 },
   usa: { lat: 39.8, lon: -98.5 },
   us: { lat: 39.8, lon: -98.5 },
   "united kingdom": { lat: 55.4, lon: -3.4 },
@@ -51,6 +62,9 @@ const COUNTRY_COORDS: Record<string, GeoCoord> = {
   russia: { lat: 61.5, lon: 105.3 },
   turkey: { lat: 38.9, lon: 35.2 },
   "saudi arabia": { lat: 23.9, lon: 45.1 },
+  greece: { lat: 39.1, lon: 21.8 },
+  "czech republic": { lat: 49.8, lon: 15.5 },
+  czechia: { lat: 49.8, lon: 15.5 },
 };
 
 const CITY_COORDS: Record<string, GeoCoord> = {
@@ -64,8 +78,18 @@ const CITY_COORDS: Record<string, GeoCoord> = {
   atlanta: { lat: 33.7, lon: -84.4 },
   dallas: { lat: 32.8, lon: -96.8 },
   miami: { lat: 25.8, lon: -80.2 },
+  austin: { lat: 30.3, lon: -97.7 },
+  denver: { lat: 39.7, lon: -104.9 },
+  phoenix: { lat: 33.4, lon: -112.1 },
+  portland: { lat: 45.5, lon: -122.7 },
+  "washington dc": { lat: 38.9, lon: -77.0 },
+  philadelphia: { lat: 39.9, lon: -75.2 },
+  detroit: { lat: 42.3, lon: -83.0 },
   london: { lat: 51.5, lon: -0.1 },
   manchester: { lat: 53.5, lon: -2.2 },
+  birmingham: { lat: 52.5, lon: -1.9 },
+  cambridge: { lat: 52.2, lon: 0.1 },
+  edinburgh: { lat: 55.95, lon: -3.2 },
   paris: { lat: 48.9, lon: 2.4 },
   berlin: { lat: 52.5, lon: 13.4 },
   munich: { lat: 48.1, lon: 11.6 },
@@ -88,6 +112,7 @@ const CITY_COORDS: Record<string, GeoCoord> = {
   madrid: { lat: 40.4, lon: -3.7 },
   rome: { lat: 41.9, lon: 12.5 },
   zurich: { lat: 47.4, lon: 8.5 },
+  basel: { lat: 47.6, lon: 7.6 },
   stockholm: { lat: 59.3, lon: 18.1 },
   oslo: { lat: 59.9, lon: 10.8 },
   copenhagen: { lat: 55.7, lon: 12.6 },
@@ -97,12 +122,25 @@ const CITY_COORDS: Record<string, GeoCoord> = {
   lagos: { lat: 6.5, lon: 3.4 },
   cairo: { lat: 30.0, lon: 31.2 },
   nairobi: { lat: -1.3, lon: 36.8 },
-  austin: { lat: 30.3, lon: -97.7 },
-  denver: { lat: 39.7, lon: -104.9 },
-  phoenix: { lat: 33.4, lon: -112.1 },
-  portland: { lat: 45.5, lon: -122.7 },
-  "washington dc": { lat: 38.9, lon: -77.0 },
-  philadelphia: { lat: 39.9, lon: -75.2 },
+  "tel aviv": { lat: 32.1, lon: 34.8 },
+  helsinki: { lat: 60.2, lon: 24.9 },
+};
+
+const US_STATE_COORDS: Record<string, GeoCoord> = {
+  ca: { lat: 36.8, lon: -119.4 },
+  california: { lat: 36.8, lon: -119.4 },
+  wa: { lat: 47.4, lon: -120.5 },
+  washington: { lat: 47.4, lon: -120.5 },
+  ma: { lat: 42.4, lon: -71.4 },
+  massachusetts: { lat: 42.4, lon: -71.4 },
+  tx: { lat: 31.0, lon: -99.9 },
+  texas: { lat: 31.0, lon: -99.9 },
+  ny: { lat: 43.0, lon: -75.5 },
+  "new york": { lat: 43.0, lon: -75.5 },
+  il: { lat: 40.0, lon: -89.0 },
+  illinois: { lat: 40.0, lon: -89.0 },
+  mi: { lat: 44.3, lon: -85.6 },
+  michigan: { lat: 44.3, lon: -85.6 },
 };
 
 function normalizeKey(value: string): string {
@@ -119,28 +157,35 @@ export function geoToMapPercent(lat: number, lon: number): { left: number; top: 
   return { left: clamp(left, 3, 97), top: clamp(top, 8, 92) };
 }
 
+export function geoToSvgCoord(lat: number, lon: number): { x: number; y: number } {
+  return {
+    x: clamp(((lon + 180) / 360) * 1000, 20, 980),
+    y: clamp(((90 - lat) / 180) * 500, 20, 480),
+  };
+}
+
 export function resolveAccountGeo(
   country: string | null | undefined,
   city: string | null | undefined,
   state: string | null | undefined,
   name: string,
   index: number,
-): { left: number; top: number; resolved: boolean } {
+): { left: number; top: number; lat: number; lon: number; resolved: boolean } {
   if (city) {
     const cityKey = normalizeKey(city);
     const cityCoord = CITY_COORDS[cityKey];
     if (cityCoord) {
       const pos = geoToMapPercent(cityCoord.lat, cityCoord.lon);
-      return { ...pos, resolved: true };
+      return { ...pos, lat: cityCoord.lat, lon: cityCoord.lon, resolved: true };
     }
   }
 
   if (state) {
     const stateKey = normalizeKey(state);
-    const stateCoord = CITY_COORDS[stateKey];
+    const stateCoord = US_STATE_COORDS[stateKey] ?? CITY_COORDS[stateKey];
     if (stateCoord) {
       const pos = geoToMapPercent(stateCoord.lat, stateCoord.lon);
-      return { ...pos, resolved: true };
+      return { ...pos, lat: stateCoord.lat, lon: stateCoord.lon, resolved: true };
     }
   }
 
@@ -150,15 +195,16 @@ export function resolveAccountGeo(
     if (countryCoord) {
       const jitterLon = ((name.charCodeAt(0) + index * 7) % 20) - 10;
       const jitterLat = ((name.charCodeAt(1) || 0) + index * 5) % 14 - 7;
-      const pos = geoToMapPercent(
-        countryCoord.lat + jitterLat * 0.15,
-        countryCoord.lon + jitterLon * 0.2,
-      );
-      return { ...pos, resolved: true };
+      const lat = countryCoord.lat + jitterLat * 0.15;
+      const lon = countryCoord.lon + jitterLon * 0.2;
+      const pos = geoToMapPercent(lat, lon);
+      return { ...pos, lat, lon, resolved: true };
     }
   }
 
   const left = 10 + ((name.charCodeAt(0) * 17 + index * 23) % 75);
   const top = 15 + (((name.charCodeAt(1) || 0) * 13 + index * 19) % 65);
-  return { left, top, resolved: false };
+  const lat = 90 - (top / 100) * 180;
+  const lon = (left / 100) * 360 - 180;
+  return { left, top, lat, lon, resolved: false };
 }

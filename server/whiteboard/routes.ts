@@ -50,6 +50,14 @@ export function registerWhiteboardRoutes(app: Express) {
     } catch (e: unknown) { res.status(500).json({ message: (e as Error).message }); }
   });
 
+  app.get("/api/whiteboard/share/:token/detail", async (req, res) => {
+    try {
+      const detail = await wb.getWhiteboardDetailByShareToken(req.params.token);
+      if (!detail) return res.status(404).json({ message: "Link not found or expired" });
+      res.json(detail);
+    } catch (e: unknown) { res.status(500).json({ message: (e as Error).message }); }
+  });
+
   app.get("/api/whiteboard", async (req, res) => {
     if (!isAuth(req)) return res.status(401).json({ message: "Unauthorized" });
     try {

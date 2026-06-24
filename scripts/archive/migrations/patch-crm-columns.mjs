@@ -51,6 +51,7 @@ const statements = [
   `ALTER TABLE crm_opportunities ADD COLUMN IF NOT EXISTS gross_profit numeric(15,2)`,
   `ALTER TABLE crm_opportunities ADD COLUMN IF NOT EXISTS is_archived boolean DEFAULT false`,
   `ALTER TABLE crm_opportunities ADD COLUMN IF NOT EXISTS custom_data jsonb DEFAULT '{}'::jsonb`,
+  `ALTER TABLE crm_contracts ADD COLUMN IF NOT EXISTS document_id integer REFERENCES documents(id) ON DELETE SET NULL`,
 ];
 
 const url = process.env.DATABASE_URL;

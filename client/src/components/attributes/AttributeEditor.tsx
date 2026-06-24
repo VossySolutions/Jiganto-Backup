@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ATTRIBUTE_TYPES, type TimeTrackingValue, type ChecklistValue, type LinkValue, type LabelValue, type MembersValue, type VoteValue, type ReferenceValue } from "@shared/attributeTypes";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -330,26 +330,60 @@ function LinksEditor({ value, onChange }: { value: LinkValue; onChange: (v: Link
 
 function AttachmentsEditor({ value, onChange }: { value: { name: string; url: string }[]; onChange: (v: { name: string; url: string }[]) => void }) {
   const attachments = value || [];
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const removeAttachment = (idx: number) => {
     onChange(attachments.filter((_, i) => i !== idx));
+  };
+
+  const uploadFile = async (file: File) => {
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/document-files/upload", { method: "POST", body: form, credentials: "include" });
+      if (!res.ok) throw new Error("Upload failed");
+      const uploaded = await res.json() as { originalName: string; storedName: string };
+      onChange([...attachments, { name: uploaded.originalName, url: `/uploads/${uploaded.storedName}` }]);
+    } catch {
+      // keep existing attachments on failure
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
     <div className="space-y-2">
       {attachments.map((file, idx) => (
         <div key={idx} className="flex items-center gap-2 text-sm p-2 bg-muted rounded">
-          <span className="flex-1 truncate">{file.name}</span>
-          <button onClick={() => removeAttachment(idx)} className="text-muted-foreground hover:text-destructive">
+          <a href={file.url} target="_blank" rel="noreferrer" className="flex-1 truncate hover:underline">{file.name}</a>
+          <button type="button" onClick={() => removeAttachment(idx)} className="text-muted-foreground hover:text-destructive">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
       ))}
-      <Button variant="outline" className="w-full" data-testid="upload-attachment">
+      <input
+        type="file"
+        className="hidden"
+        ref={fileInputRef}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void uploadFile(file);
+          e.target.value = "";
+        }}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        disabled={uploading}
+        onClick={() => fileInputRef.current?.click()}
+        data-testid="upload-attachment"
+      >
         <Plus className="h-4 w-4 mr-2" />
-        Upload File
+        {uploading ? "Uploading…" : "Upload File"}
       </Button>
-      <p className="text-xs text-muted-foreground">File upload coming soon</p>
     </div>
   );
 }

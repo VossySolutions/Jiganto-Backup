@@ -77,13 +77,13 @@ export default function PortfolioManagementPage() {
         <div className="flex-1 overflow-auto p-3 sm:p-4 md:p-6">
           <Tabs value={activeTab} className="space-y-0">
             <TabsContent value="dashboard" className="mt-0">
-              <PortfolioDashboardTab onNavigate={setActiveTab} />
+              <PortfolioDashboardTab onNavigate={setActiveTab} headerSearch={searchTerm} />
             </TabsContent>
             <TabsContent value="portfolios" className="mt-0">
-              <PortfolioPortfoliosTab />
+              <PortfolioPortfoliosTab searchTerm={searchTerm} />
             </TabsContent>
             <TabsContent value="programmes" className="mt-0">
-              <PortfolioProgrammesTab />
+              <PortfolioProgrammesTab searchTerm={searchTerm} />
             </TabsContent>
             <TabsContent value="roadmap" className="mt-0">
               <PortfolioRoadmapTab />

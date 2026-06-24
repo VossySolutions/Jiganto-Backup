@@ -37,7 +37,10 @@ export function ContactOrgChartView({ accountId, contacts }: ContactOrgChartView
   const hierarchy = useMemo(() => {
     const reportsTo = new Map<number, number>();
     for (const r of allRelationships) {
-      if (r.relationshipType === "Reports To") {
+      if (r.relationshipType !== "Reports To") continue;
+      const fromAccount = accountContacts.some((c) => c.id === r.contactId);
+      const toAccount = accountContacts.some((c) => c.id === r.relatedContactId);
+      if (fromAccount && toAccount) {
         reportsTo.set(r.contactId, r.relatedContactId);
       }
     }

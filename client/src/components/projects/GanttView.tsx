@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,26 @@ export function GanttView({ projectId }: GanttViewProps) {
   const [editingPhase, setEditingPhase] = useState<PmProjectPhase | null>(null);
   const [editingWorkstream, setEditingWorkstream] = useState<PmWorkstream | null>(null);
   const [editingTask, setEditingTask] = useState<PmTask | null>(null);
+
+  const invalidateGanttLists = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "phases"] });
+    queryClient.invalidateQueries({ queryKey: [`/api/pm/projects/${projectId}/phases`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/pm/workstreams?projectId=${projectId}`] });
+    queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "tasks"] });
+    queryClient.invalidateQueries({ queryKey: [`/api/pm/projects/${projectId}/tasks`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/pm/projects/${projectId}/milestones`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/pm/projects/${projectId}`] });
+  }, [queryClient, projectId]);
+
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === "gantt-saved" && e.data?.projectId === projectId) {
+        invalidateGanttLists();
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [projectId, invalidateGanttLists]);
 
   const { data: phases = [], isLoading: phasesLoading } = useQuery<PmProjectPhase[]>({
     queryKey: ["/api/pm/projects", projectId, "phases"],
@@ -110,13 +130,6 @@ export function GanttView({ projectId }: GanttViewProps) {
   const handleEditTask = (task: PmTask) => {
     setEditingTask(task);
     setTaskDialogOpen(true);
-  };
-
-  const handleAddMilestone = () => {
-    toast({ 
-      title: "Coming Soon", 
-      description: "Milestone creation will be available in the next update." 
-    });
   };
 
   const getStatusBadge = (status: string | null | undefined) => {

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { Globe, Copy, Mail, Loader2, ExternalLink, Code } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -60,15 +60,18 @@ export function HelpDeskPortalTab() {
 
   const { data: configs = [], isLoading, isError, isFetching, refetch } = useQuery<PortalConfig[]>({
     queryKey: ["/api/help-desk/portal/configs"],
+    staleTime: 60_000,
   });
 
   const { data: clients = [] } = useQuery<ClientRow[]>({
     queryKey: ["/api/clients"],
+    staleTime: 60_000,
   });
 
   const { data: activity = [], isLoading: activityLoading, isFetching: activityFetching } = useQuery<ActivityRow[]>({
     queryKey: [`/api/help-desk/portal/configs/${selectedId}/activity`],
     enabled: selectedId != null,
+    staleTime: 30_000,
   });
 
   const createMut = useMutation({
@@ -126,7 +129,7 @@ export function HelpDeskPortalTab() {
     );
   }
   if (isError) {
-    return <HelpDeskErrorState message="Could not load portal configs. Run npm run db:patch-help-desk." onRetry={() => refetch()} />;
+    return <HelpDeskErrorState message="Could not load portal configs. Run npm run db:push." onRetry={() => refetch()} />;
   }
 
   return (
@@ -272,19 +275,22 @@ export function HelpDeskPortalTab() {
         </Card>
       )}
 
-      <Dialog open={inviteOpen != null} onOpenChange={(o) => !o && setInviteOpen(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Send Portal Access</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Email</Label><Input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} /></div>
-            <div><Label>Message (optional)</Label><Input value={inviteMessage} onChange={(e) => setInviteMessage(e.target.value)} /></div>
-            <Button className="w-full" style={{ backgroundColor: HD_ACCENT }} disabled={!inviteEmail || inviteMut.isPending} onClick={() => inviteOpen && inviteMut.mutate({ id: inviteOpen, email: inviteEmail, message: inviteMessage })}>
-              {inviteMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Send Invite
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <FormDialogShell
+        open={inviteOpen != null}
+        onOpenChange={(o) => !o && setInviteOpen(null)}
+        title="Send Portal Access"
+        saveLabel="Send Invite"
+        onCancel={() => setInviteOpen(null)}
+        onSubmit={() => inviteOpen && inviteMut.mutate({ id: inviteOpen, email: inviteEmail, message: inviteMessage })}
+        saving={inviteMut.isPending}
+        disabled={!inviteEmail}
+        size="sm"
+      >
+        <FormSection title="Invite details">
+          <div className="space-y-1.5 mb-3.5"><FieldLabel required>Email</FieldLabel><Input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} /></div>
+          <div className="space-y-1.5"><FieldLabel>Message (optional)</FieldLabel><Input value={inviteMessage} onChange={(e) => setInviteMessage(e.target.value)} /></div>
+        </FormSection>
+      </FormDialogShell>
     </div>
   );
 }

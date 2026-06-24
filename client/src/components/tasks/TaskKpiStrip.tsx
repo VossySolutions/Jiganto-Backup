@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
+import { MetricCard } from "@/components/ui/metric-card";
 import { TaskSourceBadge, TaskWorkspaceBadge } from "./TaskBadges";
 import { STATUS_COLORS, type TaskFilters } from "./constants";
 import type { TaskSummaryCounts, TaskSource } from "@shared/models/tasks";
@@ -12,11 +12,11 @@ interface TaskKpiStripProps {
 }
 
 const STATUS_KPI = [
-  { key: "todo", label: "To Do", filter: { status: "todo" }, color: "text-slate-600" },
-  { key: "inProgress", label: "In Progress", filter: { status: "in_progress" }, color: "text-emerald-600" },
-  { key: "completed", label: "Completed", filter: { status: "completed" }, color: "text-blue-600" },
-  { key: "overdue", label: "Overdue", filter: { status: "overdue" }, color: "text-red-600" },
-] as const;
+  { key: "todo" as const, label: "To Do", filter: { status: "todo" }, color: "text-slate-600", helpText: "Tasks not yet started." },
+  { key: "inProgress" as const, label: "In Progress", filter: { status: "in_progress" }, color: "text-emerald-600", helpText: "Tasks currently being worked on." },
+  { key: "completed" as const, label: "Completed", filter: { status: "completed" }, color: "text-blue-600", helpText: "Tasks marked done." },
+  { key: "overdue" as const, label: "Overdue", filter: { status: "overdue" }, color: "text-red-600", helpText: "Open tasks past their due date." },
+];
 
 export function TaskKpiStrip({ summary, loading, onFilter }: TaskKpiStripProps) {
   if (loading && !summary) return <TaskKpiSkeleton />;
@@ -29,32 +29,27 @@ export function TaskKpiStrip({ summary, loading, onFilter }: TaskKpiStripProps) 
     <div className="space-y-2">
       <div className="flex gap-2 overflow-x-auto pb-1 snap-x snap-mandatory md:grid md:grid-cols-4 lg:grid-cols-6 md:overflow-visible md:pb-0">
         {STATUS_KPI.map((kpi) => (
-          <Card
+          <MetricCard
             key={kpi.key}
-            className="min-w-[128px] snap-start shrink-0 cursor-pointer hover-elevate border-border/40 md:min-w-0"
+            title={kpi.label}
+            value={summary ? summary[kpi.key] : "—"}
+            helpText={kpi.helpText}
+            valueClassName={cn("text-center md:text-left", kpi.color)}
+            className="min-w-[128px] snap-start shrink-0 md:min-w-0"
             onClick={() => onFilter(kpi.filter)}
-          >
-            <CardContent className="p-3 text-center">
-              <p className={cn("text-2xl font-bold leading-none", kpi.color)}>
-                {summary ? summary[kpi.key] : "—"}
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-1">{kpi.label}</p>
-            </CardContent>
-          </Card>
+            testId={`kpi-task-${kpi.key}`}
+          />
         ))}
         {sourceEntries.slice(0, 2).map(([source, count]) => (
-          <Card
+          <MetricCard
             key={source}
-            className="min-w-[128px] snap-start shrink-0 cursor-pointer hover-elevate border-border/40 md:min-w-0"
+            title={source.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+            value={count}
+            helpText={`Tasks originating from ${source.replace("_", " ")}.`}
+            className="min-w-[128px] snap-start shrink-0 md:min-w-0"
             onClick={() => onFilter({ source })}
-          >
-            <CardContent className="p-3">
-              <p className="text-2xl font-bold leading-none">{count}</p>
-              <div className="mt-1">
-                <TaskSourceBadge source={source} />
-              </div>
-            </CardContent>
-          </Card>
+            testId={`kpi-task-source-${source}`}
+          />
         ))}
       </div>
     </div>

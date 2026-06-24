@@ -45,7 +45,7 @@ export type ClientSortKey =
 export type ClientSortDir = "asc" | "desc";
 
 interface Props {
-  clients: ClientWorkspace[];
+  clients: readonly ClientWorkspace[];
   sortKey: ClientSortKey;
   sortDir: ClientSortDir;
   onSort: (key: ClientSortKey) => void;

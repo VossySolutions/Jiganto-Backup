@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -39,6 +39,7 @@ export default function ResourceManagementPage() {
   const [capacityViewMode, setCapacityViewMode] = useState<"basic" | "enhanced">("enhanced");
   const [showAllocDialog, setShowAllocDialog] = useState(false);
   const [profileResourceId, setProfileResourceId] = useState<number | null>(null);
+  const [gapPlanId, setGapPlanId] = useState<number | null>(null);
   const [timesheetView, setTimesheetView] = useState<"entry" | "approval" | "reports">(
     new URLSearchParams(typeof window !== "undefined" ? window.location.search : "").get("timesheetView") === "approval"
       ? "approval"
@@ -50,26 +51,32 @@ export default function ResourceManagementPage() {
 
   const { data: stats } = useQuery({
     queryKey: ["/api/resources/stats"],
+    staleTime: 30_000,
   });
 
   const { data: resources = [], isLoading, isError, refetch } = useQuery<Resource[]>({
     queryKey: ["/api/resources"],
+    staleTime: 30_000,
   });
 
   const { data: skillCategoriesList = [], isLoading: skillsCategoriesLoading } = useQuery<SkillCategory[]>({
     queryKey: ["/api/resources/skill-categories"],
+    staleTime: 60_000,
   });
 
   const { data: skillsList = [], isLoading: skillsLoading } = useQuery<Skill[]>({
     queryKey: ["/api/resources/skills"],
+    staleTime: 60_000,
   });
 
   const { data: allocations = [], isLoading: allocationsLoading } = useQuery<ResourceAllocation[]>({
     queryKey: ["/api/resources/allocations"],
+    staleTime: 30_000,
   });
 
   const { data: allResourceSkills = {}, isLoading: skillsMapLoading } = useQuery<Record<number, ResourceSkill[]>>({
     queryKey: ["/api/resources/skills-map"],
+    staleTime: 30_000,
   });
 
   useEffect(() => {
@@ -133,7 +140,14 @@ export default function ResourceManagementPage() {
     },
   });
 
-  const utilByResource = (stats as { utilByResource?: Record<number, number> })?.utilByResource ?? {};
+  const utilByResource = useMemo(() => {
+    const raw = (stats as { utilByResource?: Record<number, number> })?.utilByResource ?? {};
+    if (!scope || scope.visibleResourceIds === "all") return raw;
+    const allowed = new Set(scope.visibleResourceIds as number[]);
+    return Object.fromEntries(
+      Object.entries(raw).filter(([id]) => allowed.has(Number(id))),
+    );
+  }, [stats, scope]);
 
   const visibleResources = !scope || scope.visibleResourceIds === "all"
     ? resources
@@ -228,6 +242,7 @@ export default function ResourceManagementPage() {
               <ResourcesDashboardTab
                 resources={visibleResources}
                 allocations={allocations}
+                allowedTabs={allowedTabs}
                 onNavigate={(tab, filter) => { setTabFilter(filter); setActiveTab(tab); }}
                 onOpenProfile={(id) => { setProfileResourceId(id); setActiveTab("people"); }}
               />
@@ -269,6 +284,7 @@ export default function ResourceManagementPage() {
                 resourceSkills={allResourceSkills}
                 isLoading={skillsLoading || skillsCategoriesLoading || skillsMapLoading}
                 onOpenProfile={(r) => { setProfileResourceId(r.id); setActiveTab("people"); }}
+                initialGapPlanId={gapPlanId}
               />
             </TabsContent>
 
@@ -300,7 +316,13 @@ export default function ResourceManagementPage() {
 
             <TabsContent value="pipeline" className={tabContentClass}>
               <ResourcesPipelineTab
-                onGapAnalysis={(planId) => { setActiveTab("skills"); toast({ title: `Run gap analysis for plan ${planId} in Skills Matrix` }); }}
+                onViewPlan={(planId) => {
+                  window.location.href = `/modules/crm?tab=resourceplan&plan=${planId}`;
+                }}
+                onGapAnalysis={(planId) => {
+                  setGapPlanId(planId);
+                  setActiveTab("skills");
+                }}
               />
             </TabsContent>
 

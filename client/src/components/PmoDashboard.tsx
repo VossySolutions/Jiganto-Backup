@@ -50,7 +50,7 @@ export function PmoDashboard() {
   });
 
   const { data: projectsRaw, isLoading: projectsLoading } = useQuery<unknown>({
-    queryKey: ["/api/pm/projects?tenantId=1"],
+    queryKey: ["/api/pm/projects"],
     queryFn: getQueryFn({ on401: "throw" }),
     staleTime: 60_000,
   });

@@ -7,7 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  FormDialogShell,
+  FormDialogViewShell,
+  FormSection,
+  FieldGrid,
+  FieldLabel,
+} from "@/components/ui/form-dialog-shell";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -27,7 +34,7 @@ import {
   FolderOpen, Library, ChevronDown, ChevronRight, BookOpen, LayoutGrid, List, Clock,
   Target, Users, ArrowRightLeft, Lightbulb, CheckCircle2, Play, Eye, Edit3,
   LogIn, LogOut, Timer, X, Link2, Unlink, ExternalLink, Rows3, Columns3,
-  Download, Image, FileDown, LayoutList, Columns2, ClipboardCopy, MoreVertical, Copy,
+  Download, Image, FileDown, LayoutList, Columns2, ClipboardCopy, MoreVertical, Copy, ClipboardList,
   ArrowLeftRight, FolderTree, Video, FileQuestion, Sparkles, Globe, PanelRightOpen, PanelRightClose,
   ChevronsDownUp, Server,
 } from "lucide-react";
@@ -52,6 +59,7 @@ import { SaveAsPlatformTemplateDialog } from "@/components/templates/SaveAsPlatf
 import { useAuth } from "@/hooks/use-auth";
 import { BpmLoadingState, BpmCardGridSkeleton } from "@/components/bpm/BpmLoadingState";
 import { bpmFetchJson } from "@/lib/bpm-api";
+import { ModuleTrackingBoard } from "@/components/workspaces/ModuleTrackingBoard";
 
 import {
   ReactFlow,
@@ -66,6 +74,8 @@ import "@xyflow/react/dist/style.css";
 import { nodeTypes } from "@/components/bpm/BpmNodeTypes";
 
 const BpmCanvasEditor = lazy(() => import("@/components/bpm/BpmCanvasEditor"));
+
+const BPM_QUERY_STALE_MS = 30_000;
 
 type BpmDiagram = {
   id: number;
@@ -476,11 +486,12 @@ function FrameworksCatalogue({ onOpenFramework, onCreateNew }: { onOpenFramework
   const [groupBy, setGroupBy] = useState("none");
 
   const { data: frameworksList = [], isLoading } = useQuery<FrameworkItem[]>({
-    queryKey: [`/api/frameworks?tenantId=1`],
+    queryKey: [`/api/frameworks`],
+    staleTime: BPM_QUERY_STALE_MS,
   });
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/frameworks/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/frameworks?tenantId=1`] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/frameworks`] }),
   });
   const filtered = useMemo(() => frameworksList.filter(fw => {
     const matchesSearch = !search || fw.name.toLowerCase().includes(search.toLowerCase()) || fw.description?.toLowerCase().includes(search.toLowerCase());
@@ -770,8 +781,9 @@ function DocumentLinkDialog({ open, onClose, onSelect, itemText }: {
 }) {
   const [search, setSearch] = useState("");
   const { data: allDocs = [], isLoading: docsLoading } = useQuery<{ id: number; title: string; type: string; status: string }[]>({
-    queryKey: [`/api/documents?tenantId=1`],
+    queryKey: [`/api/documents`],
     enabled: open,
+    staleTime: BPM_QUERY_STALE_MS,
   });
 
   const filtered = useMemo(() => {
@@ -781,14 +793,14 @@ function DocumentLinkDialog({ open, onClose, onSelect, itemText }: {
   }, [allDocs, search]);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Link Document</DialogTitle>
-          <DialogDescription>
-            Link a document to "<span className="font-medium">{itemText}</span>"
-          </DialogDescription>
-        </DialogHeader>
+    <FormDialogViewShell
+      open={open}
+      onOpenChange={(v) => { if (!v) onClose(); }}
+      onClose={onClose}
+      title="Link Document"
+      subtitle={`Link a document to "${itemText}"`}
+      size="sm"
+    >
         <div className="space-y-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -820,8 +832,7 @@ function DocumentLinkDialog({ open, onClose, onSelect, itemText }: {
             )}
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+    </FormDialogViewShell>
   );
 }
 
@@ -1294,8 +1305,8 @@ function FrameworkDetailView({ framework, onBack, onUpdate }: { framework: Frame
                         phase={phase}
                         index={idx}
                         total={phases.length}
-                        isSelected={false}
-                        onClick={() => {}}
+                        isSelected={selectedPhaseId === phase.id}
+                        onClick={() => setSelectedPhaseId(phase.id)}
                         color={phase.color || PHASE_COLORS[idx % PHASE_COLORS.length]}
                       />
                     ))}
@@ -1429,13 +1440,14 @@ function DiagramCatalogue({
   const { toast } = useToast();
 
   const { data: diagrams = [], isLoading } = useQuery<BpmDiagram[]>({
-    queryKey: ["/api/bpm/diagrams?tenantId=1"],
+    queryKey: ["/api/bpm/diagrams"],
+    staleTime: BPM_QUERY_STALE_MS,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/bpm/diagrams/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/bpm/diagrams?tenantId=1"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bpm/diagrams"] });
       toast({ title: "Diagram deleted" });
     },
   });
@@ -1444,7 +1456,7 @@ function DiagramCatalogue({
     mutationFn: ({ id, name }: { id: number; name: string }) =>
       apiRequest("POST", `/api/bpm/diagrams/${id}/duplicate`, { name }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/bpm/diagrams?tenantId=1"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bpm/diagrams"] });
       setDuplicateSource(null);
       setDuplicateName("");
       toast({ title: "Diagram duplicated" });
@@ -1772,16 +1784,24 @@ function DiagramCatalogue({
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={duplicateSource !== null} onOpenChange={() => { setDuplicateSource(null); setDuplicateName(""); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Duplicate Diagram</DialogTitle>
-            <DialogDescription>
-              Create a copy of <strong className="text-foreground">{duplicateSource?.name}</strong> with all its nodes, edges, and swimlanes.
-            </DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={duplicateSource !== null}
+        onOpenChange={() => { setDuplicateSource(null); setDuplicateName(""); }}
+        title="Duplicate Diagram"
+        subtitle={`Create a copy of ${duplicateSource?.name ?? "this diagram"} with all its nodes, edges, and swimlanes.`}
+        saveLabel="Duplicate"
+        saveTestId="button-submit-duplicate-diagram"
+        onCancel={() => { setDuplicateSource(null); setDuplicateName(""); }}
+        onSubmit={() => {
+          if (duplicateSource && duplicateName.trim()) {
+            duplicateMutation.mutate({ id: duplicateSource.id, name: duplicateName.trim() });
+          }
+        }}
+        disabled={!duplicateName.trim() || duplicateMutation.isPending}
+        saving={duplicateMutation.isPending}
+      >
           <div className="space-y-2">
-            <label className="text-sm font-medium">Name</label>
+            <FieldLabel>Name</FieldLabel>
             <Input
               value={duplicateName}
               onChange={e => setDuplicateName(e.target.value)}
@@ -1790,30 +1810,37 @@ function DiagramCatalogue({
               data-testid="input-duplicate-diagram-name"
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setDuplicateSource(null); setDuplicateName(""); }}>Cancel</Button>
-            <Button
-              onClick={() => {
-                if (duplicateSource && duplicateName.trim()) {
-                  duplicateMutation.mutate({ id: duplicateSource.id, name: duplicateName.trim() });
-                }
-              }}
-              disabled={!duplicateName.trim() || duplicateMutation.isPending}
-              data-testid="button-submit-duplicate-diagram"
-            >
-              {duplicateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Duplicate
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog open={showCompareDialog} onOpenChange={(open) => { setShowCompareDialog(open); if (!open) { setCompareAsIs(null); setCompareToBe(null); } }}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>Compare Diagrams</DialogTitle>
-            <DialogDescription>Select an As-Is and To-Be diagram to compare and identify differences</DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={showCompareDialog}
+        onOpenChange={(open) => {
+          setShowCompareDialog(open);
+          if (!open) {
+            setCompareAsIs(null);
+            setCompareToBe(null);
+          }
+        }}
+        title="Compare Diagrams"
+        subtitle="Select an As-Is and To-Be diagram to compare and identify differences."
+        saveLabel="Compare"
+        saveTestId="button-submit-compare"
+        onCancel={() => {
+          setShowCompareDialog(false);
+          setCompareAsIs(null);
+          setCompareToBe(null);
+        }}
+        onSubmit={() => {
+          if (compareAsIs && compareToBe && onCompare) {
+            onCompare(compareAsIs, compareToBe);
+            setShowCompareDialog(false);
+            setCompareAsIs(null);
+            setCompareToBe(null);
+          }
+        }}
+        disabled={!compareAsIs || !compareToBe || compareAsIs === compareToBe}
+        size="sm"
+      >
           <div className="space-y-4 py-2">
             <div>
               <Label>As-Is Diagram</Label>
@@ -1842,26 +1869,7 @@ function DiagramCatalogue({
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCompareDialog(false); setCompareAsIs(null); setCompareToBe(null); }}>Cancel</Button>
-            <Button
-              onClick={() => {
-                if (compareAsIs && compareToBe && onCompare) {
-                  onCompare(compareAsIs, compareToBe);
-                  setShowCompareDialog(false);
-                  setCompareAsIs(null);
-                  setCompareToBe(null);
-                }
-              }}
-              disabled={!compareAsIs || !compareToBe || compareAsIs === compareToBe}
-              data-testid="button-submit-compare"
-            >
-              <ArrowLeftRight className="h-4 w-4 mr-2" />
-              Compare
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
     </div>
   );
 }
@@ -1906,13 +1914,14 @@ const PROCESS_TYPE_OPTIONS = [
 const SUB_NAV_ITEMS = [
   { key: "bpml" as const, label: "BPML", icon: BpmLibraryIcon },
   { key: "process" as const, label: "Process Diagrams", icon: BpmDiagramsIcon },
+  { key: "task-tracker" as const, label: "Task Tracker", icon: ClipboardList },
   { key: "portal" as const, label: "Process Portal", icon: BpmPortalIcon },
   { key: "architecture" as const, label: "Architecture", icon: BpmArchitectureIcon },
   { key: "orgchart" as const, label: "Org Charts", icon: BpmOrgChartIcon },
   { key: "frameworks" as const, label: "Frameworks", icon: BpmFrameworksIcon },
 ];
 
-type ActiveSection = "process" | "architecture" | "portal" | "frameworks" | "bpml" | "orgchart";
+type ActiveSection = "process" | "architecture" | "portal" | "frameworks" | "bpml" | "orgchart" | "task-tracker";
 
 type CompareStatus = "added" | "removed" | "changed" | "unchanged";
 
@@ -1999,8 +2008,8 @@ function applyCompareStyleToEdges(edges: any[], statuses: Map<string, CompareSta
 }
 
 function DiagramCompareView({ asIsId, toBeId, onBack }: { asIsId: number; toBeId: number; onBack: () => void }) {
-  const { data: asIsDiagram } = useQuery<BpmDiagram>({ queryKey: ["/api/bpm/diagrams", asIsId] });
-  const { data: toBeDiagram } = useQuery<BpmDiagram>({ queryKey: ["/api/bpm/diagrams", toBeId] });
+  const { data: asIsDiagram } = useQuery<BpmDiagram>({ queryKey: ["/api/bpm/diagrams", asIsId], staleTime: BPM_QUERY_STALE_MS });
+  const { data: toBeDiagram } = useQuery<BpmDiagram>({ queryKey: ["/api/bpm/diagrams", toBeId], staleTime: BPM_QUERY_STALE_MS });
 
   const diffResult = useMemo(() => {
     if (!asIsDiagram || !toBeDiagram) return null;
@@ -2196,33 +2205,40 @@ function ProcessPortal() {
   const [videoLightbox, setVideoLightbox] = useState<string | null>(null);
 
   const { data: bpmlLibraries = [], isLoading: librariesLoading } = useQuery<BpmlTemplate[]>({
-    queryKey: [`/api/bpml/templates?tenantId=1`],
+    queryKey: [`/api/bpml/templates`],
+    staleTime: BPM_QUERY_STALE_MS,
   });
 
   const { data: allEntries = [], isLoading: entriesLoading } = useQuery<BpmlEntry[]>({
-    queryKey: [`/api/bpml/entries?tenantId=1&templateId=${selectedLibrary}`],
+    queryKey: [`/api/bpml/entries?templateId=${selectedLibrary}`],
     enabled: !!selectedLibrary,
+    staleTime: BPM_QUERY_STALE_MS,
   });
 
   const { data: allDiagrams = [], isLoading: diagramsLoading } = useQuery<BpmDiagram[]>({
-    queryKey: [`/api/bpm/diagrams?tenantId=1`],
+    queryKey: [`/api/bpm/diagrams`],
+    staleTime: BPM_QUERY_STALE_MS,
   });
 
   const { data: menuNodes = [], isLoading: menuNodesLoading } = useQuery<any[]>({
-    queryKey: [`/api/portal/menu-nodes?tenantId=1`],
+    queryKey: [`/api/portal/menu-nodes`],
+    staleTime: BPM_QUERY_STALE_MS,
   });
 
   const { data: portalAssignments = [], isLoading: assignmentsLoading } = useQuery<any[]>({
-    queryKey: [`/api/portal/assignments?tenantId=1`],
+    queryKey: [`/api/portal/assignments`],
+    staleTime: BPM_QUERY_STALE_MS,
   });
 
   const { data: allResources = [], isLoading: resourcesLoading } = useQuery<ProcessResource[]>({
-    queryKey: [`/api/process-resources?tenantId=1`],
+    queryKey: [`/api/process-resources`],
+    staleTime: BPM_QUERY_STALE_MS,
   });
 
   const { data: portalSettings, isLoading: portalSettingsLoading } = useQuery<any>({
-    queryKey: [`/api/bpm/portal-settings?tenantId=1${selectedLibrary ? `&libraryId=${selectedLibrary}` : ""}`],
+    queryKey: [`/api/bpm/portal-settings${selectedLibrary ? `?libraryId=${selectedLibrary}` : ""}`],
     enabled: !!selectedLibrary,
+    staleTime: BPM_QUERY_STALE_MS,
   });
 
   const areaColorMap: Record<string, string> = (portalSettings?.businessAreaColors as Record<string, string>) || {};
@@ -2557,7 +2573,7 @@ function ProcessPortal() {
                   e.stopPropagation();
                   const name = prompt("New child node name:");
                   if (name?.trim()) {
-                    createMenuNodeMutation.mutate({ tenantId: 1, parentId: node.id, name: name.trim(), sortOrder: childNodes.length });
+                    createMenuNodeMutation.mutate({ parentId: node.id, name: name.trim(), sortOrder: childNodes.length });
                   }
                 }}
                 data-testid={`button-add-child-${node.id}`}
@@ -2735,7 +2751,7 @@ function ProcessPortal() {
         <div className="px-4 sm:px-6 pt-4 pb-0 border-b bg-card shrink-0">
           <h2 className="text-lg sm:text-xl font-semibold mb-3" data-testid="text-portal-title">Process Portal</h2>
           <div className="flex items-center gap-2 mb-3">
-            {selectedLibrary && <PortalSettingsDialog tenantId={1} libraryId={selectedLibrary} />}
+            {selectedLibrary && <PortalSettingsDialog  libraryId={selectedLibrary} />}
           </div>
           <TabsList className="h-12 bg-transparent border-0 gap-1" data-testid="portal-tabs-list">
             <TabsTrigger value="library" className="gap-2 rounded-lg data-[state=active]:bg-primary/10 data-[state=active]:text-primary" data-testid="tab-process-library">
@@ -2934,7 +2950,7 @@ function ProcessPortal() {
                     <Separator className="mb-4" />
 
                     <PortalAssetPanel
-                      tenantId={1}
+                      
                       entryIds={detailNode?.entries.map(e => e.id) || []}
                       entryLabel={detailNode?.name || ""}
                       resources={allResources}
@@ -2981,7 +2997,7 @@ function ProcessPortal() {
                   onClick={() => {
                     const name = prompt("Root node name:");
                     if (name?.trim()) {
-                      createMenuNodeMutation.mutate({ tenantId: 1, parentId: null, name: name.trim(), sortOrder: rootMenuNodes.length });
+                      createMenuNodeMutation.mutate({ parentId: null, name: name.trim(), sortOrder: rootMenuNodes.length });
                     }
                   }}
                   data-testid="button-add-root-node"
@@ -3015,14 +3031,14 @@ function ProcessPortal() {
           </div>
 
           {assignDialogNodeId !== null && (
-            <Dialog open={true} onOpenChange={() => setAssignDialogNodeId(null)}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Assign Diagram</DialogTitle>
-                  <DialogDescription>
-                    Select a published diagram to assign to this menu node.
-                  </DialogDescription>
-                </DialogHeader>
+            <FormDialogViewShell
+              open={true}
+              onOpenChange={() => setAssignDialogNodeId(null)}
+              onClose={() => setAssignDialogNodeId(null)}
+              title="Assign Diagram"
+              subtitle="Select a published diagram to assign to this menu node."
+              size="sm"
+            >
                 <div className="space-y-2 max-h-60 overflow-auto">
                   {publishedDiagrams.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-4 text-center">No published diagrams available.</p>
@@ -3058,8 +3074,7 @@ function ProcessPortal() {
                     })
                   )}
                 </div>
-              </DialogContent>
-            </Dialog>
+            </FormDialogViewShell>
           )}
         </div>
       )}
@@ -3123,17 +3138,19 @@ export default function BPMPage() {
 
   const { data: userTemplates = [] } = useQuery<BpmTemplate[]>({
     queryKey: ["/api/bpm/templates"],
+    staleTime: BPM_QUERY_STALE_MS,
   });
 
   const { data: libraries = [], isLoading: librariesLoading } = useQuery<BpmLibrary[]>({
-    queryKey: [`/api/bpm/libraries?tenantId=1`],
+    queryKey: [`/api/bpm/libraries`],
+    staleTime: BPM_QUERY_STALE_MS,
   });
 
   const createMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/bpm/diagrams", data),
     onSuccess: async (res) => {
       const diagram = await res.json();
-      queryClient.invalidateQueries({ queryKey: ["/api/bpm/diagrams?tenantId=1"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bpm/diagrams"] });
       setShowCreateDialog(false);
       setNewDiagramName("");
       setNewDiagramDescription("");
@@ -3151,7 +3168,7 @@ export default function BPMPage() {
   const createLibraryMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/bpm/libraries", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/bpm/libraries?tenantId=1`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/bpm/libraries`] });
       setShowCreateLibraryDialog(false);
       setNewLibraryName("");
       setNewLibraryDescription("");
@@ -3228,7 +3245,6 @@ export default function BPMPage() {
     }
 
     createMutation.mutate({
-      tenantId: 1,
       name: newDiagramName,
       description: newDiagramDescription || null,
       type: newDiagramType,
@@ -3260,7 +3276,6 @@ export default function BPMPage() {
     const [, rows] = allProcesses[0];
     const { nodes, edges } = buildDiagramFromRows(rows, importCsvOrientation);
     createMutation.mutate({
-      tenantId: 1,
       name: importCsvDiagramName,
       description: null,
       type: "process_flow",
@@ -3276,7 +3291,6 @@ export default function BPMPage() {
   const handleCreateLibrary = () => {
     if (!newLibraryName.trim()) return;
     createLibraryMutation.mutate({
-      tenantId: 1,
       name: newLibraryName,
       description: newLibraryDescription || null,
       vendor: newLibraryVendor && newLibraryVendor !== "none" ? newLibraryVendor : null,
@@ -3331,14 +3345,14 @@ export default function BPMPage() {
   const handleBackToCatalogue = () => {
     setView("catalogue");
     setActiveDiagram(null);
-    queryClient.invalidateQueries({ queryKey: ["/api/bpm/diagrams?tenantId=1"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/bpm/diagrams"] });
   };
 
   const createFrameworkMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/frameworks", data),
     onSuccess: async (res) => {
       const fw = await res.json();
-      queryClient.invalidateQueries({ queryKey: ["/api/frameworks", { tenantId: 1 }] });
+      queryClient.invalidateQueries({ queryKey: ["/api/frameworks", "/api/frameworks"] });
       setShowCreateFrameworkDialog(false);
       setNewFrameworkName(""); setNewFrameworkDescription(""); setNewFrameworkCategory("project_delivery"); setNewFrameworkVendor(""); setUseTemplate("blank");
       setActiveFramework(fw);
@@ -3353,7 +3367,7 @@ export default function BPMPage() {
 
   const handleBackFromFramework = () => {
     setActiveFramework(null);
-    queryClient.invalidateQueries({ queryKey: ["/api/frameworks", { tenantId: 1 }] });
+    queryClient.invalidateQueries({ queryKey: ["/api/frameworks", "/api/frameworks"] });
   };
 
   const handleCreateFramework = () => {
@@ -3361,7 +3375,7 @@ export default function BPMPage() {
     const templateMap: Record<string, FrameworkPhase[]> = { sap_activate: SAP_ACTIVATE_PHASES, workday: WORKDAY_PHASES };
     const templatePhases = templateMap[useTemplate]?.map(p => ({ ...p, id: `phase_${Date.now()}_${p.order}` })) || [];
     createFrameworkMutation.mutate({
-      tenantId: 1, name: newFrameworkName, description: newFrameworkDescription || null,
+      name: newFrameworkName, description: newFrameworkDescription || null,
       category: newFrameworkCategory, vendor: newFrameworkVendor && newFrameworkVendor !== "none" ? newFrameworkVendor : null,
       version: "1.0", status: "draft", phases: templatePhases,
     });
@@ -3480,6 +3494,15 @@ export default function BPMPage() {
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
               <OrgChartView />
             </Suspense>
+          ) : activeSection === "task-tracker" ? (
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              <ModuleTrackingBoard
+                apiPath="/api/bpm/tracking-board"
+                queryKey={["/api/bpm/tracking-board"]}
+                title="BPM Task Tracker"
+                description="Track process improvement actions, remediation tasks, and audit follow-ups."
+              />
+            </div>
           ) : (
             <DiagramCatalogue
               onOpenDiagram={handleOpenDiagram}
@@ -3528,15 +3551,21 @@ export default function BPMPage() {
           </Suspense>
         ) : null}
 
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="sm:max-w-[540px]">
-          <DialogHeader>
-            <DialogTitle>Create New Diagram</DialogTitle>
-            <DialogDescription>Choose a template or start from a blank canvas</DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        title="Create New Diagram"
+        subtitle="Choose a template or start from a blank canvas"
+        saveLabel="Create"
+        saveTestId="button-confirm-create-diagram"
+        onCancel={() => setShowCreateDialog(false)}
+        onSubmit={handleCreateDiagram}
+        disabled={!newDiagramName.trim() || createMutation.isPending}
+        saving={createMutation.isPending}
+      >
           <div className="space-y-4 py-2">
             <div>
-              <Label>Name</Label>
+              <FieldLabel>Name</FieldLabel>
               <Input
                 value={newDiagramName}
                 onChange={(e) => setNewDiagramName(e.target.value)}
@@ -3545,7 +3574,7 @@ export default function BPMPage() {
               />
             </div>
             <div>
-              <Label>Type</Label>
+              <FieldLabel>Type</FieldLabel>
               <Select value={newDiagramType} onValueChange={setNewDiagramType}>
                 <SelectTrigger data-testid="select-new-diagram-type">
                   <SelectValue />
@@ -3563,7 +3592,7 @@ export default function BPMPage() {
               </Select>
             </div>
             <div>
-              <Label>Library (optional)</Label>
+              <FieldLabel>Library (optional)</FieldLabel>
               <Select value={newDiagramLibraryId} onValueChange={setNewDiagramLibraryId}>
                 <SelectTrigger data-testid="select-new-diagram-library">
                   <SelectValue placeholder="No library (unassigned)" />
@@ -3577,7 +3606,7 @@ export default function BPMPage() {
               </Select>
             </div>
             <div>
-              <Label className="mb-2 block">Template</Label>
+              <FieldLabel>Template</FieldLabel>
               <Tabs value={templateTab} onValueChange={(v) => { setTemplateTab(v); setSelectedTemplate(v === "builtin" ? "blank" : ""); }}>
                 <TabsList className="w-full">
                   <TabsTrigger value="builtin" className="flex-1" data-testid="tab-builtin-templates">Built-in</TabsTrigger>
@@ -3626,7 +3655,7 @@ export default function BPMPage() {
               </Tabs>
             </div>
             <div>
-              <Label>Description (optional)</Label>
+              <FieldLabel>Description (optional)</FieldLabel>
               <Textarea
                 value={newDiagramDescription}
                 onChange={(e) => setNewDiagramDescription(e.target.value)}
@@ -3635,29 +3664,23 @@ export default function BPMPage() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
-            <Button
-              onClick={handleCreateDiagram}
-              disabled={!newDiagramName.trim() || createMutation.isPending}
-              data-testid="button-confirm-create-diagram"
-            >
-              {createMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-              Create
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog open={showCreateLibraryDialog} onOpenChange={setShowCreateLibraryDialog}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Create New Library</DialogTitle>
-            <DialogDescription>Organize your templates into libraries</DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={showCreateLibraryDialog}
+        onOpenChange={setShowCreateLibraryDialog}
+        title="Create New Library"
+        subtitle="Organize your templates into libraries"
+        saveLabel="Create Library"
+        saveTestId="button-confirm-create-library"
+        onCancel={() => setShowCreateLibraryDialog(false)}
+        onSubmit={handleCreateLibrary}
+        disabled={!newLibraryName.trim() || createLibraryMutation.isPending}
+        saving={createLibraryMutation.isPending}
+      >
           <div className="space-y-4 py-2">
             <div>
-              <Label>Name</Label>
+              <FieldLabel>Name</FieldLabel>
               <Input
                 value={newLibraryName}
                 onChange={(e) => setNewLibraryName(e.target.value)}
@@ -3666,7 +3689,7 @@ export default function BPMPage() {
               />
             </div>
             <div>
-              <Label>Description (optional)</Label>
+              <FieldLabel>Description (optional)</FieldLabel>
               <Textarea
                 value={newLibraryDescription}
                 onChange={(e) => setNewLibraryDescription(e.target.value)}
@@ -3675,7 +3698,7 @@ export default function BPMPage() {
               />
             </div>
             <div>
-              <Label>Vendor (optional)</Label>
+              <FieldLabel>Vendor (optional)</FieldLabel>
               <Select value={newLibraryVendor} onValueChange={setNewLibraryVendor}>
                 <SelectTrigger data-testid="select-library-vendor">
                   <SelectValue placeholder="None" />
@@ -3689,7 +3712,7 @@ export default function BPMPage() {
               </Select>
             </div>
             <div>
-              <Label>Status</Label>
+              <FieldLabel>Status</FieldLabel>
               <Select value={newLibraryStatus} onValueChange={setNewLibraryStatus}>
                 <SelectTrigger data-testid="select-library-status"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -3700,7 +3723,7 @@ export default function BPMPage() {
               </Select>
             </div>
             <div>
-              <Label>System Tag (optional)</Label>
+              <FieldLabel>System Tag (optional)</FieldLabel>
               <Input
                 value={newLibrarySystemTag}
                 onChange={(e) => setNewLibrarySystemTag(e.target.value)}
@@ -3720,29 +3743,23 @@ export default function BPMPage() {
               </Label>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateLibraryDialog(false)}>Cancel</Button>
-            <Button
-              onClick={handleCreateLibrary}
-              disabled={!newLibraryName.trim() || createLibraryMutation.isPending}
-              data-testid="button-confirm-create-library"
-            >
-              {createLibraryMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FolderOpen className="h-4 w-4 mr-2" />}
-              Create Library
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog open={showCreateTemplateDialog} onOpenChange={setShowCreateTemplateDialog}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Create New Template</DialogTitle>
-            <DialogDescription>Create an empty template that can be populated later from the editor</DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={showCreateTemplateDialog}
+        onOpenChange={setShowCreateTemplateDialog}
+        title="Create New Template"
+        subtitle="Create an empty template that can be populated later from the editor"
+        saveLabel="Create Template"
+        saveTestId="button-confirm-create-template"
+        onCancel={() => setShowCreateTemplateDialog(false)}
+        onSubmit={handleCreateTemplate}
+        disabled={!newTemplateName.trim() || !newTemplateLibraryId || createTemplateMutation.isPending}
+        saving={createTemplateMutation.isPending}
+      >
           <div className="space-y-4 py-2">
             <div>
-              <Label>Template Name</Label>
+              <FieldLabel>Template Name</FieldLabel>
               <Input
                 value={newTemplateName}
                 onChange={(e) => setNewTemplateName(e.target.value)}
@@ -3751,7 +3768,7 @@ export default function BPMPage() {
               />
             </div>
             <div>
-              <Label>Library (required)</Label>
+              <FieldLabel>Library (required)</FieldLabel>
               <Select value={newTemplateLibraryId} onValueChange={setNewTemplateLibraryId}>
                 <SelectTrigger data-testid="select-new-template-library">
                   <SelectValue placeholder="Select a library" />
@@ -3772,7 +3789,7 @@ export default function BPMPage() {
               )}
             </div>
             <div>
-              <Label>Process Type (optional)</Label>
+              <FieldLabel>Process Type (optional)</FieldLabel>
               <Select value={newTemplateProcessType} onValueChange={setNewTemplateProcessType}>
                 <SelectTrigger data-testid="select-new-template-process-type">
                   <SelectValue placeholder="None" />
@@ -3786,7 +3803,7 @@ export default function BPMPage() {
               </Select>
             </div>
             <div>
-              <Label>Description (optional)</Label>
+              <FieldLabel>Description (optional)</FieldLabel>
               <Textarea
                 value={newTemplateDescription}
                 onChange={(e) => setNewTemplateDescription(e.target.value)}
@@ -3795,29 +3812,23 @@ export default function BPMPage() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateTemplateDialog(false)}>Cancel</Button>
-            <Button
-              onClick={handleCreateTemplate}
-              disabled={!newTemplateName.trim() || !newTemplateLibraryId || createTemplateMutation.isPending}
-              data-testid="button-confirm-create-template"
-            >
-              {createTemplateMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-              Create Template
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog open={showSaveTemplateDialog} onOpenChange={setShowSaveTemplateDialog}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle>Save as Template</DialogTitle>
-            <DialogDescription>Save your current diagram as a reusable template</DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={showSaveTemplateDialog}
+        onOpenChange={setShowSaveTemplateDialog}
+        title="Save as Template"
+        subtitle="Save your current diagram as a reusable template"
+        saveLabel="Save Template"
+        saveTestId="button-confirm-save-template"
+        onCancel={() => setShowSaveTemplateDialog(false)}
+        onSubmit={handleConfirmSaveTemplate}
+        disabled={!saveTemplateName.trim() || !saveTemplateLibraryId || saveTemplateMutation.isPending}
+        saving={saveTemplateMutation.isPending}
+      >
           <div className="space-y-4 py-2">
             <div>
-              <Label>Template Name</Label>
+              <FieldLabel>Template Name</FieldLabel>
               <Input
                 value={saveTemplateName}
                 onChange={(e) => setSaveTemplateName(e.target.value)}
@@ -3826,7 +3837,7 @@ export default function BPMPage() {
               />
             </div>
             <div>
-              <Label>Library (required)</Label>
+              <FieldLabel>Library (required)</FieldLabel>
               <Select value={saveTemplateLibraryId} onValueChange={setSaveTemplateLibraryId}>
                 <SelectTrigger data-testid="select-save-template-library">
                   <SelectValue placeholder="Select a library" />
@@ -3846,9 +3857,9 @@ export default function BPMPage() {
                 <p className="text-xs text-muted-foreground mt-1">No libraries yet. Create a library first.</p>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <FieldGrid cols={2}>
               <div>
-                <Label>Vendor</Label>
+                <FieldLabel>Vendor</FieldLabel>
                 <Select value={saveTemplateVendor} onValueChange={setSaveTemplateVendor}>
                   <SelectTrigger className="text-sm" data-testid="select-template-vendor">
                     <SelectValue placeholder="None" />
@@ -3862,7 +3873,7 @@ export default function BPMPage() {
                 </Select>
               </div>
               <div>
-                <Label>Process Type</Label>
+                <FieldLabel>Process Type</FieldLabel>
                 <Select value={saveTemplateProcessType} onValueChange={setSaveTemplateProcessType}>
                   <SelectTrigger className="text-sm" data-testid="select-template-process-type">
                     <SelectValue placeholder="None" />
@@ -3875,9 +3886,9 @@ export default function BPMPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+            </FieldGrid>
             <div>
-              <Label>Description (optional)</Label>
+              <FieldLabel>Description (optional)</FieldLabel>
               <Textarea
                 value={saveTemplateDescription}
                 onChange={(e) => setSaveTemplateDescription(e.target.value)}
@@ -3886,26 +3897,16 @@ export default function BPMPage() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSaveTemplateDialog(false)}>Cancel</Button>
-            <Button
-              onClick={handleConfirmSaveTemplate}
-              disabled={!saveTemplateName.trim() || !saveTemplateLibraryId || saveTemplateMutation.isPending}
-              data-testid="button-confirm-save-template"
-            >
-              {saveTemplateMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bookmark className="h-4 w-4 mr-2" />}
-              Save Template
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog open={showManageTemplatesDialog} onOpenChange={setShowManageTemplatesDialog}>
-        <DialogContent className="sm:max-w-[640px]">
-          <DialogHeader>
-            <DialogTitle>Manage Templates</DialogTitle>
-            <DialogDescription>View and manage your BPM templates organized by library</DialogDescription>
-          </DialogHeader>
+      <FormDialogViewShell
+        open={showManageTemplatesDialog}
+        onOpenChange={setShowManageTemplatesDialog}
+        onClose={() => setShowManageTemplatesDialog(false)}
+        title="Manage Templates"
+        subtitle="View and manage your BPM templates organized by library."
+        size="md"
+      >
           <div className="py-2">
             <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
               <Select value={manageFilterLibrary} onValueChange={setManageFilterLibrary}>
@@ -4050,18 +4051,23 @@ export default function BPMPage() {
               </p>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
+      </FormDialogViewShell>
 
-      <Dialog open={showCreateFrameworkDialog} onOpenChange={setShowCreateFrameworkDialog}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>Create New Framework</DialogTitle>
-            <DialogDescription>Define a new methodology or lifecycle framework</DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={showCreateFrameworkDialog}
+        onOpenChange={setShowCreateFrameworkDialog}
+        title="Create New Framework"
+        subtitle="Define a new methodology or lifecycle framework"
+        saveLabel="Create"
+        saveTestId="button-confirm-create-fw"
+        onCancel={() => setShowCreateFrameworkDialog(false)}
+        onSubmit={handleCreateFramework}
+        disabled={!newFrameworkName.trim() || createFrameworkMutation.isPending}
+        saving={createFrameworkMutation.isPending}
+      >
           <div className="space-y-4 py-2">
             <div>
-              <Label className="text-xs text-muted-foreground mb-2 block">Start from template</Label>
+              <FieldLabel>Start from template</FieldLabel>
               <div className="flex gap-2 flex-wrap">
                 <Button size="sm" variant={useTemplate === "blank" ? "default" : "outline"} onClick={() => { setUseTemplate("blank"); setNewFrameworkName(""); setNewFrameworkDescription(""); }} data-testid="button-template-blank">
                   Blank Framework
@@ -4077,15 +4083,15 @@ export default function BPMPage() {
               </div>
             </div>
             <div>
-              <Label>Name</Label>
+              <FieldLabel>Name</FieldLabel>
               <Input value={newFrameworkName} onChange={(e) => setNewFrameworkName(e.target.value)} placeholder="e.g., SAP Activate - Public Cloud" data-testid="input-new-fw-name" />
             </div>
             <div>
-              <Label>Description</Label>
+              <FieldLabel>Description</FieldLabel>
               <Textarea value={newFrameworkDescription} onChange={(e) => setNewFrameworkDescription(e.target.value)} placeholder="Brief description of this framework..." className="resize-none" rows={3} data-testid="textarea-new-fw-description" />
             </div>
             <div>
-              <Label>Category</Label>
+              <FieldLabel>Category</FieldLabel>
               <Select value={newFrameworkCategory} onValueChange={setNewFrameworkCategory}>
                 <SelectTrigger data-testid="select-new-fw-category"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -4094,7 +4100,7 @@ export default function BPMPage() {
               </Select>
             </div>
             <div>
-              <Label>Vendor / Standard</Label>
+              <FieldLabel>Vendor / Standard</FieldLabel>
               <Select value={newFrameworkVendor || "none"} onValueChange={setNewFrameworkVendor}>
                 <SelectTrigger data-testid="select-new-fw-vendor"><SelectValue placeholder="Select vendor..." /></SelectTrigger>
                 <SelectContent>
@@ -4104,25 +4110,23 @@ export default function BPMPage() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateFrameworkDialog(false)} data-testid="button-cancel-create-fw">Cancel</Button>
-            <Button onClick={handleCreateFramework} disabled={!newFrameworkName.trim() || createFrameworkMutation.isPending} data-testid="button-confirm-create-fw">
-              {createFrameworkMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Create
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog open={showImportCsvDialog} onOpenChange={setShowImportCsvDialog}>
-        <DialogContent className="sm:max-w-[520px]">
-          <DialogHeader>
-            <DialogTitle>Import Process from CSV</DialogTitle>
-            <DialogDescription>Upload a CSV file to create a new diagram with process shapes, connections, and attributes</DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={showImportCsvDialog}
+        onOpenChange={setShowImportCsvDialog}
+        title="Import Process from CSV"
+        subtitle="Upload a CSV file to create a new diagram with process shapes, connections, and attributes"
+        saveLabel="Import & Create"
+        saveTestId="button-confirm-import-csv"
+        onCancel={() => setShowImportCsvDialog(false)}
+        onSubmit={handleImportCsvConfirm}
+        disabled={!importCsvPreview || importCsvPreview.size === 0 || !importCsvDiagramName.trim() || createMutation.isPending}
+        saving={createMutation.isPending}
+      >
           <div className="space-y-4 py-2">
             <div>
-              <Label>Diagram Name</Label>
+              <FieldLabel>Diagram Name</FieldLabel>
               <Input
                 value={importCsvDiagramName}
                 onChange={(e) => setImportCsvDiagramName(e.target.value)}
@@ -4157,7 +4161,7 @@ export default function BPMPage() {
               </div>
             )}
             <div>
-              <Label>Lane Orientation</Label>
+              <FieldLabel>Lane Orientation</FieldLabel>
               <Select value={importCsvOrientation} onValueChange={(v) => setImportCsvOrientation(v as "horizontal" | "vertical")}>
                 <SelectTrigger data-testid="select-import-orientation">
                   <SelectValue />
@@ -4169,19 +4173,7 @@ export default function BPMPage() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowImportCsvDialog(false)}>Cancel</Button>
-            <Button
-              onClick={handleImportCsvConfirm}
-              disabled={!importCsvPreview || importCsvPreview.size === 0 || !importCsvDiagramName.trim() || createMutation.isPending}
-              data-testid="button-confirm-import-csv"
-            >
-              {createMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-              Import & Create
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
     </ModuleShell>
   );
 }

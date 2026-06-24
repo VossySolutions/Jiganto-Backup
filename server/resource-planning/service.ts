@@ -1105,6 +1105,16 @@ export async function getBenchManagement(tenantId: number) {
   };
 }
 
+async function computeScenarioUtilAndShortfall(tenantId: number, demandFte: number) {
+  const stats = await getExtendedResourceStats(tenantId);
+  const capacity = Math.max(1, stats.activeResources);
+  const allocatedFte = capacity * (stats.utilisationPct / 100);
+  const projectedLoad = allocatedFte + demandFte;
+  const util = Math.min(100, Math.round((projectedLoad / capacity) * 100));
+  const shortfall = Math.round(capacity - projectedLoad);
+  return { util, shortfall };
+}
+
 export async function getScenarios(tenantId: number) {
   let scenarios = await db.select().from(resourcePlanningScenarios)
     .where(eq(resourcePlanningScenarios.tenantId, tenantId));
@@ -1114,10 +1124,16 @@ export async function getScenarios(tenantId: number) {
     const best = await getPipelineDemand(tenantId, "best");
     const worst = await getPipelineDemand(tenantId, "worst");
 
+    const [expectedMetrics, bestMetrics, worstMetrics] = await Promise.all([
+      computeScenarioUtilAndShortfall(tenantId, pipeline.kpis.softDemand),
+      computeScenarioUtilAndShortfall(tenantId, best.kpis.softDemand),
+      computeScenarioUtilAndShortfall(tenantId, worst.kpis.softDemand),
+    ]);
+
     const defaults = [
-      { name: "Expected Case", scenarioType: "expected", multiplier: "1.0", revenue: pipeline.kpis.totalPipelineValue, demand: pipeline.kpis.softDemand, util: 81, shortfall: -7 },
-      { name: "Best Case", scenarioType: "best", multiplier: "1.4", revenue: best.kpis.totalPipelineValue, demand: best.kpis.softDemand, util: 86, shortfall: -11 },
-      { name: "Worst Case", scenarioType: "worst", multiplier: "0.6", revenue: worst.kpis.totalPipelineValue, demand: worst.kpis.softDemand, util: 58, shortfall: 0 },
+      { name: "Expected Case", scenarioType: "expected", multiplier: "1.0", revenue: pipeline.kpis.totalPipelineValue, demand: pipeline.kpis.softDemand, util: expectedMetrics.util, shortfall: expectedMetrics.shortfall },
+      { name: "Best Case", scenarioType: "best", multiplier: "1.4", revenue: best.kpis.totalPipelineValue, demand: best.kpis.softDemand, util: bestMetrics.util, shortfall: bestMetrics.shortfall },
+      { name: "Worst Case", scenarioType: "worst", multiplier: "0.6", revenue: worst.kpis.totalPipelineValue, demand: worst.kpis.softDemand, util: worstMetrics.util, shortfall: worstMetrics.shortfall },
     ];
 
     for (const d of defaults) {
@@ -1138,18 +1154,19 @@ export async function getScenarios(tenantId: number) {
       .where(eq(resourcePlanningScenarios.tenantId, tenantId));
   }
 
+  const topSkill = await getTopSkillGapName(tenantId);
   const comparison = [
     { metric: "Pipeline revenue", worst: fmtMoney(scenarios.find((s) => s.scenarioType === "worst")), expected: fmtMoney(scenarios.find((s) => s.scenarioType === "expected")), best: fmtMoney(scenarios.find((s) => s.scenarioType === "best")) },
     { metric: "Resource demand", worst: fmtFte(scenarios.find((s) => s.scenarioType === "worst")), expected: fmtFte(scenarios.find((s) => s.scenarioType === "expected")), best: fmtFte(scenarios.find((s) => s.scenarioType === "best")) },
     { metric: "Utilisation", worst: fmtPct(scenarios.find((s) => s.scenarioType === "worst")), expected: fmtPct(scenarios.find((s) => s.scenarioType === "expected")), best: fmtPct(scenarios.find((s) => s.scenarioType === "best")) },
     { metric: "Bench size", worst: await benchSizeForScenario(tenantId, "worst"), expected: await benchSizeForScenario(tenantId, "expected"), best: await benchSizeForScenario(tenantId, "best") },
-    { metric: "SAP shortage", worst: await skillShortageForScenario(tenantId, "SAP", "worst"), expected: await skillShortageForScenario(tenantId, "SAP", "expected"), best: await skillShortageForScenario(tenantId, "SAP", "best") },
+    { metric: `${topSkill} shortage`, worst: await skillShortageForScenario(tenantId, topSkill, "worst"), expected: await skillShortageForScenario(tenantId, topSkill, "expected"), best: await skillShortageForScenario(tenantId, topSkill, "best") },
     { metric: "Recruitment needed", worst: await recruitmentNeededForScenario(tenantId, "worst"), expected: await recruitmentNeededForScenario(tenantId, "expected"), best: await recruitmentNeededForScenario(tenantId, "best") },
     { metric: "Shortfall", worst: fmtShortfall(scenarios.find((s) => s.scenarioType === "worst")), expected: fmtShortfall(scenarios.find((s) => s.scenarioType === "expected")), best: fmtShortfall(scenarios.find((s) => s.scenarioType === "best")) },
   ];
 
   return {
-    scenarios: scenarios.map((s) => ({
+    scenarios: await Promise.all(scenarios.map(async (s) => ({
       id: s.id,
       name: s.name,
       type: s.scenarioType,
@@ -1157,8 +1174,10 @@ export async function getScenarios(tenantId: number) {
       demand: fmtFte(s),
       util: fmtPct(s),
       shortfall: fmtShortfall(s),
-      actions: (s.actions as Array<{ title: string; detail: string; severity: string }>) ?? defaultActions(s.scenarioType ?? "expected"),
-    })),
+      actions: (Array.isArray(s.actions) && (s.actions as unknown[]).length)
+        ? (s.actions as Array<{ title: string; detail: string; severity: string }>)
+        : await buildDefaultActions(tenantId, s.scenarioType ?? "expected"),
+    }))),
     comparison,
   };
 }
@@ -1178,19 +1197,27 @@ function fmtShortfall(s?: { shortfallFte?: string | null }): string {
   return v === 0 ? "0 FTE" : `${v} FTE`;
 }
 
-function defaultActions(type: string) {
+async function buildDefaultActions(tenantId: number, type: string) {
+  const topSkill = await getTopSkillGapName(tenantId);
+  const matrix = await getDemandSupplyMatrix(tenantId, { includePipeline: true, months: 6 });
+  const row = matrix.rows.find((r) => r.skill === topSkill);
+  const gapMonths = row ? row.cells.filter((c) => c.startsWith("-")).length : 0;
+  const recs = await db.select().from(recruitmentRecommendations).where(eq(recruitmentRecommendations.tenantId, tenantId));
+  const openRoles = recs.filter((r) => r.status === "open").reduce((s, r) => s + r.headcount, 0);
+  const bench = await getBenchManagement(tenantId);
+
   if (type === "best") return [
-    { title: "Accelerate SAP recruitment", detail: "Hire 4 senior consultants by Q3 to capture upside", severity: "critical" },
-    { title: "Secure contractor bench", detail: "Pre-approve 3 contractors for surge capacity", severity: "warning" },
+    { title: `Accelerate ${topSkill} recruitment`, detail: `Hire ${Math.max(1, Math.round(openRoles * 0.5))} specialists to capture upside`, severity: "critical" },
+    { title: "Secure contractor bench", detail: `Pre-approve contractors for ${topSkill} surge capacity`, severity: "warning" },
   ];
   if (type === "worst") return [
-    { title: "Reduce bench cost", detail: "Redeploy 6 bench resources to internal projects", severity: "info" },
-    { title: "Pause non-critical hiring", detail: "Defer 2 open requisitions until pipeline firms up", severity: "success" },
+    { title: "Reduce bench cost", detail: `Redeploy ${Math.max(1, Math.round(bench.kpis.onBench * 0.4))} bench resources to internal projects`, severity: "info" },
+    { title: "Pause non-critical hiring", detail: `Defer ${Math.max(1, Math.round(openRoles * 0.3))} open requisitions until pipeline firms up`, severity: "success" },
   ];
   return [
-    { title: "Address SAP shortage", detail: "3 consultants needed by Sep 2026 — initiate hiring now", severity: "critical" },
-    { title: "Backfill rolling-off resources", detail: "8 resources rolling off in 30 days — assign pipeline matches", severity: "warning" },
-    { title: "Optimise bench utilisation", detail: "14 redeployable bench resources matched to open demand", severity: "success" },
+    { title: `Address ${topSkill} shortage`, detail: gapMonths > 0 ? `${gapMonths} month(s) of shortage forecast — initiate hiring now` : "Monitor demand-supply matrix for emerging gaps", severity: "critical" },
+    { title: "Backfill rolling-off resources", detail: "Assign pipeline matches before allocations end", severity: "warning" },
+    { title: "Optimise bench utilisation", detail: `${bench.kpis.redeployable ?? bench.kpis.onBench} redeployable bench resources matched to open demand`, severity: "success" },
   ];
 }
 
@@ -1200,14 +1227,15 @@ export async function createScenario(
   actorUserId: string | null,
 ) {
   const pipeline = await getPipelineDemand(tenantId, (data.scenarioType as "expected" | "best" | "worst") ?? "expected");
+  const { util, shortfall } = await computeScenarioUtilAndShortfall(tenantId, pipeline.kpis.softDemand);
   const [row] = await db.insert(resourcePlanningScenarios).values({
     tenantId,
     name: data.name,
     scenarioType: data.scenarioType ?? "custom",
     revenueForecast: String(Math.round(pipeline.kpis.totalPipelineValue)),
     demandFte: String(pipeline.kpis.softDemand),
-    utilisationForecast: 75,
-    shortfallFte: "-3",
+    utilisationForecast: util,
+    shortfallFte: String(shortfall),
     assumptions: data.assumptions,
     createdById: actorUserId ?? undefined,
   }).returning();
@@ -1308,6 +1336,20 @@ async function skillShortageForScenario(tenantId: number, skill: string, scenari
   const shortages = row.cells.filter((c) => c.startsWith("-")).length;
   const mult = scenario === "best" ? 1.4 : scenario === "worst" ? 0.6 : 1;
   return `${Math.round(shortages * mult)} mo`;
+}
+
+async function getTopSkillGapName(tenantId: number): Promise<string> {
+  const matrix = await getDemandSupplyMatrix(tenantId, { includePipeline: true, months: 6 });
+  let topSkill = "Skills";
+  let topShortages = 0;
+  for (const row of matrix.rows) {
+    const shortages = row.cells.filter((c) => c.startsWith("-")).length;
+    if (shortages > topShortages) {
+      topShortages = shortages;
+      topSkill = row.skill;
+    }
+  }
+  return topSkill;
 }
 
 async function recruitmentNeededForScenario(tenantId: number, scenario: "expected" | "best" | "worst") {

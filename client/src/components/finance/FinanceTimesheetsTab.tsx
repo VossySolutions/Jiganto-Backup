@@ -68,19 +68,20 @@ type TimesheetEntryRow = {
   role?: string | null;
 };
 
-function PeriodEntriesPanel({ periodId, canApprove }: { periodId: number; canApprove: boolean }) {
+function PeriodEntriesPanel({ periodId, canApprove, onChanged }: { periodId: number; canApprove: boolean; onChanged?: () => void }) {
   const { data: entries = [], refetch } = useQuery<TimesheetEntryRow[]>({
-    queryKey: [`/api/resources/timesheets/periods/${periodId}/entries`],
+    queryKey: [`/api/finance/timesheets/periods/${periodId}/entries`],
+    staleTime: 30_000,
   });
 
   const approveEntry = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/api/resources/timesheets/entries/${id}/approve`),
-    onSuccess: () => refetch(),
+    onSuccess: () => { refetch(); onChanged?.(); },
   });
 
   const rejectEntry = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/api/resources/timesheets/entries/${id}/reject`, { reason: "Needs revision" }),
-    onSuccess: () => refetch(),
+    onSuccess: () => { refetch(); onChanged?.(); },
   });
 
   if (entries.length === 0) return <p className="text-xs text-muted-foreground pl-6">No line entries</p>;
@@ -132,11 +133,13 @@ export function FinanceTimesheetsTab({
   const { data: fetchedPeriods = [], isLoading: fetchLoading } = useQuery<FinanceTimesheetPeriod[]>({
     queryKey: ["/api/finance/timesheets/periods"],
     enabled: periodsProp === undefined,
+    staleTime: 30_000,
   });
 
   const { data: fetchedPending = [] } = useQuery<FinanceTimesheetPeriod[]>({
     queryKey: ["/api/finance/timesheets/periods?status=submitted"],
     enabled: pendingProp === undefined,
+    staleTime: 30_000,
   });
 
   const periods = periodsProp ?? fetchedPeriods;
@@ -145,6 +148,7 @@ export function FinanceTimesheetsTab({
 
   const { data: resources = [] } = useQuery<Array<{ id: number; firstName: string; lastName: string }>>({
     queryKey: ["/api/resources"],
+    staleTime: 60_000,
   });
 
   const visibleResources = ownResourceId
@@ -153,10 +157,12 @@ export function FinanceTimesheetsTab({
 
   const { data: projects = [] } = useQuery<Array<{ id: number; name: string }>>({
     queryKey: ["/api/pm/projects"],
+    staleTime: 60_000,
   });
 
   const { data: signoffRequests = [] } = useQuery<Array<{ id: number; title: string; status: string; timesheetPeriodId?: number }>>({
     queryKey: ["/api/signoff"],
+    staleTime: 30_000,
   });
 
   const signoffByPeriodId = useMemo(() => {
@@ -184,16 +190,19 @@ export function FinanceTimesheetsTab({
   const { data: periodDetail, refetch: refetchPeriod } = useQuery<FinanceTimesheetPeriod>({
     queryKey: [`/api/finance/timesheets/periods/${activePeriodId}`],
     enabled: activePeriodId != null,
+    staleTime: 30_000,
   });
 
   const { data: utilisation } = useQuery({
     queryKey: ["/api/finance/timesheets/reports/utilisation"],
     enabled: viewMode === "reports",
+    staleTime: 30_000,
   });
 
   const { data: missing = [] } = useQuery<Array<{ resourceId: number; name: string }>>({
     queryKey: [`/api/finance/timesheets/reports/missing?weekStartDate=${getMonday().toISOString().slice(0, 10)}`],
     enabled: viewMode === "reports",
+    staleTime: 30_000,
   });
 
   useEffect(() => {
@@ -211,7 +220,10 @@ export function FinanceTimesheetsTab({
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/finance/timesheets/periods"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/finance/timesheets/periods?status=submitted"] });
     queryClient.invalidateQueries({ queryKey: ["/api/finance/dashboard"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/finance/budgets"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/finance/timesheets/reports/utilisation"] });
     if (activePeriodId) refetchPeriod();
   };
 
@@ -636,7 +648,7 @@ export function FinanceTimesheetsTab({
                     </div>
                   )}
                 </div>
-                {expandedPeriodId === p.id && <PeriodEntriesPanel periodId={p.id} canApprove={canApprove} />}
+                {expandedPeriodId === p.id && <PeriodEntriesPanel periodId={p.id} canApprove={canApprove} onChanged={invalidate} />}
               </CardContent>
             </Card>
           );

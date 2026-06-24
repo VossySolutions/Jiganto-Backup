@@ -5,7 +5,7 @@
  *   npm run db:seed-esign
  *   FORCE=1 npm run db:seed-esign
  *
- * Prerequisites: users exist, npm run db:patch-esign, projects recommended (db:seed-finance).
+ * Prerequisites: users exist, npm run db:push, projects recommended (db:seed-finance).
  */
 import { eq } from "drizzle-orm";
 import { db } from "./db";

@@ -12,11 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
+import { FormDialogShell, FormDialogViewShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -290,23 +287,27 @@ export default function TemplatesPage() {
   const templatesQuery = useQuery({
     queryKey: ["/api/templates", queryParams],
     queryFn: () => fetchTemplates(queryParams),
+    staleTime: 30_000,
   });
 
   const countsQuery = useQuery({
     queryKey: ["/api/templates/module-counts"],
     queryFn: fetchTemplateModuleCounts,
+    staleTime: 60_000,
   });
 
   const discoveryQuery = useQuery({
     queryKey: ["/api/templates/discovery"],
     queryFn: fetchTemplatesDiscovery,
     enabled: viewMode === "library",
+    staleTime: 60_000,
   });
 
   const marketplaceQuery = useQuery({
     queryKey: ["/api/templates/marketplace"],
     queryFn: fetchMarketplaceTemplates,
     enabled: viewMode === "marketplace",
+    staleTime: 60_000,
   });
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<{ id: number; name: string }[]>({
@@ -317,6 +318,7 @@ export default function TemplatesPage() {
       return res.json();
     },
     enabled: applyTpl?.module === "test_mgmt",
+    staleTime: 60_000,
   });
 
   const templates = viewMode === "marketplace" ? (marketplaceQuery.data ?? []) : (templatesQuery.data ?? []);
@@ -638,65 +640,74 @@ export default function TemplatesPage() {
         </div>
     </ModuleShell>
 
-      <Dialog open={!!previewTpl} onOpenChange={() => setPreviewTpl(null)}>
-        <DialogContent className="max-w-lg sm:max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="template-preview-dialog">
-          {previewTpl && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="pr-6">{previewTpl.name}</DialogTitle>
-                <DialogDescription>
-                  {moduleLabel(previewTpl.module)} · v{previewTpl.version} · {previewTpl.usageCount ?? 0} uses
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">{previewTpl.description || snapshotSummary(previewTpl)}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  <Badge variant="outline" style={{ borderColor: moduleColor(previewTpl.module), color: moduleColor(previewTpl.module) }}>
-                    {moduleLabel(previewTpl.module)}
-                  </Badge>
-                  {(previewTpl.categoryTags ?? []).map(tag => (
-                    <Badge key={tag} variant="secondary">{tag}</Badge>
-                  ))}
-                </div>
-                <div className="rounded-lg border bg-muted/40 p-4 text-sm">
-                  <p className="font-medium text-xs text-muted-foreground mb-1">What&apos;s included</p>
-                  <p>{snapshotSummary(previewTpl)}</p>
-                  {previewTpl.creatorName && (
-                    <p className="text-xs text-muted-foreground mt-2">Created by {previewTpl.creatorName}</p>
-                  )}
-                </div>
-                <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-                  {previewTpl.tier === "customer" && (
-                    <Button variant="outline" className="w-full sm:w-auto" onClick={() => { setSubmitTpl(previewTpl); setPreviewTpl(null); }}>
-                      <Send className="h-3.5 w-3.5 mr-1" /> Submit to Jiganto
-                    </Button>
-                  )}
-                  <Button className="w-full sm:w-auto" onClick={() => { openApply(previewTpl); setPreviewTpl(null); }}>
-                    Use this template <ChevronRight className="h-3.5 w-3.5 ml-1" />
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <FormDialogViewShell
+        open={!!previewTpl}
+        onOpenChange={() => setPreviewTpl(null)}
+        title={previewTpl?.name ?? "Template preview"}
+        subtitle={previewTpl ? `${moduleLabel(previewTpl.module)} · v${previewTpl.version} · ${previewTpl.usageCount ?? 0} uses` : undefined}
+        onClose={() => setPreviewTpl(null)}
+        size="lg"
+        testId="template-preview-dialog"
+        footer={
+          previewTpl ? (
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+              {previewTpl.tier === "customer" && (
+                <Button variant="outline" className="w-full sm:w-auto" onClick={() => { setSubmitTpl(previewTpl); setPreviewTpl(null); }}>
+                  <Send className="h-3.5 w-3.5 mr-1" /> Submit to Jiganto
+                </Button>
+              )}
+              <Button className="w-full sm:w-auto" onClick={() => { openApply(previewTpl); setPreviewTpl(null); }}>
+                Use this template <ChevronRight className="h-3.5 w-3.5 ml-1" />
+              </Button>
+            </div>
+          ) : null
+        }
+      >
+        {previewTpl && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">{previewTpl.description || snapshotSummary(previewTpl)}</p>
+            <div className="flex flex-wrap gap-1.5">
+              <Badge variant="outline" style={{ borderColor: moduleColor(previewTpl.module), color: moduleColor(previewTpl.module) }}>
+                {moduleLabel(previewTpl.module)}
+              </Badge>
+              {(previewTpl.categoryTags ?? []).map(tag => (
+                <Badge key={tag} variant="secondary">{tag}</Badge>
+              ))}
+            </div>
+            <div className="rounded-lg border bg-muted/40 p-4 text-sm">
+              <p className="font-medium text-xs text-muted-foreground mb-1">What&apos;s included</p>
+              <p>{snapshotSummary(previewTpl)}</p>
+              {previewTpl.creatorName && (
+                <p className="text-xs text-muted-foreground mt-2">Created by {previewTpl.creatorName}</p>
+              )}
+            </div>
+          </div>
+        )}
+      </FormDialogViewShell>
 
-      <Dialog open={!!applyTpl} onOpenChange={() => setApplyTpl(null)}>
-        <DialogContent className="max-w-md" data-testid="template-apply-dialog">
-          <DialogHeader>
-            <DialogTitle>Use template</DialogTitle>
-            <DialogDescription>
-              Create a new {applyTpl ? moduleLabel(applyTpl.module).toLowerCase() : "item"} from this template
-            </DialogDescription>
-          </DialogHeader>
-          {applyTpl && (
-            <div className="space-y-4">
-              <div className="rounded-lg border p-3 text-sm bg-muted/30">
-                <p className="font-medium">{applyTpl.name}</p>
-                <p className="text-xs text-muted-foreground mt-1">{snapshotSummary(applyTpl)}</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="apply-name">Name</Label>
+      <FormDialogShell
+        open={!!applyTpl}
+        onOpenChange={() => setApplyTpl(null)}
+        title="Use template"
+        subtitle={applyTpl ? `Create a new ${moduleLabel(applyTpl.module).toLowerCase()} from this template` : undefined}
+        saveLabel="Create"
+        onCancel={() => setApplyTpl(null)}
+        onSubmit={confirmApply}
+        saving={applyMut.isPending}
+        disabled={!applyName.trim()}
+        size="sm"
+        testId="template-apply-dialog"
+        saveTestId="confirm-apply"
+      >
+        {applyTpl && (
+          <>
+            <div className="rounded-lg border p-3 text-sm bg-muted/30 mb-4">
+              <p className="font-medium">{applyTpl.name}</p>
+              <p className="text-xs text-muted-foreground mt-1">{snapshotSummary(applyTpl)}</p>
+            </div>
+            <FormSection icon={<LayoutTemplate className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="New item">
+              <div className="space-y-1.5 mb-3.5">
+                <FieldLabel required>Name</FieldLabel>
                 <Input id="apply-name" value={applyName} onChange={e => setApplyName(e.target.value)} data-testid="apply-name-input" />
               </div>
               {applyTpl.module === "project" && (
@@ -705,8 +716,8 @@ export default function TemplatesPage() {
                 </p>
               )}
               {applyTpl.module === "test_mgmt" && (
-                <div className="space-y-2">
-                  <Label>Target project</Label>
+                <div className="space-y-1.5">
+                  <FieldLabel>Target project</FieldLabel>
                   {projectsLoading ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                       <Loader2 className="h-4 w-4 animate-spin" /> Loading projects…
@@ -725,109 +736,104 @@ export default function TemplatesPage() {
                   )}
                 </div>
               )}
-              <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2">
-                <Button variant="outline" onClick={() => setApplyTpl(null)}>Cancel</Button>
-                <Button onClick={confirmApply} disabled={applyMut.isPending} data-testid="confirm-apply">
-                  {applyMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="h-4 w-4 mr-1" /> Create</>}
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            </FormSection>
+          </>
+        )}
+      </FormDialogShell>
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-md" data-testid="create-template-dialog">
-          <DialogHeader>
-            <DialogTitle>Create Template</DialogTitle>
-            <DialogDescription>
-              Templates are usually saved from the source module. Pick a module to get started.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Module type</Label>
-              <Select value={createModule} onValueChange={setCreateModule}>
-                <SelectTrigger data-testid="create-module-select">
-                  <SelectValue placeholder="Select module…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TEMPLATE_MODULES.map(m => (
-                    <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={handleCreateRedirect} disabled={!createModule} className="w-full" data-testid="create-template-go">
-              Go to module <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
+      <FormDialogShell
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        title="Create template"
+        subtitle="Templates are usually saved from the source module. Pick a module to get started."
+        saveLabel="Go to module"
+        onCancel={() => setShowCreate(false)}
+        onSubmit={handleCreateRedirect}
+        disabled={!createModule}
+        size="sm"
+        testId="create-template-dialog"
+        saveTestId="create-template-go"
+      >
+        <FormSection icon={<Plus className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Module type">
+          <div className="space-y-1.5">
+            <FieldLabel required>Module type</FieldLabel>
+            <Select value={createModule} onValueChange={setCreateModule}>
+              <SelectTrigger data-testid="create-module-select">
+                <SelectValue placeholder="Select module…" />
+              </SelectTrigger>
+              <SelectContent>
+                {TEMPLATE_MODULES.map(m => (
+                  <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </DialogContent>
-      </Dialog>
+        </FormSection>
+      </FormDialogShell>
 
-      <Dialog open={showAi} onOpenChange={setShowAi}>
-        <DialogContent className="max-w-md" data-testid="ai-generate-dialog">
-          <DialogHeader>
-            <DialogTitle>Generate with AI</DialogTitle>
-            <DialogDescription>Describe your template in plain English. Uses your AI token balance.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Module</Label>
-              <Select value={aiModule} onValueChange={setAiModule}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {AI_GENERATE_MODULES.map(m => (
-                    <SelectItem key={m} value={m}>{moduleLabel(m)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Describe your template</Label>
-              <Textarea
-                value={aiPrompt}
-                onChange={e => setAiPrompt(e.target.value)}
-                placeholder="e.g. SAP FI end-to-end test scenario hierarchy for a greenfield implementation…"
-                rows={4}
-                data-testid="ai-prompt-input"
-              />
-            </div>
-            <Button
-              onClick={() => aiMut.mutate({ module: aiModule, prompt: aiPrompt })}
-              disabled={!aiPrompt.trim() || aiMut.isPending}
-              className="w-full"
-              data-testid="ai-generate-submit"
-            >
-              {aiMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Sparkles className="h-4 w-4 mr-1" /> Generate</>}
-            </Button>
+      <FormDialogShell
+        open={showAi}
+        onOpenChange={setShowAi}
+        title="Generate with AI"
+        subtitle="Describe your template in plain English. Uses your AI token balance."
+        saveLabel="Generate"
+        onCancel={() => setShowAi(false)}
+        onSubmit={() => aiMut.mutate({ module: aiModule, prompt: aiPrompt })}
+        saving={aiMut.isPending}
+        disabled={!aiPrompt.trim()}
+        size="sm"
+        testId="ai-generate-dialog"
+        saveTestId="ai-generate-submit"
+      >
+        <FormSection icon={<Sparkles className="h-3.5 w-3.5 text-violet-600" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="AI generation">
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Module</FieldLabel>
+            <Select value={aiModule} onValueChange={setAiModule}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {AI_GENERATE_MODULES.map(m => (
+                  <SelectItem key={m} value={m}>{moduleLabel(m)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="space-y-1.5">
+            <FieldLabel required>Describe your template</FieldLabel>
+            <Textarea
+              value={aiPrompt}
+              onChange={e => setAiPrompt(e.target.value)}
+              placeholder="e.g. SAP FI end-to-end test scenario hierarchy for a greenfield implementation…"
+              rows={4}
+              data-testid="ai-prompt-input"
+            />
+          </div>
+        </FormSection>
+      </FormDialogShell>
 
-      <Dialog open={!!submitTpl} onOpenChange={() => setSubmitTpl(null)}>
-        <DialogContent className="max-w-md" data-testid="submit-template-dialog">
-          <DialogHeader>
-            <DialogTitle>Submit to Jiganto</DialogTitle>
-            <DialogDescription>Share with all customers if approved (typically 2–4 weeks review).</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
+      <FormDialogShell
+        open={!!submitTpl}
+        onOpenChange={() => setSubmitTpl(null)}
+        title="Submit to Jiganto"
+        subtitle="Share with all customers if approved (typically 2–4 weeks review)."
+        saveLabel="Submit for review"
+        onCancel={() => setSubmitTpl(null)}
+        onSubmit={() => submitTpl && submitMut.mutate({ id: submitTpl.id, note: submitNote })}
+        saving={submitMut.isPending}
+        size="sm"
+        testId="submit-template-dialog"
+      >
+        <FormSection icon={<Send className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Review note">
+          <div className="space-y-1.5">
+            <FieldLabel>Optional note for reviewers</FieldLabel>
             <Textarea
               value={submitNote}
               onChange={e => setSubmitNote(e.target.value)}
               placeholder="Optional note for reviewers…"
               rows={3}
             />
-            <Button
-              onClick={() => submitTpl && submitMut.mutate({ id: submitTpl.id, note: submitNote })}
-              disabled={submitMut.isPending}
-              className="w-full"
-            >
-              {submitMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit for review"}
-            </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </FormSection>
+      </FormDialogShell>
     </>
   );
 }

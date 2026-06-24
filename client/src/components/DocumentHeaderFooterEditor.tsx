@@ -62,7 +62,7 @@ export function DocumentHeaderFooterEditor({
     lastExternalContent.current = incoming;
     const current = normalizeEditorHtml(editor.getHTML());
     if (incoming !== current) {
-      editor.commands.setContent(incoming, false);
+      editor.commands.setContent(incoming, { emitUpdate: false });
     }
   }, [content, editor]);
 

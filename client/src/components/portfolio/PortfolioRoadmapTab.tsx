@@ -23,7 +23,7 @@ export function PortfolioRoadmapTab() {
   const [filterClient, setFilterClient] = useState("");
   const [filterRag, setFilterRag] = useState("");
 
-  const { data, isLoading } = useQuery<RoadmapData>({ queryKey: ["/api/portfolio/roadmap"] });
+  const { data, isLoading } = useQuery<RoadmapData>({ queryKey: ["/api/portfolio/roadmap"], staleTime: 30_000 });
 
   const spanDays = ZOOM_DAYS[zoom] || 90;
   const today = new Date();
@@ -41,7 +41,11 @@ export function PortfolioRoadmapTab() {
     if (filterRag) rows = rows.filter((i) => (i.ragStatus || "").toLowerCase() === filterRag);
     if (groupBy === "type") {
       const order = { internal: 0, programme: 1, project: 2 };
-      rows = [...rows].sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9));
+      rows = [...rows].sort((a, b) => (order[a.type as keyof typeof order] ?? 9) - (order[b.type as keyof typeof order] ?? 9));
+    } else if (groupBy === "portfolio") {
+      rows = [...rows].sort((a, b) => (a.portfolioName || "").localeCompare(b.portfolioName || ""));
+    } else if (groupBy === "client") {
+      rows = [...rows].sort((a, b) => (a.clientName || "").localeCompare(b.clientName || ""));
     }
     return rows;
   }, [data, filterClient, filterRag, groupBy]);
@@ -71,7 +75,7 @@ export function PortfolioRoadmapTab() {
         <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={showToday} onChange={(e) => setShowToday(e.target.checked)} /> Today</label>
         <Button variant="outline" size="sm" onClick={exportPng} disabled={exporting}>
           {exporting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Image className="h-3.5 w-3.5 mr-1" />}
-          PNG
+          PNG (Print)
         </Button>
         <Button variant="outline" size="sm" onClick={() => window.print()}><Download className="h-3.5 w-3.5 mr-1" /> Print</Button>
       </PortfolioToolbar>
@@ -88,7 +92,7 @@ export function PortfolioRoadmapTab() {
               badge={<Badge variant="outline" className="text-[9px] capitalize">{item.type}</Badge>}
             >
               <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div className="h-full rounded-full" style={{ width: `${Math.min(100, item.status === "completed" ? 100 : 60)}%`, background: item.colour }} />
+                <div className="h-full rounded-full" style={{ width: `${Math.min(100, item.progress ?? (item.status === "completed" ? 100 : 0))}%`, background: item.colour }} />
               </div>
               <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 <div className={cn("h-2 w-2 rounded-full", ragDot)} />

@@ -24,6 +24,7 @@ export function TemplatesTab({
   const { data: templates = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["/api/surveys/templates"],
     queryFn: fetchSurveyTemplates,
+    staleTime: 30_000,
   });
 
   const submitMut = useMutation({

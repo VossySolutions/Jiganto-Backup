@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import { useMutation } from "@tanstack/react-query";
@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -29,9 +30,10 @@ type Props = {
   resourceSkills: Record<number, ResourceSkill[]>;
   isLoading?: boolean;
   onOpenProfile: (r: Resource) => void;
+  initialGapPlanId?: number | null;
 };
 
-export function SkillsMatrixTab({ resources, skills, categories, resourceSkills, isLoading, onOpenProfile }: Props) {
+export function SkillsMatrixTab({ resources, skills, categories, resourceSkills, isLoading, onOpenProfile, initialGapPlanId = null }: Props) {
   const { toast } = useToast();
   const [view, setView] = useState<"matrix" | "search">("matrix");
   const [showAdmin, setShowAdmin] = useState(false);
@@ -88,6 +90,21 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
       setGapLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!initialGapPlanId) return;
+    setGapPlanId(String(initialGapPlanId));
+    setShowGap(true);
+    void (async () => {
+      setGapLoading(true);
+      try {
+        const res = await fetch(`/api/resources/skills/gap-analysis/${initialGapPlanId}`, { credentials: "include" });
+        if (res.ok) setGapResults(await res.json());
+      } finally {
+        setGapLoading(false);
+      }
+    })();
+  }, [initialGapPlanId]);
 
   const exportSearchCsv = () => {
     const lines = ["Name,Title,Utilisation,Skills"];
@@ -268,27 +285,33 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
         </div>
       )}
 
-      <Dialog open={showAdmin} onOpenChange={setShowAdmin}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Manage Skills</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Name</Label><Input value={newSkillName} onChange={(e) => setNewSkillName(e.target.value)} /></div>
-            <div>
-              <Label>Category</Label>
-              <Select value={newSkillCategory} onValueChange={setNewSkillCategory}>
-                <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <label className="flex items-center gap-2 text-sm"><Checkbox checked={isCertification} onCheckedChange={(v) => setIsCertification(!!v)} /> Certification skill</label>
+      <FormDialogShell
+        open={showAdmin}
+        onOpenChange={setShowAdmin}
+        title="Manage Skills"
+        saveLabel="Create"
+        onCancel={() => setShowAdmin(false)}
+        onSubmit={() => createSkillMutation.mutate({ name: newSkillName, categoryId: newSkillCategory ? Number(newSkillCategory) : null, isCertification })}
+        saving={createSkillMutation.isPending}
+        disabled={!newSkillName}
+      >
+        <FormSection title="Skill details">
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel required>Name</FieldLabel>
+            <Input value={newSkillName} onChange={(e) => setNewSkillName(e.target.value)} />
           </div>
-          <DialogFooter>
-            <Button onClick={() => createSkillMutation.mutate({ name: newSkillName, categoryId: newSkillCategory ? Number(newSkillCategory) : null, isCertification })} disabled={!newSkillName}>Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Category</FieldLabel>
+            <Select value={newSkillCategory} onValueChange={setNewSkillCategory}>
+              <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
+              <SelectContent>
+                {categories.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <label className="flex items-center gap-2 text-sm"><Checkbox checked={isCertification} onCheckedChange={(v) => setIsCertification(!!v)} /> Certification skill</label>
+        </FormSection>
+      </FormDialogShell>
 
       <Dialog open={showGap} onOpenChange={setShowGap}>
         <DialogContent className="max-w-lg">

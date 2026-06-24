@@ -95,68 +95,7 @@ import {
 import { useTablePagination } from "@/hooks/use-table-pagination";
 
 import { TablePagination } from "@/components/TablePagination";
-
-
-
-function KpiCard({
-
-  label,
-
-  value,
-
-  icon: Icon,
-
-  color,
-
-  loading,
-
-}: {
-
-  label: string;
-
-  value: string | number;
-
-  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
-
-  color: string;
-
-  loading?: boolean;
-
-}) {
-
-  return (
-
-    <div className="rounded-2xl border bg-card/90 backdrop-blur-sm p-4 sm:p-5 flex items-center gap-3 sm:gap-4 shadow-sm hover:shadow-md transition-shadow">
-
-      <div
-
-        className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl flex items-center justify-center flex-shrink-0"
-
-        style={{ backgroundColor: color + "18" }}
-
-      >
-
-        <Icon className="h-5 w-5" style={{ color }} />
-
-      </div>
-
-      <div className="min-w-0">
-
-        <p className={cn("text-xl sm:text-2xl font-bold tabular-nums truncate", loading && "opacity-60")}>
-
-          {loading ? "—" : value}
-
-        </p>
-
-        <p className="text-xs text-muted-foreground truncate">{label}</p>
-
-      </div>
-
-    </div>
-
-  );
-
-}
+import { MetricCard } from "@/components/ui/metric-card";
 
 
 
@@ -557,24 +496,19 @@ export default function ClientsPage() {
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
 
-                <KpiCard label="Total Clients" value={kpis?.totalClients ?? clients.length} icon={Briefcase} color="#185FA5" loading={kpisBusy} />
+                <MetricCard title="Total Clients" value={kpisBusy ? "—" : (kpis?.totalClients ?? clients.length)} icon={Briefcase} borderColor="#185FA5" helpText="All client organisations in your portfolio." testId="kpi-total-clients" />
 
-                <KpiCard label="Active Engagements" value={kpis?.activeEngagements ?? 0} icon={TrendingUp} color="#0F6E56" loading={kpisBusy} />
+                <MetricCard title="Active Engagements" value={kpisBusy ? "—" : (kpis?.activeEngagements ?? 0)} icon={TrendingUp} borderColor="#0F6E56" helpText="Clients with at least one active project or engagement." testId="kpi-active-engagements" />
 
-                <KpiCard label="Projects Tracked" value={kpis?.projectsTracked ?? 0} icon={Users} color="#7C3AED" loading={kpisBusy} />
+                <MetricCard title="Projects Tracked" value={kpisBusy ? "—" : (kpis?.projectsTracked ?? 0)} icon={Users} borderColor="#7C3AED" helpText="Projects linked across all client workspaces." testId="kpi-projects-tracked" />
 
-                <KpiCard
-
-                  label="At-Risk Projects"
-
-                  value={kpis?.atRiskProjects ?? 0}
-
+                <MetricCard
+                  title="At-Risk Projects"
+                  value={kpisBusy ? "—" : (kpis?.atRiskProjects ?? 0)}
                   icon={AlertTriangle}
-
-                  color={(kpis?.atRiskProjects ?? 0) > 0 ? "#EF4444" : "#6B7280"}
-
-                  loading={kpisBusy}
-
+                  borderColor={(kpis?.atRiskProjects ?? 0) > 0 ? "#EF4444" : "#6B7280"}
+                  helpText="Projects flagged red or amber on health or delivery status."
+                  testId="kpi-at-risk-projects"
                 />
 
               </div>

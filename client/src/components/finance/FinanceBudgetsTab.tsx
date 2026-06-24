@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,9 +58,10 @@ interface FinanceBudgetsTabProps {
   budgets?: BudgetListItem[];
   isLoading?: boolean;
   searchTerm?: string;
+  filterProjectId?: number | null;
 }
 
-export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingProp, searchTerm = "" }: FinanceBudgetsTabProps) {
+export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingProp, searchTerm = "", filterProjectId = null }: FinanceBudgetsTabProps) {
   const { toast } = useToast();
   const [ragFilter, setRagFilter] = useState("all");
   const [contractFilter, setContractFilter] = useState("all");
@@ -72,6 +74,7 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
 
   const { data: projects = [] } = useQuery<Array<{ id: number; name: string }>>({
     queryKey: ["/api/pm/projects"],
+    staleTime: 60_000,
   });
 
   const createMutation = useMutation({
@@ -89,9 +92,20 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
     onError: () => toast({ title: "Failed to create budget", variant: "destructive" }),
   });
 
+  const recalculateMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/finance/budgets/${id}/recalculate`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/budgets"] });
+      if (selectedId != null) queryClient.invalidateQueries({ queryKey: [`/api/finance/budgets/${selectedId}`] });
+      toast({ title: "Budget recalculated from live data" });
+    },
+    onError: () => toast({ title: "Recalculation failed", variant: "destructive" }),
+  });
+
   const { data: fetchedBudgets = [], isLoading: fetchLoading } = useQuery<BudgetListItem[]>({
     queryKey: ["/api/finance/budgets"],
     enabled: budgetsProp === undefined,
+    staleTime: 30_000,
   });
   const budgets = budgetsProp ?? fetchedBudgets;
   const isLoading = isLoadingProp ?? fetchLoading;
@@ -99,6 +113,7 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
   const { data: detail, isLoading: detailLoading } = useQuery<BudgetDetail>({
     queryKey: [`/api/finance/budgets/${selectedId}`],
     enabled: selectedId != null,
+    staleTime: 30_000,
   });
 
   const enrichedBudgets = useMemo(() =>
@@ -118,12 +133,19 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
   const filteredBudgets = useMemo(() => {
     const q = searchTerm.toLowerCase();
     return enrichedBudgets.filter((b) => {
+      if (filterProjectId != null && b.projectId !== filterProjectId) return false;
       if (ragFilter !== "all" && b.ragStatus !== ragFilter) return false;
       if (contractFilter !== "all" && b.contractType !== contractFilter) return false;
       if (q && !`${b.projectName ?? ""} ${b.clientName ?? ""}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [enrichedBudgets, searchTerm, ragFilter, contractFilter]);
+  }, [enrichedBudgets, searchTerm, ragFilter, contractFilter, filterProjectId]);
+
+  useEffect(() => {
+    if (filterProjectId == null || selectedId != null) return;
+    const match = enrichedBudgets.find((b) => b.projectId === filterProjectId);
+    if (match) setSelectedId(match.id);
+  }, [filterProjectId, enrichedBudgets, selectedId]);
 
   const pagination = useTablePagination(filteredBudgets, {
     resetKey: `${searchTerm}-${ragFilter}-${contractFilter}`,
@@ -156,9 +178,11 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
           </SelectContent>
         </Select>
         <span className="text-sm text-muted-foreground">{filteredBudgets.length} budgets</span>
+        {budgets.length > 0 && (
         <Button size="sm" className="sm:ml-auto w-full sm:w-auto" onClick={() => setShowCreate(true)}>
           <Plus className="h-4 w-4 mr-1" /> New Budget
         </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -243,6 +267,17 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
                 <div><span className="text-muted-foreground">Total budget</span><p className="font-medium">{formatCurrency(detail.totalBudget, detail.budgetCurrency)}</p></div>
                 <div><span className="text-muted-foreground">Actual cost</span><p className="font-medium">{formatCurrency(detail.actualCost, detail.budgetCurrency)}</p></div>
                 <div><span className="text-muted-foreground">RAG</span><div className="mt-0.5">{ragBadge(computeRag(parseMoney(detail.actualCost), parseMoney(detail.totalBudget)))}</div></div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={recalculateMutation.isPending}
+                  onClick={() => selectedId != null && recalculateMutation.mutate(selectedId)}
+                >
+                  {recalculateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Recalculate actuals
+                </Button>
               </div>
 
               <Tabs defaultValue="labour">
@@ -353,50 +388,51 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
         </SheetContent>
       </Sheet>
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Create Project Budget</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Project</Label>
-              <Select value={newProjectId} onValueChange={setNewProjectId}>
-                <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
-                <SelectContent>
-                  {projects.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Contract type</Label>
-              <Select value={newContractType} onValueChange={setNewContractType}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fixed_price">Fixed price</SelectItem>
-                  <SelectItem value="time_materials">Time &amp; materials</SelectItem>
-                  <SelectItem value="retainer">Retainer</SelectItem>
-                  <SelectItem value="mixed">Mixed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Labour budget</Label>
-                <Input type="number" value={newLabourBudget} onChange={(e) => setNewLabourBudget(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Expense budget</Label>
-                <Input type="number" value={newExpenseBudget} onChange={(e) => setNewExpenseBudget(e.target.value)} />
-              </div>
-            </div>
+      <FormDialogShell
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        title="Create project budget"
+        subtitle="Set labour and expense budgets for a project"
+        saveLabel="Create budget"
+        onCancel={() => setShowCreate(false)}
+        onSubmit={() => createMutation.mutate()}
+        saving={createMutation.isPending}
+        disabled={!newProjectId}
+      >
+        <FormSection icon={<Wallet className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Budget setup">
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel required>Project</FieldLabel>
+            <Select value={newProjectId} onValueChange={setNewProjectId}>
+              <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
+              <SelectContent>
+                {projects.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={() => createMutation.mutate()} disabled={!newProjectId || createMutation.isPending}>
-              {createMutation.isPending ? <FinanceButtonSpinner /> : "Create"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Contract type</FieldLabel>
+            <Select value={newContractType} onValueChange={setNewContractType}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="fixed_price">Fixed price</SelectItem>
+                <SelectItem value="time_materials">Time &amp; materials</SelectItem>
+                <SelectItem value="retainer">Retainer</SelectItem>
+                <SelectItem value="mixed">Mixed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <FieldGrid>
+            <div className="space-y-1.5">
+              <FieldLabel>Labour budget</FieldLabel>
+              <Input type="number" value={newLabourBudget} onChange={(e) => setNewLabourBudget(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <FieldLabel>Expense budget</FieldLabel>
+              <Input type="number" value={newExpenseBudget} onChange={(e) => setNewExpenseBudget(e.target.value)} />
+            </div>
+          </FieldGrid>
+        </FormSection>
+      </FormDialogShell>
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
+import { MetricCard } from "@/components/ui/metric-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Ticket, AlertTriangle, Clock, Star, Bug, Wallet, BarChart3 } from "lucide-react";
+import { Ticket, AlertTriangle, Clock, Star, Bug, Wallet } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line,
 } from "recharts";
@@ -26,6 +27,7 @@ interface Props {
 export function HelpDeskDashboardTab({ onFilterTickets }: Props) {
   const { data, isLoading, isError, isFetching, refetch } = useQuery<HelpDeskDashboard>({
     queryKey: ["/api/help-desk/dashboard"],
+    staleTime: 30_000,
   });
 
   if (isLoading) {
@@ -41,7 +43,7 @@ export function HelpDeskDashboardTab({ onFilterTickets }: Props) {
   if (isError) {
     return (
       <HelpDeskErrorState
-        message="Could not load the Help Desk dashboard. Run npm run db:patch-help-desk if tables are missing."
+        message="Could not load the Help Desk dashboard. Run npm run db:push if tables are missing."
         onRetry={() => refetch()}
       />
     );
@@ -50,12 +52,12 @@ export function HelpDeskDashboardTab({ onFilterTickets }: Props) {
   if (!data) return null;
 
   const kpis = [
-    { label: "Open Tickets", value: data.kpis.openTickets, icon: Ticket, color: HD_ACCENT, filter: { status: "open" } },
-    { label: "SLA Breached", value: data.kpis.slaBreached, icon: AlertTriangle, color: "#ef4444", filter: { slaFilter: "breached" } },
-    { label: "Avg Resolution", value: `${data.kpis.avgResolutionHours}h`, icon: Clock, color: "#6366f1" },
-    { label: "CSAT Score", value: data.kpis.csatScore > 0 ? data.kpis.csatScore : "—", icon: Star, color: "#f59e0b" },
-    { label: "Open Defects", value: data.kpis.openDefects, icon: Bug, color: "#dc2626", filter: { type: "defect" } },
-    { label: "Billable Hrs", value: `${data.kpis.billableHoursThisMonth}h`, icon: Wallet, color: "#22c55e", href: "/modules/finance" },
+    { title: "Open Tickets", value: data.kpis.openTickets, subtitle: "Not closed or resolved", helpText: "All help desk tickets that are still open.", icon: Ticket, borderColor: HD_ACCENT, filter: { status: "open" } as const },
+    { title: "SLA Breached", value: data.kpis.slaBreached, subtitle: "Past resolution deadline", helpText: "Tickets that missed their SLA resolution target.", icon: AlertTriangle, borderColor: "#ef4444", filter: { slaFilter: "breached" } as const },
+    { title: "Avg Resolution", value: `${data.kpis.avgResolutionHours}h`, subtitle: "Business hours, 30 days", helpText: "Mean hours from open to resolved over the last 30 days.", icon: Clock, borderColor: "#6366f1" },
+    { title: "CSAT Score", value: data.kpis.csatScore > 0 ? data.kpis.csatScore : "—", subtitle: "Out of 5.0", helpText: "Average customer satisfaction from post-resolution surveys.", icon: Star, borderColor: "#f59e0b" },
+    { title: "Open Defects", value: data.kpis.openDefects, subtitle: "Type: defect", helpText: "Open tickets classified as software defects.", icon: Bug, borderColor: "#dc2626", filter: { type: "defect" } as const },
+    { title: "Billable Hrs", value: `${data.kpis.billableHoursThisMonth}h`, subtitle: "This calendar month", helpText: "Billable hours logged against help desk work this month.", icon: Wallet, borderColor: "#22c55e", href: "/modules/finance-mgmt?tab=timesheets" },
   ];
 
   return (
@@ -64,23 +66,21 @@ export function HelpDeskDashboardTab({ onFilterTickets }: Props) {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
         {kpis.map((k) => (
-          <Card
-            key={k.label}
-            className="rounded-xl border-border/50 cursor-pointer hover:border-sky-500/40 active:scale-[0.98] transition-all"
+          <MetricCard
+            key={k.title}
+            title={k.title}
+            value={k.value}
+            subtitle={k.subtitle}
+            helpText={k.helpText}
+            icon={k.icon}
+            borderColor={k.borderColor}
+            className="border-border/50"
             onClick={() => {
               if ("href" in k && k.href) { window.location.href = k.href; return; }
               if (k.filter) onFilterTickets?.(k.filter);
             }}
-          >
-            <div className="h-0.5 w-full rounded-t-xl" style={{ backgroundColor: k.color }} />
-            <CardContent className="p-2.5 sm:p-4">
-              <div className="flex items-center gap-1 mb-1">
-                <k.icon className="h-3.5 w-3.5 shrink-0" style={{ color: k.color }} />
-                <span className="text-[10px] sm:text-xs text-muted-foreground leading-tight line-clamp-2">{k.label}</span>
-              </div>
-              <p className="text-lg sm:text-2xl font-semibold tabular-nums">{k.value}</p>
-            </CardContent>
-          </Card>
+            testId={`hd-kpi-${k.title.toLowerCase().replace(/\s+/g, "-")}`}
+          />
         ))}
       </div>
 

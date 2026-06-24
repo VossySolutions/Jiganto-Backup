@@ -5,14 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Settings, Plus, Trash2, Loader2 } from "lucide-react";
 import type { PortalBusinessAreaColor } from "@shared/models/bpm-extensions";
 
 type Props = {
-  tenantId: number;
   libraryId: number | null;
 };
 
@@ -21,7 +20,7 @@ const DEFAULT_COLORS = [
   "#EF4444", "#8B5CF6", "#F97316", "#6366F1", "#84CC16", "#0EA5E9",
 ];
 
-export function PortalSettingsDialog({ tenantId, libraryId }: Props) {
+export function PortalSettingsDialog({ libraryId }: Props) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [accessModel, setAccessModel] = useState("open");
@@ -33,7 +32,7 @@ export function PortalSettingsDialog({ tenantId, libraryId }: Props) {
   const [newTagAreas, setNewTagAreas] = useState("");
 
   const { data: settings, isLoading } = useQuery<any>({
-    queryKey: [`/api/bpm/portal-settings?tenantId=${tenantId}${libraryId ? `&libraryId=${libraryId}` : ""}`],
+    queryKey: [`/api/bpm/portal-settings${libraryId ? `?libraryId=${libraryId}` : ""}`],
     enabled: open,
   });
 
@@ -81,17 +80,32 @@ export function PortalSettingsDialog({ tenantId, libraryId }: Props) {
       <Button size="sm" variant="outline" onClick={handleOpen} data-testid="button-portal-settings">
         <Settings className="h-4 w-4 mr-1" /> Settings
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg" data-testid="dialog-portal-settings">
-          <DialogHeader>
-            <DialogTitle>Process Portal Settings</DialogTitle>
-          </DialogHeader>
+      <FormDialogShell
+        open={open}
+        onOpenChange={setOpen}
+        title="Process Portal Settings"
+        saveLabel="Save Settings"
+        onCancel={() => setOpen(false)}
+        onSubmit={() => saveMutation.mutate({
+          libraryId,
+          accessModel,
+          businessAreaColors: Object.fromEntries(areaColors.map(a => [a.area, a.color])),
+          userAreaTags: Object.fromEntries(
+            userAreaTags.map(t => [t.userId, t.areas.split(",").map(s => s.trim()).filter(Boolean)]),
+          ),
+        })}
+        saving={saveMutation.isPending}
+        testId="dialog-portal-settings"
+        saveTestId="button-save-portal-settings"
+        size="lg"
+      >
           {isLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
           ) : (
+            <FormSection title="Access and visibility">
             <div className="space-y-4">
               <div>
-                <Label>Access Control</Label>
+                <FieldLabel>Access Control</FieldLabel>
                 <Select value={accessModel} onValueChange={setAccessModel}>
                   <SelectTrigger data-testid="select-access-model"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -105,7 +119,7 @@ export function PortalSettingsDialog({ tenantId, libraryId }: Props) {
               </div>
               {accessModel === "tag_based" && (
                 <div>
-                  <Label>User Area Tags</Label>
+                  <FieldLabel>User Area Tags</FieldLabel>
                   <p className="text-xs text-muted-foreground mb-2">Map user IDs to comma-separated Business Area names they can access.</p>
                   <div className="space-y-2 mb-3">
                     {userAreaTags.map(ut => (
@@ -127,7 +141,7 @@ export function PortalSettingsDialog({ tenantId, libraryId }: Props) {
               )}
               <Separator />
               <div>
-                <Label>Business Area Colours</Label>
+                <FieldLabel>Business Area Colours</FieldLabel>
                 <p className="text-xs text-muted-foreground mb-2">Left-border stripe colour per Business Area in hierarchy and breadcrumbs.</p>
                 <div className="space-y-2 mb-3">
                   {areaColors.map(ac => (
@@ -152,26 +166,9 @@ export function PortalSettingsDialog({ tenantId, libraryId }: Props) {
                 </div>
               </div>
             </div>
+            </FormSection>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button
-              onClick={() => saveMutation.mutate({
-                tenantId, libraryId,
-                accessModel,
-                businessAreaColors: Object.fromEntries(areaColors.map(a => [a.area, a.color])),
-                userAreaTags: Object.fromEntries(
-                  userAreaTags.map(t => [t.userId, t.areas.split(",").map(s => s.trim()).filter(Boolean)]),
-                ),
-              })}
-              disabled={saveMutation.isPending}
-              data-testid="button-save-portal-settings"
-            >
-              Save Settings
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
     </>
   );
 }

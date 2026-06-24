@@ -2,6 +2,8 @@
 
 Jiganto uses Supabase for **PostgreSQL** and **authentication**. Application data and foreign keys use `public.users`; Supabase stores logins in `auth.users`. Both share the **same user id** (UUID).
 
+For production deployment of modules 6–20, see also **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
+
 ## Architecture (standard pattern)
 
 ```

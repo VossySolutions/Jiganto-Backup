@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useRef, useEffect, useMemo, Fragment, lazy, Suspense } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo, Fragment, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
@@ -27,7 +27,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import {
+  FormDialogShell,
+  FormDialogViewShell,
+  FormSection,
+  FieldGrid,
+  FieldLabel,
+} from "@/components/ui/form-dialog-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -888,7 +894,7 @@ export default function DocumentManagementPage() {
 
   const createFolderMutation = useMutation({
     mutationFn: async (data: { name: string; parentId: number | null; color?: string }) => 
-      apiRequest("POST", "/api/documents/folders", { ...data, tenantId: 1 }),
+      apiRequest("POST", "/api/documents/folders", { ...data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents/folders"] });
       setIsNewFolderOpen(false);
@@ -923,7 +929,7 @@ export default function DocumentManagementPage() {
 
   const createDocMutation = useMutation({
     mutationFn: async (data: { title: string; type: string; folderId: number | null; content?: string; openAfterCreate?: boolean }) => {
-      const res = await apiRequest("POST", "/api/documents", { ...data, tenantId: 1, content: data.content || "", status: "draft" });
+      const res = await apiRequest("POST", "/api/documents", { ...data, content: data.content || "", status: "draft" });
       return res.json() as Promise<Document & { openAfterCreate?: boolean }>;
     },
     onSuccess: (doc: Document & { openAfterCreate?: boolean }, variables) => {
@@ -1092,7 +1098,6 @@ export default function DocumentManagementPage() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("tenantId", "1");
       if (selectedFolderId !== null) {
         formData.append("folderId", String(selectedFolderId));
       }
@@ -1264,9 +1269,9 @@ export default function DocumentManagementPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/documents/recent"] });
       queryClient.invalidateQueries({ queryKey: ["/api/documents/favorites"] });
       if (selectedDocumentRef.current?.id === deletedId) {
-        setSelectedDocument(null);
-        setHighlightedDocument(null);
-        setIsPreviewMode(false);
+      setSelectedDocument(null);
+      setHighlightedDocument(null);
+      setIsPreviewMode(false);
       }
       toast({ title: "Document deleted" });
     },
@@ -4119,24 +4124,38 @@ export default function DocumentManagementPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Dialog open={isNewFolderOpen} onOpenChange={setIsNewFolderOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1.5 hidden sm:inline-flex" onClick={() => setNewFolderParentId(selectedFolderId)} data-testid="button-new-folder">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 hidden sm:inline-flex"
+                onClick={() => {
+                  setNewFolderParentId(selectedFolderId);
+                  setIsNewFolderOpen(true);
+                }}
+                data-testid="button-new-folder"
+              >
                     <FolderPlus className="h-4 w-4" /> Folder
                   </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create New Folder</DialogTitle>
-                    <DialogDescription>
-                      {newFolderParentId === null 
+
+              <FormDialogShell
+                open={isNewFolderOpen}
+                onOpenChange={setIsNewFolderOpen}
+                title="Create New Folder"
+                subtitle={
+                  newFolderParentId === null
                         ? "This folder will be created at the root level." 
-                        : `This folder will be created inside "${folders.find(f => f.id === newFolderParentId)?.name || "selected folder"}".`}
-                    </DialogDescription>
-                  </DialogHeader>
+                    : `This folder will be created inside "${folders.find(f => f.id === newFolderParentId)?.name || "selected folder"}".`
+                }
+                saveLabel={createFolderMutation.isPending ? "Creating..." : "Create Folder"}
+                saveTestId="button-create-folder"
+                onCancel={() => setIsNewFolderOpen(false)}
+                onSubmit={() => createFolderMutation.mutate({ name: newFolderName, parentId: newFolderParentId === "root" ? null : newFolderParentId as number | null, color: newFolderColor })}
+                disabled={!newFolderName.trim() || createFolderMutation.isPending}
+                saving={createFolderMutation.isPending}
+              >
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                      <Label>Folder Name</Label>
+                      <FieldLabel>Folder Name</FieldLabel>
                       <Input
                         value={newFolderName}
                         onChange={(e) => setNewFolderName(e.target.value)}
@@ -4145,7 +4164,7 @@ export default function DocumentManagementPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Folder Color</Label>
+                      <FieldLabel>Folder Color</FieldLabel>
                       <div className="flex items-center gap-2 flex-wrap" data-testid="folder-color-picker">
                         {FOLDER_COLORS.map(color => (
                           <button
@@ -4165,7 +4184,7 @@ export default function DocumentManagementPage() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>Location</Label>
+                      <FieldLabel>Location</FieldLabel>
                       <Select 
                         value={newFolderParentId === null ? "root" : String(newFolderParentId)} 
                         onValueChange={(v) => setNewFolderParentId(v === "root" ? null : Number(v))}
@@ -4182,41 +4201,56 @@ export default function DocumentManagementPage() {
                       </Select>
                     </div>
                   </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsNewFolderOpen(false)}>Cancel</Button>
-                    <Button 
-                      onClick={() => createFolderMutation.mutate({ name: newFolderName, parentId: newFolderParentId === "root" ? null : newFolderParentId as number | null, color: newFolderColor })}
-                      disabled={!newFolderName.trim() || createFolderMutation.isPending}
-                      data-testid="button-create-folder"
-                    >
-                      {createFolderMutation.isPending ? (
-                        <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Creating...</>
-                      ) : "Create Folder"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              </FormDialogShell>
 
-              <Dialog open={isNewDocOpen} onOpenChange={(open) => {
+                    <Button 
+                size="sm"
+                className="gap-1.5"
+                data-testid="button-new-document"
+                onClick={() => {
+                  setNewDocFolderId(newDocDefaultFolderId);
+                  setIsNewDocOpen(true);
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">New Page</span>
+                    </Button>
+
+              <FormDialogShell
+                open={isNewDocOpen}
+                onOpenChange={(open) => {
                 setIsNewDocOpen(open);
                 if (open) setNewDocFolderId(newDocDefaultFolderId);
                 if (!open) setSelectedTemplateId(null);
-              }}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="gap-1.5" data-testid="button-new-document">
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">New Page</span>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] sm:w-full">
-                  <DialogHeader>
-                    <DialogTitle>Create New Document</DialogTitle>
-                    <DialogDescription>Start blank or choose a template</DialogDescription>
-                  </DialogHeader>
+                }}
+                title="Create New Document"
+                subtitle="Start blank or choose a template"
+                saveLabel="Create"
+                saveTestId="button-create-document"
+                size="xl"
+                onCancel={() => setIsNewDocOpen(false)}
+                onSubmit={() => {
+                  if (!ALLOW_UNCATEGORISED_DOCS && newDocFolderId == null) {
+                    toast({ title: "Folder required", description: "Please choose a folder for this document.", variant: "destructive" });
+                    return;
+                  }
+                  const templateContent = selectedTemplateId
+                    ? templates.find(t => t.id === selectedTemplateId)?.content || ""
+                    : "";
+                  createDocMutation.mutate({
+                    title: newDocTitle || "Untitled",
+                    type: newDocType,
+                    folderId: newDocFolderId,
+                    content: templateContent,
+                  });
+                  setSelectedTemplateId(null);
+                }}
+                disabled={createDocMutation.isPending || (!ALLOW_UNCATEGORISED_DOCS && newDocFolderId == null)}
+              >
                   <div className="space-y-4 py-2">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Document Title</Label>
+                        <FieldLabel>Document Title</FieldLabel>
                         <Input
                           value={newDocTitle}
                           onChange={(e) => setNewDocTitle(e.target.value)}
@@ -4225,7 +4259,7 @@ export default function DocumentManagementPage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Type</Label>
+                        <FieldLabel>Type</FieldLabel>
                         <Select value={newDocType} onValueChange={setNewDocType}>
                           <SelectTrigger data-testid="select-document-type">
                             <SelectValue />
@@ -4244,10 +4278,10 @@ export default function DocumentManagementPage() {
 
                     {templates.length > 0 && (
                       <div className="space-y-2">
-                        <Label className="flex items-center gap-2">
+                        <FieldLabel>
                           <BookCopy className="h-4 w-4" />
                           Start from Template (optional)
-                        </Label>
+                        </FieldLabel>
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-[200px] overflow-y-auto p-1">
                           <button
                             className={cn(
@@ -4284,7 +4318,7 @@ export default function DocumentManagementPage() {
                     )}
 
                     <div className="space-y-2">
-                      <Label>Save location</Label>
+                      <FieldLabel>Save location</FieldLabel>
                       {selectedFolderId != null && (
                         <p className="text-xs text-muted-foreground">
                           Creating in folder: {folders.find(f => f.id === selectedFolderId)?.name}
@@ -4303,33 +4337,7 @@ export default function DocumentManagementPage() {
                       </Select>
                     </div>
                   </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsNewDocOpen(false)}>Cancel</Button>
-                    <Button
-                      onClick={() => {
-                        if (!ALLOW_UNCATEGORISED_DOCS && newDocFolderId == null) {
-                          toast({ title: "Folder required", description: "Please choose a folder for this document.", variant: "destructive" });
-                          return;
-                        }
-                        const templateContent = selectedTemplateId
-                          ? templates.find(t => t.id === selectedTemplateId)?.content || ""
-                          : "";
-                        createDocMutation.mutate({
-                          title: newDocTitle || "Untitled",
-                          type: newDocType,
-                          folderId: newDocFolderId,
-                          content: templateContent,
-                        });
-                        setSelectedTemplateId(null);
-                      }}
-                      disabled={createDocMutation.isPending || (!ALLOW_UNCATEGORISED_DOCS && newDocFolderId == null)}
-                      data-testid="button-create-document"
-                    >
-                      Create
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              </FormDialogShell>
 
               <Button 
                 size="sm" 
@@ -4420,15 +4428,20 @@ export default function DocumentManagementPage() {
         </div>
     </ModuleShell>
 
-      <Dialog open={!!renamingFolder} onOpenChange={(open) => { if (!open) setRenamingFolder(null); else if (renamingFolder) setRenamingFolderColor(renamingFolder.color || "#f97316"); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Folder</DialogTitle>
-            <DialogDescription>Update the name and color of this folder.</DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={!!renamingFolder}
+        onOpenChange={(open) => { if (!open) setRenamingFolder(null); else if (renamingFolder) setRenamingFolderColor(renamingFolder.color || "#f97316"); }}
+        title="Edit Folder"
+        subtitle="Update the name and color of this folder."
+        saveLabel="Save"
+        saveTestId="button-confirm-rename-folder"
+        onCancel={() => setRenamingFolder(null)}
+        onSubmit={() => renamingFolder && renameFolderMutation.mutate({ id: renamingFolder.id, name: renameValue, color: renamingFolderColor })}
+        disabled={!renameValue.trim() || renameFolderMutation.isPending}
+      >
           <div className="py-4 space-y-4">
             <div className="space-y-2">
-              <Label>Folder Name</Label>
+              <FieldLabel>Folder Name</FieldLabel>
               <Input
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
@@ -4437,7 +4450,7 @@ export default function DocumentManagementPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Folder Color</Label>
+              <FieldLabel>Folder Color</FieldLabel>
               <div className="flex items-center gap-2 flex-wrap" data-testid="folder-color-picker-edit">
                 {FOLDER_COLORS.map(color => (
                   <button
@@ -4457,25 +4470,19 @@ export default function DocumentManagementPage() {
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRenamingFolder(null)}>Cancel</Button>
-            <Button
-              onClick={() => renamingFolder && renameFolderMutation.mutate({ id: renamingFolder.id, name: renameValue, color: renamingFolderColor })}
-              disabled={!renameValue.trim() || renameFolderMutation.isPending}
-              data-testid="button-confirm-rename-folder"
-            >
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog open={!!renamingDocument} onOpenChange={(open) => !open && setRenamingDocument(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename Document</DialogTitle>
-            <DialogDescription>Enter a new name for this document.</DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={!!renamingDocument}
+        onOpenChange={(open) => !open && setRenamingDocument(null)}
+        title="Rename Document"
+        subtitle="Enter a new name for this document."
+        saveLabel="Rename"
+        saveTestId="button-confirm-rename-document"
+        onCancel={() => setRenamingDocument(null)}
+        onSubmit={() => renamingDocument && updateDocMutation.mutate({ id: renamingDocument.id, updates: { title: renameValue } })}
+        disabled={!renameValue.trim()}
+      >
           <div className="py-4">
             <Input
               value={renameValue}
@@ -4484,25 +4491,38 @@ export default function DocumentManagementPage() {
               data-testid="input-rename-document"
             />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRenamingDocument(null)}>Cancel</Button>
-            <Button
-              onClick={() => renamingDocument && updateDocMutation.mutate({ id: renamingDocument.id, updates: { title: renameValue } })}
-              disabled={!renameValue.trim()}
-              data-testid="button-confirm-rename-document"
-            >
-              Rename
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog open={isSaveAsOpen} onOpenChange={setIsSaveAsOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save As New Document</DialogTitle>
-            <DialogDescription>Create a copy of this document with a new name and choose a destination folder</DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={isSaveAsOpen}
+        onOpenChange={setIsSaveAsOpen}
+        title="Save As New Document"
+        subtitle="Create a copy of this document with a new name and choose a destination folder."
+        saveLabel="Save As"
+        saveTestId="button-confirm-save-as"
+        onCancel={() => setIsSaveAsOpen(false)}
+        onSubmit={() => {
+                if (!selectedDocument || !saveAsTitle.trim()) return;
+                if (!ALLOW_UNCATEGORISED_DOCS && saveAsFolderId == null) {
+                  toast({ title: "Folder required", description: "Please choose a folder for the copy.", variant: "destructive" });
+                  return;
+                }
+                const targetFolderName = saveAsFolderId
+                  ? folders.find(f => f.id === saveAsFolderId)?.name || "selected folder"
+                  : "Uncategorised";
+                createDocMutation.mutate({
+                  title: saveAsTitle.trim(),
+                  type: selectedDocument.type || "document",
+                  folderId: saveAsFolderId,
+                  content: editContent || selectedDocument.content || "",
+                  openAfterCreate: false,
+                });
+                setIsSaveAsOpen(false);
+                toast({ title: "Copy saved", description: `"${saveAsTitle.trim()}" saved to ${targetFolderName}` });
+              }}
+              disabled={!saveAsTitle.trim() || (!ALLOW_UNCATEGORISED_DOCS && saveAsFolderId == null) || createDocMutation.isPending}
+        saving={createDocMutation.isPending}
+      >
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>New Document Title</Label>
@@ -4528,48 +4548,30 @@ export default function DocumentManagementPage() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSaveAsOpen(false)}>Cancel</Button>
-            <Button
-              onClick={() => {
-                if (!selectedDocument || !saveAsTitle.trim()) return;
-                if (!ALLOW_UNCATEGORISED_DOCS && saveAsFolderId == null) {
-                  toast({ title: "Folder required", description: "Please choose a folder for the copy.", variant: "destructive" });
-                  return;
-                }
-                const targetFolderName = saveAsFolderId
-                  ? folders.find(f => f.id === saveAsFolderId)?.name || "selected folder"
-                  : "Uncategorised";
-                createDocMutation.mutate({
-                  title: saveAsTitle.trim(),
-                  type: selectedDocument.type || "document",
-                  folderId: saveAsFolderId,
-                  content: editContent || selectedDocument.content || "",
-                  openAfterCreate: false,
-                });
-                setIsSaveAsOpen(false);
-                toast({ title: "Copy saved", description: `"${saveAsTitle.trim()}" saved to ${targetFolderName}` });
-              }}
-              disabled={!saveAsTitle.trim() || (!ALLOW_UNCATEGORISED_DOCS && saveAsFolderId == null) || createDocMutation.isPending}
-              data-testid="button-confirm-save-as"
-            >
-              {createDocMutation.isPending ? "Saving..." : "Save As"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog open={isMoveToFolderOpen} onOpenChange={setIsMoveToFolderOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Move Document</DialogTitle>
-            <DialogDescription>
-              Move "{selectedDocument?.title}" to a different location
-            </DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={isMoveToFolderOpen}
+        onOpenChange={setIsMoveToFolderOpen}
+        title="Move Document"
+        subtitle={`Move "${selectedDocument?.title}" to a different location`}
+        saveLabel={updateDocMutation.isPending ? "Moving..." : "Move"}
+        saveTestId="button-confirm-move"
+        onCancel={() => setIsMoveToFolderOpen(false)}
+        onSubmit={() => {
+                if (selectedDocument) {
+                  updateDocMutation.mutate({
+                    id: selectedDocument.id,
+                    updates: { folderId: moveToFolderId },
+                  });
+                  setIsMoveToFolderOpen(false);
+                }
+              }}
+              disabled={(!ALLOW_UNCATEGORISED_DOCS && moveToFolderId == null) || updateDocMutation.isPending}
+      >
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Destination</Label>
+              <FieldLabel>Destination</FieldLabel>
               <Select
                 value={folderSelectValue(moveToFolderId)}
                 onValueChange={(val) => setMoveToFolderId(parseFolderSelectValue(val))}
@@ -4583,61 +4585,16 @@ export default function DocumentManagementPage() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsMoveToFolderOpen(false)}>Cancel</Button>
-            <Button
-              onClick={() => {
-                if (selectedDocument) {
-                  updateDocMutation.mutate({
-                    id: selectedDocument.id,
-                    updates: { folderId: moveToFolderId },
-                  });
-                  setIsMoveToFolderOpen(false);
-                }
-              }}
-              disabled={(!ALLOW_UNCATEGORISED_DOCS && moveToFolderId == null) || updateDocMutation.isPending}
-              data-testid="button-confirm-move"
-            >
-              {updateDocMutation.isPending ? "Moving..." : "Move"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog open={isSaveLocationOpen} onOpenChange={setIsSaveLocationOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Where would you like to save?</DialogTitle>
-            <DialogDescription>
-              Choose a folder for "{selectedDocument?.title}", or leave it uncategorised.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Document title</Label>
-              <Input
-                value={saveLocationTitle}
-                onChange={(e) => setSaveLocationTitle(e.target.value)}
-                placeholder="Document title"
-                data-testid="input-save-document-title"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Save location</Label>
-              <Select
-                value={folderSelectValue(saveLocationFolderId)}
-                onValueChange={(val) => setSaveLocationFolderId(parseFolderSelectValue(val))}
-              >
-                <SelectTrigger data-testid="select-save-to-folder">
-                  <SelectValue placeholder="Choose save location" />
-                </SelectTrigger>
-                <SelectContent className="max-h-64">
-                  {renderFolderSelectItems("save-to-folder")}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter className="flex-col sm:flex-row gap-2">
+      <FormDialogViewShell
+        open={isSaveLocationOpen}
+        onOpenChange={setIsSaveLocationOpen}
+        onClose={() => setIsSaveLocationOpen(false)}
+        title="Where would you like to save?"
+        subtitle={`Choose a folder for "${selectedDocument?.title}", or leave it uncategorised.`}
+        footer={(
+          <div className="flex-col sm:flex-row gap-2 flex sm:justify-end">
             <Button variant="outline" onClick={() => setIsSaveLocationOpen(false)}>Cancel</Button>
             {ALLOW_UNCATEGORISED_DOCS && (
               <Button
@@ -4703,21 +4660,56 @@ export default function DocumentManagementPage() {
             >
               {updateDocMutation.isPending ? "Saving..." : "Save"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isMoveFolderOpen} onOpenChange={setIsMoveFolderOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Move Folder</DialogTitle>
-            <DialogDescription>
-              Move "{movingFolder?.name}" to a different location
-            </DialogDescription>
-          </DialogHeader>
+          </div>
+        )}
+      >
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Destination</Label>
+              <Label>Document title</Label>
+              <Input
+                value={saveLocationTitle}
+                onChange={(e) => setSaveLocationTitle(e.target.value)}
+                placeholder="Document title"
+                data-testid="input-save-document-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Save location</Label>
+              <Select
+                value={folderSelectValue(saveLocationFolderId)}
+                onValueChange={(val) => setSaveLocationFolderId(parseFolderSelectValue(val))}
+              >
+                <SelectTrigger data-testid="select-save-to-folder">
+                  <SelectValue placeholder="Choose save location" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {renderFolderSelectItems("save-to-folder")}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+      </FormDialogViewShell>
+
+      <FormDialogShell
+        open={isMoveFolderOpen}
+        onOpenChange={setIsMoveFolderOpen}
+        title="Move Folder"
+        subtitle={`Move "${movingFolder?.name}" to a different location`}
+        saveLabel={moveFolderMutation.isPending ? "Moving..." : "Move"}
+        saveTestId="button-confirm-move-folder"
+        onCancel={() => setIsMoveFolderOpen(false)}
+        onSubmit={() => {
+          if (movingFolder) {
+            moveFolderMutation.mutate({ id: movingFolder.id, parentId: moveFolderTargetId });
+            setIsMoveFolderOpen(false);
+            setMovingFolder(null);
+          }
+        }}
+        disabled={moveFolderMutation.isPending}
+      >
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <FieldLabel>Destination</FieldLabel>
               <Select
                 value={moveFolderTargetId === null ? "__root__" : String(moveFolderTargetId)}
                 onValueChange={(val) => setMoveFolderTargetId(val === "__root__" ? null : Number(val))}
@@ -4755,39 +4747,130 @@ export default function DocumentManagementPage() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsMoveFolderOpen(false)}>Cancel</Button>
-            <Button
-              onClick={() => {
-                if (movingFolder) {
-                  moveFolderMutation.mutate({ id: movingFolder.id, parentId: moveFolderTargetId });
-                  setIsMoveFolderOpen(false);
-                  setMovingFolder(null);
-                }
-              }}
-              disabled={moveFolderMutation.isPending}
-              data-testid="button-confirm-move-folder"
-            >
-              {moveFolderMutation.isPending ? "Moving..." : "Move"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog
+      <FormDialogViewShell
         open={isImportOpen}
         onOpenChange={(open) => {
           setIsImportOpen(open);
           if (!open) resetImportDialog();
         }}
+        onClose={() => {
+          setIsImportOpen(false);
+          resetImportDialog();
+        }}
+        title="Import Word Document"
+        subtitle="Review the title and choose a destination folder. Word import supports headings, lists, tables, images, and header/footer text; complex styles and some embedded objects may not convert fully."
+        size="md"
+        footer={(
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsImportOpen(false)}>Cancel</Button>
+            <Button
+              onClick={async () => {
+                if (!importTitle.trim() || !importContent) return;
+                if (!ALLOW_UNCATEGORISED_DOCS && importFolderId == null) {
+                  toast({ title: "Folder required", description: "Please choose a folder for the imported document.", variant: "destructive" });
+                  return;
+                }
+                setIsImporting(true);
+                try {
+                  const replaceTarget = importConflictAction === "replace" ? importNameConflict : null;
+                  let targetDocId: number;
+                  let importedTitle = importTitle.trim();
+                  let didReplace = false;
+
+                  if (replaceTarget) {
+                    targetDocId = replaceTarget.id;
+                    importedTitle = replaceTarget.title;
+                    didReplace = true;
+                  } else {
+                    if (findDocumentByTitleInFolder(allDocuments, importedTitle, importFolderId)) {
+                      importedTitle = suggestUniqueDocumentTitle(importedTitle, importFolderId, allDocuments);
+                    }
+                  const createRes = await apiRequest("POST", "/api/documents", {
+                      title: importedTitle,
+                    type: "document",
+                    folderId: importFolderId,
+                    content: "",
+                    status: "draft",
+                  });
+                  const newDoc = await createRes.json();
+                    targetDocId = newDoc.id;
+                  }
+
+                  let contentRes: Response | null = null;
+                  for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                      const contentBlob = new Blob([importContent], { type: "text/html" });
+                      const formData = new FormData();
+                      formData.append("content", contentBlob, "content.html");
+                      contentRes = await fetchWithAuth(`/api/documents/${targetDocId}/content`, {
+                        method: "POST",
+                        body: formData,
+                      });
+                      if (contentRes.ok) break;
+                    } catch {
+                      if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                    }
+                  }
+                  if (!contentRes || !contentRes.ok) throw new Error("Failed to save content");
+
+                  const savedDoc = await contentRes.json();
+                  let fullDoc = savedDoc;
+                  if (importHeaderContent.trim() || importFooterContent.trim()) {
+                    const metaRes = await apiRequest("PUT", `/api/documents/${targetDocId}`, {
+                      metadata: {
+                        ...(savedDoc.metadata || {}),
+                        headerHtml: importHeaderContent.trim() || null,
+                        footerHtml: importFooterContent.trim() || null,
+                      },
+                    });
+                    fullDoc = await metaRes.json();
+                  }
+                  queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedFolderId] });
+                  queryClient.invalidateQueries({ queryKey: ["/api/documents/all"] });
+                  queryClient.invalidateQueries({ queryKey: ["/api/documents/recent"] });
+                  if (importFolderId !== null && importFolderId !== selectedFolderId) {
+                    queryClient.invalidateQueries({ queryKey: ["/api/documents", importFolderId] });
+                  }
+                  lastAutoSavedContent.current = importContent;
+                  setSelectedDocument(fullDoc);
+                  setIsEditing(true);
+                  setIsPreviewMode(false);
+                  setEditContent(importContent);
+                  const headerFromDoc = (fullDoc.metadata as Record<string, unknown> | undefined)?.headerHtml as string || importHeaderContent;
+                  const footerFromDoc = (fullDoc.metadata as Record<string, unknown> | undefined)?.footerHtml as string || importFooterContent;
+                  setEditHeaderContentState(headerFromDoc);
+                  setEditFooterContentState(footerFromDoc);
+                  editHeaderContentRef.current = headerFromDoc;
+                  editFooterContentRef.current = footerFromDoc;
+                  setActiveTab("content");
+                  setSelectedFile(null);
+                  toast({
+                    title: didReplace ? "Document replaced" : "Document imported successfully",
+                    description: didReplace
+                      ? `"${importedTitle}" was updated with the imported content.`
+                      : `"${importedTitle}" was added to your library.`,
+                  });
+                  setIsImportOpen(false);
+                  resetImportDialog();
+                } catch (err: any) {
+                  toast({ title: "Import failed", description: err.message || "Failed to save document", variant: "destructive" });
+                } finally {
+                  setIsImporting(false);
+                }
+              }}
+              disabled={!importTitle.trim() || !importContent || (!ALLOW_UNCATEGORISED_DOCS && importFolderId == null) || isImporting}
+              data-testid="button-confirm-import"
+              variant={importConflictAction === "replace" && importNameConflict ? "destructive" : "default"}
+            >
+              {isImporting
+                ? (importConflictAction === "replace" && importNameConflict ? "Replacing..." : "Importing...")
+                : (importConflictAction === "replace" && importNameConflict ? "Replace" : "Import")}
+            </Button>
+          </div>
+        )}
       >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Import Word Document</DialogTitle>
-            <DialogDescription>
-              Review the title and choose a destination folder. Word import supports headings, lists, tables, images, and header/footer text; complex styles and some embedded objects may not convert fully.
-            </DialogDescription>
-          </DialogHeader>
           <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
             <p className="font-medium text-foreground">Before you import</p>
             <ul className="list-disc pl-4 space-y-0.5">
@@ -4886,122 +4969,16 @@ export default function DocumentManagementPage() {
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsImportOpen(false)}>Cancel</Button>
-            <Button
-              onClick={async () => {
-                if (!importTitle.trim() || !importContent) return;
-                if (!ALLOW_UNCATEGORISED_DOCS && importFolderId == null) {
-                  toast({ title: "Folder required", description: "Please choose a folder for the imported document.", variant: "destructive" });
-                  return;
-                }
-                setIsImporting(true);
-                try {
-                  const replaceTarget = importConflictAction === "replace" ? importNameConflict : null;
-                  let targetDocId: number;
-                  let importedTitle = importTitle.trim();
-                  let didReplace = false;
+      </FormDialogViewShell>
 
-                  if (replaceTarget) {
-                    targetDocId = replaceTarget.id;
-                    importedTitle = replaceTarget.title;
-                    didReplace = true;
-                  } else {
-                    if (findDocumentByTitleInFolder(allDocuments, importedTitle, importFolderId)) {
-                      importedTitle = suggestUniqueDocumentTitle(importedTitle, importFolderId, allDocuments);
-                    }
-                    const createRes = await apiRequest("POST", "/api/documents", {
-                      title: importedTitle,
-                      type: "document",
-                      folderId: importFolderId,
-                      content: "",
-                      tenantId: 1,
-                      status: "draft",
-                    });
-                    const newDoc = await createRes.json();
-                    targetDocId = newDoc.id;
-                  }
-
-                  let contentRes: Response | null = null;
-                  for (let attempt = 0; attempt < 3; attempt++) {
-                    try {
-                      const contentBlob = new Blob([importContent], { type: "text/html" });
-                      const formData = new FormData();
-                      formData.append("content", contentBlob, "content.html");
-                      contentRes = await fetchWithAuth(`/api/documents/${targetDocId}/content`, {
-                        method: "POST",
-                        body: formData,
-                      });
-                      if (contentRes.ok) break;
-                    } catch {
-                      if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-                    }
-                  }
-                  if (!contentRes || !contentRes.ok) throw new Error("Failed to save content");
-
-                  const savedDoc = await contentRes.json();
-                  let fullDoc = savedDoc;
-                  if (importHeaderContent.trim() || importFooterContent.trim()) {
-                    const metaRes = await apiRequest("PUT", `/api/documents/${targetDocId}`, {
-                      metadata: {
-                        ...(savedDoc.metadata || {}),
-                        headerHtml: importHeaderContent.trim() || null,
-                        footerHtml: importFooterContent.trim() || null,
-                      },
-                    });
-                    fullDoc = await metaRes.json();
-                  }
-                  queryClient.invalidateQueries({ queryKey: ["/api/documents", selectedFolderId] });
-                  queryClient.invalidateQueries({ queryKey: ["/api/documents/all"] });
-                  queryClient.invalidateQueries({ queryKey: ["/api/documents/recent"] });
-                  if (importFolderId !== null && importFolderId !== selectedFolderId) {
-                    queryClient.invalidateQueries({ queryKey: ["/api/documents", importFolderId] });
-                  }
-                  lastAutoSavedContent.current = importContent;
-                  setSelectedDocument(fullDoc);
-                  setIsEditing(true);
-                  setIsPreviewMode(false);
-                  setEditContent(importContent);
-                  const headerFromDoc = (fullDoc.metadata as Record<string, unknown> | undefined)?.headerHtml as string || importHeaderContent;
-                  const footerFromDoc = (fullDoc.metadata as Record<string, unknown> | undefined)?.footerHtml as string || importFooterContent;
-                  setEditHeaderContentState(headerFromDoc);
-                  setEditFooterContentState(footerFromDoc);
-                  editHeaderContentRef.current = headerFromDoc;
-                  editFooterContentRef.current = footerFromDoc;
-                  setActiveTab("content");
-                  setSelectedFile(null);
-                  toast({
-                    title: didReplace ? "Document replaced" : "Document imported successfully",
-                    description: didReplace
-                      ? `"${importedTitle}" was updated with the imported content.`
-                      : `"${importedTitle}" was added to your library.`,
-                  });
-                  setIsImportOpen(false);
-                  resetImportDialog();
-                } catch (err: any) {
-                  toast({ title: "Import failed", description: err.message || "Failed to save document", variant: "destructive" });
-                } finally {
-                  setIsImporting(false);
-                }
-              }}
-              disabled={!importTitle.trim() || !importContent || (!ALLOW_UNCATEGORISED_DOCS && importFolderId == null) || isImporting}
-              data-testid="button-confirm-import"
-              variant={importConflictAction === "replace" && importNameConflict ? "destructive" : "default"}
-            >
-              {isImporting
-                ? (importConflictAction === "replace" && importNameConflict ? "Replacing..." : "Importing...")
-                : (importConflictAction === "replace" && importNameConflict ? "Replace" : "Import")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Share "{shareDialogName}"</DialogTitle>
-            <DialogDescription>Share this item with others via link or email.</DialogDescription>
-          </DialogHeader>
+      <FormDialogViewShell
+        open={shareDialogOpen}
+        onOpenChange={setShareDialogOpen}
+        onClose={() => setShareDialogOpen(false)}
+        title={`Share "${shareDialogName}"`}
+        subtitle="Share this item with others via link or email."
+        size="md"
+      >
           <div className="space-y-4 py-2">
             {/* Internal link */}
             <div>
@@ -5080,17 +5057,16 @@ export default function DocumentManagementPage() {
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+      </FormDialogViewShell>
 
-      <Dialog open={isTemplateManagerOpen} onOpenChange={setIsTemplateManagerOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <BookCopy className="h-5 w-5" /> Template Manager
-            </DialogTitle>
-            <DialogDescription>Create, manage, and organize document templates by scope and department.</DialogDescription>
-          </DialogHeader>
+      <FormDialogViewShell
+        open={isTemplateManagerOpen}
+        onOpenChange={setIsTemplateManagerOpen}
+        onClose={() => setIsTemplateManagerOpen(false)}
+        title="Template Manager"
+        subtitle="Create, manage, and organize document templates by scope and department."
+        size="xl"
+      >
           <Tabs defaultValue="browse" className="mt-2">
             <TabsList>
               <TabsTrigger value="browse" data-testid="tab-browse-templates">Browse</TabsTrigger>
@@ -5247,8 +5223,7 @@ export default function DocumentManagementPage() {
               </div>
             </TabsContent>
           </Tabs>
-        </DialogContent>
-      </Dialog>
+      </FormDialogViewShell>
     </>
   );
 }

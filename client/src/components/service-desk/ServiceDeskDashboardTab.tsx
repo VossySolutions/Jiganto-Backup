@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { MetricCard } from "@/components/ui/metric-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Ticket, AlertTriangle, Clock, ShieldAlert, CheckCircle, BarChart3 } from "lucide-react";
@@ -27,6 +28,7 @@ interface Props {
 export function ServiceDeskDashboardTab({ onFilterTickets }: Props) {
   const { data, isLoading, isError, refetch, isFetching } = useQuery<ServiceDeskDashboard>({
     queryKey: ["/api/service-desk/dashboard"],
+    staleTime: 30_000,
   });
 
   if (isLoading) {
@@ -53,12 +55,12 @@ export function ServiceDeskDashboardTab({ onFilterTickets }: Props) {
   }
 
   const kpis = [
-    { label: "Open Tickets", value: data.kpis.openTickets, icon: Ticket, color: "#6366f1", filter: { status: "open" } },
-    { label: "SLA Breached", value: data.kpis.slaBreached, icon: AlertTriangle, color: "#ef4444", filter: { slaFilter: "breached" } },
-    { label: "SLA At Risk", value: data.kpis.slaAtRisk, icon: Clock, color: "#f59e0b", filter: { slaFilter: "at_risk" } },
-    { label: "Avg Resolution", value: `${data.kpis.avgResolutionHours}h`, icon: BarChart3, color: "#0ea5e9" },
-    { label: "P1 / P2 Open", value: data.kpis.p1p2Open, icon: ShieldAlert, color: "#dc2626", filter: { priority: "p1" } },
-    { label: "Pending Approval", value: data.kpis.pendingApproval, icon: CheckCircle, color: "#8b5cf6" },
+    { title: "Open Tickets", value: data.kpis.openTickets, subtitle: "Not closed or resolved", helpText: "Tickets in any status except closed, resolved, or completed.", icon: Ticket, borderColor: "#6366f1", filter: { status: "open" } as const },
+    { title: "SLA Breached", value: data.kpis.slaBreached, subtitle: "Past resolution deadline", helpText: "Open tickets that have exceeded their SLA resolution target.", icon: AlertTriangle, borderColor: "#ef4444", filter: { slaFilter: "breached" } as const },
+    { title: "SLA At Risk", value: data.kpis.slaAtRisk, subtitle: "Approaching deadline", helpText: "Tickets nearing SLA breach — typically within the warning window.", icon: Clock, borderColor: "#f59e0b", filter: { slaFilter: "at_risk" } as const },
+    { title: "Avg Resolution", value: `${data.kpis.avgResolutionHours}h`, subtitle: "Business hours, 30 days", helpText: "Mean time from ticket open to resolved over the last 30 days.", icon: BarChart3, borderColor: "#0ea5e9" },
+    { title: "P1 Open", value: data.kpis.p1p2Open, subtitle: "Critical priority only", helpText: "Open tickets with P1 (critical) priority. Click to filter the ticket list.", icon: ShieldAlert, borderColor: "#dc2626", filter: { priority: "p1" } as const },
+    { title: "Pending Approval", value: data.kpis.pendingApproval, subtitle: "Awaiting sign-off", helpText: "Tickets waiting for customer or internal approval before work can proceed.", icon: CheckCircle, borderColor: "#8b5cf6" },
   ];
 
   const slaPie = [
@@ -74,20 +76,18 @@ export function ServiceDeskDashboardTab({ onFilterTickets }: Props) {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         {kpis.map((k) => (
-          <Card
-            key={k.label}
-            className="rounded-xl border-border/50 cursor-pointer hover:border-teal-500/40 active:scale-[0.98] transition-all"
-            onClick={() => k.filter && onFilterTickets?.(k.filter)}
-          >
-            <div className="h-0.5 w-full rounded-t-xl" style={{ backgroundColor: k.color }} />
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <k.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" style={{ color: k.color }} />
-                <span className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{k.label}</span>
-              </div>
-              <p className="text-xl sm:text-2xl font-semibold tabular-nums">{k.value}</p>
-            </CardContent>
-          </Card>
+          <MetricCard
+            key={k.title}
+            title={k.title}
+            value={k.value}
+            subtitle={k.subtitle}
+            helpText={k.helpText}
+            icon={k.icon}
+            borderColor={k.borderColor}
+            className="border-border/50"
+            onClick={k.filter ? () => onFilterTickets?.(k.filter!) : undefined}
+            testId={`sd-kpi-${k.title.toLowerCase().replace(/\s+/g, "-")}`}
+          />
         ))}
       </div>
 

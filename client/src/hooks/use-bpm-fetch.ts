@@ -13,5 +13,6 @@ export function useBpmFetch<T>(
     ...options,
     queryKey,
     queryFn: () => bpmFetchJson<T>(path),
+    staleTime: options?.staleTime ?? 30_000,
   });
 }

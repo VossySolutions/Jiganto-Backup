@@ -78,11 +78,37 @@ export function ImportDropdown({ columns, onImport }: ImportDropdownProps) {
       setPreviewData(items);
       setIsPreviewOpen(true);
     } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-      toast({
-        title: "Excel Import Coming Soon",
-        description: "Please save your Excel file as CSV first (File → Save As → CSV). CSV import is fully supported.",
-        variant: "default"
-      });
+      try {
+        const XLSX = await import("xlsx");
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        if (!sheet) {
+          toast({ title: "Empty workbook", description: "No sheets found in the Excel file.", variant: "destructive" });
+          return;
+        }
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+        const items: Record<string, unknown>[] = [];
+        for (const row of rows) {
+          const item: Record<string, unknown> = {};
+          for (const [header, value] of Object.entries(row)) {
+            const column = columns.find(c =>
+              c.title.toLowerCase() === String(header).toLowerCase() ||
+              c.key.toLowerCase() === String(header).toLowerCase(),
+            );
+            if (column) item[column.key] = value ?? "";
+          }
+          if (Object.keys(item).length > 0) items.push(item);
+        }
+        if (items.length === 0) {
+          toast({ title: "No matching columns", description: "Excel headers must match board column names.", variant: "destructive" });
+          return;
+        }
+        setPreviewData(items);
+        setIsPreviewOpen(true);
+      } catch {
+        toast({ title: "Excel import failed", description: "Could not read the file. Try saving as CSV.", variant: "destructive" });
+      }
     }
 
     if (fileInputRef.current) {

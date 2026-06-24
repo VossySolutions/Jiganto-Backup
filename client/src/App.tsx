@@ -259,6 +259,12 @@ function Router() {
           <Route path="/clients">{suspense(ClientsPage)}</Route>
           <Route path="/modules/customer-mgmt">{suspense(CustomerManagementPage)}</Route>
           <Route path="/modules/finance-mgmt">{suspense(FinanceManagementPage)}</Route>
+          <Route path="/modules/finance">
+            <Redirect to="/modules/finance-mgmt" />
+          </Route>
+          <Route path="/modules/resources">
+            <Redirect to="/modules/resource-mgmt" />
+          </Route>
           <Route path="/finance">
             <Redirect to="/modules/finance-mgmt" />
           </Route>

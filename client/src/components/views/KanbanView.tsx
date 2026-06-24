@@ -1,31 +1,33 @@
 import { useMemo } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { type Column, type Item } from "@shared/schema";
 import { cn } from "@/lib/utils";
-import { MoreHorizontal, Plus, Calendar as CalendarIcon, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Calendar as CalendarIcon, GripVertical, Plus, User } from "lucide-react";
+import { AppKanbanBoard } from "@/components/kanban";
 
 interface KanbanViewProps {
   columns: Column[];
   items: Item[];
   onItemClick?: (item: Item) => void;
   onAddItem?: (status: string) => void;
+  onItemStatusChange?: (item: Item, status: string) => void | Promise<void>;
 }
 
 const statusColors: Record<string, string> = {
   "To Do": "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
   "In Progress": "bg-status-blue text-status-blue-foreground",
-  "Done": "bg-status-green text-status-green-foreground",
-  "Blocked": "bg-status-red text-status-red-foreground",
+  Done: "bg-status-green text-status-green-foreground",
+  Blocked: "bg-status-red text-status-red-foreground",
 };
 
-export function KanbanView({ columns: columnsData, items, onItemClick, onAddItem }: KanbanViewProps) {
-  const statusColumn = columnsData.find(col => col.type === "status");
-  const titleColumn = columnsData.find(col => col.key === "title" || col.type === "text");
-  const dateColumn = columnsData.find(col => col.type === "date");
-  const ownerColumn = columnsData.find(col => col.type === "person" || col.key === "owner");
-  
+export function KanbanView({ columns: columnsData, items, onItemClick, onAddItem, onItemStatusChange }: KanbanViewProps) {
+  const statusColumn = columnsData.find((col) => col.type === "status");
+  const titleColumn = columnsData.find((col) => col.key === "title" || col.type === "text");
+  const dateColumn = columnsData.find((col) => col.type === "date");
+  const ownerColumn = columnsData.find((col) => col.type === "person" || col.key === "owner");
+
   const statuses = useMemo(() => {
     if (statusColumn?.options && Array.isArray(statusColumn.options)) {
       return statusColumn.options as string[];
@@ -33,108 +35,115 @@ export function KanbanView({ columns: columnsData, items, onItemClick, onAddItem
     return ["To Do", "In Progress", "Done"];
   }, [statusColumn]);
 
-  const itemsByStatus = useMemo(() => {
-    const groups: Record<string, Item[]> = {};
-    statuses.forEach(status => {
-      groups[status] = [];
-    });
-    
-    items.forEach(item => {
-      const itemStatus = statusColumn ? (item.values as any)[statusColumn.key] : "To Do";
-      if (groups[itemStatus]) {
-        groups[itemStatus].push(item);
-      } else {
-        groups["To Do"]?.push(item);
-      }
-    });
-    
-    return groups;
-  }, [items, statuses, statusColumn]);
+  const getItemStatus = (item: Item) => {
+    const values = item.values as Record<string, unknown>;
+    return statusColumn ? String(values[statusColumn.key] ?? statuses[0]) : statuses[0];
+  };
+
+  const kanbanColumns = statuses.map((status) => ({
+    id: status,
+    title: status,
+    accentColor: undefined,
+    header: (
+      <div className="rounded-t-2xl border border-b-0 border-border/50 bg-muted/30 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Badge variant="outline" className={cn("rounded-lg px-2.5 py-0.5 truncate", statusColors[status] || "bg-muted")}>
+              {status}
+            </Badge>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {items.filter((item) => getItemStatus(item) === status).length}
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 text-muted-foreground"
+            onClick={() => onAddItem?.(status)}
+            data-testid={`add-item-${status.toLowerCase().replace(/\s+/g, "-")}`}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    ),
+    className: "w-[300px]",
+  }));
+
+  if (!statusColumn || !onItemStatusChange) {
+    return (
+      <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+        Kanban view requires a status column and status update handler.
+      </div>
+    );
+  }
+
+  const statusKey = statusColumn.key;
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4 min-h-[600px]">
-      {statuses.map((status) => (
-        <div
-          key={status}
-          className="flex-shrink-0 w-[300px] bg-muted/30 rounded-2xl p-3 border border-border/50"
-          data-testid={`kanban-column-${status.toLowerCase().replace(/\s+/g, '-')}`}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Badge 
-                variant="outline" 
-                className={cn("rounded-lg px-2.5 py-1", statusColors[status] || "bg-muted")}
-              >
-                {status}
-              </Badge>
-              <span className="text-sm text-muted-foreground font-medium">
-                {itemsByStatus[status]?.length || 0}
-              </span>
-            </div>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-7 w-7 text-muted-foreground"
-              onClick={() => onAddItem?.(status)}
-              data-testid={`add-item-${status.toLowerCase().replace(/\s+/g, '-')}`}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
+    <AppKanbanBoard
+      columns={kanbanColumns}
+      items={items}
+      getItemId={(item) => String(item.id)}
+      getColumnId={getItemStatus}
+      setColumnIdOnItem={(item, columnId) => ({
+        ...item,
+        values: { ...(item.values as object), [statusKey]: columnId },
+      })}
+      onMove={(move) => Promise.resolve(onItemStatusChange(move.item, move.toColumnId))}
+      testIdPrefix="jiganto-kanban"
+      idPrefix="item-"
+      emptyColumnLabel="No items"
+      className="min-h-[600px]"
+      columnWidthClass="w-[300px]"
+      renderCard={(item, { dragHandleProps, isDragging, isSaving }) => {
+        const values = item.values as Record<string, unknown>;
+        const title = titleColumn ? String(values[titleColumn.key] ?? "") : `Item ${item.id}`;
+        const dueDate = dateColumn ? values[dateColumn.key] : null;
+        const owner = ownerColumn ? values[ownerColumn.key] : null;
 
-          <div className="space-y-3">
-            {itemsByStatus[status]?.map((item) => {
-              const values = item.values as Record<string, any>;
-              const title = titleColumn ? values[titleColumn.key] : `Item ${item.id}`;
-              const dueDate = dateColumn ? values[dateColumn.key] : null;
-              const owner = ownerColumn ? values[ownerColumn.key] : null;
-
-              return (
-                <Card 
-                  key={item.id}
-                  className="rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border-border/50 bg-card"
-                  onClick={() => onItemClick?.(item)}
-                  data-testid={`kanban-card-${item.id}`}
-                >
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <h4 className="font-medium text-sm text-foreground line-clamp-2">
-                        {title}
-                      </h4>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2 -mt-1 flex-shrink-0 text-muted-foreground">
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      {dueDate && (
-                        <div className="flex items-center gap-1">
-                          <CalendarIcon className="h-3 w-3" />
-                          <span>{new Date(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-                        </div>
-                      )}
-                      {owner && (
-                        <div className="flex items-center gap-1">
-                          <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center">
-                            <User className="h-3 w-3 text-primary" />
-                          </div>
-                          <span className="truncate max-w-[80px]">{owner}</span>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-
-            {(!itemsByStatus[status] || itemsByStatus[status].length === 0) && (
-              <div className="text-center py-8 text-muted-foreground/50 text-sm">
-                No items
-              </div>
+        return (
+          <Card
+            className={cn(
+              "rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer border-border/50 bg-card",
+              isDragging && "shadow-lg ring-2 ring-primary/20",
+              isSaving && "opacity-70",
             )}
-          </div>
-        </div>
-      ))}
-    </div>
+            onClick={() => onItemClick?.(item)}
+            data-testid={`kanban-card-${item.id}`}
+          >
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-start gap-2">
+                <div
+                  {...(dragHandleProps ?? {})}
+                  className="shrink-0 cursor-grab active:cursor-grabbing touch-none text-muted-foreground mt-0.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <GripVertical className="h-4 w-4" />
+                </div>
+                <h4 className="font-medium text-sm text-foreground line-clamp-2 flex-1">{title || `Item ${item.id}`}</h4>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-muted-foreground pl-6">
+                {dueDate != null && dueDate !== "" && (
+                  <div className="flex items-center gap-1">
+                    <CalendarIcon className="h-3 w-3" />
+                    <span>{new Date(String(dueDate)).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                  </div>
+                )}
+                {owner != null && owner !== "" && (
+                  <div className="flex items-center gap-1">
+                    <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center">
+                      <User className="h-3 w-3 text-primary" />
+                    </div>
+                    <span className="truncate max-w-[80px]">{String(owner)}</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      }}
+    />
   );
 }

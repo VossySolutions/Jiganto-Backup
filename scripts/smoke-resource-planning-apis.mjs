@@ -1,12 +1,11 @@
 /**
  * Smoke test Resource Planning APIs.
- * Usage: SMOKE_BEARER_TOKEN=<jwt> npm run smoke:resource-planning
+ * Usage: npm run smoke:resource-planning
  */
 import "dotenv/config";
+import { obtainSmokeAuth, smokeCall } from "./smoke-auth.mjs";
 
-const BASE = process.env.SMOKE_BASE_URL ?? "http://localhost:5000";
-const TENANT = process.env.SEED_TENANT_ID ?? "1";
-const TOKEN = process.env.SMOKE_BEARER_TOKEN ?? "";
+const BASE = process.env.SMOKE_BASE_URL ?? "http://127.0.0.1:5000";
 
 const ENDPOINTS = [
   "GET /api/resource-planning/dashboard?persona=res-mgr",
@@ -23,32 +22,28 @@ const ENDPOINTS = [
   "GET /api/resource-planning/recruitment/export?format=pdf&persona=hr",
 ];
 
-async function fetchEndpoint(spec) {
-  const [method, path] = spec.split(" ");
-  const url = `${BASE}${path}${path.includes("?") ? "&" : "?"}tenantId=${TENANT}`;
-  const headers = {};
-  if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
-  const res = await fetch(url, { method, credentials: "include", headers });
-  const text = await res.text();
-  let json = null;
-  try { json = JSON.parse(text); } catch { /* */ }
-  return { spec, status: res.status, ok: res.ok, size: text.length, keys: json ? Object.keys(json).slice(0, 5) : [] };
-}
-
 async function main() {
   console.log(`Smoke testing Resource Planning APIs at ${BASE}...`);
-  if (!TOKEN) console.log("(No SMOKE_BEARER_TOKEN — expecting 401 unless session cookie present)\n");
+  const auth = await obtainSmokeAuth(BASE);
+  if (!auth.bearer && !auth.cookie) {
+    console.error("No auth — set SMOKE_BEARER_TOKEN or start dev server with dev login enabled.");
+    process.exit(1);
+  }
+  console.log(`Auth: ${auth.via}\n`);
+
   let passed = 0;
   let failed = 0;
-  for (const ep of ENDPOINTS) {
+  for (const spec of ENDPOINTS) {
+    const [method, path] = spec.split(" ");
     try {
-      const r = await fetchEndpoint(ep);
-      const mark = r.ok ? "✓" : "✗";
-      if (r.ok) passed++; else failed++;
-      console.log(`${mark} ${r.spec} → ${r.status} (${r.size}b) ${r.keys.length ? `[${r.keys.join(", ")}]` : ""}`);
+      const r = await smokeCall(BASE, method, path, auth);
+      const ok = r.status >= 200 && r.status < 300;
+      if (ok) passed++; else failed++;
+      const keys = r.json && typeof r.json === "object" ? Object.keys(r.json).slice(0, 5) : [];
+      console.log(`${ok ? "✓" : "✗"} ${spec} → ${r.status} ${keys.length ? `[${keys.join(", ")}]` : r.text.slice(0, 80)}`);
     } catch (e) {
       failed++;
-      console.log(`✗ ${ep} → ERROR: ${e.message}`);
+      console.log(`✗ ${spec} → ERROR: ${e.message}`);
     }
   }
   console.log(`\n${passed} passed, ${failed} failed`);

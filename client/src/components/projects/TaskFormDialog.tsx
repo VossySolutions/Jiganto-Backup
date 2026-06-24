@@ -1,14 +1,11 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2 } from "lucide-react";
 import type { PmTask, PmProjectPhase, PmMilestone } from "@shared/models/projects";
 
 interface TaskFormDialogProps {
@@ -134,15 +131,13 @@ export function TaskFormDialog({
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     if (!name.trim()) {
       toast({ title: "Missing name", description: "Please enter a task name.", variant: "destructive" });
       return;
     }
 
     const data = {
-      tenantId: 1,
       projectId,
       name: name.trim(),
       description: description.trim() || null,
@@ -178,167 +173,180 @@ export function TaskFormDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto" data-testid="task-form-dialog">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Task" : "Add New Task"}</DialogTitle>
-          <DialogDescription>
-            {isEditing ? "Update the task details below." : "Create a new task for your project."}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="task-name">Name *</Label>
+    <FormDialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      onCancel={() => onOpenChange(false)}
+      onSubmit={handleSubmit}
+      title={isEditing ? "Edit Task" : "Add New Task"}
+      subtitle={isEditing ? "Update the task details below." : "Create a new task for your project."}
+      saveLabel={isPending ? "Saving..." : isEditing ? "Update Task" : "Create Task"}
+      saving={isPending}
+      saveTestId="button-save-task"
+      testId="task-form-dialog"
+      size="lg"
+    >
+      <FormSection title="Task details" icon={<span className="h-2 w-2 rounded-full bg-blue-500" />}>
+        <div className="space-y-1.5 mb-3.5">
+          <FieldLabel required>Name</FieldLabel>
+          <Input
+            id="task-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., Create database schema"
+            data-testid="input-task-name"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <FieldLabel>Description</FieldLabel>
+          <Textarea
+            id="task-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe the task..."
+            rows={2}
+            data-testid="input-task-description"
+          />
+        </div>
+      </FormSection>
+
+      <FormDivider />
+
+      <FormSection title="Planning" icon={<span className="h-2 w-2 rounded-full bg-violet-500" />}>
+        <FieldGrid className="mb-3.5">
+          <div className="space-y-1.5">
+            <FieldLabel>Phase</FieldLabel>
+            <Select value={phaseId || "__none__"} onValueChange={(v) => setPhaseId(v === "__none__" ? "" : v)}>
+              <SelectTrigger id="task-phase" data-testid="select-task-phase">
+                <SelectValue placeholder="Select phase..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No Phase</SelectItem>
+                {phases.map((phase) => (
+                  <SelectItem key={phase.id} value={phase.id.toString()}>{phase.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <FieldLabel>Milestone</FieldLabel>
+            <Select value={milestoneId || "__none__"} onValueChange={(v) => setMilestoneId(v === "__none__" ? "" : v)}>
+              <SelectTrigger id="task-milestone" data-testid="select-task-milestone">
+                <SelectValue placeholder="Select milestone..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No Milestone</SelectItem>
+                {milestones.map((ms) => (
+                  <SelectItem key={ms.id} value={ms.id.toString()}>{ms.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </FieldGrid>
+
+        <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3 mb-3.5">
+          <div className="space-y-1.5">
+            <FieldLabel>Status</FieldLabel>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger id="task-status" data-testid="select-task-status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {statusOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <FieldLabel>Priority</FieldLabel>
+            <Select value={priority} onValueChange={setPriority}>
+              <SelectTrigger id="task-priority" data-testid="select-task-priority">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {priorityOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <FieldLabel>Progress %</FieldLabel>
             <Input
-              id="task-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Create database schema"
-              data-testid="input-task-name"
+              id="task-progress"
+              type="number"
+              min="0"
+              max="100"
+              value={progress}
+              onChange={(e) => setProgress(e.target.value)}
+              data-testid="input-task-progress"
+            />
+          </div>
+        </div>
+
+        <FieldGrid className="mb-3.5">
+          <div className="space-y-1.5">
+            <FieldLabel>Planned Start Date</FieldLabel>
+            <Input
+              id="task-start-date"
+              type="date"
+              value={plannedStartDate}
+              onChange={(e) => setPlannedStartDate(e.target.value)}
+              data-testid="input-task-start-date"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="task-description">Description</Label>
-            <Textarea
-              id="task-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe the task..."
-              rows={2}
-              data-testid="input-task-description"
+          <div className="space-y-1.5">
+            <FieldLabel>Planned End Date</FieldLabel>
+            <Input
+              id="task-end-date"
+              type="date"
+              value={plannedEndDate}
+              onChange={(e) => setPlannedEndDate(e.target.value)}
+              data-testid="input-task-end-date"
+            />
+          </div>
+        </FieldGrid>
+
+        <FieldGrid>
+          <div className="space-y-1.5">
+            <FieldLabel>WBS Code</FieldLabel>
+            <Input
+              id="task-wbs"
+              value={wbsCode}
+              onChange={(e) => setWbsCode(e.target.value)}
+              placeholder="e.g., 1.2.3.1"
+              data-testid="input-task-wbs"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="task-phase">Phase</Label>
-              <Select value={phaseId || "__none__"} onValueChange={(v) => setPhaseId(v === "__none__" ? "" : v)}>
-                <SelectTrigger id="task-phase" data-testid="select-task-phase">
-                  <SelectValue placeholder="Select phase..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No Phase</SelectItem>
-                  {phases.map((phase) => (
-                    <SelectItem key={phase.id} value={phase.id.toString()}>{phase.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="task-milestone">Milestone</Label>
-              <Select value={milestoneId || "__none__"} onValueChange={(v) => setMilestoneId(v === "__none__" ? "" : v)}>
-                <SelectTrigger id="task-milestone" data-testid="select-task-milestone">
-                  <SelectValue placeholder="Select milestone..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No Milestone</SelectItem>
-                  {milestones.map((ms) => (
-                    <SelectItem key={ms.id} value={ms.id.toString()}>{ms.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1.5">
+            <FieldLabel>Estimated Hours</FieldLabel>
+            <Input
+              id="task-hours"
+              type="number"
+              min="0"
+              step="0.5"
+              value={estimatedHours}
+              onChange={(e) => setEstimatedHours(e.target.value)}
+              placeholder="e.g., 8"
+              data-testid="input-task-hours"
+            />
           </div>
+        </FieldGrid>
+      </FormSection>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="task-status">Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger id="task-status" data-testid="select-task-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {statusOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="task-priority">Priority</Label>
-              <Select value={priority} onValueChange={setPriority}>
-                <SelectTrigger id="task-priority" data-testid="select-task-priority">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {priorityOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="task-progress">Progress %</Label>
-              <Input
-                id="task-progress"
-                type="number"
-                min="0"
-                max="100"
-                value={progress}
-                onChange={(e) => setProgress(e.target.value)}
-                data-testid="input-task-progress"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="task-start-date">Planned Start Date</Label>
-              <Input
-                id="task-start-date"
-                type="date"
-                value={plannedStartDate}
-                onChange={(e) => setPlannedStartDate(e.target.value)}
-                data-testid="input-task-start-date"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="task-end-date">Planned End Date</Label>
-              <Input
-                id="task-end-date"
-                type="date"
-                value={plannedEndDate}
-                onChange={(e) => setPlannedEndDate(e.target.value)}
-                data-testid="input-task-end-date"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="task-wbs">WBS Code</Label>
-              <Input
-                id="task-wbs"
-                value={wbsCode}
-                onChange={(e) => setWbsCode(e.target.value)}
-                placeholder="e.g., 1.2.3.1"
-                data-testid="input-task-wbs"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="task-hours">Estimated Hours</Label>
-              <Input
-                id="task-hours"
-                type="number"
-                min="0"
-                step="0.5"
-                value={estimatedHours}
-                onChange={(e) => setEstimatedHours(e.target.value)}
-                placeholder="e.g., 8"
-                data-testid="input-task-hours"
-              />
-            </div>
-          </div>
-
-          {availablePredecessors.length > 0 && (
-            <div className="space-y-2">
-              <Label>Dependencies (Predecessor Tasks)</Label>
+      {availablePredecessors.length > 0 ? (
+        <>
+          <FormDivider />
+          <FormSection title="Dependencies" icon={<span className="h-2 w-2 rounded-full bg-amber-500" />}>
+            <div className="space-y-1.5">
+              <FieldLabel>Predecessor Tasks</FieldLabel>
               <div className="border rounded-md p-2 max-h-32 overflow-y-auto space-y-1">
                 {availablePredecessors.map((t) => (
                   <label key={t.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1 rounded">
@@ -350,30 +358,20 @@ export function TaskFormDialog({
                       data-testid={`checkbox-predecessor-${t.id}`}
                     />
                     <span>{t.name}</span>
-                    {t.wbsCode && <span className="text-muted-foreground">({t.wbsCode})</span>}
+                    {t.wbsCode ? <span className="text-muted-foreground">({t.wbsCode})</span> : null}
                   </label>
                 ))}
               </div>
-              {predecessorIds.length > 0 && (
+              {predecessorIds.length > 0 ? (
                 <p className="text-xs text-muted-foreground">
                   {predecessorIds.length} task(s) selected as dependencies
                 </p>
-              )}
+              ) : null}
             </div>
-          )}
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-task">
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isPending} data-testid="button-save-task">
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isEditing ? "Update Task" : "Create Task"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </FormSection>
+        </>
+      ) : null}
+    </FormDialogShell>
   );
 }
 

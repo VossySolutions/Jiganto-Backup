@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
@@ -7,12 +7,13 @@ import { HelpDeskIcon } from "@/components/icons/ModuleIcons";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { LayoutDashboard, Ticket, Globe, Clock, BarChart3 } from "lucide-react";
+import { LayoutDashboard, Ticket, Globe, Clock, BarChart3, ClipboardList } from "lucide-react";
 import { HelpDeskDashboardTab } from "@/components/help-desk/HelpDeskDashboardTab";
 import { ServiceDeskTicketsTab } from "@/components/service-desk/ServiceDeskTicketsTab";
 import { HelpDeskPortalTab } from "@/components/help-desk/HelpDeskPortalTab";
 import { HelpDeskSlaTab } from "@/components/help-desk/HelpDeskSlaTab";
 import { HelpDeskReportsTab } from "@/components/help-desk/HelpDeskReportsTab";
+import { ModuleTrackingBoard } from "@/components/workspaces/ModuleTrackingBoard";
 import { HD_ACCENT } from "@/components/help-desk/HelpDeskUi";
 import type { HelpDeskDashboard } from "@/components/service-desk/types";
 import type { TicketRow } from "@/components/service-desk/types";
@@ -20,22 +21,39 @@ import type { TicketRow } from "@/components/service-desk/types";
 const TAB_ITEMS = [
   { value: "dashboard", label: "Dashboard", short: "Home", icon: LayoutDashboard },
   { value: "tickets", label: "Tickets", short: "Tickets", icon: Ticket },
+  { value: "task-tracker", label: "Task Tracker", short: "Tasks", icon: ClipboardList },
   { value: "portal", label: "Client Portal", short: "Portal", icon: Globe },
   { value: "sla", label: "SLA Management", short: "SLA", icon: Clock },
   { value: "reports", label: "Reports", short: "Reports", icon: BarChart3 },
 ] as const;
 
+function parseHelpDeskUrl() {
+  const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  const projectId = params.get("projectId");
+  const ticket = params.get("ticket");
+  return {
+    projectId: projectId && /^\d+$/.test(projectId) ? Number(projectId) : null,
+    ticketId: ticket && /^\d+$/.test(ticket) ? Number(ticket) : null,
+    openTickets: projectId != null || ticket != null,
+  };
+}
+
 export default function HelpDeskPage() {
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const urlState = useMemo(() => parseHelpDeskUrl(), []);
+  const [activeTab, setActiveTab] = useState(urlState.openTickets ? "tickets" : "dashboard");
   const [searchTerm, setSearchTerm] = useState("");
   const [ticketFilters, setTicketFilters] = useState<{ slaFilter?: string; status?: string; priority?: string; type?: string }>({});
   const tabsListRef = useRef<HTMLDivElement>(null);
 
   const { data: dashboard } = useQuery<HelpDeskDashboard>({
     queryKey: ["/api/help-desk/dashboard"],
+    staleTime: 30_000,
+    enabled: activeTab === "dashboard",
   });
   const { data: tickets = [] } = useQuery<TicketRow[]>({
     queryKey: ["/api/help-desk/tickets"],
+    staleTime: 30_000,
+    enabled: activeTab === "tickets" || activeTab === "dashboard",
   });
 
   const openCount = dashboard?.kpis.openTickets ?? tickets.filter(
@@ -124,7 +142,17 @@ export default function HelpDeskPage() {
                 includeDefect
                 initialFilters={ticketFilters}
                 searchQuery={searchTerm}
-                key={`${JSON.stringify(ticketFilters)}-${searchTerm}`}
+                initialProjectId={urlState.projectId}
+                initialTicketId={urlState.ticketId}
+                key={`${JSON.stringify(ticketFilters)}-${searchTerm}-${urlState.projectId}-${urlState.ticketId}`}
+              />
+            </TabsContent>
+            <TabsContent value="task-tracker" className="mt-0 focus-visible:outline-none">
+              <ModuleTrackingBoard
+                apiPath="/api/help-desk/tracking-board"
+                queryKey={["/api/help-desk/tracking-board"]}
+                title="Help Desk Task Tracker"
+                description="Track follow-up actions, remediation tasks, and delivery items linked to support work."
               />
             </TabsContent>
             <TabsContent value="portal" className="mt-0 focus-visible:outline-none">

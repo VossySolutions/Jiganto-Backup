@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -6,23 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
+import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { MetricCard } from "@/components/ui/metric-card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
-import { Separator } from "@/components/ui/separator";
 import { Plus, MoreHorizontal, CheckCircle2, XCircle, ArrowRight, Calendar, Settings2, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { useCrmUsers } from "./CrmUsersProvider";
-
-type CrmAccount = { id: number; tenantId: number; name: string; type: string; industry: string | null; };
-type CrmPipeline = { id: number; tenantId: number; name: string; description: string | null; isDefault: boolean | null; color: string | null; };
-type CrmOpportunityStage = { id: number; tenantId: number; pipelineId: number | null; name: string; order: number; probability: number | null; color: string | null; isClosed: boolean | null; isWon: boolean | null; };
-type CrmOpportunity = { id: number; tenantId: number; accountId: number | null; stageId: number | null; name: string; amount: string | null; probability: number | null; expectedCloseDate: string | null; ownerUserId: string | null; isArchived?: boolean | null; createdAt: string; };
+import { opportunityMatchesPipeline, stagesForActivePipeline } from "@/lib/crm-tab-counts";
+import { CrmPipelineKanban } from "./CrmPipelineKanban";
+import type { CrmAccount, CrmPipeline, CrmOpportunity, CrmOpportunityStage } from "./types";
 
 interface CrmPipelineTabProps {
   opportunities: CrmOpportunity[];
@@ -151,7 +148,7 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines, sea
 
   const activePipelineId = selectedPipelineId || pipelines.find(p => p.isDefault)?.id || pipelines[0]?.id || null;
   const activePipeline = pipelines.find(p => p.id === activePipelineId);
-  const pipelineStages = activePipelineId ? stages.filter(s => s.pipelineId === activePipelineId) : stages;
+  const pipelineStages = stagesForActivePipeline(stages, pipelines, activePipelineId);
 
   const createPipelineMutation = useMutation({
     mutationFn: (data: { name: string }) => apiRequest("POST", "/api/crm/pipelines", data),
@@ -263,22 +260,6 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines, sea
     setIsOpen(true);
   };
 
-  const handleDragEnd = (result: DropResult) => {
-    const { destination, source, draggableId } = result;
-    if (!destination) return;
-    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
-    const opportunityId = parseInt(draggableId.replace("opp-", ""));
-    const newStageId = parseInt(destination.droppableId.replace("stage-", ""));
-    const newStage = stages.find(s => s.id === newStageId);
-    const probability = newStage?.probability ?? undefined;
-    if (newStage?.isClosed) {
-      setPendingClose({ oppId: opportunityId, stageId: newStageId, isWon: !!newStage.isWon });
-      setCloseReasonOpen(true);
-      return;
-    }
-    updateStageMutation.mutate({ id: opportunityId, stageId: newStageId, probability });
-  };
-
   const confirmCloseReason = () => {
     if (!pendingClose) return;
     const stage = stages.find(s => s.id === pendingClose.stageId);
@@ -295,40 +276,42 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines, sea
   const activeStages = pipelineStages.filter(s => !s.isClosed).sort((a, b) => a.order - b.order);
   const closedStages = pipelineStages.filter(s => s.isClosed);
 
-  let pipelineOpportunities = opportunities.filter(o => {
-    if (o.isArchived) return false;
-    const stage = stages.find(s => s.id === o.stageId);
-    return stage && stage.pipelineId === activePipelineId && !stage.isClosed;
-  });
+  const pipelineOpportunities = useMemo(() => {
+    let list = opportunities.filter(o =>
+      opportunityMatchesPipeline(o, stages, pipelines, activePipelineId, { openOnly: true }),
+    );
 
-  if (ownerFilter) {
-    if (ownerFilter === "__unassigned__") {
-      pipelineOpportunities = pipelineOpportunities.filter(o => !o.ownerUserId);
-    } else {
-      pipelineOpportunities = pipelineOpportunities.filter(o => o.ownerUserId === ownerFilter);
+    if (ownerFilter) {
+      if (ownerFilter === "__unassigned__") {
+        list = list.filter(o => !o.ownerUserId);
+      } else {
+        list = list.filter(o => o.ownerUserId === ownerFilter);
+      }
     }
-  }
 
-  if (stageFilter !== "all") {
-    pipelineOpportunities = pipelineOpportunities.filter(o => o.stageId === parseInt(stageFilter));
-  }
+    if (stageFilter !== "all") {
+      list = list.filter(o => o.stageId === parseInt(stageFilter));
+    }
 
-  if (minAmount) {
-    const min = parseFloat(minAmount);
-    if (!isNaN(min)) pipelineOpportunities = pipelineOpportunities.filter(o => (parseFloat(o.amount || "0") || 0) >= min);
-  }
-  if (maxAmount) {
-    const max = parseFloat(maxAmount);
-    if (!isNaN(max)) pipelineOpportunities = pipelineOpportunities.filter(o => (parseFloat(o.amount || "0") || 0) <= max);
-  }
+    if (minAmount) {
+      const min = parseFloat(minAmount);
+      if (!isNaN(min)) list = list.filter(o => (parseFloat(o.amount || "0") || 0) >= min);
+    }
+    if (maxAmount) {
+      const max = parseFloat(maxAmount);
+      if (!isNaN(max)) list = list.filter(o => (parseFloat(o.amount || "0") || 0) <= max);
+    }
 
-  if (searchTerm) {
-    const s = searchTerm.toLowerCase();
-    pipelineOpportunities = pipelineOpportunities.filter(o => {
-      const account = accounts.find(a => a.id === o.accountId);
-      return o.name.toLowerCase().includes(s) || (account?.name || "").toLowerCase().includes(s);
-    });
-  }
+    if (searchTerm) {
+      const s = searchTerm.toLowerCase();
+      list = list.filter(o => {
+        const account = accounts.find(a => a.id === o.accountId);
+        return o.name.toLowerCase().includes(s) || (account?.name || "").toLowerCase().includes(s);
+      });
+    }
+
+    return list;
+  }, [opportunities, stages, pipelines, activePipelineId, ownerFilter, stageFilter, minAmount, maxAmount, searchTerm, accounts]);
 
   const activeFilterCount = [stageFilter !== "all", minAmount, maxAmount].filter(Boolean).length;
 
@@ -353,34 +336,43 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines, sea
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-open-deals">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <OpenDealsIcon className="h-5 w-5" />
-            Open Deals
-          </div>
-          <div className="text-2xl font-bold" data-testid="text-open-deals">{pipelineOpportunities.length}</div>
-        </div>
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-pipeline-value">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <PipelineValueIcon className="h-5 w-5" />
-            Total Pipeline Value
-          </div>
-          <div className="text-2xl font-bold text-[#22c55e]" data-testid="text-pipeline-value">${totalPipelineValue.toLocaleString()}</div>
-        </div>
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-weighted-value">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <WeightedIcon className="h-5 w-5" />
-            Weighted Value
-          </div>
-          <div className="text-2xl font-bold text-[#8b5cf6]" data-testid="text-weighted-value">${weightedPipelineValue.toLocaleString()}</div>
-        </div>
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-avg-deal">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <AvgDealIcon className="h-5 w-5" />
-            Avg Deal Size
-          </div>
-          <div className="text-2xl font-bold text-[#f97316]" data-testid="text-avg-deal">${Math.round(avgDealSize).toLocaleString()}</div>
-        </div>
+        <MetricCard
+          title="Open Deals"
+          value={pipelineOpportunities.length}
+          subtitle="In selected pipeline"
+          helpText="Number of open opportunities in the currently selected pipeline and owner filter."
+          icon={OpenDealsIcon}
+          testId="card-open-deals"
+        />
+        <MetricCard
+          title="Total Pipeline Value"
+          value={`$${totalPipelineValue.toLocaleString()}`}
+          subtitle="Sum of deal amounts"
+          helpText="Combined value of all open deals before probability weighting."
+          icon={PipelineValueIcon}
+          borderColor="#22c55e"
+          valueClassName="text-[#22c55e]"
+          testId="card-pipeline-value"
+        />
+        <MetricCard
+          title="Weighted Value"
+          value={`$${weightedPipelineValue.toLocaleString()}`}
+          subtitle="Amount × probability"
+          helpText="Expected revenue based on each deal's amount and stage win probability."
+          icon={WeightedIcon}
+          borderColor="#8b5cf6"
+          valueClassName="text-[#8b5cf6]"
+          testId="card-weighted-value"
+        />
+        <MetricCard
+          title="Avg Deal Size"
+          value={`$${Math.round(avgDealSize).toLocaleString()}`}
+          subtitle="Per open deal"
+          helpText="Average amount per opportunity in the current pipeline view."
+          icon={AvgDealIcon}
+          borderColor="#f97316"
+          testId="card-avg-deal"
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -540,24 +532,35 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines, sea
 
         <div className="flex-1" />
 
-        <Dialog open={isCreatePipelineOpen} onOpenChange={setIsCreatePipelineOpen}>
-          <DialogTrigger asChild>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <button
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
-              data-testid="button-create-pipeline-kanban"
+              data-testid="button-setup-pipeline"
             >
-              <Plus className="h-4 w-4" />
-              New Pipeline
+              <Settings2 className="h-4 w-4" />
+              Setup
             </button>
-          </DialogTrigger>
-          <DialogContent>
-            <SubmitForm
-              onSubmit={() => createPipelineMutation.mutate({ name: pipelineName })}
-              disabled={!pipelineName || createPipelineMutation.isPending}
-            >
-            <DialogHeader>
-              <DialogTitle>Create New Pipeline</DialogTitle>
-            </DialogHeader>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setIsCreatePipelineOpen(true)} data-testid="button-create-pipeline-kanban">
+              Add pipeline…
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+          <FormDialogShell
+            open={isCreatePipelineOpen}
+            onOpenChange={setIsCreatePipelineOpen}
+            title="Create New Pipeline"
+            subtitle="Add a new sales pipeline"
+            saveLabel={createPipelineMutation.isPending ? "Creating..." : "Create Pipeline"}
+            onCancel={() => setIsCreatePipelineOpen(false)}
+            onSubmit={() => createPipelineMutation.mutate({ name: pipelineName })}
+            saving={createPipelineMutation.isPending}
+            disabled={!pipelineName}
+            saveTestId="button-save-pipeline-kanban"
+            size="sm"
+          >
             <div className="space-y-4 py-4">
               <div>
                 <Label htmlFor="pipelineNameKanban">Pipeline Name *</Label>
@@ -570,54 +573,54 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines, sea
                 />
               </div>
             </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline" data-testid="button-cancel-pipeline-kanban">Cancel</Button>
-              </DialogClose>
-              <Button
-                type="submit"
-                disabled={!pipelineName || createPipelineMutation.isPending}
-                data-testid="button-save-pipeline-kanban"
-              >
-                {createPipelineMutation.isPending ? "Creating..." : "Create Pipeline"}
-              </Button>
-            </DialogFooter>
-            </SubmitForm>
-          </DialogContent>
-        </Dialog>
+          </FormDialogShell>
 
-        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setAddDealStageId(null); setEditingId(null); setFormData({ name: "", amount: "", stageId: "", accountId: "", expectedCloseDate: "", probability: "" }); } }}>
-          <DialogTrigger asChild>
+        <Tooltip>
+          <TooltipTrigger asChild>
             <button
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white transition-colors"
               data-testid="button-add-opportunity-kanban"
+              onClick={() => setIsOpen(true)}
             >
               <Plus className="h-4 w-4" />
               New Opportunity
             </button>
-          </DialogTrigger>
-          <DialogContent>
-            <SubmitForm
-              onSubmit={() => {
-                if (editingId) {
-                  updateMutation.mutate({ id: editingId, updates: {
-                    ...formData,
-                    stageId: formData.stageId ? parseInt(formData.stageId) : null,
-                    accountId: formData.accountId ? parseInt(formData.accountId) : null,
-                    probability: formData.probability ? parseInt(formData.probability) : null,
-                  }});
-                  setIsOpen(false);
-                  setEditingId(null);
-                  setFormData({ name: "", amount: "", stageId: "", accountId: "", expectedCloseDate: "", probability: "" });
-                } else {
-                  createMutation.mutate(formData);
-                }
-              }}
-              disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
-            >
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Opportunity" : "Create New Opportunity"}</DialogTitle>
-            </DialogHeader>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            Add a deal to this pipeline. Use column &quot;Add deal&quot; to pre-select a stage.
+          </TooltipContent>
+        </Tooltip>
+          <FormDialogShell
+            open={isOpen}
+            onOpenChange={(open) => { setIsOpen(open); if (!open) { setAddDealStageId(null); setEditingId(null); setFormData({ name: "", amount: "", stageId: "", accountId: "", expectedCloseDate: "", probability: "" }); } }}
+            title={editingId ? "Edit Opportunity" : "Create New Opportunity"}
+            subtitle="Create or update a pipeline opportunity"
+            saveLabel={
+              editingId
+                ? (updateMutation.isPending ? "Updating..." : "Update Opportunity")
+                : (createMutation.isPending ? "Creating..." : "Create Opportunity")
+            }
+            onCancel={() => { setIsOpen(false); setEditingId(null); }}
+            onSubmit={() => {
+              if (editingId) {
+                updateMutation.mutate({ id: editingId, updates: {
+                  ...formData,
+                  stageId: formData.stageId ? parseInt(formData.stageId) : null,
+                  accountId: formData.accountId ? parseInt(formData.accountId) : null,
+                  probability: formData.probability ? parseInt(formData.probability) : null,
+                }});
+                setIsOpen(false);
+                setEditingId(null);
+                setFormData({ name: "", amount: "", stageId: "", accountId: "", expectedCloseDate: "", probability: "" });
+              } else {
+                createMutation.mutate(formData);
+              }
+            }}
+            saving={createMutation.isPending || updateMutation.isPending}
+            disabled={!formData.name}
+            saveTestId="button-save-opp-kanban"
+            size="md"
+          >
             <div className="space-y-4 py-4">
               <div>
                 <Label htmlFor="oppNameKanban">Opportunity Name *</Label>
@@ -688,299 +691,61 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines, sea
                 />
               </div>
             </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline" data-testid="button-cancel-opp-kanban">Cancel</Button>
-              </DialogClose>
-              <Button
-                type="submit"
-                disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
-                data-testid="button-save-opp-kanban"
-              >
-                {editingId
-                  ? (updateMutation.isPending ? "Updating..." : "Update Opportunity")
-                  : (createMutation.isPending ? "Creating..." : "Create Opportunity")}
-              </Button>
-            </DialogFooter>
-            </SubmitForm>
-          </DialogContent>
-        </Dialog>
+          </FormDialogShell>
       </div>
 
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="flex gap-4 pb-4 overflow-x-auto">
-          {activeStages.map((stage, stageIndex) => {
-            const stageColor = getStageColor(stage, stageIndex);
-            const stageOpps = pipelineOpportunities.filter(o => o.stageId === stage.id);
-            const stageValue = stageOpps.reduce((sum, o) => sum + parseFloat(o.amount || "0"), 0);
-
-            return (
-              <div key={stage.id} className="w-72 flex-shrink-0" data-testid={`stage-column-${stage.id}`}>
-                <div
-                  className="rounded-t-xl border border-b-0 border-border/40 bg-muted/30 dark:bg-muted/10 px-4 py-3"
-                  style={{ borderTopColor: stageColor, borderTopWidth: "3px" }}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-sm" data-testid={`stage-name-${stage.id}`}>{stage.name}</h3>
-                      <div className="flex items-center gap-1">
-                        <div
-                          className="h-1.5 w-1.5 rounded-full"
-                          style={{ backgroundColor: stageColor }}
-                        />
-                        <div
-                          className="h-1.5 w-1.5 rounded-full"
-                          style={{ backgroundColor: stageColor, opacity: 0.5 }}
-                        />
-                        <div
-                          className="h-1.5 w-1.5 rounded-full"
-                          style={{ backgroundColor: stageColor, opacity: 0.25 }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-muted-foreground" data-testid={`stage-value-${stage.id}`}>
-                      {formatCurrency(stageValue.toString())}
-                    </span>
-                    <span className="text-xs text-muted-foreground">·</span>
-                    <span className="text-xs text-muted-foreground" data-testid={`stage-count-${stage.id}`}>
-                      {stageOpps.length} {stageOpps.length === 1 ? "deal" : "deals"}
-                    </span>
-                  </div>
-                </div>
-
-                <Droppable droppableId={`stage-${stage.id}`}>
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={cn(
-                        "space-y-2 min-h-[120px] p-2 border border-t-0 border-border/40 rounded-b-xl bg-muted/10 dark:bg-muted/5 transition-colors",
-                        snapshot.isDraggingOver && "bg-primary/5 border-primary/30"
-                      )}
-                    >
-                      {stageOpps.map((opp, index) => {
-                        const account = accounts.find(a => a.id === opp.accountId);
-                        const owner = resolveOwner(opp.ownerUserId);
-                        const oppStage = stages.find(s => s.id === opp.stageId);
-                        const probability = opp.probability ?? oppStage?.probability ?? 0;
-
-                        return (
-                          <Draggable key={opp.id} draggableId={`opp-${opp.id}`} index={index}>
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className={cn(
-                                  "bg-white dark:bg-card rounded-lg border border-border/50 shadow-sm cursor-grab hover:shadow-md transition-shadow overflow-hidden",
-                                  snapshot.isDragging && "shadow-lg ring-2 ring-primary/30 rotate-1"
-                                )}
-                                data-testid={`opportunity-card-${opp.id}`}
-                              >
-                                <div className="flex">
-                                  <div
-                                    className="w-1 shrink-0 rounded-l-lg"
-                                    style={{ backgroundColor: stageColor }}
-                                  />
-                                  <div className="flex-1 p-3 min-w-0">
-                                    <div className="flex items-start justify-between gap-1 mb-1">
-                                      <div className="min-w-0">
-                                        {visibleFields.has("account") && account && (
-                                          <p className="text-[11px] text-muted-foreground truncate" data-testid={`opp-account-${opp.id}`}>
-                                            {account.name}
-                                          </p>
-                                        )}
-                                        <h4 className="font-semibold text-sm leading-tight truncate" data-testid={`opp-name-${opp.id}`}>
-                                          {opp.name}
-                                        </h4>
-                                      </div>
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6 shrink-0 -mt-0.5 -mr-1"
-                                            data-testid={`opp-menu-${opp.id}`}
-                                          >
-                                            <MoreHorizontal className="h-3.5 w-3.5" />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="w-52">
-                                          <DropdownMenuItem
-                                            onClick={() => handleEditOpp(opp)}
-                                            data-testid={`action-edit-opp-${opp.id}`}
-                                          >
-                                            <Pencil className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                                            Edit Deal
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            onClick={() => deleteMutation.mutate(opp.id)}
-                                            className="text-red-600 focus:text-red-600"
-                                            data-testid={`action-delete-opp-${opp.id}`}
-                                          >
-                                            <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                            Delete Deal
-                                          </DropdownMenuItem>
-                                          <Separator className="my-1" />
-                                          <DropdownMenuItem
-                                            onClick={() => setCardFieldsOpen(true)}
-                                            data-testid={`edit-card-${opp.id}`}
-                                          >
-                                            <Settings2 className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                                            Edit Card Fields
-                                          </DropdownMenuItem>
-                                          <Separator className="my-1" />
-                                          <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                                            Move to Stage
-                                          </div>
-                                          <Separator className="my-1" />
-                                          {pipelineStages.filter(s => !s.isClosed && s.id !== stage.id).map((targetStage, ti) => (
-                                            <DropdownMenuItem
-                                              key={targetStage.id}
-                                              onClick={() => updateStageMutation.mutate({ id: opp.id, stageId: targetStage.id })}
-                                              data-testid={`move-opp-${opp.id}-to-stage-${targetStage.id}`}
-                                            >
-                                              <div
-                                                className="w-2.5 h-2.5 rounded-full mr-2 shrink-0"
-                                                style={{ backgroundColor: getStageColor(targetStage, ti) }}
-                                              />
-                                              {targetStage.name}
-                                            </DropdownMenuItem>
-                                          ))}
-                                          {pipelines.filter(p => p.id !== activePipelineId).length > 0 && (
-                                            <>
-                                              <Separator className="my-1" />
-                                              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                                                Move to Pipeline
-                                              </div>
-                                              {pipelines.filter(p => p.id !== activePipelineId).map(targetPipeline => {
-                                                const firstStage = stages.find(s => s.pipelineId === targetPipeline.id && !s.isClosed);
-                                                return (
-                                                  <DropdownMenuItem
-                                                    key={targetPipeline.id}
-                                                    onClick={() => {
-                                                      if (firstStage) {
-                                                        updateStageMutation.mutate({ id: opp.id, stageId: firstStage.id });
-                                                      } else {
-                                                        toast({
-                                                          title: "Cannot move to pipeline",
-                                                          description: "Target pipeline has no stages",
-                                                          variant: "destructive"
-                                                        });
-                                                      }
-                                                    }}
-                                                    data-testid={`move-opp-${opp.id}-to-pipeline-${targetPipeline.id}`}
-                                                  >
-                                                    <ArrowRight className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                                                    {targetPipeline.name}
-                                                  </DropdownMenuItem>
-                                                );
-                                              })}
-                                            </>
-                                          )}
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    </div>
-
-                                    {visibleFields.has("amount") && (
-                                      <div className="text-lg font-bold mt-1" data-testid={`opp-amount-${opp.id}`}>
-                                        {formatCurrency(opp.amount)}
-                                      </div>
-                                    )}
-
-                                    {visibleFields.has("stage") && oppStage && (
-                                      <div className="mt-1.5">
-                                        <span
-                                          className="text-[10px] font-medium px-1.5 py-0.5 rounded"
-                                          style={{
-                                            backgroundColor: `${stageColor}15`,
-                                            color: stageColor
-                                          }}
-                                        >
-                                          {oppStage.name}
-                                        </span>
-                                      </div>
-                                    )}
-
-                                    {visibleFields.has("industry") && account?.industry && (
-                                      <p className="text-[11px] text-muted-foreground mt-1.5 truncate">
-                                        <span className="font-medium">Industry:</span> {account.industry}
-                                      </p>
-                                    )}
-
-                                    {visibleFields.has("accountType") && account && (
-                                      <p className="text-[11px] text-muted-foreground mt-1 truncate">
-                                        <span className="font-medium">Type:</span> {account.type}
-                                      </p>
-                                    )}
-
-                                    {visibleFields.has("pipeline") && activePipeline && (
-                                      <p className="text-[11px] text-muted-foreground mt-1 truncate">
-                                        <span className="font-medium">Pipeline:</span> {activePipeline.name}
-                                      </p>
-                                    )}
-
-                                    {visibleFields.has("created") && opp.createdAt && (
-                                      <p className="text-[11px] text-muted-foreground mt-1">
-                                        <span className="font-medium">Created:</span> {formatDate(opp.createdAt)}
-                                      </p>
-                                    )}
-
-                                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                      {visibleFields.has("owner") && (
-                                        <div
-                                          className="h-6 w-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0"
-                                          style={{ backgroundColor: owner.color }}
-                                          title={owner.name}
-                                        >
-                                          {owner.initials}
-                                        </div>
-                                      )}
-                                      {visibleFields.has("probability") && (
-                                        <span className="text-xs text-muted-foreground">{probability}%</span>
-                                      )}
-                                      {visibleFields.has("closeDate") && opp.expectedCloseDate && (
-                                        <>
-                                          {visibleFields.has("probability") && <span className="text-xs text-muted-foreground">·</span>}
-                                          <span className="text-xs text-muted-foreground flex items-center gap-0.5">
-                                            <Calendar className="h-3 w-3" />
-                                            {formatDate(opp.expectedCloseDate)}
-                                          </span>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </Draggable>
-                        );
-                      })}
-                      {provided.placeholder}
-                      {stageOpps.length === 0 && !snapshot.isDraggingOver && (
-                        <div className="p-4 border-2 border-dashed border-border/30 rounded-lg text-center text-sm text-muted-foreground" data-testid={`stage-empty-${stage.id}`}>
-                          Drop opportunities here
-                        </div>
-                      )}
-
-                      <button
-                        onClick={() => openAddDealForStage(stage.id)}
-                        className="w-full text-left text-sm text-muted-foreground hover:text-foreground transition-colors py-2 px-1 flex items-center gap-1"
-                        data-testid={`add-deal-stage-${stage.id}`}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Add deal
-                      </button>
-                    </div>
-                  )}
-                </Droppable>
-              </div>
-            );
-          })}
-        </div>
-      </DragDropContext>
+      {activeStages.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-10 text-center" data-testid="pipeline-no-stages">
+            <p className="text-sm font-medium mb-1">No stages in this pipeline</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Add stages via Manage Stages, or switch pipeline if deals use global stages.
+            </p>
+            <Button size="sm" variant="outline" onClick={() => setStageMgmtOpen(true)}>
+              Manage stages
+            </Button>
+          </div>
+        ) : (
+          <CrmPipelineKanban
+            opportunities={pipelineOpportunities}
+            activeStages={activeStages}
+            pipelineStages={pipelineStages}
+            stages={stages}
+            pipelines={pipelines}
+            accounts={accounts}
+            activePipelineId={activePipelineId}
+            activePipeline={activePipeline}
+            visibleFields={visibleFields}
+            getStageColor={getStageColor}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            resolveOwner={resolveOwner}
+            onEdit={handleEditOpp}
+            onDelete={(id) => deleteMutation.mutate(id)}
+            onMoveStage={(id, stageId, probability) =>
+              new Promise<void>((resolve, reject) => {
+                updateStageMutation.mutate(
+                  { id, stageId, probability },
+                  { onSuccess: () => resolve(), onError: (e) => reject(e) },
+                );
+              })
+            }
+            onOpenCardFields={() => setCardFieldsOpen(true)}
+            onAddDeal={openAddDealForStage}
+            onMovePipeline={(oppId, targetPipelineId) => {
+              const firstStage = stages.find((s) => s.pipelineId === targetPipelineId && !s.isClosed);
+              if (firstStage) {
+                updateStageMutation.mutate({ id: oppId, stageId: firstStage.id });
+              } else {
+                toast({
+                  title: "Cannot move to pipeline",
+                  description: "Target pipeline has no stages",
+                  variant: "destructive",
+                });
+              }
+            }}
+            toast={toast}
+          />
+        )}
 
       {closedStages.length > 0 && (
         <div className="pt-4 border-t border-border/20" data-testid="closed-deals-section">
@@ -1067,11 +832,18 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines, sea
         </SheetContent>
       </Sheet>
 
-      <Dialog open={stageMgmtOpen} onOpenChange={setStageMgmtOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" data-testid="stage-management-dialog">
-          <DialogHeader>
-            <DialogTitle>Manage Stages — {activePipeline?.name}</DialogTitle>
-          </DialogHeader>
+      <FormDialogShell
+        open={stageMgmtOpen}
+        onOpenChange={setStageMgmtOpen}
+        title={`Manage Stages — ${activePipeline?.name || ""}`}
+        subtitle="Add, edit, and remove stages"
+        saveLabel="Done"
+        onCancel={() => setStageMgmtOpen(false)}
+        onSubmit={() => setStageMgmtOpen(false)}
+        disabled={false}
+        testId="stage-management-dialog"
+        size="md"
+      >
           <div className="space-y-3 py-2">
             {[...pipelineStages].sort((a, b) => a.order - b.order).map(stage => (
               <div key={stage.id} className="flex items-center gap-2 p-2 border rounded-lg" data-testid={`stage-mgmt-row-${stage.id}`}>
@@ -1133,24 +905,25 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines, sea
               <Plus className="h-4 w-4 mr-1" /> Add
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog open={closeReasonOpen} onOpenChange={setCloseReasonOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{pendingClose?.isWon ? "Win Reason" : "Loss Reason"}</DialogTitle>
-          </DialogHeader>
+      <FormDialogShell
+        open={closeReasonOpen}
+        onOpenChange={setCloseReasonOpen}
+        title={pendingClose?.isWon ? "Win Reason" : "Loss Reason"}
+        subtitle="Required for closed stage move"
+        saveLabel="Confirm"
+        onCancel={() => { setCloseReasonOpen(false); setPendingClose(null); }}
+        onSubmit={confirmCloseReason}
+        disabled={!closeReason.trim()}
+        saveTestId="button-confirm-close-reason"
+        size="sm"
+      >
           <div className="py-4">
             <Label>{pendingClose?.isWon ? "Why was this deal won?" : "Why was this deal lost?"}</Label>
             <Input value={closeReason} onChange={e => setCloseReason(e.target.value)} className="mt-2" data-testid="input-close-reason" />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setCloseReasonOpen(false); setPendingClose(null); }}>Cancel</Button>
-            <Button onClick={confirmCloseReason} disabled={!closeReason.trim()} data-testid="button-confirm-close-reason">Confirm</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
     </div>
   );
 }

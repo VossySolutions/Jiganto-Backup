@@ -106,7 +106,7 @@ export async function smokeCall(base, method, path, { bearer, cookie, body } = {
   if (bearer) headers.Authorization = `Bearer ${bearer}`;
   if (cookie) headers.Cookie = cookie;
   const init = { method, headers };
-  if (body !== undefined) init.body = JSON.stringify(body);
+  if (body !== undefined && body !== null) init.body = JSON.stringify(body);
   const res = await fetch(`${base}${path}`, init);
   const text = await res.text();
   let json = null;

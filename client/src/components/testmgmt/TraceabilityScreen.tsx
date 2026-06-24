@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { TmRequirement, TmTestCase, TmTestResult, TmDefect } from "@shared/schema";
+import { TmRequirement, TmTestCase, TmTestResult } from "@shared/schema";
+import type { TmHdDefect } from "@/types/testmgmt";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -64,7 +65,7 @@ export function TraceabilityScreen() {
   const reqsQuery = useTmFetch<TmRequirement[]>(["/api/tm/requirements"], "/api/tm/requirements");
   const casesQuery = useTmFetch<TmTestCase[]>(["/api/tm/cases"], "/api/tm/cases");
   const resultsQuery = useTmFetch<TmTestResult[]>(["/api/tm/results/all"], "/api/tm/results/all");
-  const defectsQuery = useTmFetch<TmDefect[]>(["/api/tm/defects"], "/api/tm/defects");
+  const defectsQuery = useTmFetch<TmHdDefect[]>(["/api/tm/defects/hd"], "/api/tm/defects/hd");
 
   const reqs = reqsQuery.data ?? [];
   const cases = casesQuery.data ?? [];
@@ -75,7 +76,12 @@ export function TraceabilityScreen() {
 
   const selected = reqs.find(r => r.id === selectedId);
   const linkedCases = selected ? cases.filter(c => (selected.linkedCaseIds ?? []).includes(c.id)) : [];
-  const linkedDefects = selected ? allDefects.filter(d => (selected.linkedDefectIds ?? []).includes(d.id)) : [];
+  const linkedDefects = selected
+    ? allDefects.filter((d) =>
+        (selected.linkedDefectIds ?? []).includes(d.id)
+        || (d.linkedTestCaseId != null && (selected.linkedCaseIds ?? []).includes(d.linkedTestCaseId)),
+      )
+    : [];
 
   function getLastResult(caseId: number) {
     const results = allResults.filter(r => r.testCaseId === caseId);
@@ -85,7 +91,7 @@ export function TraceabilityScreen() {
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await apiRequest("POST", "/api/tm/requirements", { ...data, tenantId: 1, projectId: activeProjectId });
+      const res = await apiRequest("POST", "/api/tm/requirements", { ...data, projectId: activeProjectId });
       return res.json() as Promise<TmRequirement>;
     },
     onSuccess: (created: TmRequirement) => {
@@ -520,7 +526,10 @@ export function TraceabilityScreen() {
                     <tbody className="divide-y divide-border/50">
                       {linkedDefects.map(d => (
                         <tr key={d.id} className="hover:bg-muted/20">
-                          <td className="px-4 py-2.5 font-medium">{d.title}</td>
+                          <td className="px-4 py-2.5 font-medium">
+                            <span className="font-mono text-[10px] text-muted-foreground mr-2">{d.ref}</span>
+                            {d.title}
+                          </td>
                           <td className="px-4 py-2.5 capitalize">{d.severity}</td>
                           <td className="px-4 py-2.5 capitalize">{d.status}</td>
                         </tr>

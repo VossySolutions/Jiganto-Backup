@@ -21,9 +21,13 @@ import { TemplatesTab } from "@/components/surveys/TemplatesTab";
 import { SurveyLoadingState, SurveyKpiSkeleton, SurveyRowSkeleton, SurveyCardSkeleton, SurveyButtonSpinner } from "@/components/surveys/SurveyLoadingState";
 import { asArray, fetchSurveys, fetchSurvey, fetchSurveyResponses, fetchSurveyResultsSummary } from "@/lib/survey-api";
 import { SurveyAiTokenBanner } from "@/components/surveys/SurveyAiTokenBanner";
+import { MetricCard } from "@/components/ui/metric-card";
 import { RichTextField } from "@/components/surveys/RichTextField";
 import { useSurveyAiStatus } from "@/hooks/use-survey-ai-status";
+import { CrmFormHeader } from "@/lib/crm-form-layout";
 import "@/styles/surveys.css";
+
+const SURVEY_STALE_MS = 30_000;
 
 // ─── Question preview card ─────────────────────────────────────────────────
 function QuestionPreview({ q, idx, selected, onClick, onDelete, onDuplicate, onMoveUp, onMoveDown, isFirst, isLast }: {
@@ -717,12 +721,24 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
         <style>{`@keyframes su{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
 
         {/* Header */}
-        <div style={{ padding: "18px 24px", borderBottom: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 17 }}>Create New Survey</div>
-            {step > 0 && mode && <div style={{ fontSize: 12, color: C.ink4, marginTop: 2 }}>{mode === "scratch" ? "Starting from scratch" : mode === "template" ? "From template" : "AI-generated"}</div>}
-          </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: C.ink3, lineHeight: 1 }} data-testid="button-close-wizard">✕</button>
+        <div style={{ flexShrink: 0, position: "relative" }}>
+          <CrmFormHeader
+            title="Create New Survey"
+            subtitle={
+              step > 0 && mode
+                ? (mode === "scratch" ? "Starting from scratch" : mode === "template" ? "From template" : "AI-generated")
+                : undefined
+            }
+            showClose={false}
+          />
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-slate-100"
+            style={{ position: "absolute", right: 24, top: "50%", transform: "translateY(-50%)" }}
+            data-testid="button-close-wizard"
+          >
+            ✕
+          </button>
         </div>
 
         {/* Step bar (only when past mode picker) */}
@@ -922,22 +938,41 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "14px 24px", borderTop: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-border/50 bg-slate-50 dark:bg-muted/20 rounded-b-2xl flex items-center justify-between gap-3 shrink-0">
           <div>
-            {step > 0 && <button onClick={goBack} style={{ padding: "8px 16px", border: `1px solid ${C.line}`, borderRadius: 8, background: "#fff", cursor: "pointer", fontSize: 14 }} data-testid="button-wizard-back">← Back</button>}
+            {step > 0 && (
+              <button
+                onClick={goBack}
+                className="h-8 px-3 rounded-md border border-slate-200 dark:border-border bg-white dark:bg-background text-sm font-bold"
+                data-testid="button-wizard-back"
+              >
+                ← Back
+              </button>
+            )}
           </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={onClose} style={{ padding: "8px 16px", border: `1px solid ${C.line}`, borderRadius: 8, background: "#fff", cursor: "pointer", fontSize: 14 }}>Cancel</button>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="h-8 px-3 rounded-md border border-slate-200 dark:border-border bg-white dark:bg-background text-sm font-bold"
+            >
+              Cancel
+            </button>
             {step < (mode === "scratch" ? 4 : 4) ? (
-              <button onClick={goNext} disabled={step === 0 && !mode}
-                style={{ padding: "8px 20px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 500, opacity: step === 0 && !mode ? 0.5 : 1 }}
-                data-testid="button-wizard-next">
+              <button
+                onClick={goNext}
+                disabled={step === 0 && !mode}
+                className="h-8 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold disabled:opacity-50"
+                data-testid="button-wizard-next"
+              >
                 Next →
               </button>
             ) : (
-              <button onClick={handleCreate} disabled={createMut.isPending}
-                style={{ padding: "8px 24px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, opacity: createMut.isPending ? 0.6 : 1 }}
-                data-testid="button-create-survey">
+              <button
+                onClick={handleCreate}
+                disabled={createMut.isPending}
+                className="h-8 px-5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold disabled:opacity-60"
+                data-testid="button-create-survey"
+              >
                 {createMut.isPending ? "Creating…" : "✓ Create Survey"}
               </button>
             )}
@@ -1035,12 +1070,14 @@ export default function SurveysPage() {
   const { data: surveys = [], isLoading, isError, refetch } = useQuery<SurveyWithDetails[]>({
     queryKey: ["/api/surveys"],
     queryFn: fetchSurveys,
+    staleTime: SURVEY_STALE_MS,
   });
 
   const { data: activeSurvey, isLoading: surveyDetailLoading } = useQuery<SurveyWithDetails>({
     queryKey: ["/api/surveys", activeSurveyId],
     queryFn: () => fetchSurvey(activeSurveyId!),
     enabled: !!activeSurveyId,
+    staleTime: SURVEY_STALE_MS,
   });
 
   const { data: aiStatus } = useSurveyAiStatus();
@@ -1050,6 +1087,7 @@ export default function SurveysPage() {
     queryKey: ["/api/surveys", activeSurveyId, "results-summary"],
     queryFn: () => fetchSurveyResultsSummary(activeSurveyId!),
     enabled: !!activeSurveyId && view === "results",
+    staleTime: SURVEY_STALE_MS,
   });
 
   const { data: responses = [], isLoading: responsesLoading, isError: responsesError, refetch: refetchResponses } = useQuery<SurveyResponseWithAnswers[]>({
@@ -1057,6 +1095,7 @@ export default function SurveysPage() {
     queryFn: () => fetchSurveyResponses(activeSurveyId!),
     enabled: !!activeSurveyId && view === "results",
     initialData: [],
+    staleTime: SURVEY_STALE_MS,
   });
 
   // ── Mutations ─────────────────────────────────────────────────────────────
@@ -1285,17 +1324,21 @@ export default function SurveysPage() {
           <>
           {/* KPI cards */}
           {isLoading ? <SurveyKpiSkeleton /> : (
-          <div className="survey-kpi-grid">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
             {[
-              { n: kpiTotal,     label: "Total surveys",    color: C.ink },
-              { n: kpiActive,    label: "Active now",       color: C.teal },
-              { n: kpiResponses, label: "Total responses",  color: C.amber },
-              { n: kpiDrafts,    label: "Drafts",           color: C.violet },
-            ].map(k => (
-              <div key={k.label} style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "16px 20px", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-                <div style={{ fontSize: 28, fontWeight: 700, color: k.color }}>{k.n}</div>
-                <div style={{ fontSize: 12, color: C.ink3, marginTop: 2 }}>{k.label}</div>
-              </div>
+              { n: kpiTotal, label: "Total surveys", helpText: "All surveys created in this tenant.", borderColor: C.ink },
+              { n: kpiActive, label: "Active now", helpText: "Surveys currently accepting responses.", borderColor: C.teal },
+              { n: kpiResponses, label: "Total responses", helpText: "Cumulative responses across all surveys.", borderColor: C.amber },
+              { n: kpiDrafts, label: "Drafts", helpText: "Surveys not yet activated for distribution.", borderColor: C.violet },
+            ].map((k) => (
+              <MetricCard
+                key={k.label}
+                title={k.label}
+                value={k.n}
+                helpText={k.helpText}
+                borderColor={k.borderColor}
+                valueClassName="text-[28px]"
+              />
             ))}
           </div>
           )}
@@ -1759,17 +1802,14 @@ export default function SurveysPage() {
             )}
 
             {/* KPI strip */}
-            <div className="survey-kpi-grid">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {[
-                { n: completedResponses.length, label: "Responses", color: C.teal },
-                { n: activeSurvey.invitedCount ? `${completedResponses.length} / ${activeSurvey.invitedCount}` : completedResponses.length, label: "Invited vs replied", color: C.amber },
-                { n: activeSurvey.invitedCount ? `${Math.round((completedResponses.length / activeSurvey.invitedCount) * 100)}%` : "—", label: "Completion rate", color: C.violet },
-                { n: fmtTime(avgTime), label: "Avg time", color: C.ink },
-              ].map(k => (
-                <div key={k.label} style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "16px 20px", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-                  <div style={{ fontSize: 26, fontWeight: 700, color: k.color }}>{k.n}</div>
-                  <div style={{ fontSize: 12, color: C.ink3, marginTop: 2 }}>{k.label}</div>
-                </div>
+                { n: completedResponses.length, label: "Responses", helpText: "Completed survey submissions.", borderColor: C.teal },
+                { n: activeSurvey.invitedCount ? `${completedResponses.length} / ${activeSurvey.invitedCount}` : completedResponses.length, label: "Invited vs replied", helpText: "Responses compared to invited recipients.", borderColor: C.amber },
+                { n: activeSurvey.invitedCount ? `${Math.round((completedResponses.length / activeSurvey.invitedCount) * 100)}%` : "—", label: "Completion rate", helpText: "Share of invitees who completed the survey.", borderColor: C.violet },
+                { n: fmtTime(avgTime), label: "Avg time", helpText: "Mean time to complete among submitted responses.", borderColor: C.ink },
+              ].map((k) => (
+                <MetricCard key={k.label} title={k.label} value={k.n} helpText={k.helpText} borderColor={k.borderColor} />
               ))}
             </div>
 

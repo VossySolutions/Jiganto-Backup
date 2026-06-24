@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { getApiTenantIdWithFallback } from "../lib/api-tenant-id";
+import { requireApiTenantId } from "../lib/api-tenant-id";
 import { storage } from "../storage";
 import * as ws from "./service";
 
@@ -10,7 +10,8 @@ function userId(req: Request): string | undefined {
 export function registerWorkspaceExtendedRoutes(app: Express): void {
   app.get("/api/workspaces/list", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       if (!uid) return res.status(401).json({ message: "Unauthorized" });
       const filter = (req.query.filter as import("./service").WorkspaceFilter | undefined) || "all";
@@ -34,7 +35,8 @@ export function registerWorkspaceExtendedRoutes(app: Express): void {
 
   app.post("/api/workspaces/:id/duplicate", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       if (!uid) return res.status(401).json({ message: "Unauthorized" });
       const copy = await ws.duplicateWorkspace(Number(req.params.id), uid, tenantId);
@@ -55,7 +57,8 @@ export function registerWorkspaceExtendedRoutes(app: Express): void {
 
   app.get("/api/workspace-templates", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       await ws.seedSystemWorkspaceTemplates(tenantId);
       const templates = await ws.getWorkspaceTemplates(tenantId);
       res.json(templates);
@@ -66,7 +69,8 @@ export function registerWorkspaceExtendedRoutes(app: Express): void {
 
   app.post("/api/workspaces/from-template/:templateId", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       if (!uid) return res.status(401).json({ message: "Unauthorized" });
       const workspace = await ws.createWorkspaceFromTemplate(
@@ -83,7 +87,8 @@ export function registerWorkspaceExtendedRoutes(app: Express): void {
 
   app.post("/api/workspaces/:id/save-as-template", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       if (!uid) return res.status(401).json({ message: "Unauthorized" });
       const saved = await ws.saveWorkspaceAsTemplate(Number(req.params.id), uid, tenantId, req.body);
@@ -102,7 +107,8 @@ export function registerWorkspaceExtendedRoutes(app: Express): void {
 
   app.post("/api/workspace-pages/:id/copy-to-documents", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       if (!uid) return res.status(401).json({ message: "Unauthorized" });
       const result = await ws.copyPageToDocuments(
@@ -311,7 +317,8 @@ export function registerWorkspaceExtendedRoutes(app: Express): void {
 
   app.post("/api/projects/:projectId/tracking-board", async (req, res) => {
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       if (!uid) return res.status(401).json({ message: "Unauthorized" });
       const board = await ws.createProjectTrackingBoard(
@@ -323,6 +330,33 @@ export function registerWorkspaceExtendedRoutes(app: Express): void {
       res.json(board);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  const moduleTrackerHandler = (moduleKey: string) => async (req: any, res: any) => {
+    try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const scopeRaw = req.query.scopeId ?? req.params.scopeId;
+      const scopeId = scopeRaw != null && scopeRaw !== "" ? Number(scopeRaw) : null;
+      const board = await ws.getModuleTrackingBoard(moduleKey, Number.isFinite(scopeId) ? scopeId : null, tenantId);
+      res.json(board);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  };
+
+  app.get("/api/service-desk/tracking-board", moduleTrackerHandler("service-desk"));
+  app.get("/api/help-desk/tracking-board", moduleTrackerHandler("help-desk"));
+  app.get("/api/bpm/tracking-board", moduleTrackerHandler("bpm"));
+  app.get("/api/tm/projects/:projectId/tracking-board", async (req, res) => {
+    try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const board = await ws.getModuleTrackingBoard("test-mgmt", Number(req.params.projectId), tenantId);
+      res.json(board);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
     }
   });
 

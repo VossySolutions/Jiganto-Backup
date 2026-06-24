@@ -1,13 +1,7 @@
 import { useState } from "react";
 import { LayoutTemplate, Sparkles, Search, Building2, User, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { FormDialogViewShell } from "@/components/ui/form-dialog-shell";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -144,17 +138,14 @@ export function TemplateSelector({ open, onOpenChange, onSelectTemplate, onAskAI
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <LayoutTemplate className="h-5 w-5 text-primary" />
-            Choose a Template
-          </DialogTitle>
-          <DialogDescription>
-            Start with a pre-built template or ask the AI assistant to create one for you
-          </DialogDescription>
-        </DialogHeader>
+    <FormDialogViewShell
+      open={open}
+      onOpenChange={onOpenChange}
+      onClose={() => onOpenChange(false)}
+      title="Choose a Template"
+      subtitle="Start with a pre-built template or ask the AI assistant to create one for you."
+      size="xl"
+    >
         
         <div className="flex items-center gap-3 py-3">
           <div className="relative flex-1">
@@ -224,8 +215,7 @@ export function TemplateSelector({ open, onOpenChange, onSelectTemplate, onAskAI
             </div>
           </TabsContent>
         </Tabs>
-      </DialogContent>
-    </Dialog>
+    </FormDialogViewShell>
   );
 }
 

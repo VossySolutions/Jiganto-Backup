@@ -5,13 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
+import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, MoreHorizontal } from "lucide-react";
 import { ForecastMatrix } from "@/components/crm/ForecastMatrix";
 import { useCrmUsers } from "./CrmUsersProvider";
+import {
+  buildForecastPeriodOptions,
+  closeDateInForecastPeriod,
+  forecastRecordOverlapsPeriod,
+  getCurrentForecastPeriodKey,
+  parseForecastPeriodKey,
+} from "@/lib/crm-forecast-period";
 
 type Forecast = {
   id: number;
@@ -48,14 +54,19 @@ type Stage = {
   color: string | null;
   isClosed: boolean | null;
   isWon: boolean | null;
+  pipelineId?: number | null;
 };
 
-type CrmPipeline = { id: number; name: string; isDefault: boolean | null };
+import type { CrmPipelineSummary } from "./types";
 
 interface SalesForecastDashboardProps {
   opportunities: Opportunity[];
   stages: Stage[];
-  pipelines?: CrmPipeline[];
+  pipelines?: CrmPipelineSummary[];
+  accounts?: Array<{ id: number; name: string; annualRevenue?: string | null; customData?: Record<string, unknown> | null }>;
+  contacts?: Array<{ id: number; firstName: string; lastName: string; accountId: number | null }>;
+  /** Historical win rate from closed deals (90d), from /api/crm/dashboard-stats */
+  winRate90d?: number;
 }
 
 const VIBRANT_LOGO_COLORS = [
@@ -98,12 +109,12 @@ function formatCurrencyFull(value: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(value);
 }
 
-export function SalesForecastDashboard({ opportunities, stages, pipelines = [] }: SalesForecastDashboardProps) {
+export function SalesForecastDashboard({ opportunities, stages, pipelines = [], accounts = [], contacts = [], winRate90d = 0 }: SalesForecastDashboardProps) {
   const { resolveOwner } = useCrmUsers();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingForecast, setEditingForecast] = useState<Forecast | null>(null);
-  const [selectedPeriod, setSelectedPeriod] = useState<string>("");
+  const [selectedPeriod, setSelectedPeriod] = useState<string>(getCurrentForecastPeriodKey);
   const [newForecast, setNewForecast] = useState({
     forecastPeriod: "monthly",
     periodStart: "",
@@ -119,46 +130,37 @@ export function SalesForecastDashboard({ opportunities, stages, pipelines = [] }
 
   const now = new Date();
   const currentYear = now.getFullYear();
-  const currentQuarter = Math.ceil((now.getMonth() + 1) / 3);
 
-  const periods = useMemo(() => {
-    const result = [];
-    const prevQ = currentQuarter === 1 ? 4 : currentQuarter - 1;
-    const prevYear = currentQuarter === 1 ? currentYear - 1 : currentYear;
-    result.push({ label: `Q${prevQ} ${prevYear}`, value: `Q${prevQ}-${prevYear}` });
+  const periods = useMemo(() => buildForecastPeriodOptions(currentYear), [currentYear]);
 
-    result.push({ label: `Q${currentQuarter} ${currentYear}`, value: `Q${currentQuarter}-${currentYear}` });
+  const activePeriod = selectedPeriod || getCurrentForecastPeriodKey();
+  const periodRange = useMemo(() => parseForecastPeriodKey(activePeriod), [activePeriod]);
+  const activePeriodLabel = periodRange?.label || periods.find(p => p.value === activePeriod)?.label || activePeriod;
 
-    const nextQ = currentQuarter === 4 ? 1 : currentQuarter + 1;
-    const nextYear = currentQuarter === 4 ? currentYear + 1 : currentYear;
-    result.push({ label: `Q${nextQ} ${nextYear}`, value: `Q${nextQ}-${nextYear}` });
+  const stageById = useMemo(() => new Map(stages.map((s) => [s.id, s])), [stages]);
+  const closedStageIds = useMemo(() => new Set(stages.filter((s) => s.isClosed).map((s) => s.id)), [stages]);
 
-    if (currentQuarter < 3) {
-      const q = currentQuarter + 2;
-      result.push({ label: `Q${q} ${currentYear}`, value: `Q${q}-${currentYear}` });
-    }
-
-    result.push({ label: `FY ${currentYear}`, value: `FY-${currentYear}` });
-    return result;
-  }, [currentYear, currentQuarter]);
-
-  const activePeriod = selectedPeriod || `Q${currentQuarter}-${currentYear}`;
-  const activePeriodLabel = periods.find(p => p.value === activePeriod)?.label || `Q${currentQuarter} ${currentYear}`;
+  const scopedOpportunities = useMemo(() => {
+    if (!periodRange) return opportunities;
+    return opportunities.filter((o) => closeDateInForecastPeriod(o.expectedCloseDate, periodRange));
+  }, [opportunities, periodRange]);
 
   const openOpps = useMemo(() => {
-    const closedStageIds = new Set(stages.filter(s => s.isClosed).map(s => s.id));
-    return opportunities.filter(o => !o.stageId || !closedStageIds.has(o.stageId));
-  }, [opportunities, stages]);
+    return scopedOpportunities.filter((o) => !o.stageId || !closedStageIds.has(o.stageId));
+  }, [scopedOpportunities, closedStageIds]);
+
+  const getEffectiveProbability = (o: Opportunity) => {
+    const stage = o.stageId ? stageById.get(o.stageId) : undefined;
+    return o.probability ?? stage?.probability ?? 0;
+  };
 
   const totalPipeline = useMemo(() => openOpps.reduce((s, o) => s + parseFloat(o.amount || "0"), 0), [openOpps]);
-  const weightedForecast = useMemo(() => openOpps.reduce((s, o) => s + (parseFloat(o.amount || "0") * ((o.probability ?? 0) / 100)), 0), [openOpps]);
-  const committedOpps = useMemo(() => openOpps.filter(o => (o.probability ?? 0) >= 70), [openOpps]);
+  const weightedForecast = useMemo(
+    () => openOpps.reduce((s, o) => s + parseFloat(o.amount || "0") * (getEffectiveProbability(o) / 100), 0),
+    [openOpps, stageById],
+  );
+  const committedOpps = useMemo(() => openOpps.filter((o) => getEffectiveProbability(o) >= 70), [openOpps, stageById]);
   const committedValue = useMemo(() => committedOpps.reduce((s, o) => s + parseFloat(o.amount || "0"), 0), [committedOpps]);
-  const avgWinRate = useMemo(() => {
-    if (openOpps.length === 0) return 0;
-    const sum = openOpps.reduce((s, o) => s + (o.probability ?? 0), 0);
-    return Math.round(sum / openOpps.length);
-  }, [openOpps]);
 
   const stageData = useMemo(() => {
     const openStages = stages.filter(s => !s.isClosed);
@@ -167,7 +169,10 @@ export function SalesForecastDashboard({ opportunities, stages, pipelines = [] }
       .map(stage => {
         const stageOpps = openOpps.filter(o => o.stageId === stage.id);
         const totalValue = stageOpps.reduce((s, o) => s + parseFloat(o.amount || "0"), 0);
-        const weightedValue = stageOpps.reduce((s, o) => s + (parseFloat(o.amount || "0") * ((o.probability ?? 0) / 100)), 0);
+        const weightedValue = stageOpps.reduce(
+          (s, o) => s + parseFloat(o.amount || "0") * (getEffectiveProbability(o) / 100),
+          0,
+        );
         return {
           id: stage.id,
           name: stage.name,
@@ -185,17 +190,60 @@ export function SalesForecastDashboard({ opportunities, stages, pipelines = [] }
 
   const repData = useMemo(() => {
     const reps: Record<string, { name: string; weighted: number }> = {};
-    for (const o of openOpps) {
-      const ownerId = o.ownerUserId || "unassigned";
-      const ownerName = resolveOwner(o.ownerUserId).name;
-      if (!reps[ownerId]) reps[ownerId] = { name: ownerName, weighted: 0 };
-      reps[ownerId].weighted += parseFloat(o.amount || "0") * ((o.probability ?? 0) / 100);
+    const addRep = (id: string, name: string, value: number) => {
+      if (value <= 0) return;
+      if (!reps[id]) reps[id] = { name, weighted: 0 };
+      reps[id].weighted += value;
+    };
+
+    const resolveRepName = (userId: string | null | undefined) => {
+      if (!userId) return "Unassigned";
+      return resolveOwner(userId).name;
+    };
+
+    const periodForecasts = forecasts.filter((f) =>
+      forecastRecordOverlapsPeriod(f.periodStart, f.periodEnd, periodRange),
+    );
+
+    const hasAssignedOpps = openOpps.some((o) => !!o.ownerUserId);
+
+    if (hasAssignedOpps) {
+      for (const o of openOpps) {
+        const uid = o.ownerUserId || "unassigned";
+        const stage = o.stageId ? stageById.get(o.stageId) : undefined;
+        const prob = o.probability ?? stage?.probability ?? 0;
+        addRep(uid, resolveRepName(o.ownerUserId), parseFloat(o.amount || "0") * (prob / 100));
+      }
+    } else if (periodForecasts.length > 0) {
+      for (const f of periodForecasts) {
+        const uid = f.userId || "unassigned";
+        addRep(uid, resolveRepName(f.userId), parseFloat(f.weightedAmount || f.forecastAmount || "0"));
+      }
+    } else {
+      for (const o of openOpps) {
+        const uid = o.ownerUserId || "unassigned";
+        const stage = o.stageId ? stageById.get(o.stageId) : undefined;
+        const prob = o.probability ?? stage?.probability ?? 0;
+        addRep(uid, resolveRepName(o.ownerUserId), parseFloat(o.amount || "0") * (prob / 100));
+      }
     }
+
     return Object.entries(reps)
       .map(([id, data]) => ({ id, ...data }))
       .sort((a, b) => b.weighted - a.weighted)
-      .slice(0, 6);
-  }, [openOpps, resolveOwner]);
+      .slice(0, 8);
+  }, [openOpps, forecasts, periodRange, resolveOwner, stageById]);
+
+  const periodForecastHistory = useMemo(
+    () =>
+      forecasts
+        .filter((f) => forecastRecordOverlapsPeriod(f.periodStart, f.periodEnd, periodRange))
+        .sort(
+          (a, b) =>
+            new Date(b.periodStart || 0).getTime() - new Date(a.periodStart || 0).getTime(),
+        ),
+    [forecasts, periodRange],
+  );
 
   const getDefaultDates = (period: string) => {
     const year = currentYear;
@@ -283,24 +331,26 @@ export function SalesForecastDashboard({ opportunities, stages, pipelines = [] }
                 AI-weighted pipeline forecast based on deal stage, probability and historical win rates
               </p>
             </div>
-            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <button
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-white/20 hover:bg-white/30 text-white border border-white/20 transition-colors"
-                  data-testid="button-create-forecast"
-                >
-                  <Plus className="h-4 w-4" />
-                  New Forecast
-                </button>
-              </DialogTrigger>
-              <DialogContent>
-                <SubmitForm
-                  onSubmit={() => createForecastMutation.mutate(newForecast)}
-                  disabled={createForecastMutation.isPending}
-                >
-                <DialogHeader>
-                  <DialogTitle>Create Forecast</DialogTitle>
-                </DialogHeader>
+            <button
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-white/20 hover:bg-white/30 text-white border border-white/20 transition-colors"
+              data-testid="button-create-forecast"
+              onClick={() => setCreateDialogOpen(true)}
+            >
+              <Plus className="h-4 w-4" />
+              New Forecast
+            </button>
+              <FormDialogShell
+                open={createDialogOpen}
+                onOpenChange={setCreateDialogOpen}
+                title="Create Forecast"
+                subtitle="Create a new forecast period"
+                saveLabel={createForecastMutation.isPending ? "Creating..." : "Create Forecast"}
+                onCancel={() => setCreateDialogOpen(false)}
+                onSubmit={() => createForecastMutation.mutate(newForecast)}
+                saving={createForecastMutation.isPending}
+                size="md"
+                saveTestId="button-save-forecast"
+              >
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
                     <Label>Period Type</Label>
@@ -356,39 +406,29 @@ export function SalesForecastDashboard({ opportunities, stages, pipelines = [] }
                     />
                   </div>
                 </div>
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="outline">Cancel</Button>
-                  </DialogClose>
-                  <Button
-                    type="submit"
-                    disabled={createForecastMutation.isPending}
-                    data-testid="button-save-forecast"
-                  >
-                    {createForecastMutation.isPending ? "Creating..." : "Create Forecast"}
-                  </Button>
-                </DialogFooter>
-                </SubmitForm>
-              </DialogContent>
-            </Dialog>
+              </FormDialogShell>
           </div>
 
-          <div className="flex items-end gap-10 mt-6">
+          <div className="flex flex-wrap items-end gap-8 sm:gap-10 mt-6">
             <div data-testid="kpi-weighted-forecast">
               <div className="text-3xl font-bold text-white tracking-tight">{formatCompact(weightedForecast)}</div>
-              <div className="text-blue-200 text-xs mt-0.5">Weighted Forecast</div>
+              <div className="text-blue-200 text-xs mt-0.5 font-medium">Weighted Forecast</div>
+              <div className="text-blue-200/70 text-[10px] mt-0.5">Open deals × probability for this period</div>
             </div>
             <div data-testid="kpi-total-pipeline">
               <div className="text-3xl font-bold text-white tracking-tight">{formatCompact(totalPipeline)}</div>
-              <div className="text-blue-200 text-xs mt-0.5">Total Pipeline</div>
+              <div className="text-blue-200 text-xs mt-0.5 font-medium">Total Pipeline</div>
+              <div className="text-blue-200/70 text-[10px] mt-0.5">Full amount of deals closing this period</div>
             </div>
             <div data-testid="kpi-committed">
               <div className="text-3xl font-bold text-white tracking-tight">{formatCompact(committedValue)}</div>
-              <div className="text-blue-200 text-xs mt-0.5">Committed (High Prob)</div>
+              <div className="text-blue-200 text-xs mt-0.5 font-medium">Committed (High Prob)</div>
+              <div className="text-blue-200/70 text-[10px] mt-0.5">Deals at ≥75% win probability</div>
             </div>
             <div data-testid="kpi-win-rate">
-              <div className="text-3xl font-bold text-white tracking-tight">{avgWinRate}%</div>
-              <div className="text-blue-200 text-xs mt-0.5">Avg Win Rate</div>
+              <div className="text-3xl font-bold text-white tracking-tight">{winRate90d}%</div>
+              <div className="text-blue-200 text-xs mt-0.5 font-medium">Win Rate (90d)</div>
+              <div className="text-blue-200/70 text-[10px] mt-0.5">Closed-won ÷ all closed deals, last 90 days</div>
             </div>
           </div>
         </div>
@@ -415,12 +455,12 @@ export function SalesForecastDashboard({ opportunities, stages, pipelines = [] }
         <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm p-6" data-testid="pipeline-by-stage">
           <h3 className="text-base font-semibold mb-5">Pipeline by Stage — Weighted Value</h3>
 
-          {stageData.length === 0 ? (
+          {openOpps.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <svg className="h-10 w-10 mx-auto opacity-30 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/>
               </svg>
-              <p className="text-sm">No open opportunities to forecast</p>
+              <p className="text-sm">No opportunities expected to close in {activePeriodLabel}</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -485,21 +525,13 @@ export function SalesForecastDashboard({ opportunities, stages, pipelines = [] }
         </div>
       </div>
 
-      {forecasts.length > 0 && (
+      {periodForecastHistory.length > 0 && (
         <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm p-6" data-testid="forecast-history">
-          <h3 className="text-base font-semibold mb-4">Forecast History</h3>
+          <h3 className="text-base font-semibold mb-4">Forecast History — {activePeriodLabel}</h3>
           <div className="space-y-3">
-            {forecasts.slice(0, 5).map((forecast) => {
+            {periodForecastHistory.slice(0, 8).map((forecast) => {
               const forecastQuota = parseFloat(forecast.quotaAmount || "0");
-              const periodOpps = opportunities.filter(o => {
-                if (!o.expectedCloseDate) return false;
-                const closeDate = new Date(o.expectedCloseDate);
-                if (forecast.periodStart && closeDate < new Date(forecast.periodStart)) return false;
-                if (forecast.periodEnd && closeDate > new Date(forecast.periodEnd)) return false;
-                return true;
-              });
-              const periodClosed = periodOpps.filter(o => o.probability === 100);
-              const forecastClosed = periodClosed.reduce((sum, o) => sum + parseFloat(o.amount || "0"), 0);
+              const forecastClosed = parseFloat(forecast.closedAmount || "0");
               const attainment = forecastQuota > 0 ? Math.round((forecastClosed / forecastQuota) * 100) : 0;
               const status = attainment >= 100 ? "achieved" : attainment >= 70 ? "on-track" : attainment >= 40 ? "at-risk" : "behind";
               const statusColors: Record<string, string> = {
@@ -513,6 +545,10 @@ export function SalesForecastDashboard({ opportunities, stages, pipelines = [] }
                     <div>
                       <div className="font-medium text-sm capitalize">{forecast.forecastPeriod} Forecast</div>
                       <div className="text-xs text-muted-foreground">
+                        {(forecast.userId && resolveOwner(forecast.userId).name === "Unassigned"
+                          ? forecast.userId
+                          : resolveOwner(forecast.userId).name) || "Unassigned"}
+                        {" · "}
                         {forecast.periodStart ? new Date(forecast.periodStart).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "N/A"} – {forecast.periodEnd ? new Date(forecast.periodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "N/A"}
                       </div>
                     </div>
@@ -551,15 +587,18 @@ export function SalesForecastDashboard({ opportunities, stages, pipelines = [] }
         </div>
       )}
 
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
-          <SubmitForm
-            onSubmit={() => editingForecast && updateForecastMutation.mutate(editingForecast)}
-            disabled={updateForecastMutation.isPending}
-          >
-          <DialogHeader>
-            <DialogTitle>Edit Forecast</DialogTitle>
-          </DialogHeader>
+      <FormDialogShell
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        title="Edit Forecast"
+        subtitle="Update forecast period settings"
+        saveLabel={updateForecastMutation.isPending ? "Updating..." : "Update Forecast"}
+        onCancel={() => setEditDialogOpen(false)}
+        onSubmit={() => editingForecast && updateForecastMutation.mutate(editingForecast)}
+        saving={updateForecastMutation.isPending}
+        saveTestId="button-update-forecast"
+        size="md"
+      >
           {editingForecast && (
             <div className="space-y-4 py-4">
               <div className="space-y-2">
@@ -620,25 +659,17 @@ export function SalesForecastDashboard({ opportunities, stages, pipelines = [] }
               </div>
             </div>
           )}
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button
-              type="submit"
-              disabled={updateForecastMutation.isPending}
-              data-testid="button-update-forecast"
-            >
-              {updateForecastMutation.isPending ? "Updating..." : "Update Forecast"}
-            </Button>
-          </DialogFooter>
-          </SubmitForm>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
       <div className="mt-8 pt-6 border-t">
         <h3 className="text-base font-semibold mb-4">Time-Period Forecast Matrix</h3>
-        <ForecastMatrix pipelines={pipelines} />
+        <ForecastMatrix
+          pipelines={pipelines}
+          stages={stages.map(s => ({ ...s, pipelineId: s.pipelineId ?? null }))}
+          opportunities={opportunities}
+          accounts={accounts}
+          contacts={contacts}
+        />
       </div>
     </div>
   );

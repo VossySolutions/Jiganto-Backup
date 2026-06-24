@@ -1,7 +1,7 @@
 export type TmScreen =
   | "command-centre" | "digital-twin" | "navigator" | "test-library" | "test-cycles"
   | "scenarios" | "test-suites" | "test-cases" | "traceability" | "import" | "execution"
-  | "defect-triage" | "defect-board" | "audit" | "access" | "phase-comparison";
+  | "defect-triage" | "defect-board" | "audit" | "access" | "phase-comparison" | "task-tracker";
 
 export type TmMethodology = "waterfall" | "agile" | "hybrid";
 
@@ -41,6 +41,19 @@ export interface TmDashboardData {
   };
   burndown: Array<{ date: string; target: number; actual: number; remaining?: number }>;
   byArea: Array<{ name: string; areaName?: string; passRatePct?: number; completionPct?: number; passed: number; failed: number; blocked: number; notStarted: number }>;
+  bySuite?: Array<{
+    suiteId: number;
+    suiteName: string;
+    total: number;
+    pass: number;
+    fail: number;
+    blocked: number;
+    notRun: number;
+    passRatePct: number;
+    completionPct: number;
+    openDefects: number;
+    criticalDefects: number;
+  }>;
   defectTrend: Array<{ date: string; open: number; closed: number; count?: number }>;
   passRateTrend: Array<{ date?: string; label?: string; cycleName?: string; rate?: number; passRatePct?: number }>;
   activeCycle: { id: number; name: string; status: string } | null;

@@ -12,12 +12,12 @@ QTSP_PROVIDER=mock          # enables AdES in compose UI + mock QTSP audit event
 # RESEND_API_KEY=re_xxxx    # real signing emails (else console log in dev)
 ```
 
-Run `npm run db:patch-esign` after pulling schema changes.
+Run `npm run db:push` after pulling schema changes.
 
 ## Setup
 
 ```bash
-npm run db:patch-esign    # apply schema patches
+npm run db:push           # sync schema from Drizzle models
 npm run db:seed-esign     # demo data (needs users + projects)
 npm run smoke:esign       # API smoke test (dev server running)
 ```

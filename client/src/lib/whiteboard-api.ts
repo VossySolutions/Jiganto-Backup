@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/queryClient";
-import type { WhiteboardListItem, WhiteboardDetail, WhiteboardActivity, StickyNote } from "@shared/models/whiteboard";
+import type { WhiteboardListItem, WhiteboardDetail, WhiteboardActivity, WhiteboardPermission, StickyNote } from "@shared/models/whiteboard";
 
 export async function fetchWhiteboards(params: { filter?: string; sort?: string; search?: string; projectId?: number }) {
   const qs = new URLSearchParams();
@@ -14,6 +14,16 @@ export async function fetchWhiteboards(params: { filter?: string; sort?: string;
 export async function fetchWhiteboard(id: number) {
   const res = await apiRequest("GET", `/api/whiteboard/${id}`);
   return res.json() as Promise<WhiteboardDetail>;
+}
+
+export async function fetchWhiteboardByShareToken(token: string) {
+  const res = await fetch(`/api/whiteboard/share/${encodeURIComponent(token)}/detail`, { credentials: "include" });
+  if (!res.ok) throw new Error(`${res.status}: Share link invalid or expired`);
+  return res.json() as Promise<{
+    board: WhiteboardDetail;
+    permission: WhiteboardPermission;
+    notes: StickyNote[];
+  }>;
 }
 
 export async function createWhiteboard(body: { name: string; description?: string; projectId?: number }) {

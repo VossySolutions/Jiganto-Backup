@@ -5,19 +5,18 @@ import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedV
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { MetricCard } from "@/components/ui/metric-card";
+import { ContactFormDialog } from "./ContactFormDialog";
 import {
   Plus, Download, Upload, Search, ArrowUpDown, Layers,
-  ChevronDown, X, Trash2, Paintbrush, Bookmark, MoreHorizontal, Pencil
+  ChevronDown, X, Trash2, Paintbrush, Bookmark, MoreHorizontal, Pencil, Users
 } from "lucide-react";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
@@ -25,50 +24,13 @@ import { evaluateConditionalFormatting, type ConditionalFormatRule } from "@/lib
 import type { ColumnDef as MondayColumnDef } from "@/components/MondayTable";
 import { ContactOrgChartView } from "@/components/crm/ContactOrgChartView";
 import { ContactRelationshipsPanel } from "@/components/crm/ContactRelationshipsPanel";
-import { CrmCustomFieldsForm } from "./CrmCustomFieldsForm";
 import { CrmCustomFieldTableHeaders, CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
 import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
-
-type CrmAccount = {
-  id: number;
-  tenantId: number;
-  parentAccountId: number | null;
-  name: string;
-  type: string;
-  industry: string | null;
-  website: string | null;
-  phone: string | null;
-  email: string | null;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  country: string | null;
-  postalCode: string | null;
-  ownerUserId: string | null;
-  description: string | null;
-  annualRevenue: string | null;
-  employeeCount: number | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type CrmContact = {
-  id: number;
-  tenantId: number;
-  accountId: number | null;
-  firstName: string;
-  lastName: string;
-  email: string | null;
-  phone: string | null;
-  title: string | null;
-  role: string | null;
-  customData?: Record<string, unknown> | null;
-  createdAt: string;
-};
+import type { CrmAccountDetail, CrmContact } from "./types";
 
 interface CrmContactsTabProps {
   contacts: CrmContact[];
-  accounts: CrmAccount[];
+  accounts: CrmAccountDetail[];
   searchTerm: string;
 }
 
@@ -146,8 +108,8 @@ function RecentIcon({ className }: { className?: string }) {
 export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTabProps) {
   const { fields: customFields } = useCrmCustomFields("contact");
   const tableColSpan = 8 + customFields.length;
-  const [isOpen, setIsOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<CrmContact | null>(null);
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [localSearch, setLocalSearch] = useState("");
@@ -157,9 +119,6 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
   const [groupBy, setGroupBy] = useState<"none" | "role" | "account">("none");
   const [formatPanelOpen, setFormatPanelOpen] = useState(false);
   const [formatRules, setFormatRules] = useState<ConditionalFormatRule[]>([]);
-  const EMPTY_CONTACT_FORM = { firstName: "", lastName: "", email: "", phone: "", title: "", accountId: "", role: "contact" };
-  const [formData, setFormData] = useState(EMPTY_CONTACT_FORM);
-  const [customData, setCustomData] = useState<Record<string, unknown>>({});
   const [importOpen, setImportOpen] = useState(false);
   const [subView, setSubView] = useState<"list" | "orgchart">("list");
   const [orgChartAccountId, setOrgChartAccountId] = useState<number | null>(null);
@@ -182,34 +141,6 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
     onError: () => toast({ title: "Import failed", variant: "destructive" }),
   });
 
-  const createMutation = useMutation({
-    mutationFn: (data: typeof formData) =>
-      apiRequest("POST", "/api/crm/contacts", {
-        ...data,
-        accountId: data.accountId ? parseInt(data.accountId) : null,
-        customData,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts"] });
-      setIsOpen(false);
-      setEditingId(null);
-      setFormData(EMPTY_CONTACT_FORM);
-      setCustomData({});
-      toast({ title: "Contact created successfully" });
-    },
-    onError: () => toast({ title: "Failed to create contact", variant: "destructive" }),
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, updates }: { id: number; updates: Record<string, unknown> }) =>
-      apiRequest("PUT", `/api/crm/contacts/${id}`, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts"] });
-      toast({ title: "Contact updated" });
-    },
-    onError: () => toast({ title: "Failed to update contact", variant: "destructive" }),
-  });
-
   const bulkDeleteMutation = useMutation({
     mutationFn: (ids: number[]) => apiRequest("POST", "/api/crm/contacts/bulk-delete", { ids }),
     onSuccess: () => {
@@ -229,11 +160,15 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
     onError: () => toast({ title: "Failed to delete contact", variant: "destructive" }),
   });
 
-  const resetForm = () => {
-    setEditingId(null);
-    setFormData(EMPTY_CONTACT_FORM);
-    setCustomData({});
-  };
+  function openCreateForm() {
+    setEditingContact(null);
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setEditingContact(null);
+  }
 
   const accountNames = useMemo(() => {
     const set = new Set<string>();
@@ -421,18 +356,8 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
   };
 
   const handleEdit = (c: typeof enrichedContacts[0]) => {
-    setEditingId(c.id);
-    setFormData({
-      firstName: c.firstName,
-      lastName: c.lastName,
-      email: c.email || "",
-      phone: c.phone || "",
-      title: c.title || "",
-      accountId: c.accountId ? String(c.accountId) : "",
-      role: c.role || "contact",
-    });
-    setCustomData((c.customData as Record<string, unknown>) || {});
-    setIsOpen(true);
+    setEditingContact(c);
+    setFormOpen(true);
   };
 
   const renderRow = (c: typeof enrichedContacts[0]) => {
@@ -502,6 +427,10 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setDetailContactId(c.id)} data-testid={`action-relationships-contact-${c.id}`}>
+                <Users className="h-3.5 w-3.5 mr-2" />
+                Manage relationships
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleEdit(c)} data-testid={`action-edit-contact-${c.id}`}>
                 <Pencil className="h-3.5 w-3.5 mr-2" />
                 Edit
@@ -523,35 +452,11 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-total-contacts">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <ContactsIcon className="h-5 w-5" />
-            Total Contacts
-          </div>
-          <div className="text-2xl font-bold" data-testid="text-total-contacts">{enrichedContacts.length}</div>
-        </div>
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-accounts-linked">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <AccountsIcon className="h-5 w-5" />
-            Linked Accounts
-          </div>
-          <div className="text-2xl font-bold text-[#22c55e]" data-testid="text-accounts-linked">{uniqueAccounts.size}</div>
-        </div>
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-key-contacts">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <RolesIcon className="h-5 w-5" />
-            Key Contacts
-          </div>
-          <div className="text-2xl font-bold text-[#8b5cf6]" data-testid="text-key-contacts">{primaryCount + roleCounts.decision_maker}</div>
-        </div>
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-recent-contacts">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <RecentIcon className="h-5 w-5" />
-            Added (30d)
-          </div>
-          <div className="text-2xl font-bold text-[#f97316]" data-testid="text-recent-contacts">{recentCount}</div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <MetricCard title="Total Contacts" value={enrichedContacts.length} subtitle="Matching filters" helpText="All contacts visible in the list after search and filter rules." icon={ContactsIcon} testId="card-total-contacts" />
+        <MetricCard title="Linked Accounts" value={uniqueAccounts.size} subtitle="Unique accounts" helpText="Number of distinct customer accounts linked to at least one contact." icon={AccountsIcon} borderColor="#22c55e" valueClassName="text-[#22c55e]" testId="card-accounts-linked" />
+        <MetricCard title="Key Contacts" value={primaryCount + roleCounts.decision_maker} subtitle="Primary + decision maker" helpText="Contacts flagged as primary or decision maker on their account." icon={RolesIcon} borderColor="#8b5cf6" valueClassName="text-[#8b5cf6]" testId="card-key-contacts" />
+        <MetricCard title="Added (30d)" value={recentCount} subtitle="New this month" helpText="Contacts created in the last 30 calendar days." icon={RecentIcon} borderColor="#f97316" valueClassName="text-[#f97316]" testId="card-recent-contacts" />
       </div>
 
       <div className="flex gap-2">
@@ -579,9 +484,20 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
       )}
 
       {detailContactId && (
-        <div className="border rounded-xl p-4 bg-card">
-          <ContactRelationshipsPanel contactId={detailContactId} contacts={contacts} />
-          <Button variant="ghost" size="sm" className="mt-2" onClick={() => setDetailContactId(null)}>Close</Button>
+        <div className="border rounded-xl p-4 bg-card space-y-3">
+          {(() => {
+            const c = contacts.find((x) => x.id === detailContactId);
+            return c ? (
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold">{c.firstName} {c.lastName}</p>
+                  <p className="text-xs text-muted-foreground">{accounts.find(a => a.id === c.accountId)?.name || "No account"}</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setDetailContactId(null)}>Close</Button>
+              </div>
+            ) : null;
+          })()}
+          <ContactRelationshipsPanel contactId={detailContactId} contacts={contacts} accounts={accounts} embedded />
         </div>
       )}
 
@@ -683,16 +599,16 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
-                "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                "inline-flex items-center justify-center h-9 w-9 rounded-lg border transition-colors",
                 groupBy !== "none"
                   ? "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"
                   : "bg-background border-border text-foreground hover:bg-muted"
               )}
+              title={groupBy === "none" ? "Group" : `Grouped by ${groupBy}`}
+              aria-label={groupBy === "none" ? "Group contacts" : `Grouped by ${groupBy}`}
               data-testid="button-group-contacts"
             >
-              <Layers className="h-3.5 w-3.5" />
-              Group
-              <ChevronDown className="h-3 w-3" />
+              <Layers className="h-4 w-4" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -764,136 +680,24 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
           onApplyView={applySavedView}
         />
 
-        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) resetForm(); }}>
-          <DialogTrigger asChild>
-            <button
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white transition-colors"
-              data-testid="button-add-contact"
-            >
-              <Plus className="h-4 w-4" />
-              New Contact
-            </button>
-          </DialogTrigger>
-          <DialogContent>
-            <SubmitForm
-              onSubmit={() => {
-                if (editingId) {
-                  updateMutation.mutate({
-                    id: editingId,
-                    updates: {
-                      ...formData,
-                      accountId: formData.accountId ? parseInt(formData.accountId) : null,
-                      customData,
-                    },
-                  });
-                  setIsOpen(false);
-                  resetForm();
-                } else {
-                  createMutation.mutate(formData);
-                }
-              }}
-              disabled={!formData.firstName || !formData.lastName || createMutation.isPending || updateMutation.isPending}
-            >
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Contact" : "Create New Contact"}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="contact-firstName">First Name *</Label>
-                  <Input
-                    id="contact-firstName"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                    data-testid="input-contact-firstName"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="contact-lastName">Last Name *</Label>
-                  <Input
-                    id="contact-lastName"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                    data-testid="input-contact-lastName"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="contact-email">Email</Label>
-                  <Input
-                    id="contact-email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    data-testid="input-contact-email"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="contact-phone">Phone</Label>
-                  <Input
-                    id="contact-phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                    data-testid="input-contact-phone"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="contact-title">Title</Label>
-                <Input
-                  id="contact-title"
-                  value={formData.title}
-                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  data-testid="input-contact-title"
-                />
-              </div>
-              <div>
-                <Label htmlFor="contact-account">Account</Label>
-                <Select value={formData.accountId} onValueChange={(v) => setFormData(prev => ({ ...prev, accountId: v }))}>
-                  <SelectTrigger data-testid="select-contact-account">
-                    <SelectValue placeholder="Select account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map(account => (
-                      <SelectItem key={account.id} value={account.id.toString()}>{account.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="contact-role">Role</Label>
-                <Select value={formData.role} onValueChange={(v) => setFormData(prev => ({ ...prev, role: v }))}>
-                  <SelectTrigger data-testid="select-contact-role">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="primary">Primary Contact</SelectItem>
-                    <SelectItem value="decision_maker">Decision Maker</SelectItem>
-                    <SelectItem value="technical">Technical</SelectItem>
-                    <SelectItem value="contact">Contact</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <CrmCustomFieldsForm entityType="contact" values={customData} onChange={(k, v) => setCustomData(prev => ({ ...prev, [k]: v }))} />
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button
-                type="submit"
-                disabled={!formData.firstName || !formData.lastName || createMutation.isPending || updateMutation.isPending}
-                data-testid="button-save-contact"
-              >
-                {editingId
-                  ? (updateMutation.isPending ? "Updating..." : "Update Contact")
-                  : (createMutation.isPending ? "Creating..." : "Create Contact")}
-              </Button>
-            </DialogFooter>
-            </SubmitForm>
-          </DialogContent>
-        </Dialog>
+        {enrichedContacts.length > 0 && (
+        <button
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white transition-colors"
+          onClick={openCreateForm}
+          data-testid="button-add-contact"
+        >
+          <Plus className="h-4 w-4" />
+          New Contact
+        </button>
+        )}
+
+        <ContactFormDialog
+          open={formOpen}
+          onClose={closeForm}
+          editing={editingContact}
+          accounts={accounts}
+          contacts={contacts}
+        />
       </div>
 
       {subView === "list" && <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden w-full" data-testid="contacts-table">
@@ -940,7 +744,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
                       <Button
                         size="sm"
                         className="mt-2 bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
-                        onClick={() => { resetForm(); setIsOpen(true); }}
+                        onClick={openCreateForm}
                       >
                         <Plus className="h-4 w-4 mr-1" />
                         New Contact

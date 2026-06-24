@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
@@ -6,8 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { RP_ACCENT } from "@/components/resource-planning/ui";
-import { RpPersonaProvider, type RpPersonaId } from "@/components/resource-planning/persona-context";
-import { PERSONAS } from "@/components/resource-planning/mock-data";
+import { RpPersonaProvider, type RpPersonaId, useRpPersonas, RP_PERSONA_LABELS } from "@/components/resource-planning/persona-context";
 import { useRpDashboard, useRpRecruitment, useRpPipeline, useRpDemandSupply } from "@/components/resource-planning/hooks";
 import { canRpRead } from "@/components/resource-planning/persona-context";
 import {
@@ -58,15 +57,51 @@ const PERSONA_DEFAULT_TAB: Record<string, string> = {
 const TAB_CONTENT_CLASS = "p-3 sm:p-4 md:p-6 m-0 mt-0";
 
 export default function ResourcePlanningPage() {
-  const [persona, setPersona] = useState<RpPersonaId>("res-mgr");
+  const { data: personaConfig, isLoading: personasLoading } = useRpPersonas();
+  const allowedPersonas = personaConfig?.allowed ?? ["res-mgr"];
+  const defaultPersona = personaConfig?.defaultPersona ?? "res-mgr";
+  const [persona, setPersona] = useState<RpPersonaId>(defaultPersona);
+
+  useEffect(() => {
+    if (personaConfig?.defaultPersona) {
+      setPersona(personaConfig.defaultPersona);
+    }
+  }, [personaConfig?.defaultPersona]);
+
+  useEffect(() => {
+    if (!allowedPersonas.includes(persona)) {
+      setPersona(allowedPersonas[0] ?? "res-mgr");
+    }
+  }, [allowedPersonas, persona]);
+
+  if (personasLoading && !personaConfig) {
+    return (
+      <ModuleShell className="h-screen overflow-hidden bg-background" testId="resource-planning-page">
+        <div className="flex items-center justify-center flex-1 py-20 text-sm text-muted-foreground">Loading resource planning…</div>
+      </ModuleShell>
+    );
+  }
+
   return (
     <RpPersonaProvider persona={persona}>
-      <ResourcePlanningInner persona={persona} setPersona={setPersona} />
+      <ResourcePlanningInner
+        persona={persona}
+        setPersona={setPersona}
+        allowedPersonas={allowedPersonas}
+      />
     </RpPersonaProvider>
   );
 }
 
-function ResourcePlanningInner({ persona, setPersona }: { persona: RpPersonaId; setPersona: (p: RpPersonaId) => void }) {
+function ResourcePlanningInner({
+  persona,
+  setPersona,
+  allowedPersonas,
+}: {
+  persona: RpPersonaId;
+  setPersona: (p: RpPersonaId) => void;
+  allowedPersonas: RpPersonaId[];
+}) {
   const initialTab = typeof window !== "undefined"
     ? new URLSearchParams(window.location.search).get("tab") ?? "exec"
     : "exec";
@@ -120,21 +155,23 @@ function ResourcePlanningInner({ persona, setPersona }: { persona: RpPersonaId; 
             titleTestId="text-resource-planning-title"
             onAIInsightsClick={() => setActiveTab("ai")}
             actions={
+              allowedPersonas.length > 1 ? (
               <div className="hidden lg:flex items-center gap-1 p-0.5 bg-muted rounded-lg">
-                {PERSONAS.map((p) => (
+                {allowedPersonas.map((id) => (
                   <button
-                    key={p.id}
+                    key={id}
                     type="button"
-                    onClick={() => handlePersonaChange(p.id)}
+                    onClick={() => handlePersonaChange(id)}
                     className={cn(
                       "px-2 py-1 rounded-md text-[10px] font-semibold transition-colors",
-                      persona === p.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                      persona === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                     )}
                   >
-                    {p.label}
+                    {RP_PERSONA_LABELS[id]}
                   </button>
                 ))}
               </div>
+              ) : undefined
             }
           />
 

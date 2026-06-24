@@ -151,7 +151,7 @@ export function TestScenariosScreen() {
   }
 
   function submitForm() {
-    const payload = { ...form, tenantId: 1, projectId: activeProjectId };
+    const payload = { ...form, projectId: activeProjectId };
     if (creating) {
       createMutation.mutate(payload);
     } else if (editing && selected) {

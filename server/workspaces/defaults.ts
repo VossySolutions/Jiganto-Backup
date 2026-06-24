@@ -1,24 +1,7 @@
-/** Spec default tracking table columns (Section 5.2) */
-export const SPEC_DEFAULT_COLUMNS = [
-  { name: "Name", type: "text", sortOrder: 0, options: { anchor: true }, width: 250 },
-  {
-    name: "Status",
-    type: "select",
-    sortOrder: 1,
-    options: { choices: ["To Do", "In Progress", "Done", "Blocked"] },
-    width: 140,
-  },
-  {
-    name: "Priority",
-    type: "select",
-    sortOrder: 2,
-    options: { choices: ["High", "Medium", "Low"] },
-    width: 120,
-  },
-  { name: "Assignee", type: "person", sortOrder: 3, options: null, width: 150 },
-  { name: "Due Date", type: "date", sortOrder: 4, options: null, width: 130 },
-  { name: "Notes", type: "long_text", sortOrder: 5, options: null, width: 300 },
-] as const;
+import { PROJECT_TASK_TRACKER_COLUMNS } from "../../shared/workspace-task-tracker";
+
+/** Project & module tracking boards use the canonical 12-column task tracker schema. */
+export const SPEC_DEFAULT_COLUMNS = PROJECT_TASK_TRACKER_COLUMNS;
 
 export const VALID_COLUMN_TYPES = [
   "text",

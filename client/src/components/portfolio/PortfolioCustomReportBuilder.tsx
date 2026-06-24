@@ -52,10 +52,12 @@ export function PortfolioCustomReportBuilder() {
 
   const { data: saved = [], isLoading } = useQuery<SavedReport[]>({
     queryKey: ["/api/portfolio/custom-reports"],
+    staleTime: 30_000,
   });
 
   const { data: availableFields = [] } = useQuery<string[]>({
     queryKey: [`/api/portfolio/custom-reports/fields/${dataSource}`],
+    staleTime: 30_000,
   });
 
   const selectedFields = useMemo(() => {

@@ -3,23 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Phone, Mail, Calendar, Users, Clock, CheckCircle2, AlertCircle, TrendingUp, Activity } from "lucide-react";
-
-type CrmActivity = {
-  id: number;
-  type: string;
-  subject: string;
-  description: string | null;
-  dueDate: string | null;
-  startTime: string | null;
-  endTime: string | null;
-  duration: number | null;
-  location: string | null;
-  outcome: string | null;
-  completedAt: string | null;
-  status: string | null;
-  priority: string | null;
-  createdAt: string;
-};
+import type { CrmActivity } from "./types";
 
 interface ActivityAnalyticsProps {
   activities: CrmActivity[];

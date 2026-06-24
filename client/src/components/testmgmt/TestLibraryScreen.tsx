@@ -10,12 +10,15 @@ import type { TmHierarchyNode } from "@/types/testmgmt";
 import {
   ChevronRight, ChevronDown, Plus, CheckCircle2, ShieldCheck, Layers, FileDown,
 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import { useTmFetch } from "@/hooks/use-tm-fetch";
 import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 import { tmDownloadPdf } from "@/lib/tm-api";
 
 export function TestLibraryScreen() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const signedOffBy = user?.email ?? user?.id ?? "unknown";
   const { activeProjectId, activeProject, qsParam } = useTmProject();
   const labels = getTmLabels(activeProject?.methodology);
   const [expandedAreas, setExpandedAreas] = useState<Set<number>>(new Set());
@@ -44,7 +47,7 @@ export function TestLibraryScreen() {
   });
 
   const createAreaMutation = useMutation({
-    mutationFn: (name: string) => apiRequest("POST", "/api/tm/business-areas", { name, projectId: activeProjectId, tenantId: 1 }),
+    mutationFn: (name: string) => apiRequest("POST", "/api/tm/business-areas", { name, projectId: activeProjectId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tm/hierarchy"] });
       setCreating(null);
@@ -55,7 +58,7 @@ export function TestLibraryScreen() {
 
   const createProcessMutation = useMutation({
     mutationFn: ({ name, businessAreaId }: { name: string; businessAreaId: number }) =>
-      apiRequest("POST", "/api/tm/business-processes", { name, businessAreaId, projectId: activeProjectId, tenantId: 1 }),
+      apiRequest("POST", "/api/tm/business-processes", { name, businessAreaId, projectId: activeProjectId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tm/hierarchy"] });
       setCreating(null);
@@ -167,7 +170,7 @@ export function TestLibraryScreen() {
                   </>
                 ) : (
                   <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => signOffMutation.mutate({
-                    entityType: "business_area", entityId: node.area.id, projectId: activeProjectId, signedOffBy: "current-user",
+                    entityType: "business_area", entityId: node.area.id, projectId: activeProjectId, signedOffBy,
                   })}>
                     <ShieldCheck className="h-3 w-3" /> Sign off
                   </Button>
@@ -184,7 +187,7 @@ export function TestLibraryScreen() {
                     <span className="text-[10px] text-muted-foreground">{labels.process}</span>
                     {proc.process.signOffStatus !== "signed_off" && (
                       <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => signOffMutation.mutate({
-                        entityType: "business_process", entityId: proc.process.id, projectId: activeProjectId, signedOffBy: "current-user",
+                        entityType: "business_process", entityId: proc.process.id, projectId: activeProjectId, signedOffBy,
                       })}>Sign off</Button>
                     )}
                   </div>
@@ -197,7 +200,7 @@ export function TestLibraryScreen() {
                         <span className="text-[10px] text-muted-foreground">{sc.cases.length} cases</span>
                         {sc.scenario.signOffStatus !== "signed_off" && sc.cases.length > 0 && (
                           <Button size="sm" variant="ghost" className="h-5 text-[9px]" onClick={() => signOffMutation.mutate({
-                            entityType: "scenario", entityId: sc.scenario.id, projectId: activeProjectId, signedOffBy: "current-user",
+                            entityType: "scenario", entityId: sc.scenario.id, projectId: activeProjectId, signedOffBy,
                           })}>Sign off</Button>
                         )}
                       </div>

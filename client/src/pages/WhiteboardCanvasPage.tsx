@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { ModuleShell } from "@/components/ModuleShell";
@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -24,6 +24,7 @@ import type { WhiteboardCanvasHandle } from "@/components/whiteboard/WhiteboardC
 import { userColorFromId, initials } from "@/lib/whiteboard-constants";
 import {
   fetchWhiteboard,
+  fetchWhiteboardByShareToken,
   fetchWhiteboardActivity,
   searchWhiteboardUsers,
   addWhiteboardMember,
@@ -79,23 +80,37 @@ export function WhiteboardCanvasPage() {
     return () => { if (memberSearchTimer.current) clearTimeout(memberSearchTimer.current); };
   }, [memberSearchInput]);
 
+  const shareToken = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("token");
+  }, []);
+
   const { data: board, isLoading, isError, error, refetch } = useQuery<WhiteboardDetail>({
-    queryKey: ["/api/whiteboard", boardId],
-    queryFn: () => fetchWhiteboard(boardId),
-    enabled: Number.isFinite(boardId) && boardId > 0,
+    queryKey: shareToken ? ["/api/whiteboard/share", shareToken, "detail"] : ["/api/whiteboard", boardId],
+    queryFn: async () => {
+      if (shareToken) {
+        const shared = await fetchWhiteboardByShareToken(shareToken);
+        return { ...shared.board, notes: shared.notes } as WhiteboardDetail;
+      }
+      return fetchWhiteboard(boardId);
+    },
+    enabled: shareToken ? shareToken.length > 0 : Number.isFinite(boardId) && boardId > 0,
     retry: 1,
+    staleTime: 30_000,
   });
 
   const { data: activity = [], isLoading: activityLoading } = useQuery<WhiteboardActivity[]>({
     queryKey: ["/api/whiteboard", boardId, "activity", activityFilter],
     queryFn: () => fetchWhiteboardActivity(boardId, activityFilter),
     enabled: activityOpen && Number.isFinite(boardId),
+    staleTime: 30_000,
   });
 
   const { data: memberResults = [], isFetching: membersSearching } = useQuery({
     queryKey: ["/api/whiteboard/users/search", memberSearch],
     queryFn: () => searchWhiteboardUsers(memberSearch),
     enabled: shareOpen && memberSearch.length >= 2,
+    staleTime: 30_000,
   });
 
   const canEdit = board ? board.myPermission !== "view" : false;
@@ -339,28 +354,23 @@ export function WhiteboardCanvasPage() {
         </div>
     </ModuleShell>
 
-      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit whiteboard details</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Description</Label>
-              <Input className="mt-1" maxLength={300} value={descDraft} onChange={(e) => setDescDraft(e.target.value)} />
-            </div>
+      <FormDialogShell
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        title="Edit whiteboard details"
+        saveLabel="Save"
+        onCancel={() => setDetailsOpen(false)}
+        onSubmit={() => { updateMut.mutate({ description: descDraft || null }); setDetailsOpen(false); }}
+        saving={updateMut.isPending}
+        size="sm"
+      >
+        <FormSection title="Details">
+          <div className="space-y-1.5">
+            <FieldLabel>Description</FieldLabel>
+            <Input maxLength={300} value={descDraft} onChange={(e) => setDescDraft(e.target.value)} />
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setDetailsOpen(false)}>Cancel</Button>
-            <Button
-              disabled={updateMut.isPending}
-              onClick={() => { updateMut.mutate({ description: descDraft || null }); setDetailsOpen(false); }}
-            >
-              {updateMut.isPending ? <WhiteboardButtonSpinner /> : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </FormSection>
+      </FormDialogShell>
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>

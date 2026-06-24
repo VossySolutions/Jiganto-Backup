@@ -8,8 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
+import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -19,6 +18,7 @@ import {
   Plus, Download, Upload, Search, ArrowUpDown, Layers,
   ChevronDown, X, Trash2, Paintbrush, Bookmark, MoreHorizontal, Pencil, MapPin, Globe
 } from "lucide-react";
+import { MetricCard } from "@/components/ui/metric-card";
 import { Textarea } from "@/components/ui/textarea";
 import { CrmCustomFieldsForm } from "./CrmCustomFieldsForm";
 import { CrmCustomFieldTableHeaders, CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
@@ -28,44 +28,26 @@ import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPa
 import { evaluateConditionalFormatting, type ConditionalFormatRule } from "@/lib/conditionalFormatting";
 import type { ColumnDef as MondayColumnDef } from "@/components/MondayTable";
 import { resolveAccountGeo } from "@/lib/crm-geo";
+import { accountTypeFilterOptions, getAccountTypeInfo, CRM_ACCOUNT_TYPES } from "@/lib/crm-account-types";
+import {
+  findSegmentField,
+  getSegmentColor,
+  getSegmentPinColor,
+  resolveAccountSegment,
+  segmentFilterOptions,
+} from "@/lib/crm-segment";
+import { CrmGeoMap } from "./CrmGeoMap";
 import { CrmOwnerSelect } from "./CrmOwnerSelect";
 import { useCrmUsers } from "./CrmUsersProvider";
-
-type CrmAccount = {
-  id: number;
-  tenantId: number;
-  parentAccountId: number | null;
-  name: string;
-  type: string;
-  industry: string | null;
-  website: string | null;
-  phone: string | null;
-  email: string | null;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  country: string | null;
-  postalCode: string | null;
-  ownerUserId: string | null;
-  description: string | null;
-  annualRevenue: string | null;
-  employeeCount: number | null;
-  customData?: Record<string, unknown> | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type CrmOpportunity = { id: number; accountId: number | null; stageId: number | null };
-type CrmContract = { id: number; accountId: number | null; status: string | null; endDate: string | null };
-type CrmStage = { id: number; isClosed: boolean | null };
+import type { CrmAccountDetail, CrmOpportunitySummary, CrmContractSummary, CrmOpportunityStage } from "./types";
 
 interface CrmCustomersTabProps {
-  accounts: CrmAccount[];
-  opportunities?: CrmOpportunity[];
-  contracts?: CrmContract[];
-  stages?: CrmStage[];
+  accounts: CrmAccountDetail[];
+  opportunities?: CrmOpportunitySummary[];
+  contracts?: CrmContractSummary[];
+  stages?: CrmOpportunityStage[];
   searchTerm: string;
-  onSelectAccount: (account: CrmAccount) => void;
+  onSelectAccount: (account: CrmAccountDetail) => void;
 }
 
 const VIBRANT_LOGO_COLORS = [
@@ -84,35 +66,12 @@ function getInitials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join("");
 }
 
-function getSegment(annualRevenue: string | null): string {
-  const rev = parseFloat(annualRevenue || "0");
-  if (rev >= 1000000) return "Enterprise";
-  if (rev >= 100000) return "Mid-Market";
-  return "SMB";
-}
-
-function getSegmentColor(segment: string): string {
-  if (segment === "Enterprise") return "#8b5cf6";
-  if (segment === "Mid-Market") return "#3b82f6";
-  return "#6b7280";
-}
-
 function formatCurrency(val: string | null): string {
   const num = parseFloat(val || "0");
   if (num === 0) return "—";
   if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`;
   if (num >= 1000) return `$${Math.round(num / 1000)}K`;
   return `$${num.toLocaleString()}`;
-}
-
-function getStatusInfo(type: string): { label: string; color: string; bg: string } {
-  switch (type) {
-    case "customer": return { label: "Active", color: "#22c55e", bg: "rgba(34,197,94,0.1)" };
-    case "prospect": return { label: "Prospect", color: "#f59e0b", bg: "rgba(245,158,11,0.1)" };
-    case "partner": return { label: "Partner", color: "#3b82f6", bg: "rgba(59,130,246,0.1)" };
-    case "inactive": return { label: "Inactive", color: "#6b7280", bg: "rgba(107,114,128,0.1)" };
-    default: return { label: type, color: "#6b7280", bg: "rgba(107,114,128,0.1)" };
-  }
 }
 
 function CustomersIcon({ className }: { className?: string }) {
@@ -158,6 +117,7 @@ function GrowthIcon({ className }: { className?: string }) {
 
 export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], stages = [], searchTerm, onSelectAccount }: CrmCustomersTabProps) {
   const { fields: customFields } = useCrmCustomFields("account");
+  const segmentField = useMemo(() => findSegmentField(customFields), [customFields]);
   const tableColSpan = 10 + customFields.length;
   const openStageIds = useMemo(() => new Set(stages.filter(s => !s.isClosed).map(s => s.id)), [stages]);
 
@@ -181,7 +141,8 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
   }, [opportunities, contracts, openStageIds]);
   const [isOpen, setIsOpen] = useState(false);
   const [segmentFilter, setSegmentFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+  /** `all` | `account:{type}` | `stage:{stageId}` */
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [industryFilter, setIndustryFilter] = useState<string>("all");
   const [localSearch, setLocalSearch] = useState("");
   const [sortField, setSortField] = useState<"name" | "revenue" | "segment" | "industry" | "created">("name");
@@ -264,7 +225,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
   const enrichedAccounts = useMemo(() => {
     let result = accounts.map(a => ({
       ...a,
-      segment: getSegment(a.annualRevenue),
+      segment: resolveAccountSegment(a, segmentField),
       revenueNum: parseFloat(a.annualRevenue || "0"),
     }));
 
@@ -281,8 +242,19 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
     if (segmentFilter !== "all") {
       result = result.filter(a => a.segment === segmentFilter);
     }
-    if (typeFilter !== "all") {
-      result = result.filter(a => a.type === typeFilter);
+    if (statusFilter !== "all") {
+      if (statusFilter.startsWith("account:")) {
+        const accountType = statusFilter.slice(8);
+        result = result.filter((a) => a.type === accountType);
+      } else if (statusFilter.startsWith("stage:")) {
+        const stageId = parseInt(statusFilter.slice(6), 10);
+        const accountIds = new Set(
+          opportunities
+            .filter((o) => o.accountId && o.stageId === stageId)
+            .map((o) => o.accountId!),
+        );
+        result = result.filter((a) => accountIds.has(a.id));
+      }
     }
     if (industryFilter !== "all") {
       result = result.filter(a => a.industry === industryFilter);
@@ -298,20 +270,20 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
     });
 
     return result;
-  }, [accounts, localSearch, searchTerm, segmentFilter, typeFilter, industryFilter, sortField, sortDir]);
+  }, [accounts, opportunities, localSearch, searchTerm, segmentFilter, statusFilter, industryFilter, sortField, sortDir, segmentField]);
 
   const pagination = useCrmPagination(enrichedAccounts, {
-    resetKey: `${localSearch}|${searchTerm}|${segmentFilter}|${typeFilter}|${industryFilter}|${sortField}|${sortDir}|${groupBy}|${viewMode}`,
+    resetKey: `${localSearch}|${searchTerm}|${segmentFilter}|${statusFilter}|${industryFilter}|${sortField}|${sortDir}|${groupBy}|${viewMode}`,
     enabled: viewMode !== "map" && groupBy === "none",
   });
 
   const currentFilters = useMemo((): FilterConfig[] => {
     const filters: FilterConfig[] = [];
     if (segmentFilter !== "all") filters.push({ columnId: "segment", operator: "equals", value: segmentFilter });
-    if (typeFilter !== "all") filters.push({ columnId: "type", operator: "equals", value: typeFilter });
+    if (statusFilter !== "all") filters.push({ columnId: "status", operator: "equals", value: statusFilter });
     if (industryFilter !== "all") filters.push({ columnId: "industry", operator: "equals", value: industryFilter });
     return filters;
-  }, [segmentFilter, typeFilter, industryFilter]);
+  }, [segmentFilter, statusFilter, industryFilter]);
 
   const currentSorts = useMemo((): SortConfig[] => (
     [{ columnId: sortField, direction: sortDir }]
@@ -319,11 +291,12 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
 
   const applySavedView = (filters: FilterConfig[], sorts?: SortConfig[]) => {
     setSegmentFilter("all");
-    setTypeFilter("all");
+    setStatusFilter("all");
     setIndustryFilter("all");
     for (const f of filters) {
       if (f.columnId === "segment") setSegmentFilter(f.value);
-      if (f.columnId === "type") setTypeFilter(f.value);
+      if (f.columnId === "type") setStatusFilter(`account:${f.value}`);
+      if (f.columnId === "status") setStatusFilter(f.value);
       if (f.columnId === "industry") setIndustryFilter(f.value);
     }
     if (sorts?.[0]) {
@@ -374,12 +347,63 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
   const uniqueIndustries = new Set(enrichedAccounts.filter(a => a.industry).map(a => a.industry));
   const activeCount = enrichedAccounts.filter(a => a.type === "customer").length;
 
-  const segmentCounts = {
-    all: accounts.length,
-    Enterprise: accounts.filter(a => getSegment(a.annualRevenue) === "Enterprise").length,
-    "Mid-Market": accounts.filter(a => getSegment(a.annualRevenue) === "Mid-Market").length,
-    SMB: accounts.filter(a => getSegment(a.annualRevenue) === "SMB").length,
-  };
+  const accountTypeOptions = useMemo(
+    () => accountTypeFilterOptions(accounts.map((a) => a.type)),
+    [accounts],
+  );
+
+  const segmentOptions = useMemo(() => {
+    const values = accounts.map((a) => resolveAccountSegment(a, segmentField));
+    return segmentFilterOptions(segmentField, values);
+  }, [accounts, segmentField]);
+
+  const segmentCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: accounts.length };
+    for (const seg of segmentOptions) {
+      counts[seg] = accounts.filter((a) => resolveAccountSegment(a, segmentField) === seg).length;
+    }
+    return counts;
+  }, [accounts, segmentField, segmentOptions]);
+
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: accounts.length };
+    for (const t of accountTypeOptions) {
+      counts[t.value] = accounts.filter((a) => a.type === t.value).length;
+    }
+    return counts;
+  }, [accounts, accountTypeOptions]);
+
+  const openStageOptions = useMemo(() => {
+    const seen = new Set<number>();
+    const list: Array<{ id: number; name: string }> = [];
+    for (const stage of stages.filter((s) => !s.isClosed)) {
+      if (seen.has(stage.id)) continue;
+      seen.add(stage.id);
+      list.push({ id: stage.id, name: stage.name });
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [stages]);
+
+  const stageCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const o of opportunities) {
+      if (!o.accountId || !o.stageId) continue;
+      counts[o.stageId] = (counts[o.stageId] ?? 0) + 1;
+    }
+    return counts;
+  }, [opportunities]);
+
+  const statusFilterLabel = useMemo(() => {
+    if (statusFilter === "all") return "Status";
+    if (statusFilter.startsWith("account:")) {
+      return getAccountTypeInfo(statusFilter.slice(8)).label;
+    }
+    if (statusFilter.startsWith("stage:")) {
+      const stageId = parseInt(statusFilter.slice(6), 10);
+      return openStageOptions.find((s) => s.id === stageId)?.name ?? "Deal stage";
+    }
+    return "Status";
+  }, [statusFilter, openStageOptions]);
 
   const groupedData = useMemo(() => {
     if (groupBy === "none") return null;
@@ -388,7 +412,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
       let key: string;
       if (groupBy === "segment") key = acc.segment;
       else if (groupBy === "industry") key = acc.industry || "No Industry";
-      else key = getStatusInfo(acc.type).label;
+      else key = getAccountTypeInfo(acc.type).label;
       if (!groups[key]) groups[key] = [];
       groups[key].push(acc);
     }
@@ -397,7 +421,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
 
   const groupColors: Record<string, string> = {
     "Enterprise": "#8b5cf6", "Mid-Market": "#3b82f6", "SMB": "#6b7280",
-    "Active": "#22c55e", "Prospect": "#f59e0b", "Partner": "#3b82f6", "Inactive": "#6b7280",
+    ...Object.fromEntries(CRM_ACCOUNT_TYPES.map((t) => [t.label, t.color])),
   };
 
   const allSelected = enrichedAccounts.length > 0 && selectedIds.size === enrichedAccounts.length;
@@ -418,7 +442,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
     else { setSortField(field); setSortDir("asc"); }
   };
 
-  const handleEdit = (acc: CrmAccount) => {
+  const handleEdit = (acc: CrmAccountDetail) => {
     setEditingId(acc.id);
     setFormData({
       name: acc.name,
@@ -444,7 +468,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
   const exportToCSV = () => {
     const headers = ["Account", "Segment", "Industry", "Status", "Revenue", "Email", "Phone", "City", "Since"];
     const rows = enrichedAccounts.map(a => [
-      a.name, a.segment, a.industry || "", getStatusInfo(a.type).label,
+      a.name, a.segment, a.industry || "", getAccountTypeInfo(a.type).label,
       a.annualRevenue || "", a.email || "", a.phone || "", a.city || "",
       new Date(a.createdAt).getFullYear().toString(),
     ]);
@@ -460,7 +484,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
   const renderRow = (acc: typeof enrichedAccounts[0]) => {
     const color = getColorForName(acc.name);
     const initials = getInitials(acc.name);
-    const status = getStatusInfo(acc.type);
+    const status = getAccountTypeInfo(acc.type);
     const segColor = getSegmentColor(acc.segment);
 
     return (
@@ -547,35 +571,11 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-total-customers">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <CustomersIcon className="h-5 w-5" />
-            Total Customers
-          </div>
-          <div className="text-2xl font-bold" data-testid="text-total-customers">{enrichedAccounts.length}</div>
-        </div>
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-total-revenue">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <RevenueIcon className="h-5 w-5" />
-            Total Revenue
-          </div>
-          <div className="text-2xl font-bold text-[#22c55e]" data-testid="text-total-revenue">${totalRevenue.toLocaleString()}</div>
-        </div>
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-industries">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <IndustryIcon className="h-5 w-5" />
-            Industries
-          </div>
-          <div className="text-2xl font-bold text-[#8b5cf6]" data-testid="text-industries">{uniqueIndustries.size}</div>
-        </div>
-        <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 shadow-sm" data-testid="card-active-customers">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <GrowthIcon className="h-5 w-5" />
-            Active Customers
-          </div>
-          <div className="text-2xl font-bold text-[#f97316]" data-testid="text-active-customers">{activeCount}</div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <MetricCard title="Total Accounts" value={enrichedAccounts.length} subtitle="Matching filters" helpText="Customer and prospect accounts shown after filters are applied." icon={CustomersIcon} testId="card-total-customers" />
+        <MetricCard title="Annual Revenue (Accounts)" value={`$${totalRevenue.toLocaleString()}`} subtitle="Sum of ARR fields" helpText="Combined annual revenue values stored on account records — not closed-won deal revenue." icon={RevenueIcon} borderColor="#22c55e" valueClassName="text-[#22c55e]" testId="card-total-revenue" />
+        <MetricCard title="Industries" value={uniqueIndustries.size} subtitle="Distinct sectors" helpText="Number of unique industry values across filtered accounts." icon={IndustryIcon} borderColor="#8b5cf6" valueClassName="text-[#8b5cf6]" testId="card-industries" />
+        <MetricCard title="Customer Accounts" value={activeCount} subtitle='Type = "customer"' helpText='Accounts with type set to customer (not prospect or partner).' icon={GrowthIcon} borderColor="#f97316" valueClassName="text-[#f97316]" testId="card-active-customers" />
       </div>
 
       {selectedIds.size > 0 && (
@@ -614,13 +614,15 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
             <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"/><path d="M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20M2 12h20"/>
             </svg>
-            <SelectValue placeholder="Segment" />
+            <SelectValue placeholder="Segment">
+              {segmentFilter === "all" ? `Segment (${segmentCounts.all})` : segmentFilter}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Segments ({segmentCounts.all})</SelectItem>
-            <SelectItem value="Enterprise">Enterprise ({segmentCounts.Enterprise})</SelectItem>
-            <SelectItem value="Mid-Market">Mid-Market ({segmentCounts["Mid-Market"]})</SelectItem>
-            <SelectItem value="SMB">SMB ({segmentCounts.SMB})</SelectItem>
+            <SelectItem value="all">All segments ({segmentCounts.all})</SelectItem>
+            {segmentOptions.map((seg) => (
+              <SelectItem key={seg} value={seg}>{seg} ({segmentCounts[seg] ?? 0})</SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -647,11 +649,11 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
           </SelectContent>
         </Select>
 
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger
             className={cn(
               "h-9 w-auto min-w-[130px] rounded-lg text-sm font-medium border transition-colors gap-1.5",
-              typeFilter !== "all"
+              statusFilter !== "all"
                 ? "bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
                 : "bg-background border-border text-foreground"
             )}
@@ -660,15 +662,27 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
             <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
             </svg>
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder="Status">{statusFilterLabel}</SelectValue>
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="customer">Active</SelectItem>
-            <SelectItem value="prospect">Prospect</SelectItem>
-            <SelectItem value="partner">Partner</SelectItem>
-            <SelectItem value="vendor">Vendor</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
+          <SelectContent className="max-h-[min(24rem,70vh)]">
+            <SelectItem value="all">All accounts ({typeCounts.all})</SelectItem>
+            {accountTypeOptions.map((t) => (
+              <SelectItem key={`account-${t.value}`} value={`account:${t.value}`}>
+                {t.label} ({typeCounts[t.value] ?? 0})
+              </SelectItem>
+            ))}
+            {openStageOptions.length > 0 && (
+              <>
+                <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-t mt-1 pt-2">
+                  Deal stage
+                </div>
+                {openStageOptions.map((stage) => (
+                  <SelectItem key={`stage-${stage.id}`} value={`stage:${stage.id}`}>
+                    {stage.name} ({stageCounts[stage.id] ?? 0})
+                  </SelectItem>
+                ))}
+              </>
+            )}
           </SelectContent>
         </Select>
 
@@ -700,16 +714,16 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
-                "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                "inline-flex items-center justify-center h-9 w-9 rounded-lg border transition-colors",
                 groupBy !== "none"
                   ? "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"
                   : "bg-background border-border text-foreground hover:bg-muted"
               )}
+              title={groupBy === "none" ? "Group" : `Grouped by ${groupBy}`}
+              aria-label={groupBy === "none" ? "Group customers" : `Grouped by ${groupBy}`}
               data-testid="button-group-customers"
             >
-              <Layers className="h-3.5 w-3.5" />
-              Group
-              <ChevronDown className="h-3 w-3" />
+              <Layers className="h-4 w-4" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -788,37 +802,46 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
           <button onClick={() => setViewMode("map")} className={cn("px-3 py-2 text-xs font-medium border-l", viewMode === "map" ? "bg-[#0ea5e9] text-white" : "bg-background")} data-testid="view-map">Map</button>
         </div>
 
-        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setEditingId(null); setFormData(EMPTY_CUSTOMER_FORM); setCustomData({}); } }}>
-          <DialogTrigger asChild>
-            <button
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white transition-colors"
-              data-testid="button-add-customer"
-            >
-              <Plus className="h-4 w-4" />
-              New Customer
-            </button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <SubmitForm
-              onSubmit={() => {
-                const payload = {
-                  ...formData,
-                  employeeCount: formData.employeeCount ? parseInt(formData.employeeCount) : null,
-                  parentAccountId: formData.parentAccountId ? parseInt(formData.parentAccountId) : null,
-                  customData,
-                };
-                if (editingId) {
-                  updateMutation.mutate({ id: editingId, updates: payload });
-                  setIsOpen(false);
-                } else {
-                  createMutation.mutate(formData);
-                }
-              }}
-              disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
-            >
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Account" : "Create New Account"}</DialogTitle>
-            </DialogHeader>
+        {enrichedAccounts.length > 0 && (
+        <button
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white transition-colors"
+          data-testid="button-add-customer"
+          onClick={() => setIsOpen(true)}
+        >
+          <Plus className="h-4 w-4" />
+          New Customer
+        </button>
+        )}
+          <FormDialogShell
+            open={isOpen}
+            onOpenChange={(open) => { setIsOpen(open); if (!open) { setEditingId(null); setFormData(EMPTY_CUSTOMER_FORM); setCustomData({}); } }}
+            title={editingId ? "Edit Account" : "Create New Account"}
+            subtitle="Manage customer account details"
+            saveLabel={
+              editingId
+                ? (updateMutation.isPending ? "Updating..." : "Update Account")
+                : (createMutation.isPending ? "Creating..." : "Create Account")
+            }
+            onCancel={() => { setIsOpen(false); setEditingId(null); setFormData(EMPTY_CUSTOMER_FORM); setCustomData({}); }}
+            onSubmit={() => {
+              const payload = {
+                ...formData,
+                employeeCount: formData.employeeCount ? parseInt(formData.employeeCount) : null,
+                parentAccountId: formData.parentAccountId ? parseInt(formData.parentAccountId) : null,
+                customData,
+              };
+              if (editingId) {
+                updateMutation.mutate({ id: editingId, updates: payload });
+                setIsOpen(false);
+              } else {
+                createMutation.mutate(formData);
+              }
+            }}
+            saving={createMutation.isPending || updateMutation.isPending}
+            disabled={!formData.name}
+            saveTestId="button-save-customer"
+            size="lg"
+          >
             <div className="space-y-4 py-4">
               <div>
                 <Label htmlFor="name">Account Name *</Label>
@@ -836,11 +859,9 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="prospect">Prospect</SelectItem>
-                    <SelectItem value="customer">Customer</SelectItem>
-                    <SelectItem value="partner">Partner</SelectItem>
-            <SelectItem value="vendor">Vendor</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
+                    {CRM_ACCOUNT_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -922,23 +943,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
               </div>
               <CrmCustomFieldsForm entityType="account" values={customData} onChange={(k, v) => setCustomData(prev => ({ ...prev, [k]: v }))} />
             </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button
-                type="submit"
-                disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
-                data-testid="button-save-customer"
-              >
-                {editingId
-                  ? (updateMutation.isPending ? "Updating..." : "Update Account")
-                  : (createMutation.isPending ? "Creating..." : "Create Account")}
-              </Button>
-            </DialogFooter>
-            </SubmitForm>
-          </DialogContent>
-        </Dialog>
+          </FormDialogShell>
       </div>
 
       {viewMode === "map" && (() => {
@@ -946,6 +951,15 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
         const geoResolvedCount = mapAccounts.filter((a, i) =>
           resolveAccountGeo(a.country, a.city, a.state, a.name, i).resolved
         ).length;
+        const mapPins = mapAccounts.map((a) => ({
+          id: a.id,
+          name: a.name,
+          country: a.country,
+          city: a.city,
+          state: a.state,
+          segment: a.segment,
+          color: getSegmentPinColor(a.segment),
+        }));
         return (
         <div className="bg-white dark:bg-card rounded-xl border border-border/40 p-4 sm:p-6 shadow-sm" data-testid="customers-map-view">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
@@ -957,43 +971,20 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
               {mapAccounts.length} accounts · {geoResolvedCount} geocoded from country/city data
             </span>
           </div>
-          <div className="relative bg-gradient-to-b from-sky-100/80 via-sky-50 to-emerald-50/60 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 rounded-xl h-[280px] sm:h-[400px] overflow-hidden border">
-            <svg className="absolute inset-0 w-full h-full opacity-20 dark:opacity-10 pointer-events-none" viewBox="0 0 1000 500" preserveAspectRatio="none">
-              <ellipse cx="500" cy="250" rx="480" ry="230" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-sky-600/40" />
-              <path d="M120,180 Q250,120 400,150 T700,140 T880,200" fill="none" stroke="currentColor" strokeWidth="1" className="text-emerald-600/30" />
-              <path d="M100,300 Q300,360 500,330 T900,310" fill="none" stroke="currentColor" strokeWidth="1" className="text-emerald-600/30" />
-            </svg>
-            {mapAccounts.map((a, i) => {
-              const geo = resolveAccountGeo(a.country, a.city, a.state, a.name, i);
-              const segment = getSegment(a.annualRevenue);
-              const pinColor = segment === "Enterprise" ? "#0ea5e9" : segment === "Mid-Market" ? "#8b5cf6" : "#22c55e";
-              return (
-                <button
-                  key={a.id}
-                  onClick={() => onSelectAccount?.(a)}
-                  className="absolute group -translate-x-1/2 -translate-y-full z-10"
-                  style={{ left: `${geo.left}%`, top: `${geo.top}%` }}
-                  data-testid={`map-pin-${a.id}`}
-                >
-                  <MapPin className="h-5 w-5 sm:h-6 sm:w-6 drop-shadow-md group-hover:scale-125 transition-transform" style={{ color: pinColor }} />
-                  <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 hidden group-hover:block bg-card border rounded-lg px-2 py-1.5 text-xs shadow-lg whitespace-nowrap z-20">
-                    <div className="font-semibold">{a.name}</div>
-                    <div className="text-muted-foreground">{[a.city, a.state, a.country].filter(Boolean).join(", ")}</div>
-                    <div className="text-[10px] text-muted-foreground">{segment}{!geo.resolved ? " · approximate" : ""}</div>
-                  </div>
-                </button>
-              );
-            })}
-            {mapAccounts.length === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground px-6 text-center">
-                Add country and city to customer accounts to plot them on the map
-              </div>
-            )}
-          </div>
+          <CrmGeoMap
+            pins={mapPins}
+            onPinClick={(pin) => {
+              const account = enrichedAccounts.find((a) => a.id === pin.id);
+              if (account) onSelectAccount(account);
+            }}
+          />
           <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#0ea5e9]" /> Enterprise</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#8b5cf6]" /> Mid-Market</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#22c55e]" /> SMB</span>
+            {segmentOptions.map((seg) => (
+              <span key={seg} className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: getSegmentPinColor(seg) }} />
+                {seg}
+              </span>
+            ))}
           </div>
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
             {Array.from(new Set(enrichedAccounts.filter(a => a.country).map(a => a.country))).map(country => (
@@ -1061,7 +1052,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
                 </th>
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Status</th>
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("revenue")}>
-                  Total Revenue {sortField === "revenue" && (sortDir === "asc" ? "↑" : "↓")}
+                  Annual Revenue (ARR) {sortField === "revenue" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Email</th>
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Phone</th>

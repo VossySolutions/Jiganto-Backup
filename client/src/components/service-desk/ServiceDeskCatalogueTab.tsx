@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from "@/components/ui/dialog";
+  FormDialogShell, FormSection, FieldLabel,
+} from "@/components/ui/form-dialog-shell";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -43,10 +43,12 @@ export function ServiceDeskCatalogueTab() {
 
   const { data, isLoading, isError, refetch } = useQuery<CatalogueData>({
     queryKey: ["/api/service-desk/catalogue"],
+    staleTime: 60_000,
   });
 
   const { data: adminData } = useQuery<CatalogueData>({
     queryKey: ["/api/service-desk/catalogue?admin=1"],
+    staleTime: 60_000,
   });
 
   const requestMut = useMutation({
@@ -168,61 +170,58 @@ export function ServiceDeskCatalogueTab() {
         </div>
       )}
 
-      <Dialog open={!!requestService} onOpenChange={() => setRequestService(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Request: {requestService?.name}</DialogTitle>
-            <DialogDescription>Submit a service request. SLA clock starts on submission.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Title</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-            </div>
-            <div className="space-y-2">
-              <Label>Priority</Label>
-              <Select value={priority} onValueChange={setPriority}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {(requestService?.requestFormFields as FormField[] ?? []).map((f) => (
-              <div key={f.key} className="space-y-2">
-                <Label>{f.label}{f.required ? " *" : ""}</Label>
-                {f.type === "select" ? (
-                  <Select value={formValues[f.key] ?? ""} onValueChange={(v) => setFormValues({ ...formValues, [f.key]: v })}>
-                    <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                    <SelectContent>
-                      {(f.options ?? []).map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
-                    value={formValues[f.key] ?? ""}
-                    onChange={(e) => setFormValues({ ...formValues, [f.key]: e.target.value })}
-                  />
-                )}
-              </div>
-            ))}
-            <Button
-              className="w-full rounded-xl"
-              disabled={requestMut.isPending}
-              onClick={() => requestService && requestMut.mutate(requestService.id)}
-            >
-              {requestMut.isPending ? "Submitting…" : "Submit request"}
-            </Button>
+      <FormDialogShell
+        open={!!requestService}
+        onOpenChange={() => setRequestService(null)}
+        title={`Request: ${requestService?.name ?? ""}`}
+        subtitle="Submit a service request. SLA clock starts on submission."
+        saveLabel={requestMut.isPending ? "Submitting..." : "Submit request"}
+        onCancel={() => setRequestService(null)}
+        onSubmit={() => requestService && requestMut.mutate(requestService.id)}
+        saving={requestMut.isPending}
+        size="lg"
+      >
+        <FormSection title="Request details">
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Title</FieldLabel>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
-        </DialogContent>
-      </Dialog>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Description</FieldLabel>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+          </div>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Priority</FieldLabel>
+            <Select value={priority} onValueChange={setPriority}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {(requestService?.requestFormFields as FormField[] ?? []).map((f) => (
+            <div key={f.key} className="space-y-1.5 mb-3.5">
+              <FieldLabel>{f.label}{f.required ? " *" : ""}</FieldLabel>
+              {f.type === "select" ? (
+                <Select value={formValues[f.key] ?? ""} onValueChange={(v) => setFormValues({ ...formValues, [f.key]: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectContent>
+                    {(f.options ?? []).map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                  value={formValues[f.key] ?? ""}
+                  onChange={(e) => setFormValues({ ...formValues, [f.key]: e.target.value })}
+                />
+              )}
+            </div>
+          ))}
+        </FormSection>
+      </FormDialogShell>
     </div>
   );
 }

@@ -1,5 +1,10 @@
-import { ShieldCheck, User, FlaskConical, Bug, Eye } from "lucide-react";
+import { ShieldCheck, User, FlaskConical, Bug, Eye, ExternalLink } from "lucide-react";
+import { Link } from "wouter";
 import { useTmProject } from "@/contexts/TmProjectContext";
+import { usePermissions } from "@/hooks/use-permissions";
+import { getSettingsAccess } from "@/lib/settings-access";
+import { settingsPathForTier } from "@/lib/settings-routes";
+import { Button } from "@/components/ui/button";
 
 const ROLES = [
   { id: "test_manager", label: "Test Manager", icon: ShieldCheck, desc: "Create cycles, assign cases, sign off areas and cycles" },
@@ -10,14 +15,27 @@ const ROLES = [
 
 export function AccessRolesScreen() {
   const { activeProject } = useTmProject();
+  const { platformRole, isJigantoStaff } = usePermissions();
+  const settingsAccess = getSettingsAccess(platformRole, isJigantoStaff);
+  const customersSettingsHref = settingsAccess.tabs.includes("customers")
+    ? `${settingsPathForTier(settingsAccess.tier)}?tab=customers`
+    : `${settingsPathForTier(settingsAccess.tier)}?tab=users`;
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-3xl w-full">
-      <div>
-        <h2 className="text-xl font-semibold">Access & Roles</h2>
-        <p className="text-sm text-muted-foreground">
-          Project-scoped roles for {activeProject?.name ?? "this project"}. Role assignment uses the organisation permissions module.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Access & Roles</h2>
+          <p className="text-sm text-muted-foreground">
+            Project-scoped roles for {activeProject?.name ?? "this project"}. Assign users and permissions in Settings.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" className="shrink-0" asChild>
+          <Link href={customersSettingsHref}>
+            <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+            Manage in Settings
+          </Link>
+        </Button>
       </div>
       <div className="grid gap-3">
         {ROLES.map(role => (

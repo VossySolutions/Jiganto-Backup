@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
+import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Settings2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
@@ -117,11 +116,18 @@ export function CrmCustomFieldsSettings() {
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <SubmitForm onSubmit={() => createMutation.mutate({ entityType, fieldName: fieldName || fieldLabel.toLowerCase().replace(/\s+/g, "_"), fieldLabel, fieldType })}>
-            <DialogHeader><DialogTitle>Add Custom Field</DialogTitle></DialogHeader>
-            <div className="space-y-4 py-4">
+      <FormDialogShell
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title="Add Custom Field"
+        subtitle="Create a new CRM custom field"
+        saveLabel="Create"
+        onCancel={() => setDialogOpen(false)}
+        onSubmit={() => createMutation.mutate({ entityType, fieldName: fieldName || fieldLabel.toLowerCase().replace(/\s+/g, "_"), fieldLabel, fieldType })}
+        saving={createMutation.isPending}
+        disabled={!fieldLabel}
+      >
+            <div className="space-y-4 py-1">
               <div>
                 <Label>Label</Label>
                 <Input value={fieldLabel} onChange={e => setFieldLabel(e.target.value)} data-testid="input-custom-field-label" />
@@ -151,13 +157,7 @@ export function CrmCustomFieldsSettings() {
                 </div>
               )}
             </div>
-            <DialogFooter>
-              <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-              <Button type="submit" disabled={!fieldLabel || createMutation.isPending}>Create</Button>
-            </DialogFooter>
-          </SubmitForm>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
     </div>
   );
 }

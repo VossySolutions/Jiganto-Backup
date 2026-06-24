@@ -6,8 +6,7 @@ import { Plus, FolderOpen, Folder, Pencil, Trash2, ChevronRight, ChevronDown } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
+import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { useTmProject } from "@/contexts/TmProjectContext";
 import { useTmFetch } from "@/hooks/use-tm-fetch";
@@ -92,7 +91,7 @@ export function TestSuitesScreen() {
   } = useTmFetch<TmTestSuite[]>(["/api/tm/suites"], "/api/tm/suites");
 
   const createMutation = useMutation({
-    mutationFn: (data: SuiteFormData) => apiRequest("POST", "/api/tm/suites", { ...data, tenantId: 1, projectId: activeProjectId }),
+    mutationFn: (data: SuiteFormData) => apiRequest("POST", "/api/tm/suites", { ...data, projectId: activeProjectId }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/tm/suites"] }); setDialogOpen(false); toast({ title: "Suite created" }); },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -172,62 +171,53 @@ export function TestSuitesScreen() {
           )}
         </div>
 
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent>
-            <SubmitForm
-              onSubmit={handleSubmit}
-              disabled={!form.name.trim() || createMutation.isPending || updateMutation.isPending}
-            >
-            <DialogHeader>
-              <DialogTitle>{editing ? "Edit Suite" : "New Test Suite"}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div>
-                <label className="text-sm font-medium mb-1 block">Name *</label>
-                <Input
-                  value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. Functional Testing"
-                  data-testid="input-suite-name"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Description</label>
-                <Textarea
-                  value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Optional description"
-                  rows={3}
-                  data-testid="input-suite-description"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Parent Suite (optional)</label>
-                <select
-                  className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
-                  value={form.parentId ?? ""}
-                  onChange={e => setForm(f => ({ ...f, parentId: e.target.value ? Number(e.target.value) : null }))}
-                  data-testid="select-suite-parent"
-                >
-                  <option value="">— No parent (root level) —</option>
-                  {suites.filter(s => s.id !== editing?.id).map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                <Button
-                  type="submit"
-                  data-testid="button-submit-suite"
-                >
-                  {editing ? "Save Changes" : "Create Suite"}
-                </Button>
-              </div>
+        <FormDialogShell
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          title={editing ? "Edit Suite" : "New Test Suite"}
+          saveLabel={editing ? "Save Changes" : "Create Suite"}
+          onCancel={() => setDialogOpen(false)}
+          onSubmit={handleSubmit}
+          saving={createMutation.isPending || updateMutation.isPending}
+          disabled={!form.name.trim()}
+          saveTestId="button-submit-suite"
+        >
+          <FormSection title="Suite details">
+            <div className="space-y-1.5 mb-3.5">
+              <FieldLabel required>Name</FieldLabel>
+              <Input
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. Functional Testing"
+                data-testid="input-suite-name"
+              />
             </div>
-            </SubmitForm>
-          </DialogContent>
-        </Dialog>
+            <div className="space-y-1.5 mb-3.5">
+              <FieldLabel>Description</FieldLabel>
+              <Textarea
+                value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Optional description"
+                rows={3}
+                data-testid="input-suite-description"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <FieldLabel>Parent Suite (optional)</FieldLabel>
+              <select
+                className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                value={form.parentId ?? ""}
+                onChange={e => setForm(f => ({ ...f, parentId: e.target.value ? Number(e.target.value) : null }))}
+                data-testid="select-suite-parent"
+              >
+                <option value="">— No parent (root level) —</option>
+                {suites.filter(s => s.id !== editing?.id).map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          </FormSection>
+        </FormDialogShell>
       </div>
     </TmScreenShell>
   );

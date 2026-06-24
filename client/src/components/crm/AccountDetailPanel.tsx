@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,119 +8,69 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { CRM_ACCOUNT_TYPES, getAccountTypeInfo } from "@/lib/crm-account-types";
 import { cn } from "@/lib/utils";
+import { LeadFormDialog } from "./LeadFormDialog";
+import { AccountDetailFormOverlay } from "./AccountDetailFormOverlay";
+import { ContactOrgChartView } from "./ContactOrgChartView";
+import { ContactRelationshipsPanel } from "./ContactRelationshipsPanel";
 import { 
   Building2, Users, Target, TrendingUp, Phone, Mail, Calendar, 
   Plus, Globe, MapPin, DollarSign, Clock, FileText, MessageSquare,
-  CheckCircle2, XCircle, ChevronLeft, X, Edit2, Trash2, Activity, Loader2,
-  Briefcase, ExternalLink, User, MoreHorizontal
+  CheckCircle2, XCircle, X, Edit2, Trash2, Activity, Loader2,
+  Briefcase, ExternalLink, User, MoreHorizontal, LayoutGrid, List, GitBranch,
+  Inbox, Send
 } from "lucide-react";
+import type {
+  CrmAccountDetail,
+  CrmContactDetail,
+  CrmOpportunityDetail,
+  CrmActivityRecord,
+  CrmNoteRecord,
+  CrmTask,
+  CrmOpportunityStageSummary,
+  CrmEmailLog,
+} from "./types";
 
-type CrmAccount = {
-  id: number;
-  tenantId: number;
-  parentAccountId: number | null;
-  name: string;
-  type: string;
-  industry: string | null;
-  website: string | null;
-  phone: string | null;
-  email: string | null;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  country: string | null;
-  postalCode: string | null;
-  ownerUserId: string | null;
-  description: string | null;
-  annualRevenue: string | null;
-  employeeCount: number | null;
-  createdAt: string;
-  updatedAt: string;
-};
+const CRM_DETAIL_STALE_MS = 30_000;
 
-type CrmContact = {
-  id: number;
-  accountId: number | null;
-  firstName: string;
-  lastName: string;
-  email: string | null;
-  phone: string | null;
-  mobile: string | null;
-  title: string | null;
-  department: string | null;
-  role: string | null;
-  isPrimary: boolean | null;
-  linkedInUrl: string | null;
-  notes: string | null;
-  createdAt: string;
-};
-
-type CrmOpportunity = {
-  id: number;
-  accountId: number | null;
-  stageId: number | null;
-  name: string;
-  amount: string | null;
-  probability: number | null;
-  expectedCloseDate: string | null;
-  type: string | null;
-  source: string | null;
-  nextStep: string | null;
-  createdAt: string;
-};
-
-type CrmActivity = {
-  id: number;
-  type: string;
+type CorrespondenceItem = {
+  id: string;
+  source: "log" | "activity";
   subject: string;
-  description: string | null;
-  dueDate: string | null;
-  completedAt: string | null;
+  body: string | null;
+  recipientOrFrom: string | null;
   status: string | null;
-  priority: string | null;
-  accountId: number | null;
-  createdAt: string;
-};
-
-type CrmNote = {
-  id: number;
-  entityType: string;
-  entityId: number;
-  content: string;
-  createdAt: string;
-};
-
-type CrmTask = {
-  id: number;
-  subject: string;
-  description: string | null;
-  dueDate: string | null;
-  status: string | null;
-  priority: string | null;
-  accountId: number | null;
-  createdAt: string;
-};
-
-type CrmOpportunityStage = {
-  id: number;
-  name: string;
-  probability: number | null;
-  color: string | null;
-  isClosed: boolean | null;
-  isWon: boolean | null;
+  date: Date;
 };
 
 interface AccountDetailPanelProps {
-  account: CrmAccount;
+  account: CrmAccountDetail;
   onClose: () => void;
+}
+
+type ContactsViewMode = "list" | "cards" | "hierarchy";
+
+const CONTACT_ROLE_ORDER = ["decision_maker", "influencer", "contact"] as const;
+const CONTACT_ROLE_LABELS: Record<string, string> = {
+  decision_maker: "Decision makers",
+  influencer: "Influencers",
+  contact: "Contacts",
+  other: "Other",
+};
+
+function getContactRoleGroup(role: string | null): string {
+  if (role && CONTACT_ROLE_ORDER.includes(role as typeof CONTACT_ROLE_ORDER[number])) return role;
+  return "other";
+}
+
+function getInitials(first: string, last: string): string {
+  return `${first[0] || ""}${last[0] || ""}`.toUpperCase();
 }
 
 export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps) {
@@ -129,9 +80,10 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
   const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
   const [isAddNoteOpen, setIsAddNoteOpen] = useState(false);
   const [isAddActivityOpen, setIsAddActivityOpen] = useState(false);
-  const [contactFormData, setContactFormData] = useState({ firstName: "", lastName: "", email: "", phone: "", title: "" });
-  const [leadFormData, setLeadFormData] = useState({ firstName: "", lastName: "", email: "", source: "referral" });
   const [noteContent, setNoteContent] = useState("");
+  const [contactsView, setContactsView] = useState<ContactsViewMode>("list");
+  const [selectedContactForRelationships, setSelectedContactForRelationships] = useState<number | null>(null);
+  const [contactFormData, setContactFormData] = useState({ firstName: "", lastName: "", email: "", phone: "", title: "" });
   const [activityFormData, setActivityFormData] = useState({ type: "call", subject: "", description: "", dueDate: "" });
   const [editFormData, setEditFormData] = useState({
     name: account.name,
@@ -150,28 +102,39 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
   });
   const { toast } = useToast();
 
-  const { data: contacts = [], isLoading: contactsLoading } = useQuery<CrmContact[]>({
+  const { data: contacts = [], isLoading: contactsLoading } = useQuery<CrmContactDetail[]>({
     queryKey: [`/api/crm/contacts?accountId=${account.id}`],
+    staleTime: CRM_DETAIL_STALE_MS,
   });
 
-  const { data: opportunities = [], isLoading: opportunitiesLoading } = useQuery<CrmOpportunity[]>({
+  const { data: opportunities = [], isLoading: opportunitiesLoading } = useQuery<CrmOpportunityDetail[]>({
     queryKey: [`/api/crm/opportunities?accountId=${account.id}`],
+    staleTime: CRM_DETAIL_STALE_MS,
   });
 
-  const { data: activities = [], isLoading: activitiesLoading } = useQuery<CrmActivity[]>({
+  const { data: activities = [], isLoading: activitiesLoading } = useQuery<CrmActivityRecord[]>({
     queryKey: [`/api/crm/activities?accountId=${account.id}`],
+    staleTime: CRM_DETAIL_STALE_MS,
   });
 
-  const { data: notes = [], isLoading: notesLoading } = useQuery<CrmNote[]>({
+  const { data: notes = [], isLoading: notesLoading } = useQuery<CrmNoteRecord[]>({
     queryKey: [`/api/crm/notes?entityType=account&entityId=${account.id}`],
+    staleTime: CRM_DETAIL_STALE_MS,
   });
 
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<CrmTask[]>({
     queryKey: [`/api/crm/tasks?accountId=${account.id}`],
+    staleTime: CRM_DETAIL_STALE_MS,
   });
 
-  const { data: stages = [] } = useQuery<CrmOpportunityStage[]>({
+  const { data: stages = [] } = useQuery<CrmOpportunityStageSummary[]>({
     queryKey: ["/api/crm/stages"],
+    staleTime: CRM_DETAIL_STALE_MS,
+  });
+
+  const { data: emailLogs = [], isLoading: emailLogsLoading } = useQuery<CrmEmailLog[]>({
+    queryKey: [`/api/crm/email-logs?accountId=${account.id}`],
+    staleTime: CRM_DETAIL_STALE_MS,
   });
 
   const createContactMutation = useMutation({
@@ -227,18 +190,6 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
     onError: () => toast({ title: "Failed to update account", variant: "destructive" }),
   });
 
-  const createLeadMutation = useMutation({
-    mutationFn: (data: typeof leadFormData) => 
-      apiRequest("POST", "/api/crm/leads", { ...data, company: account.name, status: "new" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads"] });
-      setIsAddLeadOpen(false);
-      setLeadFormData({ firstName: "", lastName: "", email: "", source: "referral" });
-      toast({ title: "Lead created successfully" });
-    },
-    onError: () => toast({ title: "Failed to create lead", variant: "destructive" }),
-  });
-
   const totalOpportunityValue = opportunities.reduce((sum, opp) => sum + parseFloat(opp.amount || "0"), 0);
   const openOpportunities = opportunities.filter(opp => {
     const stage = stages.find(s => s.id === opp.stageId);
@@ -264,100 +215,71 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
     ...tasks.map(t => ({ ...t, itemType: 'task' as const, date: new Date(t.createdAt) })),
   ].sort((a, b) => b.date.getTime() - a.date.getTime());
 
+  const correspondenceItems = useMemo<CorrespondenceItem[]>(() => {
+    const logItems: CorrespondenceItem[] = emailLogs.map((log) => ({
+      id: `log-${log.id}`,
+      source: "log",
+      subject: log.subject,
+      body: log.body ?? null,
+      recipientOrFrom: log.recipientEmail,
+      status: log.status,
+      date: new Date(log.sentAt),
+    }));
+    const activityEmails: CorrespondenceItem[] = activities
+      .filter((a) => a.type === "email")
+      .map((a) => ({
+        id: `activity-${a.id}`,
+        source: "activity",
+        subject: a.subject,
+        body: a.description,
+        recipientOrFrom: null,
+        status: a.status,
+        date: new Date(a.createdAt),
+      }));
+    return [...logItems, ...activityEmails].sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [emailLogs, activities]);
+
+  const typeInfo = getAccountTypeInfo(account.type);
+
   return (
-    <div className="h-full flex flex-col bg-background" data-testid="account-detail-panel">
-      <div className="border-b bg-card/50 p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={onClose} data-testid="button-close-detail">
+    <div className="relative h-full flex flex-col overflow-hidden bg-[#f8f9fc] dark:bg-background" data-testid="account-detail-panel">
+      <div className="shrink-0 bg-gradient-to-br from-[#0ea5e9]/10 via-violet-500/5 to-background border-b border-border/50 px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <Button variant="ghost" size="icon" className="shrink-0 mt-0.5" onClick={onClose} data-testid="button-close-detail">
               <X className="h-5 w-5" />
             </Button>
-            <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/10">
-              <Building2 className="h-6 w-6 text-primary" />
+            <div
+              className="h-12 w-12 rounded-[14px] flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-md"
+              style={{ background: "linear-gradient(135deg, #0ea5e9, #6366f1)" }}
+            >
+              {getInitials(account.name.split(" ")[0] || account.name, account.name.split(" ")[1] || "")}
             </div>
-            <div>
-              <h1 className="text-xl font-semibold" data-testid="account-detail-name">{account.name}</h1>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Badge variant="secondary" className="capitalize">{account.type}</Badge>
-                {account.industry && <span>{account.industry}</span>}
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold tracking-tight truncate" data-testid="account-detail-name">{account.name}</h1>
+              <div className="flex items-center gap-2 mt-1 flex-wrap text-sm">
+                <span
+                  className="text-xs font-medium px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: typeInfo.bg, color: typeInfo.color }}
+                >
+                  {typeInfo.label}
+                </span>
+                {account.industry && (
+                  <span className="text-muted-foreground">{account.industry}</span>
+                )}
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Dialog open={isAddLeadOpen} onOpenChange={setIsAddLeadOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" data-testid="button-add-lead-from-account">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Lead
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <SubmitForm
-                  onSubmit={() => createLeadMutation.mutate(leadFormData)}
-                  disabled={!leadFormData.firstName || !leadFormData.lastName || createLeadMutation.isPending}
-                >
-                <DialogHeader>
-                  <DialogTitle>Add Lead from {account.name}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>First Name *</Label>
-                      <Input 
-                        value={leadFormData.firstName}
-                        onChange={(e) => setLeadFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <Label>Last Name *</Label>
-                      <Input 
-                        value={leadFormData.lastName}
-                        onChange={(e) => setLeadFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label>Email</Label>
-                    <Input 
-                      type="email"
-                      value={leadFormData.email}
-                      onChange={(e) => setLeadFormData(prev => ({ ...prev, email: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label>Source</Label>
-                    <Select value={leadFormData.source} onValueChange={(v) => setLeadFormData(prev => ({ ...prev, source: v }))}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="referral">Referral</SelectItem>
-                        <SelectItem value="website">Website</SelectItem>
-                        <SelectItem value="social">Social Media</SelectItem>
-                        <SelectItem value="event">Event</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="outline">Cancel</Button>
-                  </DialogClose>
-                  <Button 
-                    type="submit"
-                    disabled={!leadFormData.firstName || !leadFormData.lastName || createLeadMutation.isPending}
-                  >
-                    {createLeadMutation.isPending ? "Creating..." : "Create Lead"}
-                  </Button>
-                </DialogFooter>
-                </SubmitForm>
-              </DialogContent>
-            </Dialog>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            <Button variant="outline" size="sm" onClick={() => setIsAddLeadOpen(true)} data-testid="button-add-lead-from-account">
+              <Plus className="h-4 w-4 mr-1" />
+              Lead
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setIsAddContactOpen(true)} data-testid="button-add-contact-quick">
               <Plus className="h-4 w-4 mr-1" />
               Contact
             </Button>
-            <Button size="sm" onClick={() => setIsEditMode(true)} data-testid="button-edit-account">
+            <Button size="sm" className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90" onClick={() => setIsEditMode(true)} data-testid="button-edit-account">
               <Edit2 className="h-4 w-4 mr-1" />
               Edit
             </Button>
@@ -367,9 +289,9 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
 
       <div className="flex-1 overflow-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-          <div className="border-b px-4">
-            <TabsList className="h-11 bg-transparent border-0 gap-1">
-              <TabsTrigger value="overview" className="gap-2 rounded-lg data-[state=active]:bg-primary/10" data-testid="detail-tab-overview">
+          <div className="border-b border-border/40 px-4 bg-background/80 overflow-x-auto">
+            <TabsList className="h-11 bg-transparent border-0 gap-1 p-0 w-max min-w-full">
+              <TabsTrigger value="overview" className="gap-2 rounded-lg data-[state=active]:bg-[#0ea5e9]/10 data-[state=active]:text-[#0ea5e9] data-[state=active]:shadow-none border border-transparent data-[state=active]:border-[#0ea5e9]/20" data-testid="detail-tab-overview">
                 <Building2 className="h-3.5 w-3.5" />
                 Overview
               </TabsTrigger>
@@ -387,10 +309,17 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                 <Activity className="h-3.5 w-3.5" />
                 Timeline
               </TabsTrigger>
-              <TabsTrigger value="notes" className="gap-2 rounded-lg data-[state=active]:bg-primary/10" data-testid="detail-tab-notes">
+              <TabsTrigger value="notes" className="gap-2 rounded-lg data-[state=active]:bg-primary/10 shrink-0" data-testid="detail-tab-notes">
                 <MessageSquare className="h-3.5 w-3.5" />
                 Notes
                 <Badge variant="secondary" className="text-xs ml-1">{notes.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="correspondence" className="gap-2 rounded-lg data-[state=active]:bg-primary/10 shrink-0" data-testid="detail-tab-correspondence">
+                <Inbox className="h-3.5 w-3.5" />
+                Correspondence
+                {correspondenceItems.length > 0 && (
+                  <Badge variant="secondary" className="text-xs ml-1">{correspondenceItems.length}</Badge>
+                )}
               </TabsTrigger>
             </TabsList>
           </div>
@@ -399,8 +328,8 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
             <TabsContent value="overview" className="p-6 m-0 space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
-                  <Card>
-                    <CardHeader>
+                  <Card className="rounded-xl border-border/40 shadow-sm">
+                    <CardHeader className="pb-3">
                       <CardTitle className="text-base">Account Information</CardTitle>
                     </CardHeader>
                     <CardContent className="grid grid-cols-2 gap-3 text-sm">
@@ -549,7 +478,7 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium truncate">
-                                  {item.itemType === 'activity' && (item as CrmActivity).subject}
+                                  {item.itemType === 'activity' && (item as CrmActivityRecord).subject}
                                   {item.itemType === 'note' && "Note added"}
                                   {item.itemType === 'task' && (item as CrmTask).subject}
                                 </p>
@@ -587,81 +516,45 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
             </TabsContent>
 
             <TabsContent value="contacts" className="p-6 m-0 space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h3 className="text-lg font-semibold">Contacts ({contacts.length})</h3>
-                <Dialog open={isAddContactOpen} onOpenChange={setIsAddContactOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" data-testid="button-add-contact-detail">
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add Contact
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <SubmitForm
-                      onSubmit={() => createContactMutation.mutate(contactFormData)}
-                      disabled={!contactFormData.firstName || !contactFormData.lastName || createContactMutation.isPending}
+                <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide shrink-0">View</span>
+                    <div className="flex border border-border/60 rounded-lg overflow-hidden shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setContactsView("list")}
+                      className={cn("px-2.5 py-1.5 text-xs font-medium inline-flex items-center gap-1", contactsView === "list" ? "bg-[#0ea5e9] text-white" : "bg-background hover:bg-muted")}
+                      data-testid="contacts-view-list"
                     >
-                    <DialogHeader>
-                      <DialogTitle>Add Contact to {account.name}</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label>First Name *</Label>
-                          <Input 
-                            value={contactFormData.firstName}
-                            onChange={(e) => setContactFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                            data-testid="input-new-contact-firstname"
-                          />
-                        </div>
-                        <div>
-                          <Label>Last Name *</Label>
-                          <Input 
-                            value={contactFormData.lastName}
-                            onChange={(e) => setContactFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                            data-testid="input-new-contact-lastname"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <Label>Email</Label>
-                        <Input 
-                          type="email"
-                          value={contactFormData.email}
-                          onChange={(e) => setContactFormData(prev => ({ ...prev, email: e.target.value }))}
-                          data-testid="input-new-contact-email"
-                        />
-                      </div>
-                      <div>
-                        <Label>Phone</Label>
-                        <Input 
-                          value={contactFormData.phone}
-                          onChange={(e) => setContactFormData(prev => ({ ...prev, phone: e.target.value }))}
-                        />
-                      </div>
-                      <div>
-                        <Label>Title</Label>
-                        <Input 
-                          value={contactFormData.title}
-                          onChange={(e) => setContactFormData(prev => ({ ...prev, title: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button type="button" variant="outline">Cancel</Button>
-                      </DialogClose>
-                      <Button 
-                        type="submit"
-                        disabled={!contactFormData.firstName || !contactFormData.lastName || createContactMutation.isPending}
-                        data-testid="button-save-new-contact"
-                      >
-                        {createContactMutation.isPending ? "Adding..." : "Add Contact"}
-                      </Button>
-                    </DialogFooter>
-                    </SubmitForm>
-                  </DialogContent>
-                </Dialog>
+                      <List className="h-3.5 w-3.5" /> List
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setContactsView("cards")}
+                      className={cn("px-2.5 py-1.5 text-xs font-medium inline-flex items-center gap-1 border-l", contactsView === "cards" ? "bg-[#0ea5e9] text-white" : "bg-background hover:bg-muted")}
+                      data-testid="contacts-view-cards"
+                    >
+                      <LayoutGrid className="h-3.5 w-3.5" /> Cards
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setContactsView("hierarchy")}
+                      className={cn("px-2.5 py-1.5 text-xs font-medium inline-flex items-center gap-1 border-l", contactsView === "hierarchy" ? "bg-[#0ea5e9] text-white" : "bg-background hover:bg-muted")}
+                      data-testid="contacts-view-hierarchy"
+                    >
+                      <GitBranch className="h-3.5 w-3.5" /> Hierarchy
+                    </button>
+                  </div>
+                  </div>
+                  {contacts.length > 0 && (
+                  <Button size="sm" onClick={() => setIsAddContactOpen(true)} data-testid="button-add-contact-detail">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Contact
+                  </Button>
+                  )}
+                </div>
               </div>
 
               {contactsLoading ? (
@@ -669,7 +562,7 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : contacts.length === 0 ? (
-                <Card>
+                <Card className="rounded-xl border-border/40 shadow-sm">
                   <CardContent className="py-12 text-center">
                     <Users className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
                     <p className="text-muted-foreground">No contacts for this account yet.</p>
@@ -679,33 +572,111 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                     </Button>
                   </CardContent>
                 </Card>
+              ) : contactsView === "list" ? (
+                <div className="rounded-xl border border-border/40 bg-card shadow-sm overflow-hidden overflow-x-auto">
+                  <table className="w-full text-sm min-w-[520px]">
+                    <thead>
+                      <tr className="border-b border-border/40 bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="text-left font-semibold px-4 py-3">Name</th>
+                        <th className="text-left font-semibold px-4 py-3">Title</th>
+                        <th className="text-left font-semibold px-4 py-3">Email</th>
+                        <th className="text-left font-semibold px-4 py-3">Phone</th>
+                        <th className="text-left font-semibold px-4 py-3">Role</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {contacts.map((contact) => (
+                        <tr key={contact.id} className="border-b border-border/30 last:border-0 hover:bg-muted/20" data-testid={`contact-row-${contact.id}`}>
+                          <td className="px-4 py-3 font-medium whitespace-nowrap">
+                            {contact.firstName} {contact.lastName}
+                            {contact.isPrimary && <Badge variant="secondary" className="text-[10px] ml-2">Primary</Badge>}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">{contact.title || "—"}</td>
+                          <td className="px-4 py-3 text-muted-foreground truncate max-w-[160px]">{contact.email || "—"}</td>
+                          <td className="px-4 py-3 text-muted-foreground truncate max-w-[140px] tabular-nums">{contact.phone || contact.mobile || "—"}</td>
+                          <td className="px-4 py-3 capitalize text-muted-foreground">{(contact.role || "contact").replace(/_/g, " ")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : contactsView === "hierarchy" ? (
+                <div className="space-y-4">
+                  <ContactOrgChartView accountId={account.id} contacts={contacts} />
+                  <p className="text-xs text-muted-foreground px-1">
+                    Select a contact below to add, edit, or remove reporting relationships. Links are restricted to this account only.
+                  </p>
+                  <div className="rounded-xl border border-border/40 bg-card shadow-sm divide-y divide-border/30">
+                    {contacts.map((contact) => (
+                      <button
+                        key={contact.id}
+                        type="button"
+                        onClick={() => setSelectedContactForRelationships(contact.id)}
+                        className={cn(
+                          "w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/20 transition-colors",
+                          selectedContactForRelationships === contact.id && "bg-[#0ea5e9]/5",
+                        )}
+                        data-testid={`contact-hierarchy-select-${contact.id}`}
+                      >
+                        <div className="h-9 w-9 rounded-full bg-[#0ea5e9]/10 flex items-center justify-center text-[#0ea5e9] font-semibold text-xs shrink-0">
+                          {getInitials(contact.firstName, contact.lastName)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm">{contact.firstName} {contact.lastName}</p>
+                          <p className="text-xs text-muted-foreground truncate">{contact.title || "—"}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  {selectedContactForRelationships && (
+                    <div className="rounded-xl border border-border/40 bg-card p-4 shadow-sm">
+                      <ContactRelationshipsPanel
+                        contactId={selectedContactForRelationships}
+                        contacts={contacts}
+                        accounts={[{ id: account.id, name: account.name }]}
+                        embedded
+                      />
+                      <Button variant="ghost" size="sm" className="mt-2" onClick={() => setSelectedContactForRelationships(null)}>
+                        Close
+                      </Button>
+                    </div>
+                  )}
+                </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3">
                   {contacts.map(contact => (
-                    <Card key={contact.id} className="hover-elevate" data-testid={`contact-card-${contact.id}`}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="h-11 w-11 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
-                            {contact.firstName[0]}{contact.lastName[0]}
+                    <Card key={contact.id} className="rounded-xl border-border/40 shadow-sm overflow-hidden hover:shadow-md transition-shadow" data-testid={`contact-card-${contact.id}`}>
+                      <CardContent className="p-4 overflow-hidden">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className="h-11 w-11 rounded-full bg-[#0ea5e9]/10 flex items-center justify-center text-[#0ea5e9] font-semibold shrink-0">
+                            {getInitials(contact.firstName, contact.lastName)}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-medium">{contact.firstName} {contact.lastName}</h4>
-                              {contact.isPrimary && <Badge variant="secondary" className="text-xs">Primary</Badge>}
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <h4 className="font-semibold truncate">{contact.firstName} {contact.lastName}</h4>
+                              {contact.isPrimary && <Badge variant="secondary" className="text-xs shrink-0">Primary</Badge>}
                             </div>
-                            <p className="text-sm text-muted-foreground">{contact.title || "—"}</p>
-                            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                              {contact.email && (
-                                <span className="flex items-center gap-1">
-                                  <Mail className="h-3 w-3" /> {contact.email}
-                                </span>
-                              )}
-                              {contact.phone && (
-                                <span className="flex items-center gap-1">
-                                  <Phone className="h-3 w-3" /> {contact.phone}
-                                </span>
-                              )}
-                            </div>
+                            {(contact.title || contact.role) && (
+                              <p className="text-sm text-muted-foreground truncate">
+                                {[contact.title, contact.role ? (contact.role || "contact").replace(/_/g, " ") : null].filter(Boolean).join(" · ")}
+                              </p>
+                            )}
+                            {(contact.email || contact.phone || contact.mobile) && (
+                              <div className="space-y-1.5 pt-1 border-t border-border/30">
+                                {contact.email && (
+                                  <div className="flex items-center gap-2 min-w-0 text-sm">
+                                    <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                    <span className="truncate text-muted-foreground">{contact.email}</span>
+                                  </div>
+                                )}
+                                {(contact.phone || contact.mobile) && (
+                                  <div className="flex items-center gap-2 min-w-0 text-sm">
+                                    <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                    <span className="truncate tabular-nums text-muted-foreground">{contact.phone || contact.mobile}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </CardContent>
@@ -776,75 +747,10 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
             <TabsContent value="activities" className="p-6 m-0 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Activity Timeline</h3>
-                <Dialog open={isAddActivityOpen} onOpenChange={setIsAddActivityOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" data-testid="button-log-activity-detail">
-                      <Plus className="h-4 w-4 mr-1" />
-                      Log Activity
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <SubmitForm
-                      onSubmit={() => createActivityMutation.mutate(activityFormData)}
-                      disabled={!activityFormData.subject || createActivityMutation.isPending}
-                    >
-                    <DialogHeader>
-                      <DialogTitle>Log Activity for {account.name}</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div>
-                        <Label>Activity Type</Label>
-                        <Select value={activityFormData.type} onValueChange={(v) => setActivityFormData(prev => ({ ...prev, type: v }))}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="call">Call</SelectItem>
-                            <SelectItem value="email">Email</SelectItem>
-                            <SelectItem value="meeting">Meeting</SelectItem>
-                            <SelectItem value="task">Task</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label>Subject *</Label>
-                        <Input 
-                          value={activityFormData.subject}
-                          onChange={(e) => setActivityFormData(prev => ({ ...prev, subject: e.target.value }))}
-                          data-testid="input-activity-subject-detail"
-                        />
-                      </div>
-                      <div>
-                        <Label>Description</Label>
-                        <Textarea 
-                          value={activityFormData.description}
-                          onChange={(e) => setActivityFormData(prev => ({ ...prev, description: e.target.value }))}
-                        />
-                      </div>
-                      <div>
-                        <Label>Due Date</Label>
-                        <Input 
-                          type="date"
-                          value={activityFormData.dueDate}
-                          onChange={(e) => setActivityFormData(prev => ({ ...prev, dueDate: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button type="button" variant="outline">Cancel</Button>
-                      </DialogClose>
-                      <Button 
-                        type="submit"
-                        disabled={!activityFormData.subject || createActivityMutation.isPending}
-                        data-testid="button-save-activity-detail"
-                      >
-                        {createActivityMutation.isPending ? "Logging..." : "Log Activity"}
-                      </Button>
-                    </DialogFooter>
-                    </SubmitForm>
-                  </DialogContent>
-                </Dialog>
+                <Button size="sm" onClick={() => setIsAddActivityOpen(true)} data-testid="button-log-activity-detail">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Log Activity
+                </Button>
               </div>
 
               {activitiesLoading || notesLoading || tasksLoading ? (
@@ -868,7 +774,7 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                   <div className="space-y-4">
                     {allTimelineItems.map((item, idx) => {
                       const Icon = item.itemType === 'activity' 
-                        ? getActivityIcon((item as CrmActivity).type)
+                        ? getActivityIcon((item as CrmActivityRecord).type)
                         : item.itemType === 'note' ? MessageSquare : CheckCircle2;
                       return (
                         <div key={`${item.itemType}-${idx}`} className="flex gap-4 relative">
@@ -886,17 +792,17 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                                 <div>
                                   {item.itemType === 'activity' && (
                                     <>
-                                      <p className="font-medium">{(item as CrmActivity).subject}</p>
-                                      <Badge variant="secondary" className="text-xs capitalize mt-1">{(item as CrmActivity).type}</Badge>
-                                      {(item as CrmActivity).description && (
-                                        <p className="text-sm text-muted-foreground mt-2">{(item as CrmActivity).description}</p>
+                                      <p className="font-medium">{(item as CrmActivityRecord).subject}</p>
+                                      <Badge variant="secondary" className="text-xs capitalize mt-1">{(item as CrmActivityRecord).type}</Badge>
+                                      {(item as CrmActivityRecord).description && (
+                                        <p className="text-sm text-muted-foreground mt-2">{(item as CrmActivityRecord).description}</p>
                                       )}
                                     </>
                                   )}
                                   {item.itemType === 'note' && (
                                     <>
                                       <p className="font-medium">Note</p>
-                                      <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">{(item as CrmNote).content}</p>
+                                      <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">{(item as CrmNoteRecord).content}</p>
                                     </>
                                   )}
                                   {item.itemType === 'task' && (
@@ -923,45 +829,10 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
             <TabsContent value="notes" className="p-6 m-0 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Notes ({notes.length})</h3>
-                <Dialog open={isAddNoteOpen} onOpenChange={setIsAddNoteOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" data-testid="button-add-note-detail">
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add Note
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <SubmitForm
-                      onSubmit={() => createNoteMutation.mutate(noteContent)}
-                      disabled={!noteContent.trim() || createNoteMutation.isPending}
-                    >
-                    <DialogHeader>
-                      <DialogTitle>Add Note to {account.name}</DialogTitle>
-                    </DialogHeader>
-                    <div className="py-4">
-                      <Textarea 
-                        placeholder="Enter your note..."
-                        value={noteContent}
-                        onChange={(e) => setNoteContent(e.target.value)}
-                        className="min-h-[150px]"
-                        data-testid="input-note-content"
-                      />
-                    </div>
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button type="button" variant="outline">Cancel</Button>
-                      </DialogClose>
-                      <Button 
-                        type="submit"
-                        disabled={!noteContent.trim() || createNoteMutation.isPending}
-                        data-testid="button-save-note"
-                      >
-                        {createNoteMutation.isPending ? "Saving..." : "Add Note"}
-                      </Button>
-                    </DialogFooter>
-                    </SubmitForm>
-                  </DialogContent>
-                </Dialog>
+                <Button size="sm" onClick={() => setIsAddNoteOpen(true)} data-testid="button-add-note-detail">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Note
+                </Button>
               </div>
 
               {notesLoading ? (
@@ -998,148 +869,310 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                 </div>
               )}
             </TabsContent>
+
+            <TabsContent value="correspondence" className="p-6 m-0 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-lg font-semibold">Correspondence ({correspondenceItems.length})</h3>
+              </div>
+
+              <div className="rounded-xl border border-[#0ea5e9]/20 bg-[#0ea5e9]/5 px-4 py-3 text-sm">
+                <p className="font-medium text-[#0ea5e9]">Gmail &amp; Outlook sync</p>
+                <p className="text-muted-foreground mt-1">
+                  Connect your mailbox in Settings to automatically import email threads with this account and its contacts.
+                  Until then, logged sends and email activities appear below.
+                </p>
+                <Link href="/settings?tab=integrations">
+                  <Button variant="link" className="h-auto p-0 mt-2 text-[#0ea5e9]" data-testid="link-correspondence-integrations">
+                    Open Integrations settings
+                  </Button>
+                </Link>
+              </div>
+
+              {emailLogsLoading || activitiesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : correspondenceItems.length === 0 ? (
+                <Card className="rounded-xl border-border/40 shadow-sm">
+                  <CardContent className="py-12 text-center">
+                    <Inbox className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+                    <p className="text-muted-foreground">No correspondence recorded for this account yet.</p>
+                    <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
+                      Emails sent from Jiganto or synced from Gmail/Outlook will appear here.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {correspondenceItems.map((item) => (
+                    <Card key={item.id} className="rounded-xl border-border/40 shadow-sm overflow-hidden" data-testid={`correspondence-item-${item.id}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className="h-9 w-9 rounded-lg bg-[#0ea5e9]/10 flex items-center justify-center shrink-0">
+                            {item.source === "log" ? (
+                              <Send className="h-4 w-4 text-[#0ea5e9]" />
+                            ) : (
+                              <Mail className="h-4 w-4 text-[#0ea5e9]" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">{item.subject}</p>
+                                {item.recipientOrFrom && (
+                                  <p className="text-xs text-muted-foreground truncate mt-0.5">To: {item.recipientOrFrom}</p>
+                                )}
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {item.date.toLocaleDateString()}
+                                </span>
+                                {item.status && (
+                                  <Badge variant="secondary" className="text-[10px] capitalize block mt-1 ml-auto w-fit">
+                                    {item.status}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            {item.body && (
+                              <p className="text-sm text-muted-foreground mt-2 line-clamp-3 whitespace-pre-wrap break-words">
+                                {item.body}
+                              </p>
+                            )}
+                            <p className="text-[10px] text-muted-foreground/70 mt-2 uppercase tracking-wide">
+                              {item.source === "log" ? "Logged email" : "Email activity"}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
           </ScrollArea>
         </Tabs>
       </div>
 
-      <Dialog open={isEditMode} onOpenChange={setIsEditMode}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <SubmitForm
-            onSubmit={() => updateAccountMutation.mutate(editFormData)}
-            disabled={!editFormData.name || updateAccountMutation.isPending}
+      <LeadFormDialog
+        open={isAddLeadOpen}
+        onClose={() => setIsAddLeadOpen(false)}
+        editing={null}
+        stacked
+        initialValues={{
+          company: account.name,
+          industry: account.industry || "",
+          website: account.website || "",
+        }}
+      />
+
+      <AccountDetailFormOverlay
+        open={isAddContactOpen}
+        onClose={() => setIsAddContactOpen(false)}
+        title="Add contact"
+        description={account.name}
+        testId="account-add-contact-panel"
+        headerActions={
+          <Button
+            size="sm"
+            className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
+            disabled={!contactFormData.firstName || !contactFormData.lastName || createContactMutation.isPending}
+            onClick={() => createContactMutation.mutate(contactFormData)}
+            data-testid="button-save-new-contact"
           >
-          <DialogHeader>
-            <DialogTitle>Edit Account</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Account Name *</Label>
-                <Input 
-                  value={editFormData.name}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
-                  data-testid="input-edit-account-name"
-                />
-              </div>
-              <div>
-                <Label>Type</Label>
-                <Select value={editFormData.type} onValueChange={(v) => setEditFormData(prev => ({ ...prev, type: v }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="prospect">Prospect</SelectItem>
-                    <SelectItem value="customer">Customer</SelectItem>
-                    <SelectItem value="partner">Partner</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Industry</Label>
-                <Input 
-                  value={editFormData.industry}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, industry: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>Website</Label>
-                <Input 
-                  value={editFormData.website}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, website: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Phone</Label>
-                <Input 
-                  value={editFormData.phone}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, phone: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>Email</Label>
-                <Input 
-                  type="email"
-                  value={editFormData.email}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, email: e.target.value }))}
-                />
-              </div>
+            {createContactMutation.isPending ? "Adding…" : "Add contact"}
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>First name *</Label>
+              <Input value={contactFormData.firstName} onChange={(e) => setContactFormData(prev => ({ ...prev, firstName: e.target.value }))} data-testid="input-new-contact-firstname" />
             </div>
             <div>
-              <Label>Address</Label>
-              <Input 
-                value={editFormData.address}
-                onChange={(e) => setEditFormData(prev => ({ ...prev, address: e.target.value }))}
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label>City</Label>
-                <Input 
-                  value={editFormData.city}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, city: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>State/Province</Label>
-                <Input 
-                  value={editFormData.state}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, state: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>Country</Label>
-                <Input 
-                  value={editFormData.country}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, country: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Annual Revenue ($)</Label>
-                <Input 
-                  type="number"
-                  value={editFormData.annualRevenue}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, annualRevenue: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>Employee Count</Label>
-                <Input 
-                  type="number"
-                  value={editFormData.employeeCount}
-                  onChange={(e) => setEditFormData(prev => ({ ...prev, employeeCount: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea 
-                value={editFormData.description}
-                onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))}
-                className="min-h-[100px]"
-              />
+              <Label>Last name *</Label>
+              <Input value={contactFormData.lastName} onChange={(e) => setContactFormData(prev => ({ ...prev, lastName: e.target.value }))} data-testid="input-new-contact-lastname" />
             </div>
           </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button 
-              type="submit"
-              disabled={!editFormData.name || updateAccountMutation.isPending}
-              data-testid="button-save-account-edit"
-            >
-              {updateAccountMutation.isPending ? "Saving..." : "Save Changes"}
-            </Button>
-          </DialogFooter>
-          </SubmitForm>
-        </DialogContent>
-      </Dialog>
+          <div>
+            <Label>Email</Label>
+            <Input type="email" value={contactFormData.email} onChange={(e) => setContactFormData(prev => ({ ...prev, email: e.target.value }))} data-testid="input-new-contact-email" />
+          </div>
+          <div>
+            <Label>Phone</Label>
+            <Input value={contactFormData.phone} onChange={(e) => setContactFormData(prev => ({ ...prev, phone: e.target.value }))} />
+          </div>
+          <div>
+            <Label>Title</Label>
+            <Input value={contactFormData.title} onChange={(e) => setContactFormData(prev => ({ ...prev, title: e.target.value }))} />
+          </div>
+        </div>
+      </AccountDetailFormOverlay>
+
+      <AccountDetailFormOverlay
+        open={isEditMode}
+        onClose={() => setIsEditMode(false)}
+        title="Edit account"
+        description={account.name}
+        testId="account-edit-panel"
+        headerActions={
+          <Button
+            size="sm"
+            className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
+            disabled={!editFormData.name || updateAccountMutation.isPending}
+            onClick={() => updateAccountMutation.mutate(editFormData)}
+            data-testid="button-save-account-edit"
+          >
+            {updateAccountMutation.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Account name *</Label>
+              <Input value={editFormData.name} onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))} data-testid="input-edit-account-name" />
+            </div>
+            <div>
+              <Label>Type</Label>
+              <Select value={editFormData.type} onValueChange={(v) => setEditFormData(prev => ({ ...prev, type: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CRM_ACCOUNT_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Industry</Label>
+              <Input value={editFormData.industry} onChange={(e) => setEditFormData(prev => ({ ...prev, industry: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Website</Label>
+              <Input value={editFormData.website} onChange={(e) => setEditFormData(prev => ({ ...prev, website: e.target.value }))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Phone</Label>
+              <Input value={editFormData.phone} onChange={(e) => setEditFormData(prev => ({ ...prev, phone: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input type="email" value={editFormData.email} onChange={(e) => setEditFormData(prev => ({ ...prev, email: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <Label>Address</Label>
+            <Input value={editFormData.address} onChange={(e) => setEditFormData(prev => ({ ...prev, address: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Label>City</Label>
+              <Input value={editFormData.city} onChange={(e) => setEditFormData(prev => ({ ...prev, city: e.target.value }))} />
+            </div>
+            <div>
+              <Label>State / region</Label>
+              <Input value={editFormData.state} onChange={(e) => setEditFormData(prev => ({ ...prev, state: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Country</Label>
+              <Input value={editFormData.country} onChange={(e) => setEditFormData(prev => ({ ...prev, country: e.target.value }))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Annual revenue ($)</Label>
+              <Input type="number" value={editFormData.annualRevenue} onChange={(e) => setEditFormData(prev => ({ ...prev, annualRevenue: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Employees</Label>
+              <Input type="number" value={editFormData.employeeCount} onChange={(e) => setEditFormData(prev => ({ ...prev, employeeCount: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <Label>Description</Label>
+            <Textarea value={editFormData.description} onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))} className="min-h-[100px]" />
+          </div>
+        </div>
+      </AccountDetailFormOverlay>
+
+      <AccountDetailFormOverlay
+        open={isAddNoteOpen}
+        onClose={() => setIsAddNoteOpen(false)}
+        title="Add note"
+        description={account.name}
+        testId="account-add-note-panel"
+        headerActions={
+          <Button
+            size="sm"
+            className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
+            disabled={!noteContent.trim() || createNoteMutation.isPending}
+            onClick={() => createNoteMutation.mutate(noteContent)}
+            data-testid="button-save-note"
+          >
+            {createNoteMutation.isPending ? "Saving…" : "Add note"}
+          </Button>
+        }
+      >
+        <Textarea
+          placeholder="Enter your note…"
+          value={noteContent}
+          onChange={(e) => setNoteContent(e.target.value)}
+          className="min-h-[200px]"
+          data-testid="input-note-content"
+        />
+      </AccountDetailFormOverlay>
+
+      <AccountDetailFormOverlay
+        open={isAddActivityOpen}
+        onClose={() => setIsAddActivityOpen(false)}
+        title="Log activity"
+        description={account.name}
+        testId="account-add-activity-panel"
+        headerActions={
+          <Button
+            size="sm"
+            className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
+            disabled={!activityFormData.subject || createActivityMutation.isPending}
+            onClick={() => createActivityMutation.mutate(activityFormData)}
+            data-testid="button-save-activity-detail"
+          >
+            {createActivityMutation.isPending ? "Logging…" : "Log activity"}
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <Label>Activity type</Label>
+            <Select value={activityFormData.type} onValueChange={(v) => setActivityFormData(prev => ({ ...prev, type: v }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="call">Call</SelectItem>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="meeting">Meeting</SelectItem>
+                <SelectItem value="task">Task</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Subject *</Label>
+            <Input value={activityFormData.subject} onChange={(e) => setActivityFormData(prev => ({ ...prev, subject: e.target.value }))} data-testid="input-activity-subject-detail" />
+          </div>
+          <div>
+            <Label>Description</Label>
+            <Textarea value={activityFormData.description} onChange={(e) => setActivityFormData(prev => ({ ...prev, description: e.target.value }))} />
+          </div>
+          <div>
+            <Label>Due date</Label>
+            <Input type="date" value={activityFormData.dueDate} onChange={(e) => setActivityFormData(prev => ({ ...prev, dueDate: e.target.value }))} />
+          </div>
+        </div>
+      </AccountDetailFormOverlay>
     </div>
   );
 }

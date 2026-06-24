@@ -1,14 +1,15 @@
-import type { Express } from "express";
+import type { Express, Response } from "express";
 import { storage } from "../storage";
 import * as bpmService from "./service";
 import { BPML_CORE_FIELDS } from "@shared/models/bpml";
+import { requireApiTenantId } from "../lib/api-tenant-id";
 
 function getUserId(req: any): string | null {
   return req.user?.claims?.sub ?? req.user?.id ?? req.session?.userId ?? null;
 }
 
-function getApiTenantIdWithFallback(req: any): number {
-  return Number(req.query.tenantId || req.body?.tenantId || 1);
+function resolveTenantId(req: any, res: Response): number | null {
+  return requireApiTenantId(req, res);
 }
 
 export function registerBpmExtensionRoutes(app: Express) {
@@ -16,16 +17,19 @@ export function registerBpmExtensionRoutes(app: Express) {
   app.get("/api/portal/menu-nodes", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
-    const nodes = await storage.getPortalMenuNodes(tenantId);
+    const tid = resolveTenantId(req, res);
+    if (tid == null) return;
+    const nodes = await storage.getPortalMenuNodes(tid);
     res.json(nodes);
   });
 
   app.post("/api/portal/menu-nodes", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tid = resolveTenantId(req, res);
+    if (tid == null) return;
     try {
-      const node = await storage.createPortalMenuNode(req.body);
+      const node = await storage.createPortalMenuNode({ ...req.body, tenantId: tid });
       res.status(201).json(node);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
@@ -54,13 +58,14 @@ export function registerBpmExtensionRoutes(app: Express) {
   app.get("/api/portal/assignments", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = getApiTenantIdWithFallback(req);
+    const tid = resolveTenantId(req, res);
+    if (tid == null) return;
     const menuNodeId = req.query.menuNodeId ? Number(req.query.menuNodeId) : undefined;
     if (menuNodeId) {
       const assignments = await storage.getPortalDiagramAssignments(menuNodeId);
       res.json(assignments);
     } else {
-      const assignments = await storage.getAllPortalDiagramAssignments(tenantId);
+      const assignments = await storage.getAllPortalDiagramAssignments(tid);
       res.json(assignments);
     }
   });
@@ -87,11 +92,12 @@ export function registerBpmExtensionRoutes(app: Express) {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tid = resolveTenantId(req, res);
+      if (tid == null) return;
       const libraryId = req.query.libraryId ? Number(req.query.libraryId) : undefined;
-      const settings = await bpmService.getPortalSettings(tenantId, libraryId);
+      const settings = await bpmService.getPortalSettings(tid, libraryId);
       res.json(settings || {
-        tenantId, libraryId: libraryId ?? null,
+        tenantId: tid, libraryId: libraryId ?? null,
         accessModel: "open", businessAreaColors: {}, userAreaTags: {}, customAssetTypes: [],
       });
     } catch (e: any) {
@@ -103,8 +109,9 @@ export function registerBpmExtensionRoutes(app: Express) {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
-      const settings = await bpmService.upsertPortalSettings({ tenantId, ...req.body });
+      const tid = resolveTenantId(req, res);
+      if (tid == null) return;
+      const settings = await bpmService.upsertPortalSettings({ tenantId: tid, ...req.body });
       res.json(settings);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -127,8 +134,9 @@ export function registerBpmExtensionRoutes(app: Express) {
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
       const { rows, mode = "append", templateId } = req.body;
-      const tenantId = getApiTenantIdWithFallback(req);
-      const result = await bpmService.bulkUpsertBpmlEntries(Number(templateId), tenantId, rows, mode);
+      const tid = resolveTenantId(req, res);
+      if (tid == null) return;
+      const result = await bpmService.bulkUpsertBpmlEntries(Number(templateId), tid, rows, mode);
       res.json(result);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -201,8 +209,9 @@ export function registerBpmExtensionRoutes(app: Express) {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
-      const sub = await bpmService.submitBpmTemplate(Number(req.params.id), tenantId, userId);
+      const tid = resolveTenantId(req, res);
+      if (tid == null) return;
+      const sub = await bpmService.submitBpmTemplate(Number(req.params.id), tid, userId);
       res.status(201).json(sub);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -213,8 +222,9 @@ export function registerBpmExtensionRoutes(app: Express) {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
-      const subs = await bpmService.getBpmTemplateSubmissions(tenantId);
+      const tid = resolveTenantId(req, res);
+      if (tid == null) return;
+      const subs = await bpmService.getBpmTemplateSubmissions(tid);
       res.json(subs);
     } catch (e: any) {
       res.status(500).json({ message: e.message });

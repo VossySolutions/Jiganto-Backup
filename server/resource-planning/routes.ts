@@ -5,10 +5,15 @@ import { effectiveUserId } from "../auth/impersonationRoutes";
 import { requireApiTenantId } from "../lib/api-tenant-id";
 import {
   assertRpAccess,
+  assertRpPersonaAllowed,
   filterRpResponse,
   getRpPersona,
+  resolveAllowedRpPersonas,
   type RpFeature,
+  type RpPersona,
 } from "./persona-access";
+import { resolveUserPermissions } from "../lib/permissions";
+import { resolveResourceScope } from "../resources/permissions";
 import { DEFAULT_TTL_MS, invalidateRpTenantCache, rpCacheKey, rpCached } from "./cache";
 import { demandSupplyMatrixPdf, recruitmentForecastPdf } from "./pdf";
 import {
@@ -60,11 +65,19 @@ function tenantId(req: Request, res: Response): number | null {
   }
 }
 
-function guardRp(req: Request, res: Response, feature: RpFeature): { tid: number; persona: ReturnType<typeof getRpPersona> } | null {
+async function guardRp(req: Request, res: Response, feature: RpFeature): Promise<{ tid: number; persona: RpPersona } | null> {
   if (!requireAuth(req, res)) return null;
   const tid = tenantId(req, res);
   if (tid == null) return null;
   const persona = getRpPersona(req);
+  const userId = getUserId(req);
+  if (!userId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return null;
+  }
+  const perms = await resolveUserPermissions(userId, tid);
+  const resourceScope = await resolveResourceScope(userId, tid, perms.platformRole);
+  if (!assertRpPersonaAllowed(res, persona, perms.platformRole, resourceScope)) return null;
   if (!assertRpAccess(res, persona, feature, req.method)) return null;
   return { tid, persona };
 }
@@ -90,8 +103,25 @@ const bookingSchema = z.object({
 });
 
 export function registerResourcePlanningRoutes(app: Express): void {
+  app.get("/api/resource-planning/personas", async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const tid = tenantId(req, res);
+    if (tid == null) return;
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    try {
+      const perms = await resolveUserPermissions(userId, tid);
+      const resourceScope = await resolveResourceScope(userId, tid, perms.platformRole);
+      const { allowed, defaultPersona } = resolveAllowedRpPersonas(perms.platformRole, resourceScope);
+      res.json({ allowed, defaultPersona });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ message: "Failed to resolve personas" });
+    }
+  });
+
   app.get("/api/resource-planning/dashboard", async (req, res) => {
-    const ctx = guardRp(req, res, "dashboard");
+    const ctx = await guardRp(req, res, "dashboard");
     if (!ctx) return;
     try {
       const data = await rpCached(
@@ -107,7 +137,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.get("/api/resource-planning/demand-supply", async (req, res) => {
-    const ctx = guardRp(req, res, "demand-supply");
+    const ctx = await guardRp(req, res, "demand-supply");
     if (!ctx) return;
     const includePipeline = req.query.includePipeline === "true";
     const practice = String(req.query.practice ?? "all");
@@ -126,7 +156,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.get("/api/resource-planning/demand-supply/export", async (req, res) => {
-    const ctx = guardRp(req, res, "demand-supply");
+    const ctx = await guardRp(req, res, "demand-supply");
     if (!ctx) return;
     const includePipeline = req.query.includePipeline === "true";
     const format = String(req.query.format ?? "csv");
@@ -148,13 +178,13 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.get("/api/resource-planning/ai/insights", async (req, res) => {
-    const ctx = guardRp(req, res, "ai");
+    const ctx = await guardRp(req, res, "ai");
     if (!ctx) return;
     sendFiltered(res, ctx.persona, "ai", await getDailyAiInsights(ctx.tid, ctx.persona));
   });
 
   app.post("/api/resource-planning/bench/:id/assign", async (req, res) => {
-    const ctx = guardRp(req, res, "bench");
+    const ctx = await guardRp(req, res, "bench");
     if (!ctx) return;
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
@@ -169,7 +199,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.post("/api/resource-planning/pipeline/sync", async (req, res) => {
-    const ctx = guardRp(req, res, "pipeline");
+    const ctx = await guardRp(req, res, "pipeline");
     if (!ctx) return;
     const result = await syncPipelineFromCrm(ctx.tid, getUserId(req));
     mutateInvalidate(ctx.tid);
@@ -191,7 +221,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.get("/api/resource-planning/demand-supply/cell", async (req, res) => {
-    const ctx = guardRp(req, res, "demand-supply");
+    const ctx = await guardRp(req, res, "demand-supply");
     if (!ctx) return;
     const skill = String(req.query.skill ?? "");
     const monthIndex = Number(req.query.monthIndex ?? 0);
@@ -203,7 +233,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.get("/api/resource-planning/heatmap", async (req, res) => {
-    const ctx = guardRp(req, res, "heatmap");
+    const ctx = await guardRp(req, res, "heatmap");
     if (!ctx) return;
     const weeks = req.query.weeks ? Number(req.query.weeks) : 16;
     const granularity = (req.query.granularity as "week" | "month" | "quarter") ?? "week";
@@ -221,7 +251,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.get("/api/resource-planning/scheduler", async (req, res) => {
-    const ctx = guardRp(req, res, "scheduler");
+    const ctx = await guardRp(req, res, "scheduler");
     if (!ctx) return;
     const weeks = req.query.weeks ? Number(req.query.weeks) : 16;
     try {
@@ -238,7 +268,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.post("/api/resource-planning/bookings", async (req, res) => {
-    const ctx = guardRp(req, res, "scheduler");
+    const ctx = await guardRp(req, res, "scheduler");
     if (!ctx) return;
     const parsed = bookingSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0]?.message });
@@ -253,7 +283,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.put("/api/resource-planning/bookings/:id", async (req, res) => {
-    const ctx = guardRp(req, res, "scheduler");
+    const ctx = await guardRp(req, res, "scheduler");
     if (!ctx) return;
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
@@ -269,7 +299,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.post("/api/resource-planning/bookings/:id/move", async (req, res) => {
-    const ctx = guardRp(req, res, "scheduler");
+    const ctx = await guardRp(req, res, "scheduler");
     if (!ctx) return;
     const id = Number(req.params.id);
     const resourceId = Number(req.body?.resourceId);
@@ -289,7 +319,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.post("/api/resource-planning/bookings/:id/extend", async (req, res) => {
-    const ctx = guardRp(req, res, "scheduler");
+    const ctx = await guardRp(req, res, "scheduler");
     if (!ctx) return;
     const id = Number(req.params.id);
     const endWeek = Number(req.body?.endWeek);
@@ -308,7 +338,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.post("/api/resource-planning/bookings/:id/promote", async (req, res) => {
-    const ctx = guardRp(req, res, "scheduler");
+    const ctx = await guardRp(req, res, "scheduler");
     if (!ctx) return;
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
@@ -319,7 +349,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.post("/api/resource-planning/pipeline/:id/promote", async (req, res) => {
-    const ctx = guardRp(req, res, "pipeline");
+    const ctx = await guardRp(req, res, "pipeline");
     if (!ctx) return;
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
@@ -329,7 +359,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.delete("/api/resource-planning/bookings/:id", async (req, res) => {
-    const ctx = guardRp(req, res, "scheduler");
+    const ctx = await guardRp(req, res, "scheduler");
     if (!ctx) return;
     const id = Number(req.params.id);
     const ok = await deleteBooking(ctx.tid, id, getUserId(req));
@@ -339,7 +369,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.post("/api/resource-planning/auto-match", async (req, res) => {
-    const ctx = guardRp(req, res, "scheduler");
+    const ctx = await guardRp(req, res, "scheduler");
     if (!ctx) return;
     const { roleName, startDate, endDate } = req.body ?? {};
     if (!roleName || !startDate || !endDate) {
@@ -349,7 +379,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.get("/api/resource-planning/skills-inventory", async (req, res) => {
-    const ctx = guardRp(req, res, "skills");
+    const ctx = await guardRp(req, res, "skills");
     if (!ctx) return;
     const q = String(req.query.q ?? "");
     const data = await rpCached(
@@ -361,7 +391,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.get("/api/resource-planning/pipeline", async (req, res) => {
-    const ctx = guardRp(req, res, "pipeline");
+    const ctx = await guardRp(req, res, "pipeline");
     if (!ctx) return;
     const scenario = (req.query.scenario as "expected" | "best" | "worst") ?? "expected";
     const data = await rpCached(
@@ -373,7 +403,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.get("/api/resource-planning/recruitment", async (req, res) => {
-    const ctx = guardRp(req, res, "recruitment");
+    const ctx = await guardRp(req, res, "recruitment");
     if (!ctx) return;
     const data = await rpCached(
       rpCacheKey(ctx.tid, "recruitment"),
@@ -384,7 +414,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.post("/api/resource-planning/recruitment/:id/status", async (req, res) => {
-    const ctx = guardRp(req, res, "recruitment");
+    const ctx = await guardRp(req, res, "recruitment");
     if (!ctx) return;
     const id = Number(req.params.id);
     const status = String(req.body?.status ?? "in-progress");
@@ -395,7 +425,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.get("/api/resource-planning/recruitment/export", async (req, res) => {
-    const ctx = guardRp(req, res, "recruitment");
+    const ctx = await guardRp(req, res, "recruitment");
     if (!ctx) return;
     const format = String(req.query.format ?? "csv");
     const data = await getRecruitmentForecast(ctx.tid);
@@ -412,7 +442,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.get("/api/resource-planning/bench", async (req, res) => {
-    const ctx = guardRp(req, res, "bench");
+    const ctx = await guardRp(req, res, "bench");
     if (!ctx) return;
     const data = await rpCached(
       rpCacheKey(ctx.tid, "bench"),
@@ -423,7 +453,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.get("/api/resource-planning/scenarios", async (req, res) => {
-    const ctx = guardRp(req, res, "scenarios");
+    const ctx = await guardRp(req, res, "scenarios");
     if (!ctx) return;
     const data = await rpCached(
       rpCacheKey(ctx.tid, "scenarios"),
@@ -434,7 +464,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.post("/api/resource-planning/scenarios", async (req, res) => {
-    const ctx = guardRp(req, res, "scenarios");
+    const ctx = await guardRp(req, res, "scenarios");
     if (!ctx) return;
     const name = String(req.body?.name ?? "").trim();
     if (!name) return res.status(400).json({ message: "name required" });
@@ -444,7 +474,7 @@ export function registerResourcePlanningRoutes(app: Express): void {
   });
 
   app.post("/api/resource-planning/ai/query", async (req, res) => {
-    const ctx = guardRp(req, res, "ai");
+    const ctx = await guardRp(req, res, "ai");
     if (!ctx) return;
     const query = String(req.body?.query ?? "").trim();
     if (!query) return res.status(400).json({ message: "query required" });

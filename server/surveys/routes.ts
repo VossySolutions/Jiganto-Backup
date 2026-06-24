@@ -2,7 +2,7 @@ import type { Express, Request } from "express";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { getApiTenantIdWithFallback } from "../lib/api-tenant-id";
+import { requireApiTenantId } from "../lib/api-tenant-id";
 import { resolveListClientId } from "../lib/list-client-id";
 import { isRequestAuthenticated } from "../auth/supabaseAuth";
 import { storage } from "../storage";
@@ -65,6 +65,13 @@ export function registerSurveyRoutes(app: Express) {
       const survey = await surveyService.getSurveyByToken(req.params.token);
       if (!survey) return res.status(404).json({ message: "Survey not found" });
       if (survey.status !== "active") return res.status(410).json({ message: "Survey is closed" });
+      try {
+        await surveyService.assertSurveyPortalAccess(survey, {
+          userId: isAuth(req) ? userId(req) : null,
+        });
+      } catch (e: unknown) {
+        return res.status(403).json({ message: (e as Error).message });
+      }
       await handleSurveyFileUpload(req, res);
     } catch (e: unknown) { res.status(500).json({ message: (e as Error).message }); }
   });
@@ -75,7 +82,14 @@ export function registerSurveyRoutes(app: Express) {
       const survey = await surveyService.getSurveyByToken(req.params.token);
       if (!survey) return res.status(404).json({ message: "Survey not found" });
       if (survey.status !== "active") return res.status(410).json({ message: "Survey is not active" });
-      const { createdBy, ...pub } = survey as Record<string, unknown>;
+      try {
+        await surveyService.assertSurveyPortalAccess(survey, {
+          userId: isAuth(req) ? userId(req) : null,
+        });
+      } catch (e: unknown) {
+        return res.status(403).json({ message: (e as Error).message });
+      }
+      const { createdBy, distributions: _d, ...pub } = survey as Record<string, unknown>;
       res.json(pub);
     } catch (e: unknown) { res.status(500).json({ message: (e as Error).message }); }
   });
@@ -85,6 +99,13 @@ export function registerSurveyRoutes(app: Express) {
       const survey = await surveyService.getSurveyByToken(req.params.token);
       if (!survey) return res.status(404).json({ message: "Not found" });
       if (!survey.showResultsToRespondents) return res.status(403).json({ message: "Results not shared" });
+      try {
+        await surveyService.assertSurveyPortalAccess(survey, {
+          userId: isAuth(req) ? userId(req) : null,
+        });
+      } catch (e: unknown) {
+        return res.status(403).json({ message: (e as Error).message });
+      }
       const summary = await surveyService.getSurveyResultsSummary(survey.id);
       res.json(summary);
     } catch (e: unknown) { res.status(500).json({ message: (e as Error).message }); }
@@ -96,6 +117,14 @@ export function registerSurveyRoutes(app: Express) {
       if (!survey) return res.status(404).json({ message: "Survey not found" });
       if (survey.status !== "active") return res.status(410).json({ message: "Survey is closed" });
       const { respondentName, respondentEmail, answers, timeSeconds } = req.body;
+      try {
+        await surveyService.assertSurveyPortalAccess(survey, {
+          userId: isAuth(req) ? userId(req) : null,
+          email: respondentEmail,
+        });
+      } catch (e: unknown) {
+        return res.status(403).json({ message: (e as Error).message });
+      }
       const response = await surveyService.submitResponse({
         survey,
         respondentName,
@@ -116,23 +145,34 @@ export function registerSurveyRoutes(app: Express) {
   // ── Public poll portal ──────────────────────────────────────────────────────
   app.get("/api/polls/by-token/:token", async (req, res) => {
     try {
-      const poll = await surveyService.getPollByToken(req.params.token, isAuth(req) ? userId(req) : undefined);
+      const voterSession = typeof req.query.voterSession === "string" ? req.query.voterSession : undefined;
+      const poll = await surveyService.getPollByToken(
+        req.params.token,
+        isAuth(req) ? userId(req) : undefined,
+        voterSession,
+      );
       if (!poll) return res.status(404).json({ message: "Poll not found" });
       res.json(poll);
     } catch (e: unknown) { res.status(500).json({ message: (e as Error).message }); }
   });
 
   app.post("/api/polls/by-token/:token/vote", async (req, res) => {
-    if (!isAuth(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
-      const poll = await surveyService.getPollByToken(req.params.token, userId(req));
+      const voterSession = typeof req.body.voterSession === "string" ? req.body.voterSession : undefined;
+      const authed = isAuth(req);
+      const poll = await surveyService.getPollByToken(req.params.token);
       if (!poll) return res.status(404).json({ message: "Poll not found" });
+      if (!authed && !poll.anonymous) return res.status(401).json({ message: "Sign in to vote on this poll" });
+      if (!authed && poll.anonymous && !voterSession) {
+        return res.status(400).json({ message: "voterSession required for anonymous polls" });
+      }
       const { optionIndexes } = req.body;
       const indexes = Array.isArray(optionIndexes) ? optionIndexes : [Number(req.body.optionIndex)];
       const updated = await surveyService.castPollVote({
         pollId: poll.id,
-        voterId: userId(req),
-        voterName: userName(req),
+        voterId: authed ? userId(req) : undefined,
+        voterName: authed ? userName(req) : undefined,
+        voterSession: authed ? undefined : voterSession,
         optionIndexes: indexes,
       });
       res.json(updated);
@@ -143,7 +183,8 @@ export function registerSurveyRoutes(app: Express) {
   app.get("/api/surveys", async (req, res) => {
     if (!isAuth(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const wsId = workspaceId(req);
       const list = await surveyService.listSurveys(tenantId, wsId);
       res.json(list);
@@ -153,7 +194,8 @@ export function registerSurveyRoutes(app: Express) {
   app.get("/api/surveys/templates", async (req, res) => {
     if (!isAuth(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const templates = await surveyService.listTemplates(tenantId);
       res.json(templates);
     } catch (e: unknown) { res.status(500).json({ message: (e as Error).message }); }
@@ -163,12 +205,10 @@ export function registerSurveyRoutes(app: Express) {
   app.get("/api/surveys/polls", async (req, res) => {
     if (!isAuth(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
-      const polls = await surveyService.listPolls(
-        getApiTenantIdWithFallback(req),
-        workspaceId(req),
-        projectId,
-      );
+      const polls = await surveyService.listPolls(tenantId, workspaceId(req), projectId);
       res.json(polls);
     } catch (e: unknown) { res.status(500).json({ message: (e as Error).message }); }
   });
@@ -176,7 +216,8 @@ export function registerSurveyRoutes(app: Express) {
   app.get("/api/surveys/ai-status", async (req, res) => {
     if (!isAuth(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       const { ensureAiTokenBalance, checkAiTokenAllowance } = await import("../lib/ai-tokens");
       const balance = await ensureAiTokenBalance(tenantId);
@@ -202,10 +243,12 @@ export function registerSurveyRoutes(app: Express) {
   app.post("/api/surveys/polls", async (req, res) => {
     if (!isAuth(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const { question, options, pollType, durationMinutes, anonymous, showResultsToVoters, allowVoteChange, projectId, workspaceId: wsId } = req.body;
       const closeAt = durationMinutes ? new Date(Date.now() + durationMinutes * 60000) : req.body.closeAt ? new Date(req.body.closeAt) : null;
       const poll = await surveyService.createPoll({
-        tenantId: getApiTenantIdWithFallback(req),
+        tenantId,
         workspaceId: wsId ?? workspaceId(req),
         projectId: projectId ?? null,
         question,
@@ -247,7 +290,8 @@ export function registerSurveyRoutes(app: Express) {
   app.post("/api/surveys/ai-generate", async (req, res) => {
     if (!isAuth(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       const { checkAiTokenAllowance, recordAiTokenUsage } = await import("../lib/ai-tokens");
       const check = await checkAiTokenAllowance({ orgId: tenantId, userId: uid, module: "surveys", estimatedTokens: 800 });
@@ -282,9 +326,11 @@ Return JSON: { "questions": [{ "text", "type" (mc|scale|nps|text|para|yn|sc|like
   app.post("/api/surveys/from-template/:id", async (req, res) => {
     if (!isAuth(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const survey = await surveyService.createSurveyFromTemplate({
         templateId: Number(req.params.id),
-        tenantId: getApiTenantIdWithFallback(req),
+        tenantId,
         userId: userId(req),
         userName: userName(req),
         workspaceId: workspaceId(req) ?? req.body.workspaceId ?? null,
@@ -319,7 +365,8 @@ Return JSON: { "questions": [{ "text", "type" (mc|scale|nps|text|para|yn|sc|like
       if (!summary) return res.status(404).json({ message: "Not found" });
       if (summary.completed < 10) return res.status(400).json({ message: "At least 10 responses required for AI analysis" });
 
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const uid = userId(req);
       const { checkAiTokenAllowance, recordAiTokenUsage } = await import("../lib/ai-tokens");
       const check = await checkAiTokenAllowance({ orgId: tenantId, userId: uid, module: "surveys", estimatedTokens: 1200 });
@@ -354,9 +401,11 @@ Return JSON: { "questions": [{ "text", "type" (mc|scale|nps|text|para|yn|sc|like
   app.post("/api/surveys", async (req, res) => {
     if (!isAuth(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const survey = await surveyService.createSurvey({
         ...req.body,
-        tenantId: getApiTenantIdWithFallback(req),
+        tenantId,
         workspaceId: workspaceId(req) ?? req.body.workspaceId ?? null,
         createdBy: userId(req),
         createdByName: userName(req),
@@ -419,7 +468,8 @@ Return JSON: { "questions": [{ "text", "type" (mc|scale|nps|text|para|yn|sc|like
   app.post("/api/surveys/:id/save-template", async (req, res) => {
     if (!isAuth(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
-      const tenantId = getApiTenantIdWithFallback(req);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const tpl = await surveyService.saveAsTemplate({
         surveyId: Number(req.params.id),
         tenantId,
@@ -440,11 +490,13 @@ Return JSON: { "questions": [{ "text", "type" (mc|scale|nps|text|para|yn|sc|like
   app.post("/api/surveys/:id/distribute", async (req, res) => {
     if (!isAuth(req)) return res.status(401).json({ message: "Unauthorized" });
     try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
       const result = await surveyService.distributeSurvey({
         surveyId: Number(req.params.id),
         type: req.body.type ?? "link",
         userId: userId(req),
-        tenantId: getApiTenantIdWithFallback(req),
+        tenantId,
         targetUserIds: req.body.targetUserIds,
         targetEmails: req.body.targetEmails,
         reminderDays: req.body.reminderDays,

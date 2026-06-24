@@ -141,3 +141,33 @@ export async function listHealthSnapshotWeeks(tenantId: number): Promise<string[
     .limit(12);
   return rows.map((r) => r.week);
 }
+
+/** Month-over-month avg health delta from weekly snapshots (current vs ~4 weeks ago). */
+export async function getPortfolioAvgHealthTrend(
+  tenantId: number,
+  currentAvgHealth: number,
+  projectIds?: number[],
+): Promise<number> {
+  const priorDate = new Date();
+  priorDate.setDate(priorDate.getDate() - 28);
+  const priorWeek = weekStartMonday(priorDate);
+
+  const rows = await db
+    .select({
+      projectId: pmHealthMatrixSnapshots.projectId,
+      healthScore: pmHealthMatrixSnapshots.healthScore,
+    })
+    .from(pmHealthMatrixSnapshots)
+    .where(and(eq(pmHealthMatrixSnapshots.tenantId, tenantId), eq(pmHealthMatrixSnapshots.snapshotWeek, priorWeek)));
+
+  const scoped = projectIds?.length
+    ? rows.filter((r) => projectIds.includes(r.projectId))
+    : rows;
+
+  if (!scoped.length) return 0;
+
+  const priorAvg = Math.round(
+    scoped.reduce((sum, row) => sum + (row.healthScore ?? 0), 0) / scoped.length,
+  );
+  return currentAvgHealth - priorAvg;
+}

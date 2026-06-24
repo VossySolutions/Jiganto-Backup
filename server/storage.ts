@@ -346,7 +346,9 @@ export interface IStorage {
 
   // CRM Contact Relationships
   getCrmContactRelationships(contactId: number): Promise<CrmContactRelationship[]>;
+  getCrmContactRelationship(id: number): Promise<CrmContactRelationship | undefined>;
   createCrmContactRelationship(relationship: InsertCrmContactRelationship): Promise<CrmContactRelationship>;
+  updateCrmContactRelationship(id: number, updates: Partial<InsertCrmContactRelationship>): Promise<CrmContactRelationship | undefined>;
   deleteCrmContactRelationship(id: number): Promise<void>;
 
   // CRM Saved Views
@@ -365,6 +367,7 @@ export interface IStorage {
 
   // CRM Email Logs
   getCrmEmailLogs(tenantId: number, entityType?: string, entityId?: number): Promise<CrmEmailLog[]>;
+  getCrmEmailLogsForAccount(tenantId: number, accountId: number): Promise<CrmEmailLog[]>;
   createCrmEmailLog(log: InsertCrmEmailLog): Promise<CrmEmailLog>;
 
   // CRM Forecasts
@@ -428,6 +431,15 @@ export interface IStorage {
   // Opportunity Resource Rows
   getOpportunityResourceRows(planId: number): Promise<OpportunityResourceRow[]>;
   getAllOpportunityResourceRowsWithPlans(tenantId: number): Promise<Array<OpportunityResourceRow & { planId: number; opportunityId: number; opportunityName?: string }>>;
+  getResourcePlanSummaries(tenantId: number): Promise<Array<{
+    opportunityId: number;
+    planCount: number;
+    primaryPlanId: number;
+    primaryPlanName: string | null;
+    currency: string;
+    rowCount: number;
+    totalCost: number;
+  }>>;
   createOpportunityResourceRow(row: InsertOpportunityResourceRow): Promise<OpportunityResourceRow>;
   updateOpportunityResourceRow(id: number, updates: Partial<InsertOpportunityResourceRow>): Promise<OpportunityResourceRow | undefined>;
   deleteOpportunityResourceRow(id: number): Promise<void>;
@@ -2710,9 +2722,19 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(crmContactRelationships).where(eq(crmContactRelationships.contactId, contactId));
   }
 
+  async getCrmContactRelationship(id: number): Promise<CrmContactRelationship | undefined> {
+    const [row] = await db.select().from(crmContactRelationships).where(eq(crmContactRelationships.id, id));
+    return row;
+  }
+
   async createCrmContactRelationship(relationship: InsertCrmContactRelationship): Promise<CrmContactRelationship> {
     const [created] = await db.insert(crmContactRelationships).values(relationship).returning();
     return created;
+  }
+
+  async updateCrmContactRelationship(id: number, updates: Partial<InsertCrmContactRelationship>): Promise<CrmContactRelationship | undefined> {
+    const [updated] = await db.update(crmContactRelationships).set(updates).where(eq(crmContactRelationships.id, id)).returning();
+    return updated;
   }
 
   async deleteCrmContactRelationship(id: number): Promise<void> {
@@ -2775,7 +2797,30 @@ export class DatabaseStorage implements IStorage {
     const conditions = [eq(crmEmailLogs.tenantId, tenantId)];
     if (entityType) conditions.push(eq(crmEmailLogs.entityType, entityType));
     if (entityId) conditions.push(eq(crmEmailLogs.entityId, entityId));
-    return await db.select().from(crmEmailLogs).where(and(...conditions));
+    return await db.select().from(crmEmailLogs).where(and(...conditions)).orderBy(desc(crmEmailLogs.sentAt));
+  }
+
+  async getCrmEmailLogsForAccount(tenantId: number, accountId: number): Promise<CrmEmailLog[]> {
+    const contactRows = await db
+      .select({ id: crmContacts.id })
+      .from(crmContacts)
+      .where(and(eq(crmContacts.tenantId, tenantId), eq(crmContacts.accountId, accountId)));
+    const contactIds = contactRows.map((c) => c.id);
+
+    const entityFilters = [
+      and(eq(crmEmailLogs.entityType, "account"), eq(crmEmailLogs.entityId, accountId)),
+    ];
+    if (contactIds.length > 0) {
+      entityFilters.push(
+        and(eq(crmEmailLogs.entityType, "contact"), inArray(crmEmailLogs.entityId, contactIds)),
+      );
+    }
+
+    return await db
+      .select()
+      .from(crmEmailLogs)
+      .where(and(eq(crmEmailLogs.tenantId, tenantId), or(...entityFilters)))
+      .orderBy(desc(crmEmailLogs.sentAt));
   }
 
   async createCrmEmailLog(log: InsertCrmEmailLog): Promise<CrmEmailLog> {
@@ -3056,6 +3101,82 @@ export class DatabaseStorage implements IStorage {
   // Opportunity Resource Rows
   async getOpportunityResourceRows(planId: number): Promise<OpportunityResourceRow[]> {
     return await db.select().from(opportunityResourceRows).where(eq(opportunityResourceRows.planId, planId)).orderBy(opportunityResourceRows.sortOrder);
+  }
+
+  async getResourcePlanSummaries(tenantId: number): Promise<Array<{
+    opportunityId: number;
+    planCount: number;
+    primaryPlanId: number;
+    primaryPlanName: string | null;
+    currency: string;
+    rowCount: number;
+    totalCost: number;
+  }>> {
+    const plans = await db
+      .select()
+      .from(opportunityResourcePlans)
+      .where(eq(opportunityResourcePlans.tenantId, tenantId))
+      .orderBy(desc(opportunityResourcePlans.createdAt));
+    if (plans.length === 0) return [];
+
+    const planIds = plans.map((p) => p.id);
+    const rows = await db
+      .select()
+      .from(opportunityResourceRows)
+      .where(inArray(opportunityResourceRows.planId, planIds));
+
+    const rowsByPlan = new Map<number, OpportunityResourceRow[]>();
+    for (const row of rows) {
+      const list = rowsByPlan.get(row.planId) ?? [];
+      list.push(row);
+      rowsByPlan.set(row.planId, list);
+    }
+
+    const calcRowCost = (row: OpportunityResourceRow): number => {
+      const start = row.startDate ? String(row.startDate).slice(0, 10) : "";
+      const end = row.endDate ? String(row.endDate).slice(0, 10) : "";
+      if (!start || !end) return 0;
+      const daysPerWeek = Number(row.daysPerWeek) || 5;
+      const dailyRate = Number(row.dailyRate) || 0;
+      const discountPercent = Number(row.discountPercent) || 0;
+      const weeks = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / (7 * 86400000)));
+      const days = Math.max(0, Math.round(weeks * daysPerWeek));
+      return Math.round(days * dailyRate * (1 - discountPercent / 100));
+    };
+
+    const plansByOpp = new Map<number, typeof plans>();
+    for (const plan of plans) {
+      const list = plansByOpp.get(plan.opportunityId) ?? [];
+      list.push(plan);
+      plansByOpp.set(plan.opportunityId, list);
+    }
+
+    const summaries: Array<{
+      opportunityId: number;
+      planCount: number;
+      primaryPlanId: number;
+      primaryPlanName: string | null;
+      currency: string;
+      rowCount: number;
+      totalCost: number;
+    }> = [];
+
+    for (const [opportunityId, oppPlans] of plansByOpp) {
+      const primaryPlan = oppPlans[0];
+      const planRows = rowsByPlan.get(primaryPlan.id) ?? [];
+      if (planRows.length === 0) continue;
+      summaries.push({
+        opportunityId,
+        planCount: oppPlans.length,
+        primaryPlanId: primaryPlan.id,
+        primaryPlanName: primaryPlan.planName,
+        currency: primaryPlan.currency || "GBP",
+        rowCount: planRows.length,
+        totalCost: planRows.reduce((sum, row) => sum + calcRowCost(row), 0),
+      });
+    }
+
+    return summaries.sort((a, b) => b.totalCost - a.totalCost);
   }
 
   async getAllOpportunityResourceRowsWithPlans(tenantId: number): Promise<Array<OpportunityResourceRow & { planId: number; opportunityId: number; opportunityName?: string }>> {
@@ -7436,6 +7557,10 @@ export class DatabaseStorage implements IStorage {
 
   async getTmTestResults(testRunId: number): Promise<TmTestResult[]> {
     return await db.select().from(tmTestResults).where(eq(tmTestResults.testRunId, testRunId));
+  }
+  async getTmTestResultsForRuns(runIds: number[]): Promise<TmTestResult[]> {
+    if (runIds.length === 0) return [];
+    return await db.select().from(tmTestResults).where(inArray(tmTestResults.testRunId, runIds));
   }
   async createTmTestResult(data: InsertTmTestResult): Promise<TmTestResult> {
     const [row] = await db.insert(tmTestResults).values(data).returning();

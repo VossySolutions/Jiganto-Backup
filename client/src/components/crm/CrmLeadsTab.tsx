@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
+import { FormDialogShell } from "@/components/ui/form-dialog-shell";
+import { LeadFormDialog } from "./LeadFormDialog";
+import { LeadDetailSheet, type CrmLead } from "./LeadDetailSheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -21,33 +22,15 @@ import {
   UserCheck, ChevronDown, X, MoreHorizontal, Pencil
 } from "lucide-react";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
-import { Textarea } from "@/components/ui/textarea";
-import { CrmCustomFieldsForm } from "./CrmCustomFieldsForm";
 import { CrmCustomFieldTableHeaders, CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
 import { useCrmUsers } from "./CrmUsersProvider";
-import { CrmOwnerSelect } from "./CrmOwnerSelect";
 import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
-
-type CrmLead = {
-  id: number;
-  tenantId: number;
-  firstName: string;
-  lastName: string;
-  email: string | null;
-  company: string | null;
-  title?: string | null;
-  source: string | null;
-  status: string;
-  score: number | null;
-  rating?: string | null;
-  ownerUserId: string | null;
-  customData?: Record<string, unknown> | null;
-  createdAt: string;
-};
 
 interface CrmLeadsTabProps {
   leads: CrmLead[];
   searchTerm: string;
+  onNavigateToTab?: (tab: string) => void;
+  onOpenCustomFieldsSettings?: () => void;
 }
 
 function getTemperature(score: number | null): "hot" | "warm" | "cold" {
@@ -184,12 +167,13 @@ function StatusDot({ status }: { status: string }) {
   );
 }
 
-export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
+export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFieldsSettings }: CrmLeadsTabProps) {
   const { users, resolveOwner } = useCrmUsers();
   const { fields: customFields } = useCrmCustomFields("lead");
   const tableColSpan = 11 + customFields.length;
-  const [isOpen, setIsOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<CrmLead | null>(null);
+  const [viewingLead, setViewingLead] = useState<CrmLead | null>(null);
   const [isConvertOpen, setIsConvertOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<CrmLead | null>(null);
   const [temperatureFilter, setTemperatureFilter] = useState<"all" | "hot" | "warm" | "cold">("all");
@@ -210,9 +194,6 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
     opportunityName: "",
     opportunityAmount: ""
   });
-  const EMPTY_LEAD_FORM = { firstName: "", lastName: "", email: "", phone: "", company: "", title: "", industry: "", website: "", description: "", source: "", status: "new", score: "", rating: "", ownerUserId: "" };
-  const [formData, setFormData] = useState(EMPTY_LEAD_FORM);
-  const [customData, setCustomData] = useState<Record<string, unknown>>({});
   const [importOpen, setImportOpen] = useState(false);
   const { toast } = useToast();
 
@@ -226,40 +207,37 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
     onError: () => toast({ title: "Import failed", variant: "destructive" }),
   });
 
-  const createMutation = useMutation({
-    mutationFn: (data: typeof formData) => apiRequest("POST", "/api/crm/leads", { ...data, score: data.score ? parseInt(data.score) : 0, rating: data.rating || null, customData }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads"] });
-      setIsOpen(false);
-      setFormData(EMPTY_LEAD_FORM);
-      setCustomData({});
-      toast({ title: "Lead created successfully" });
-    },
-    onError: () => toast({ title: "Failed to create lead", variant: "destructive" }),
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, updates }: { id: number; updates: Record<string, unknown> }) =>
-      apiRequest("PUT", `/api/crm/leads/${id}`, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads"] });
-      toast({ title: "Lead updated" });
-    },
-    onError: () => toast({ title: "Failed to update lead", variant: "destructive" }),
-  });
-
   const convertMutation = useMutation({
-    mutationFn: ({ id, options }: { id: number; options: typeof convertOptions }) =>
-      apiRequest("POST", `/api/crm/leads/${id}/convert`, options),
-    onSuccess: () => {
+    mutationFn: async ({ id, options }: { id: number; options: typeof convertOptions }) => {
+      const res = await apiRequest("POST", `/api/crm/leads/${id}/convert`, options);
+      return res.json() as Promise<{ opportunityId?: number | null; accountId?: number | null }>;
+    },
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/leads"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crm/accounts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crm/opportunities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/dashboard-stats"] });
       setIsConvertOpen(false);
       setSelectedLead(null);
       setConvertOptions({ createAccount: true, createContact: true, createOpportunity: true, accountName: "", opportunityName: "", opportunityAmount: "" });
-      toast({ title: "Lead converted successfully", description: "Account, contact, and opportunity created" });
+
+      const createdOpp = variables.options.createOpportunity && result.opportunityId;
+      if (createdOpp) {
+        onNavigateToTab?.("opportunities");
+        toast({
+          title: "Lead converted",
+          description: "The new opportunity is ready in the Opportunities tab.",
+        });
+      } else if (variables.options.createAccount && result.accountId) {
+        onNavigateToTab?.("customers");
+        toast({
+          title: "Lead converted",
+          description: "The new account is ready in the Customers tab.",
+        });
+      } else {
+        toast({ title: "Lead converted successfully" });
+      }
     },
     onError: () => toast({ title: "Failed to convert lead", variant: "destructive" }),
   });
@@ -284,25 +262,13 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
   });
 
   const handleEdit = (lead: CrmLead) => {
-    setEditingId(lead.id);
-    setFormData({
-      firstName: lead.firstName,
-      lastName: lead.lastName,
-      email: lead.email || "",
-      phone: (lead as CrmLead & { phone?: string }).phone || "",
-      company: lead.company || "",
-      title: (lead as CrmLead & { title?: string }).title || "",
-      industry: (lead as CrmLead & { industry?: string }).industry || "",
-      website: (lead as CrmLead & { website?: string }).website || "",
-      description: (lead as CrmLead & { description?: string }).description || "",
-      source: lead.source || "",
-      status: lead.status,
-      score: lead.score != null ? String(lead.score) : "",
-      rating: lead.rating || "",
-      ownerUserId: lead.ownerUserId || "",
-    });
-    setCustomData((lead.customData as Record<string, unknown>) || {});
-    setIsOpen(true);
+    setEditingLead(lead);
+    setFormOpen(true);
+  };
+
+  const openCreateForm = () => {
+    setEditingLead(null);
+    setFormOpen(true);
   };
 
   const handleConvert = (lead: CrmLead) => {
@@ -479,7 +445,14 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
               {companyInitials}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold truncate max-w-[200px]">{companyName}</p>
+              <button
+                type="button"
+                onClick={() => setViewingLead(lead)}
+                className="text-sm font-semibold truncate max-w-[200px] text-left text-[#0ea5e9] hover:underline"
+                data-testid={`link-lead-company-${lead.id}`}
+              >
+                {companyName}
+              </button>
               <p className="text-xs text-muted-foreground">Lead</p>
             </div>
           </div>
@@ -754,16 +727,16 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
-                "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                "inline-flex items-center justify-center h-9 w-9 rounded-lg border transition-colors",
                 groupBy !== "none"
                   ? "bg-[#0ea5e9]/10 border-[#0ea5e9]/30 text-[#0ea5e9]"
                   : "border-border bg-background text-foreground hover:bg-muted"
               )}
+              title={groupBy === "none" ? "Group" : `Grouped by ${groupBy}`}
+              aria-label={groupBy === "none" ? "Group leads" : `Grouped by ${groupBy}`}
               data-testid="button-group"
             >
-              <Layers className="h-3.5 w-3.5" />
-              {groupBy === "none" ? "Group" : `Group: ${groupBy.charAt(0).toUpperCase() + groupBy.slice(1)}`}
-              <ChevronDown className="h-3 w-3" />
+              <Layers className="h-4 w-4" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -816,164 +789,12 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
           onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
         />
 
-        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setEditingId(null); setFormData(EMPTY_LEAD_FORM); setCustomData({}); } }}>
-          <DialogTrigger asChild>
-            <Button className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white gap-1.5" data-testid="button-add-lead">
-              <Plus className="h-4 w-4" />
-              New Lead
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <SubmitForm
-              onSubmit={() => {
-                if (editingId) {
-                  updateMutation.mutate({ id: editingId, updates: { ...formData, score: formData.score ? parseInt(formData.score) : 0, rating: formData.rating || null, customData } });
-                  setIsOpen(false);
-                  setEditingId(null);
-                  setFormData(EMPTY_LEAD_FORM);
-                  setCustomData({});
-                } else {
-                  createMutation.mutate(formData);
-                }
-              }}
-              disabled={!formData.firstName || !formData.lastName || createMutation.isPending || updateMutation.isPending}
-            >
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Lead" : "Create New Lead"}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="firstName">First Name *</Label>
-                  <Input
-                    id="firstName"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                    data-testid="input-lead-firstName"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="lastName">Last Name *</Label>
-                  <Input
-                    id="lastName"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                    data-testid="input-lead-lastName"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  data-testid="input-lead-email"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="company">Company</Label>
-                  <Input id="company" value={formData.company} onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))} data-testid="input-lead-company" />
-                </div>
-                <div>
-                  <Label htmlFor="title">Title</Label>
-                  <Input id="title" value={formData.title} onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))} data-testid="input-lead-title" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input id="phone" value={formData.phone} onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))} data-testid="input-lead-phone" />
-                </div>
-                <div>
-                  <Label htmlFor="score">Lead Score</Label>
-                  <Input id="score" type="number" min={0} max={100} value={formData.score} onChange={(e) => setFormData(prev => ({ ...prev, score: e.target.value }))} data-testid="input-lead-score" />
-                </div>
-              </div>
-              <div>
-                <Label>Rating</Label>
-                <Select value={formData.rating || "none"} onValueChange={(v) => setFormData(prev => ({ ...prev, rating: v === "none" ? "" : v }))}>
-                  <SelectTrigger data-testid="select-lead-rating"><SelectValue placeholder="Select rating" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="hot">Hot</SelectItem>
-                    <SelectItem value="warm">Warm</SelectItem>
-                    <SelectItem value="cold">Cold</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="industry">Industry</Label>
-                  <Input id="industry" value={formData.industry} onChange={(e) => setFormData(prev => ({ ...prev, industry: e.target.value }))} data-testid="input-lead-industry" />
-                </div>
-                <div>
-                  <Label htmlFor="website">Website</Label>
-                  <Input id="website" value={formData.website} onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))} data-testid="input-lead-website" />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="source">Lead Source</Label>
-                <Select value={formData.source} onValueChange={(v) => setFormData(prev => ({ ...prev, source: v }))}>
-                  <SelectTrigger data-testid="select-lead-source">
-                    <SelectValue placeholder="Select source" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="inbound">Inbound</SelectItem>
-                    <SelectItem value="referral">Referral</SelectItem>
-                    <SelectItem value="linkedin">LinkedIn</SelectItem>
-                    <SelectItem value="web">Web</SelectItem>
-                    <SelectItem value="event">Event</SelectItem>
-                    <SelectItem value="cold_email">Cold Email</SelectItem>
-                    <SelectItem value="cold_call">Cold Call</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Status</Label>
-                <Select value={formData.status} onValueChange={(v) => setFormData(prev => ({ ...prev, status: v }))}>
-                  <SelectTrigger data-testid="select-lead-status"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="new">New</SelectItem>
-                    <SelectItem value="contacted">Contacted</SelectItem>
-                    <SelectItem value="qualified">Qualified</SelectItem>
-                    <SelectItem value="unqualified">Unqualified</SelectItem>
-                    <SelectItem value="converted">Converted</SelectItem>
-                    <SelectItem value="lost">Lost</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <CrmOwnerSelect
-                value={formData.ownerUserId}
-                onChange={(v) => setFormData(prev => ({ ...prev, ownerUserId: v }))}
-                testId="select-lead-owner"
-              />
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Textarea id="description" value={formData.description} onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))} rows={2} data-testid="input-lead-description" />
-              </div>
-              <CrmCustomFieldsForm entityType="lead" values={customData} onChange={(k, v) => setCustomData(prev => ({ ...prev, [k]: v }))} />
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline" data-testid="button-cancel-lead">Cancel</Button>
-              </DialogClose>
-              <Button
-                type="submit"
-                disabled={!formData.firstName || !formData.lastName || createMutation.isPending || updateMutation.isPending}
-                data-testid="button-save-lead"
-              >
-                {editingId
-                  ? (updateMutation.isPending ? "Updating..." : "Update Lead")
-                  : (createMutation.isPending ? "Creating..." : "Create Lead")}
-              </Button>
-            </DialogFooter>
-            </SubmitForm>
-          </DialogContent>
-        </Dialog>
+        {filteredLeads.length > 0 && (
+        <Button className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white gap-1.5" data-testid="button-add-lead" onClick={openCreateForm}>
+          <Plus className="h-4 w-4" />
+          New Lead
+        </Button>
+        )}
       </div>
 
       <div className="rounded-xl border border-border/60 bg-card overflow-x-auto w-full" data-testid="leads-table">
@@ -1010,7 +831,7 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
                     <Button
                       size="sm"
                       className="mt-2 bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
-                      onClick={() => setIsOpen(true)}
+                      onClick={openCreateForm}
                     >
                       <Plus className="h-4 w-4 mr-1" />
                       New Lead
@@ -1062,19 +883,23 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
         )}
       </div>
 
-      <Dialog open={isConvertOpen} onOpenChange={setIsConvertOpen}>
-        <DialogContent className="max-w-md">
-          <SubmitForm
-            onSubmit={() => {
-              if (selectedLead) {
-                convertMutation.mutate({ id: selectedLead.id, options: convertOptions });
-              }
-            }}
-            disabled={convertMutation.isPending}
-          >
-          <DialogHeader>
-            <DialogTitle>Convert Lead</DialogTitle>
-          </DialogHeader>
+      <FormDialogShell
+        open={isConvertOpen}
+        onOpenChange={setIsConvertOpen}
+        title="Convert Lead"
+        subtitle="Create account/contact/opportunity records"
+        saveLabel={convertMutation.isPending ? "Converting..." : "Convert Lead"}
+        onCancel={() => setIsConvertOpen(false)}
+        onSubmit={() => {
+          if (selectedLead) {
+            convertMutation.mutate({ id: selectedLead.id, options: convertOptions });
+          }
+        }}
+        saving={convertMutation.isPending}
+        disabled={false}
+        saveTestId="button-confirm-convert"
+        size="md"
+      >
           {selectedLead && (
             <div className="space-y-4 py-4">
               <div className="p-3 bg-muted rounded-lg flex items-center gap-3">
@@ -1167,22 +992,50 @@ export function CrmLeadsTab({ leads, searchTerm }: CrmLeadsTabProps) {
               </div>
             </div>
           )}
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline" data-testid="button-cancel-convert">Cancel</Button>
-            </DialogClose>
-            <Button
-              type="submit"
-              disabled={convertMutation.isPending}
-              className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
-              data-testid="button-confirm-convert"
-            >
-              {convertMutation.isPending ? "Converting..." : "Convert Lead"}
-            </Button>
-          </DialogFooter>
-          </SubmitForm>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
+
+      <LeadFormDialog
+        open={formOpen}
+        onClose={() => { setFormOpen(false); setEditingLead(null); }}
+        editing={editingLead ? {
+          id: editingLead.id,
+          firstName: editingLead.firstName,
+          lastName: editingLead.lastName,
+          email: editingLead.email ?? "",
+          phone: editingLead.phone ?? "",
+          company: editingLead.company ?? "",
+          title: editingLead.title ?? "",
+          industry: editingLead.industry ?? "",
+          website: editingLead.website ?? "",
+          description: editingLead.description ?? "",
+          source: editingLead.source ?? "",
+          status: editingLead.status,
+          score: editingLead.score,
+          rating: editingLead.rating ?? "",
+          ownerUserId: editingLead.ownerUserId ?? "",
+          customData: editingLead.customData,
+          createdAt: editingLead.createdAt,
+          updatedAt: editingLead.updatedAt,
+        } : null}
+        onOpenCustomFieldsSettings={() => {
+          setFormOpen(false);
+          setEditingLead(null);
+          onOpenCustomFieldsSettings?.();
+        }}
+      />
+
+      <LeadDetailSheet
+        lead={viewingLead}
+        open={!!viewingLead}
+        onClose={() => setViewingLead(null)}
+        onEdit={handleEdit}
+        onConvert={handleConvert}
+        companyColor={viewingLead ? getColorForName(viewingLead.company || `${viewingLead.firstName} ${viewingLead.lastName}`) : "#3b82f6"}
+        companyInitials={viewingLead ? getInitials(viewingLead.company || `${viewingLead.firstName} ${viewingLead.lastName}`) : "?"}
+        ownerName={viewingLead ? resolveOwner(viewingLead.ownerUserId).name : "—"}
+        statusLabel={viewingLead ? <StatusDot status={viewingLead.status} /> : null}
+        temperatureLabel={viewingLead ? <TemperatureDisplay score={viewingLead.score} temperature={getTemperature(viewingLead.score)} /> : null}
+      />
     </div>
   );
 }

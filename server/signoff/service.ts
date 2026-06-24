@@ -264,6 +264,22 @@ export async function createRequest(params: {
   let fileName = (requestData.fileName as string) ?? null;
   let fileType = (requestData.fileType as string) ?? null;
   let fileData = (requestData.fileData as string) ?? null;
+  let contentHtml = (requestData.contentHtml as string) ?? null;
+  const sourceDocumentId = (requestData.sourceDocumentId as number) ?? null;
+
+  if (sourceDocumentId && !fileData) {
+    const [doc] = await db.select({
+      id: documents.id,
+      title: documents.title,
+      content: documents.content,
+    }).from(documents).where(eq(documents.id, sourceDocumentId)).limit(1);
+    if (doc) {
+      contentHtml = contentHtml || doc.content || `<h1>${doc.title}</h1>`;
+      fileName = fileName || `${doc.title}.html`;
+      fileType = fileType || "html";
+      requestData.sourceType = "jiganto_doc";
+    }
+  }
 
   const signatureLevel = (requestData.signatureLevel as string) === "ades" ? "ades" : "ses";
   if (signatureLevel === "ades" && !isAdesAvailable()) {
@@ -290,7 +306,7 @@ export async function createRequest(params: {
     title: (requestData.title as string) || "Untitled",
     description: (requestData.description as string) ?? null,
     sourceType: (requestData.sourceType as string) || "upload",
-    sourceDocumentId: (requestData.sourceDocumentId as number) ?? null,
+    sourceDocumentId: sourceDocumentId,
     templateId: (requestData.templateId as number) ?? null,
     projectId: (requestData.projectId as number) ?? null,
     deliverableId: (requestData.deliverableId as number) ?? null,
@@ -300,7 +316,7 @@ export async function createRequest(params: {
     fileName,
     fileType,
     fileData,
-    contentHtml: (requestData.contentHtml as string) ?? null,
+    contentHtml: contentHtml ?? null,
     message: (requestData.message as string) ?? null,
     signingOrder: (requestData.signingOrder as string) || "sequential",
     deadline: (requestData.deadline as string) || defaultDeadline(),

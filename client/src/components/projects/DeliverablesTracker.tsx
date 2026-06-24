@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { PmDeliverablePhase, PmDeliverable } from "@shared/models/projects";
 import {
@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import {
@@ -205,12 +206,22 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
 
   const { data: phases = [], isLoading: phasesLoading } = useQuery<PmDeliverablePhase[]>({
     queryKey: ["/api/pm/projects", projectId, "deliverable-phases"],
-    queryFn: () => fetch(`/api/pm/projects/${projectId}/deliverable-phases`).then(r => r.json()),
+    queryFn: async () => {
+      const res = await fetchWithAuth(`/api/pm/projects/${projectId}/deliverable-phases`);
+      if (!res.ok) throw new Error("Failed to load deliverable phases");
+      return res.json();
+    },
+    staleTime: 30_000,
   });
 
   const { data: deliverables = [], isLoading: delsLoading } = useQuery<PmDeliverable[]>({
     queryKey: ["/api/pm/projects", projectId, "deliverables"],
-    queryFn: () => fetch(`/api/pm/projects/${projectId}/deliverables`).then(r => r.json()),
+    queryFn: async () => {
+      const res = await fetchWithAuth(`/api/pm/projects/${projectId}/deliverables`);
+      if (!res.ok) throw new Error("Failed to load deliverables");
+      return res.json();
+    },
+    staleTime: 30_000,
   });
 
   const invalidateAll = () => {
@@ -231,7 +242,7 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
   });
 
   const applyTemplateMut = useMutation({
-    mutationFn: (data: { template: string; tenantId: number }) =>
+    mutationFn: (data: { template: string }) =>
       apiRequest("POST", `/api/pm/projects/${projectId}/deliverable-phases/template`, data),
     onSuccess: invalidateAll,
   });
@@ -419,7 +430,6 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
       await updateDelMut.mutateAsync({ id: editDelId, data });
     } else {
       data.projectId = projectId;
-      data.tenantId = 1;
       data.version = 1;
       data.auditLog = [];
       await createDelMut.mutateAsync(data);
@@ -529,7 +539,6 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
       }
 
       const phasesToSave = tempPhases.map((tp, i) => ({
-        tenantId: 1,
         projectId,
         name: tp.name,
         color: tp.color,
@@ -720,7 +729,7 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
     for (const r of importRows) {
       if (r.phaseName && !createdPhaseNames.has(r.phaseName)) {
         const c = PHASE_PAL[createdPhaseNames.size % PHASE_PAL.length];
-        await createPhaseMut.mutateAsync({ tenantId: 1, projectId, name: r.phaseName, color: c, sortOrder: createdPhaseNames.size });
+        await createPhaseMut.mutateAsync({ projectId, name: r.phaseName, color: c, sortOrder: createdPhaseNames.size });
         createdPhaseNames.add(r.phaseName);
       }
       const key = `${r.name}|||${r.phaseName || ""}`;
@@ -732,7 +741,6 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
       await createDelMut.mutateAsync({
         ...r,
         projectId,
-        tenantId: 1,
       });
     }
     const imported = importRows.length - skipped;
@@ -956,80 +964,95 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
       </div>
 
       {/* Add/Edit Modal */}
-      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="max-w-[660px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle data-testid="text-modal-title">{editDelId ? "Edit Deliverable" : "Add Deliverable"}</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-3.5">
-            <div className="col-span-2 space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Deliverable Name</label>
-              <Input value={formName} onChange={e => setFormName(e.target.value)} placeholder="e.g. Business Requirements Document" data-testid="input-deliverable-name" />
-            </div>
+      <FormDialogShell
+        open={showAddModal}
+        onOpenChange={setShowAddModal}
+        onCancel={() => setShowAddModal(false)}
+        onSubmit={saveDeliverable}
+        title={editDelId ? "Edit Deliverable" : "Add Deliverable"}
+        saveLabel="Save Deliverable"
+        saveTestId="button-save-deliverable"
+        size="lg"
+      >
+        <FormSection title="Deliverable details" icon={<span className="h-2 w-2 rounded-full bg-blue-500" />}>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Deliverable Name</FieldLabel>
+            <Input value={formName} onChange={e => setFormName(e.target.value)} placeholder="e.g. Business Requirements Document" data-testid="input-deliverable-name" />
+          </div>
+          <FieldGrid className="mb-3.5">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Phase</label>
+              <FieldLabel>Phase</FieldLabel>
               <select className="w-full h-9 px-3 border rounded-lg bg-background text-[13px] outline-none" value={formPhase} onChange={e => setFormPhase(e.target.value)} data-testid="select-deliverable-phase">
                 {phases.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Type</label>
+              <FieldLabel>Type</FieldLabel>
               <select className="w-full h-9 px-3 border rounded-lg bg-background text-[13px] outline-none" value={formType} onChange={e => setFormType(e.target.value)} data-testid="select-deliverable-type">
                 {DELIVERABLE_TYPES.map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
+          </FieldGrid>
+          <FieldGrid className="mb-3.5">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Status</label>
+              <FieldLabel>Status</FieldLabel>
               <select className="w-full h-9 px-3 border rounded-lg bg-background text-[13px] outline-none" value={formStatus} onChange={e => setFormStatus(e.target.value)} data-testid="select-deliverable-status">
                 {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">RAG</label>
+              <FieldLabel>RAG</FieldLabel>
               <select className="w-full h-9 px-3 border rounded-lg bg-background text-[13px] outline-none" value={formRag} onChange={e => setFormRag(e.target.value)} data-testid="select-deliverable-rag">
                 {RAG_OPTIONS.map(r => <option key={r}>{r}</option>)}
               </select>
             </div>
+          </FieldGrid>
+          <FieldGrid>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Due Date</label>
+              <FieldLabel>Due Date</FieldLabel>
               <Input type="date" value={formDue} onChange={e => setFormDue(e.target.value)} data-testid="input-deliverable-due" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Progress %</label>
+              <FieldLabel>Progress %</FieldLabel>
               <div className="flex items-center gap-2">
                 <input type="range" className="flex-1 accent-blue-600" min={0} max={100} value={formProg} onChange={e => setFormProg(Number(e.target.value))} data-testid="input-deliverable-progress" />
                 <span className="text-xs text-muted-foreground w-8">{formProg}%</span>
               </div>
             </div>
-            <div className="col-span-2">
-              <PeopleEditor label="Owners" hint="responsible for authoring & delivering" people={formOwners} onChange={setFormOwners} />
-            </div>
-            <div className="col-span-2">
-              <PeopleEditor label="Reviewers" hint="review content before approval" people={formReviewers} onChange={setFormReviewers} />
-            </div>
-            <div className="col-span-2">
-              <PeopleEditor label="Approvers" hint="formal sign-off required from each" people={formApprovers} onChange={setFormApprovers} />
-            </div>
-            <div className="col-span-2 space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Notes</label>
-              <Textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="Optional context, links, blockers…" data-testid="input-deliverable-notes" />
-            </div>
+          </FieldGrid>
+        </FormSection>
+
+        <FormDivider />
+
+        <FormSection title="Stakeholders & notes" icon={<span className="h-2 w-2 rounded-full bg-emerald-500" />}>
+          <div className="mb-3.5">
+            <PeopleEditor label="Owners" hint="responsible for authoring & delivering" people={formOwners} onChange={setFormOwners} />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddModal(false)} data-testid="button-cancel-deliverable">Cancel</Button>
-            <Button onClick={saveDeliverable} data-testid="button-save-deliverable">Save Deliverable</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="mb-3.5">
+            <PeopleEditor label="Reviewers" hint="review content before approval" people={formReviewers} onChange={setFormReviewers} />
+          </div>
+          <div className="mb-3.5">
+            <PeopleEditor label="Approvers" hint="formal sign-off required from each" people={formApprovers} onChange={setFormApprovers} />
+          </div>
+          <div className="space-y-1.5">
+            <FieldLabel>Notes</FieldLabel>
+            <Textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="Optional context, links, blockers…" data-testid="input-deliverable-notes" />
+          </div>
+        </FormSection>
+      </FormDialogShell>
 
       {/* Review Modal */}
-      <Dialog open={showReviewModal} onOpenChange={setShowReviewModal}>
-        <DialogContent className="max-w-[580px]">
-          <DialogHeader>
-            <DialogTitle data-testid="text-review-title">
-              {reviewDelId ? `Review: ${deliverables.find(d => d.id === reviewDelId)?.name}` : "Review Deliverable"}
-            </DialogTitle>
-          </DialogHeader>
+      <FormDialogShell
+        open={showReviewModal}
+        onOpenChange={setShowReviewModal}
+        onCancel={() => setShowReviewModal(false)}
+        onSubmit={() => submitReview("approve")}
+        title={reviewDelId ? `Review: ${deliverables.find(d => d.id === reviewDelId)?.name}` : "Review Deliverable"}
+        saveLabel="Approve"
+        saveTestId="button-review-approve"
+        size="md"
+      >
+        <FormSection title="Review details" icon={<span className="h-2 w-2 rounded-full bg-amber-500" />}>
           {reviewDelId && (() => {
             const del = deliverables.find(d => d.id === reviewDelId);
             if (!del) return null;
@@ -1041,11 +1064,11 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
                   Approvers: {((del.approvers as string[]) || []).join(", ") || "None set"}
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Your Name / Initials</label>
+                  <FieldLabel>Your Name / Initials</FieldLabel>
                   <Input value={reviewWho} onChange={e => setReviewWho(e.target.value)} placeholder="e.g. AB" data-testid="input-review-who" />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Comment</label>
+                  <FieldLabel>Comment</FieldLabel>
                   <Textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)} placeholder="Add a note, feedback, or approval comment…" data-testid="input-review-comment" />
                 </div>
                 <div>
@@ -1055,14 +1078,12 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
               </div>
             );
           })()}
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowReviewModal(false)} data-testid="button-cancel-review">Cancel</Button>
+          <div className="flex flex-wrap gap-2 pt-2">
             <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => submitReview("comment")} data-testid="button-review-comment">💬 Comment</Button>
             <Button variant="destructive" onClick={() => submitReview("changes")} data-testid="button-review-changes">🔴 Request Changes</Button>
-            <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => submitReview("approve")} data-testid="button-review-approve">✅ Approve</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </FormSection>
+      </FormDialogShell>
 
       {/* Audit Trail Modal */}
       <Dialog open={showAuditModal} onOpenChange={setShowAuditModal}>
@@ -1089,11 +1110,18 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
       </Dialog>
 
       {/* Phase Manager Modal */}
-      <Dialog open={showPhaseModal} onOpenChange={(open) => { if (!savingPhases) setShowPhaseModal(open); }}>
-        <DialogContent className="max-w-[580px] max-h-[85vh] flex flex-col">
-          <DialogHeader className="shrink-0">
-            <DialogTitle>⚙️ Manage Phases</DialogTitle>
-          </DialogHeader>
+      <FormDialogShell
+        open={showPhaseModal}
+        onOpenChange={(open) => { if (!savingPhases) setShowPhaseModal(open); }}
+        onCancel={() => setShowPhaseModal(false)}
+        onSubmit={savePhases}
+        title="Manage Phases"
+        saveLabel={savingPhases ? "Saving..." : "Save Phases"}
+        saving={savingPhases}
+        saveTestId="button-save-phases"
+        size="md"
+      >
+        <FormSection title="Phase configuration" icon={<span className="h-2 w-2 rounded-full bg-violet-500" />}>
           <div className="flex flex-col gap-4 overflow-hidden min-h-0">
             <p className="text-[13px] text-muted-foreground shrink-0">Choose a template or customise. Drag to reorder.</p>
             <div className="shrink-0">
@@ -1154,25 +1182,22 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
               </button>
             </div>
           </div>
-          <DialogFooter className="shrink-0">
-            <Button variant="outline" onClick={() => setShowPhaseModal(false)} disabled={savingPhases} data-testid="button-cancel-phases">Cancel</Button>
-            <Button onClick={savePhases} disabled={savingPhases} data-testid="button-save-phases">
-              {savingPhases ? (
-                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Saving...</>
-              ) : (
-                "Save Phases"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </FormSection>
+      </FormDialogShell>
 
       {/* Import Modal */}
-      <Dialog open={showImportModal} onOpenChange={setShowImportModal}>
-        <DialogContent className="max-w-[700px]">
-          <DialogHeader>
-            <DialogTitle>⬆ Import Deliverables</DialogTitle>
-          </DialogHeader>
+      <FormDialogShell
+        open={showImportModal}
+        onOpenChange={setShowImportModal}
+        onCancel={() => setShowImportModal(false)}
+        onSubmit={confirmImport}
+        title="Import Deliverables"
+        saveLabel={`Add ${importRows.length} Deliverables`}
+        disabled={importRows.length === 0 || importTab !== "upload"}
+        saveTestId="button-confirm-import"
+        size="xl"
+      >
+        <FormSection title="Import options" icon={<span className="h-2 w-2 rounded-full bg-cyan-500" />}>
           <div>
             <div className="flex border-b mb-5">
               <button className={`px-5 py-2 text-[13px] font-semibold border-b-[2.5px] -mb-px transition ${importTab === "upload" ? "text-blue-600 border-blue-600" : "text-muted-foreground border-transparent hover:text-foreground"}`} onClick={() => setImportTab("upload")} data-testid="import-tab-upload">📂 Upload CSV</button>
@@ -1273,14 +1298,8 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowImportModal(false)} data-testid="button-cancel-import">Cancel</Button>
-            {importRows.length > 0 && importTab === "upload" && (
-              <Button onClick={confirmImport} data-testid="button-confirm-import">＋ Add {importRows.length} Deliverables</Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </FormSection>
+      </FormDialogShell>
 
       {/* Bulk Move Phase Modal */}
       <Dialog open={showBulkMoveModal} onOpenChange={setShowBulkMoveModal}>

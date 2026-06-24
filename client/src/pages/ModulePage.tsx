@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useBoards, useCreateBoard, useCreateColumn } from "@/hooks/use-jiganto";
 import { useTenants } from "@/hooks/use-jiganto";
 import { Plus, LayoutGrid, LayoutTemplate } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
@@ -13,6 +13,7 @@ import { type InsertBoard } from "@shared/schema";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { TemplateSelector, type BoardTemplate } from "@/components/TemplateSelector";
 import { SubmitForm } from "@/components/ui/submit-form";
+import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 
 export function ModulePage() {
   const [match, params] = useRoute("/modules/:key");
@@ -125,14 +126,22 @@ export function ModulePage() {
                     <Plus className="h-4 w-4" />
                   </button>
                 </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create New Board</DialogTitle>
-                    <DialogDescription>Add a new board to this module</DialogDescription>
-                  </DialogHeader>
-                  <SubmitForm onSubmit={handleCreateBoard} disabled={createBoard.isPending} className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label>Board Name</Label>
+                <FormDialogShell
+                  open={isDialogOpen}
+                  onOpenChange={setIsDialogOpen}
+                  title="Create New Board"
+                  subtitle="Add a new board to this module"
+                  saveLabel="Create Board"
+                  onCancel={() => setIsDialogOpen(false)}
+                  onSubmit={handleCreateBoard}
+                  saving={createBoard.isPending}
+                  disabled={!newBoardName.trim()}
+                  saveTestId="create-board-btn"
+                  size="sm"
+                >
+                  <FormSection title="Board details">
+                    <div className="space-y-1.5 mb-3.5">
+                      <FieldLabel required>Board Name</FieldLabel>
                       <Input 
                         value={newBoardName} 
                         onChange={e => setNewBoardName(e.target.value)} 
@@ -140,7 +149,6 @@ export function ModulePage() {
                         data-testid="new-board-name"
                       />
                     </div>
-                  <div className="flex justify-between">
                     <Button 
                       type="button"
                       variant="outline" 
@@ -150,12 +158,8 @@ export function ModulePage() {
                       <LayoutTemplate className="h-4 w-4 mr-2" />
                       Use Template
                     </Button>
-                    <Button type="submit" disabled={createBoard.isPending} data-testid="create-board-btn">
-                      {createBoard.isPending ? "Creating..." : "Create Board"}
-                    </Button>
-                  </div>
-                  </SubmitForm>
-                </DialogContent>
+                  </FormSection>
+                </FormDialogShell>
               </Dialog>
             </div>
           </div>

@@ -81,6 +81,7 @@ export default function TaskManagementPage() {
 
   const tasksQuery = useQuery<AggregatedTask[]>({
     queryKey: buildTasksQueryKey(filters),
+    staleTime: 30_000,
     queryFn: async () => {
       const res = await fetchWithAuth(`/api/tasks${querySuffix}`);
       if (!res.ok) throw new Error("Failed to load tasks");
@@ -90,6 +91,7 @@ export default function TaskManagementPage() {
 
   const summaryQuery = useQuery<TaskSummaryCounts>({
     queryKey: [`/api/tasks/summary${querySuffix}`],
+    staleTime: 30_000,
     queryFn: async () => {
       const res = await fetchWithAuth(`/api/tasks/summary${querySuffix}`);
       if (!res.ok) throw new Error("Failed to load summary");
@@ -104,6 +106,7 @@ export default function TaskManagementPage() {
       if (!res.ok) throw new Error("Failed to load workspaces");
       return res.json();
     },
+    staleTime: 30_000,
   });
 
   const projectsQuery = useQuery<{ id: number; name: string }[]>({
@@ -113,6 +116,7 @@ export default function TaskManagementPage() {
       if (!res.ok) throw new Error("Failed to load projects");
       return res.json();
     },
+    staleTime: 30_000,
   });
 
   const tasks = tasksQuery.data ?? [];
@@ -294,7 +298,7 @@ export default function TaskManagementPage() {
                     onRowClick={(row) => openTask(row)}
                     onRowDoubleClick={(row) => openTask(row)}
                     onCellEdit={(id, columnId, value) =>
-                      updateMutation.mutate({ id: String(id), updates: { [columnId]: value } })
+                      updateMutation.mutateAsync({ id: String(id), updates: { [columnId]: value } })
                     }
                     onAddItem={() => {}}
                     dateField="dueDate"

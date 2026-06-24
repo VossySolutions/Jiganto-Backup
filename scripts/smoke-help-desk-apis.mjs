@@ -113,7 +113,7 @@ async function main() {
       }
       if (r.status === 500) {
         failed++;
-        const hint = r.text.includes("does not exist") ? " (run: npm run db:patch-help-desk)" : "";
+        const hint = r.text.includes("does not exist") ? " (run: npm run db:push)" : "";
         console.log(`✗ ${r.spec} → 500${hint} ${r.text.slice(0, 120)}`);
         continue;
       }

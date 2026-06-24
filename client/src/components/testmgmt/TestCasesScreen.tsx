@@ -11,8 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
+import { FormDialogShell, FormSection, FormDivider } from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useTablePagination } from "@/hooks/use-table-pagination";
@@ -106,7 +105,7 @@ export function TestCasesScreen() {
 
   const createMutation = useMutation({
     mutationFn: async (data: { tc: FormData; steps: StepDraft[] }) => {
-      const res = await apiRequest("POST", "/api/tm/cases", { ...data.tc, tenantId: 1, projectId: activeProjectId });
+      const res = await apiRequest("POST", "/api/tm/cases", { ...data.tc, projectId: activeProjectId });
       const tc: TmTestCase = await res.json();
       if (data.steps.length > 0) {
         await apiRequest("POST", `/api/tm/cases/${tc.id}/steps/bulk`, data.steps);
@@ -148,7 +147,6 @@ export function TestCasesScreen() {
     mutationFn: async ({ name, startDate, caseIds }: { name: string; startDate: string; caseIds: number[] }) => {
       const runRes = await apiRequest("POST", "/api/tm/runs", {
         name,
-        tenantId: 1,
         projectId: activeProjectId,
         status: "not_started",
         startDate: startDate || null,
@@ -391,16 +389,20 @@ export function TestCasesScreen() {
       </div>
 
       {/* Case Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <SubmitForm
-            onSubmit={handleSubmit}
-            disabled={!form.title.trim() || createMutation.isPending || updateMutation.isPending}
-          >
-          <DialogHeader>
-            <DialogTitle>{editing ? "Edit Test Case" : "New Test Case"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-5 pt-2">
+      <FormDialogShell
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title={editing ? "Edit Test Case" : "New Test Case"}
+        saveLabel={editing ? "Save Changes" : "Create Test Case"}
+        onCancel={() => setDialogOpen(false)}
+        onSubmit={handleSubmit}
+        saving={createMutation.isPending || updateMutation.isPending}
+        disabled={!form.title.trim()}
+        saveTestId="button-submit-case"
+        size="xl"
+      >
+          <FormSection title="Case details">
+          <div className="space-y-5">
 
             {/* Title */}
             <div>
@@ -580,30 +582,25 @@ export function TestCasesScreen() {
               )}
             </div>
 
-            {/* Actions */}
-            <div className="flex justify-end gap-2 pt-2 border-t border-border">
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button
-                type="submit"
-                data-testid="button-submit-case"
-              >
-                {editing ? "Save Changes" : "Create Test Case"}
-              </Button>
-            </div>
           </div>
-          </SubmitForm>
-        </DialogContent>
-      </Dialog>
+          </FormSection>
+      </FormDialogShell>
 
       {/* ── Start Test Cycle Modal ── */}
-      <Dialog open={runModalOpen} onOpenChange={setRunModalOpen}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Play className="h-4 w-4 text-primary" /> Start Test Cycle
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-2">
+      <FormDialogShell
+        open={runModalOpen}
+        onOpenChange={setRunModalOpen}
+        title="Start Test Cycle"
+        saveLabel={`Create Run (${runCaseIds.size} cases)`}
+        onCancel={() => setRunModalOpen(false)}
+        onSubmit={() => createRunMutation.mutate({ name: runName, startDate: runStartDate, caseIds: Array.from(runCaseIds) })}
+        saving={createRunMutation.isPending}
+        disabled={!runName.trim() || runCaseIds.size === 0}
+        saveTestId="btn-confirm-run"
+        size="lg"
+      >
+          <FormSection title="Run setup">
+          <div className="space-y-4">
             <div>
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Run Name</label>
               <input className="mt-1 w-full border border-border rounded px-3 py-2 text-sm bg-background"
@@ -646,18 +643,9 @@ export function TestCasesScreen() {
                 )}
               </div>
             </div>
-            <div className="flex gap-2 pt-1">
-              <Button className="flex-1 gap-2" data-testid="btn-confirm-run"
-                disabled={!runName.trim() || runCaseIds.size === 0 || createRunMutation.isPending}
-                onClick={() => createRunMutation.mutate({ name: runName, startDate: runStartDate, caseIds: Array.from(runCaseIds) })}>
-                {createRunMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                Create Run ({runCaseIds.size} cases)
-              </Button>
-              <Button variant="outline" onClick={() => setRunModalOpen(false)}>Cancel</Button>
-            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+          </FormSection>
+      </FormDialogShell>
       </div>
     </TmScreenShell>
   );

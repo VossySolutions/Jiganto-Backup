@@ -9,8 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { SubmitForm } from "@/components/ui/submit-form";
+import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -268,26 +267,20 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
   const showForm = createMode || editingCard;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col" data-testid="rate-card-manager">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-[#0ea5e9]" />
-            {readOnly ? "Rate Cards (Read-Only)" : "Rate Card Management"}
-          </DialogTitle>
-          {readOnly && (
-            <p className="text-xs text-muted-foreground">
-              Rate cards are managed in Resource Management (Module 08). Select a card to apply rates to this plan.
-            </p>
-          )}
-        </DialogHeader>
-
-        <div className="flex-1 overflow-hidden flex flex-col gap-4">
+    <FormDialogShell
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      title={readOnly ? "Rate Cards (Read-Only)" : "Rate Card Management"}
+      subtitle={readOnly ? "Select a card to apply rates to this plan." : "Create and manage reusable rate cards."}
+      saveLabel="Close"
+      onCancel={onClose}
+      onSubmit={onClose}
+      testId="rate-card-manager"
+      size="xl"
+      bodyClassName="max-h-[80vh]"
+    >
+      <div className="flex-1 overflow-hidden flex flex-col gap-4">
           {showForm && !readOnly ? (
-            <SubmitForm
-              onSubmit={handleSaveCard}
-              disabled={createCardMutation.isPending || updateCardMutation.isPending}
-            >
             <div className="space-y-4 p-4 border rounded-lg bg-muted/20" data-testid="rate-card-form">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <h4 className="text-sm font-bold">{editingCard ? "Edit Rate Card" : "Create New Rate Card"}</h4>
@@ -379,7 +372,6 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
                 </Button>
               </div>
             </div>
-            </SubmitForm>
           ) : (
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">
@@ -633,11 +625,6 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
             </div>
           </ScrollArea>
         </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} data-testid="button-close-manager">Close</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </FormDialogShell>
   );
 }

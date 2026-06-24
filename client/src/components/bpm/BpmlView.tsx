@@ -7,6 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import {
+  FormDialogShell,
+  FieldGrid,
+  FieldLabel,
+  FormDivider,
+} from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -359,8 +365,6 @@ export default function BpmlView() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const catalogueImportRef = useRef<HTMLInputElement>(null);
   const bpmlContentRef = useRef<HTMLDivElement>(null);
-  const tenantId = 1;
-
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [showCreateTemplateDialog, setShowCreateTemplateDialog] = useState(false);
   const [showEditTemplateDialog, setShowEditTemplateDialog] = useState(false);
@@ -423,13 +427,13 @@ export default function BpmlView() {
   const [pendingFilterValue, setPendingFilterValue] = useState("");
 
   const { data: templates = [], isLoading: loadingTemplates } = useQuery<BpmlTemplate[]>({
-    queryKey: [`/api/bpml/templates?tenantId=${tenantId}`],
+    queryKey: [`/api/bpml/templates`],
   });
 
   const selectedTemplate = useMemo(() => templates.find(t => t.id === selectedTemplateId), [templates, selectedTemplateId]);
 
   const { data: entries = [], isLoading: loadingEntries } = useQuery<BpmlEntry[]>({
-    queryKey: [`/api/bpml/entries?templateId=${selectedTemplateId}&tenantId=${tenantId}`],
+    queryKey: [`/api/bpml/entries?templateId=${selectedTemplateId}`],
     enabled: !!selectedTemplateId,
   });
 
@@ -668,7 +672,6 @@ export default function BpmlView() {
     const maxSeq = entries.reduce((max, e) => Math.max(max, e.sequenceOrder ?? 0), 0);
     createEntryMutation.mutate({
       templateId: selectedTemplateId,
-      tenantId,
       processName: "New Process",
       sequenceOrder: maxSeq + 1,
     });
@@ -681,7 +684,6 @@ export default function BpmlView() {
     const refSeq = refEntry.sequenceOrder ?? 0;
     createEntryMutation.mutate({
       templateId: selectedTemplateId,
-      tenantId,
       processName: "New Process",
       sequenceOrder: position === "above" ? refSeq : refSeq + 1,
     });
@@ -693,7 +695,6 @@ export default function BpmlView() {
 
   const handleCreateTemplate = () => {
     createTemplateMutation.mutate({
-      tenantId,
       name: newTemplateName,
       description: newTemplateDesc || undefined,
       templateType: newTemplateType,
@@ -829,7 +830,7 @@ export default function BpmlView() {
   const upsertImportMutation = useMutation({
     mutationFn: async (rows: Record<string, unknown>[]) => {
       const res = await apiRequest("POST", "/api/bpml/entries/bulk-upsert", {
-        rows, mode: importMode, templateId: selectedTemplateId, tenantId,
+        rows, mode: importMode, templateId: selectedTemplateId,
       });
       return res.json();
     },
@@ -851,7 +852,6 @@ export default function BpmlView() {
       const coreFieldIds = new Set(BPML_CORE_FIELDS.map(f => f.id));
       const entry: Record<string, any> = {
         templateId: selectedTemplateId,
-        tenantId,
         processName: row.processName || `Process ${idx + 1}`,
         sequenceOrder: idx + 1,
       };
@@ -908,7 +908,6 @@ export default function BpmlView() {
     }
     try {
       const res = await apiRequest("POST", "/api/bpml/templates", {
-        tenantId,
         name: importLibraryName,
         templateType: "standard",
         visibleSections: ["core", "ownership"],
@@ -919,7 +918,6 @@ export default function BpmlView() {
       const entriesToCreate = importLibraryPreview.map((row, idx) => {
         const entry: Record<string, any> = {
           templateId: template.id,
-          tenantId,
           processName: row.processName || `Process ${idx + 1}`,
           sequenceOrder: idx + 1,
         };
@@ -1322,15 +1320,21 @@ export default function BpmlView() {
           )}
         </div>
 
-        <Dialog open={showCreateTemplateDialog} onOpenChange={setShowCreateTemplateDialog}>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Create BPML Library</DialogTitle>
-              <DialogDescription>Define a new BPML library to organise your process hierarchy.</DialogDescription>
-            </DialogHeader>
+        <FormDialogShell
+          open={showCreateTemplateDialog}
+          onOpenChange={setShowCreateTemplateDialog}
+          title="Create BPML Library"
+          subtitle="Define a new BPML library to organise your process hierarchy."
+          saveLabel="Create"
+          saveTestId="button-confirm-create-library"
+          onCancel={() => setShowCreateTemplateDialog(false)}
+          onSubmit={handleCreateTemplate}
+          disabled={!newTemplateName.trim() || createTemplateMutation.isPending}
+          saving={createTemplateMutation.isPending}
+        >
             <div className="space-y-4">
               <div>
-                <Label>Library Name</Label>
+                <FieldLabel>Library Name</FieldLabel>
                 <Input
                   value={newTemplateName}
                   onChange={e => setNewTemplateName(e.target.value)}
@@ -1339,7 +1343,7 @@ export default function BpmlView() {
                 />
               </div>
               <div>
-                <Label>Description</Label>
+                <FieldLabel>Description</FieldLabel>
                 <Textarea
                   value={newTemplateDesc}
                   onChange={e => setNewTemplateDesc(e.target.value)}
@@ -1347,9 +1351,9 @@ export default function BpmlView() {
                   data-testid="input-library-desc"
                 />
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <FieldGrid cols={3}>
                 <div>
-                  <Label>Type</Label>
+                  <FieldLabel>Type</FieldLabel>
                   <Select value={bpmlTemplateTypeEnum.includes(newTemplateType as any) ? newTemplateType : "custom"} onValueChange={v => {
                     if (v === "custom") { setNewTemplateType(""); return; }
                     setNewTemplateType(v);
@@ -1373,7 +1377,7 @@ export default function BpmlView() {
                   )}
                 </div>
                 <div>
-                  <Label>ERP Platform</Label>
+                  <FieldLabel>ERP Platform</FieldLabel>
                   <Select value={newTemplateErp} onValueChange={setNewTemplateErp}>
                     <SelectTrigger data-testid="select-library-erp"><SelectValue placeholder="Select..." /></SelectTrigger>
                     <SelectContent>
@@ -1384,7 +1388,7 @@ export default function BpmlView() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Process Area</Label>
+                  <FieldLabel>Process Area</FieldLabel>
                   <Select value={newTemplateArea} onValueChange={setNewTemplateArea}>
                     <SelectTrigger data-testid="select-library-area"><SelectValue placeholder="Select..." /></SelectTrigger>
                     <SelectContent>
@@ -1394,27 +1398,25 @@ export default function BpmlView() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
+              </FieldGrid>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowCreateTemplateDialog(false)}>Cancel</Button>
-              <Button onClick={handleCreateTemplate} disabled={!newTemplateName.trim() || createTemplateMutation.isPending} data-testid="button-confirm-create-library">
-                {createTemplateMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                Create
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        </FormDialogShell>
 
-        <Dialog open={showImportLibraryDialog} onOpenChange={setShowImportLibraryDialog}>
-          <DialogContent className="sm:max-w-[650px]">
-            <DialogHeader>
-              <DialogTitle>Import BPML Library</DialogTitle>
-              <DialogDescription>Create a new library and import process data from a CSV or Excel file.</DialogDescription>
-            </DialogHeader>
+        <FormDialogShell
+          open={showImportLibraryDialog}
+          onOpenChange={setShowImportLibraryDialog}
+          title="Import BPML Library"
+          subtitle="Create a new library and import process data from a CSV or Excel file."
+          saveLabel={`Create & Import ${importLibraryPreview?.length || 0} Entries`}
+          saveTestId="button-confirm-import-library"
+          size="lg"
+          onCancel={() => { setShowImportLibraryDialog(false); setImportLibraryName(""); setImportLibraryFile(null); setImportLibraryPreview(null); }}
+          onSubmit={handleImportLibraryConfirm}
+          disabled={!importLibraryName.trim() || !importLibraryPreview || importLibraryPreview.length === 0}
+        >
             <div className="space-y-4">
               <div>
-                <Label>Library Name</Label>
+                <FieldLabel>Library Name</FieldLabel>
                 <Input
                   value={importLibraryName}
                   onChange={e => setImportLibraryName(e.target.value)}
@@ -1423,7 +1425,7 @@ export default function BpmlView() {
                 />
               </div>
               <div>
-                <Label>Upload File</Label>
+                <FieldLabel>Upload File</FieldLabel>
                 <div className="flex items-center gap-2 mt-1">
                   <Button variant="outline" size="sm" onClick={() => catalogueImportRef.current?.click()} data-testid="button-import-library-file">
                     <Upload className="h-4 w-4 mr-1" />
@@ -1484,14 +1486,7 @@ export default function BpmlView() {
                 </>
               )}
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => { setShowImportLibraryDialog(false); setImportLibraryName(""); setImportLibraryFile(null); setImportLibraryPreview(null); }}>Cancel</Button>
-              <Button onClick={handleImportLibraryConfirm} disabled={!importLibraryName.trim() || !importLibraryPreview || importLibraryPreview.length === 0} data-testid="button-confirm-import-library">
-                Create & Import {importLibraryPreview?.length || 0} Entries
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        </FormDialogShell>
       </div>
     );
   }
@@ -2250,16 +2245,34 @@ export default function BpmlView() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showEditTemplateDialog} onOpenChange={setShowEditTemplateDialog}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Edit Library</DialogTitle>
-            <DialogDescription>Update library settings and metadata.</DialogDescription>
-          </DialogHeader>
+      <FormDialogShell
+        open={showEditTemplateDialog}
+        onOpenChange={setShowEditTemplateDialog}
+        title="Edit Library"
+        subtitle="Update library settings and metadata."
+        saveLabel="Save Changes"
+        saveTestId="button-save-library"
+        onCancel={() => setShowEditTemplateDialog(false)}
+        onSubmit={() => {
+          if (editingTemplate) {
+            updateTemplateMutation.mutate({
+              id: editingTemplate.id,
+              name: editingTemplate.name,
+              description: editingTemplate.description,
+              templateType: editingTemplate.templateType,
+              erpPlatform: editingTemplate.erpPlatform,
+              processArea: editingTemplate.processArea,
+              version: editingTemplate.version,
+              status: editingTemplate.status,
+            });
+          }
+        }}
+        disabled={updateTemplateMutation.isPending}
+      >
           {editingTemplate && (
             <div className="space-y-4">
               <div>
-                <Label>Library Name</Label>
+                <FieldLabel>Library Name</FieldLabel>
                 <Input
                   value={editingTemplate.name}
                   onChange={e => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
@@ -2267,16 +2280,16 @@ export default function BpmlView() {
                 />
               </div>
               <div>
-                <Label>Description</Label>
+                <FieldLabel>Description</FieldLabel>
                 <Textarea
                   value={editingTemplate.description || ""}
                   onChange={e => setEditingTemplate({ ...editingTemplate, description: e.target.value })}
                   data-testid="input-edit-library-desc"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <FieldGrid cols={2}>
                 <div>
-                  <Label>Type</Label>
+                  <FieldLabel>Type</FieldLabel>
                   <Select value={bpmlTemplateTypeEnum.includes(editingTemplate.templateType as any) ? editingTemplate.templateType : "custom"} onValueChange={v => {
                     if (v === "custom") { setEditingTemplate({ ...editingTemplate, templateType: "" }); return; }
                     setEditingTemplate({ ...editingTemplate, templateType: v });
@@ -2300,16 +2313,16 @@ export default function BpmlView() {
                   )}
                 </div>
                 <div>
-                  <Label>Version</Label>
+                  <FieldLabel>Version</FieldLabel>
                   <Input
                     value={editingTemplate.version || "1.0"}
                     onChange={e => setEditingTemplate({ ...editingTemplate, version: e.target.value })}
                   />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+              </FieldGrid>
+              <FieldGrid cols={2}>
                 <div>
-                  <Label>ERP Platform</Label>
+                  <FieldLabel>ERP Platform</FieldLabel>
                   <Select value={editingTemplate.erpPlatform || ""} onValueChange={v => setEditingTemplate({ ...editingTemplate, erpPlatform: v })}>
                     <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                     <SelectContent>
@@ -2320,7 +2333,7 @@ export default function BpmlView() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Process Area</Label>
+                  <FieldLabel>Process Area</FieldLabel>
                   <Select value={editingTemplate.processArea || ""} onValueChange={v => setEditingTemplate({ ...editingTemplate, processArea: v })}>
                     <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                     <SelectContent>
@@ -2330,9 +2343,9 @@ export default function BpmlView() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
+              </FieldGrid>
               <div>
-                <Label>Status</Label>
+                <FieldLabel>Status</FieldLabel>
                 <Select value={editingTemplate.status} onValueChange={v => setEditingTemplate({ ...editingTemplate, status: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -2342,49 +2355,25 @@ export default function BpmlView() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-          )}
-          <DialogFooter className="flex justify-between">
-            <Button
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              onClick={() => {
-                if (editingTemplate) {
-                  deleteTemplateMutation.mutate(editingTemplate.id);
-                  setShowEditTemplateDialog(false);
-                }
-              }}
-              data-testid="button-delete-library"
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              Delete Library
-            </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setShowEditTemplateDialog(false)}>Cancel</Button>
+              <FormDivider />
               <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive hover:text-destructive w-fit"
                 onClick={() => {
                   if (editingTemplate) {
-                    updateTemplateMutation.mutate({
-                      id: editingTemplate.id,
-                      name: editingTemplate.name,
-                      description: editingTemplate.description,
-                      templateType: editingTemplate.templateType,
-                      erpPlatform: editingTemplate.erpPlatform,
-                      processArea: editingTemplate.processArea,
-                      version: editingTemplate.version,
-                      status: editingTemplate.status,
-                    });
+                    deleteTemplateMutation.mutate(editingTemplate.id);
+                    setShowEditTemplateDialog(false);
                   }
                 }}
-                disabled={updateTemplateMutation.isPending}
-                data-testid="button-save-library"
+                data-testid="button-delete-library"
               >
-                Save Changes
+                <Trash2 className="h-4 w-4 mr-1" />
+                Delete Library
               </Button>
             </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          )}
+      </FormDialogShell>
 
       <Dialog open={showSaveViewDialog} onOpenChange={setShowSaveViewDialog}>
         <DialogContent className="sm:max-w-[400px]">

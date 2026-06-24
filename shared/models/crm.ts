@@ -4,6 +4,7 @@ import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
 import { tenants } from "../schema";
 import { users } from "./auth";
+import { documents } from "./documents";
 import {
   rateCards,
   rateCardItems,
@@ -404,6 +405,7 @@ export const crmContracts = pgTable("crm_contracts", {
   terms: text("terms"),
   signedDate: timestamp("signed_date"),
   signedByContactId: integer("signed_by_contact_id").references(() => crmContacts.id),
+  documentId: integer("document_id").references(() => documents.id, { onDelete: "set null" }),
   ownerUserId: varchar("owner_user_id"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -421,6 +423,10 @@ export const crmContractsRelations = relations(crmContracts, ({ one }) => ({
   signedBy: one(crmContacts, {
     fields: [crmContracts.signedByContactId],
     references: [crmContacts.id],
+  }),
+  document: one(documents, {
+    fields: [crmContracts.documentId],
+    references: [documents.id],
   }),
   owner: one(users, {
     fields: [crmContracts.ownerUserId],

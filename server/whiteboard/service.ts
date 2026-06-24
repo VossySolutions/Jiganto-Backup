@@ -377,6 +377,19 @@ export async function getWhiteboardByShareToken(token: string) {
   return board ? { board, share: row } : null;
 }
 
+export async function getWhiteboardDetailByShareToken(token: string) {
+  const resolved = await getWhiteboardByShareToken(token);
+  if (!resolved) return null;
+  const notes = await db.select().from(stickyNotes)
+    .where(and(eq(stickyNotes.whiteboardId, resolved.board.id), eq(stickyNotes.isDeleted, false)))
+    .orderBy(stickyNotes.id);
+  return {
+    board: resolved.board,
+    permission: resolved.share.permission as WhiteboardPermission,
+    notes,
+  };
+}
+
 export async function searchOrgUsers(tenantId: number, query: string) {
   const { storage } = await import("../storage");
   return storage.searchUsers(tenantId, query);

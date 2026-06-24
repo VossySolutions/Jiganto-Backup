@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Search, X, Save, Filter, Group, ArrowUpDown, Settings, Plus } from "lucide-react";
 import { useColumns, useItems, useCreateItem, useUpdateItem, useCreateColumn } from "@/hooks/use-jiganto";
 import { type Column, type Item } from "@shared/schema";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { Label } from "@/components/ui/label";
 import {
   ViewSwitcher,
@@ -30,7 +30,6 @@ import {
 import { FilterPanel, type FilterCondition } from "@/components/FilterPanel";
 import { ExportDropdown } from "@/components/ExportDropdown";
 import { ImportDropdown } from "@/components/ImportDropdown";
-import { SubmitForm } from "@/components/ui/submit-form";
 
 interface BoardViewProps {
   boardId: number;
@@ -234,11 +233,19 @@ export function BoardView({ boardId, boardName = "Board" }: BoardViewProps) {
     switch (currentView) {
       case "columns":
         return (
-          <KanbanView 
-            columns={columns} 
-            items={items} 
+          <KanbanView
+            columns={columns}
+            items={items}
             onItemClick={handleItemClick}
             onAddItem={() => setIsDialogOpen(true)}
+            onItemStatusChange={(item, status) => {
+              const statusColumn = columns.find((col) => col.type === "status");
+              if (!statusColumn) return;
+              void updateItem.mutateAsync({
+                id: item.id,
+                values: { ...(item.values as object), [statusColumn.key]: status },
+              });
+            }}
           />
         );
       case "table":
@@ -427,18 +434,22 @@ export function BoardView({ boardId, boardName = "Board" }: BoardViewProps) {
 
       {renderView()}
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Add New Item</DialogTitle>
-            <DialogDescription>Create a new item for this board</DialogDescription>
-          </DialogHeader>
-          <SubmitForm onSubmit={handleCreateItem} disabled={createItem.isPending} className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
+      <FormDialogShell
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        title="Add New Item"
+        subtitle="Create a new item for this board"
+        saveLabel="Create Item"
+        onCancel={() => setIsDialogOpen(false)}
+        onSubmit={handleCreateItem}
+        saving={createItem.isPending}
+        saveTestId="create-item-btn"
+      >
+        <FormSection title="Item fields">
+          <div className="grid gap-4 max-h-[60vh] overflow-y-auto">
             {columns.map((col) => (
               <div key={col.id} className="space-y-2">
-                <Label htmlFor={col.key} className="text-xs uppercase font-semibold text-muted-foreground">
-                  {col.title}
-                </Label>
+                <FieldLabel>{col.title}</FieldLabel>
                 <AttributeEditor
                   type={col.type}
                   value={newItemValues[col.key]}
@@ -447,47 +458,37 @@ export function BoardView({ boardId, boardName = "Board" }: BoardViewProps) {
                 />
               </div>
             ))}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={createItem.isPending} data-testid="create-item-btn">
-              {createItem.isPending ? "Creating..." : "Create Item"}
-            </Button>
           </div>
-          </SubmitForm>
-        </DialogContent>
-      </Dialog>
+        </FormSection>
+      </FormDialogShell>
 
-      <Dialog open={showSaveViewDialog} onOpenChange={setShowSaveViewDialog}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>Save Current View</DialogTitle>
-            <DialogDescription>
-              Save your current view settings as a new tab. This preserves the view type and any active filters.
-            </DialogDescription>
-          </DialogHeader>
-          <SubmitForm onSubmit={handleSaveView} disabled={!newViewName.trim()} className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>View Name</Label>
-              <Input
-                value={newViewName}
-                onChange={(e) => setNewViewName(e.target.value)}
-                placeholder="e.g., Active Tasks, High Priority"
-                data-testid="view-name-input"
-              />
-            </div>
-            <div className="text-sm text-muted-foreground">
-              <p>View Type: <strong>{currentView}</strong></p>
-            </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setShowSaveViewDialog(false)}>Cancel</Button>
-            <Button type="submit" disabled={!newViewName.trim()} data-testid="confirm-save-view-btn">
-              <Save className="h-4 w-4 mr-2" />
-              Save View
-            </Button>
+      <FormDialogShell
+        open={showSaveViewDialog}
+        onOpenChange={setShowSaveViewDialog}
+        title="Save Current View"
+        subtitle="Save your current view settings as a new tab. This preserves the view type and any active filters."
+        saveLabel="Save View"
+        onCancel={() => setShowSaveViewDialog(false)}
+        onSubmit={handleSaveView}
+        disabled={!newViewName.trim()}
+        saveTestId="confirm-save-view-btn"
+        size="sm"
+      >
+        <FormSection title="View details">
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>View Name</FieldLabel>
+            <Input
+              value={newViewName}
+              onChange={(e) => setNewViewName(e.target.value)}
+              placeholder="e.g., Active Tasks, High Priority"
+              data-testid="view-name-input"
+            />
           </div>
-          </SubmitForm>
-        </DialogContent>
-      </Dialog>
+          <div className="text-sm text-muted-foreground">
+            <p>View Type: <strong>{currentView}</strong></p>
+          </div>
+        </FormSection>
+      </FormDialogShell>
 
       <FilterPanel
         isOpen={isFilterPanelOpen}

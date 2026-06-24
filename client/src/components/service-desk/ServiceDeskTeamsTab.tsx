@@ -11,8 +11,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
+  FormDialogShell, FormSection, FieldGrid, FieldLabel,
+} from "@/components/ui/form-dialog-shell";
 import { Plus, Trash2, Users, GitBranch, Loader2 } from "lucide-react";
 import {
   ServiceDeskTabLoading,
@@ -37,8 +37,8 @@ export function ServiceDeskTeamsTab() {
     assignTeamId: "",
   });
 
-  const { data: teams = [], isLoading: teamsLoading, isError: teamsError, refetch: refetchTeams } = useQuery<AgentTeam[]>({ queryKey: ["/api/service-desk/teams"] });
-  const { data: rules = [], isLoading: rulesLoading, isError: rulesError, refetch: refetchRules } = useQuery<RoutingRule[]>({ queryKey: ["/api/service-desk/routing-rules"] });
+  const { data: teams = [], isLoading: teamsLoading, isError: teamsError, refetch: refetchTeams } = useQuery<AgentTeam[]>({ queryKey: ["/api/service-desk/teams"], staleTime: 30_000 });
+  const { data: rules = [], isLoading: rulesLoading, isError: rulesError, refetch: refetchRules } = useQuery<RoutingRule[]>({ queryKey: ["/api/service-desk/routing-rules"], staleTime: 30_000 });
 
   const createTeam = useMutation({
     mutationFn: async () => {
@@ -141,30 +141,40 @@ export function ServiceDeskTeamsTab() {
         </CardContent>
       </Card>
 
-      <Dialog open={teamDialog} onOpenChange={setTeamDialog}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>New Agent Team</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div><Label>Name</Label><Input value={teamForm.name} onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })} /></div>
-            <div><Label>Description</Label><Input value={teamForm.description} onChange={(e) => setTeamForm({ ...teamForm, description: e.target.value })} /></div>
-            <div className="flex items-center gap-2">
-              <Switch checked={teamForm.roundRobinEnabled} onCheckedChange={(v) => setTeamForm({ ...teamForm, roundRobinEnabled: v })} />
-              <Label>Round-robin assignment</Label>
-            </div>
-            <Button className="w-full" onClick={() => createTeam.mutate()} disabled={!teamForm.name || createTeam.isPending}>
-              {createTeam.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create team"}
-            </Button>
+      <FormDialogShell
+        open={teamDialog}
+        onOpenChange={setTeamDialog}
+        title="New Agent Team"
+        saveLabel="Create team"
+        onCancel={() => setTeamDialog(false)}
+        onSubmit={() => createTeam.mutate()}
+        saving={createTeam.isPending}
+        disabled={!teamForm.name}
+      >
+        <FormSection title="Team details">
+          <div className="space-y-1.5 mb-3.5"><FieldLabel required>Name</FieldLabel><Input value={teamForm.name} onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })} /></div>
+          <div className="space-y-1.5 mb-3.5"><FieldLabel>Description</FieldLabel><Input value={teamForm.description} onChange={(e) => setTeamForm({ ...teamForm, description: e.target.value })} /></div>
+          <div className="flex items-center gap-2">
+            <Switch checked={teamForm.roundRobinEnabled} onCheckedChange={(v) => setTeamForm({ ...teamForm, roundRobinEnabled: v })} />
+            <Label>Round-robin assignment</Label>
           </div>
-        </DialogContent>
-      </Dialog>
+        </FormSection>
+      </FormDialogShell>
 
-      <Dialog open={ruleDialog} onOpenChange={setRuleDialog}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>New Routing Rule</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div><Label>Rule name</Label><Input value={ruleForm.name} onChange={(e) => setRuleForm({ ...ruleForm, name: e.target.value })} /></div>
+      <FormDialogShell
+        open={ruleDialog}
+        onOpenChange={setRuleDialog}
+        title="New Routing Rule"
+        saveLabel="Create rule"
+        onCancel={() => setRuleDialog(false)}
+        onSubmit={() => createRule.mutate()}
+        disabled={!ruleForm.name}
+      >
+        <FormSection title="Rule details">
+          <div className="space-y-1.5 mb-3.5"><FieldLabel required>Rule name</FieldLabel><Input value={ruleForm.name} onChange={(e) => setRuleForm({ ...ruleForm, name: e.target.value })} /></div>
+          <FieldGrid className="mb-3.5">
             <div>
-              <Label>Ticket type</Label>
+              <FieldLabel>Ticket type</FieldLabel>
               <Select value={ruleForm.ticketType || "__any"} onValueChange={(v) => setRuleForm({ ...ruleForm, ticketType: v === "__any" ? "" : v })}>
                 <SelectTrigger><SelectValue placeholder="Any" /></SelectTrigger>
                 <SelectContent>
@@ -173,20 +183,19 @@ export function ServiceDeskTeamsTab() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Keyword in title</Label><Input value={ruleForm.keyword} onChange={(e) => setRuleForm({ ...ruleForm, keyword: e.target.value })} placeholder="e.g. SAP" /></div>
-            <div>
-              <Label>Assign to team</Label>
-              <Select value={ruleForm.assignTeamId} onValueChange={(v) => setRuleForm({ ...ruleForm, assignTeamId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select team" /></SelectTrigger>
-                <SelectContent>
-                  {teams.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button className="w-full" onClick={() => createRule.mutate()} disabled={!ruleForm.name}>Create rule</Button>
+            <div><FieldLabel>Keyword in title</FieldLabel><Input value={ruleForm.keyword} onChange={(e) => setRuleForm({ ...ruleForm, keyword: e.target.value })} placeholder="e.g. SAP" /></div>
+          </FieldGrid>
+          <div className="space-y-1.5">
+            <FieldLabel>Assign to team</FieldLabel>
+            <Select value={ruleForm.assignTeamId} onValueChange={(v) => setRuleForm({ ...ruleForm, assignTeamId: v })}>
+              <SelectTrigger><SelectValue placeholder="Select team" /></SelectTrigger>
+              <SelectContent>
+                {teams.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
-        </DialogContent>
-      </Dialog>
+        </FormSection>
+      </FormDialogShell>
     </div>
   );
 }

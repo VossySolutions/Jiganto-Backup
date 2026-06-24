@@ -109,7 +109,6 @@ export function ImportTemplatesScreen() {
       let successCount = 0;
       for (const row of parsed) {
         await apiRequest("POST", "/api/tm/cases", {
-          tenantId: 1,
           suiteId: targetSuiteId || null,
           title: row.title,
           description: row.description || null,

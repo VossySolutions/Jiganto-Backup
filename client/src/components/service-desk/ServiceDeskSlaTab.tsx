@@ -32,8 +32,8 @@ export function ServiceDeskSlaTab({ apiBase = "/api/service-desk" }: { apiBase?:
   const { toast } = useToast();
   const [form, setForm] = useState({ clientId: "", priority: "p1", responseHours: "1", resolutionHours: "4" });
 
-  const { data: configs = [], isLoading: configsLoading, isError: configsError, refetch } = useQuery<SlaConfigRow[]>({ queryKey: [`${apiBase}/sla-configs`] });
-  const { data: calendar, isLoading: calLoading } = useQuery<BusinessCalendar>({ queryKey: ["/api/settings/business-calendar"] });
+  const { data: configs = [], isLoading: configsLoading, isError: configsError, refetch } = useQuery<SlaConfigRow[]>({ queryKey: [`${apiBase}/sla-configs`], staleTime: 60_000 });
+  const { data: calendar, isLoading: calLoading } = useQuery<BusinessCalendar>({ queryKey: ["/api/settings/business-calendar"], staleTime: 300_000 });
 
   const createConfig = useMutation({
     mutationFn: async () => {

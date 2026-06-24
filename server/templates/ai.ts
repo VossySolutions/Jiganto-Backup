@@ -2,7 +2,10 @@ import { db } from "../db";
 import { platformTemplates, templateAiGenerations } from "@shared/models/templates";
 import type { TemplateModule } from "@shared/models/templates";
 
-const AI_MODULES: TemplateModule[] = ["bpm_framework", "survey", "project", "bpml", "esign"];
+const AI_MODULES: TemplateModule[] = [
+  "bpm_framework", "bpm_diagram", "bpm_orgchart", "survey", "project", "bpml", "esign",
+  "workspace", "whiteboard", "test_mgmt",
+];
 
 export async function generateTemplateWithAi(params: {
   tenantId: number;
@@ -32,6 +35,10 @@ export async function generateTemplateWithAi(params: {
   const modulePrompts: Record<string, string> = {
     bpm_framework: `Generate a methodology framework JSON for: "${params.prompt}"
 Return JSON: { "name", "description", "category", "vendor", "phases": [{ "order", "name", "description", "rows": [] }] }`,
+    bpm_diagram: `Generate a BPM process diagram template JSON for: "${params.prompt}"
+Return JSON: { "name", "description", "type", "nodes": [{ "nodeId", "nodeType", "label", "positionX", "positionY" }], "edges": [{ "edgeId", "sourceNodeId", "targetNodeId", "label" }] }`,
+    bpm_orgchart: `Generate an org chart template JSON for: "${params.prompt}"
+Return JSON: { "name", "description", "chartTitle", "chartType", "members": [{ "name", "title", "department", "_origId", "parentMemberId", "sortOrder" }] }`,
     survey: `Generate a survey template JSON for: "${params.prompt}"
 Return JSON: { "title", "description", "surveyType", "category", "questions": [{ "text", "type", "options", "required", "scaleMin", "scaleMax" }] }`,
     project: `Generate a project setup template JSON for: "${params.prompt}"
@@ -40,6 +47,12 @@ Return JSON: { "name", "description", "projectType", "methodology", "framework",
 Return JSON: { "name", "description", "erpPlatform", "processArea", "entries": [{ "processName", "processCode", "businessArea", "moduleArea" }] }`,
     esign: `Generate an eSign document template JSON for: "${params.prompt}"
 Return JSON: { "title", "description", "category", "contentHtml" }`,
+    workspace: `Generate a workspace template JSON for: "${params.prompt}"
+Return JSON: { "name", "description", "icon", "color", "pages": [{ "title", "pageType", "content", "databases": [{ "name", "activeView", "columns": [{ "name", "type", "sortOrder" }] }] }] }`,
+    whiteboard: `Generate a whiteboard layout template JSON for: "${params.prompt}"
+Return JSON: { "name", "description", "notes": [{ "noteType", "colourHex", "xPosition", "yPosition", "width", "height" }] }`,
+    test_mgmt: `Generate a test management hierarchy template JSON for: "${params.prompt}"
+Return JSON: { "hierarchy": { "areas": [{ "name", "description" }], "processes": [{ "areaIndex", "name", "priority" }], "scenarios": [{ "processIndex", "name" }], "testCases": [{ "scenarioIndex", "title", "steps": [{ "stepOrder", "action", "expectedResult" }] }] } }`,
   };
 
   const completion = await openai.chat.completions.create({
@@ -73,6 +86,8 @@ Return JSON: { "title", "description", "category", "contentHtml" }`,
       title: parsed.title ?? name, description, category: parsed.category ?? "Custom",
       sourceType: "inline_doc", contentHtml: parsed.contentHtml ?? `<h1>${name}</h1><p>${description}</p>`,
     };
+  } else if (params.module === "test_mgmt") {
+    snapshot = { hierarchy: parsed.hierarchy ?? parsed };
   } else {
     snapshot = parsed;
   }

@@ -19,12 +19,12 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  FormDialogShell,
+  FormDialogViewShell,
+  FormSection,
+  FieldGrid,
+  FieldLabel,
+} from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
@@ -160,11 +160,13 @@ function SidebarRowCount({ pageId }: { pageId: number }) {
   const { data: databases = [] } = useQuery<any[]>({
     queryKey: ["/api/workspace-pages", pageId, "databases"],
     enabled: !!pageId,
+    staleTime: 60_000,
   });
   const dbId = databases.length > 0 ? databases[0].id : null;
   const { data: rows = [] } = useQuery<any[]>({
     queryKey: ["/api/workspace-databases", dbId, "rows"],
     enabled: !!dbId,
+    staleTime: 60_000,
   });
   if (!dbId) return null;
   return (
@@ -194,6 +196,7 @@ function WorkspaceSidebar({
   const { data: pages = [], isLoading } = useQuery<WorkspacePage[]>({
     queryKey: ["/api/workspaces", workspaceId, "pages"],
     enabled: !!workspaceId,
+    staleTime: 30_000,
   });
 
   const deletePageMutation = useMutation({
@@ -736,20 +739,24 @@ function PageView({
   const { data: page, isLoading } = useQuery<WorkspacePage>({
     queryKey: ["/api/workspace-pages", pageId],
     enabled: !!pageId,
+    staleTime: 30_000,
   });
 
   const { data: databases = [] } = useQuery<WorkspaceDatabase[]>({
     queryKey: ["/api/workspace-pages", pageId, "databases"],
     enabled: !!pageId,
+    staleTime: 30_000,
   });
 
   const { data: allPages = [] } = useQuery<WorkspacePage[]>({
     queryKey: ["/api/workspaces", workspaceId, "pages"],
     enabled: !!workspaceId,
+    staleTime: 30_000,
   });
 
   const { data: workspacesData = [] } = useQuery<Workspace[]>({
     queryKey: ["/api/workspaces"],
+    staleTime: 60_000,
   });
 
   const childPages = allPages
@@ -1156,13 +1163,15 @@ function PageView({
         {siblingNav}
       </div>
 
-      <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Create Board from Template</DialogTitle>
-            <DialogDescription>Choose a template to get started quickly with pre-configured columns and sample data.</DialogDescription>
-          </DialogHeader>
-          <div className="flex items-center gap-2 px-1">
+      <FormDialogViewShell
+        open={showTemplateDialog}
+        onOpenChange={setShowTemplateDialog}
+        onClose={() => setShowTemplateDialog(false)}
+        title="Create Board from Template"
+        subtitle="Choose a template to get started quickly with pre-configured columns and sample data."
+        size="xl"
+      >
+          <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Search templates..." value={templateSearchQuery} onChange={(e) => setTemplateSearchQuery(e.target.value)} className="pl-9 h-9" data-testid="template-search-input" />
@@ -1223,8 +1232,7 @@ function PageView({
               <span className="text-sm text-muted-foreground">Creating board...</span>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+      </FormDialogViewShell>
     </div>
   );
 }
@@ -1245,13 +1253,15 @@ function NewPageDialog({
   onCreatePage: (pageType: string) => void;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Create New Page</DialogTitle>
-          <DialogDescription>Select a page type to create.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-2">
+    <FormDialogViewShell
+      open={open}
+      onOpenChange={onOpenChange}
+      onClose={() => onOpenChange(false)}
+      title="Create New Page"
+      subtitle="Select a page type to create."
+      size="sm"
+    >
+        <div className="space-y-2 pb-1">
           {PAGE_TYPES.map((pt) => (
             <button
               key={pt.type}
@@ -1267,8 +1277,7 @@ function NewPageDialog({
             </button>
           ))}
         </div>
-      </DialogContent>
-    </Dialog>
+    </FormDialogViewShell>
   );
 }
 
@@ -1313,19 +1322,23 @@ export default function WorkspacesPage() {
   const { data: pages = [] } = useQuery<WorkspacePage[]>({
     queryKey: ["/api/workspaces", selectedWorkspaceId, "pages"],
     enabled: !!selectedWorkspaceId,
+    staleTime: 30_000,
   });
 
   const { data: allWorkspaces = [] } = useQuery<Workspace[]>({
     queryKey: ["/api/workspaces"],
+    staleTime: 30_000,
   });
 
   const { data: workspaceTemplates = [] } = useQuery<any[]>({
     queryKey: ["/api/workspace-templates"],
+    staleTime: 60_000,
   });
 
   const { data: orgMembers = [] } = useQuery({
     queryKey: ["/api/chat/users", "workspace-create"],
     queryFn: fetchOrgMemberCandidates,
+    staleTime: 60_000,
   });
 
   const { data: selectedWorkspaceMembers = [] } = useQuery<any[]>({
@@ -1339,20 +1352,23 @@ export default function WorkspacesPage() {
         : [];
     },
     enabled: !!selectedWorkspaceId,
+    staleTime: 30_000,
   });
 
   const { data: myPermissionData } = useQuery<{ permission: string }>({
     queryKey: ["/api/workspaces", selectedWorkspaceId, "my-permission"],
     queryFn: async () => {
       const res = await fetchWithAuth(`/api/workspaces/${selectedWorkspaceId}/my-permission`);
-      if (!res.ok) return { permission: "edit" };
+      if (!res.ok) return { permission: "view" };
       return res.json();
     },
     enabled: !!selectedWorkspaceId,
+    staleTime: 30_000,
   });
 
   const { data: globalFavorites = [] } = useQuery<WorkspacePage[]>({
     queryKey: ["/api/workspace-pages/favorites"],
+    staleTime: 60_000,
   });
 
   const editWorkspaceMutation = useMutation({
@@ -1411,7 +1427,6 @@ export default function WorkspacesPage() {
           icon: icon || undefined,
           description: description || undefined,
           color: color || undefined,
-          tenantId: 1,
         });
         workspace = await response.json();
       }
@@ -2008,7 +2023,7 @@ export default function WorkspacesPage() {
         onCreatePage={handleNewPageDialogCreate}
       />
 
-      <Dialog
+      <FormDialogShell
         open={showCreateDialog}
         onOpenChange={(open) => {
           setShowCreateDialog(open);
@@ -2022,21 +2037,44 @@ export default function WorkspacesPage() {
             setSelectedMemberIds([]);
           }
         }}
+        title="Create Workspace"
+        subtitle="Give your workspace a name, pick an icon, and choose a color."
+        saveLabel="Create"
+        saveTestId="confirm-create-workspace"
+        size="md"
+        onCancel={() => {
+          setShowCreateDialog(false);
+          setNewWorkspaceName("");
+          setNewWorkspaceDescription("");
+          setNewWorkspaceIcon(null);
+          setNewWorkspaceColor(WORKSPACE_COLORS[0]);
+          setNewWorkspaceColorCustom("");
+          setSelectedTemplateId("");
+          setSelectedMemberIds([]);
+        }}
+        onSubmit={() =>
+          newWorkspaceName.trim() &&
+          createWorkspaceMutation.mutate({
+            name: newWorkspaceName.trim(),
+            icon: newWorkspaceIcon,
+            description: newWorkspaceDescription.trim() || undefined,
+            color: newWorkspaceColorCustom || newWorkspaceColor,
+            templateId: selectedTemplateId || undefined,
+            memberIds: selectedMemberIds,
+          })
+        }
+        disabled={!newWorkspaceName.trim() || createWorkspaceMutation.isPending}
+        saving={createWorkspaceMutation.isPending}
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create Workspace</DialogTitle>
-            <DialogDescription>Give your workspace a name, pick an icon, and choose a color.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
+          <div className="space-y-4">
             <div className="flex items-start gap-4">
               <WorkspaceIconPicker
                 selectedIcon={newWorkspaceIcon}
                 onSelect={setNewWorkspaceIcon}
               />
-              <div className="flex-1 space-y-3">
+              <FormSection title="Details" className="flex-1 space-y-3">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Name</label>
+                  <FieldLabel>Name</FieldLabel>
                   <Input
                     value={newWorkspaceName}
                     onChange={(e) => setNewWorkspaceName(e.target.value)}
@@ -2057,42 +2095,44 @@ export default function WorkspacesPage() {
                     data-testid="create-workspace-name-input"
                   />
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Template (optional)</label>
-                  <select
-                    value={selectedTemplateId}
-                    onChange={(e) => setSelectedTemplateId(e.target.value)}
-                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    data-testid="create-workspace-template-select"
-                  >
-                    <option value="">No template</option>
-                    {workspaceTemplates.map((template) => (
-                      <option key={template.id} value={String(template.id)}>
-                        {template.name}
-                      </option>
-                    ))}
-                  </select>
-                  {workspaceTemplates.length === 0 && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {WORKSPACE_FULL_TEMPLATES.length} built-in templates available once API templates load.
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Description (optional)</label>
-                  <textarea
-                    value={newWorkspaceDescription}
-                    onChange={(e) => setNewWorkspaceDescription(e.target.value)}
-                    placeholder="What is this workspace for?"
-                    rows={2}
-                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
-                    data-testid="create-workspace-description-input"
-                  />
-                </div>
-              </div>
+                <FieldGrid cols={1}>
+                  <div>
+                    <FieldLabel>Template (optional)</FieldLabel>
+                    <select
+                      value={selectedTemplateId}
+                      onChange={(e) => setSelectedTemplateId(e.target.value)}
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      data-testid="create-workspace-template-select"
+                    >
+                      <option value="">No template</option>
+                      {workspaceTemplates.map((template) => (
+                        <option key={template.id} value={String(template.id)}>
+                          {template.name}
+                        </option>
+                      ))}
+                    </select>
+                    {workspaceTemplates.length === 0 && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {WORKSPACE_FULL_TEMPLATES.length} built-in templates available once API templates load.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <FieldLabel>Description (optional)</FieldLabel>
+                    <textarea
+                      value={newWorkspaceDescription}
+                      onChange={(e) => setNewWorkspaceDescription(e.target.value)}
+                      placeholder="What is this workspace for?"
+                      rows={2}
+                      className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+                      data-testid="create-workspace-description-input"
+                    />
+                  </div>
+                </FieldGrid>
+              </FormSection>
             </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-2 block">Members</label>
+            <FormSection title="Members">
+              <FieldLabel>Members</FieldLabel>
               <div className="max-h-28 overflow-y-auto rounded-md border p-2 space-y-1">
                 {orgMembers.length === 0 && (
                   <p className="text-xs text-muted-foreground">No members available.</p>
@@ -2123,9 +2163,9 @@ export default function WorkspacesPage() {
                   );
                 })}
               </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-2 block">Color</label>
+            </FormSection>
+            <FormSection title="Color">
+              <FieldLabel>Color</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {WORKSPACE_COLORS.map((c) => (
                   <button
@@ -2150,62 +2190,40 @@ export default function WorkspacesPage() {
                 className="mt-2 h-8"
                 data-testid="create-workspace-custom-color-input"
               />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowCreateDialog(false);
-                  setNewWorkspaceName("");
-                  setNewWorkspaceDescription("");
-                  setNewWorkspaceIcon(null);
-                  setNewWorkspaceColor(WORKSPACE_COLORS[0]);
-                  setNewWorkspaceColorCustom("");
-                  setSelectedTemplateId("");
-                  setSelectedMemberIds([]);
-                }}
-                data-testid="cancel-create-workspace"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() =>
-                  newWorkspaceName.trim() &&
-                  createWorkspaceMutation.mutate({
-                    name: newWorkspaceName.trim(),
-                    icon: newWorkspaceIcon,
-                    description: newWorkspaceDescription.trim() || undefined,
-                    color: newWorkspaceColorCustom || newWorkspaceColor,
-                    templateId: selectedTemplateId || undefined,
-                    memberIds: selectedMemberIds,
-                  })
-                }
-                disabled={!newWorkspaceName.trim() || createWorkspaceMutation.isPending}
-                data-testid="confirm-create-workspace"
-              >
-                {createWorkspaceMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
-                Create
-              </Button>
-            </div>
+            </FormSection>
           </div>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog open={editingWorkspace !== null} onOpenChange={(open) => { if (!open) setEditingWorkspace(null); }}>
-        <DialogContent className="sm:max-w-md" data-testid="edit-workspace-dialog">
-          <DialogHeader>
-            <DialogTitle>Edit Workspace</DialogTitle>
-            <DialogDescription>Update your workspace icon, name, description, and color.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
+      <FormDialogShell
+        open={editingWorkspace !== null}
+        onOpenChange={(open) => { if (!open) setEditingWorkspace(null); }}
+        title="Edit Workspace"
+        subtitle="Update your workspace icon, name, description, and color."
+        saveLabel="Save Changes"
+        saveTestId="confirm-edit-workspace"
+        size="md"
+        testId="edit-workspace-dialog"
+        onCancel={() => setEditingWorkspace(null)}
+        onSubmit={() => {
+          if (editingWorkspace && editName.trim()) {
+            editWorkspaceMutation.mutate({
+              id: editingWorkspace.id,
+              data: { name: editName.trim(), description: editDescription.trim() || undefined, icon: editIcon, color: editColor },
+            });
+          }
+        }}
+        disabled={!editName.trim() || editWorkspaceMutation.isPending}
+        saving={editWorkspaceMutation.isPending}
+      >
+          <div className="space-y-4">
             <div className="flex items-start gap-4">
               <WorkspaceIconPicker
                 selectedIcon={editIcon}
                 onSelect={setEditIcon}
               />
-              <div className="flex-1 space-y-3">
+              <FormSection title="Details" className="flex-1 space-y-3">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Name</label>
+                  <FieldLabel>Name</FieldLabel>
                   <Input
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
@@ -2214,21 +2232,23 @@ export default function WorkspacesPage() {
                     data-testid="edit-workspace-name-input"
                   />
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Description (optional)</label>
-                  <textarea
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    placeholder="What is this workspace for?"
-                    rows={2}
-                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
-                    data-testid="edit-workspace-description-input"
-                  />
-                </div>
-              </div>
+                <FieldGrid cols={1}>
+                  <div>
+                    <FieldLabel>Description (optional)</FieldLabel>
+                    <textarea
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      placeholder="What is this workspace for?"
+                      rows={2}
+                      className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+                      data-testid="edit-workspace-description-input"
+                    />
+                  </div>
+                </FieldGrid>
+              </FormSection>
             </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-2 block">Color</label>
+            <FormSection title="Color">
+              <FieldLabel>Color</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {WORKSPACE_COLORS.map((c) => (
                   <button
@@ -2246,35 +2266,19 @@ export default function WorkspacesPage() {
                   </button>
                 ))}
               </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditingWorkspace(null)} data-testid="cancel-edit-workspace">Cancel</Button>
-              <Button
-                onClick={() => {
-                  if (editingWorkspace && editName.trim()) {
-                    editWorkspaceMutation.mutate({
-                      id: editingWorkspace.id,
-                      data: { name: editName.trim(), description: editDescription.trim() || undefined, icon: editIcon, color: editColor },
-                    });
-                  }
-                }}
-                disabled={!editName.trim() || editWorkspaceMutation.isPending}
-                data-testid="confirm-edit-workspace"
-              >
-                {editWorkspaceMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
-                Save Changes
-              </Button>
-            </div>
+            </FormSection>
           </div>
-        </DialogContent>
-      </Dialog>
+      </FormDialogShell>
 
-      <Dialog open={showBoardTemplateDialog} onOpenChange={setShowBoardTemplateDialog}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col" data-testid="board-template-dialog">
-          <DialogHeader>
-            <DialogTitle>Create Board from Template</DialogTitle>
-            <DialogDescription>Choose a template to get started quickly with pre-configured columns and sample data.</DialogDescription>
-          </DialogHeader>
+      <FormDialogViewShell
+        open={showBoardTemplateDialog}
+        onOpenChange={setShowBoardTemplateDialog}
+        onClose={() => setShowBoardTemplateDialog(false)}
+        title="Create Board from Template"
+        subtitle="Choose a template to get started quickly with pre-configured columns and sample data."
+        size="xl"
+        testId="board-template-dialog"
+      >
           <div className="space-y-3 flex-1 overflow-hidden flex flex-col">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -2326,8 +2330,7 @@ export default function WorkspacesPage() {
               )}
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+      </FormDialogViewShell>
 
       <WorkspaceSharePanel
         workspaceId={shareWorkspaceId || selectedWorkspaceId || 0}

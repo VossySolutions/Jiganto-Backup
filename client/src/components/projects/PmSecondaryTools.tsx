@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,8 +20,13 @@ export function PmTeamOrgTool({ projectId }: ToolProps) {
     queryKey: [`/api/pm/projects/${projectId}/team`],
   });
   const { data: orgCharts = [] } = useQuery<any[]>({
-    queryKey: ["/api/org-charts", { tenantId: 1 }],
-    queryFn: () => fetch("/api/org-charts?tenantId=1").then(r => r.json()),
+    queryKey: ["/api/org-charts"],
+    queryFn: async () => {
+      const res = await fetchWithAuth("/api/org-charts");
+      if (!res.ok) throw new Error("Failed to load org charts");
+      return res.json();
+    },
+    staleTime: 30_000,
   });
   const projectChart = orgCharts.find((c: any) => c.metadata?.projectId === projectId);
 
@@ -250,7 +255,7 @@ export function PmResourceTrackerTool({ projectId }: ToolProps) {
 
 export function PmTimesheetsTool({ projectId }: ToolProps) {
   const { data: entries = [], isLoading } = useQuery<any[]>({
-    queryKey: [`/api/finance/timesheet-entries?projectId=${projectId}`],
+    queryKey: [`/api/finance/timesheets/projects/${projectId}/entries`],
   });
 
   if (isLoading) {
@@ -293,7 +298,7 @@ export function PmFinanceTrackerTool({ projectId, project }: ToolProps) {
   const { toast } = useToast();
   const [budgetInput, setBudgetInput] = useState(String(project?.budget ?? ""));
   const { data: entries = [] } = useQuery<any[]>({
-    queryKey: [`/api/finance/timesheet-entries?projectId=${projectId}`],
+    queryKey: [`/api/finance/timesheets/projects/${projectId}/entries`],
     enabled: !!projectId,
   });
 
@@ -525,8 +530,17 @@ export function PmDocumentationTool({ projectId }: ToolProps) {
 }
 
 export function PmTestTrackerTool({ projectId }: ToolProps) {
+  const { data: pmProject } = useQuery<{ id: number; name: string }>({
+    queryKey: [`/api/pm/projects/${projectId}`],
+    enabled: !!projectId,
+  });
+  const { data: tmProjects = [] } = useQuery<Array<{ id: number; name: string }>>({
+    queryKey: ["/api/tm/projects"],
+  });
+  const tmProjectId = tmProjects.find((p) => p.name === pmProject?.name)?.id;
   const { data: testCases = [], isLoading } = useQuery<any[]>({
-    queryKey: [`/api/test-mgmt/test-cases?projectId=${projectId}`],
+    queryKey: tmProjectId ? [`/api/tm/cases?projectId=${tmProjectId}`] : ["/api/tm/cases?disabled=1"],
+    enabled: !!tmProjectId,
   });
   const total = testCases.length;
   const passed = testCases.filter((t: any) => (t.status || "").toLowerCase() === "passed").length;
@@ -764,10 +778,16 @@ export function PmStakeholderTool({ projectId, project }: ToolProps) {
 }
 
 export function PmBpmTool({ projectId }: ToolProps) {
+  const { data: libraries = [] } = useQuery<Array<{ id: number; projectId?: number | null }>>({
+    queryKey: ["/api/bpm/libraries"],
+  });
   const { data: diagrams = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/bpm/diagrams"],
   });
-  const projectDiagrams = diagrams.filter((d: any) => d.metadata?.projectId === projectId);
+  const libraryIdsForProject = new Set(
+    libraries.filter((lib) => lib.projectId === projectId).map((lib) => lib.id),
+  );
+  const projectDiagrams = diagrams.filter((d: any) => d.libraryId && libraryIdsForProject.has(d.libraryId));
 
   return (
     <div className="space-y-4">

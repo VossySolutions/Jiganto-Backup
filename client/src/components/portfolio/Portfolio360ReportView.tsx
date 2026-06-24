@@ -20,6 +20,7 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
 
   const { data, isLoading } = useQuery<Report360Data>({
     queryKey: [`/api/portfolio/reports/360/${projectId}`],
+    staleTime: 30_000,
   });
   const [narrative, setNarrative] = useState("");
 

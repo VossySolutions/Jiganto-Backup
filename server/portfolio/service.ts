@@ -276,6 +276,13 @@ export async function getPortfolioDashboard(tenantId: number, clientId?: number)
   const programmeCount = programmes.length;
   const childProjectCount = programmes.reduce((s, g) => s + g.childCount, 0);
 
+  const { getPortfolioAvgHealthTrend } = await import("./health-history");
+  const avgHealthTrend = await getPortfolioAvgHealthTrend(
+    tenantId,
+    avgHealth,
+    active.map((p) => p.id),
+  );
+
   return {
     kpis: {
       activeProjects: active.length,
@@ -284,7 +291,7 @@ export async function getPortfolioDashboard(tenantId: number, clientId?: number)
       totalSpent,
       milestonesDue30d,
       avgHealth,
-      avgHealthTrend: 0,
+      avgHealthTrend,
       programmeCount,
       childProjectCount,
       greenCount: projects.filter((p) => ragLevel(p.ragStatus) === "green").length,

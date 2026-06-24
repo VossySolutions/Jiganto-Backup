@@ -50,6 +50,18 @@ import {
   projectMarginPct,
   utilisationPct,
 } from "./calculations";
+import { resourceWeeklyCapacityHours } from "../resources/service";
+
+function workingDaysBetweenIso(fromDate: string, toDate: string): number {
+  let count = 0;
+  const d = new Date(fromDate);
+  const endD = new Date(toDate);
+  while (d <= endD) {
+    if (d.getDay() !== 0 && d.getDay() !== 6) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return Math.max(count, 1);
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -556,6 +568,11 @@ export async function recalculateBudgetActuals(tenantId: number, projectId: numb
     .where(eq(projectBudgets.id, budget.id))
     .returning();
 
+  await db
+    .update(pmProjects)
+    .set({ spentBudget: moneyStr(actualCost), updatedAt: new Date() })
+    .where(and(eq(pmProjects.id, projectId), eq(pmProjects.tenantId, tenantId)));
+
   return updated;
 }
 
@@ -913,6 +930,17 @@ async function recomputePeriodEntryStatus(periodId: number): Promise<boolean> {
 }
 
 async function finalizeTimesheetApproval(tenantId: number, periodId: number): Promise<TimesheetPeriod | null> {
+  // Period-level approval: pending entries inherit approved status (entry-level rejections remain rejected)
+  await db
+    .update(timesheetEntries)
+    .set({ approvalStatus: "approved", approvedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(timesheetEntries.timesheetPeriodId, periodId),
+        or(eq(timesheetEntries.approvalStatus, "pending"), isNull(timesheetEntries.approvalStatus)),
+      ),
+    );
+
   const entriesApproved = await recomputePeriodEntryStatus(periodId);
   if (!entriesApproved) return null;
 
@@ -1090,6 +1118,15 @@ export async function approveTimesheetEntry(
     })
     .where(eq(timesheetEntries.id, entryId))
     .returning();
+
+  if (updated) {
+    const allApproved = await recomputePeriodEntryStatus(entry.timesheetPeriodId);
+    if (allApproved) {
+      await finalizeTimesheetApproval(tenantId, entry.timesheetPeriodId);
+    } else if (entry.projectId != null) {
+      await recalculateBudgetActuals(tenantId, entry.projectId);
+    }
+  }
 
   return updated ?? null;
 }
@@ -1300,19 +1337,37 @@ export async function getUtilisationReport(tenantId: number, fromDate: string, t
     if (e.activityType === "billable") agg.billable += h;
     byRes.set(e.resourceId, agg);
   }
-  const days = Math.max(1, Math.ceil((Date.parse(toDate) - Date.parse(fromDate)) / 86400000) + 1);
-  const available = byRes.size * days * 8;
+  const workingDays = workingDaysBetweenIso(fromDate, toDate);
+  const activeResources = await db
+    .select()
+    .from(resources)
+    .where(and(
+      eq(resources.tenantId, tenantId),
+      or(eq(resources.status, "active"), eq(resources.status, "available")),
+    ));
+
+  let available = 0;
+  for (const r of activeResources) {
+    available += (resourceWeeklyCapacityHours(r) / 5) * workingDays;
+  }
+
   return {
     billableHours: billable,
     nonBillableHours: nonBillable,
     availableHours: available,
-    pct: utilisationPct(billable, available || billable + nonBillable),
-    byResource: Array.from(byRes.entries()).map(([resourceId, v]) => ({
-      resourceId,
-      billable: v.billable,
-      total: v.total,
-      pct: utilisationPct(v.billable, v.total),
-    })),
+    pct: utilisationPct(billable, available),
+    byResource: Array.from(byRes.entries()).map(([resourceId, v]) => {
+      const res = activeResources.find((r) => r.id === resourceId);
+      const resAvailable = res
+        ? (resourceWeeklyCapacityHours(res) / 5) * workingDays
+        : v.total;
+      return {
+        resourceId,
+        billable: v.billable,
+        total: v.total,
+        pct: utilisationPct(v.billable, resAvailable),
+      };
+    }),
   };
 }
 
@@ -1634,9 +1689,13 @@ export async function createInvoice(
     notes?: string | null;
     poNumber?: string | null;
     createdBy?: string | null;
+    taxAmount?: string | number | null;
+    vatAmount?: string | number | null;
     milestoneLineIds?: number[];
     includeTimesheets?: boolean;
     includeExpenses?: boolean;
+    periodStart?: string;
+    periodEnd?: string;
     manualLines?: {
       lineType?: string;
       description: string;
@@ -1703,14 +1762,19 @@ export async function createInvoice(
 
       const periodIds = approvedPeriods.map((p) => p.id);
       if (periodIds.length) {
+        const entryConds = [
+          inArray(timesheetEntries.timesheetPeriodId, periodIds),
+          eq(timesheetEntries.projectId, data.projectId),
+          eq(timesheetEntries.isInvoiced, false),
+          eq(timesheetEntries.activityType, "billable"),
+        ];
+        if (data.periodStart) entryConds.push(gte(timesheetEntries.entryDate, data.periodStart));
+        if (data.periodEnd) entryConds.push(lte(timesheetEntries.entryDate, data.periodEnd));
+
         const entries = await db
           .select()
           .from(timesheetEntries)
-          .where(and(
-            inArray(timesheetEntries.timesheetPeriodId, periodIds),
-            eq(timesheetEntries.projectId, data.projectId),
-            eq(timesheetEntries.isInvoiced, false),
-          ));
+          .where(and(...entryConds));
 
         const byRole = new Map<string, { hours: number; charge: number; ids: number[] }>();
         for (const e of entries) {
@@ -1776,6 +1840,8 @@ export async function createInvoice(
   }
 
   const subtotal = lines.reduce((s, l) => s + parseMoney(l.amount), 0);
+  const taxAmount = parseMoney(data.taxAmount ?? 0) + parseMoney(data.vatAmount ?? 0);
+  const total = subtotal + taxAmount;
 
   const [invoice] = await db
     .insert(financeInvoices)
@@ -1791,7 +1857,8 @@ export async function createInvoice(
       currency: data.currency ?? settings.baseCurrency ?? "GBP",
       exchangeRate: data.exchangeRate != null ? String(data.exchangeRate) : null,
       subtotal: moneyStr(subtotal),
-      total: moneyStr(subtotal),
+      taxAmount: moneyStr(taxAmount),
+      total: moneyStr(total),
       notes: data.notes ?? null,
       poNumber: data.poNumber ?? null,
       createdBy: data.createdBy ?? null,
@@ -1810,12 +1877,13 @@ export async function updateInvoice(
   id: number,
   updates: Partial<Omit<FinanceInvoice, "id" | "tenantId" | "createdAt">> & {
     lines?: Omit<typeof financeInvoiceLines.$inferInsert, "id" | "invoiceId" | "createdAt">[];
+    vatAmount?: string | number | null;
   },
 ): Promise<InvoiceDetail | null> {
   const existing = await getInvoiceDetail(tenantId, id);
   if (!existing || existing.status !== "draft") return null;
 
-  const { lines, ...invoiceUpdates } = updates;
+  const { lines, vatAmount: vatInput, ...invoiceUpdates } = updates;
   const [updated] = await db
     .update(financeInvoices)
     .set({ ...invoiceUpdates, updatedAt: new Date() })
@@ -1830,9 +1898,29 @@ export async function updateInvoice(
       await db.insert(financeInvoiceLines).values(lines.map((l) => ({ ...l, invoiceId: id })));
     }
     const subtotal = lines.reduce((s, l) => s + parseMoney(l.amount), 0);
+    const taxAmount = parseMoney(invoiceUpdates.taxAmount ?? existing.taxAmount ?? 0)
+      + parseMoney(vatInput ?? 0);
+    const total = subtotal + taxAmount;
     await db
       .update(financeInvoices)
-      .set({ subtotal: moneyStr(subtotal), total: moneyStr(subtotal), updatedAt: new Date() })
+      .set({
+        subtotal: moneyStr(subtotal),
+        taxAmount: moneyStr(taxAmount),
+        total: moneyStr(total),
+        updatedAt: new Date(),
+      })
+      .where(eq(financeInvoices.id, id));
+  } else if (invoiceUpdates.taxAmount != null || vatInput != null) {
+    const subtotal = parseMoney(updated.subtotal);
+    const taxAmount = parseMoney(invoiceUpdates.taxAmount ?? updated.taxAmount ?? 0)
+      + parseMoney(vatInput ?? 0);
+    await db
+      .update(financeInvoices)
+      .set({
+        taxAmount: moneyStr(taxAmount),
+        total: moneyStr(subtotal + taxAmount),
+        updatedAt: new Date(),
+      })
       .where(eq(financeInvoices.id, id));
   }
 
@@ -1861,6 +1949,33 @@ async function markInvoiceLineSourcesInvoiced(lines: FinanceInvoiceLine[]): Prom
       await db
         .update(budgetMilestoneLines)
         .set({ isInvoiced: true })
+        .where(eq(budgetMilestoneLines.milestoneId, line.milestoneId));
+    }
+  }
+}
+
+async function unmarkInvoiceLineSourcesInvoiced(lines: FinanceInvoiceLine[]): Promise<void> {
+  for (const line of lines) {
+    const tsIds = (line.timesheetEntryIds as number[] | null) ?? [];
+    if (tsIds.length) {
+      await db
+        .update(timesheetEntries)
+        .set({ isInvoiced: false, updatedAt: new Date() })
+        .where(inArray(timesheetEntries.id, tsIds));
+    }
+
+    const expIds = (line.expenseItemIds as number[] | null) ?? [];
+    if (expIds.length) {
+      await db
+        .update(expenseItems)
+        .set({ isInvoiced: false })
+        .where(inArray(expenseItems.id, expIds));
+    }
+
+    if (line.milestoneId) {
+      await db
+        .update(budgetMilestoneLines)
+        .set({ isInvoiced: false })
         .where(eq(budgetMilestoneLines.milestoneId, line.milestoneId));
     }
   }
@@ -1999,6 +2114,9 @@ export async function createCreditNote(
     quantity: l.quantity,
     unitRate: moneyStr(-parseMoney(l.unitRate)),
     amount: moneyStr(-parseMoney(l.amount)),
+    timesheetEntryIds: l.timesheetEntryIds,
+    expenseItemIds: l.expenseItemIds,
+    milestoneId: l.milestoneId,
   }));
 
   const subtotal = creditLines.reduce((s, l) => s + parseMoney(l.amount), 0);
@@ -2025,6 +2143,25 @@ export async function createCreditNote(
 
   if (creditLines.length) {
     await db.insert(financeInvoiceLines).values(creditLines.map((l) => ({ ...l, invoiceId: credit.id })));
+  }
+
+  const sentStatuses = new Set(["sent", "partially_paid", "paid", "overdue"]);
+  if (sentStatuses.has(original.status)) {
+    await unmarkInvoiceLineSourcesInvoiced(original.lines);
+
+    const budget = await db
+      .select()
+      .from(projectBudgets)
+      .where(and(eq(projectBudgets.tenantId, tenantId), eq(projectBudgets.projectId, original.projectId)))
+      .limit(1);
+
+    if (budget[0]) {
+      const newBilled = Math.max(0, parseMoney(budget[0].billedToDate) - parseMoney(original.total));
+      await db
+        .update(projectBudgets)
+        .set({ billedToDate: moneyStr(newBilled), updatedAt: new Date() })
+        .where(eq(projectBudgets.id, budget[0].id));
+    }
   }
 
   await db
@@ -2119,6 +2256,68 @@ export async function listErpSyncLog(
 // Dashboard
 // ---------------------------------------------------------------------------
 
+function resolveProjectBudgetTimeline(
+  projectStart: string | null | undefined,
+  projectEnd: string | null | undefined,
+  budgetCreatedAt?: Date | string | null,
+): { start: Date; end: Date } | null {
+  if (projectStart && projectEnd) {
+    const start = new Date(projectStart);
+    const end = new Date(projectEnd);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end >= start) {
+      return { start, end };
+    }
+  }
+  if (projectStart) {
+    const start = new Date(projectStart);
+    if (!Number.isNaN(start.getTime())) {
+      const end = new Date(start);
+      end.setFullYear(end.getFullYear() + 1);
+      return { start, end };
+    }
+  }
+  if (projectEnd) {
+    const end = new Date(projectEnd);
+    if (!Number.isNaN(end.getTime())) {
+      const start = new Date(end);
+      start.setFullYear(start.getFullYear() - 1);
+      return { start, end };
+    }
+  }
+  if (budgetCreatedAt) {
+    const created = new Date(budgetCreatedAt);
+    if (!Number.isNaN(created.getTime())) {
+      return {
+        start: new Date(created.getFullYear(), 0, 1),
+        end: new Date(created.getFullYear(), 11, 31),
+      };
+    }
+  }
+  return null;
+}
+
+function monthBudgetForProject(
+  budgetTotal: number,
+  projectStart: string | null | undefined,
+  projectEnd: string | null | undefined,
+  year: number,
+  month: number,
+  budgetCreatedAt?: Date | string | null,
+): number {
+  if (budgetTotal <= 0) return 0;
+  const timeline = resolveProjectBudgetTimeline(projectStart, projectEnd, budgetCreatedAt);
+  if (!timeline) return 0;
+  const { start, end } = timeline;
+  const monthStart = new Date(year, month, 1);
+  const monthEnd = new Date(year, month + 1, 0);
+  if (monthEnd < start || monthStart > end) return 0;
+  const totalDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1);
+  const overlapStart = start > monthStart ? start : monthStart;
+  const overlapEnd = end < monthEnd ? end : monthEnd;
+  const overlapDays = Math.max(0, Math.ceil((overlapEnd.getTime() - overlapStart.getTime()) / 86400000) + 1);
+  return budgetTotal * (overlapDays / totalDays);
+}
+
 export async function loadFinanceDashboard(
   tenantId: number,
   clientId?: number,
@@ -2164,6 +2363,9 @@ export async function loadFinanceDashboard(
     if (sentStatuses.has(inv.status) && inv.issueDate >= monthStart && inv.issueDate <= monthEnd) {
       revenueThisMonth += total;
     }
+    if (inv.status === "credit_note" && inv.issueDate >= monthStart && inv.issueDate <= monthEnd) {
+      revenueThisMonth += total;
+    }
 
     if (sentStatuses.has(inv.status) && outstanding > 0) {
       outstandingInvoices += outstanding;
@@ -2175,7 +2377,13 @@ export async function loadFinanceDashboard(
     if (sentStatuses.has(inv.status) && inv.issueDate >= ytdStart && inv.issueDate <= ytdEnd) {
       totalBilledYtd += total;
     }
+    if (inv.status === "credit_note" && inv.issueDate >= ytdStart && inv.issueDate <= ytdEnd) {
+      totalBilledYtd += total;
+    }
     if (sentStatuses.has(inv.status) && inv.issueDate >= prevYtdStart && inv.issueDate <= prevYtdEnd) {
+      totalBilledPrevYtd += total;
+    }
+    if (inv.status === "credit_note" && inv.issueDate >= prevYtdStart && inv.issueDate <= prevYtdEnd) {
       totalBilledPrevYtd += total;
     }
   }
@@ -2273,12 +2481,22 @@ export async function loadFinanceDashboard(
         if (sentStatuses.has(inv.status) && inv.issueDate >= start && inv.issueDate <= end) {
           actual += parseMoney(inv.total);
         }
+        if (inv.status === "credit_note" && inv.issueDate >= start && inv.issueDate <= end) {
+          actual += parseMoney(inv.total);
+        }
       }
     }
 
     const monthBudget = budgets.reduce((s, b) => {
       const total = parseMoney(b.budget.totalBudget);
-      return s + total / 12;
+      return s + monthBudgetForProject(
+        total,
+        b.projectStart,
+        b.projectEnd,
+        d.getFullYear(),
+        d.getMonth(),
+        b.budget.createdAt,
+      );
     }, 0);
 
     revenueVsBudget.push({
@@ -2315,13 +2533,20 @@ export async function loadFinanceDashboard(
     }
   }
 
-  const resourceCount = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(timesheetPeriods)
-    .where(and(eq(timesheetPeriods.tenantId, tenantId), gte(timesheetPeriods.weekStartDate, new Date(monthStart))));
+  const workingDays = workingDaysBetweenIso(monthStart, monthEnd);
+  const activeResources = await db
+    .select()
+    .from(resources)
+    .where(and(
+      eq(resources.tenantId, tenantId),
+      or(eq(resources.status, "active"), eq(resources.status, "available")),
+    ));
 
-  const availableHours = (resourceCount[0]?.count ?? 0) * 40;
-  const pct = utilisationPct(billableHours, availableHours || billableHours + nonBillableHours || 1);
+  const availableHours = activeResources.reduce(
+    (sum, r) => sum + (resourceWeeklyCapacityHours(r) / 5) * workingDays,
+    0,
+  );
+  const pct = utilisationPct(billableHours, availableHours);
 
   return {
     kpis: {

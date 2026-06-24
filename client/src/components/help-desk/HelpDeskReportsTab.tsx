@@ -87,7 +87,7 @@ export function HelpDeskReportsTab() {
   }
 
   if (isError) {
-    return <HelpDeskErrorState message="Could not load reports. Run npm run db:patch-help-desk." onRetry={() => refetch()} />;
+    return <HelpDeskErrorState message="Could not load reports. Run npm run db:push." onRetry={() => refetch()} />;
   }
 
   if (!data) return null;

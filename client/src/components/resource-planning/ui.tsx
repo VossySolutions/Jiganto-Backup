@@ -2,12 +2,38 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, Info } from "lucide-react";
+import { AlertTriangle, CircleHelp, Info } from "lucide-react";
 import type { AvatarColor, DsCell } from "./mock-data";
 
 /** Module accent — matches sidebar colour (#4338CA). */
 export const RP_ACCENT = "#4338CA";
+
+/** Tooltip copy for resource-planning KPI labels. */
+export const RP_KPI_HELP: Record<string, string> = {
+  "Total Capacity": "Active resources available for allocation this period.",
+  "Billable Utilisation": "Billable hours divided by available hours vs target.",
+  "Forecast Revenue": "Probability-weighted pipeline revenue from CRM deals.",
+  "On Bench": "Resources with zero allocation this week.",
+  "Open Skills Gaps": "Skill shortages vs confirmed and pipeline demand.",
+  "Skills Tracked": "Distinct skills mapped across practice areas.",
+  "Critical Shortages": "Skills with urgent demand in the forecast window.",
+  "Confirmed Demand": "Headcount required from signed or confirmed work.",
+  "Pipeline Demand": "Probability-weighted headcount from CRM pipeline.",
+  "Active Opportunities": "Open CRM opportunities driving resource demand.",
+  "Soft Demand (weighted)": "Expected headcount after stage probability weighting.",
+  "At-risk opportunities": "Deals where capacity may not meet delivery dates.",
+  "Avg probability": "Mean win probability across active pipeline deals.",
+  "On Bench Today": "Resources unallocated today as a share of capacity.",
+  "Rolling off (30 days)": "Assignments ending within 30 days unless rebooked.",
+  "Bench Cost / Month": "Estimated monthly salary cost for unbillable bench time.",
+  "Redeployable": "Bench resources matched to open demand profiles.",
+  "Expected Revenue": "Scenario revenue from weighted pipeline.",
+  "Resource Demand": "Headcount needed if scenario assumptions hold.",
+  "Utilisation Forecast": "Projected utilisation after planned actions.",
+  "Shortfall": "Gap between demand and supply requiring action.",
+};
 
 const AVATAR_COLORS: Record<AvatarColor, string> = {
   brand: "bg-indigo-600",
@@ -47,18 +73,35 @@ export function RpKpiCard({
   sub,
   accent = RP_ACCENT,
   valueColor,
+  helpText,
 }: {
   label: string;
   value: string;
   sub?: string;
   accent?: string;
   valueColor?: string;
+  helpText?: string;
 }) {
+  const tip = helpText ?? RP_KPI_HELP[label];
   return (
     <Card className="rounded-xl border-border/50 overflow-hidden hover:shadow-sm transition-shadow">
       <div className="h-1" style={{ backgroundColor: accent }} />
       <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground truncate">{label}</p>
+        <div className="flex items-center gap-1 min-w-0">
+          <p className="text-xs text-muted-foreground truncate">{label}</p>
+          {tip ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" className="text-muted-foreground/60 hover:text-muted-foreground shrink-0" aria-label={`About ${label}`}>
+                  <CircleHelp className="h-3 w-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[240px] text-xs leading-relaxed">
+                {tip}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
         <p className="text-xl sm:text-2xl font-bold mt-1 tabular-nums" style={valueColor ? { color: valueColor } : undefined}>
           {value}
         </p>

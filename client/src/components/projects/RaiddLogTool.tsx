@@ -2,10 +2,11 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { ImportModal } from "@/components/ImportModal";
 import { TablePagination } from "@/components/TablePagination";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { useTablePagination } from "@/hooks/use-table-pagination";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel } from "@/components/ui/form-dialog-shell";
 import {
   Dialog,
   DialogContent,
@@ -407,7 +408,12 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
 
   const { data: items = [], isLoading } = useQuery<RaiddItem[]>({
     queryKey: ["/api/pm/projects", projectId, "raidd", config.typeValue],
-    queryFn: () => fetch(`/api/pm/projects/${projectId}/raidd?type=${config.typeValue}`).then(r => r.json()),
+    queryFn: async () => {
+      const res = await fetchWithAuth(`/api/pm/projects/${projectId}/raidd?type=${config.typeValue}`);
+      if (!res.ok) throw new Error("Failed to load RAIDD items");
+      return res.json();
+    },
+    staleTime: 30_000,
   });
 
   const createMutation = useMutation({
@@ -489,7 +495,6 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
     if (!newItem.title.trim()) return;
     const nextCode = `${config.codePrefix}-${String(items.length + 1).padStart(3, "0")}`;
     createMutation.mutate({
-      tenantId: 1,
       projectId,
       type: config.typeValue,
       code: nextCode,
@@ -720,7 +725,6 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
           const isEscalated = escalatedVal === "yes" || escalatedVal === "true";
 
           rows.push({
-            tenantId: 1,
             projectId,
             type: config.typeValue,
             code: codeIdx >= 0 && vals[codeIdx] ? vals[codeIdx] : nextCode,
@@ -747,14 +751,8 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
         let failCount = 0;
         for (const row of rows) {
           try {
-            const res = await fetch("/api/pm/raidd", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(row),
-              credentials: "include",
-            });
-            if (res.ok) { successCount++; }
-            else { failCount++; console.error("Import row failed:", await res.text()); }
+            await apiRequest("POST", "/api/pm/raidd", row);
+            successCount++;
           } catch (err) {
             failCount++;
             console.error("Import row error:", err);
@@ -1294,47 +1292,48 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
       )}
 
       {/* Add Item Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="sm:max-w-[460px]" data-testid="dialog-add-item">
-          <DialogHeader>
-            <DialogTitle>{config.addLabel}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3.5">
-            <div>
-              <label className="text-[11px] font-semibold text-muted-foreground">Title</label>
-              <input className="w-full mt-1 px-2.5 py-2 border rounded-md text-[12.5px] bg-muted focus:border-primary outline-none" value={newItem.title} onChange={(e) => setNewItem({ ...newItem, title: e.target.value })} placeholder={`Enter ${config.title.toLowerCase()} title...`} data-testid="input-new-title" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground">Priority</label>
-                <select className="w-full mt-1 px-2.5 py-2 border rounded-md text-[12.5px] bg-muted" value={newItem.priority} onChange={(e) => setNewItem({ ...newItem, priority: e.target.value })} data-testid="select-new-priority">
-                  {config.priorityOptions.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground">Category</label>
-                <select className="w-full mt-1 px-2.5 py-2 border rounded-md text-[12.5px] bg-muted" value={newItem.category} onChange={(e) => setNewItem({ ...newItem, category: e.target.value })} data-testid="select-new-category">
-                  <option value="">Select...</option>
-                  {config.categories.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="text-[11px] font-semibold text-muted-foreground">Workstream</label>
-              <select className="w-full mt-1 px-2.5 py-2 border rounded-md text-[12.5px] bg-muted" value={newItem.workstream} onChange={(e) => setNewItem({ ...newItem, workstream: e.target.value })} data-testid="select-new-workstream">
-                <option value="">Select...</option>
-                {WORKSTREAMS.map(w => <option key={w} value={w}>{w}</option>)}
+      <FormDialogShell
+        open={showAddDialog}
+        onOpenChange={setShowAddDialog}
+        onCancel={() => setShowAddDialog(false)}
+        onSubmit={handleAddItem}
+        title={config.addLabel}
+        saveLabel={createMutation.isPending ? "Creating..." : config.addLabel}
+        saving={createMutation.isPending}
+        disabled={!newItem.title.trim() || createMutation.isPending}
+        saveTestId="button-confirm-add"
+        testId="dialog-add-item"
+        size="sm"
+      >
+        <FormSection title={`${config.title} details`} icon={<span className="h-2 w-2 rounded-full bg-blue-500" />}>
+          <div className="space-y-1.5 mb-3.5">
+            <FieldLabel>Title</FieldLabel>
+            <input className="w-full mt-1 px-2.5 py-2 border rounded-md text-[12.5px] bg-muted focus:border-primary outline-none" value={newItem.title} onChange={(e) => setNewItem({ ...newItem, title: e.target.value })} placeholder={`Enter ${config.title.toLowerCase()} title...`} data-testid="input-new-title" />
+          </div>
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5">
+              <FieldLabel>Priority</FieldLabel>
+              <select className="w-full mt-1 px-2.5 py-2 border rounded-md text-[12.5px] bg-muted" value={newItem.priority} onChange={(e) => setNewItem({ ...newItem, priority: e.target.value })} data-testid="select-new-priority">
+                {config.priorityOptions.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
+            <div className="space-y-1.5">
+              <FieldLabel>Category</FieldLabel>
+              <select className="w-full mt-1 px-2.5 py-2 border rounded-md text-[12.5px] bg-muted" value={newItem.category} onChange={(e) => setNewItem({ ...newItem, category: e.target.value })} data-testid="select-new-category">
+                <option value="">Select...</option>
+                {config.categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </FieldGrid>
+          <div className="space-y-1.5">
+            <FieldLabel>Workstream</FieldLabel>
+            <select className="w-full mt-1 px-2.5 py-2 border rounded-md text-[12.5px] bg-muted" value={newItem.workstream} onChange={(e) => setNewItem({ ...newItem, workstream: e.target.value })} data-testid="select-new-workstream">
+              <option value="">Select...</option>
+              {WORKSTREAMS.map(w => <option key={w} value={w}>{w}</option>)}
+            </select>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)} data-testid="button-cancel-add">Cancel</Button>
-            <Button onClick={handleAddItem} disabled={!newItem.title.trim() || createMutation.isPending} data-testid="button-confirm-add">
-              {createMutation.isPending ? "Creating..." : config.addLabel}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </FormSection>
+      </FormDialogShell>
 
       {/* Escalation Dialog */}
       <Dialog open={showEscDialog} onOpenChange={setShowEscDialog}>

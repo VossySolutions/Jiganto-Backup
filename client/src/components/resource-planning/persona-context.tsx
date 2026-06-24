@@ -1,6 +1,14 @@
 import { createContext, useContext, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 export type RpPersonaId = "res-mgr" | "exec" | "sales" | "hr";
+
+export const RP_PERSONA_LABELS: Record<RpPersonaId, string> = {
+  "res-mgr": "Resource Mgr",
+  exec: "Exec",
+  sales: "Sales",
+  hr: "HR",
+};
 
 export type RpFeature =
   | "dashboard"
@@ -40,4 +48,11 @@ export function useRpPersona(): RpPersonaId {
 export function withRpPersona(url: string, persona: RpPersonaId): string {
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}persona=${persona}`;
+}
+
+export function useRpPersonas() {
+  return useQuery<{ allowed: RpPersonaId[]; defaultPersona: RpPersonaId }>({
+    queryKey: ["/api/resource-planning/personas"],
+    staleTime: 60_000,
+  });
 }

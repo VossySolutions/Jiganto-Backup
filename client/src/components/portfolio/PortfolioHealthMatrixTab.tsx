@@ -39,6 +39,7 @@ function RagCell({ level, onClick }: { level: RagLevel; onClick?: () => void }) 
 function HealthTrendSparkline({ projectId }: { projectId: number }) {
   const { data: history = [], isLoading } = useQuery<HealthHistoryPoint[]>({
     queryKey: [`/api/portfolio/health-matrix/history/${projectId}`],
+    staleTime: 30_000,
   });
 
   const points = history.slice(-4);
@@ -79,6 +80,7 @@ export function PortfolioHealthMatrixTab() {
 
   const { data: snapshotWeeks = [] } = useQuery<string[]>({
     queryKey: ["/api/portfolio/health-matrix/snapshot-weeks"],
+    staleTime: 30_000,
   });
 
   const matrixUrl = snapshotWeek
@@ -87,6 +89,7 @@ export function PortfolioHealthMatrixTab() {
 
   const { data: rows = [], isLoading, refetch } = useQuery<HealthMatrixRow[]>({
     queryKey: [matrixUrl],
+    staleTime: 30_000,
   });
 
   const portfolios = useMemo(() => Array.from(new Set(rows.flatMap((r) => r.portfolioNames))), [rows]);
@@ -124,6 +127,27 @@ export function PortfolioHealthMatrixTab() {
 
   if (isLoading) {
     return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
+
+  if (!isLoading && filtered.length === 0) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-[420px] text-center gap-3">
+        <div className="bg-primary/10 rounded-full p-4">
+          <Loader2 className="h-8 w-8 text-primary opacity-40" />
+        </div>
+        <h2 className="text-lg font-semibold">No projects in health matrix</h2>
+        <p className="text-sm text-muted-foreground max-w-md">
+          {filterPortfolio
+            ? `No projects found for portfolio "${filterPortfolio}". Try clearing the filter.`
+            : "Add projects to a portfolio and enable health tracking to see the RAG matrix."}
+        </p>
+        {filterPortfolio && (
+          <Button variant="outline" size="sm" onClick={() => setFilterPortfolio("")}>
+            Clear filter
+          </Button>
+        )}
+      </div>
+    );
   }
 
   const toggleExpand = (projectId: number) => {
@@ -220,7 +244,7 @@ export function PortfolioHealthMatrixTab() {
                         <RagCell
                           level={row[d.key as keyof HealthMatrixRow] as RagLevel}
                           onClick={() => {
-                            if (d.key === "budget") setLocation("/modules/finance-mgmt");
+                            if (d.key === "budget") setLocation(`/modules/finance-mgmt?tab=budgets&projectId=${row.projectId}`);
                             else setLocation(`/modules/projects/${row.projectId}`);
                           }}
                         />

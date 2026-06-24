@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -147,44 +147,53 @@ export function ResourcesAllocationsTab({
         </CardContent>
       </Card>
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent>
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Calendar className="h-5 w-5" /> Allocation</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Resource</Label>
+      <FormDialogShell
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        title="New allocation"
+        subtitle="Assign a resource to a project for a date range"
+        saveLabel="Create allocation"
+        onCancel={() => setShowCreate(false)}
+        onSubmit={save}
+        disabled={!form.resourceId || !form.startDate || !form.endDate}
+      >
+        <FormSection icon={<Calendar className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Assignment">
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5"><FieldLabel required>Resource</FieldLabel>
               <Select value={form.resourceId} onValueChange={(v) => setForm({ ...form, resourceId: v })}>
                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                 <SelectContent>{resources.map((r) => <SelectItem key={r.id} value={String(r.id)}>{r.firstName} {r.lastName}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>Project</Label>
+            <div className="space-y-1.5"><FieldLabel required>Project</FieldLabel>
               <Select value={form.projectId} onValueChange={(v) => setForm({ ...form, projectId: v })}>
                 <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
                 <SelectContent>{projects.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Type</Label>
-                <Select value={form.allocationType} onValueChange={(v) => setForm({ ...form, allocationType: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{ALLOCATION_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div><Label>Days / week</Label><Input type="number" step="0.5" min="0" max="5" value={form.daysPerWeek} onChange={(e) => setForm({ ...form, daysPerWeek: e.target.value })} /></div>
+          </FieldGrid>
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5"><FieldLabel>Type</FieldLabel>
+              <Select value={form.allocationType} onValueChange={(v) => setForm({ ...form, allocationType: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{ALLOCATION_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
-            <div><Label>Role on project</Label><Input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Start</Label><Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
-              <div><Label>End</Label><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>
-            </div>
-            <div><Label>Notes</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
-          </div>
-          <DialogFooter>
-            <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-            <Button onClick={save} disabled={!form.resourceId || !form.startDate || !form.endDate}>Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <div className="space-y-1.5"><FieldLabel>Days / week</FieldLabel><Input type="number" step="0.5" min="0" max="5" value={form.daysPerWeek} onChange={(e) => setForm({ ...form, daysPerWeek: e.target.value })} /></div>
+          </FieldGrid>
+          <div className="space-y-1.5"><FieldLabel>Role on project</FieldLabel><Input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} placeholder="e.g. Lead developer" /></div>
+        </FormSection>
+
+        <FormDivider />
+
+        <FormSection icon={<Calendar className="h-3.5 w-3.5 text-violet-600" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Schedule">
+          <FieldGrid className="mb-3.5">
+            <div className="space-y-1.5"><FieldLabel required>Start</FieldLabel><Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
+            <div className="space-y-1.5"><FieldLabel required>End</FieldLabel><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>
+          </FieldGrid>
+          <div className="space-y-1.5"><FieldLabel>Notes</FieldLabel><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} placeholder="Optional context for the team" /></div>
+        </FormSection>
+      </FormDialogShell>
     </div>
   );
 }

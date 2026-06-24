@@ -76,6 +76,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  FormDialogShell,
+  FormDialogViewShell,
+  FormSection,
+  FieldGrid,
+  FieldLabel,
+  FormDivider,
+} from "@/components/ui/form-dialog-shell";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 type BpmDiagram = {
@@ -519,7 +527,7 @@ function LinkedDiagramSelector({
   onUpdateAttributes: (updates: Record<string, any>) => void;
 }) {
   const { data: diagrams = [] } = useQuery<BpmDiagram[]>({
-    queryKey: ["/api/bpm/diagrams?tenantId=1"],
+    queryKey: ["/api/bpm/diagrams"],
   });
 
   const availableDiagrams = diagrams.filter((d) => {
@@ -1985,7 +1993,7 @@ function CanvasEditorInner({
         canvasData,
         metadata: { ...existingMeta, workflowSteps },
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/bpm/diagrams?tenantId=1"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bpm/diagrams"] });
       setIsDirty(false);
       toast({ title: "Saved", description: "Diagram saved successfully" });
     } catch (error: any) {
@@ -2142,7 +2150,7 @@ function CanvasEditorInner({
         canvasData,
         metadata: { ...existingMeta, workflowSteps },
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/bpm/diagrams?tenantId=1"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bpm/diagrams"] });
       setIsDirty(false);
       toast({ title: "Saved", description: "Diagram saved successfully" });
       onBack();
@@ -2574,14 +2582,22 @@ function CanvasEditorInner({
         data-testid="input-csv-file"
       />
 
-      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Import Process from CSV</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
+      <FormDialogShell
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        title="Import Process from CSV"
+        subtitle="Upload a CSV file to create process shapes with connections and attributes."
+        saveLabel="Import"
+        saveTestId="button-confirm-import"
+        size="md"
+        onCancel={() => setShowImportDialog(false)}
+        onSubmit={handleImportConfirm}
+        disabled={!importPreview || importPreview.size === 0}
+      >
+          <FormSection title="Import settings">
+            <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Upload a CSV file to create process shapes with connections and attributes. Use the "Download Template" button for the correct format.
+              Use the "Download Template" button for the correct format.
             </p>
 
             <div className="flex items-center gap-3">
@@ -2599,7 +2615,7 @@ function CanvasEditorInner({
             </div>
 
             <div>
-              <label className="text-sm font-medium">Lane Orientation</label>
+              <FieldLabel>Lane Orientation</FieldLabel>
               <Select value={importOrientation} onValueChange={(v) => setImportOrientation(v as "horizontal" | "vertical")}>
                 <SelectTrigger className="mt-1" data-testid="select-import-orientation">
                   <SelectValue />
@@ -2627,21 +2643,9 @@ function CanvasEditorInner({
                 </p>
               </div>
             )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowImportDialog(false)} data-testid="button-cancel-import">
-              Cancel
-            </Button>
-            <Button
-              onClick={handleImportConfirm}
-              disabled={!importPreview || importPreview.size === 0}
-              data-testid="button-confirm-import"
-            >
-              Import
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </div>
+          </FormSection>
+      </FormDialogShell>
 
       <WorkflowConfigDialog
         open={showWorkflowConfig}
@@ -2658,16 +2662,26 @@ function CanvasEditorInner({
         }}
       />
 
-      <Dialog open={showDefaultsDialog} onOpenChange={setShowDefaultsDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Node & Edge Defaults</DialogTitle>
-          </DialogHeader>
+      <FormDialogViewShell
+        open={showDefaultsDialog}
+        onOpenChange={setShowDefaultsDialog}
+        onClose={() => setShowDefaultsDialog(false)}
+        title="Node & Edge Defaults"
+        size="md"
+        footer={(
+          <div className="flex justify-end">
+            <Button onClick={() => setShowDefaultsDialog(false)} data-testid="button-close-defaults">
+              Done
+            </Button>
+          </div>
+        )}
+      >
           <div className="space-y-4">
             <p className="text-xs text-muted-foreground">These settings apply to newly created nodes and edges. Existing elements are not affected.</p>
-            <Separator />
+            <FormDivider />
+            <FormSection title="Node defaults">
             <div>
-              <Label className="text-xs text-muted-foreground">Default Font Size</Label>
+              <FieldLabel>Default Font Size</FieldLabel>
               <div className="flex items-center gap-3 mt-1">
                 <Slider
                   value={[userDefaults.fontSize]}
@@ -2681,7 +2695,7 @@ function CanvasEditorInner({
               </div>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Default Node Background</Label>
+              <FieldLabel>Default Node Background</FieldLabel>
               <div className="flex flex-wrap gap-1.5 mt-1">
                 {[
                   { label: "None", color: "" },
@@ -2706,7 +2720,7 @@ function CanvasEditorInner({
               </div>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Default Node Border</Label>
+              <FieldLabel>Default Node Border</FieldLabel>
               <div className="flex flex-wrap gap-1.5 mt-1">
                 {[
                   { label: "None", color: "" },
@@ -2731,7 +2745,7 @@ function CanvasEditorInner({
               </div>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Default Text Colour</Label>
+              <FieldLabel>Default Text Colour</FieldLabel>
               <div className="flex flex-wrap gap-1.5 mt-1">
                 {[
                   { label: "None", color: "" },
@@ -2752,9 +2766,11 @@ function CanvasEditorInner({
                 ))}
               </div>
             </div>
-            <Separator />
+            </FormSection>
+            <FormDivider />
+            <FormSection title="Edge defaults">
             <div>
-              <Label className="text-xs text-muted-foreground">Default Edge Type</Label>
+              <FieldLabel>Default Edge Type</FieldLabel>
               <Select
                 value={userDefaults.defaultEdgeType}
                 onValueChange={(v) => updateUserDefaults({ defaultEdgeType: v })}
@@ -2769,18 +2785,13 @@ function CanvasEditorInner({
                 </SelectContent>
               </Select>
             </div>
-            <Separator />
+            </FormSection>
+            <FormDivider />
             <Button variant="outline" size="sm" className="w-full" onClick={() => { updateUserDefaults(INITIAL_DEFAULTS); }} data-testid="button-reset-defaults">
               Reset All to Defaults
             </Button>
           </div>
-          <DialogFooter>
-            <Button onClick={() => setShowDefaultsDialog(false)} data-testid="button-close-defaults">
-              Done
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </FormDialogViewShell>
 
       <Dialog open={showExitDialog} onOpenChange={setShowExitDialog}>
         <DialogContent className="max-w-sm">
@@ -2855,14 +2866,19 @@ function WorkflowConfigDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle>Configure Workflow Steps</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
+    <FormDialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Configure Workflow Steps"
+      saveLabel="Save Workflow"
+      saveTestId="button-save-workflow"
+      size="md"
+      onCancel={() => onOpenChange(false)}
+      onSubmit={() => onSave(editSteps)}
+    >
+          <div className="space-y-4">
           <div>
-            <Label className="text-xs text-muted-foreground mb-2 block">Presets</Label>
+            <FieldLabel>Presets</FieldLabel>
             <div className="space-y-1">
               {WORKFLOW_PRESETS.map((preset, i) => (
                 <Button
@@ -2879,10 +2895,10 @@ function WorkflowConfigDialog({
             </div>
           </div>
 
-          <Separator />
+          <FormDivider />
 
           <div>
-            <Label className="text-xs text-muted-foreground mb-2 block">Current Workflow</Label>
+            <FieldLabel>Current Workflow</FieldLabel>
             <div className="space-y-1">
               {editSteps.map((step, idx) => {
                 const isFirst = idx === 0;
@@ -2919,12 +2935,12 @@ function WorkflowConfigDialog({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <FieldGrid cols={2} className="items-end">
             <Input
               value={newStep}
               onChange={(e) => setNewStep(e.target.value)}
               placeholder="Add custom step..."
-              className="h-7 text-xs flex-1"
+              className="h-7 text-xs flex-1 sm:col-span-1"
               onKeyDown={(e) => e.key === "Enter" && addStep()}
               data-testid="input-new-workflow-step"
             />
@@ -2932,19 +2948,14 @@ function WorkflowConfigDialog({
               <Plus className="h-3 w-3 mr-1" />
               Add
             </Button>
-          </div>
+          </FieldGrid>
 
           <p className="text-xs text-muted-foreground">
             The first step is always the starting status and the last step is the final status.
             You can add, remove, and reorder intermediate steps.
           </p>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={() => onSave(editSteps)} data-testid="button-save-workflow">Save Workflow</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </FormDialogShell>
   );
 }
 

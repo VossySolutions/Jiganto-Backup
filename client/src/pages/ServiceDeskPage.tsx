@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
@@ -8,8 +8,9 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
-  LayoutDashboard, BookOpen, Ticket, Users, Clock, BarChart3,
+  LayoutDashboard, BookOpen, Ticket, Users, Clock, BarChart3, ClipboardList,
 } from "lucide-react";
+import { ModuleTrackingBoard } from "@/components/workspaces/ModuleTrackingBoard";
 import { ServiceDeskDashboardTab } from "@/components/service-desk/ServiceDeskDashboardTab";
 import { ServiceDeskCatalogueTab } from "@/components/service-desk/ServiceDeskCatalogueTab";
 import { ServiceDeskTicketsTab } from "@/components/service-desk/ServiceDeskTicketsTab";
@@ -24,22 +25,39 @@ const TAB_ITEMS = [
   { value: "dashboard", label: "Dashboard", short: "Home", icon: LayoutDashboard },
   { value: "catalogue", label: "Service Catalogue", short: "Catalogue", icon: BookOpen },
   { value: "tickets", label: "Tickets", short: "Tickets", icon: Ticket },
+  { value: "task-tracker", label: "Task Tracker", short: "Tasks", icon: ClipboardList },
   { value: "teams", label: "Teams & Routing", short: "Teams", icon: Users },
   { value: "sla", label: "SLA Management", short: "SLA", icon: Clock },
   { value: "reports", label: "Reports", short: "Reports", icon: BarChart3 },
 ] as const;
 
+function parseServiceDeskUrl() {
+  const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  const projectId = params.get("projectId");
+  const ticket = params.get("ticket");
+  return {
+    projectId: projectId && /^\d+$/.test(projectId) ? Number(projectId) : null,
+    ticketId: ticket && /^\d+$/.test(ticket) ? Number(ticket) : null,
+    openTickets: projectId != null || ticket != null,
+  };
+}
+
 export default function ServiceDeskPage() {
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const urlState = useMemo(() => parseServiceDeskUrl(), []);
+  const [activeTab, setActiveTab] = useState(urlState.openTickets ? "tickets" : "dashboard");
   const [searchTerm, setSearchTerm] = useState("");
   const [ticketFilters, setTicketFilters] = useState<{ slaFilter?: string; status?: string; priority?: string }>({});
   const tabsListRef = useRef<HTMLDivElement>(null);
 
   const { data: dashboard } = useQuery<ServiceDeskDashboard>({
     queryKey: ["/api/service-desk/dashboard"],
+    staleTime: 30_000,
+    enabled: activeTab === "dashboard",
   });
   const { data: tickets = [] } = useQuery<TicketRow[]>({
     queryKey: ["/api/service-desk/tickets"],
+    staleTime: 30_000,
+    enabled: activeTab === "tickets" || activeTab === "dashboard",
   });
 
   const openCount = dashboard?.kpis.openTickets ?? tickets.filter(
@@ -140,7 +158,16 @@ export default function ServiceDeskPage() {
               <ServiceDeskTicketsTab
                 initialFilters={ticketFilters}
                 searchQuery={searchTerm}
-                key={`${JSON.stringify(ticketFilters)}-${searchTerm}`}
+                initialTicketId={urlState.ticketId}
+                key={`${JSON.stringify(ticketFilters)}-${searchTerm}-${urlState.ticketId ?? ""}`}
+              />
+            </TabsContent>
+            <TabsContent value="task-tracker" className="mt-0 focus-visible:outline-none">
+              <ModuleTrackingBoard
+                apiPath="/api/service-desk/tracking-board"
+                queryKey={["/api/service-desk/tracking-board"]}
+                title="Service Desk Task Tracker"
+                description="Track ITSM actions, change tasks, and operational follow-ups."
               />
             </TabsContent>
             <TabsContent value="teams" className="mt-0 focus-visible:outline-none">

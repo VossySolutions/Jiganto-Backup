@@ -75,6 +75,7 @@ export function PollsTab() {
   const { data: polls = [], isLoading, isError, refetch } = useQuery<ModulePoll[]>({
     queryKey: ["/api/surveys/polls"],
     queryFn: fetchModulePolls,
+    staleTime: 30_000,
   });
 
   const { data: pollDetail, isLoading: detailLoading, isError: detailError, refetch: refetchDetail } = useQuery({
@@ -82,6 +83,7 @@ export function PollsTab() {
     queryFn: () => fetchModulePoll(selectedPollId!),
     enabled: !!selectedPollId,
     refetchInterval: realtime ? false : 3000,
+    staleTime: 30_000,
   });
 
   const onPollChange = useCallback(() => {

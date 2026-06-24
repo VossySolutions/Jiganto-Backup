@@ -3,12 +3,10 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { PmMilestone } from "@shared/models/projects";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import {
@@ -977,7 +975,6 @@ function AddMilestoneModal({ open, onClose, onSave, projects, phases, workstream
     setSaving(true);
     try {
       await onSave({
-        tenantId: 1,
         projectId: mode === "project" ? projectId : null,
         name: form.name,
         projectName: mode === "project" ? undefined : form.projectName,
@@ -993,56 +990,62 @@ function AddMilestoneModal({ open, onClose, onSave, projects, phases, workstream
   };
 
   return (
-    <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-[540px]">
-        <DialogHeader>
-          <DialogTitle>Add Milestone</DialogTitle>
-        </DialogHeader>
-        <div className="grid grid-cols-2 gap-3.5">
-          <div className="col-span-2 space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Milestone Title *</label>
-            <Input value={form.name} onChange={set("name")} placeholder="e.g. UAT Sign-off" data-testid="input-milestone-title" />
-          </div>
-          {mode !== "project" && (
+    <FormDialogShell
+      open={open}
+      onOpenChange={(v) => !v && onClose()}
+      onCancel={onClose}
+      onSubmit={save}
+      title="Add Milestone"
+      saveLabel={saving ? "Saving..." : "Save Milestone"}
+      saving={saving}
+      disabled={!form.name.trim() || !form.targetDate}
+      saveTestId="button-save-milestone"
+      size="md"
+    >
+      <FormSection title="Milestone details" icon={<span className="h-2 w-2 rounded-full bg-blue-500" />}>
+        <div className="space-y-1.5 mb-3.5">
+          <FieldLabel required>Milestone Title</FieldLabel>
+          <Input value={form.name} onChange={set("name")} placeholder="e.g. UAT Sign-off" data-testid="input-milestone-title" />
+        </div>
+        <FieldGrid className="mb-3.5">
+          {mode !== "project" ? (
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Project</label>
+              <FieldLabel>Project</FieldLabel>
               <Input value={form.projectName} onChange={set("projectName")} list="ms-project-list" placeholder="Project name" data-testid="input-milestone-project" />
               <datalist id="ms-project-list">{projects.map(p => <option key={p} value={p} />)}</datalist>
             </div>
-          )}
+          ) : null}
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Target Date *</label>
+            <FieldLabel required>Target Date</FieldLabel>
             <Input type="date" value={form.targetDate} onChange={set("targetDate")} data-testid="input-milestone-date" />
           </div>
+        </FieldGrid>
+        <FieldGrid className="mb-3.5">
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Phase</label>
+            <FieldLabel>Phase</FieldLabel>
             <Input value={form.phase} onChange={set("phase")} list="ms-phase-list" placeholder="e.g. Build" data-testid="input-milestone-phase" />
             <datalist id="ms-phase-list">{phases.map(p => <option key={p} value={p} />)}</datalist>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Workstream</label>
+            <FieldLabel>Workstream</FieldLabel>
             <Input value={form.workstream} onChange={set("workstream")} list="ms-ws-list" placeholder="e.g. Technical" data-testid="input-milestone-workstream" />
             <datalist id="ms-ws-list">{workstreams.map(w => <option key={w} value={w} />)}</datalist>
           </div>
+        </FieldGrid>
+        <FieldGrid className="mb-3.5">
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">RAG Status</label>
+            <FieldLabel>RAG Status</FieldLabel>
             <select className="w-full border rounded-lg px-3 py-2 text-sm bg-background text-foreground" value={form.ragStatus} onChange={set("ragStatus")} data-testid="select-milestone-rag">
               {RAG_ORDER.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
-          <div className="col-span-2 space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Commentary</label>
-            <Textarea value={form.commentary} onChange={set("commentary")} placeholder="Brief status update (max 200 chars)" maxLength={200} rows={3} data-testid="input-milestone-commentary" />
-          </div>
+        </FieldGrid>
+        <div className="space-y-1.5">
+          <FieldLabel>Commentary</FieldLabel>
+          <Textarea value={form.commentary} onChange={set("commentary")} placeholder="Brief status update (max 200 chars)" maxLength={200} rows={3} data-testid="input-milestone-commentary" />
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button onClick={save} disabled={saving || !form.name.trim() || !form.targetDate} data-testid="button-save-milestone">
-            {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Saving...</> : "Save Milestone"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </FormSection>
+    </FormDialogShell>
   );
 }
 
@@ -1075,7 +1078,6 @@ function ImportMilestonesModal({ open, onClose, onImport, mode, projectId }: {
       headers.forEach((h, hi) => { if (h) obj[h] = cells[hi] || ""; });
       if (!obj.projectName && !obj.name) { errors.push(`Row ${i + 2}: skipped`); return; }
       rows.push({
-        tenantId: 1,
         projectId: mode === "project" ? projectId : null,
         name: obj.name || "(untitled)",
         projectName: obj.projectName || (mode === "project" ? undefined : "Unknown Project"),
@@ -1122,11 +1124,19 @@ function ImportMilestonesModal({ open, onClose, onImport, mode, projectId }: {
   };
 
   return (
-    <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-[640px] max-h-[85vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Import Milestones</DialogTitle>
-        </DialogHeader>
+    <FormDialogShell
+      open={open}
+      onOpenChange={(v) => !v && onClose()}
+      onCancel={onClose}
+      onSubmit={doImport}
+      title="Import Milestones"
+      saveLabel={importing ? "Importing..." : `Add ${parsed.length} Milestone${parsed.length > 1 ? "s" : ""}`}
+      saving={importing}
+      disabled={parsed.length === 0}
+      saveTestId="button-confirm-import-milestones"
+      size="lg"
+    >
+      <FormSection title="Import setup" icon={<span className="h-2 w-2 rounded-full bg-violet-500" />}>
         <div className="flex border-b -mx-6 px-6 mb-4">
           <button className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${tab === "upload" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"}`} onClick={() => setTab("upload")}>Upload File</button>
           <button className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${tab === "template" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"}`} onClick={() => setTab("template")}>Template</button>
@@ -1214,15 +1224,7 @@ function ImportMilestonesModal({ open, onClose, onImport, mode, projectId }: {
           )}
         </div>
 
-        <DialogFooter className="shrink-0">
-          <Button variant="outline" onClick={onClose} disabled={importing}>Cancel</Button>
-          {parsed.length > 0 && (
-            <Button onClick={doImport} disabled={importing} data-testid="button-confirm-import-milestones">
-              {importing ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Importing...</> : `Add ${parsed.length} Milestone${parsed.length > 1 ? "s" : ""}`}
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </FormSection>
+    </FormDialogShell>
   );
 }

@@ -25,6 +25,7 @@ export function useTmFetch<T>(
     queryKey: [...queryKey, activeProjectId],
     queryFn: () => tmFetchJson<T>(url),
     enabled,
+    staleTime: options?.staleTime ?? 30_000,
   });
 }
 
@@ -40,5 +41,6 @@ export function useTmFetchById<T>(
     queryKey: [...queryKey, activeProjectId],
     queryFn: () => tmFetchJson<T>(path!),
     enabled: (options?.enabled ?? true) && !!path,
+    staleTime: options?.staleTime ?? 30_000,
   });
 }

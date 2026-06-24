@@ -864,7 +864,7 @@ async function persistBulkImport(rows,mode){
   try{
     const res=await fetch('/api/pm/projects/'+projectId+'/gantt/import',{
       method:'POST',credentials:'include',
-      headers:{'Content-Type':'application/json'},
+      headers:apiAuthHeaders(true),
       body:JSON.stringify({mode:mode||'append',items:rows}),
     });
     if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.message||'Import failed');}
@@ -1127,12 +1127,28 @@ function handleBarClickForDep(barEl,taskId){
 // ID ranges: phases=1000+id, workstreams=2000+id, tasks=3000+id, milestones=4000+id
 // Items with id>=5000 are locally added and not yet in the DB (Phase 2)
 // ══════════════════════════════════════════════════════════════
-const RAG_TO_STATUS={g:'green',a:'amber',r:'red'};
+const RAG_TO_RAGSTATUS={g:'green',a:'amber',r:'red'};
+function taskStatusFromGantt(t){
+  if((t.prog||0)>=100) return 'done';
+  if((t.prog||0)>0) return 'in_progress';
+  return 'todo';
+}
+function notifyGanttParent(){
+  const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
+  try{ window.parent.postMessage({type:'gantt-saved',projectId},'*'); }catch(e){}
+}
 const ID_PFX={project:1,phase:1000,ws:2000,task:3000,ms:4000};
 
 function ganttMeta(){
   const d=window.GANTT_INIT_DATA||{};
   return {projectId:d.projectId,tenantId:d.tenantId};
+}
+function apiAuthHeaders(json){
+  const h={};
+  if(json) h['Content-Type']='application/json';
+  const token=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.authToken)||'';
+  if(token) h['Authorization']='Bearer '+token;
+  return h;
 }
 
 function resolvePhaseId(parentId){
@@ -1154,11 +1170,13 @@ function countPhases(){
 async function persistCreate(t){
   const {projectId,tenantId}=ganttMeta();
   if(!projectId||!tenantId) return;
-  const h={'Content-Type':'application/json'};
+  const h=apiAuthHeaders(true);
   const post=(url,body)=>fetch(url,{method:'POST',credentials:'include',headers:h,body:JSON.stringify(body)});
-  const rag=RAG_TO_STATUS[t.rag]||'green';
+  const rag=RAG_TO_RAGSTATUS[t.rag]||'green';
   const phaseId=resolvePhaseId(t.parent);
   const parentTaskId=resolveParentTaskId(t.parent);
+  const ownerMap=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.ownerIdMap)||{};
+  const assigneeId=t.owner?ownerMap[t.owner]||null:null;
   try{
     if(t.type===2){
       const created=await post('/api/pm/phases',{tenantId,projectId,name:t.name,phaseNumber:countPhases()+1,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:rag,order:countPhases()}).then(r=>r.json());
@@ -1177,7 +1195,7 @@ async function persistCreate(t){
         if(selectedTaskId===oldId) selectedTaskId=t.id;
       }
     } else if(t.type===4||t.type===5){
-      const created=await post('/api/pm/tasks',{tenantId,projectId,phaseId,parentTaskId,name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:rag,isSummary:t.type===4,ganttType:t.type===4?'summary':'task',order:tasks.filter(x=>x.type===4||x.type===5).length}).then(r=>r.json());
+      const created=await post('/api/pm/tasks',{tenantId,projectId,phaseId,parentTaskId,name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,status:taskStatusFromGantt(t),isSummary:t.type===4,ganttType:t.type===4?'summary':'task',order:tasks.filter(x=>x.type===4||x.type===5).length,assigneeId:assigneeId||undefined}).then(r=>r.json());
       if(created?.id){
         const oldId=t.id;
         t.id=ID_PFX.task+created.id;
@@ -1198,23 +1216,26 @@ async function persistCreate(t){
     calcWBS();
     renderAll();
     showSaveIndicator();
+    notifyGanttParent();
   } catch(e){ console.error('Gantt create failed:',e); }
 }
 
 async function persistDelete(t){
   if(!t||t.id>=5000) return;
-  const del=(url)=>fetch(url,{method:'DELETE',credentials:'include'});
+  const h=apiAuthHeaders();
+  const del=(url)=>fetch(url,{method:'DELETE',credentials:'include',headers:h});
   try{
     if(t.type===2&&t.id>ID_PFX.phase&&t.id<ID_PFX.ws) await del('/api/pm/phases/'+(t.id-ID_PFX.phase));
     else if(t.type===3&&t.id>ID_PFX.ws&&t.id<ID_PFX.task) await del('/api/pm/workstreams/'+(t.id-ID_PFX.ws));
     else if((t.type===4||t.type===5)&&t.id>ID_PFX.task&&t.id<ID_PFX.ms) await del('/api/pm/tasks/'+(t.id-ID_PFX.task));
     else if(t.type===6&&t.id>ID_PFX.ms&&t.id<5000) await del('/api/pm/milestones/'+(t.id-ID_PFX.ms));
+    notifyGanttParent();
   } catch(e){ console.error('Gantt delete failed:',e); }
 }
 
 async function persistSave(t){
   if(!t||t.id>=5000) return; // local-only items
-  const h={'Content-Type':'application/json'};
+  const h=apiAuthHeaders(true);
   const put=(url,body)=>fetch(url,{method:'PUT',credentials:'include',headers:h,body:JSON.stringify(body)});
   const ownerMap=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.ownerIdMap)||{};
   const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
@@ -1229,13 +1250,15 @@ async function persistSave(t){
     try{ window.parent.postMessage({type:'gantt-saved',projectId},'*'); }catch(e){}
   }
   try{
-    if(t.type===2&&t.id>1000&&t.id<2000){
+    if(t.type===1&&projectId){
+      await put('/api/pm/projects/'+projectId,{startDate:t.start,endDate:t.end,progress:t.prog,ragStatus:RAG_TO_RAGSTATUS[t.rag]||'green',description:t.notes||undefined});
+    } else if(t.type===2&&t.id>1000&&t.id<2000){
       const id=t.id-1000;
-      await put('/api/pm/phases/'+id,{name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:RAG_TO_STATUS[t.rag]||'green',description:t.notes||undefined,wbsCode:t.wbs||undefined});
+      await put('/api/pm/phases/'+id,{name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:RAG_TO_RAGSTATUS[t.rag]||'green',description:t.notes||undefined,wbsCode:t.wbs||undefined});
     } else if(t.type===3&&t.id>2000&&t.id<3000){
       const id=t.id-2000;
       const parent=mapParent(t.parent);
-      await put('/api/pm/workstreams/'+id,{name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:RAG_TO_STATUS[t.rag]||'green',description:t.notes||undefined,wbsCode:t.wbs||undefined,...(parent.phaseId?{phaseId:parent.phaseId}:{})});
+      await put('/api/pm/workstreams/'+id,{name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:RAG_TO_RAGSTATUS[t.rag]||'green',description:t.notes||undefined,wbsCode:t.wbs||undefined,...(parent.phaseId?{phaseId:parent.phaseId}:{})});
     } else if((t.type===4||t.type===5)&&t.id>3000&&t.id<4000){
       const id=t.id-3000;
       const parent=mapParent(t.parent);
@@ -1243,7 +1266,7 @@ async function persistSave(t){
       const assigneeId=t.owner?ownerMap[t.owner]||null:null;
       await put('/api/pm/tasks/'+id,{
         name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,
-        status:RAG_TO_STATUS[t.rag]||'todo',description:t.notes||undefined,
+        status:taskStatusFromGantt(t),description:t.notes||undefined,
         wbsCode:t.wbs||undefined,phaseId:parent.phaseId||undefined,
         parentTaskId:parent.parentTaskId||undefined,
         predecessorIds:predIds||undefined,assigneeId:assigneeId||undefined,

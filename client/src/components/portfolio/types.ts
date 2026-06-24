@@ -105,6 +105,7 @@ export interface RoadmapData {
     programmeName: string | null;
     colour: string;
     provisional: boolean;
+    progress?: number;
   }[];
   milestoneMarkers: { id: number; name: string; projectName: string | null; date: string | null; ragStatus: string | null; projectId: number | null }[];
 }

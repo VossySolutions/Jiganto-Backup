@@ -1,6 +1,7 @@
-import { useMemo, useEffect, useCallback, useState } from "react";
+import { useMemo, useEffect, useCallback, useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getSupabaseAccessToken } from "@/lib/supabase-session";
 import type {
   PmProject,
   PmProjectPhase,
@@ -16,7 +17,13 @@ function mapRag(rag?: string | null): "g" | "a" | "r" {
   const r = rag.toLowerCase();
   if (r === "red" || r === "r" || r === "blocked" || r === "behind") return "r";
   if (r === "amber" || r === "a" || r === "yellow" || r === "at_risk" || r === "atrisk") return "a";
-  if (r === "in_progress" || r === "todo" || r === "not_started" || r === "done" || r === "completed") return "g";
+  return "g";
+}
+
+function mapTaskVisualRag(status?: string | null, progress = 0): "g" | "a" | "r" {
+  if (progress >= 100 || status === "done" || status === "completed") return "g";
+  if (status === "blocked") return "r";
+  if (status === "in_progress" || status === "in_review") return "a";
   return "g";
 }
 
@@ -55,13 +62,31 @@ interface GanttInitData {
   nextId: number;
   projectId: number;
   tenantId: number;
+  authToken?: string;
 }
 
 interface TeamMember {
-  id: string;
-  firstName?: string;
-  lastName?: string;
+  id?: number | string;
+  userId?: string;
+  firstName?: string | null;
+  lastName?: string | null;
   name?: string;
+  user?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+  };
+}
+
+function teamMemberUserId(m: TeamMember): string | null {
+  return m.user?.id ?? (typeof m.userId === "string" ? m.userId : null);
+}
+
+function teamMemberDisplayName(m: TeamMember): string {
+  return (
+    m.name ||
+    [m.user?.firstName ?? m.firstName, m.user?.lastName ?? m.lastName].filter(Boolean).join(" ").trim()
+  );
 }
 
 function buildGanttData(
@@ -80,11 +105,12 @@ function buildGanttData(
   const ownerMap = new Map<string, string>();
   const ownerIdMap: Record<string, string> = {};
   team.forEach((m) => {
-    if (!m.id) return;
-    const name = m.name || [m.firstName, m.lastName].filter(Boolean).join(" ").trim();
+    const userId = teamMemberUserId(m);
+    if (!userId) return;
+    const name = teamMemberDisplayName(m);
     if (name) {
-      ownerMap.set(m.id, name);
-      ownerIdMap[name] = m.id;
+      ownerMap.set(userId, name);
+      ownerIdMap[name] = userId;
     }
   });
 
@@ -153,10 +179,9 @@ function buildGanttData(
     });
   });
 
-  // Tasks & sub-tasks (type 4 = activity/summary, 5 = task, 6 = milestone)
-  tasks.forEach((t) => {
-    const isMilestone = t.ganttType === "milestone";
-    const type = isMilestone ? 6 : t.isSummary ? 4 : 5;
+  // Tasks & sub-tasks (type 4 = summary, 5 = task) — skip milestone-type rows (milestones table below)
+  tasks.filter((t) => t.ganttType !== "milestone").forEach((t) => {
+    const type = t.isSummary ? 4 : 5;
 
     let parentId: number;
     if (t.parentTaskId) {
@@ -174,7 +199,7 @@ function buildGanttData(
         : null;
 
     const start = safeDate(t.plannedStartDate, today);
-    const end = isMilestone ? start : safeDate(t.plannedEndDate, start);
+    const end = safeDate(t.plannedEndDate, start);
 
     items.push({
       id: PFX.task + t.id,
@@ -184,7 +209,7 @@ function buildGanttData(
       start,
       end,
       prog: t.progress ?? 0,
-      rag: mapRag(t.status),
+      rag: mapTaskVisualRag(t.status, t.progress ?? 0),
       parent: parentId,
       predId,
       depType: "FS",
@@ -216,7 +241,10 @@ function buildGanttData(
     });
   });
 
-  const owners = Array.from(new Set(items.map((t) => t.owner).filter(Boolean)));
+  const ownerNamesFromTeam = team
+    .map((m) => teamMemberDisplayName(m))
+    .filter(Boolean);
+  const owners = Array.from(new Set([...ownerNamesFromTeam, ...items.map((t) => t.owner).filter(Boolean)]));
   return {
     tasks: items,
     owners,
@@ -442,64 +470,97 @@ interface ReactGanttChartProps {
 export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
   const queryClient = useQueryClient();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [authToken, setAuthToken] = useState<string | undefined>(undefined);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const invalidateGantt = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: [`/api/pm/projects/${projectId}`] });
-    queryClient.invalidateQueries({ queryKey: [`/api/pm/projects/${projectId}/phases`] });
-    queryClient.invalidateQueries({ queryKey: [`/api/pm/workstreams?projectId=${projectId}`] });
-    queryClient.invalidateQueries({ queryKey: [`/api/pm/projects/${projectId}/tasks`] });
-    queryClient.invalidateQueries({ queryKey: [`/api/pm/projects/${projectId}/milestones`] });
+  useEffect(() => {
+    let cancelled = false;
+    void getSupabaseAccessToken().then((token) => {
+      if (!cancelled) setAuthToken(token ?? "");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const invalidateGantt = useCallback(async () => {
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: [`/api/pm/projects/${projectId}`] }),
+      queryClient.refetchQueries({ queryKey: [`/api/pm/projects/${projectId}/phases`] }),
+      queryClient.refetchQueries({ queryKey: ["/api/pm/projects", projectId, "phases"] }),
+      queryClient.refetchQueries({ queryKey: [`/api/pm/workstreams?projectId=${projectId}`] }),
+      queryClient.refetchQueries({ queryKey: [`/api/pm/projects/${projectId}/tasks`] }),
+      queryClient.refetchQueries({ queryKey: ["/api/pm/projects", projectId, "tasks"] }),
+      queryClient.refetchQueries({ queryKey: [`/api/pm/projects/${projectId}/milestones`] }),
+      queryClient.refetchQueries({ queryKey: [`/api/pm/projects/${projectId}/team`] }),
+    ]);
     setRefreshKey((k) => k + 1);
   }, [queryClient, projectId]);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.data?.type === "gantt-saved" && e.data?.projectId === projectId) {
-        invalidateGantt();
+        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = setTimeout(() => {
+          void invalidateGantt();
+        }, 600);
       }
     };
     window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
   }, [projectId, invalidateGantt]);
   const { data: project, isLoading: pjL } = useQuery<PmProject>({
     queryKey: [`/api/pm/projects/${projectId}`],
     enabled: !!projectId,
+    staleTime: 30_000,
   });
   const { data: phases = [], isLoading: phL } = useQuery<PmProjectPhase[]>({
     queryKey: [`/api/pm/projects/${projectId}/phases`],
     enabled: !!projectId,
+    staleTime: 30_000,
   });
   const { data: workstreams = [], isLoading: wsL } = useQuery<PmWorkstream[]>({
     queryKey: [`/api/pm/workstreams?projectId=${projectId}`],
     enabled: !!projectId,
+    staleTime: 30_000,
   });
   const { data: dbTasks = [], isLoading: tkL } = useQuery<PmTask[]>({
     queryKey: [`/api/pm/projects/${projectId}/tasks`],
     enabled: !!projectId,
+    staleTime: 30_000,
   });
   const { data: milestones = [], isLoading: msL } = useQuery<PmMilestone[]>({
     queryKey: [`/api/pm/projects/${projectId}/milestones`],
     enabled: !!projectId,
+    staleTime: 30_000,
   });
   const { data: team = [], isLoading: tmL } = useQuery<TeamMember[]>({
     queryKey: [`/api/pm/projects/${projectId}/team`],
     enabled: !!projectId,
+    staleTime: 30_000,
   });
 
-  const isLoading = pjL || phL || wsL || tkL || msL || tmL;
+  const authReady = authToken !== undefined;
+  const isLoading = pjL || phL || wsL || tkL || msL || tmL || !authReady;
 
   const srcDoc = useMemo(() => {
-    if (!project) return null;
-    const data = buildGanttData(
-      project,
-      phases as PmProjectPhase[],
-      workstreams as PmWorkstream[],
-      dbTasks as PmTask[],
-      milestones as PmMilestone[],
-      team as TeamMember[]
-    );
+    if (!project || !authReady) return null;
+    const data: GanttInitData = {
+      ...buildGanttData(
+        project,
+        phases as PmProjectPhase[],
+        workstreams as PmWorkstream[],
+        dbTasks as PmTask[],
+        milestones as PmMilestone[],
+        team as TeamMember[]
+      ),
+      authToken: authToken || undefined,
+    };
     return buildSrcDoc(data, project.name);
-  }, [project, phases, workstreams, dbTasks, milestones, team]);
+  }, [project, phases, workstreams, dbTasks, milestones, team, authToken, authReady]);
 
   if (isLoading) {
     return (

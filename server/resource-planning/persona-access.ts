@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+import type { PlatformRole } from "@shared/models/permissions";
+import type { ResourceScope } from "../resources/permissions";
 
 export type RpPersona = "res-mgr" | "exec" | "sales" | "hr";
 
@@ -32,6 +34,57 @@ export function getRpPersona(req: Request): RpPersona {
   const raw = String(req.headers["x-rp-persona"] ?? req.query.persona ?? "res-mgr");
   if (raw === "exec" || raw === "sales" || raw === "hr") return raw;
   return "res-mgr";
+}
+
+/** Resolve which RP personas the signed-in user may assume (server + client RBAC). */
+export function resolveAllowedRpPersonas(
+  platformRole: PlatformRole | null | undefined,
+  resourceScope: ResourceScope | null | undefined,
+): { allowed: RpPersona[]; defaultPersona: RpPersona } {
+  const role = platformRole ?? "client_project_user";
+
+  if (resourceScope?.role === "self") {
+    return { allowed: [], defaultPersona: "res-mgr" };
+  }
+
+  if (role === "client_executive") {
+    return { allowed: ["exec"], defaultPersona: "exec" };
+  }
+
+  if (role === "jiganto_staff" || role === "si_super_admin") {
+    return { allowed: ["res-mgr", "exec", "sales", "hr"], defaultPersona: "res-mgr" };
+  }
+
+  if (resourceScope?.role === "manager") {
+    return { allowed: ["res-mgr", "exec", "sales", "hr"], defaultPersona: "res-mgr" };
+  }
+
+  if (resourceScope?.role === "consultant") {
+    return { allowed: ["res-mgr"], defaultPersona: "res-mgr" };
+  }
+
+  if (role === "si_consultant_pm") {
+    return { allowed: ["res-mgr", "sales"], defaultPersona: "res-mgr" };
+  }
+
+  return { allowed: ["res-mgr"], defaultPersona: "res-mgr" };
+}
+
+export function assertRpPersonaAllowed(
+  res: Response,
+  requested: RpPersona,
+  platformRole: PlatformRole | null | undefined,
+  resourceScope: ResourceScope | null | undefined,
+): boolean {
+  const { allowed } = resolveAllowedRpPersonas(platformRole, resourceScope);
+  if (!allowed.includes(requested)) {
+    res.status(403).json({
+      message: `Persona "${requested}" is not available for your role`,
+      allowed,
+    });
+    return false;
+  }
+  return true;
 }
 
 export function assertRpAccess(

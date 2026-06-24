@@ -14,7 +14,8 @@ export type SettingsTabId =
   | "notifications"
   | "billing"
   | "data"
-  | "ai-usage";
+  | "ai-usage"
+  | "crm";
 
 export type SettingsTier = "personal" | "workspace" | "system";
 
@@ -27,7 +28,7 @@ export interface SettingsAccess {
 
 const PERSONAL: SettingsTabId[] = ["personal"];
 
-const WORKSPACE: SettingsTabId[] = ["personal", "users", "customers", "audit"];
+const WORKSPACE: SettingsTabId[] = ["personal", "users", "customers", "crm", "audit"];
 
 const SYSTEM: SettingsTabId[] = [
   "personal",
@@ -43,6 +44,7 @@ const SYSTEM: SettingsTabId[] = [
   "billing",
   "data",
   "ai-usage",
+  "crm",
 ];
 
 /** SI Super Admin + Jiganto Staff — compliance / impersonation audit. */

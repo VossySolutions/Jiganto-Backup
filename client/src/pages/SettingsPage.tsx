@@ -47,6 +47,7 @@ import SettingsBillingTab from "@/components/settings/SettingsBillingTab";
 import SettingsDataGovernanceTab from "@/components/settings/SettingsDataGovernanceTab";
 import SettingsOrgNotificationsTab from "@/components/settings/SettingsOrgNotificationsTab";
 import SettingsAiUsageTab from "@/components/settings/SettingsAiUsageTab";
+import { CrmCustomFieldsSettings } from "@/components/crm/CrmCustomFieldsSettings";
 import {
   getSettingsAccess,
   tenantNeedsAdminFetch,
@@ -889,6 +890,18 @@ export default function SettingsPage() {
                     <Sparkles className="h-3 w-3 text-status-purple-foreground" />
                   </div>
                   AI Usage
+                </TabsTrigger>
+              )}
+              {settingsAccess.tabs.includes("crm") && (
+                <TabsTrigger
+                  value="crm"
+                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  data-testid="tab-crm"
+                >
+                  <div className="p-1 rounded-md bg-sky-100 dark:bg-sky-900/30">
+                    <Building2 className="h-3 w-3 text-sky-600" />
+                  </div>
+                  CRM Fields
                 </TabsTrigger>
               )}
             </TabsList>
@@ -1881,6 +1894,10 @@ export default function SettingsPage() {
                 {tenantId != null && (
                   <SettingsDataGovernanceTab tenantId={tenantId} tenant={tenant} />
                 )}
+              </TabsContent>
+
+              <TabsContent value="crm" className="m-0">
+                <CrmCustomFieldsSettings />
               </TabsContent>
             </Tabs>
           </div>

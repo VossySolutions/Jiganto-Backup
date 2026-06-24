@@ -34,58 +34,92 @@ import type { FinanceSettings } from "@/components/finance/types";
 
 const FINANCE_COLOR = "#10B981";
 
+const FINANCE_TABS = ["dashboard", "budgets", "timesheets", "expenses", "invoices", "rate-cards", "integrations", "settings"] as const;
+
 export default function FinanceManagementPage() {
   const { activeClient } = useClientContext();
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const initialTab = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("tab") ?? "dashboard"
+    : "dashboard";
+  const initialProjectId = typeof window !== "undefined"
+    ? Number(new URLSearchParams(window.location.search).get("projectId")) || null
+    : null;
+  const [activeTab, setActiveTab] = useState(
+    FINANCE_TABS.includes(initialTab as (typeof FINANCE_TABS)[number]) ? initialTab : "dashboard",
+  );
   const [searchTerm, setSearchTerm] = useState("");
   const tabsListRef = useRef<HTMLDivElement>(null);
 
   const { data: dashboard, isLoading: dashboardLoading } = useQuery<FinanceDashboardData>({
     queryKey: ["/api/finance/dashboard"],
+    staleTime: 30_000,
+    enabled: activeTab === "dashboard",
   });
 
   const { data: budgets = [], isLoading: budgetsLoading } = useQuery<BudgetListItem[]>({
     queryKey: ["/api/finance/budgets"],
+    staleTime: 30_000,
+    enabled: activeTab === "budgets",
   });
 
   const { data: timesheetPeriods = [], isLoading: periodsLoading } = useQuery<FinanceTimesheetPeriod[]>({
     queryKey: ["/api/finance/timesheets/periods"],
+    staleTime: 30_000,
+    enabled: activeTab === "timesheets",
   });
 
-  const { data: approvalQueue = [], isLoading: approvalLoading } = useQuery<FinanceTimesheetPeriod[]>({
+  const { data: approvalQueue = [] } = useQuery<FinanceTimesheetPeriod[]>({
     queryKey: ["/api/finance/timesheets/periods?status=submitted"],
+    staleTime: 30_000,
+    enabled: activeTab === "timesheets" || activeTab === "dashboard",
   });
 
   const { data: expenseReports = [], isLoading: expensesLoading } = useQuery<ExpenseReportRow[]>({
     queryKey: ["/api/finance/expenses/reports"],
+    staleTime: 30_000,
+    enabled: activeTab === "expenses" || activeTab === "dashboard",
   });
 
   const { data: invoices = [], isLoading: invoicesLoading } = useQuery<FinanceInvoiceRow[]>({
     queryKey: ["/api/finance/invoices"],
+    staleTime: 30_000,
+    enabled: activeTab === "invoices" || activeTab === "dashboard",
   });
 
   const { data: rateCards = [], isLoading: rateCardsLoading } = useQuery<FinanceRateCard[]>({
     queryKey: ["/api/finance/rate-cards"],
+    staleTime: 60_000,
+    enabled: activeTab === "rate-cards",
   });
 
   const { data: integrations = [], isLoading: integrationsLoading } = useQuery<ErpIntegrationRow[]>({
     queryKey: ["/api/finance/erp/integrations"],
+    staleTime: 60_000,
+    enabled: activeTab === "integrations",
   });
 
   const { data: settings, isLoading: settingsLoading } = useQuery<FinanceSettings>({
     queryKey: ["/api/finance/settings"],
+    staleTime: 60_000,
+    enabled: activeTab === "settings",
   });
 
-  const isLoading =
-    dashboardLoading ||
-    budgetsLoading ||
-    periodsLoading ||
-    approvalLoading ||
-    expensesLoading ||
-    invoicesLoading ||
-    rateCardsLoading ||
-    integrationsLoading ||
-    settingsLoading;
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    if (tab && FINANCE_TABS.includes(tab as (typeof FINANCE_TABS)[number])) {
+      setActiveTab(tab);
+    }
+  }, []);
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    if (tab === "dashboard") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", tab);
+    window.history.replaceState({}, "", url.pathname + url.search);
+  };
+
+  const isLoading = activeTab === "dashboard" && dashboardLoading && dashboard === undefined;
 
   const pendingExpenses = expenseReports.filter((r) => r.status === "submitted").length;
   const unpaidInvoices = invoices.filter((i) => i.status !== "paid" && i.status !== "void").length;
@@ -146,7 +180,7 @@ export default function FinanceManagementPage() {
             titleTestId="finance-title"
           />
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="px-3 sm:px-4">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="px-3 sm:px-4">
             <TabsList
               ref={tabsListRef}
               className="h-11 sm:h-12 bg-transparent border-0 gap-0.5 sm:gap-1 flex w-full max-w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-none scroll-smooth"
@@ -180,11 +214,11 @@ export default function FinanceManagementPage() {
                 data={dashboard}
                 isLoading={dashboardLoading}
                 searchTerm={searchTerm}
-                onNavigateTab={setActiveTab}
+                onNavigateTab={handleTabChange}
               />
             </TabsContent>
             <TabsContent value="budgets" className="p-3 sm:p-4 md:p-6 m-0">
-              <FinanceBudgetsTab budgets={budgets} isLoading={budgetsLoading} searchTerm={searchTerm} />
+              <FinanceBudgetsTab budgets={budgets} isLoading={budgetsLoading} searchTerm={searchTerm} filterProjectId={initialProjectId} />
             </TabsContent>
             <TabsContent value="timesheets" className="p-3 sm:p-4 md:p-6 m-0">
               <FinanceTimesheetsTab
