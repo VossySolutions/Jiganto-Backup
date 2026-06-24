@@ -1,12 +1,5 @@
 /** Slug for heading anchor links. */
-export function slugifyHeading(text: string): string {
-  const slug = text
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "");
-  return slug || "section";
-}
+export { slugifyHeading } from "@shared/document-headings";
 
 function cloneImg(doc: Document, img: HTMLImageElement): HTMLImageElement {
   const lifted = doc.createElement("img");

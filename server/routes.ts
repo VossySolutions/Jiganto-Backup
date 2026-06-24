@@ -185,7 +185,20 @@ export async function registerRoutes(
       }
       const doc = await storage.getDocumentByPublicToken(token);
       if (!doc) return res.status(404).send("Document not found or link has been revoked");
-      // Return a minimal read-only HTML page
+
+      const {
+        extractHeadingsFromHtmlString,
+        injectHeadingAnchorIds,
+        buildPublicSectionNavHtml,
+        PUBLIC_DOCUMENT_SECTION_NAV_STYLES,
+        PUBLIC_DOCUMENT_SECTION_NAV_SCRIPT,
+      } = await import("@shared/document-headings");
+
+      const contentWithAnchors = injectHeadingAnchorIds(doc.content || "");
+      const sectionHeadings = extractHeadingsFromHtmlString(contentWithAnchors);
+      const sectionNavHtml = buildPublicSectionNavHtml(sectionHeadings);
+      const hasSectionNav = sectionHeadings.length > 0;
+
       const htmlStyles = `
         body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1.5rem; line-height: 1.6; color: #1a1a1a; }
         h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; }
@@ -203,6 +216,7 @@ export async function registerRoutes(
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background: #f5f5f5; font-weight: 600; }
         .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; color: #999; font-size: 0.75rem; text-align: center; }
+        ${PUBLIC_DOCUMENT_SECTION_NAV_STYLES}
       `;
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.send(`<!DOCTYPE html>
@@ -213,13 +227,20 @@ export async function registerRoutes(
   <title>${doc.title} — Jiganto</title>
   <style>${htmlStyles}</style>
 </head>
-<body>
+<body class="${hasSectionNav ? "has-section-nav" : ""}">
   <h1>${doc.title}<span class="badge badge-${doc.status}">${doc.status}</span></h1>
   <div class="meta">
     Shared document · Last updated ${new Date(doc.updatedAt!).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
   </div>
-  <div class="content">${doc.content || "<p><em>No content</em></p>"}</div>
+  <div class="page-layout${hasSectionNav ? " has-section-nav" : ""}">
+    <div class="page-main">
+      ${hasSectionNav ? sectionNavHtml : ""}
+      <div class="content">${contentWithAnchors || "<p><em>No content</em></p>"}</div>
+    </div>
+    ${hasSectionNav ? `<aside class="page-sidebar">${sectionNavHtml}</aside>` : ""}
+  </div>
   <div class="footer">Shared via Jiganto · Read-only public view</div>
+  <script>${PUBLIC_DOCUMENT_SECTION_NAV_SCRIPT}</script>
 </body>
 </html>`);
     } catch (err) {

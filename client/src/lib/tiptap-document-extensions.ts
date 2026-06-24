@@ -184,12 +184,175 @@ export function scrollEditorToHeading(editor: any, pos: number) {
       el = domAt.node.parentElement;
     }
     if (el?.tagName?.match(/^H[1-6]$/i)) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      scrollHeadingElementIntoView(el);
     } else {
-      el?.closest("h1,h2,h3,h4,h5,h6")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const heading = el?.closest("h1,h2,h3,h4,h5,h6");
+      if (heading instanceof HTMLElement) scrollHeadingElementIntoView(heading);
     }
     editor.chain().focus().setTextSelection(pos + 1).run();
   } catch {
     // ignore
+  }
+}
+
+/** Parse stored HTML and build a section list for page-level navigation. */
+export function extractHeadingsFromHtml(html: string): DocumentTocHeading[] {
+  if (!html?.trim() || typeof document === "undefined") return [];
+
+  const root = new DOMParser()
+    .parseFromString(`<div id="__toc-root">${html}</div>`, "text/html")
+    .getElementById("__toc-root");
+  if (!root) return [];
+
+  const headings: DocumentTocHeading[] = [];
+  const usedIds = new Set<string>();
+
+  root.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((el) => {
+    const text = (el.textContent || "").trim();
+    if (!text) return;
+
+    const level = parseInt(el.tagName.charAt(1), 10);
+    let id =
+      el.getAttribute("id") ||
+      el.getAttribute("data-toc-id") ||
+      slugifyHeading(text);
+
+    if (usedIds.has(id)) {
+      let index = 2;
+      const base = slugifyHeading(text);
+      while (usedIds.has(`${base}-${index}`)) index++;
+      id = `${base}-${index}`;
+    }
+    usedIds.add(id);
+
+    headings.push({ level, text, id, pos: 0 });
+  });
+
+  return headings;
+}
+
+export function findDocumentScrollParent(el: HTMLElement | null): HTMLElement | null {
+  const editorScroll = el?.closest('[data-testid="editor-content-scroll"]');
+  if (editorScroll instanceof HTMLElement) return editorScroll;
+
+  let node = el?.parentElement ?? null;
+  while (node && node !== document.body) {
+    if (node.hasAttribute("data-radix-scroll-area-viewport")) {
+      return node;
+    }
+    const style = window.getComputedStyle(node);
+    const overflowY = style.overflowY;
+    if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
+export function getEditorContentScrollOffset(scrollContainer: HTMLElement): number {
+  const containerTop = scrollContainer.getBoundingClientRect().top;
+  let offset = 16;
+  scrollContainer.querySelectorAll<HTMLElement>('[data-testid="find-replace-bar"]').forEach((node) => {
+    const rect = node.getBoundingClientRect();
+    if (rect.height > 0 && rect.top <= containerTop + 4 && rect.bottom > containerTop) {
+      offset = Math.max(offset, rect.bottom - containerTop + 8);
+    }
+  });
+  return offset;
+}
+
+/** Offset for in-page jumps so headings sit below sticky toolbars. */
+export function getDocumentHeadingScrollOffset(
+  anchorEl: HTMLElement,
+  rootSelector = '[data-testid="tiptap-editor"]',
+): number {
+  const root = document.querySelector(rootSelector);
+  const scrollParent = findDocumentScrollParent(anchorEl) ?? findDocumentScrollParent(root as HTMLElement | null);
+  const viewportTop = scrollParent?.getBoundingClientRect().top ?? 0;
+  let offset = 20;
+
+  const stickySelectors = [
+    '[data-testid="tiptap-toolbar"]',
+    '[data-testid="find-replace-bar"]',
+    '[data-testid="document-section-nav"]',
+  ];
+
+  const searchRoot = scrollParent ?? document;
+  for (const selector of stickySelectors) {
+    searchRoot.querySelectorAll<HTMLElement>(selector).forEach((node) => {
+      const style = window.getComputedStyle(node);
+      if (style.position !== "sticky" && style.position !== "fixed") return;
+      const rect = node.getBoundingClientRect();
+      if (rect.height <= 0) return;
+      if (rect.top <= viewportTop + 8 && rect.bottom > viewportTop) {
+        offset = Math.max(offset, rect.bottom - viewportTop + 12);
+      }
+    });
+  }
+
+  return offset;
+}
+
+function scrollHeadingElementIntoView(el: HTMLElement) {
+  const editorScroll = el.closest('[data-testid="editor-content-scroll"]');
+  const scrollParent =
+    editorScroll instanceof HTMLElement
+      ? editorScroll
+      : findDocumentScrollParent(el);
+  const offset =
+    editorScroll instanceof HTMLElement
+      ? getEditorContentScrollOffset(editorScroll)
+      : getDocumentHeadingScrollOffset(el);
+
+  if (scrollParent) {
+    const parentRect = scrollParent.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const targetScroll = scrollParent.scrollTop + (elRect.top - parentRect.top) - offset;
+    scrollParent.scrollTo({ top: Math.max(0, targetScroll), behavior: "smooth" });
+  } else {
+    const top = window.scrollY + el.getBoundingClientRect().top - offset;
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  }
+
+  el.classList.add("document-heading-jump-target");
+  window.setTimeout(() => el.classList.remove("document-heading-jump-target"), 1600);
+}
+
+/** Scroll to a section by id or heading text (Confluence-style in-page links). */
+export function scrollToDocumentHeading(
+  heading: DocumentTocHeading,
+  rootSelector = '[data-testid="tiptap-editor"]',
+) {
+  if (typeof document === "undefined") return;
+
+  const root = document.querySelector(rootSelector) ?? document;
+
+  const queryById = (id: string) => {
+    try {
+      return root.querySelector(`#${CSS.escape(id)}`);
+    } catch {
+      return root.querySelector(`#${id}`);
+    }
+  };
+
+  let el =
+    queryById(heading.id) ||
+    root.querySelector(`[data-toc-id="${heading.id}"]`);
+
+  if (!el) {
+    root.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((candidate) => {
+      if (!el && candidate.textContent?.trim() === heading.text) {
+        el = candidate;
+      }
+    });
+  }
+
+  if (el instanceof HTMLElement) {
+    if (!el.id) {
+      el.id = heading.id;
+      el.setAttribute("data-toc-id", heading.id);
+    }
+    scrollHeadingElementIntoView(el);
   }
 }

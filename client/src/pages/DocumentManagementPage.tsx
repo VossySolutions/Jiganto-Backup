@@ -75,6 +75,7 @@ const TipTapEditor = lazy(() =>
 );
 import { DocumentHeaderFooterEditor } from "@/components/DocumentHeaderFooterEditor";
 import { DocumentAccessSection, DocumentAccessHeaderChip } from "@/components/documents/DocumentAccessSection";
+import { DocumentPageSectionNavTop, DocumentPageSectionAside, DocumentSectionSidebarToggle } from "@/components/editor/DocumentPageSectionNav";
 import type { Document, DocumentFolder, DocumentVersion, DocumentComment, DocumentFile, DocumentTemplate } from "@shared/schema";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -2602,12 +2603,7 @@ export default function DocumentManagementPage() {
         </div>
 
         <ScrollArea className="flex-1">
-          <div
-            className={cn(
-              "mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6",
-              isDocumentFullScreen ? "max-w-none w-full" : "max-w-4xl",
-            )}
-          >
+          <div className="w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
             {selectedDocument.folderId == null && (
               <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-4 py-3">
                 <p className="text-sm text-blue-900 dark:text-blue-200">
@@ -2745,12 +2741,9 @@ export default function DocumentManagementPage() {
                       </span>
                     )}
                   </TabsTrigger>
-                  <TabsTrigger
-                    value="members"
-                    className="shrink-0 text-xs sm:text-sm px-2.5 sm:px-3 text-red-600 data-[state=active]:text-red-700 data-[state=active]:shadow-sm"
-                    data-testid="tab-members"
-                  >
-                    Members
+                  <TabsTrigger value="members" className="shrink-0 text-xs sm:text-sm px-2.5 sm:px-3 gap-1.5" data-testid="tab-members">
+                    <Users className="h-4 w-4" />
+                    <span className="hidden sm:inline">Members</span>
                   </TabsTrigger>
                 </TabsList>
               </div>
@@ -2790,6 +2783,7 @@ export default function DocumentManagementPage() {
                     <span className="text-xs text-muted-foreground italic">No tags</span>
                   )}
                 </div>
+                <DocumentSectionSidebarToggle content={editContent || selectedDocument.content || ""} />
                 {isEditing && (
                   <div className="flex items-center gap-1.5 shrink-0">
                     <Input
@@ -2839,34 +2833,44 @@ export default function DocumentManagementPage() {
               )}
 
               <TabsContent value="content" className="mt-0">
-                <DocumentHeaderFooterEditor
-                  kind="header"
-                  content={editHeaderContent}
-                  onChange={setEditHeaderContent}
-                  editable={isEditing}
-                />
-                <Suspense fallback={<div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
-                  <TipTapEditor
-                    content={editContent}
-                    onChange={setEditContent}
-                    onExport={handleExport}
-                    editable={isEditing}
-                    placeholder="Start writing your document..."
-                    users={mentionUsers}
-                    documentId={selectedDocument?.id}
-                    documentTitle={selectedDocument?.title}
-                    onAnchorComment={(commentId, selectedText) => {
-                      setPendingAnchoredComment({ id: commentId, text: selectedText });
-                      setActiveTab("comments");
-                    }}
+                <div className="flex flex-col xl:flex-row xl:items-start gap-4 xl:gap-6 w-full">
+                  <div className="flex-1 min-w-0 w-full">
+                    <DocumentPageSectionNavTop
+                      content={editContent || selectedDocument.content || ""}
+                    />
+                    <DocumentHeaderFooterEditor
+                      kind="header"
+                      content={editHeaderContent}
+                      onChange={setEditHeaderContent}
+                      editable={isEditing}
+                    />
+                    <Suspense fallback={<div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
+                      <TipTapEditor
+                        content={editContent}
+                        onChange={setEditContent}
+                        onExport={handleExport}
+                        editable={isEditing}
+                        placeholder="Start writing your document..."
+                        users={mentionUsers}
+                        documentId={selectedDocument?.id}
+                        documentTitle={selectedDocument.title}
+                        onAnchorComment={(commentId, selectedText) => {
+                          setPendingAnchoredComment({ id: commentId, text: selectedText });
+                          setActiveTab("comments");
+                        }}
+                      />
+                    </Suspense>
+                    <DocumentHeaderFooterEditor
+                      kind="footer"
+                      content={editFooterContent}
+                      onChange={setEditFooterContent}
+                      editable={isEditing}
+                    />
+                  </div>
+                  <DocumentPageSectionAside
+                    content={editContent || selectedDocument.content || ""}
                   />
-                </Suspense>
-                <DocumentHeaderFooterEditor
-                  kind="footer"
-                  content={editFooterContent}
-                  onChange={setEditFooterContent}
-                  editable={isEditing}
-                />
+                </div>
               </TabsContent>
 
               <TabsContent value="comments" className="mt-0">

@@ -83,7 +83,7 @@ export function DocumentHeaderFooterEditor({
   return (
     <div
       className={cn(
-        "rounded-lg border border-dashed border-border/70 bg-muted/15 overflow-hidden",
+        "rounded-lg border border-dashed border-border/70 bg-muted/15 overflow-hidden w-full",
         kind === "header" ? "mb-4" : "mt-4",
       )}
       data-testid={`document-${kind}-region`}

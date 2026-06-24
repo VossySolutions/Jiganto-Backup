@@ -38,7 +38,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { uploadDocumentImage } from '@/lib/document-image-upload';
 import { normalizeDocumentHtmlForEditor } from '@/lib/document-html-normalize';
@@ -51,7 +51,6 @@ import {
   scrollEditorToHeading,
   type DocumentTocHeading,
 } from '@/lib/tiptap-document-extensions';
-import { DocumentSectionNav } from '@/components/editor/DocumentSectionNav';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code,
   Heading1, Heading2, Heading3, Heading4, Type, ChevronDown,
@@ -73,6 +72,83 @@ import { useLocation } from 'wouter';
 
 
 const lowlight = createLowlight(common);
+
+type HeadingLevel = 1 | 2 | 3 | 4;
+
+const HEADING_LEVELS: HeadingLevel[] = [1, 2, 3, 4];
+
+const HEADING_LEVEL_META: Record<HeadingLevel, { label: string; icon: typeof Heading1 }> = {
+  1: { label: 'Heading 1', icon: Heading1 },
+  2: { label: 'Heading 2', icon: Heading2 },
+  3: { label: 'Heading 3', icon: Heading3 },
+  4: { label: 'Heading 4', icon: Heading4 },
+};
+
+function getActiveHeadingLevel(editor: { isActive: (name: string, attrs?: Record<string, unknown>) => boolean }): HeadingLevel | null {
+  for (const level of HEADING_LEVELS) {
+    if (editor.isActive('heading', { level })) return level;
+  }
+  return null;
+}
+
+function suggestHeadingLevelFromBlock(editor: { state: { selection: { $from: any } } }): HeadingLevel {
+  const { $from } = editor.state.selection;
+  for (let d = $from.depth; d >= 0; d--) {
+    const node = $from.node(d);
+    if (node.type.name === 'heading') {
+      const level = Number(node.attrs.level);
+      if (level >= 1 && level <= 4) return level as HeadingLevel;
+      return 2;
+    }
+    if (node.type.name === 'paragraph') {
+      let hasBold = false;
+      let maxFontSize = 16;
+      node.descendants((child: { isText: boolean; marks: { type: { name: string }; attrs: Record<string, unknown> }[] }) => {
+        if (!child.isText) return;
+        child.marks.forEach((mark) => {
+          if (mark.type.name === 'bold') hasBold = true;
+          if (mark.type.name === 'textStyle' && mark.attrs.fontSize) {
+            const px = parseInt(String(mark.attrs.fontSize).replace('px', ''), 10);
+            if (!Number.isNaN(px)) maxFontSize = Math.max(maxFontSize, px);
+          }
+        });
+      });
+      const textLen = node.textContent.trim().length;
+      if (maxFontSize >= 28 || (hasBold && textLen <= 60 && maxFontSize >= 18)) return 1;
+      if (maxFontSize >= 22 || (hasBold && textLen <= 100)) return 2;
+      if (maxFontSize >= 18 || hasBold) return 3;
+      return 2;
+    }
+  }
+  return 2;
+}
+
+function canShowHeadingContextMenu(editor: { isActive: (name: string) => boolean }): boolean {
+  return editor.isActive('paragraph') || editor.isActive('heading');
+}
+
+function focusBlockForHeadingConversion(editor: {
+  state: { selection: { $from: any }; doc: { content: { size: number } } };
+  chain: () => { focus: () => { setTextSelection: (pos: number) => { setParagraph: () => { run: () => void } } } };
+}) {
+  if (canShowHeadingContextMenu(editor)) return;
+
+  const { $from } = editor.state.selection;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const node = $from.node(depth);
+    if (node.isTextblock) {
+      const pos = Math.min($from.before(depth) + 1, editor.state.doc.content.size - 1);
+      const chain = editor.chain().focus().setTextSelection(pos);
+      if (node.type.name === 'codeBlock') {
+        chain.setParagraph().run();
+      } else {
+        chain.run();
+      }
+      return;
+    }
+  }
+  editor.chain().focus().setParagraph().run();
+}
 
 const TableCell = TableCellBase.extend({
   addAttributes() {
@@ -772,7 +848,6 @@ export function TipTapEditor({
   const capturedNodeType = useRef<{ type: string; level?: number } | null>(null);
   // TOC
   const [tocHeadings, setTocHeadings] = useState<DocumentTocHeading[]>([]);
-  const [sectionNavOpen, setSectionNavOpen] = useState(true);
   const [tocOpen, setTocOpen] = useState(false);
   // Emoji picker
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -1313,6 +1388,7 @@ export function TipTapEditor({
   }, [showFindReplace, closeFindReplace]);
 
   const [tableCtxMenu, setTableCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [headingCtxMenu, setHeadingCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [tableDropdownOpen, setTableDropdownOpen] = useState(false);
   const [tableGridHover, setTableGridHover] = useState({ rows: 0, cols: 0 });
 
@@ -1327,12 +1403,54 @@ export function TipTapEditor({
     };
   }, [tableCtxMenu]);
 
-  const handleEditorContextMenu = (e: React.MouseEvent) => {
+  useEffect(() => {
+    if (!headingCtxMenu) return;
+    const close = () => setHeadingCtxMenu(null);
+    document.addEventListener('click', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('click', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, [headingCtxMenu]);
+
+  const convertBlockToHeading = useCallback((level: HeadingLevel) => {
     if (!editor) return;
+    if (editor.isActive('listItem')) editor.chain().focus().liftListItem('listItem').run();
+    if (editor.isActive('blockquote')) editor.chain().focus().lift('blockquote').run();
+    if (!canShowHeadingContextMenu(editor)) focusBlockForHeadingConversion(editor);
+    editor.chain().focus().setHeading({ level }).run();
+    setHeadingCtxMenu(null);
+  }, [editor]);
+
+  const convertBlockToParagraph = useCallback(() => {
+    if (!editor) return;
+    editor.chain().focus().setParagraph().run();
+    setHeadingCtxMenu(null);
+  }, [editor]);
+
+  const handleEditorContextMenu = (e: React.MouseEvent) => {
+    if (!editor || !editable) return;
+
+    const target = e.target as HTMLElement;
+    if (!target.closest('.ProseMirror')) return;
+
     if (editor.isActive('table')) {
       e.preventDefault();
+      setHeadingCtxMenu(null);
       setTableCtxMenu({ x: e.clientX, y: e.clientY });
+      return;
     }
+
+    e.preventDefault();
+    setTableCtxMenu(null);
+
+    const coords = editor.view.posAtCoords({ left: e.clientX, top: e.clientY });
+    if (coords) {
+      editor.chain().focus().setTextSelection(coords.pos).run();
+    }
+    focusBlockForHeadingConversion(editor);
+    setHeadingCtxMenu({ x: e.clientX, y: e.clientY });
   };
 
   if (!editor) {
@@ -1345,6 +1463,23 @@ export function TipTapEditor({
   const currentTextColor = editor.getAttributes('textStyle').color || '';
   const currentFontFamily = editor.getAttributes('textStyle').fontFamily || '';
   const currentFontSize = editor.getAttributes('textStyle').fontSize || '';
+  const activeHeadingLevel = getActiveHeadingLevel(editor);
+  const suggestedHeadingLevel = headingCtxMenu ? suggestHeadingLevelFromBlock(editor) : null;
+
+  const ToolbarTooltip = ({
+    label,
+    children,
+  }: {
+    label: string;
+    children: React.ReactNode;
+  }) => (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs">
+        <p>{label}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
 
   const ToolbarButton = ({ 
     icon: Icon, 
@@ -1376,7 +1511,7 @@ export function TipTapEditor({
           {children || (Icon && <Icon className="h-4 w-4" />)}
         </Button>
       </TooltipTrigger>
-      <TooltipContent>
+      <TooltipContent side="top" className="max-w-xs">
         <p>{label}</p>
       </TooltipContent>
     </Tooltip>
@@ -1401,9 +1536,10 @@ export function TipTapEditor({
   );
 
   return (
-    <div className="border rounded-lg overflow-visible bg-background" data-testid="tiptap-editor" data-editable-region="document-body">
+    <div className="border rounded-lg overflow-hidden bg-background w-full flex flex-col" data-testid="tiptap-editor" data-editable-region="document-body">
       {editable && (
-        <div className="border-b bg-muted sticky top-0 z-50" data-testid="tiptap-toolbar">
+        <div className="border-b bg-muted shrink-0 z-10" data-testid="tiptap-toolbar">
+          <TooltipProvider delayDuration={250}>
           <div className="flex flex-wrap items-center gap-0.5 p-1.5">
             <ToolbarButton 
               icon={Undo2} 
@@ -1421,77 +1557,17 @@ export function TipTapEditor({
             <Separator orientation="vertical" className="h-6 mx-0.5" />
 
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-1 px-2" data-testid="toolbar-font-family">
-                  <span className="text-xs truncate max-w-[80px]">
-                    {currentFontFamily
-                      ? FONT_FAMILIES.find(f => f.value === currentFontFamily)?.label || 'Custom'
-                      : 'Default'}
+              <ToolbarTooltip label="Heading style — creates sections for On this page links">
+                <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-1 px-2 min-w-[80px]" data-testid="toolbar-headings">
+                  <Type className="h-4 w-4 shrink-0" />
+                  <span className="text-xs font-medium">
+                    {activeHeadingLevel ? `H${activeHeadingLevel}` : 'Heading'}
                   </span>
-                  <ChevronDown className="h-3 w-3" />
+                  <ChevronDown className="h-3 w-3 shrink-0" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="max-h-64 overflow-y-auto">
-                {FONT_FAMILIES.map((font) => {
-                  const isActive = currentFontFamily === font.value;
-                  return (
-                    <DropdownMenuItem
-                      key={font.label}
-                      onClick={() => {
-                        if (font.value) {
-                          editor.chain().focus().setFontFamily(font.value).run();
-                        } else {
-                          editor.chain().focus().unsetFontFamily().run();
-                        }
-                      }}
-                      className={cn('flex items-center justify-between gap-3', isActive && 'bg-accent')}
-                      style={font.value ? { fontFamily: font.value } : undefined}
-                      data-testid={`font-${font.label.toLowerCase().replace(/\s+/g, '-')}`}
-                    >
-                      <span className={cn(isActive && 'font-semibold')}>{font.label}</span>
-                      {isActive && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-1 px-2 min-w-[50px]" data-testid="toolbar-font-size">
-                  <span className="text-xs">{currentFontSize ? currentFontSize.replace('px', '') : '16'}</span>
-                  <ChevronDown className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="max-h-64 overflow-y-auto">
-                {FONT_SIZES.map((size) => {
-                  const isActive = currentFontSize === size.value;
-                  return (
-                    <DropdownMenuItem
-                      key={size.value}
-                      onClick={() => {
-                        (editor.chain().focus() as any).setFontSize(size.value).run();
-                      }}
-                      className={cn('flex items-center justify-between gap-3', isActive && 'bg-accent')}
-                      data-testid={`font-size-${size.label}`}
-                    >
-                      <span className={cn(isActive && 'font-semibold')} style={{ fontSize: Math.min(parseInt(size.label), 20) }}>{size.label}</span>
-                      {isActive && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <Separator orientation="vertical" className="h-6 mx-0.5" />
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-1 px-2" data-testid="toolbar-headings">
-                  <Type className="h-4 w-4" />
-                  <ChevronDown className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
+                </DropdownMenuTrigger>
+              </ToolbarTooltip>
               <DropdownMenuContent>
                 <DropdownMenuItem 
                   onClick={() => editor.chain().focus().setParagraph().run()}
@@ -1531,9 +1607,76 @@ export function TipTapEditor({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            
+
             <Separator orientation="vertical" className="h-6 mx-0.5" />
-            
+
+            <DropdownMenu>
+              <ToolbarTooltip label="Font family">
+                <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-1 px-2" data-testid="toolbar-font-family">
+                  <span className="text-xs truncate max-w-[80px]">
+                    {currentFontFamily
+                      ? FONT_FAMILIES.find(f => f.value === currentFontFamily)?.label || 'Custom'
+                      : 'Default'}
+                  </span>
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+                </DropdownMenuTrigger>
+              </ToolbarTooltip>
+              <DropdownMenuContent className="max-h-64 overflow-y-auto">
+                {FONT_FAMILIES.map((font) => {
+                  const isActive = currentFontFamily === font.value;
+                  return (
+                    <DropdownMenuItem
+                      key={font.label}
+                      onClick={() => {
+                        if (font.value) {
+                          editor.chain().focus().setFontFamily(font.value).run();
+                        } else {
+                          editor.chain().focus().unsetFontFamily().run();
+                        }
+                      }}
+                      className={cn('flex items-center justify-between gap-3', isActive && 'bg-accent')}
+                      style={font.value ? { fontFamily: font.value } : undefined}
+                      data-testid={`font-${font.label.toLowerCase().replace(/\s+/g, '-')}`}
+                    >
+                      <span className={cn(isActive && 'font-semibold')}>{font.label}</span>
+                      {isActive && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <ToolbarTooltip label="Font size">
+                <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-1 px-2 min-w-[50px]" data-testid="toolbar-font-size">
+                  <span className="text-xs">{currentFontSize ? currentFontSize.replace('px', '') : '16'}</span>
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+                </DropdownMenuTrigger>
+              </ToolbarTooltip>
+              <DropdownMenuContent className="max-h-64 overflow-y-auto">
+                {FONT_SIZES.map((size) => {
+                  const isActive = currentFontSize === size.value;
+                  return (
+                    <DropdownMenuItem
+                      key={size.value}
+                      onClick={() => {
+                        (editor.chain().focus() as any).setFontSize(size.value).run();
+                      }}
+                      className={cn('flex items-center justify-between gap-3', isActive && 'bg-accent')}
+                      data-testid={`font-size-${size.label}`}
+                    >
+                      <span className={cn(isActive && 'font-semibold')} style={{ fontSize: Math.min(parseInt(size.label), 20) }}>{size.label}</span>
+                      {isActive && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <ToolbarButton 
               icon={Bold} 
               label="Bold" 
@@ -1580,14 +1723,16 @@ export function TipTapEditor({
             <Separator orientation="vertical" className="h-6 mx-0.5" />
 
             <Popover>
-              <PopoverTrigger asChild>
+              <ToolbarTooltip label="Text color">
+                <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" data-testid="toolbar-text-color">
                   <div className="flex flex-col items-center">
                     <Baseline className="h-3.5 w-3.5" />
                     <div className="w-4 h-1 rounded-sm mt-0.5" style={{ backgroundColor: currentTextColor || 'currentColor' }} />
                   </div>
                 </Button>
-              </PopoverTrigger>
+                </PopoverTrigger>
+              </ToolbarTooltip>
               <PopoverContent className="w-auto p-2">
                 <p className="text-xs font-medium mb-2 text-muted-foreground">Text Color</p>
                 <ColorGrid 
@@ -1641,14 +1786,16 @@ export function TipTapEditor({
             </Popover>
 
             <Popover>
-              <PopoverTrigger asChild>
+              <ToolbarTooltip label="Highlight color">
+                <PopoverTrigger asChild>
                 <Button variant={editor.isActive('highlight') ? 'secondary' : 'ghost'} size="icon" data-testid="toolbar-highlight">
                   <div className="flex flex-col items-center">
                     <Highlighter className="h-3.5 w-3.5" />
                     <div className="w-4 h-1 rounded-sm mt-0.5 bg-yellow-300" />
                   </div>
                 </Button>
-              </PopoverTrigger>
+                </PopoverTrigger>
+              </ToolbarTooltip>
               <PopoverContent className="w-auto p-2">
                 <p className="text-xs font-medium mb-2 text-muted-foreground">Highlight Color</p>
                 <div className="grid grid-cols-5 gap-1 p-1">
@@ -1714,7 +1861,8 @@ export function TipTapEditor({
             </Popover>
 
             <Popover>
-              <PopoverTrigger asChild>
+              <ToolbarTooltip label="Table cell background color">
+                <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1726,7 +1874,8 @@ export function TipTapEditor({
                     <div className="w-4 h-1 rounded-sm mt-0.5 bg-blue-200" />
                   </div>
                 </Button>
-              </PopoverTrigger>
+                </PopoverTrigger>
+              </ToolbarTooltip>
               <PopoverContent className="w-auto p-2">
                 <p className="text-xs font-medium mb-2 text-muted-foreground">Cell Background</p>
                 <div className="grid grid-cols-6 gap-1 p-1">
@@ -1925,12 +2074,14 @@ export function TipTapEditor({
             />
 
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+              <ToolbarTooltip label="Line spacing">
+                <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="gap-1 px-2" data-testid="toolbar-line-spacing">
                   <WrapText className="h-4 w-4" />
                   <ChevronDown className="h-3 w-3" />
                 </Button>
-              </DropdownMenuTrigger>
+                </DropdownMenuTrigger>
+              </ToolbarTooltip>
               <DropdownMenuContent>
                 <DropdownMenuLabel className="text-xs">Line Spacing</DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -1963,7 +2114,8 @@ export function TipTapEditor({
             <Separator orientation="vertical" className="h-6 mx-0.5" />
             
             <DropdownMenu open={tableDropdownOpen} onOpenChange={(o) => { setTableDropdownOpen(o); if (!o) setTableGridHover({ rows: 0, cols: 0 }); }}>
-              <DropdownMenuTrigger asChild>
+              <ToolbarTooltip label="Table">
+                <DropdownMenuTrigger asChild>
                 <Button 
                   variant={editor.isActive('table') ? 'secondary' : 'ghost'} 
                   size="sm" 
@@ -1973,7 +2125,8 @@ export function TipTapEditor({
                   <TableIcon className="h-4 w-4" />
                   <ChevronDown className="h-3 w-3" />
                 </Button>
-              </DropdownMenuTrigger>
+                </DropdownMenuTrigger>
+              </ToolbarTooltip>
               <DropdownMenuContent>
                 {/* ── Hover grid picker ── */}
                 <div
@@ -2121,7 +2274,8 @@ export function TipTapEditor({
             <Separator orientation="vertical" className="h-6 mx-0.5" />
             
             <Popover>
-              <PopoverTrigger asChild>
+              <ToolbarTooltip label="Insert link">
+                <PopoverTrigger asChild>
                 <Button 
                   variant={editor.isActive('link') ? 'secondary' : 'ghost'} 
                   size="icon"
@@ -2129,7 +2283,8 @@ export function TipTapEditor({
                 >
                   <Link2 className="h-4 w-4" />
                 </Button>
-              </PopoverTrigger>
+                </PopoverTrigger>
+              </ToolbarTooltip>
               <PopoverContent className="w-72">
                 <div className="space-y-3">
                   <h4 className="font-medium text-sm">Insert Link</h4>
@@ -2163,11 +2318,13 @@ export function TipTapEditor({
             </Popover>
             
             <Popover>
-              <PopoverTrigger asChild>
+              <ToolbarTooltip label="Insert image">
+                <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" data-testid="toolbar-image">
                   <ImageIcon className="h-4 w-4" />
                 </Button>
-              </PopoverTrigger>
+                </PopoverTrigger>
+              </ToolbarTooltip>
               <PopoverContent className="w-80">
                 <div className="space-y-3">
                   <h4 className="font-medium text-sm">{editor.isActive('image') ? 'Edit Image' : 'Insert Image'}</h4>
@@ -2259,13 +2416,15 @@ export function TipTapEditor({
 
             {/* ── Insert Blocks ── */}
             <DropdownMenu open={insertBlocksOpen} onOpenChange={setInsertBlocksOpen}>
-              <DropdownMenuTrigger asChild>
+              <ToolbarTooltip label="Insert block (callout, video, math…)">
+                <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="gap-1 px-2" data-testid="toolbar-insert-blocks">
                   <Plus className="h-4 w-4" />
                   <span className="text-xs hidden sm:inline">Insert</span>
                   <ChevronDown className="h-3 w-3" />
                 </Button>
-              </DropdownMenuTrigger>
+                </DropdownMenuTrigger>
+              </ToolbarTooltip>
               <DropdownMenuContent className="w-56">
                 <DropdownMenuLabel className="text-xs">Content Blocks</DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -2296,11 +2455,13 @@ export function TipTapEditor({
 
             {/* ── Emoji Picker ── */}
             <Popover open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
-              <PopoverTrigger asChild>
+              <ToolbarTooltip label="Insert emoji">
+                <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" data-testid="toolbar-emoji">
                   <Smile className="h-4 w-4" />
                 </Button>
-              </PopoverTrigger>
+                </PopoverTrigger>
+              </ToolbarTooltip>
               <PopoverContent className="w-72 p-2">
                 <p className="text-xs font-medium text-muted-foreground mb-2 px-1">Emoji</p>
                 <div className="grid grid-cols-10 gap-0.5 max-h-52 overflow-y-auto">
@@ -2337,18 +2498,20 @@ export function TipTapEditor({
 
             {/* ── Table of Contents ── */}
             <Popover open={tocOpen} onOpenChange={setTocOpen}>
-              <PopoverTrigger asChild>
+              <ToolbarTooltip label="Table of contents (jump to sections)">
+                <PopoverTrigger asChild>
                 <Button variant={tocOpen ? 'secondary' : 'ghost'} size="icon" data-testid="toolbar-toc">
                   <BookOpen className="h-4 w-4" />
                 </Button>
-              </PopoverTrigger>
+                </PopoverTrigger>
+              </ToolbarTooltip>
               <PopoverContent className="w-72 p-0" align="end">
                 <div className="px-3 py-2 border-b">
                   <p className="text-sm font-medium">Table of Contents</p>
                 </div>
                 <div className="max-h-72 overflow-y-auto py-1">
                   {tocHeadings.length === 0 ? (
-                    <p className="text-xs text-muted-foreground px-3 py-4 text-center">No headings found.<br/>Add headings to build a TOC.</p>
+                    <p className="text-xs text-muted-foreground px-3 py-4 text-center">No headings found</p>
                   ) : (
                     tocHeadings.map((h, i) => (
                       <button
@@ -2379,7 +2542,8 @@ export function TipTapEditor({
                 isActive={printPreview}
               />
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+                <ToolbarTooltip label="Page size (print preview)">
+                  <DropdownMenuTrigger asChild>
                   <Button 
                     variant="ghost" 
                     size="sm" 
@@ -2389,7 +2553,8 @@ export function TipTapEditor({
                     {PAGE_SIZES[pageSize].label}
                     <ChevronDown className="h-3 w-3" />
                   </Button>
-                </DropdownMenuTrigger>
+                  </DropdownMenuTrigger>
+                </ToolbarTooltip>
                 <DropdownMenuContent align="end" className="w-52">
                   <DropdownMenuLabel className="text-xs text-muted-foreground">Page Size</DropdownMenuLabel>
                   {(Object.keys(PAGE_SIZES) as PageSizeKey[]).map((key) => (
@@ -2429,13 +2594,15 @@ export function TipTapEditor({
             {onExport && (
               <>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                  <ToolbarTooltip label="Export document">
+                    <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="gap-1 px-2" data-testid="toolbar-export">
                       <FileDown className="h-4 w-4" />
                       <span className="text-xs">Export</span>
                       <ChevronDown className="h-3 w-3" />
                     </Button>
-                  </DropdownMenuTrigger>
+                    </DropdownMenuTrigger>
+                  </ToolbarTooltip>
                   <DropdownMenuContent>
                     <DropdownMenuItem onClick={() => onExport('pdf')} data-testid="toolbar-export-pdf">
                       <FileText className="h-4 w-4 mr-2" /> Export as PDF
@@ -2457,8 +2624,7 @@ export function TipTapEditor({
             {onAnchorComment && (
               <>
                 <Separator orientation="vertical" className="h-6 mx-0.5" />
-                <Tooltip>
-                  <TooltipTrigger asChild>
+                <ToolbarTooltip label="Anchor comment to selected text">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -2478,17 +2644,14 @@ export function TipTapEditor({
                       <MessageSquare className="h-4 w-4" />
                       <span className="text-xs">Comment</span>
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Anchor comment to selected text</p></TooltipContent>
-                </Tooltip>
+                </ToolbarTooltip>
               </>
             )}
 
             {documentId && (
               <>
                 <Separator orientation="vertical" className="h-6 mx-0.5" />
-                <Tooltip>
-                  <TooltipTrigger asChild>
+                <ToolbarTooltip label="Send this document for sign-off">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -2507,14 +2670,11 @@ export function TipTapEditor({
                       <FileSignature className="h-4 w-4" />
                       <span className="text-xs font-medium">Send for Sign-off</span>
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Send this document for sign-off</p>
-                  </TooltipContent>
-                </Tooltip>
+                </ToolbarTooltip>
               </>
             )}
           </div>
+          </TooltipProvider>
         </div>
       )}
       
@@ -2530,9 +2690,18 @@ export function TipTapEditor({
         </div>
       )}
 
-      <div ref={editorContentRef} className={cn("relative bg-background", printPreview && "print-preview-container")} data-testid="editor-content-wrapper" onKeyDown={(e) => e.stopPropagation()}>
+      <div
+        ref={editorContentRef}
+        className={cn(
+          "relative bg-background flex-1 min-h-[400px]",
+          editable && "overflow-y-auto max-h-[calc(100vh-14rem)]",
+          printPreview && "print-preview-container",
+        )}
+        data-testid="editor-content-scroll"
+        onKeyDown={(e) => e.stopPropagation()}
+      >
         {showFindReplace && editable && (
-          <div className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur-sm px-3 py-2 space-y-2 shadow-sm" data-testid="find-replace-bar">
+          <div className="shrink-0 border-b bg-background/95 px-3 py-2 space-y-2" data-testid="find-replace-bar">
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
@@ -2612,20 +2781,43 @@ export function TipTapEditor({
           </div>
         )}
         {printPreview && <PrintPreviewOverlay editorContentRef={editorContentRef} pageSize={pageSize} />}
-        {tocHeadings.length > 0 ? (
-          <DocumentSectionNav
-            headings={tocHeadings}
-            open={sectionNavOpen}
-            onToggle={() => setSectionNavOpen((open) => !open)}
-            onJump={scrollToHeading}
-            className="mx-4 mt-4"
-          />
-        ) : editable ? (
-          <div className="mx-4 mt-4 rounded-lg border border-dashed border-border/60 bg-muted/10 px-3 py-2 text-xs text-muted-foreground" data-testid="document-section-nav-empty">
-            Add <strong className="font-medium text-foreground">Heading 1–4</strong> styles to create sections. Section links will appear here for quick navigation (like Confluence).
-          </div>
-        ) : null}
         <div className="relative" onContextMenu={handleEditorContextMenu}>
+        {editor && editable && (
+          <BubbleMenu
+            editor={editor}
+            shouldShow={({ editor: ed, state }) => {
+              const { from, to, empty } = state.selection;
+              if (empty || from === to) return false;
+              if (ed.isActive('table') || ed.isActive('image')) return false;
+              return true;
+            }}
+            options={{ placement: 'top' }}
+          >
+            <div className="flex items-center gap-0.5 rounded-md border bg-popover p-1 shadow-md">
+              <span className="px-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                Section
+              </span>
+              {HEADING_LEVELS.map((level) => {
+                const meta = HEADING_LEVEL_META[level];
+                const Icon = meta.icon;
+                return (
+                  <Button
+                    key={level}
+                    type="button"
+                    size="sm"
+                    variant={activeHeadingLevel === level ? 'secondary' : 'ghost'}
+                    className="h-7 px-1.5"
+                    onClick={() => convertBlockToHeading(level)}
+                    title={meta.label}
+                    data-testid={`bubble-heading-${level}`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                  </Button>
+                );
+              })}
+            </div>
+          </BubbleMenu>
+        )}
         {editor && editable && (
           <BubbleMenu
             editor={editor}
@@ -2675,6 +2867,11 @@ export function TipTapEditor({
             "[&_.ProseMirror_strong]:!text-inherit [&_.ProseMirror_b]:!text-inherit [&_.ProseMirror_em]:!text-inherit [&_.ProseMirror_i]:!text-inherit",
             "[&_.ProseMirror_p]:my-1 [&_.ProseMirror_h1]:mb-2 [&_.ProseMirror_h2]:mb-2 [&_.ProseMirror_h3]:mb-1.5 [&_.ProseMirror_h4]:mb-1",
             "[&_.ProseMirror_h1]:mt-4 [&_.ProseMirror_h2]:mt-3 [&_.ProseMirror_h3]:mt-2.5 [&_.ProseMirror_h4]:mt-2",
+            "[&_.ProseMirror_h1]:scroll-mt-4 [&_.ProseMirror_h2]:scroll-mt-4 [&_.ProseMirror_h3]:scroll-mt-4 [&_.ProseMirror_h4]:scroll-mt-4",
+            "[&_.ProseMirror_h1.document-heading-jump-target]:ring-2 [&_.ProseMirror_h1.document-heading-jump-target]:ring-primary/30 [&_.ProseMirror_h1.document-heading-jump-target]:rounded-sm",
+            "[&_.ProseMirror_h2.document-heading-jump-target]:ring-2 [&_.ProseMirror_h2.document-heading-jump-target]:ring-primary/30 [&_.ProseMirror_h2.document-heading-jump-target]:rounded-sm",
+            "[&_.ProseMirror_h3.document-heading-jump-target]:ring-2 [&_.ProseMirror_h3.document-heading-jump-target]:ring-primary/30 [&_.ProseMirror_h3.document-heading-jump-target]:rounded-sm",
+            "[&_.ProseMirror_h4.document-heading-jump-target]:ring-2 [&_.ProseMirror_h4.document-heading-jump-target]:ring-primary/30 [&_.ProseMirror_h4.document-heading-jump-target]:rounded-sm",
             "[&_.ProseMirror_ul]:my-1 [&_.ProseMirror_ol]:my-1 [&_.ProseMirror_li]:my-0.5",
             "[&_.ProseMirror_p.is-editor-empty:first-child::before]:text-muted-foreground",
             "[&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]",
@@ -2785,6 +2982,57 @@ export function TipTapEditor({
             >
               <BookOpen className="h-3.5 w-3.5 text-muted-foreground" /> Toggle Header Row
             </button>
+          </div>
+        )}
+        {headingCtxMenu && editable && (
+          <div
+            style={{ position: 'fixed', top: headingCtxMenu.y, left: headingCtxMenu.x, zIndex: 9999 }}
+            className="bg-popover border border-border rounded-md shadow-md py-1 min-w-[220px] text-sm"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="heading-context-menu"
+          >
+            <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Convert to section
+            </p>
+            {HEADING_LEVELS.map((level) => {
+              const meta = HEADING_LEVEL_META[level];
+              const Icon = meta.icon;
+              const isActive = activeHeadingLevel === level;
+              const isSuggested = suggestedHeadingLevel === level && activeHeadingLevel !== level;
+              return (
+                <button
+                  key={level}
+                  type="button"
+                  className={cn(
+                    'flex items-center gap-2 w-full px-3 py-1.5 hover:bg-accent transition-colors text-left',
+                    isActive && 'bg-accent/60',
+                  )}
+                  onClick={() => convertBlockToHeading(level)}
+                  data-testid={`ctx-convert-heading-${level}`}
+                >
+                  <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="flex-1">{meta.label}</span>
+                  {isSuggested && (
+                    <span className="text-[10px] font-medium text-primary shrink-0">Suggested</span>
+                  )}
+                  {isActive && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                </button>
+              );
+            })}
+            {activeHeadingLevel !== null && (
+              <>
+                <div className="h-px bg-border my-1" />
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full px-3 py-1.5 hover:bg-accent transition-colors text-left"
+                  onClick={convertBlockToParagraph}
+                  data-testid="ctx-convert-paragraph"
+                >
+                  <Type className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span>Normal paragraph</span>
+                </button>
+              </>
+            )}
           </div>
         )}
         </div>
