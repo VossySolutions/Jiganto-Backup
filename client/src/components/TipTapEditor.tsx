@@ -1490,6 +1490,8 @@ export function TipTapEditor({
   const currentFontSize = editor.getAttributes('textStyle').fontSize || '';
   const activeHeadingLevel = getActiveHeadingLevel(editor);
   const suggestedHeadingLevel = headingCtxMenu ? suggestHeadingLevelFromBlock(editor) : null;
+  const toolbarTooltipSide = 'top' as const;
+  const toolbarTooltipOffset = toolbarPlacement === 'pinned' ? 10 : 6;
 
   const ToolbarTooltip = ({
     label,
@@ -1500,7 +1502,7 @@ export function TipTapEditor({
   }) => (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="top" className="max-w-xs">
+      <TooltipContent side={toolbarTooltipSide} sideOffset={toolbarTooltipOffset} className="max-w-xs">
         <p>{label}</p>
       </TooltipContent>
     </Tooltip>
@@ -1523,20 +1525,23 @@ export function TipTapEditor({
   }) => (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          variant={isActive ? 'secondary' : 'ghost'}
-          size="icon"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            onClick();
-          }}
-          disabled={disabled}
-          data-testid={`toolbar-${label.toLowerCase().replace(/\s+/g, '-')}`}
-        >
-          {children || (Icon && <Icon className="h-4 w-4" />)}
-        </Button>
+        <span className="inline-flex">
+          <Button
+            variant={isActive ? 'secondary' : 'ghost'}
+            size="icon"
+            title={label}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              onClick();
+            }}
+            disabled={disabled}
+            data-testid={`toolbar-${label.toLowerCase().replace(/\s+/g, '-')}`}
+          >
+            {children || (Icon && <Icon className="h-4 w-4" />)}
+          </Button>
+        </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-xs">
+      <TooltipContent side={toolbarTooltipSide} sideOffset={toolbarTooltipOffset} className="max-w-xs">
         <p>{label}</p>
       </TooltipContent>
     </Tooltip>
@@ -1566,12 +1571,13 @@ export function TipTapEditor({
         const toolbarNode = (
         <div
           className={cn(
-            "border-b bg-muted/95 backdrop-blur-sm shrink-0",
+            "border-b bg-muted/95 backdrop-blur-sm shrink-0 overflow-visible",
             toolbarPlacement === 'inline' && "sticky top-0 z-50",
+            toolbarPlacement === 'pinned' && "relative z-[60]",
           )}
           data-testid="tiptap-toolbar"
         >
-          <TooltipProvider delayDuration={250}>
+          <TooltipProvider delayDuration={300} skipDelayDuration={100}>
           <div className="flex flex-wrap items-center gap-0.5 p-1.5 min-w-0">
             <ToolbarButton 
               icon={Undo2} 
@@ -1591,7 +1597,7 @@ export function TipTapEditor({
             <DropdownMenu>
               <ToolbarTooltip label="Heading style — creates sections for On this page links">
                 <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-1 px-2 min-w-[80px]" data-testid="toolbar-headings">
+                <Button variant="ghost" size="sm" className="gap-1 px-2 min-w-[80px]" data-testid="toolbar-headings" title="Heading style">
                   <Type className="h-4 w-4 shrink-0" />
                   <span className="text-xs font-medium">
                     {activeHeadingLevel ? `H${activeHeadingLevel}` : 'Heading'}
@@ -1645,7 +1651,7 @@ export function TipTapEditor({
             <DropdownMenu>
               <ToolbarTooltip label="Font family">
                 <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-1 px-2" data-testid="toolbar-font-family">
+                <Button variant="ghost" size="sm" className="gap-1 px-2" data-testid="toolbar-font-family" title="Font family">
                   <span className="text-xs truncate max-w-[80px]">
                     {currentFontFamily
                       ? FONT_FAMILIES.find(f => f.value === currentFontFamily)?.label || 'Custom'
@@ -1683,7 +1689,7 @@ export function TipTapEditor({
             <DropdownMenu>
               <ToolbarTooltip label="Font size">
                 <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-1 px-2 min-w-[50px]" data-testid="toolbar-font-size">
+                <Button variant="ghost" size="sm" className="gap-1 px-2 min-w-[50px]" data-testid="toolbar-font-size" title="Font size">
                   <span className="text-xs">{currentFontSize ? currentFontSize.replace('px', '') : '16'}</span>
                   <ChevronDown className="h-3 w-3" />
                 </Button>
@@ -1757,7 +1763,7 @@ export function TipTapEditor({
             <Popover>
               <ToolbarTooltip label="Text color">
                 <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" data-testid="toolbar-text-color">
+                <Button variant="ghost" size="icon" data-testid="toolbar-text-color" title="Text color">
                   <div className="flex flex-col items-center">
                     <Baseline className="h-3.5 w-3.5" />
                     <div className="w-4 h-1 rounded-sm mt-0.5" style={{ backgroundColor: currentTextColor || 'currentColor' }} />
@@ -1820,7 +1826,7 @@ export function TipTapEditor({
             <Popover>
               <ToolbarTooltip label="Highlight color">
                 <PopoverTrigger asChild>
-                <Button variant={editor.isActive('highlight') ? 'secondary' : 'ghost'} size="icon" data-testid="toolbar-highlight">
+                <Button variant={editor.isActive('highlight') ? 'secondary' : 'ghost'} size="icon" data-testid="toolbar-highlight" title="Highlight color">
                   <div className="flex flex-col items-center">
                     <Highlighter className="h-3.5 w-3.5" />
                     <div className="w-4 h-1 rounded-sm mt-0.5 bg-yellow-300" />

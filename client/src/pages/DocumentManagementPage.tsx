@@ -2628,7 +2628,7 @@ export default function DocumentManagementPage() {
         {isEditing && activeTab === "content" && (
           <div
             id="document-editor-toolbar-anchor"
-            className="shrink-0 border-b bg-muted/95 backdrop-blur-sm overflow-x-auto"
+            className="shrink-0 border-b bg-muted/95 backdrop-blur-sm relative z-[60] overflow-visible"
             data-testid="document-pinned-toolbar"
           />
         )}
