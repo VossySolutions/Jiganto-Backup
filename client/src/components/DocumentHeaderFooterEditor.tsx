@@ -15,11 +15,13 @@ export function DocumentHeaderFooterEditor({
   content,
   onChange,
   editable,
+  showLabel = true,
 }: {
   kind: "header" | "footer";
   content: string;
   onChange: (html: string) => void;
   editable: boolean;
+  showLabel?: boolean;
 }) {
   const regionRef = useRef<HTMLDivElement>(null);
   const lastExternalContent = useRef(normalizeEditorHtml(content || ""));
@@ -37,8 +39,8 @@ export function DocumentHeaderFooterEditor({
       Placeholder.configure({
         placeholder:
           kind === "header"
-            ? "Add header text (title, date, logo)…"
-            : "Add footer text (copyright, page info)…",
+            ? "Type header text here…"
+            : "Type footer text here…",
       }),
     ],
     content: content || "",
@@ -57,11 +59,12 @@ export function DocumentHeaderFooterEditor({
 
   useEffect(() => {
     if (!editor) return;
+    if (editor.isFocused) return;
     const incoming = normalizeEditorHtml(content || "");
     if (incoming === lastExternalContent.current) return;
-    lastExternalContent.current = incoming;
     const current = normalizeEditorHtml(editor.getHTML());
     if (incoming !== current) {
+      lastExternalContent.current = incoming;
       editor.commands.setContent(incoming, { emitUpdate: false });
     }
   }, [content, editor]);
@@ -84,18 +87,21 @@ export function DocumentHeaderFooterEditor({
     <div
       className={cn(
         "rounded-lg border border-dashed border-border/70 bg-muted/15 overflow-hidden w-full",
-        kind === "header" ? "mb-4" : "mt-4",
+        showLabel && (kind === "header" ? "mb-4" : "mt-4"),
+        !showLabel && "border-0 rounded-none bg-transparent",
       )}
       data-testid={`document-${kind}-region`}
       data-editable-region={kind}
     >
+      {showLabel && (
       <div className="px-3 py-1.5 border-b border-border/50 bg-muted/25 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
+      )}
       <div
         ref={regionRef}
         className={cn(
-          "px-3 py-2 min-h-[2.75rem] text-sm [&_.ProseMirror]:outline-none [&_.ProseMirror_p]:my-0.5",
+          "px-2 py-1 min-h-[1.75rem] text-sm [&_.ProseMirror]:outline-none [&_.ProseMirror_p]:my-0",
           !editable && "opacity-90",
         )}
         onKeyDown={(e) => e.stopPropagation()}

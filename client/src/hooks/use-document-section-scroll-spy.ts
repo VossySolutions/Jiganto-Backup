@@ -3,8 +3,11 @@ import type { DocumentTocHeading } from "@/lib/tiptap-document-extensions";
 import {
   findDocumentScrollParent,
   getDocumentHeadingScrollOffset,
-  getEditorContentScrollOffset,
 } from "@/lib/tiptap-document-extensions";
+
+function normalizeHeadingText(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
 
 function resolveHeadingElement(
   root: Element,
@@ -24,7 +27,7 @@ function resolveHeadingElement(
   if (byToc instanceof HTMLElement) return byToc;
 
   for (const candidate of root.querySelectorAll("h1,h2,h3,h4,h5,h6")) {
-    if (candidate.textContent?.trim() === heading.text) {
+    if (normalizeHeadingText(candidate.textContent || "") === normalizeHeadingText(heading.text)) {
       return candidate as HTMLElement;
     }
   }
@@ -60,10 +63,7 @@ export function useDocumentSectionScrollSpy(
 
       if (pairs.length === 0) return;
 
-      const editorScrollEl = pairs[0].el.closest('[data-testid="editor-content-scroll"]');
-      const scrollOffset = editorScrollEl instanceof HTMLElement
-        ? getEditorContentScrollOffset(editorScrollEl)
-        : getDocumentHeadingScrollOffset(pairs[0].el, rootSelector);
+      const scrollOffset = getDocumentHeadingScrollOffset(pairs[0].el, rootSelector);
 
       let current = pairs[0].heading.id;
       for (const { heading, el } of pairs) {
@@ -81,11 +81,16 @@ export function useDocumentSectionScrollSpy(
     };
 
     const scrollRoots = new Set<HTMLElement | Window>();
-    const editorScroll = root.querySelector('[data-testid="editor-content-scroll"]');
-    if (editorScroll instanceof HTMLElement) scrollRoots.add(editorScroll);
-
     const scrollParent = findDocumentScrollParent(root as HTMLElement);
     if (scrollParent) scrollRoots.add(scrollParent);
+
+    for (const paneId of ["document-word-scroll", "document-header-scroll", "document-footer-scroll"]) {
+      const pane = document.querySelector(`[data-testid="${paneId}"]`);
+      if (pane instanceof HTMLElement) scrollRoots.add(pane);
+    }
+
+    const pageViewport = document.querySelector('[data-testid="scroll-area-viewport"]');
+    if (pageViewport instanceof HTMLElement) scrollRoots.add(pageViewport);
 
     let ancestor: HTMLElement | null = root as HTMLElement;
     while (ancestor) {

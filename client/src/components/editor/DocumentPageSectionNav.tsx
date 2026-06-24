@@ -84,9 +84,10 @@ export function DocumentPageSectionAside({ content }: { content: string }) {
   return (
     <aside
       className={cn(
-        "hidden xl:block shrink-0 self-start transition-[width] duration-200",
+        "hidden xl:flex xl:flex-col xl:min-h-0 xl:shrink-0 xl:overflow-y-auto self-stretch transition-[width] duration-200",
         open ? "w-56 2xl:w-60" : "w-12",
       )}
+      data-testid="document-section-aside-scroll"
     >
       <DocumentPageSectionSidebar content={content} />
     </aside>
@@ -104,7 +105,7 @@ function DocumentPageSectionSidebar({ content }: { content: string }) {
     return (
       <button
         type="button"
-        className="sticky top-4 w-full rounded-lg border border-border/70 bg-muted/15 px-2 py-3 flex flex-col items-center gap-1.5 text-muted-foreground hover:bg-muted/30 hover:text-foreground transition-colors shadow-sm"
+        className="w-full rounded-lg border border-border/70 bg-muted/15 px-2 py-3 flex flex-col items-center gap-1.5 text-muted-foreground hover:bg-muted/30 hover:text-foreground transition-colors shadow-sm"
         onClick={() => setOpen(true)}
         title="Show On this page"
         data-testid="document-section-sidebar-show"
@@ -144,7 +145,7 @@ export function DocumentPageSectionNavTop({
   }
 
   return (
-    <div className="xl:hidden mb-4">
+    <div className="xl:hidden shrink-0">
       <DocumentSectionNav
         headings={headings}
         open={open}

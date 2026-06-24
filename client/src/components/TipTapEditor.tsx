@@ -68,6 +68,7 @@ import {
   MessageSquare, BarChart2,
 } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation } from 'wouter';
 
 
@@ -805,7 +806,14 @@ interface TipTapEditorProps {
   documentId?: number;
   documentTitle?: string;
   onAnchorComment?: (commentId: string, selectedText: string) => void;
+  /** Pin toolbar outside the scroll area (Word-style ribbon). */
+  toolbarPlacement?: 'inline' | 'pinned';
+  toolbarAnchorId?: string;
+  /** Fill parent scroll region (document body pane). */
+  fillHeight?: boolean;
 }
+
+export const DOCUMENT_EDITOR_TOOLBAR_ANCHOR_ID = 'document-editor-toolbar-anchor';
 
 export function TipTapEditor({ 
   content, 
@@ -817,6 +825,9 @@ export function TipTapEditor({
   documentId,
   documentTitle,
   onAnchorComment,
+  toolbarPlacement = 'inline',
+  toolbarAnchorId = DOCUMENT_EDITOR_TOOLBAR_ANCHOR_ID,
+  fillHeight = false,
 }: TipTapEditorProps) {
   const [, setLocation] = useLocation();
   const usersRef = useRef<MentionUser[]>(users);
@@ -1389,6 +1400,7 @@ export function TipTapEditor({
 
   const [tableCtxMenu, setTableCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [headingCtxMenu, setHeadingCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [toolbarAnchor, setToolbarAnchor] = useState<HTMLElement | null>(null);
   const [tableDropdownOpen, setTableDropdownOpen] = useState(false);
   const [tableGridHover, setTableGridHover] = useState({ rows: 0, cols: 0 });
 
@@ -1413,6 +1425,19 @@ export function TipTapEditor({
       document.removeEventListener('keydown', close);
     };
   }, [headingCtxMenu]);
+
+  useEffect(() => {
+    if (!editable || toolbarPlacement !== 'pinned') {
+      setToolbarAnchor(null);
+      return;
+    }
+    const syncAnchor = () => {
+      setToolbarAnchor(document.getElementById(toolbarAnchorId));
+    };
+    syncAnchor();
+    const timer = window.setTimeout(syncAnchor, 0);
+    return () => window.clearTimeout(timer);
+  }, [editable, toolbarPlacement, toolbarAnchorId]);
 
   const convertBlockToHeading = useCallback((level: HeadingLevel) => {
     if (!editor) return;
@@ -1536,11 +1561,18 @@ export function TipTapEditor({
   );
 
   return (
-    <div className="border rounded-lg overflow-hidden bg-background w-full flex flex-col" data-testid="tiptap-editor" data-editable-region="document-body">
-      {editable && (
-        <div className="border-b bg-muted shrink-0 z-10" data-testid="tiptap-toolbar">
+    <div className={cn("border rounded-lg overflow-hidden bg-background w-full flex flex-col", fillHeight && "h-full min-h-0 border-0 rounded-none shadow-none")} data-testid="tiptap-editor" data-editable-region="document-body">
+      {editable && (() => {
+        const toolbarNode = (
+        <div
+          className={cn(
+            "border-b bg-muted/95 backdrop-blur-sm shrink-0",
+            toolbarPlacement === 'inline' && "sticky top-0 z-50",
+          )}
+          data-testid="tiptap-toolbar"
+        >
           <TooltipProvider delayDuration={250}>
-          <div className="flex flex-wrap items-center gap-0.5 p-1.5">
+          <div className="flex flex-wrap items-center gap-0.5 p-1.5 min-w-0">
             <ToolbarButton 
               icon={Undo2} 
               label="Undo" 
@@ -2676,7 +2708,16 @@ export function TipTapEditor({
           </div>
           </TooltipProvider>
         </div>
-      )}
+        );
+
+        if (toolbarPlacement === 'pinned' && toolbarAnchor) {
+          return createPortal(toolbarNode, toolbarAnchor);
+        }
+        if (toolbarPlacement === 'pinned') {
+          return null;
+        }
+        return toolbarNode;
+      })()}
       
       {printPreview && (
         <div className="flex items-center justify-between px-4 py-1.5 bg-primary/5 border-b text-xs" data-testid="print-preview-bar">
@@ -2693,8 +2734,8 @@ export function TipTapEditor({
       <div
         ref={editorContentRef}
         className={cn(
-          "relative bg-background flex-1 min-h-[400px]",
-          editable && "overflow-y-auto max-h-[calc(100vh-14rem)]",
+          "relative bg-background",
+          fillHeight ? "min-h-full h-full" : "min-h-[400px]",
           printPreview && "print-preview-container",
         )}
         data-testid="editor-content-scroll"
@@ -2862,12 +2903,16 @@ export function TipTapEditor({
         <EditorContent
           editor={editor} 
           className={cn(
-            "prose prose-neutral dark:prose-invert max-w-none p-4 min-h-[400px] focus:outline-none bg-background",
-            "[&_.ProseMirror]:min-h-[380px] [&_.ProseMirror]:outline-none [&_.ProseMirror]:leading-[1.4] [&_.ProseMirror]:bg-background",
+            "prose prose-neutral dark:prose-invert max-w-none p-4 focus:outline-none bg-background",
+            fillHeight ? "min-h-full h-full" : "min-h-[400px]",
+            fillHeight
+              ? "[&_.ProseMirror]:min-h-[calc(100%-0.5rem)]"
+              : "[&_.ProseMirror]:min-h-[380px]",
+            "[&_.ProseMirror]:outline-none [&_.ProseMirror]:leading-[1.4] [&_.ProseMirror]:bg-background",
             "[&_.ProseMirror_strong]:!text-inherit [&_.ProseMirror_b]:!text-inherit [&_.ProseMirror_em]:!text-inherit [&_.ProseMirror_i]:!text-inherit",
             "[&_.ProseMirror_p]:my-1 [&_.ProseMirror_h1]:mb-2 [&_.ProseMirror_h2]:mb-2 [&_.ProseMirror_h3]:mb-1.5 [&_.ProseMirror_h4]:mb-1",
             "[&_.ProseMirror_h1]:mt-4 [&_.ProseMirror_h2]:mt-3 [&_.ProseMirror_h3]:mt-2.5 [&_.ProseMirror_h4]:mt-2",
-            "[&_.ProseMirror_h1]:scroll-mt-4 [&_.ProseMirror_h2]:scroll-mt-4 [&_.ProseMirror_h3]:scroll-mt-4 [&_.ProseMirror_h4]:scroll-mt-4",
+            "[&_.ProseMirror_h1]:scroll-mt-28 [&_.ProseMirror_h2]:scroll-mt-28 [&_.ProseMirror_h3]:scroll-mt-28 [&_.ProseMirror_h4]:scroll-mt-28",
             "[&_.ProseMirror_h1.document-heading-jump-target]:ring-2 [&_.ProseMirror_h1.document-heading-jump-target]:ring-primary/30 [&_.ProseMirror_h1.document-heading-jump-target]:rounded-sm",
             "[&_.ProseMirror_h2.document-heading-jump-target]:ring-2 [&_.ProseMirror_h2.document-heading-jump-target]:ring-primary/30 [&_.ProseMirror_h2.document-heading-jump-target]:rounded-sm",
             "[&_.ProseMirror_h3.document-heading-jump-target]:ring-2 [&_.ProseMirror_h3.document-heading-jump-target]:ring-primary/30 [&_.ProseMirror_h3.document-heading-jump-target]:rounded-sm",

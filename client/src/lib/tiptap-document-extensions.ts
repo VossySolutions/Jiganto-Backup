@@ -232,12 +232,20 @@ export function extractHeadingsFromHtml(html: string): DocumentTocHeading[] {
 }
 
 export function findDocumentScrollParent(el: HTMLElement | null): HTMLElement | null {
-  const editorScroll = el?.closest('[data-testid="editor-content-scroll"]');
-  if (editorScroll instanceof HTMLElement) return editorScroll;
-
-  let node = el?.parentElement ?? null;
+  let node: HTMLElement | null = el;
   while (node && node !== document.body) {
+    const testId = node.getAttribute("data-testid");
+    if (
+      testId === "document-word-scroll" ||
+      testId === "document-header-scroll" ||
+      testId === "document-footer-scroll"
+    ) {
+      return node;
+    }
     if (node.hasAttribute("data-radix-scroll-area-viewport")) {
+      return node;
+    }
+    if (node.getAttribute("data-testid") === "scroll-area-viewport") {
       return node;
     }
     const style = window.getComputedStyle(node);
@@ -248,6 +256,10 @@ export function findDocumentScrollParent(el: HTMLElement | null): HTMLElement | 
     node = node.parentElement;
   }
   return null;
+}
+
+function normalizeHeadingText(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
 }
 
 export function getEditorContentScrollOffset(scrollContainer: HTMLElement): number {
@@ -267,13 +279,20 @@ export function getDocumentHeadingScrollOffset(
   anchorEl: HTMLElement,
   rootSelector = '[data-testid="tiptap-editor"]',
 ): number {
-  const root = document.querySelector(rootSelector);
-  const scrollParent = findDocumentScrollParent(anchorEl) ?? findDocumentScrollParent(root as HTMLElement | null);
+  const scrollParent = findDocumentScrollParent(anchorEl);
   const viewportTop = scrollParent?.getBoundingClientRect().top ?? 0;
-  let offset = 20;
+  let offset = 16;
+
+  const toolbar = document.querySelector('[data-testid="tiptap-toolbar"]');
+  if (
+    toolbar instanceof HTMLElement &&
+    scrollParent &&
+    scrollParent.contains(toolbar)
+  ) {
+    offset = Math.max(offset, toolbar.offsetHeight + 12);
+  }
 
   const stickySelectors = [
-    '[data-testid="tiptap-toolbar"]',
     '[data-testid="find-replace-bar"]',
     '[data-testid="document-section-nav"]',
   ];
@@ -295,15 +314,8 @@ export function getDocumentHeadingScrollOffset(
 }
 
 function scrollHeadingElementIntoView(el: HTMLElement) {
-  const editorScroll = el.closest('[data-testid="editor-content-scroll"]');
-  const scrollParent =
-    editorScroll instanceof HTMLElement
-      ? editorScroll
-      : findDocumentScrollParent(el);
-  const offset =
-    editorScroll instanceof HTMLElement
-      ? getEditorContentScrollOffset(editorScroll)
-      : getDocumentHeadingScrollOffset(el);
+  const scrollParent = findDocumentScrollParent(el);
+  const offset = getDocumentHeadingScrollOffset(el);
 
   if (scrollParent) {
     const parentRect = scrollParent.getBoundingClientRect();
@@ -341,8 +353,9 @@ export function scrollToDocumentHeading(
     root.querySelector(`[data-toc-id="${heading.id}"]`);
 
   if (!el) {
+    const targetText = normalizeHeadingText(heading.text);
     root.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((candidate) => {
-      if (!el && candidate.textContent?.trim() === heading.text) {
+      if (!el && normalizeHeadingText(candidate.textContent || "") === targetText) {
         el = candidate;
       }
     });

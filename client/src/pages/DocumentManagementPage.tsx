@@ -76,6 +76,7 @@ const TipTapEditor = lazy(() =>
 import { DocumentHeaderFooterEditor } from "@/components/DocumentHeaderFooterEditor";
 import { DocumentAccessSection, DocumentAccessHeaderChip } from "@/components/documents/DocumentAccessSection";
 import { DocumentPageSectionNavTop, DocumentPageSectionAside, DocumentSectionSidebarToggle } from "@/components/editor/DocumentPageSectionNav";
+import { DocumentScrollRegion } from "@/components/editor/DocumentContentPane";
 import type { Document, DocumentFolder, DocumentVersion, DocumentComment, DocumentFile, DocumentTemplate } from "@shared/schema";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -293,8 +294,9 @@ export default function DocumentManagementPage() {
       .then((full) => {
         if (cancelled || !full) return;
         setSelectedDocument(full);
-        if (!isEditingRef.current) {
+        if (!isEditingRef.current || !editContentRef.current.trim()) {
           setEditContentState(full.content || "");
+          editContentRef.current = full.content || "";
         }
       });
     return () => {
@@ -1056,15 +1058,17 @@ export default function DocumentManagementPage() {
         }
         if (selectedDocument?.id === updatedDoc.id) {
           setSelectedDocument(updatedDoc);
-          if (variables.updates.metadata) {
-            const md = (updatedDoc.metadata as Record<string, unknown>) || {};
-            editHeaderContentRef.current = (md.headerHtml as string) || "";
-            editFooterContentRef.current = (md.footerHtml as string) || "";
-          }
         }
       } else {
         setSelectedDocument(updatedDoc);
         setEditContent(updatedDoc.content || "");
+        const md = (updatedDoc.metadata as Record<string, unknown>) || {};
+        const savedHeader = (md.headerHtml as string) || "";
+        const savedFooter = (md.footerHtml as string) || "";
+        editHeaderContentRef.current = savedHeader;
+        editFooterContentRef.current = savedFooter;
+        setEditHeaderContentState(savedHeader);
+        setEditFooterContentState(savedFooter);
         setIsEditing(false);
         setIsPreviewMode(true);
       }
@@ -1649,6 +1653,9 @@ export default function DocumentManagementPage() {
       editFooterContentRef.current = footer;
       setEditHeaderContentState(header);
       setEditFooterContentState(footer);
+      const body = selectedDocument?.content || "";
+      editContentRef.current = body;
+      setEditContentState(body);
     }
   }, [selectedDocument?.id]);
 
@@ -2421,6 +2428,17 @@ export default function DocumentManagementPage() {
     const plainText = tmpDiv?.textContent || tmpDiv?.innerText || "";
     const wordCount = plainText.trim() ? plainText.trim().split(/\s+/).length : 0;
     const readingMinutes = Math.max(1, Math.ceil(wordCount / 200));
+    const hasPageRegionText = (html: string | undefined) => {
+      if (!html) return false;
+      const el = typeof document !== "undefined" ? document.createElement("div") : null;
+      if (!el) return false;
+      el.innerHTML = html;
+      return Boolean((el.textContent || "").trim());
+    };
+    const showHeaderRegion =
+      isEditing || hasPageRegionText(editHeaderContent || (selectedDocument.metadata as any)?.headerHtml);
+    const showFooterRegion =
+      isEditing || hasPageRegionText(editFooterContent || (selectedDocument.metadata as any)?.footerHtml);
     const templateSource = (selectedDocument as any).templateId
       ? templates.find(t => t.id === (selectedDocument as any).templateId)
       : null;
@@ -2439,7 +2457,12 @@ export default function DocumentManagementPage() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="h-4 w-px bg-border shrink-0" />
-            <span className="text-sm font-medium truncate min-w-0" data-testid="text-document-title-bar">
+            <span
+              className="text-sm font-medium truncate min-w-0 cursor-pointer hover:text-primary"
+              onClick={() => { setRenamingDocument(selectedDocument); setRenameValue(selectedDocument.title); }}
+              title="Click to rename"
+              data-testid="document-title-clickable"
+            >
               {selectedDocument.title}
             </span>
           </div>
@@ -2602,113 +2625,31 @@ export default function DocumentManagementPage() {
           </div>
         </div>
 
-        <ScrollArea className="flex-1">
-          <div className="w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-            {selectedDocument.folderId == null && (
-              <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-4 py-3">
-                <p className="text-sm text-blue-900 dark:text-blue-200">
-                  This document is uncategorised. When you save, you can choose a folder or leave it uncategorised.
-                </p>
-                <Button size="sm" variant="outline" className="shrink-0" onClick={promptSaveLocation} data-testid="button-choose-folder-to-save">
-                  <FolderInput className="h-3.5 w-3.5 mr-1.5" /> Save location…
+        {isEditing && activeTab === "content" && (
+          <div
+            id="document-editor-toolbar-anchor"
+            className="shrink-0 border-b bg-muted/95 backdrop-blur-sm overflow-x-auto"
+            data-testid="document-pinned-toolbar"
+          />
+        )}
+
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as typeof activeTab)}
+          className="flex flex-col flex-1 min-h-0 overflow-hidden"
+        >
+          <div className="shrink-0 border-b bg-background" data-testid="document-view-header">
+            {selectedDocument.folderId == null && isEditing && (
+              <div className="mx-4 sm:mx-6 lg:mx-8 mt-2 flex items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-3 py-1.5">
+                <p className="text-xs text-blue-900 dark:text-blue-200">Uncategorised — pick a folder when saving.</p>
+                <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={promptSaveLocation} data-testid="button-choose-folder-to-save">
+                  <FolderInput className="h-3.5 w-3.5 mr-1" /> Save location…
                 </Button>
               </div>
             )}
-            <div className="mb-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                  {getDocTypeIcon(selectedDocument.type)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  {renamingDocument?.id === selectedDocument.id ? (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && renameValue.trim()) {
-                            updateDocMutation.mutate({ id: selectedDocument.id, updates: { title: renameValue } });
-                          } else if (e.key === "Escape") {
-                            setRenamingDocument(null);
-                            setRenameValue("");
-                          }
-                        }}
-                        autoFocus
-                        className="text-xl font-bold"
-                        data-testid="input-inline-rename-document"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={() => renameValue.trim() && updateDocMutation.mutate({ id: selectedDocument.id, updates: { title: renameValue } })}
-                        disabled={!renameValue.trim()}
-                        data-testid="button-inline-rename-save"
-                      >
-                        <Save className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => { setRenamingDocument(null); setRenameValue(""); }}
-                        data-testid="button-inline-rename-cancel"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <h1
-                      className="text-xl font-bold tracking-tight cursor-pointer hover:bg-muted/50 rounded-md px-1 -mx-1 transition-colors truncate"
-                      onClick={() => { setRenamingDocument(selectedDocument); setRenameValue(selectedDocument.title); }}
-                      title="Click to rename"
-                      data-testid="document-title-clickable"
-                    >
-                      {selectedDocument.title}
-                    </h1>
-                  )}
-                </div>
-                <Badge variant="secondary" className="text-xs uppercase tracking-wide shrink-0">
-                  {selectedDocument.type.replace(/_/g, " ")}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-3 sm:gap-4 text-xs text-muted-foreground ml-0 sm:ml-12 mb-4 flex-wrap">
-                <span>v{selectedDocument.currentVersion}</span>
-                <span className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {new Date(selectedDocument.updatedAt!).toLocaleDateString()}
-                </span>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold cursor-pointer hover:opacity-75 transition-opacity select-none focus:outline-none", statusColors[selectedDocument.status] || statusColors.draft)}
-                      data-testid="text-doc-status-badge"
-                    >
-                      {statusLabel}
-                      <ChevronDown className="h-2.5 w-2.5" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    {STATUS_OPTIONS.map((opt) => (
-                      <DropdownMenuItem
-                        key={opt.value}
-                        onClick={() => updateDocMutation.mutate({ id: selectedDocument.id, updates: { status: opt.value as any } })}
-                        className="flex items-center justify-between gap-3"
-                        data-testid={`doc-status-option-${opt.value}`}
-                      >
-                        <span>{opt.label}</span>
-                        {selectedDocument.status === opt.value && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <DocumentAccessHeaderChip
-                  documentId={selectedDocument.id}
-                  onOpenMembers={() => setActiveTab("members")}
-                />
-              </div>
-            </div>
-
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-              <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto">
-                <TabsList className="mb-4 bg-muted inline-flex w-max min-w-full sm:w-full flex-nowrap h-auto p-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 lg:px-8 py-2">
+              <div className="overflow-x-auto min-w-0 flex-1">
+                <TabsList className="bg-muted inline-flex w-max min-w-0 h-8 p-0.5">
                   <TabsTrigger value="content" className="shrink-0 text-xs sm:text-sm px-2.5 sm:px-3 gap-1.5" data-testid="tab-content">
                     <FileText className="h-4 w-4" />
                     <span className="hidden sm:inline">Content</span>
@@ -2747,12 +2688,47 @@ export default function DocumentManagementPage() {
                   </TabsTrigger>
                 </TabsList>
               </div>
-
-              {activeTab === "content" && (
-              <div className="flex items-center justify-end gap-2 mb-3 pb-3 border-b" data-testid="inline-tags-section">
+              <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold cursor-pointer hover:opacity-75", statusColors[selectedDocument.status] || statusColors.draft)}
+                      data-testid="text-doc-status-badge"
+                    >
+                      {statusLabel}
+                      <ChevronDown className="h-2.5 w-2.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {STATUS_OPTIONS.map((opt) => (
+                      <DropdownMenuItem
+                        key={opt.value}
+                        onClick={() => updateDocMutation.mutate({ id: selectedDocument.id, updates: { status: opt.value as any } })}
+                        className="flex items-center justify-between gap-3"
+                        data-testid={`doc-status-option-${opt.value}`}
+                      >
+                        <span>{opt.label}</span>
+                        {selectedDocument.status === opt.value && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <span>v{selectedDocument.currentVersion}</span>
+                <DocumentAccessHeaderChip
+                  documentId={selectedDocument.id}
+                  onOpenMembers={() => setActiveTab("members")}
+                />
+                {activeTab === "content" && (
+                  <DocumentSectionSidebarToggle content={editContent || selectedDocument.content || ""} />
+                )}
+              </div>
+            </div>
+            {activeTab === "content" && (isEditing || docTags.length > 0) && (
+              <div
+                className="px-4 sm:px-6 lg:px-8 pb-2 flex flex-wrap items-center gap-2 border-t"
+                data-testid="inline-tags-section"
+              >
                 <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide shrink-0">Tags</span>
-                  <div className="h-3 w-px bg-border mx-0.5" />
                   {docTags.length > 0 ? (
                     docTags.map((tag, i) => (
                       <Badge
@@ -2780,10 +2756,9 @@ export default function DocumentManagementPage() {
                       </Badge>
                     ))
                   ) : (
-                    <span className="text-xs text-muted-foreground italic">No tags</span>
+                    <span className="text-xs text-muted-foreground">No tags</span>
                   )}
                 </div>
-                <DocumentSectionSidebarToggle content={editContent || selectedDocument.content || ""} />
                 {isEditing && (
                   <div className="flex items-center gap-1.5 shrink-0">
                     <Input
@@ -2830,48 +2805,76 @@ export default function DocumentManagementPage() {
                   </div>
                 )}
               </div>
-              )}
+            )}
+          </div>
 
-              <TabsContent value="content" className="mt-0">
-                <div className="flex flex-col xl:flex-row xl:items-start gap-4 xl:gap-6 w-full">
-                  <div className="flex-1 min-w-0 w-full">
-                    <DocumentPageSectionNavTop
-                      content={editContent || selectedDocument.content || ""}
-                    />
+          <TabsContent
+            value="content"
+            className="mt-0 flex flex-1 min-h-0 flex-col overflow-hidden data-[state=inactive]:hidden"
+          >
+            <div className="flex flex-1 min-h-0 gap-3 px-4 sm:px-6 lg:px-8 py-2">
+              <div className="flex flex-1 min-h-0 flex-col min-w-0">
+                <DocumentPageSectionNavTop content={editContent || selectedDocument.content || ""} />
+                {showHeaderRegion && (
+                  <DocumentScrollRegion
+                    scrollTestId="document-header-scroll"
+                    variant="chrome"
+                    edge="top"
+                    title="Page header"
+                    description="Top of the page"
+                  >
                     <DocumentHeaderFooterEditor
                       kind="header"
                       content={editHeaderContent}
                       onChange={setEditHeaderContent}
                       editable={isEditing}
+                      showLabel={false}
                     />
-                    <Suspense fallback={<div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
-                      <TipTapEditor
-                        content={editContent}
-                        onChange={setEditContent}
-                        onExport={handleExport}
-                        editable={isEditing}
-                        placeholder="Start writing your document..."
-                        users={mentionUsers}
-                        documentId={selectedDocument?.id}
-                        documentTitle={selectedDocument.title}
-                        onAnchorComment={(commentId, selectedText) => {
-                          setPendingAnchoredComment({ id: commentId, text: selectedText });
-                          setActiveTab("comments");
-                        }}
-                      />
-                    </Suspense>
+                  </DocumentScrollRegion>
+                )}
+                <DocumentScrollRegion scrollTestId="document-word-scroll" variant="main" className="min-h-[12rem]">
+                  <Suspense fallback={<div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
+                    <TipTapEditor
+                      content={editContent || selectedDocument.content || ""}
+                      onChange={setEditContent}
+                      onExport={handleExport}
+                      editable={isEditing}
+                      toolbarPlacement="pinned"
+                      placeholder="Start writing your document..."
+                      users={mentionUsers}
+                      documentId={selectedDocument?.id}
+                      documentTitle={selectedDocument.title}
+                      onAnchorComment={(commentId, selectedText) => {
+                        setPendingAnchoredComment({ id: commentId, text: selectedText });
+                        setActiveTab("comments");
+                      }}
+                    />
+                  </Suspense>
+                </DocumentScrollRegion>
+                {showFooterRegion && (
+                  <DocumentScrollRegion
+                    scrollTestId="document-footer-scroll"
+                    variant="chrome"
+                    edge="bottom"
+                    title="Page footer"
+                    description="Bottom of the page"
+                  >
                     <DocumentHeaderFooterEditor
                       kind="footer"
                       content={editFooterContent}
                       onChange={setEditFooterContent}
                       editable={isEditing}
+                      showLabel={false}
                     />
-                  </div>
-                  <DocumentPageSectionAside
-                    content={editContent || selectedDocument.content || ""}
-                  />
-                </div>
-              </TabsContent>
+                  </DocumentScrollRegion>
+                )}
+              </div>
+              <DocumentPageSectionAside content={editContent || selectedDocument.content || ""} />
+            </div>
+          </TabsContent>
+
+          <ScrollArea className={cn("flex-1 min-h-0", activeTab === "content" && "hidden")}>
+            <div className="w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
 
               <TabsContent value="comments" className="mt-0">
                 {commentsLoading ? (
@@ -3307,9 +3310,9 @@ export default function DocumentManagementPage() {
                   </div>
                 )}
               </TabsContent>
-            </Tabs>
-          </div>
-        </ScrollArea>
+            </div>
+          </ScrollArea>
+        </Tabs>
       </div>
     );
   };
