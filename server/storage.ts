@@ -658,6 +658,14 @@ export interface IStorage {
   createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
   updateDocumentFolder(id: number, updates: Partial<InsertDocumentFolder>): Promise<DocumentFolder | undefined>;
   deleteDocumentFolder(id: number): Promise<void>;
+  resolveFolderPageLayout(folderId: number | null): Promise<{
+    headerHtml: string;
+    footerHtml: string;
+    headerSourceFolderId?: number;
+    headerSourceFolderName?: string;
+    footerSourceFolderId?: number;
+    footerSourceFolderName?: string;
+  }>;
 
   // Document Management - Documents
   getDocuments(tenantId: number, folderId?: number | null, clientId?: number): Promise<Document[]>;
@@ -4843,6 +4851,55 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDocumentFolder(id: number): Promise<void> {
     await db.delete(documentFolders).where(eq(documentFolders.id, id));
+  }
+
+  async resolveFolderPageLayout(folderId: number | null): Promise<{
+    headerHtml: string;
+    footerHtml: string;
+    headerSourceFolderId?: number;
+    headerSourceFolderName?: string;
+    footerSourceFolderId?: number;
+    footerSourceFolderName?: string;
+  }> {
+    const { parseFolderPageLayoutDefaults } = await import("@shared/document-page-layout");
+
+    let currentId = folderId;
+    let headerHtml = "";
+    let footerHtml = "";
+    let headerSourceFolderId: number | undefined;
+    let headerSourceFolderName: string | undefined;
+    let footerSourceFolderId: number | undefined;
+    let footerSourceFolderName: string | undefined;
+
+    while (currentId != null) {
+      const folder = await this.getDocumentFolder(currentId);
+      if (!folder) break;
+      const defaults = parseFolderPageLayoutDefaults(folder.metadata);
+      const folderHeader = (defaults.defaultHeaderHtml || "").trim();
+      const folderFooter = (defaults.defaultFooterHtml || "").trim();
+
+      if (!headerHtml && folderHeader) {
+        headerHtml = folderHeader;
+        headerSourceFolderId = folder.id;
+        headerSourceFolderName = folder.name;
+      }
+      if (!footerHtml && folderFooter) {
+        footerHtml = folderFooter;
+        footerSourceFolderId = folder.id;
+        footerSourceFolderName = folder.name;
+      }
+      if (headerHtml && footerHtml) break;
+      currentId = folder.parentId ?? null;
+    }
+
+    return {
+      headerHtml,
+      footerHtml,
+      headerSourceFolderId,
+      headerSourceFolderName,
+      footerSourceFolderId,
+      footerSourceFolderName,
+    };
   }
 
   // Document Management - Documents

@@ -57,7 +57,7 @@ import {
   GripVertical, FolderInput, Save, X, FileUp,
   File, FileImage, FileSpreadsheet, FileArchive, Paperclip,
   Mail, Copy, Check, BookCopy, Globe, Building2, Layers, Palette, Users,
-  FileSignature, Bell, XCircle, Eye, Loader2, RotateCcw, Info, Maximize2, Minimize2, AlertTriangle
+  FileSignature, Bell, XCircle, Eye, Loader2, RotateCcw, Info, Maximize2, Minimize2, AlertTriangle, LayoutTemplate
 } from "lucide-react";
 import {
   DocAllIcon,
@@ -77,6 +77,10 @@ import { DocumentHeaderFooterEditor } from "@/components/DocumentHeaderFooterEdi
 import { DocumentAccessSection, DocumentAccessHeaderChip } from "@/components/documents/DocumentAccessSection";
 import { DocumentPageSectionNavTop, DocumentPageSectionAside, DocumentSectionSidebarToggle } from "@/components/editor/DocumentPageSectionNav";
 import { DocumentScrollRegion } from "@/components/editor/DocumentContentPane";
+import { DocumentPageLayoutPanel } from "@/components/editor/DocumentPageLayoutPanel";
+import { FolderPageLayoutDialog, readFolderPageLayoutFromFolder } from "@/components/documents/FolderPageLayoutDialog";
+import { resolveEffectivePageLayout, resolveFolderPageLayoutFromTree, resolvePageLayoutFieldsForSave, mergeDocumentMetadataWithPageLayout } from "@shared/document-page-layout";
+import { wrapDocumentBodyWithPageRegions } from "@shared/document-export";
 import type { Document, DocumentFolder, DocumentVersion, DocumentComment, DocumentFile, DocumentTemplate } from "@shared/schema";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -277,6 +281,8 @@ export default function DocumentManagementPage() {
   const lastAutoSavedContent = useRef<string>("");
   const selectedDocumentRef = useRef<Document | null>(null);
   const isEditingRef = useRef(false);
+  const pageLayoutEditGenerationRef = useRef(0);
+  const lastSyncedDocIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!selectedDocument?.id || selectedDocument.content != null) return;
@@ -396,6 +402,9 @@ export default function DocumentManagementPage() {
   const [isMoveFolderOpen, setIsMoveFolderOpen] = useState(false);
   const [movingFolder, setMovingFolder] = useState<any>(null);
   const [moveFolderTargetId, setMoveFolderTargetId] = useState<number | null>(null);
+  const [folderPageLayoutFolder, setFolderPageLayoutFolder] = useState<DocumentFolder | null>(null);
+  const [folderLayoutHeader, setFolderLayoutHeader] = useState("");
+  const [folderLayoutFooter, setFolderLayoutFooter] = useState("");
   const docClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const docxInputRef = useRef<HTMLInputElement>(null);
 
@@ -403,19 +412,9 @@ export default function DocumentManagementPage() {
     if (!selectedDocument) return;
     
     let content = editContent || selectedDocument.content || "";
-    const headerHtml = editHeaderContent || (selectedDocument.metadata as any)?.headerHtml || "";
-    const footerHtml = editFooterContent || (selectedDocument.metadata as any)?.footerHtml || "";
-    const wrapWithPageRegions = (body: string) => {
-      const parts: string[] = [];
-      if (headerHtml.trim()) {
-        parts.push(`<header class="document-header" style="border-bottom:1px solid #e5e7eb;padding-bottom:0.75rem;margin-bottom:1.5rem;">${headerHtml}</header>`);
-      }
-      parts.push(`<div class="document-body">${body}</div>`);
-      if (footerHtml.trim()) {
-        parts.push(`<footer class="document-footer" style="border-top:1px solid #e5e7eb;padding-top:0.75rem;margin-top:1.5rem;">${footerHtml}</footer>`);
-      }
-      return parts.join("\n");
-    };
+    const headerHtml = editHeaderContent || "";
+    const footerHtml = editFooterContent || "";
+    const wrapWithPageRegions = (body: string) => wrapDocumentBodyWithPageRegions(body, headerHtml, footerHtml);
     const filename = selectedDocument.title.replace(/[^a-z0-9]/gi, '_');
     let mimeType = "text/plain";
     let extension = "txt";
@@ -673,6 +672,33 @@ export default function DocumentManagementPage() {
     return findDocumentByTitleInFolder(allDocuments, importTitle, importFolderId) ?? null;
   }, [allDocuments, importTitle, importFolderId, importConflictAction]);
 
+  const folderLayoutNodes = useMemo(
+    () => folders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId ?? null, metadata: f.metadata })),
+    [folders],
+  );
+
+  const resolvedPageLayout = useMemo(() => {
+    if (!selectedDocument) return null;
+    return resolveEffectivePageLayout(selectedDocument.metadata, selectedDocument.folderId, folderLayoutNodes);
+  }, [selectedDocument, folderLayoutNodes]);
+
+  const applyResolvedPageLayoutToEditor = useCallback((doc: Document | null) => {
+    if (!doc) return;
+    const resolved = resolveEffectivePageLayout(doc.metadata, doc.folderId, folderLayoutNodes);
+    editHeaderContentRef.current = resolved.headerHtml;
+    editFooterContentRef.current = resolved.footerHtml;
+    setEditHeaderContentState(resolved.headerHtml);
+    setEditFooterContentState(resolved.footerHtml);
+    pageLayoutEditGenerationRef.current = 0;
+  }, [folderLayoutNodes]);
+
+  const openFolderPageLayout = useCallback((folder: DocumentFolder) => {
+    const layout = readFolderPageLayoutFromFolder(folder);
+    setFolderLayoutHeader(layout.header);
+    setFolderLayoutFooter(layout.footer);
+    setFolderPageLayoutFolder(folder);
+  }, []);
+
   const resetImportDialog = useCallback(() => {
     setImportContent("");
     setImportHeaderContent("");
@@ -739,6 +765,9 @@ export default function DocumentManagementPage() {
     onSuccess: (doc) => {
       setSelectedDocument(doc);
       setEditContent(doc.content || "");
+      lastSyncedDocIdRef.current = doc.id;
+      pageLayoutEditGenerationRef.current = 0;
+      applyResolvedPageLayoutToEditor(doc);
       queryClient.invalidateQueries({ queryKey: ["/api/documents", doc.id, "versions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
       queryClient.invalidateQueries({ queryKey: ["/api/documents/all"] });
@@ -918,6 +947,36 @@ export default function DocumentManagementPage() {
     },
   });
 
+  const saveFolderPageLayoutMutation = useMutation({
+    mutationFn: async ({
+      id,
+      defaultHeaderHtml,
+      defaultFooterHtml,
+    }: {
+      id: number;
+      defaultHeaderHtml: string | null;
+      defaultFooterHtml: string | null;
+    }) => {
+      const folder = folders.find((f) => f.id === id);
+      const existingMeta = (folder?.metadata as Record<string, unknown> | undefined) || {};
+      return apiRequest("PUT", `/api/documents/folders/${id}`, {
+        metadata: {
+          ...existingMeta,
+          defaultHeaderHtml,
+          defaultFooterHtml,
+        },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/folders"] });
+      setFolderPageLayoutFolder(null);
+      toast({ title: "Folder page layout saved" });
+    },
+    onError: () => {
+      toast({ title: "Failed to save folder page layout", variant: "destructive" });
+    },
+  });
+
   const moveFolderMutation = useMutation({
     mutationFn: async ({ id, parentId }: { id: number; parentId: number | null }) =>
       apiRequest("PUT", `/api/documents/folders/${id}`, { parentId }),
@@ -949,6 +1008,9 @@ export default function DocumentManagementPage() {
         setIsEditing(true);
         setIsPreviewMode(false);
         setEditContent(variables.content || "");
+        lastSyncedDocIdRef.current = doc.id;
+        pageLayoutEditGenerationRef.current = 0;
+        applyResolvedPageLayoutToEditor(doc);
         setActiveTab("content");
         setSelectedFile(null);
         toast({ title: "Document created" });
@@ -1058,17 +1120,14 @@ export default function DocumentManagementPage() {
         }
         if (selectedDocument?.id === updatedDoc.id) {
           setSelectedDocument(updatedDoc);
+          if ("metadata" in variables.updates) {
+            applyResolvedPageLayoutToEditor(updatedDoc);
+          }
         }
       } else {
         setSelectedDocument(updatedDoc);
         setEditContent(updatedDoc.content || "");
-        const md = (updatedDoc.metadata as Record<string, unknown>) || {};
-        const savedHeader = (md.headerHtml as string) || "";
-        const savedFooter = (md.footerHtml as string) || "";
-        editHeaderContentRef.current = savedHeader;
-        editFooterContentRef.current = savedFooter;
-        setEditHeaderContentState(savedHeader);
-        setEditFooterContentState(savedFooter);
+        applyResolvedPageLayoutToEditor(updatedDoc);
         setIsEditing(false);
         setIsPreviewMode(true);
       }
@@ -1083,21 +1142,48 @@ export default function DocumentManagementPage() {
     },
   });
 
-  const buildDocumentMetadataWithHeaderFooter = useCallback((baseMetadata?: Record<string, unknown>) => ({
-    ...(baseMetadata || {}),
-    headerHtml: editHeaderContentRef.current.trim() ? editHeaderContentRef.current : null,
-    footerHtml: editFooterContentRef.current.trim() ? editFooterContentRef.current : null,
-  }), []);
+  const buildDocumentMetadataWithHeaderFooter = useCallback((baseMetadata?: Record<string, unknown>) => {
+    const layout = resolvePageLayoutFieldsForSave(
+      editHeaderContentRef.current,
+      editFooterContentRef.current,
+      baseMetadata ?? selectedDocument?.metadata,
+      selectedDocument?.folderId ?? null,
+      folderLayoutNodes,
+    );
+    return mergeDocumentMetadataWithPageLayout(baseMetadata, layout);
+  }, [selectedDocument?.metadata, selectedDocument?.folderId, folderLayoutNodes]);
 
   const setEditHeaderContent = useCallback((val: string) => {
+    pageLayoutEditGenerationRef.current += 1;
     editHeaderContentRef.current = val;
     setEditHeaderContentState(val);
   }, []);
 
   const setEditFooterContent = useCallback((val: string) => {
+    pageLayoutEditGenerationRef.current += 1;
     editFooterContentRef.current = val;
     setEditFooterContentState(val);
   }, []);
+
+  const handleUseFolderPageLayoutDefaults = useCallback(() => {
+    if (!selectedDocument) return;
+    const folderLayout = resolveFolderPageLayoutFromTree(folderLayoutNodes, selectedDocument.folderId);
+    pageLayoutEditGenerationRef.current = 0;
+    editHeaderContentRef.current = folderLayout.headerHtml;
+    editFooterContentRef.current = folderLayout.footerHtml;
+    setEditHeaderContentState(folderLayout.headerHtml);
+    setEditFooterContentState(folderLayout.footerHtml);
+    updateDocMutation.mutate({
+      id: selectedDocument.id,
+      updates: {
+        metadata: mergeDocumentMetadataWithPageLayout(
+          (selectedDocument.metadata as Record<string, unknown>) || {},
+          { headerHtml: null, footerHtml: null },
+        ),
+      },
+      silent: true,
+    });
+  }, [selectedDocument, folderLayoutNodes, updateDocMutation]);
 
   const uploadFileMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -1646,18 +1732,27 @@ export default function DocumentManagementPage() {
     lastAutoSavedContent.current = selectedDocument?.content ?? "";
 
     if (nextDocId !== prevDocId) {
-      const md = (selectedDocument?.metadata as Record<string, unknown>) || {};
-      const header = (md.headerHtml as string) || "";
-      const footer = (md.footerHtml as string) || "";
-      editHeaderContentRef.current = header;
-      editFooterContentRef.current = footer;
-      setEditHeaderContentState(header);
-      setEditFooterContentState(footer);
       const body = selectedDocument?.content || "";
       editContentRef.current = body;
       setEditContentState(body);
+      lastSyncedDocIdRef.current = nextDocId;
+      pageLayoutEditGenerationRef.current = 0;
+      applyResolvedPageLayoutToEditor(selectedDocument);
     }
-  }, [selectedDocument?.id]);
+  }, [selectedDocument?.id, selectedDocument?.content, applyResolvedPageLayoutToEditor, selectedDocument]);
+
+  useEffect(() => {
+    if (!selectedDocument) return;
+    if (lastSyncedDocIdRef.current !== selectedDocument.id) return;
+    if (pageLayoutEditGenerationRef.current > 0 && isEditingRef.current) return;
+    applyResolvedPageLayoutToEditor(selectedDocument);
+  }, [
+    selectedDocument?.metadata,
+    selectedDocument?.folderId,
+    folderLayoutNodes,
+    selectedDocument,
+    applyResolvedPageLayoutToEditor,
+  ]);
 
   useEffect(() => {
     isEditingRef.current = isEditing;
@@ -1983,6 +2078,9 @@ export default function DocumentManagementPage() {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolder(folder); setRenameValue(folder.name); setRenamingFolderColor(folder.color || "#f97316"); }}>
                 <Pencil className="h-4 w-4 mr-2" /> Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openFolderPageLayout(folder); }} data-testid={`tree-folder-page-layout-${folder.id}`}>
+                <LayoutTemplate className="h-4 w-4 mr-2" /> Page layout defaults
               </DropdownMenuItem>
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("folder", folder.id, folder.name); }}>
                 <Share2 className="h-4 w-4 mr-2" /> Share Link
@@ -2428,23 +2526,18 @@ export default function DocumentManagementPage() {
     const plainText = tmpDiv?.textContent || tmpDiv?.innerText || "";
     const wordCount = plainText.trim() ? plainText.trim().split(/\s+/).length : 0;
     const readingMinutes = Math.max(1, Math.ceil(wordCount / 200));
-    const hasPageRegionText = (html: string | undefined) => {
-      if (!html) return false;
-      const el = typeof document !== "undefined" ? document.createElement("div") : null;
-      if (!el) return false;
-      el.innerHTML = html;
-      return Boolean((el.textContent || "").trim());
+    const openPageLayoutEditor = () => {
+      setIsEditing(true);
+      setIsPreviewMode(false);
+      setEditContent(selectedDocument.content || "");
+      setActiveTab("properties");
     };
-    const showHeaderRegion =
-      isEditing || hasPageRegionText(editHeaderContent || (selectedDocument.metadata as any)?.headerHtml);
-    const showFooterRegion =
-      isEditing || hasPageRegionText(editFooterContent || (selectedDocument.metadata as any)?.footerHtml);
     const templateSource = (selectedDocument as any).templateId
       ? templates.find(t => t.id === (selectedDocument as any).templateId)
       : null;
 
     return (
-      <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex flex-col h-full w-full min-w-0 overflow-hidden">
         <div className="border-b px-3 sm:px-4 py-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-card sticky top-0 z-10 shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <Button
@@ -2636,9 +2729,9 @@ export default function DocumentManagementPage() {
         <Tabs
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as typeof activeTab)}
-          className="flex flex-col flex-1 min-h-0 overflow-hidden"
+          className="flex flex-col flex-1 min-h-0 min-w-0 w-full overflow-hidden"
         >
-          <div className="shrink-0 border-b bg-background" data-testid="document-view-header">
+          <div className="shrink-0 border-b bg-background w-full min-w-0" data-testid="document-view-header">
             {selectedDocument.folderId == null && isEditing && (
               <div className="mx-4 sm:mx-6 lg:mx-8 mt-2 flex items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-3 py-1.5">
                 <p className="text-xs text-blue-900 dark:text-blue-200">Uncategorised — pick a folder when saving.</p>
@@ -2720,6 +2813,31 @@ export default function DocumentManagementPage() {
                 />
                 {activeTab === "content" && (
                   <DocumentSectionSidebarToggle content={editContent || selectedDocument.content || ""} />
+                )}
+                {activeTab === "properties" ? (
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    className="h-7 text-xs gap-1.5 shrink-0"
+                    onClick={() => setActiveTab("content")}
+                    data-testid="button-back-to-document"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Document</span>
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1.5 shrink-0"
+                    onClick={() => (isEditing ? setActiveTab("properties") : openPageLayoutEditor())}
+                    data-testid="button-page-layout"
+                  >
+                    <LayoutTemplate className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Page layout</span>
+                  </Button>
                 )}
               </div>
             </div>
@@ -2808,30 +2926,34 @@ export default function DocumentManagementPage() {
             )}
           </div>
 
+          <div className="relative flex flex-1 min-h-0 min-w-0 w-full overflow-hidden">
           <TabsContent
             value="content"
-            className="mt-0 flex flex-1 min-h-0 flex-col overflow-hidden data-[state=inactive]:hidden"
+            className="mt-0 absolute inset-0 flex flex-col overflow-hidden data-[state=inactive]:hidden w-full min-w-0"
           >
             <div className="flex flex-1 min-h-0 gap-3 px-4 sm:px-6 lg:px-8 py-2">
               <div className="flex flex-1 min-h-0 flex-col min-w-0">
                 <DocumentPageSectionNavTop content={editContent || selectedDocument.content || ""} />
-                {showHeaderRegion && (
-                  <DocumentScrollRegion
-                    scrollTestId="document-header-scroll"
-                    variant="chrome"
-                    edge="top"
-                    title="Page header"
-                    description="Top of the page"
-                  >
-                    <DocumentHeaderFooterEditor
-                      kind="header"
-                      content={editHeaderContent}
-                      onChange={setEditHeaderContent}
-                      editable={isEditing}
-                      showLabel={false}
-                    />
-                  </DocumentScrollRegion>
-                )}
+                <DocumentScrollRegion
+                  scrollTestId="document-header-scroll"
+                  variant="chrome"
+                  edge="top"
+                  expanded={isEditing}
+                  title="Page header"
+                  description={
+                    resolvedPageLayout?.headerInherited && resolvedPageLayout.headerSourceFolderName
+                      ? `Inherited from folder “${resolvedPageLayout.headerSourceFolderName}”`
+                      : "Top — shown when viewing & exporting"
+                  }
+                >
+                  <DocumentHeaderFooterEditor
+                    kind="header"
+                    content={editHeaderContent}
+                    onChange={setEditHeaderContent}
+                    editable={isEditing}
+                    showLabel={false}
+                  />
+                </DocumentScrollRegion>
                 <DocumentScrollRegion scrollTestId="document-word-scroll" variant="main" className="min-h-[12rem]">
                   <Suspense fallback={<div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
                     <TipTapEditor
@@ -2851,32 +2973,168 @@ export default function DocumentManagementPage() {
                     />
                   </Suspense>
                 </DocumentScrollRegion>
-                {showFooterRegion && (
-                  <DocumentScrollRegion
-                    scrollTestId="document-footer-scroll"
-                    variant="chrome"
-                    edge="bottom"
-                    title="Page footer"
-                    description="Bottom of the page"
-                  >
-                    <DocumentHeaderFooterEditor
-                      kind="footer"
-                      content={editFooterContent}
-                      onChange={setEditFooterContent}
-                      editable={isEditing}
-                      showLabel={false}
-                    />
-                  </DocumentScrollRegion>
-                )}
+                <DocumentScrollRegion
+                  scrollTestId="document-footer-scroll"
+                  variant="chrome"
+                  edge="bottom"
+                  expanded={isEditing}
+                  title="Page footer"
+                  description={
+                    resolvedPageLayout?.footerInherited && resolvedPageLayout.footerSourceFolderName
+                      ? `Inherited from folder “${resolvedPageLayout.footerSourceFolderName}”`
+                      : "Bottom — shown when viewing & exporting"
+                  }
+                >
+                  <DocumentHeaderFooterEditor
+                    kind="footer"
+                    content={editFooterContent}
+                    onChange={setEditFooterContent}
+                    editable={isEditing}
+                    showLabel={false}
+                  />
+                </DocumentScrollRegion>
               </div>
               <DocumentPageSectionAside content={editContent || selectedDocument.content || ""} />
             </div>
           </TabsContent>
 
-          <ScrollArea className={cn("flex-1 min-h-0", activeTab === "content" && "hidden")}>
-            <div className="w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <TabsContent
+            value="properties"
+            className="mt-0 absolute inset-0 flex flex-col overflow-y-auto overflow-x-hidden data-[state=inactive]:hidden w-full min-w-0"
+          >
+            <div className="w-full min-w-0 max-w-none px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-8">
+              <DocumentPageLayoutPanel
+                headerContent={editHeaderContent}
+                footerContent={editFooterContent}
+                onHeaderChange={setEditHeaderContent}
+                onFooterChange={setEditFooterContent}
+                editable={isEditing}
+                onStartEdit={openPageLayoutEditor}
+                onBackToDocument={() => setActiveTab("content")}
+                headerInherited={resolvedPageLayout?.headerInherited}
+                footerInherited={resolvedPageLayout?.footerInherited}
+                headerSourceFolderName={resolvedPageLayout?.headerSourceFolderName}
+                footerSourceFolderName={resolvedPageLayout?.footerSourceFolderName}
+                onUseFolderDefaults={handleUseFolderPageLayoutDefaults}
+              />
 
-              <TabsContent value="comments" className="mt-0">
+              <div className="border-t pt-6 w-full">
+                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Details</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-3 w-full">
+                  <div className="flex items-start gap-3">
+                    <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Status</span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold cursor-pointer hover:opacity-75 transition-opacity select-none focus:outline-none", statusColors[selectedDocument.status] || statusColors.draft)}
+                          data-testid="text-doc-status"
+                        >
+                          {statusLabel}
+                          <ChevronDown className="h-2.5 w-2.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        {STATUS_OPTIONS.map((opt) => (
+                          <DropdownMenuItem
+                            key={opt.value}
+                            onClick={() => updateDocMutation.mutate({ id: selectedDocument.id, updates: { status: opt.value as any } })}
+                            className="flex items-center justify-between gap-3"
+                            data-testid={`doc-status-option-details-${opt.value}`}
+                          >
+                            <span>{opt.label}</span>
+                            {selectedDocument.status === opt.value && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Created By</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar className="h-5 w-5 shrink-0">
+                        <AvatarFallback className="text-[10px]">{((selectedDocument as any).ownerName || "U").charAt(0).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm truncate" data-testid="text-doc-owner">{(selectedDocument as any).ownerName || "Unknown"}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Created</span>
+                    <span className="text-sm" data-testid="text-doc-created">
+                      {selectedDocument.createdAt ? new Date(selectedDocument.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Unknown"}
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Last Modified</span>
+                    <span className="text-sm" data-testid="text-doc-modified">
+                      {selectedDocument.updatedAt ? new Date(selectedDocument.updatedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Unknown"}
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Version</span>
+                    <span className="text-sm" data-testid="text-doc-version">v{selectedDocument.currentVersion}</span>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Location</span>
+                    <div className="flex items-center gap-1.5 text-sm min-w-0">
+                      <Folder className="h-3.5 w-3.5 text-brand-orange shrink-0" />
+                      <span className="truncate" data-testid="text-doc-folder">{folderName}</span>
+                    </div>
+                  </div>
+                  {selectedDocument.viewCount !== undefined && selectedDocument.viewCount !== null && (
+                    <div className="flex items-start gap-3">
+                      <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Views</span>
+                      <span className="text-sm" data-testid="text-doc-views">{selectedDocument.viewCount}</span>
+                    </div>
+                  )}
+                  <div className="flex items-start gap-3">
+                    <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Word count</span>
+                    <span className="text-sm" data-testid="text-doc-wordcount">{wordCount.toLocaleString()} words</span>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Reading time</span>
+                    <span className="text-sm" data-testid="text-doc-readtime">~{readingMinutes} min read</span>
+                  </div>
+                  {templateSource && (
+                    <div className="flex items-start gap-3">
+                      <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Template</span>
+                      <span className="text-sm text-primary" data-testid="text-doc-template">{templateSource.name}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {docTags.length > 0 && (
+                <div className="border-t pt-4 w-full">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Tags</h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {docTags.map((tag, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium"
+                        style={{ borderColor: tag.color, color: tag.color }}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                        {tag.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedDocument.description && (
+                <div className="border-t pt-4 w-full">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Description</h3>
+                  <p className="text-sm text-muted-foreground" data-testid="text-doc-description">{selectedDocument.description}</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent
+            value="comments"
+            className="mt-0 absolute inset-0 flex flex-col overflow-y-auto overflow-x-hidden data-[state=inactive]:hidden w-full min-w-0"
+          >
+            <div className="w-full min-w-0 max-w-none px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
                 {commentsLoading ? (
                   <TabLoadingState label="Loading comments..." />
                 ) : (
@@ -2966,9 +3224,14 @@ export default function DocumentManagementPage() {
                   </div>
                 </div>
                 )}
-              </TabsContent>
+            </div>
+          </TabsContent>
 
-              <TabsContent value="versions" className="mt-0">
+          <TabsContent
+            value="versions"
+            className="mt-0 absolute inset-0 flex flex-col overflow-y-auto overflow-x-hidden data-[state=inactive]:hidden w-full min-w-0"
+          >
+            <div className="w-full min-w-0 max-w-none px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
                 {versionsLoading ? (
                   <TabLoadingState label="Loading version history..." />
                 ) : (
@@ -3014,124 +3277,14 @@ export default function DocumentManagementPage() {
                   )}
                 </div>
                 )}
-              </TabsContent>
+            </div>
+          </TabsContent>
 
-              <TabsContent value="properties" className="mt-0">
-                <div className="space-y-6 max-w-lg">
-                  <div>
-                    <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Details</h3>
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-3">
-                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Status</span>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold cursor-pointer hover:opacity-75 transition-opacity select-none focus:outline-none", statusColors[selectedDocument.status] || statusColors.draft)}
-                              data-testid="text-doc-status"
-                            >
-                              {statusLabel}
-                              <ChevronDown className="h-2.5 w-2.5" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start">
-                            {STATUS_OPTIONS.map((opt) => (
-                              <DropdownMenuItem
-                                key={opt.value}
-                                onClick={() => updateDocMutation.mutate({ id: selectedDocument.id, updates: { status: opt.value as any } })}
-                                className="flex items-center justify-between gap-3"
-                                data-testid={`doc-status-option-details-${opt.value}`}
-                              >
-                                <span>{opt.label}</span>
-                                {selectedDocument.status === opt.value && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Created By</span>
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-5 w-5">
-                            <AvatarFallback className="text-[10px]">{((selectedDocument as any).ownerName || "U").charAt(0).toUpperCase()}</AvatarFallback>
-                          </Avatar>
-                          <span className="text-sm" data-testid="text-doc-owner">{(selectedDocument as any).ownerName || "Unknown"}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Created</span>
-                        <span className="text-sm" data-testid="text-doc-created">
-                          {selectedDocument.createdAt ? new Date(selectedDocument.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Unknown"}
-                        </span>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Last Modified</span>
-                        <span className="text-sm" data-testid="text-doc-modified">
-                          {selectedDocument.updatedAt ? new Date(selectedDocument.updatedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Unknown"}
-                        </span>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Version</span>
-                        <span className="text-sm" data-testid="text-doc-version">v{selectedDocument.currentVersion}</span>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Location</span>
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <Folder className="h-3.5 w-3.5 text-brand-orange" />
-                          <span data-testid="text-doc-folder">{folderName}</span>
-                        </div>
-                      </div>
-                      {selectedDocument.viewCount !== undefined && selectedDocument.viewCount !== null && (
-                        <div className="flex items-start gap-3">
-                          <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Views</span>
-                          <span className="text-sm" data-testid="text-doc-views">{selectedDocument.viewCount}</span>
-                        </div>
-                      )}
-                      <div className="flex items-start gap-3">
-                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Word count</span>
-                        <span className="text-sm" data-testid="text-doc-wordcount">{wordCount.toLocaleString()} words</span>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Reading time</span>
-                        <span className="text-sm" data-testid="text-doc-readtime">~{readingMinutes} min read</span>
-                      </div>
-                      {templateSource && (
-                        <div className="flex items-start gap-3">
-                          <span className="text-sm text-muted-foreground w-28 shrink-0 pt-0.5">Template</span>
-                          <span className="text-sm text-primary" data-testid="text-doc-template">{templateSource.name}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Tags summary */}
-                  {docTags.length > 0 && (
-                    <div className="border-t pt-4">
-                      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Tags</h3>
-                      <div className="flex flex-wrap gap-1.5">
-                        {docTags.map((tag, i) => (
-                          <span
-                            key={i}
-                            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium"
-                            style={{ borderColor: tag.color, color: tag.color }}
-                          >
-                            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
-                            {tag.name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedDocument.description && (
-                    <div className="border-t pt-4">
-                      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Description</h3>
-                      <p className="text-sm text-muted-foreground" data-testid="text-doc-description">{selectedDocument.description}</p>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="members" className="mt-0">
+          <TabsContent
+            value="members"
+            className="mt-0 absolute inset-0 flex flex-col overflow-y-auto overflow-x-hidden data-[state=inactive]:hidden w-full min-w-0"
+          >
+            <div className="w-full min-w-0 max-w-none px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
                 <DocumentAccessSection
                   documentId={selectedDocument.id}
                   ownerId={selectedDocument.ownerId}
@@ -3142,9 +3295,14 @@ export default function DocumentManagementPage() {
                     lastName: u.lastName,
                   }))}
                 />
-              </TabsContent>
+            </div>
+          </TabsContent>
 
-              <TabsContent value="signoff" className="mt-0">
+          <TabsContent
+            value="signoff"
+            className="mt-0 absolute inset-0 flex flex-col overflow-y-auto overflow-x-hidden data-[state=inactive]:hidden w-full min-w-0"
+          >
+            <div className="w-full min-w-0 max-w-none px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
                 {signoffLoading ? (
                   <TabLoadingState label="Loading sign-off requests..." />
                 ) : docSignoffRequests.length === 0 ? (
@@ -3309,9 +3467,9 @@ export default function DocumentManagementPage() {
                     </Button>
                   </div>
                 )}
-              </TabsContent>
             </div>
-          </ScrollArea>
+          </TabsContent>
+          </div>
         </Tabs>
       </div>
     );
@@ -4383,7 +4541,7 @@ export default function DocumentManagementPage() {
         </>
         )}
 
-        <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-1 min-h-0 min-w-0 w-full overflow-hidden">
           {inDocumentFocus ? (
             renderDocumentView()
           ) : (
@@ -4425,7 +4583,7 @@ export default function DocumentManagementPage() {
                 </>
               )}
 
-              <ResizablePanel id="content-panel" order={2} defaultSize={78}>
+              <ResizablePanel id="content-panel" order={2} defaultSize={78} className="min-w-0">
                 {selectedFile ? renderFilePreview() : selectedDocument ? renderDocumentView() : renderWelcomeState()}
               </ResizablePanel>
             </ResizablePanelGroup>
@@ -4476,8 +4634,46 @@ export default function DocumentManagementPage() {
                 ))}
               </div>
             </div>
+            {renamingFolder && (
+              <div className="pt-2 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => {
+                    const folder = renamingFolder;
+                    setRenamingFolder(null);
+                    openFolderPageLayout(folder);
+                  }}
+                  data-testid="button-edit-folder-page-layout"
+                >
+                  <LayoutTemplate className="h-3.5 w-3.5" />
+                  Page layout defaults
+                </Button>
+              </div>
+            )}
           </div>
       </FormDialogShell>
+
+      <FolderPageLayoutDialog
+        folder={folderPageLayoutFolder}
+        open={!!folderPageLayoutFolder}
+        onOpenChange={(open) => { if (!open) setFolderPageLayoutFolder(null); }}
+        headerContent={folderLayoutHeader}
+        footerContent={folderLayoutFooter}
+        onHeaderChange={setFolderLayoutHeader}
+        onFooterChange={setFolderLayoutFooter}
+        onSave={() => {
+          if (!folderPageLayoutFolder) return;
+          saveFolderPageLayoutMutation.mutate({
+            id: folderPageLayoutFolder.id,
+            defaultHeaderHtml: folderLayoutHeader.trim() || null,
+            defaultFooterHtml: folderLayoutFooter.trim() || null,
+          });
+        }}
+        saving={saveFolderPageLayoutMutation.isPending}
+      />
 
       <FormDialogShell
         open={!!renamingDocument}

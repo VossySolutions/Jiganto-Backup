@@ -30,6 +30,7 @@ import {
   CRMIcon,
   FinanceIcon,
   ResourcesIcon,
+  ResTimesheetsIcon,
   ResourcePlanningIcon,
   ServiceDeskIcon,
   HelpDeskIcon,
@@ -160,6 +161,13 @@ const moduleGroups: ModuleGroup[] = [
         href: "/modules/finance-mgmt",
         description: "Budgeting & invoicing",
         color: "#10B981",
+      },
+      {
+        name: "Timesheets",
+        icon: ResTimesheetsIcon,
+        href: "/modules/finance-mgmt?tab=timesheets",
+        description: "Submit and approve timesheets",
+        color: "#0EA5E9",
       },
       {
         name: "Resources",

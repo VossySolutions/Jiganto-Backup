@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
 import { fetchWithAuth } from "@/lib/queryClient";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -104,21 +103,30 @@ export function DocumentLinkSelect({
         {selected && (
           <div className="flex items-center justify-between gap-2 rounded-lg border border-border/40 bg-background px-3 py-2 text-sm">
             <span className="truncate font-medium">{selected.title}</span>
-            <Link href={`/modules/documents?doc=${selected.id}`}>
-              <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 text-[#0ea5e9]" data-testid={`${testId}-open`}>
-                Open
-                <ExternalLink className="h-3.5 w-3.5 ml-1" />
-              </Button>
-            </Link>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 shrink-0 text-[#0ea5e9]"
+              data-testid={`${testId}-open`}
+              onClick={() => window.open(`/modules/documents?doc=${selected.id}`, "_blank", "noopener,noreferrer")}
+            >
+              Open
+              <ExternalLink className="h-3.5 w-3.5 ml-1" />
+            </Button>
           </div>
         )}
       </div>
 
-      <Link href="/modules/documents">
-        <Button type="button" variant="link" className="h-auto p-0 text-[#0ea5e9]" data-testid={`${testId}-browse`}>
-          Browse Documents module
-        </Button>
-      </Link>
+      <Button
+        type="button"
+        variant="link"
+        className="h-auto p-0 text-[#0ea5e9]"
+        data-testid={`${testId}-browse`}
+        onClick={() => window.open("/modules/documents", "_blank", "noopener,noreferrer")}
+      >
+        Browse Documents module (opens in new tab)
+      </Button>
     </div>
   );
 }

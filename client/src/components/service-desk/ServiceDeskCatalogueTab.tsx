@@ -87,7 +87,7 @@ export function ServiceDeskCatalogueTab() {
       <ServiceDeskEmptyState
         icon={BookOpen}
         title="No services in catalogue"
-        description="Run npm run db:seed-service-desk to load demo services, or add categories via the API."
+        description="No services in the catalogue yet. Add categories and services from Service Desk settings."
       />
     );
   }

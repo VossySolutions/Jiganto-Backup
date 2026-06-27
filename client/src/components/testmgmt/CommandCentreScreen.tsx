@@ -1,11 +1,7 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
 import { TmTestCase, TmTestRun } from "@shared/schema";
 import type { TmHdDefect } from "@/types/testmgmt";
-import { CheckCircle2, XCircle, AlertCircle, Clock, FlaskConical, Bug, PlayCircle, Sparkles, Loader2, ExternalLink, BarChart3 } from "lucide-react";
+import { CheckCircle2, XCircle, AlertCircle, Clock, FlaskConical, Bug, PlayCircle, ExternalLink, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
 import { useTmProject } from "@/contexts/TmProjectContext";
 import { TmScreen } from "@/types/testmgmt";
 import { cn } from "@/lib/utils";
@@ -21,7 +17,6 @@ interface Props {
 }
 
 export function CommandCentreScreen({ onNavigate }: Props) {
-  const { toast } = useToast();
   const { activeProjectId } = useTmProject();
 
   const dashboardQuery = useTmFetch<TmDashboardData>(["/api/tm/dashboard"], "/api/tm/dashboard");
@@ -35,28 +30,6 @@ export function CommandCentreScreen({ onNavigate }: Props) {
   const defects = defectsQuery.data ?? [];
   const isLoading = dashboardQuery.isLoading || casesQuery.isLoading || runsQuery.isLoading || defectsQuery.isLoading;
   const firstError = dashboardQuery.error ?? casesQuery.error ?? runsQuery.error ?? defectsQuery.error ?? null;
-
-  const seedMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/tm/migrate-schema").catch(() => {});
-      const data = await apiRequest("POST", "/api/tm/seed-demo");
-      await apiRequest("POST", "/api/tm/migrate-project");
-      if (activeProjectId) await apiRequest("POST", "/api/tm/seed-hierarchy", { projectId: activeProjectId }).catch(() => {});
-      return data;
-    },
-    onSuccess: async (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tm/cases"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tm/runs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tm/cycles"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tm/defects/hd"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tm/suites"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tm/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tm/hierarchy"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tm/dashboard"] });
-      toast({ title: "Demo data loaded", description: `${data.cases} test cases, ${data.defects} defects across ${data.suites} suites.` });
-    },
-    onError: (e: any) => toast({ title: "Could not load demo data", description: e.message, variant: "destructive" }),
-  });
 
   const kpis = dashboard?.kpis;
   const isEmpty = !isLoading && !firstError && !dashboard && cases.length === 0 && runs.length === 0 && defects.length === 0;
@@ -79,24 +52,16 @@ export function CommandCentreScreen({ onNavigate }: Props) {
         </div>
         <h2 className="text-xl font-semibold">Command Centre</h2>
         <p className="text-muted-foreground text-sm max-w-md">
-          No test data yet. Load the sample ERP Implementation project to see a realistic view with test suites, test cases, defects, and execution runs.
+          No test data yet. Create test suites and cases in Test Navigator, then start execution cycles to populate this dashboard.
         </p>
-        <Button
-          onClick={() => seedMutation.mutate()}
-          disabled={seedMutation.isPending}
-          size="lg"
-          className="mt-2"
-          data-testid="button-load-demo-data"
-        >
-          {seedMutation.isPending ? (
-            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading demo data...</>
-          ) : (
-            <><Sparkles className="h-4 w-4 mr-2" /> Load Demo Data</>
-          )}
-        </Button>
-        <p className="text-xs text-muted-foreground max-w-sm">
-          Loads 12 test cases with steps, 6 test suites, 3 test runs, and 10 defects based on a real ERP implementation project scenario.
-        </p>
+        <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+          <Button size="lg" onClick={() => onNavigate("navigator")} data-testid="button-go-test-navigator">
+            Open Test Navigator
+          </Button>
+          <Button size="lg" variant="outline" onClick={() => onNavigate("test-cases")} data-testid="button-go-test-cases">
+            Create Test Cases
+          </Button>
+        </div>
       </div>
     );
   }

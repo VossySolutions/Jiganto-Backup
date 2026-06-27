@@ -1,4 +1,6 @@
-import type { AvatarColor, DsCell } from "./mock-data";
+export type AvatarColor = "brand" | "teal" | "green" | "amber" | "violet" | "red";
+
+export type DsCell = "surplus" | "shortage" | "watch" | "ok";
 
 export type RpKpi = { label: string; value: string; sub: string; accent?: string; valueColor?: string };
 

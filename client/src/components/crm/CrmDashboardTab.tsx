@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/ui/metric-card";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { DollarSign, TrendingUp, Target, Users, Building2, Loader2, Plus, ArrowRight, Clock } from "lucide-react";
+import { DollarSign, TrendingUp, Target, Users, Building2, Loader2, Plus, ArrowRight, Clock, MapPin } from "lucide-react";
 import { useCrmUsers } from "./CrmUsersProvider";
 import { ActivityAnalytics } from "./ActivityAnalytics";
 import { getAccountTypeInfo } from "@/lib/crm-account-types";
@@ -181,6 +181,34 @@ export function CrmDashboardTab({ stats, isLoading, activities = [], onNavigateT
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {onNavigateToTab && stats.totalAccounts > 0 && (
+        <div className="flex flex-wrap gap-2" data-testid="dashboard-quick-links">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => {
+              sessionStorage.setItem("crm-customers-view", "map");
+              onNavigateToTab("customers");
+            }}
+            data-testid="dashboard-customer-geography"
+          >
+            <MapPin className="h-3.5 w-3.5" />
+            Customer geography
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => onNavigateToTab("forecasting")}
+            data-testid="dashboard-pipeline-forecast"
+          >
+            <TrendingUp className="h-3.5 w-3.5" />
+            Pipeline forecast
+          </Button>
         </div>
       )}
 

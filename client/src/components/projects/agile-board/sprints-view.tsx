@@ -1,6 +1,5 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { AGILE_PALETTE as C, statusBg, statusColor } from "./palette";
-import { BURNDOWN_DATA } from "./demo-data";
 import type { BurndownPoint, Sprint, Story, Workstream } from "./types";
 import { AgileBadge, AgileBtn, AgileModal, AgileProgressBar, BurndownChart, ConfirmDelete, FormField, inputStyle } from "./ui-primitives";
 
@@ -84,7 +83,9 @@ export function SprintsView({ sprints, stories, setSprints, ws, onAddSprint, bur
         })}
       </div>
 
-      <BurndownChart data={burndownData || BURNDOWN_DATA} title={`${sprints.find(s => s.status === "Active")?.name || "Sprint"} — Burndown Chart`} width={600} height={220} />
+      {burndownData && burndownData.length > 1 && (
+        <BurndownChart data={burndownData} title={`${sprints.find(s => s.status === "Active")?.name || "Sprint"} — Burndown Chart`} width={600} height={220} />
+      )}
 
       {showAdd && (
         <AgileModal title="New Sprint" onClose={() => setShowAdd(false)}>

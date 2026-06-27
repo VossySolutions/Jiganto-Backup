@@ -3,6 +3,7 @@ import { ListTree } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { DocumentSectionNav } from "@/components/editor/DocumentSectionNav";
+import { DocumentSectionNavHint } from "@/components/editor/DocumentSectionNavHint";
 import { useDocumentSectionScrollSpy } from "@/hooks/use-document-section-scroll-spy";
 import {
   extractHeadingsFromHtml,
@@ -79,7 +80,13 @@ export function DocumentPageSectionAside({ content }: { content: string }) {
   const [open] = useDocumentSectionSidebarOpen();
   const headings = useMemo(() => extractHeadingsFromHtml(content), [content]);
 
-  if (headings.length === 0) return null;
+  if (headings.length === 0) {
+    return (
+      <aside className="hidden xl:block w-56 2xl:w-60 shrink-0 self-stretch" data-testid="document-section-aside-hint">
+        <DocumentSectionNavHint />
+      </aside>
+    );
+  }
 
   return (
     <aside
@@ -141,7 +148,11 @@ export function DocumentPageSectionNavTop({
   const activeHeadingId = useDocumentSectionScrollSpy(headings);
 
   if (headings.length === 0) {
-    return null;
+    return (
+      <div className="xl:hidden shrink-0 mb-2">
+        <DocumentSectionNavHint />
+      </div>
+    );
   }
 
   return (

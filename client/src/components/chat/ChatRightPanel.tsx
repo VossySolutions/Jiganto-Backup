@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { displayPersonName, formatMessageTime, getUserInitials, chatFont } from "@/lib/chat-utils";
+import { renderChatMessageContent } from "@/lib/chat-message-content";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, ChatSearchHit } from "@shared/models/chat";
 import { ChatButtonSpinner, ChatSpinner } from "@/components/chat/ChatLoading";
@@ -175,7 +176,7 @@ function ThreadPanel({
         {data?.parent && (
           <div className="mb-4 pb-4 border-b">
             <p className="text-xs font-semibold mb-1">{displayPersonName(data.parent.user as never)}</p>
-            <p className="text-sm">{data.parent.content}</p>
+            <p className="text-sm">{renderChatMessageContent(data.parent.content)}</p>
           </div>
         )}
         <div className="space-y-3">
@@ -192,7 +193,7 @@ function ThreadPanel({
                   <span className="text-xs font-medium">{displayPersonName(r.user)}</span>
                   <span className={chatFont.messageMeta}>{formatMessageTime(r.createdAt)}</span>
                 </div>
-                <p className="text-sm mt-0.5">{r.content}</p>
+                <p className="text-sm mt-0.5">{renderChatMessageContent(r.content)}</p>
               </div>
             </div>
           ))}
@@ -370,7 +371,7 @@ function SearchPanel({
                 <span>{displayPersonName(h.user)}</span>
                 <span>{formatMessageTime(h.createdAt)}</span>
               </div>
-              <p className="text-sm line-clamp-2">{h.content}</p>
+              <p className="text-sm line-clamp-2">{renderChatMessageContent(h.content)}</p>
             </button>
           ))
         )}
@@ -411,7 +412,7 @@ function PinsPanel({ channelId }: { channelId: number }) {
               <Pin className="h-3 w-3" />
               {displayPersonName(p.message.user)} · {formatMessageTime(p.message.createdAt)}
             </div>
-            <p className="text-sm line-clamp-4">{p.message.content}</p>
+            <p className="text-sm line-clamp-4">{renderChatMessageContent(p.message.content)}</p>
           </div>
         ))
       )}

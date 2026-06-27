@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ import {
   LayoutList, LayoutGrid, CalendarDays, ChevronRight, Users, Briefcase,
   DollarSign, Target, TrendingUp, CheckCircle2, AlertTriangle,
   Scissors, MoreHorizontal, GripVertical, Loader2, FileText,
-  CreditCard, ArrowLeft, Filter, Save, Building2, GitCompare, Copy
+  CreditCard, ArrowLeft, Filter, Save, Building2, GitCompare, Copy, Wallet
 } from "lucide-react";
 import { RateCardManager } from "./RateCardManager";
 import { CrmIntegratedCapacityBoard } from "./CrmIntegratedCapacityBoard";
@@ -174,6 +175,7 @@ type Opportunity = {
   ownerUserId: string | null;
   accountId: number | null;
   stageId: number | null;
+  projectId?: number | null;
 };
 
 type ResourcePlanSummary = {
@@ -240,6 +242,8 @@ interface CrmResourcePlanTabProps {
   accounts?: Account[];
   stages?: Stage[];
   initialPlanId?: number | null;
+  initialOpportunityId?: number | null;
+  onNavigateToTab?: (tab: string) => void;
 }
 
 function wksBetween(s: string, e: string): number {
@@ -292,10 +296,19 @@ function getWeekStarts(startDate: string, endDate: string): Date[] {
   return weeks;
 }
 
-export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], initialPlanId = null }: CrmResourcePlanTabProps) {
+export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], initialPlanId = null, initialOpportunityId = null, onNavigateToTab }: CrmResourcePlanTabProps) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const { users, resolveOwner } = useCrmUsers();
-  const [selectedOppId, setSelectedOppId] = useState<number | null>(null);
+  const [selectedOppId, setSelectedOppId] = useState<number | null>(() => {
+    if (initialOpportunityId) return initialOpportunityId;
+    const saved = sessionStorage.getItem("crm-resource-plan-opp-id");
+    if (saved && /^\d+$/.test(saved)) {
+      sessionStorage.removeItem("crm-resource-plan-opp-id");
+      return Number(saved);
+    }
+    return null;
+  });
   const [planView, setPlanView] = useState<"table" | "timeline">("table");
   const [rows, setRows] = useState<ResourceRow[]>([]);
   const [addRowOpen, setAddRowOpen] = useState(false);
@@ -312,7 +325,15 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [oppSelectorView, setOppSelectorView] = useState<"tiles" | "list">("tiles");
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(initialPlanId);
+  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(() => {
+    if (initialPlanId) return initialPlanId;
+    const saved = sessionStorage.getItem("crm-resource-plan-id");
+    if (saved && /^\d+$/.test(saved)) {
+      sessionStorage.removeItem("crm-resource-plan-id");
+      return Number(saved);
+    }
+    return null;
+  });
 
   const { data: initialPlanData } = useQuery<ResourcePlan | null>({
     queryKey: initialPlanId ? [`/api/crm/resource-plans/${initialPlanId}`] : ["/api/crm/resource-plans/skip"],
@@ -333,6 +354,9 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
   const [compareOpen, setCompareOpen] = useState(false);
   const [saveAsNewOpen, setSaveAsNewOpen] = useState(false);
   const [newPlanName, setNewPlanName] = useState("");
+  const [budgetDialogOpen, setBudgetDialogOpen] = useState(false);
+  const [budgetExpenseCategory, setBudgetExpenseCategory] = useState("Travel");
+  const [budgetExpenseAmount, setBudgetExpenseAmount] = useState("");
 
   const selectedOpp = opportunities.find(o => o.id === selectedOppId);
   const selectedAccount = selectedOpp?.accountId ? accounts.find(a => a.id === selectedOpp.accountId) : null;
@@ -447,6 +471,47 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
     },
     onSuccess: () => {
       toast({ title: "Resource Manager notified" });
+    },
+  });
+
+  const { data: budgetPreview } = useQuery<{
+    labourTotal: number;
+    rowCount: number;
+    projectId: number | null;
+    existingBudgetId: number | null;
+    opportunityName: string | null;
+  }>({
+    queryKey: planData?.id ? [`/api/finance/budgets/from-resource-plan/${planData.id}/preview`] : ["/api/finance/budgets/from-resource-plan/0/preview?disabled"],
+    enabled: budgetDialogOpen && !!planData?.id,
+    staleTime: 10_000,
+  });
+
+  const createBudgetMutation = useMutation({
+    mutationFn: async () => {
+      if (!planData?.id) throw new Error("No plan selected");
+      const expenseLines = budgetExpenseAmount
+        ? [{ category: budgetExpenseCategory, budgetedAmount: budgetExpenseAmount }]
+        : undefined;
+      const res = await apiRequest("POST", "/api/finance/budgets/from-resource-plan", {
+        planId: planData.id,
+        projectId: selectedOpp?.projectId ?? undefined,
+        expenseLines,
+      });
+      return res.json() as Promise<{ id: number; projectId: number }>;
+    },
+    onSuccess: (budget) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/budgets"] });
+      toast({ title: "Project budget created from resource plan" });
+      setBudgetDialogOpen(false);
+      setBudgetExpenseAmount("");
+      setLocation(`/modules/finance-mgmt?tab=budgets&projectId=${budget.projectId}`);
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Failed to create budget",
+        description: err.message || "Convert the opportunity to a project first, or resolve any existing budget conflict.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -576,6 +641,31 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
     if (ownerIds.length > 0) return ownerIds;
     return users.map(u => u.id);
   }, [opportunities, users]);
+
+  const oppsWithoutPlans = useMemo(() => {
+    const withPlan = new Set(planSummaries.map((s) => s.opportunityId));
+    return opportunities.filter((o) => !withPlan.has(o.id));
+  }, [opportunities, planSummaries]);
+
+  const createEmptyPlanMutation = useMutation({
+    mutationFn: async (oppId: number) => {
+      const opp = opportunities.find((o) => o.id === oppId);
+      const res = await apiRequest("POST", `/api/crm/opportunities/${oppId}/resource-plan`, {
+        createNew: true,
+        planName: `${opp?.name || "Opportunity"} — Resource Plan`,
+        rows: [],
+      });
+      return res.json() as Promise<ResourcePlan>;
+    },
+    onSuccess: (result, oppId) => {
+      setSelectedOppId(oppId);
+      if (result?.id) setSelectedPlanId(result.id);
+      queryClient.invalidateQueries({ queryKey: [`/api/crm/opportunities/${oppId}/resource-plans`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/resource-plans/summaries"] });
+      toast({ title: "Resource plan created", description: "Add staffing rows and save your plan." });
+    },
+    onError: () => toast({ title: "Failed to create resource plan", variant: "destructive" }),
+  });
 
   const filteredOppsWithPlans = useMemo((): OpportunityWithPlan[] => {
     const summaryMap = new Map(planSummaries.map((s) => [s.opportunityId, s]));
@@ -709,6 +799,19 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
               <X className="h-3 w-3" /> Clear filters
             </button>
           )}
+          {oppsWithoutPlans.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => createEmptyPlanMutation.mutate(oppsWithoutPlans[0].id)}
+              disabled={createEmptyPlanMutation.isPending}
+              data-testid="button-create-resource-plan-quick"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Plan
+            </Button>
+          )}
         </div>
 
         {summariesLoading ? (
@@ -716,12 +819,64 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
             <Loader2 className="h-4 w-4 animate-spin" /> Loading resource plans…
           </div>
         ) : planSummaries.length === 0 ? (
-          <div className="text-center py-16 px-6 border rounded-xl bg-muted/10" data-testid="resource-plan-empty">
-            <Briefcase className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-            <p className="text-sm font-semibold mb-1">No resource plans yet</p>
-            <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              Only opportunities with a saved resource plan appear here. Open an opportunity, add staffing rows from a template or manually, then save the plan.
-            </p>
+          <div className="space-y-4" data-testid="resource-plan-empty">
+            <div className="text-center py-10 px-6 border rounded-xl bg-muted/10">
+              <Briefcase className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+              <p className="text-sm font-semibold mb-1">No resource plans yet</p>
+              <p className="text-xs text-muted-foreground max-w-lg mx-auto mb-4">
+                Resource plans define staffing and daily/weekly/monthly costs for an opportunity — the approved plan becomes the project budget in Finance.
+              </p>
+              {oppsWithoutPlans.length > 0 ? (
+                <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                  Pick an opportunity below and click <span className="font-medium text-foreground">Create Plan</span>, or open any saved opportunity in the Opportunities tab and use the Resource plan section.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                    Create or open an opportunity first, then add a resource plan from the opportunity editor.
+                  </p>
+                  {onNavigateToTab && (
+                    <Button
+                      size="sm"
+                      className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
+                      onClick={() => onNavigateToTab("opportunities")}
+                      data-testid="button-goto-opportunities-resource-plan"
+                    >
+                      Open Opportunities
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+            {oppsWithoutPlans.length > 0 && (
+              <div className="border rounded-xl overflow-hidden bg-card">
+                <div className="px-4 py-3 border-b bg-muted/20 text-sm font-semibold">Create a resource plan</div>
+                <div className="divide-y max-h-[360px] overflow-auto">
+                  {oppsWithoutPlans.map((opp) => {
+                    const acct = opp.accountId ? accounts.find((a) => a.id === opp.accountId) : null;
+                    const stg = opp.stageId ? stages.find((s) => s.id === opp.stageId) : null;
+                    return (
+                      <div key={opp.id} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/20">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{opp.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{acct?.name || "No account"} · {stg?.name || "No stage"}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          className="shrink-0 bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
+                          disabled={createEmptyPlanMutation.isPending}
+                          onClick={() => createEmptyPlanMutation.mutate(opp.id)}
+                          data-testid={`create-resource-plan-${opp.id}`}
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1" />
+                          Create Plan
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         ) : oppSelectorView === "tiles" ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[calc(100vh-340px)] overflow-auto pr-1">
@@ -864,6 +1019,18 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
             data-testid="button-manage-rate-cards">
             <CreditCard className="h-3.5 w-3.5" />
             Rate Cards
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setBudgetDialogOpen(true)}
+            disabled={!planData?.id || rows.length === 0}
+            title={!selectedOpp?.projectId ? "Convert opportunity to a project before creating a budget" : "Create finance budget from this resource plan"}
+            data-testid="button-create-budget-from-plan"
+          >
+            {createBudgetMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wallet className="h-3.5 w-3.5" />}
+            Create Budget
           </Button>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => notifyMutation.mutate()} disabled={!planData?.id}
             data-testid="button-notify-rm">
@@ -1358,6 +1525,48 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
         onSelectRateCard={(id) => { handleRateCardSelect(id); }}
         readOnly
       />
+
+      {/* Create budget from plan */}
+      <Dialog open={budgetDialogOpen} onOpenChange={setBudgetDialogOpen}>
+        <DialogContent className="max-w-md" data-testid="create-budget-from-plan-dialog">
+          <DialogHeader>
+            <DialogTitle>Create project budget</DialogTitle>
+            <DialogDescription>
+              Import labour lines from this resource plan into Finance.
+            </DialogDescription>
+          </DialogHeader>
+          {budgetPreview && (
+            <div className="rounded-lg border p-3 text-sm space-y-1 mb-3">
+              <p><span className="text-muted-foreground">Opportunity:</span> {budgetPreview.opportunityName ?? selectedOpp?.name}</p>
+              <p><span className="text-muted-foreground">Labour:</span> £{budgetPreview.labourTotal.toLocaleString()} · {budgetPreview.rowCount} rows</p>
+              {!budgetPreview.projectId && (
+                <p className="text-amber-600 text-xs">Use Convert to Project on the opportunity first.</p>
+              )}
+              {budgetPreview.existingBudgetId && (
+                <p className="text-destructive text-xs">A budget already exists for this project.</p>
+              )}
+            </div>
+          )}
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Optional expense line</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input placeholder="Category" value={budgetExpenseCategory} onChange={(e) => setBudgetExpenseCategory(e.target.value)} />
+                <Input type="number" placeholder="Amount (£)" value={budgetExpenseAmount} onChange={(e) => setBudgetExpenseAmount(e.target.value)} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBudgetDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => createBudgetMutation.mutate()}
+              disabled={createBudgetMutation.isPending || !budgetPreview?.projectId || !!budgetPreview?.existingBudgetId}
+            >
+              {createBudgetMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create budget"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Compare Plans Modal */}
       <Dialog open={compareOpen} onOpenChange={setCompareOpen}>

@@ -27,7 +27,7 @@ import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
 import { evaluateConditionalFormatting, type ConditionalFormatRule } from "@/lib/conditionalFormatting";
 import type { ColumnDef as MondayColumnDef } from "@/components/MondayTable";
-import { resolveAccountGeo } from "@/lib/crm-geo";
+import { resolveAccountGeo, normalizeCountryLabel } from "@/lib/crm-geo";
 import { accountTypeFilterOptions, getAccountTypeInfo, CRM_ACCOUNT_TYPES } from "@/lib/crm-account-types";
 import {
   findSegmentField,
@@ -40,6 +40,20 @@ import { CrmGeoMap } from "./CrmGeoMap";
 import { CrmOwnerSelect } from "./CrmOwnerSelect";
 import { useCrmUsers } from "./CrmUsersProvider";
 import type { CrmAccountDetail, CrmOpportunitySummary, CrmContractSummary, CrmOpportunityStage } from "./types";
+import { CrmColumnVisibilityMenu } from "./CrmColumnVisibilityMenu";
+import { CrmInlineEditCell } from "./CrmInlineEditCell";
+import { CrmInlineEditSelect } from "./CrmInlineEditSelect";
+import { loadColumnVisibility, saveColumnVisibility, type CrmColumnDef } from "@/lib/crm-list-columns";
+
+const CUSTOMER_TABLE_COLUMNS: CrmColumnDef[] = [
+  { id: "segment", label: "Segment" },
+  { id: "industry", label: "Industry" },
+  { id: "status", label: "Status" },
+  { id: "revenue", label: "Annual Revenue" },
+  { id: "email", label: "Email" },
+  { id: "phone", label: "Phone" },
+  { id: "created", label: "Created" },
+];
 
 interface CrmCustomersTabProps {
   accounts: CrmAccountDetail[];
@@ -152,13 +166,32 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
   const [formatPanelOpen, setFormatPanelOpen] = useState(false);
   const [formatRules, setFormatRules] = useState<ConditionalFormatRule[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [viewMode, setViewMode] = useState<"table" | "card" | "map">("table");
+  const [viewMode, setViewMode] = useState<"table" | "card" | "map">(() => {
+    const saved = sessionStorage.getItem("crm-customers-view");
+    if (saved === "map" || saved === "card" || saved === "table") {
+      sessionStorage.removeItem("crm-customers-view");
+      return saved;
+    }
+    return "table";
+  });
   const EMPTY_CUSTOMER_FORM = { name: "", type: "prospect", industry: "", email: "", phone: "", website: "", address: "", city: "", state: "", country: "", postalCode: "", employeeCount: "", annualRevenue: "", description: "", parentAccountId: "", ownerUserId: "" };
   const { resolveOwner } = useCrmUsers();
   const [formData, setFormData] = useState(EMPTY_CUSTOMER_FORM);
   const [customData, setCustomData] = useState<Record<string, unknown>>({});
   const [importOpen, setImportOpen] = useState(false);
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() =>
+    loadColumnVisibility("crm-customers", CUSTOMER_TABLE_COLUMNS),
+  );
   const { toast } = useToast();
+
+  const isColVisible = (id: string) => columnVisibility[id] !== false;
+  const setColVisible = (id: string, visible: boolean) => {
+    setColumnVisibility((prev) => {
+      const next = { ...prev, [id]: visible };
+      saveColumnVisibility("crm-customers", next);
+      return next;
+    });
+  };
 
   const importMutation = useMutation({
     mutationFn: ({ rows, mode }: { rows: Record<string, string>[]; mode: ImportMode }) =>
@@ -504,7 +537,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
             data-testid={`checkbox-customer-${acc.id}`}
           />
         </td>
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "name"))} style={getCellStyle(acc.id, "name")}>
+        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "name"))} style={getCellStyle(acc.id, "name")} onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-3">
             <div
               className="h-9 w-9 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0"
@@ -512,35 +545,87 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
             >
               {initials}
             </div>
-            <span className="text-sm font-semibold">{acc.name}</span>
+            <CrmInlineEditCell
+              value={acc.name}
+              onSave={(v) => updateMutation.mutate({ id: acc.id, updates: { name: v } })}
+              className="text-sm font-semibold"
+              testId={`inline-customer-name-${acc.id}`}
+            />
           </div>
         </td>
+        {isColVisible("segment") && (
         <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "segment"))} style={getCellStyle(acc.id, "segment")}>
           <span className="text-sm" style={{ color: segColor }}>{acc.segment}</span>
         </td>
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "industry"))} style={getCellStyle(acc.id, "industry")}>
-          <span className="text-sm text-muted-foreground">{acc.industry || "—"}</span>
+        )}
+        {isColVisible("industry") && (
+        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "industry"))} style={getCellStyle(acc.id, "industry")} onClick={(e) => e.stopPropagation()}>
+          <CrmInlineEditCell
+            value={acc.industry || ""}
+            displayValue={acc.industry || "—"}
+            onSave={(v) => updateMutation.mutate({ id: acc.id, updates: { industry: v || null } })}
+            className="text-sm text-muted-foreground"
+            testId={`inline-customer-industry-${acc.id}`}
+          />
         </td>
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "type"))} style={getCellStyle(acc.id, "type")}>
-          <span
-            className="text-xs font-medium px-2 py-1 rounded-full"
-            style={{ backgroundColor: status.bg, color: status.color }}
-          >
-            {status.label}
-          </span>
+        )}
+        {isColVisible("status") && (
+        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "type"))} style={getCellStyle(acc.id, "type")} onClick={(e) => e.stopPropagation()}>
+          <CrmInlineEditSelect
+            value={acc.type || "prospect"}
+            displayValue={
+              <span
+                className="text-xs font-medium px-2 py-1 rounded-full"
+                style={{ backgroundColor: status.bg, color: status.color }}
+              >
+                {status.label}
+              </span>
+            }
+            options={CRM_ACCOUNT_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+            onSave={(v) => updateMutation.mutate({ id: acc.id, updates: { type: v } })}
+            testId={`inline-customer-status-${acc.id}`}
+          />
         </td>
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "annualRevenue"))} style={getCellStyle(acc.id, "annualRevenue")}>
-          <span className="text-sm font-semibold">{formatCurrency(acc.annualRevenue)}</span>
+        )}
+        {isColVisible("revenue") && (
+        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "annualRevenue"))} style={getCellStyle(acc.id, "annualRevenue")} onClick={(e) => e.stopPropagation()}>
+          <CrmInlineEditCell
+            value={acc.annualRevenue || ""}
+            displayValue={formatCurrency(acc.annualRevenue)}
+            type="number"
+            onSave={(v) => updateMutation.mutate({ id: acc.id, updates: { annualRevenue: v || null } })}
+            className="text-sm font-semibold"
+            testId={`inline-customer-revenue-${acc.id}`}
+          />
         </td>
-        <td className="px-4 py-3 whitespace-nowrap">
-          <span className="text-sm text-muted-foreground">{acc.email || "—"}</span>
+        )}
+        {isColVisible("email") && (
+        <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+          <CrmInlineEditCell
+            value={acc.email || ""}
+            displayValue={acc.email || "—"}
+            onSave={(v) => updateMutation.mutate({ id: acc.id, updates: { email: v || null } })}
+            className="text-sm text-muted-foreground"
+            testId={`inline-customer-email-${acc.id}`}
+          />
         </td>
-        <td className="px-4 py-3 whitespace-nowrap">
-          <span className="text-sm text-muted-foreground">{acc.phone || "—"}</span>
+        )}
+        {isColVisible("phone") && (
+        <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+          <CrmInlineEditCell
+            value={acc.phone || ""}
+            displayValue={acc.phone || "—"}
+            onSave={(v) => updateMutation.mutate({ id: acc.id, updates: { phone: v || null } })}
+            className="text-sm text-muted-foreground"
+            testId={`inline-customer-phone-${acc.id}`}
+          />
         </td>
+        )}
+        {isColVisible("created") && (
         <td className="px-4 py-3 whitespace-nowrap">
           <span className="text-sm text-muted-foreground">{new Date(acc.createdAt).getFullYear()}</span>
         </td>
+        )}
         <CrmCustomFieldTableCells fields={customFields} customData={acc.customData} />
         <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
           <DropdownMenu>
@@ -685,6 +770,13 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
             )}
           </SelectContent>
         </Select>
+
+        <CrmColumnVisibilityMenu
+          columns={CUSTOMER_TABLE_COLUMNS}
+          visibility={columnVisibility}
+          onChange={setColVisible}
+          testId="button-customer-fields"
+        />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -987,13 +1079,22 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
             ))}
           </div>
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
-            {Array.from(new Set(enrichedAccounts.filter(a => a.country).map(a => a.country))).map(country => (
-              <div key={country} className="text-xs px-3 py-2 rounded-lg bg-muted/50 flex items-center gap-2">
-                <MapPin className="h-3 w-3 text-[#0ea5e9]" />
-                <span className="font-medium truncate">{country}</span>
-                <span className="text-muted-foreground ml-auto shrink-0">{enrichedAccounts.filter(a => a.country === country).length}</span>
-              </div>
-            ))}
+            {(() => {
+              const countryCounts = new Map<string, number>();
+              for (const pin of mapPins) {
+                const label = normalizeCountryLabel(pin.country) ?? "Unknown";
+                countryCounts.set(label, (countryCounts.get(label) ?? 0) + 1);
+              }
+              return Array.from(countryCounts.entries())
+                .sort((a, b) => b[1] - a[1])
+                .map(([country, count]) => (
+                  <div key={country} className="text-xs px-3 py-2 rounded-lg bg-muted/50 flex items-center gap-2">
+                    <MapPin className="h-3 w-3 text-[#0ea5e9]" />
+                    <span className="font-medium truncate">{country}</span>
+                    <span className="text-muted-foreground ml-auto shrink-0">{count}</span>
+                  </div>
+                ));
+            })()}
           </div>
         </div>
         );
@@ -1044,21 +1145,29 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("name")}>
                   Account {sortField === "name" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
+                {isColVisible("segment") && (
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("segment")}>
                   Segment {sortField === "segment" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
+                )}
+                {isColVisible("industry") && (
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("industry")}>
                   Industry {sortField === "industry" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Status</th>
+                )}
+                {isColVisible("status") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Status</th>}
+                {isColVisible("revenue") && (
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("revenue")}>
                   Annual Revenue (ARR) {sortField === "revenue" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Email</th>
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Phone</th>
+                )}
+                {isColVisible("email") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Email</th>}
+                {isColVisible("phone") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Phone</th>}
+                {isColVisible("created") && (
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("created")}>
                   Since {sortField === "created" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
+                )}
                 <th className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Actions</th>
               </tr>
             </thead>

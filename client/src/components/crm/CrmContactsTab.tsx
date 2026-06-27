@@ -16,7 +16,7 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { ContactFormDialog } from "./ContactFormDialog";
 import {
   Plus, Download, Upload, Search, ArrowUpDown, Layers,
-  ChevronDown, X, Trash2, Paintbrush, Bookmark, MoreHorizontal, Pencil, Users
+  ChevronDown, X, Trash2, Paintbrush, Bookmark, MoreHorizontal, Pencil, Users, Maximize2, Minimize2
 } from "lucide-react";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
@@ -27,6 +27,26 @@ import { ContactRelationshipsPanel } from "@/components/crm/ContactRelationships
 import { CrmCustomFieldTableHeaders, CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
 import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
 import type { CrmAccountDetail, CrmContact } from "./types";
+import { CrmColumnVisibilityMenu } from "./CrmColumnVisibilityMenu";
+import { CrmInlineEditCell } from "./CrmInlineEditCell";
+import { CrmInlineEditSelect } from "./CrmInlineEditSelect";
+import { loadColumnVisibility, saveColumnVisibility, type CrmColumnDef } from "@/lib/crm-list-columns";
+
+const CONTACT_ROLE_OPTIONS = [
+  { value: "primary", label: "Primary" },
+  { value: "decision_maker", label: "Decision Maker" },
+  { value: "technical", label: "Technical" },
+  { value: "champion", label: "Champion" },
+  { value: "contact", label: "Contact" },
+];
+
+const CONTACT_TABLE_COLUMNS: CrmColumnDef[] = [
+  { id: "account", label: "Account" },
+  { id: "role", label: "Role" },
+  { id: "email", label: "Email" },
+  { id: "phone", label: "Phone" },
+  { id: "created", label: "Created" },
+];
 
 interface CrmContactsTabProps {
   contacts: CrmContact[];
@@ -123,7 +143,20 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
   const [subView, setSubView] = useState<"list" | "orgchart">("list");
   const [orgChartAccountId, setOrgChartAccountId] = useState<number | null>(null);
   const [detailContactId, setDetailContactId] = useState<number | null>(null);
+  const [listExpanded, setListExpanded] = useState(false);
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() =>
+    loadColumnVisibility("crm-contacts", CONTACT_TABLE_COLUMNS),
+  );
   const { toast } = useToast();
+
+  const isColVisible = (id: string) => columnVisibility[id] !== false;
+  const setColVisible = (id: string, visible: boolean) => {
+    setColumnVisibility((prev) => {
+      const next = { ...prev, [id]: visible };
+      saveColumnVisibility("crm-contacts", next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (accounts.length > 0 && orgChartAccountId == null) {
@@ -158,6 +191,15 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
       toast({ title: "Contact deleted" });
     },
     onError: () => toast({ title: "Failed to delete contact", variant: "destructive" }),
+  });
+
+  const updateContactMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: number; updates: Partial<CrmContact> }) =>
+      apiRequest("PUT", `/api/crm/contacts/${id}`, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/contacts"] });
+    },
+    onError: () => toast({ title: "Failed to update contact", variant: "destructive" }),
   });
 
   function openCreateForm() {
@@ -220,6 +262,11 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
 
     return result;
   }, [contacts, accounts, localSearch, searchTerm, roleFilter, accountFilter, sortField, sortDir]);
+
+  const accountSelectOptions = useMemo(
+    () => accounts.map((a) => ({ value: String(a.id), label: a.name })),
+    [accounts],
+  );
 
   const pagination = useCrmPagination(enrichedContacts, {
     resetKey: `${localSearch}|${searchTerm}|${roleFilter}|${accountFilter}|${sortField}|${sortDir}|${groupBy}`,
@@ -382,7 +429,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
             data-testid={`checkbox-contact-${c.id}`}
           />
         </td>
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(c.id, "fullName"))} style={getCellStyle(c.id, "fullName")}>
+        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(c.id, "fullName"))} style={getCellStyle(c.id, "fullName")} onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-3">
             <div
               className="h-9 w-9 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
@@ -390,34 +437,88 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
             >
               {initials}
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold">{c.fullName}</span>
-              {c.title && <span className="text-xs text-muted-foreground">{c.title}</span>}
+            <div className="flex flex-col min-w-0">
+              <CrmInlineEditCell
+                value={c.fullName}
+                onSave={(v) => {
+                  const parts = v.trim().split(/\s+/);
+                  const firstName = parts[0] || "";
+                  const lastName = parts.slice(1).join(" ") || "";
+                  updateContactMutation.mutate({ id: c.id, updates: { firstName, lastName } });
+                }}
+                className="text-sm font-semibold"
+                testId={`inline-contact-name-${c.id}`}
+              />
+              {c.title && (
+                <CrmInlineEditCell
+                  value={c.title}
+                  displayValue={c.title}
+                  onSave={(v) => updateContactMutation.mutate({ id: c.id, updates: { title: v || null } })}
+                  className="text-xs text-muted-foreground"
+                  testId={`inline-contact-title-${c.id}`}
+                />
+              )}
             </div>
           </div>
         </td>
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(c.id, "accountName"))} style={getCellStyle(c.id, "accountName")}>
-          <span className="text-sm text-muted-foreground">{c.accountName || "—"}</span>
+        {isColVisible("account") && (
+        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(c.id, "accountName"))} style={getCellStyle(c.id, "accountName")} onClick={(e) => e.stopPropagation()}>
+          <CrmInlineEditSelect
+            value={c.accountId ? String(c.accountId) : ""}
+            displayValue={<span className={cn("text-sm text-muted-foreground", listExpanded ? "whitespace-nowrap" : "truncate max-w-[180px] block")}>{c.accountName || "—"}</span>}
+            options={accountSelectOptions}
+            onSave={(v) => updateContactMutation.mutate({ id: c.id, updates: { accountId: v ? parseInt(v, 10) : null } })}
+            testId={`inline-contact-account-${c.id}`}
+          />
         </td>
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(c.id, "role"))} style={getCellStyle(c.id, "role")}>
-          <span
-            className="text-xs font-medium px-2 py-1 rounded-full"
-            style={{ backgroundColor: roleInfo.bg, color: roleInfo.color }}
-          >
-            {roleInfo.label}
-          </span>
+        )}
+        {isColVisible("role") && (
+        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(c.id, "role"))} style={getCellStyle(c.id, "role")} onClick={(e) => e.stopPropagation()}>
+          <CrmInlineEditSelect
+            value={c.role || "contact"}
+            displayValue={
+              <span
+                className="text-xs font-medium px-2 py-1 rounded-full"
+                style={{ backgroundColor: roleInfo.bg, color: roleInfo.color }}
+              >
+                {roleInfo.label}
+              </span>
+            }
+            options={CONTACT_ROLE_OPTIONS}
+            onSave={(v) => updateContactMutation.mutate({ id: c.id, updates: { role: v } })}
+            testId={`inline-contact-role-${c.id}`}
+          />
         </td>
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(c.id, "email"))} style={getCellStyle(c.id, "email")}>
-          <span className="text-sm text-muted-foreground">{c.email || "—"}</span>
+        )}
+        {isColVisible("email") && (
+        <td className={cn("px-4 py-3", listExpanded ? "whitespace-nowrap" : "truncate max-w-[200px]", getCellClasses(c.id, "email"))} style={getCellStyle(c.id, "email")} onClick={(e) => e.stopPropagation()}>
+          <CrmInlineEditCell
+            value={c.email || ""}
+            displayValue={c.email || "—"}
+            onSave={(v) => updateContactMutation.mutate({ id: c.id, updates: { email: v || null } })}
+            className="text-sm text-muted-foreground"
+            testId={`inline-contact-email-${c.id}`}
+          />
         </td>
-        <td className="px-4 py-3 whitespace-nowrap">
-          <span className="text-sm text-muted-foreground">{c.phone || "—"}</span>
+        )}
+        {isColVisible("phone") && (
+        <td className={cn("px-4 py-3", listExpanded ? "whitespace-nowrap" : "truncate max-w-[160px]")} onClick={(e) => e.stopPropagation()}>
+          <CrmInlineEditCell
+            value={c.phone || ""}
+            displayValue={c.phone || "—"}
+            onSave={(v) => updateContactMutation.mutate({ id: c.id, updates: { phone: v || null } })}
+            className="text-sm text-muted-foreground"
+            testId={`inline-contact-phone-${c.id}`}
+          />
         </td>
+        )}
+        {isColVisible("created") && (
         <td className="px-4 py-3 whitespace-nowrap">
           <span className="text-sm text-muted-foreground">
             {new Date(c.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
           </span>
         </td>
+        )}
         <CrmCustomFieldTableCells fields={customFields} customData={c.customData} />
         <td className="px-4 py-3 text-right whitespace-nowrap">
           <DropdownMenu>
@@ -459,9 +560,21 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
         <MetricCard title="Added (30d)" value={recentCount} subtitle="New this month" helpText="Contacts created in the last 30 calendar days." icon={RecentIcon} borderColor="#f97316" valueClassName="text-[#f97316]" testId="card-recent-contacts" />
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center">
         <button onClick={() => setSubView("list")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border", subView === "list" ? "bg-[#0ea5e9] text-white border-[#0ea5e9]" : "border-border")} data-testid="contacts-list-view">List</button>
         <button onClick={() => setSubView("orgchart")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium border", subView === "orgchart" ? "bg-[#0ea5e9] text-white border-[#0ea5e9]" : "border-border")} data-testid="contacts-orgchart-view">Org Chart</button>
+        {subView === "list" && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto gap-1.5 text-xs"
+            onClick={() => setListExpanded((v) => !v)}
+            data-testid="button-contacts-maximize"
+          >
+            {listExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            {listExpanded ? "Compact" : "Maximize"}
+          </Button>
+        )}
       </div>
 
       {subView === "orgchart" && accounts.length > 0 && orgChartAccountId != null && (
@@ -618,6 +731,13 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
           </DropdownMenuContent>
         </DropdownMenu>
 
+        <CrmColumnVisibilityMenu
+          columns={CONTACT_TABLE_COLUMNS}
+          visibility={columnVisibility}
+          onChange={setColVisible}
+          testId="button-contact-fields"
+        />
+
         <button
           onClick={() => setFormatPanelOpen(true)}
           className={cn(
@@ -700,9 +820,21 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
         />
       </div>
 
-      {subView === "list" && <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden w-full" data-testid="contacts-table">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+      {subView === "list" && <div className={cn(
+        "bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden w-full",
+        listExpanded && "fixed inset-4 z-50 flex flex-col",
+      )} data-testid="contacts-table">
+        {listExpanded && (
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 shrink-0">
+            <span className="text-sm font-semibold">Contacts — expanded list view</span>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setListExpanded(false)}>
+              <Minimize2 className="h-3.5 w-3.5" />
+              Compact
+            </Button>
+          </div>
+        )}
+        <div className={cn("overflow-x-auto", listExpanded && "flex-1 overflow-auto")}>
+          <table className={cn("w-full", listExpanded && "min-w-full")}>
             <thead>
               <tr className="border-b border-border/40 bg-muted/20">
                 <th className="px-4 py-3 w-10">
@@ -715,21 +847,31 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("name")}>
                   Contact {sortField === "name" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
+                {isColVisible("account") && (
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("account")}>
                   Account {sortField === "account" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
+                )}
+                {isColVisible("role") && (
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("role")}>
                   Role {sortField === "role" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
+                )}
+                {isColVisible("email") && (
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("email")}>
                   Email {sortField === "email" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
+                )}
+                {isColVisible("phone") && (
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">
                   Phone
                 </th>
+                )}
+                {isColVisible("created") && (
                 <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("created")}>
                   Created {sortField === "created" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
+                )}
                 <CrmCustomFieldTableHeaders fields={customFields} />
                 <th className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Actions</th>
               </tr>

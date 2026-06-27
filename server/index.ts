@@ -143,43 +143,6 @@ app.use((req, res, next) => {
 
   const onListen = () => {
       log(`serving on port ${port}`);
-      if (process.env.NODE_ENV === "development" && process.env.AUTO_SEED_TM !== "false") {
-      // Auto-seed TM demo data if not already present, then migrate to project
-      setTimeout(async () => {
-        try {
-          const seedRes = await fetch(`http://localhost:${port}/api/tm/seed-demo`, { method: "POST" });
-          if (seedRes.status === 409) {
-            log("TM demo data already present — skipping auto-seed", "seed");
-          } else if (seedRes.ok) {
-            const body = await seedRes.json() as any;
-            log(`TM demo data auto-seeded: ${body.suites} suites, ${body.cases} cases, ${body.defects} defects, ${body.requirements} requirements`, "seed");
-          } else {
-            const text = await seedRes.text();
-            log(`TM auto-seed failed (${seedRes.status}): ${text}`, "seed");
-          }
-          // Always run migration to ensure project linkage is up to date
-          const migrateRes = await fetch(`http://localhost:${port}/api/tm/migrate-project`, { method: "POST" });
-          if (migrateRes.ok) {
-            const mb = await migrateRes.json() as any;
-            log(`TM project ready: "${mb.project?.name}" (id=${mb.project?.id})`, "seed");
-          }
-          // Apply TM schema extensions (idempotent)
-          const schemaRes = await fetch(`http://localhost:${port}/api/tm/migrate-schema`, { method: "POST" });
-          if (schemaRes.ok) {
-            const sb = await schemaRes.json() as any;
-            log(`TM schema patched (${sb.executed ?? 0} statements)`, "seed");
-          }
-          // Seed demo scenarios if none exist
-          const scenariosRes = await fetch(`http://localhost:${port}/api/tm/seed-scenarios`, { method: "POST" });
-          if (scenariosRes.ok) {
-            const sb = await scenariosRes.json() as any;
-            if (sb.seeded) log(`TM scenarios auto-seeded: ${sb.count} scenarios`, "seed");
-          }
-        } catch (e: any) {
-          log(`TM auto-seed error: ${e.message}`, "seed");
-        }
-      }, 2000);
-      }
   };
 
   // reusePort is Linux-only; Windows throws ENOTSUP

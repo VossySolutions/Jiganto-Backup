@@ -63,7 +63,7 @@ export function DigitalTwinScreen({ onNavigate }: Props) {
       {modules.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-10 text-center text-muted-foreground">
           <FlaskConical className="h-8 w-8 mx-auto mb-3" />
-          <div className="text-sm">Load demo data first to see the module health map.</div>
+          <div className="text-sm">No test suites with cases yet. Create suites and cases in Test Navigator to see the module health map.</div>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

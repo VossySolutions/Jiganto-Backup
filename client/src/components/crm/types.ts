@@ -97,7 +97,7 @@ export type CrmOpportunitySummary = Pick<CrmOpportunity, "id" | "accountId" | "s
 
 export type CrmOpportunityDetail = Pick<
   DbOpportunity,
-  "id" | "accountId" | "stageId" | "name" | "amount" | "probability" | "type" | "source" | "nextStep"
+  "id" | "accountId" | "stageId" | "name" | "amount" | "probability" | "type" | "source" | "nextStep" | "projectId"
 > & {
   expectedCloseDate: ApiDate | null;
   createdAt: ApiDate;

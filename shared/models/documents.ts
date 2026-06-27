@@ -27,6 +27,7 @@ export const documentFolders = pgTable("document_folders", {
   color: text("color"),
   ownerId: varchar("owner_id").references(() => users.id),
   order: integer("order").default(0),
+  metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

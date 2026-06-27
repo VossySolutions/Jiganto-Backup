@@ -156,6 +156,13 @@ const DETAIL_SECTIONS: { id: DetailSectionId; label: string }[] = [
   { id: "history", label: "Access & extension history" },
 ];
 
+type HealthSectionId = "check-ins" | "attention";
+
+const HEALTH_SECTIONS: { id: HealthSectionId; label: string }[] = [
+  { id: "check-ins", label: "Upcoming check-ins" },
+  { id: "attention", label: "Customers needing attention" },
+];
+
 function clearCustomerFilters(
   setSearch: (v: string) => void,
   setStatusFilter: (v: string) => void,
@@ -234,6 +241,7 @@ export default function CustomerManagementPage() {
   const { toast } = useToast();
   const [view, setView] = useState<ViewId>("customers");
   const [detailSection, setDetailSection] = useState<DetailSectionId>("subscription");
+  const [healthSection, setHealthSection] = useState<HealthSectionId>("attention");
   const [selectedSlug, setSelectedSlug] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -420,6 +428,9 @@ export default function CustomerManagementPage() {
       if (variables.action === "complete_scheduled_check_in") {
         toast({ title: "Check-in marked complete" });
       } else if (variables.scheduledAt) {
+        if (variables.action === "health_follow_up") {
+          setHealthSection("check-ins");
+        }
         toast({ title: "Check-in scheduled", description: `Scheduled for ${formatScheduledDate(variables.scheduledAt)}` });
       } else {
         toast({ title: "Action recorded" });
@@ -1321,166 +1332,215 @@ export default function CustomerManagementPage() {
                     Health scores are recalculated from live usage (users, AI tokens), subscription
                     status, renewal timing, and recent CSM follow-up activity in the activity log.
                   </InfoAlert>
-                  <SectionCard
-                    title="Upcoming check-ins"
-                    description="Scheduled CSM re-engagement — overdue items appear first"
+                  <nav
+                    className="flex flex-wrap gap-1 border-b border-border/50 -mx-1"
+                    aria-label="Health scores sections"
                   >
-                    {dashboard.health.scheduledCheckIns.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-4 text-center">
-                        No check-ins scheduled yet. Use &ldquo;Schedule check-in&rdquo; on a customer below to plan
-                        your next outreach.
-                      </p>
-                    ) : (
-                      <ResponsiveTableWrap minWidthClass="min-w-[900px]">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Organisation</TableHead>
-                              <TableHead>Scheduled for</TableHead>
-                              <TableHead>CSM</TableHead>
-                              <TableHead>Note</TableHead>
-                              <TableHead>Action</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {scheduledCheckInsPagination.paginatedItems.map((row) => (
-                              <TableRow
-                                key={row.id}
-                                className={row.isOverdue ? "bg-red-50/50 dark:bg-red-950/20" : undefined}
-                              >
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <OrgAvatar initials={row.initials} color={row.avatarColor} />
-                                    <span className="font-semibold">{row.customerName}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-1.5 text-xs">
-                                    <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
-                                    <span className={cn(row.isOverdue && "text-red-600 font-semibold")}>
-                                      {formatScheduledDate(row.scheduledDate)}
-                                      {row.isOverdue ? " · Overdue" : ""}
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-xs">{row.csmName}</TableCell>
-                                <TableCell className="text-xs text-muted-foreground max-w-[240px] truncate">
-                                  {row.note}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex gap-1.5">
+                    {HEALTH_SECTIONS.map((section) => {
+                      const count =
+                        section.id === "check-ins"
+                          ? dashboard.health.scheduledCheckIns.length
+                          : dashboard.health.attentionRows.length;
+                      return (
+                        <button
+                          key={section.id}
+                          type="button"
+                          onClick={() => setHealthSection(section.id)}
+                          className={cn(
+                            "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap inline-flex items-center gap-1.5",
+                            healthSection === section.id
+                              ? "border-primary text-primary"
+                              : "border-transparent text-muted-foreground hover:text-foreground",
+                          )}
+                          data-testid={`health-scores-tab-${section.id}`}
+                        >
+                          {section.label}
+                          {count > 0 && (
+                            <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-[10px]">
+                              {count}
+                            </Badge>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </nav>
+
+                  {healthSection === "check-ins" && (
+                    <SectionCard
+                      title="Upcoming check-ins"
+                      description="Scheduled CSM re-engagement — overdue items appear first"
+                    >
+                      {dashboard.health.scheduledCheckIns.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">
+                          No check-ins scheduled yet. Use &ldquo;Schedule check-in&rdquo; on the
+                          Customers needing attention tab to plan your next outreach.
+                        </p>
+                      ) : (
+                        <ResponsiveTableWrap minWidthClass="min-w-[900px]">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Organisation</TableHead>
+                                <TableHead>Scheduled for</TableHead>
+                                <TableHead>CSM</TableHead>
+                                <TableHead>Note</TableHead>
+                                <TableHead>Action</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {scheduledCheckInsPagination.paginatedItems.map((row) => (
+                                <TableRow
+                                  key={row.id}
+                                  className={row.isOverdue ? "bg-red-50/50 dark:bg-red-950/20" : undefined}
+                                >
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <OrgAvatar initials={row.initials} color={row.avatarColor} />
+                                      <span className="font-semibold">{row.customerName}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-1.5 text-xs">
+                                      <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+                                      <span className={cn(row.isOverdue && "text-red-600 font-semibold")}>
+                                        {formatScheduledDate(row.scheduledDate)}
+                                        {row.isOverdue ? " · Overdue" : ""}
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-xs">{row.csmName}</TableCell>
+                                  <TableCell className="text-xs text-muted-foreground max-w-[240px] truncate">
+                                    {row.note}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex gap-1.5">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs"
+                                        onClick={() => {
+                                          setSelectedSlug(row.customerSlug);
+                                          setView("detail");
+                                        }}
+                                      >
+                                        View
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        className="h-7 text-xs"
+                                        disabled={customerActionMut.isPending}
+                                        onClick={() =>
+                                          customerActionMut.mutate({
+                                            action: "complete_scheduled_check_in",
+                                            customerExternalId: row.customerId,
+                                            activityLogId: Number(row.id),
+                                          })
+                                        }
+                                      >
+                                        Mark done
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                          <TablePagination
+                            page={scheduledCheckInsPagination.page}
+                            totalPages={scheduledCheckInsPagination.totalPages}
+                            total={scheduledCheckInsPagination.total}
+                            startIndex={scheduledCheckInsPagination.startIndex}
+                            endIndex={scheduledCheckInsPagination.endIndex}
+                            pageSize={scheduledCheckInsPagination.pageSize}
+                            onPageChange={scheduledCheckInsPagination.setPage}
+                            onPageSizeChange={scheduledCheckInsPagination.setPageSize}
+                          />
+                        </ResponsiveTableWrap>
+                      )}
+                    </SectionCard>
+                  )}
+
+                  {healthSection === "attention" && (
+                    <SectionCard
+                      title="Customers needing attention"
+                      description="Watch and at-risk only — sorted by urgency"
+                    >
+                      {dashboard.health.attentionRows.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">
+                          No customers currently need outreach — all accounts are healthy.
+                        </p>
+                      ) : (
+                        <ResponsiveTableWrap minWidthClass="min-w-[1000px]">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Organisation</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Score</TableHead>
+                                <TableHead>Primary signal</TableHead>
+                                <TableHead>CSM</TableHead>
+                                <TableHead>Last contact</TableHead>
+                                <TableHead>Action</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {attentionPagination.paginatedItems.map((r) => (
+                                <TableRow key={r.customerId} className={rowHighlightClass(r.rowHighlight)}>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <OrgAvatar initials={r.initials} color={r.avatarColor} />
+                                      <span className="font-semibold">{r.customerName}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <HealthBadge band={r.band} score={r.score} />
+                                  </TableCell>
+                                  <TableCell className="font-bold text-red-600">{r.score}</TableCell>
+                                  <TableCell className="text-xs text-muted-foreground max-w-[220px]">
+                                    {r.primarySignal}
+                                  </TableCell>
+                                  <TableCell className="text-xs">{r.csmName}</TableCell>
+                                  <TableCell
+                                    className={cn("text-xs", r.lastContactUrgent && "text-red-600 font-semibold")}
+                                  >
+                                    {r.lastContactDays >= 999 ? "No contact logged" : `${r.lastContactDays} days ago`}
+                                  </TableCell>
+                                  <TableCell>
                                     <Button
                                       size="sm"
-                                      variant="outline"
+                                      variant={r.actionVariant === "danger" ? "destructive" : "outline"}
                                       className="h-7 text-xs"
-                                      onClick={() => {
-                                        setSelectedSlug(row.customerSlug);
-                                        setView("detail");
-                                      }}
-                                    >
-                                      View
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      className="h-7 text-xs"
-                                      disabled={customerActionMut.isPending}
                                       onClick={() =>
-                                        customerActionMut.mutate({
-                                          action: "complete_scheduled_check_in",
-                                          customerExternalId: row.customerId,
-                                          activityLogId: Number(row.id),
+                                        openFollowUpDialog({
+                                          action: "health_follow_up",
+                                          customerExternalId: r.customerId,
+                                          customerName: r.customerName,
+                                          defaultNote: r.actionLabel,
                                         })
                                       }
+                                      disabled={customerActionMut.isPending}
                                     >
-                                      Mark done
+                                      {r.actionLabel}
                                     </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                        <TablePagination
-                          page={scheduledCheckInsPagination.page}
-                          totalPages={scheduledCheckInsPagination.totalPages}
-                          total={scheduledCheckInsPagination.total}
-                          startIndex={scheduledCheckInsPagination.startIndex}
-                          endIndex={scheduledCheckInsPagination.endIndex}
-                          pageSize={scheduledCheckInsPagination.pageSize}
-                          onPageChange={scheduledCheckInsPagination.setPage}
-                          onPageSizeChange={scheduledCheckInsPagination.setPageSize}
-                        />
-                      </ResponsiveTableWrap>
-                    )}
-                  </SectionCard>
-                  <SectionCard title="Customers needing attention" description="Watch and at-risk only — sorted by urgency">
-                    <ResponsiveTableWrap minWidthClass="min-w-[1000px]">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Organisation</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Score</TableHead>
-                          <TableHead>Primary signal</TableHead>
-                          <TableHead>CSM</TableHead>
-                          <TableHead>Last contact</TableHead>
-                          <TableHead>Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {attentionPagination.paginatedItems.map((r) => (
-                          <TableRow key={r.customerId} className={rowHighlightClass(r.rowHighlight)}>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <OrgAvatar initials={r.initials} color={r.avatarColor} />
-                                <span className="font-semibold">{r.customerName}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <HealthBadge band={r.band} score={r.score} />
-                            </TableCell>
-                            <TableCell className="font-bold text-red-600">{r.score}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground max-w-[220px]">
-                              {r.primarySignal}
-                            </TableCell>
-                            <TableCell className="text-xs">{r.csmName}</TableCell>
-                            <TableCell className={cn("text-xs", r.lastContactUrgent && "text-red-600 font-semibold")}>
-                              {r.lastContactDays >= 999 ? "No contact logged" : `${r.lastContactDays} days ago`}
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                size="sm"
-                                variant={r.actionVariant === "danger" ? "destructive" : "outline"}
-                                className="h-7 text-xs"
-                                onClick={() =>
-                                  openFollowUpDialog({
-                                    action: "health_follow_up",
-                                    customerExternalId: r.customerId,
-                                    customerName: r.customerName,
-                                    defaultNote: r.actionLabel,
-                                  })
-                                }
-                                disabled={customerActionMut.isPending}
-                              >
-                                {r.actionLabel}
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    <TablePagination
-                      page={attentionPagination.page}
-                      totalPages={attentionPagination.totalPages}
-                      total={attentionPagination.total}
-                      startIndex={attentionPagination.startIndex}
-                      endIndex={attentionPagination.endIndex}
-                      pageSize={attentionPagination.pageSize}
-                      onPageChange={attentionPagination.setPage}
-                      onPageSizeChange={attentionPagination.setPageSize}
-                    />
-                    </ResponsiveTableWrap>
-                  </SectionCard>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                          <TablePagination
+                            page={attentionPagination.page}
+                            totalPages={attentionPagination.totalPages}
+                            total={attentionPagination.total}
+                            startIndex={attentionPagination.startIndex}
+                            endIndex={attentionPagination.endIndex}
+                            pageSize={attentionPagination.pageSize}
+                            onPageChange={attentionPagination.setPage}
+                            onPageSizeChange={attentionPagination.setPageSize}
+                          />
+                        </ResponsiveTableWrap>
+                      )}
+                    </SectionCard>
+                  )}
                 </>
               )}
 
@@ -2315,8 +2375,8 @@ export default function CustomerManagementPage() {
                 : "Schedule renewal follow-up"}
             </DialogTitle>
             <DialogDescription>
-              Pick a date for CSM re-engagement. The check-in appears in the Upcoming check-ins
-              schedule on the Health scores tab.
+              Pick a date for CSM re-engagement. The check-in appears under Upcoming check-ins on
+              the Health scores tab.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-1">
@@ -2347,7 +2407,7 @@ export default function CustomerManagementPage() {
               />
             </div>
             <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-1">
-              <li>Scheduled check-ins appear in the Upcoming check-ins table on this tab</li>
+              <li>Scheduled check-ins appear under the Upcoming check-ins sub-tab on Health scores</li>
               <li>Mark complete after the call to update last-contact tracking</li>
               <li>Book a calendar invite separately if you need a video meeting</li>
             </ul>

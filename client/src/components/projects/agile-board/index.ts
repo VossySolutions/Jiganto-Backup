@@ -10,7 +10,6 @@ export {
 } from "./palette";
 export type { Workstream, Epic, Story, Defect, Sprint, BurndownPoint, BurnUpPoint } from "./types";
 export { AgileAvatar, AgileBadge, AgileProgressBar, AgileBtn, AgileSelect, AgileModal, FormField, ConfirmDelete, BurndownChart, BurnUpChart, inputStyle, textareaStyle } from "./ui-primitives";
-export { DEMO_WORKSTREAMS, EPICS_INIT, STORIES_INIT, DEFECTS_INIT, SPRINTS_INIT, BURNDOWN_DATA, BURNUP_DATA } from "./demo-data";
 export { AddStoryForm } from "./story-form";
 export { BoardView } from "./board-view";
 export { BacklogView } from "./backlog-view";

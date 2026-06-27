@@ -39,7 +39,7 @@ import {
   formatCrmRecordMeta,
   formatWeightedForecast,
 } from "@/lib/crm-form-layout";
-import { BarChart3, Clock, DollarSign, Settings2, Sparkles, StickyNote, Target, Trophy, UserRound } from "lucide-react";
+import { BarChart3, Briefcase, Clock, DollarSign, Loader2, Plus, Settings2, Sparkles, StickyNote, Target, Trophy, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type Stage = { id: number; name: string; probability?: number | null; pipelineId?: number | null; order?: number };
@@ -61,6 +61,7 @@ interface Props {
   initialStageId?: string;
   initialAccountId?: string;
   onOpenCustomFieldsSettings?: () => void;
+  onNavigateToResourcePlan?: (opportunityId: number, planId?: number | null) => void;
 }
 
 export function OpportunityFormDialog({
@@ -73,6 +74,7 @@ export function OpportunityFormDialog({
   initialStageId,
   initialAccountId,
   onOpenCustomFieldsSettings,
+  onNavigateToResourcePlan,
 }: Props) {
   const { toast } = useToast();
   const [form, setForm] = useState<OpportunityFormData>(EMPTY_OPPORTUNITY_FORM);
@@ -153,6 +155,32 @@ export function OpportunityFormDialog({
   });
 
   const isPending = createMutation.isPending || updateMutation.isPending;
+  const editingOppId = editing?.id ? Number(editing.id) : null;
+
+  const { data: resourcePlans = [], isLoading: resourcePlansLoading } = useQuery<Array<{ id: number; planName: string }>>({
+    queryKey: editingOppId ? [`/api/crm/opportunities/${editingOppId}/resource-plans`] : ["/api/crm/opportunities/0/resource-plans?disabled=1"],
+    enabled: open && !!editingOppId,
+  });
+
+  const createResourcePlanMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingOppId) throw new Error("Save opportunity first");
+      const res = await apiRequest("POST", `/api/crm/opportunities/${editingOppId}/resource-plan`, {
+        createNew: true,
+        planName: `${form.name.trim() || "Opportunity"} — Resource Plan`,
+        rows: [],
+      });
+      return res.json() as Promise<{ id: number }>;
+    },
+    onSuccess: (plan) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/crm/opportunities/${editingOppId}/resource-plans`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/resource-plans/summaries"] });
+      toast({ title: "Resource plan created" });
+      onNavigateToResourcePlan?.(editingOppId!, plan.id);
+    },
+    onError: () => toast({ title: "Failed to create resource plan", variant: "destructive" }),
+  });
+
   const canSubmit = !!form.name.trim();
   const accountName = accounts.find((a) => a.id === parseInt(form.accountId))?.name;
   const selectedAccount = accounts.find((a) => a.id === parseInt(form.accountId));
@@ -476,6 +504,51 @@ export function OpportunityFormDialog({
                   <Input id="opp-loss" value={form.lossReason} onChange={(e) => set("lossReason", e.target.value)} data-testid="input-opp-loss-reason" />
                 </div>
               </CrmFieldGrid>
+            </CrmFormSection>
+
+            <CrmFormDivider />
+
+            <CrmFormSection icon={<Briefcase className="h-3.5 w-3.5 text-sky-600" />} iconClassName="bg-sky-50 dark:bg-sky-950/40" title="Resource plan" tag="Staffing & budget basis">
+              {!editingOppId ? (
+                <p className="text-sm text-muted-foreground">Save this opportunity first, then create a resource plan with staffing rows. Once approved, export the plan to Finance as the project budget.</p>
+              ) : resourcePlansLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading resource plans…
+                </div>
+              ) : resourcePlans.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-muted-foreground flex-1 min-w-[200px]">
+                    {resourcePlans.length} plan{resourcePlans.length !== 1 ? "s" : ""} linked to this opportunity.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onNavigateToResourcePlan?.(editingOppId, resourcePlans[0]?.id ?? null)}
+                    data-testid="button-open-resource-plan"
+                  >
+                    Open resource plan
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-muted-foreground flex-1 min-w-[200px]">
+                    No resource plan yet. Add staffing rows from a template or manually.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
+                    disabled={createResourcePlanMutation.isPending}
+                    onClick={() => createResourcePlanMutation.mutate()}
+                    data-testid="button-create-resource-plan"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Create resource plan
+                  </Button>
+                </div>
+              )}
             </CrmFormSection>
 
             <CrmFormDivider />

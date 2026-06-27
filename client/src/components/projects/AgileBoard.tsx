@@ -25,11 +25,6 @@ import {
   BestPracticeView,
   EpicDetailPanel,
   StoryDetailPanel,
-  DEMO_WORKSTREAMS,
-  EPICS_INIT,
-  STORIES_INIT,
-  DEFECTS_INIT,
-  SPRINTS_INIT,
 } from "./agile-board";
 import type { Workstream, Epic, Story, Defect, Sprint } from "./agile-board";
 
@@ -55,12 +50,12 @@ export default function AgileBoard({ initialTab = "board", view, boardMode = "sp
   const isDbMode = !!projectId;
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [activeWs, setActiveWs] = useState(isDbMode ? "" : "ws-ai");
-  const [workstreams, setWorkstreams] = useState<Workstream[]>(isDbMode ? [] : DEMO_WORKSTREAMS);
-  const [epics, setEpics] = useState<Epic[]>(isDbMode ? [] : EPICS_INIT);
-  const [stories, setStories] = useState<Story[]>(isDbMode ? [] : STORIES_INIT);
-  const [defects, setDefects] = useState<Defect[]>(isDbMode ? [] : DEFECTS_INIT);
-  const [sprints, setSprints] = useState<Sprint[]>(isDbMode ? [] : SPRINTS_INIT);
+  const [activeWs, setActiveWs] = useState("");
+  const [workstreams, setWorkstreams] = useState<Workstream[]>([]);
+  const [epics, setEpics] = useState<Epic[]>([]);
+  const [stories, setStories] = useState<Story[]>([]);
+  const [defects, setDefects] = useState<Defect[]>([]);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
   const [selectedEpic, setSelectedEpic] = useState<Epic | null>(null);
   const [editingEpic, setEditingEpic] = useState<Epic | null>(null);
@@ -184,7 +179,7 @@ export default function AgileBoard({ initialTab = "board", view, boardMode = "sp
     }
   }, [isDbMode, projectId, wsData, createWorkstreamMutation.isPending]);
 
-  const currentWsObj = workstreams.find(w => w.id === activeWs) || workstreams[0] || DEMO_WORKSTREAMS[0];
+  const currentWsObj = workstreams.find(w => w.id === activeWs) || workstreams[0] || { id: activeWs, name: "", color: C.blue };
 
   const handleAddStory = isDbMode ? (data: any) => {
     createStoryMutation.mutate({ projectId, title: data.title, epicId: data.epicId ? Number(data.epicId) : null, points: data.points ? Number(data.points) : null, tshirt: data.tshirt || "M", priority: data.priority || "Medium", assignee: data.assignee || null, status: "Backlog", creator: "Current User", tags: [], acceptanceCriteria: data.ac ? data.ac.split("\n").map((l: string) => l.trim()).filter(Boolean) : [] });
@@ -199,7 +194,7 @@ export default function AgileBoard({ initialTab = "board", view, boardMode = "sp
     createDefectMutation.mutate({ projectId, title: data.title, storyId: data.storyId ? Number(data.storyId) : null, severity: data.severity || "Minor", priority: data.priority || "Medium", status: "New", assignee: data.assignee || null, reporter: "Current User", environment: data.environment || "Dev" });
   } : undefined;
 
-  const displayWorkstreams = workstreams.length > 0 ? workstreams : (isDbMode ? [] : DEMO_WORKSTREAMS);
+  const displayWorkstreams = workstreams;
   const ws = currentWsObj;
   const wsEpics = epics.filter(e=>e.wsId===activeWs);
   const wsStories = stories.filter(s=>s.wsId===activeWs);

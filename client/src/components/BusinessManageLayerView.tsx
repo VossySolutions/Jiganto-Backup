@@ -17,7 +17,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { LayoutList, LayoutGrid, Upload, Download, FileText, Edit2, Loader2, Search, Target, Flag, Crosshair, Zap, TrendingUp, BarChart3, Layers, ChevronDown, ChevronRight, MessageSquare, Send, Trash2, ShieldCheck } from "lucide-react";
 import { BusinessLoadingState } from "@/components/business/BusinessLoadingState";
-import { BusinessTableScroll } from "@/components/business/BusinessTableScroll";
+import { Link } from "wouter";
+import { resolveBusinessLinkedRecordHref, formatBusinessLinkedRecordLabel } from "@/lib/business-linked-record";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -772,18 +773,19 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
 
       {/* Table View */}
       {view === "table" && (
-        <div className="rounded-xl border border-border bg-card w-full min-w-0 max-w-full max-h-[min(70vh,720px)] overflow-y-auto">
-          <BusinessTableScroll minWidth={1100}>
-            <table className="text-xs border-collapse w-max min-w-full table-auto">
-              <thead className="sticky top-0 z-10">
-                <tr className="border-b-2 border-border bg-muted/95 backdrop-blur-sm">
-                  <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap w-[80px]">Ref</th>
+        <div className="rounded-xl border border-border bg-card w-full min-w-0 max-w-full max-h-[min(70vh,720px)] overflow-auto">
+            <table className="text-xs border-collapse w-full table-auto" style={{ minWidth: 1100 }}>
+              <thead className="sticky top-0 z-20">
+                <tr className="border-b-2 border-border bg-muted/95 backdrop-blur-sm shadow-sm">
+                  <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap w-[80px] sticky left-0 z-30 bg-muted/95">Ref</th>
                   {columns.map(c => (
                     <th key={c.key} className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap" style={{ width: c.width }}>
                       {c.label}
                     </th>
                   ))}
-                  <th className="px-3 py-2.5 w-[52px]" />
+                  <th className="px-3 py-2.5 text-right font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap sticky right-0 z-30 bg-muted/95 min-w-[100px]">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -823,13 +825,19 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
                   return (
                     <tr key={item.id}
                       className={cn("border-t border-border/30 hover:bg-muted/30 transition-colors", rowIndex % 2 !== 0 ? "bg-muted/10" : "")}>
-                      <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground whitespace-nowrap" style={{ color: accent }}>
+                      <td className={cn(
+                        "px-3 py-2 font-mono text-[10px] text-muted-foreground whitespace-nowrap sticky left-0 z-10",
+                        rowIndex % 2 !== 0 ? "bg-muted/10" : "bg-card",
+                      )} style={{ color: accent }}>
                         {refCode(refPrefix, item.id, entityRefs, entityType)}
                       </td>
                       {columns.map(c => (
                         <td key={c.key} className="px-3 py-2 align-middle max-w-[220px]">{c.render(item)}</td>
                       ))}
-                      <td className="px-2 py-2 text-right whitespace-nowrap">
+                      <td className={cn(
+                        "px-2 py-2 text-right whitespace-nowrap sticky right-0 z-10 border-l border-border/40",
+                        rowIndex % 2 !== 0 ? "bg-muted/10" : "bg-card",
+                      )}>
                         {entityType && (
                           <button onClick={() => openCheckin(item)}
                             className="relative text-muted-foreground hover:text-primary p-1 rounded hover:bg-muted transition-colors mr-0.5"
@@ -844,21 +852,26 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
                             )}
                           </button>
                         )}
-                        <button onClick={() => setEditItem(item)}
-                          className="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted transition-colors"
-                          title="Edit record">
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 gap-1 shrink-0"
+                          onClick={() => setEditItem(item)}
+                          title="Edit record"
+                          data-testid={`button-edit-${item.id}`}
+                        >
+                          <Edit2 className="h-3 w-3" />
+                          <span className="text-[10px] font-medium">Edit</span>
+                        </Button>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          </BusinessTableScroll>
           <div className="px-4 py-2 border-t border-border bg-muted/20 flex flex-wrap gap-2 justify-between items-center">
             <span className="text-xs text-muted-foreground">{filtered.length} of {items.length} records shown</span>
-            <span className="text-xs text-muted-foreground">Click <Edit2 className="h-2.5 w-2.5 inline mx-0.5" /> to edit any row</span>
+            <span className="text-xs text-muted-foreground">Use the <strong className="font-medium text-foreground">Edit</strong> button in the Actions column to update any row</span>
           </div>
           <TablePagination
             page={pagination.page}
@@ -1340,13 +1353,20 @@ export function EnhancedInitiativesTab({
   const { data: projects = [] } = useQuery<Array<{ id: number; name: string; workType?: string | null; code?: string | null }>>({
     queryKey: ["/api/pm/projects"],
   });
+  const { data: programmes = [] } = useQuery<Array<{ id: number; name: string }>>({
+    queryKey: ["/api/portfolio/programmes"],
+  });
   const linkedRecordOptions = useMemo(() => [
     { value: "", label: "None" },
     ...projects.map(p => ({
       value: `project:${p.id}`,
       label: `${p.name}${p.workType ? ` (${p.workType.replace(/_/g, " ")})` : ""}${p.code ? ` · ${p.code}` : ""}`,
     })),
-  ], [projects]);
+    ...programmes.map(p => ({
+      value: `programme:${p.id}`,
+      label: `Programme · ${p.name}`,
+    })),
+  ], [projects, programmes]);
   const fieldsWithGoal = useMemo(() => [
     ...INITIATIVES_EDIT_FIELDS.map(f =>
       f.key === "linkedRecordRef"
@@ -1359,7 +1379,15 @@ export function EnhancedInitiativesTab({
   const columns: ColDef<InitiativeEx>[] = [
     { key:"title",         label:"Title",         width:"18%", render:r=><TitleCell text={r.title} /> },
     { key:"deliveryType",  label:"Delivery",       width:"10%", render:r=>r.deliveryType ? <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 capitalize">{DELIVERY_TYPE_LABELS[r.deliveryType] ?? r.deliveryType}</span> : <span className="text-muted-foreground/40 text-[10px]">—</span> },
-    { key:"linkedRecordRef",label:"Ref",           width:"8%",  render:r=>r.linkedRecordRef ? <span className="font-mono text-[10px] text-muted-foreground">{r.linkedRecordRef}</span> : <span className="text-muted-foreground/40">—</span> },
+    { key:"linkedRecordRef",label:"Ref",           width:"8%",  render:r=>{
+      const href = resolveBusinessLinkedRecordHref(r.linkedRecordRef);
+      if (!r.linkedRecordRef || !href) return <span className="text-muted-foreground/40">—</span>;
+      return (
+        <Link href={href} className="font-mono text-[10px] text-primary hover:underline underline-offset-2" onClick={(e) => e.stopPropagation()}>
+          {formatBusinessLinkedRecordLabel(r.linkedRecordRef)}
+        </Link>
+      );
+    }},
     { key:"goalId",        label:"Parent Goal",    width:"13%", render:r=><ParentCell text={goalMap[r.goalId??0]?.title} prefix="G" id={r.goalId} /> },
     { key:"ownerName",     label:"Owner",          width:"11%", render:r=><OwnerCell name={r.ownerName} /> },
     { key:"ragStatus",     label:"RAG",            width:"9%",  render:r=><RagBadge rag={r.ragStatus} /> },

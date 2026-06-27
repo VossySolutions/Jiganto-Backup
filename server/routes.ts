@@ -37,6 +37,7 @@ import {
 import { resolveListClientId } from "./lib/list-client-id";
 import { resolveDefaultOpenStage } from "./lib/crm-pipeline";
 import { opportunityMatchesPipeline } from "@shared/crm-pipeline";
+import { closeDateInForecastPeriod, parseForecastPeriodKey } from "@shared/crm-forecast-period";
 import { ensureDefaultModuleRoles } from "./lib/default-module-roles";
 import { requireApiTenantId, getApiTenantId } from "./lib/api-tenant-id";
 import { isRequestAuthenticated } from "./auth/supabaseAuth";
@@ -186,6 +187,14 @@ export async function registerRoutes(
       const doc = await storage.getDocumentByPublicToken(token);
       if (!doc) return res.status(404).send("Document not found or link has been revoked");
 
+      const { parseDocumentPageLayout, resolvePageLayoutWithFolderDefaults } = await import("@shared/document-page-layout");
+      const { wrapDocumentBodyWithPageRegions } = await import("@shared/document-export");
+      const folderDefaults = await storage.resolveFolderPageLayout(doc.folderId ?? null);
+      const { headerHtml: pageHeaderHtml, footerHtml: pageFooterHtml } = resolvePageLayoutWithFolderDefaults(
+        doc.metadata,
+        folderDefaults,
+      );
+
       const {
         extractHeadingsFromHtmlString,
         injectHeadingAnchorIds,
@@ -232,10 +241,14 @@ export async function registerRoutes(
   <div class="meta">
     Shared document · Last updated ${new Date(doc.updatedAt!).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
   </div>
-  <div class="page-layout${hasSectionNav ? " has-section-nav" : ""}">
+      <div class="page-layout${hasSectionNav ? " has-section-nav" : ""}">
     <div class="page-main">
       ${hasSectionNav ? sectionNavHtml : ""}
-      <div class="content">${contentWithAnchors || "<p><em>No content</em></p>"}</div>
+      ${wrapDocumentBodyWithPageRegions(
+        `<div class="content">${contentWithAnchors || "<p><em>No content</em></p>"}</div>`,
+        pageHeaderHtml,
+        pageFooterHtml,
+      )}
     </div>
     ${hasSectionNav ? `<aside class="page-sidebar">${sectionNavHtml}</aside>` : ""}
   </div>
@@ -3139,8 +3152,10 @@ export async function registerRoutes(
     const period = (req.query.period as string) || "monthly";
     const scenario = (req.query.scenario as string) || "expected";
     const pipelineId = req.query.pipelineId ? Number(req.query.pipelineId) : undefined;
+    const stageId = req.query.stageId ? Number(req.query.stageId) : undefined;
     const ownerUserId = req.query.ownerUserId as string | undefined;
     const monthsAhead = req.query.monthsAhead ? Number(req.query.monthsAhead) : undefined;
+    const forecastPeriodKey = req.query.forecastPeriod as string | undefined;
     const listClientId = resolveListClientId(req);
     const [opportunities, stages, accounts, pipelines] = await Promise.all([
       storage.getCrmOpportunities(tenantId, undefined, undefined, listClientId),
@@ -3163,57 +3178,97 @@ export async function registerRoutes(
         openOpps = openOpps.filter((o: any) => o.ownerUserId === ownerUserId);
       }
     }
+    if (stageId) {
+      openOpps = openOpps.filter((o: any) => o.stageId === stageId);
+    }
+    const periodRange = forecastPeriodKey ? parseForecastPeriodKey(forecastPeriodKey) : null;
+    if (periodRange) {
+      openOpps = openOpps.filter((o: any) => closeDateInForecastPeriod(o.expectedCloseDate, periodRange));
+    }
     const now = new Date();
+    const columnAnchor = periodRange?.start ?? now;
     const columns: string[] = [];
     const defaultColCount = period === "annual" ? 4 : period === "quarterly" ? 8 : period === "half-year" ? 6 : 12;
-    const colCount = monthsAhead && monthsAhead > 0 ? Math.min(monthsAhead, 24) : defaultColCount;
+    let colCount = monthsAhead && monthsAhead > 0 ? Math.min(monthsAhead, 24) : defaultColCount;
+    if (periodRange && period === "monthly") {
+      const monthsInRange =
+        (periodRange.end.getFullYear() - periodRange.start.getFullYear()) * 12 +
+        (periodRange.end.getMonth() - periodRange.start.getMonth()) +
+        1;
+      colCount = Math.min(colCount, Math.max(monthsInRange, 1));
+    } else if (periodRange && period === "quarterly") {
+      colCount = Math.min(colCount, 4);
+    }
     for (let i = 0; i < colCount; i++) {
       if (period === "monthly") {
-        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        const d = new Date(columnAnchor.getFullYear(), columnAnchor.getMonth() + i, 1);
         columns.push(d.toLocaleString("en-US", { month: "short", year: "2-digit" }));
       } else if (period === "quarterly") {
-        const q = Math.ceil((now.getMonth() + 1) / 3) + i;
-        const year = now.getFullYear() + Math.floor((q - 1) / 4);
+        const q = Math.ceil((columnAnchor.getMonth() + 1) / 3) + i;
+        const year = columnAnchor.getFullYear() + Math.floor((q - 1) / 4);
         const actualQ = ((q - 1) % 4) + 1;
         columns.push(`Q${actualQ} ${year}`);
       } else if (period === "half-year") {
-        const d = new Date(now.getFullYear(), now.getMonth() + i * 6, 1);
+        const d = new Date(columnAnchor.getFullYear(), columnAnchor.getMonth() + i * 6, 1);
         const h = Math.floor(d.getMonth() / 6) + 1;
         columns.push(`H${h} ${d.getFullYear()}`);
       } else {
-        columns.push(String(now.getFullYear() + i));
+        columns.push(String(columnAnchor.getFullYear() + i));
       }
     }
+    const notePreviews = new Map<number, { count: number; preview: string | null }>();
+    await Promise.all(
+      openOpps.map(async (o: any) => {
+        const notes = await storage.getCrmNotes(tenantId, "opportunity", o.id, listClientId);
+        if (notes.length > 0) {
+          const preview = (notes[0].content || "").replace(/\[(TAG|SENTIMENT):[^\]]+\]/g, "").trim().slice(0, 120);
+          notePreviews.set(o.id, { count: notes.length, preview: preview || null });
+        }
+      }),
+    );
+
     const rows = openOpps.map((o: any) => {
       const account = accounts.find((a: any) => a.id === o.accountId);
       const amount = parseFloat(o.amount || "0") || 0;
       const stage = o.stageId ? stageById.get(o.stageId) : undefined;
       const prob = o.probability ?? stage?.probability ?? 0;
+      const noteInfo = notePreviews.get(o.id);
       const cellValues = columns.map((_, i) => {
         if (!o.expectedCloseDate) return 0;
         const cd = new Date(o.expectedCloseDate);
         let match = false;
         if (period === "monthly") {
-          const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+          const d = new Date(columnAnchor.getFullYear(), columnAnchor.getMonth() + i, 1);
           match = cd.getMonth() === d.getMonth() && cd.getFullYear() === d.getFullYear();
         } else if (period === "quarterly") {
-          const q = Math.ceil((now.getMonth() + 1) / 3) + i;
-          const year = now.getFullYear() + Math.floor((q - 1) / 4);
+          const q = Math.ceil((columnAnchor.getMonth() + 1) / 3) + i;
+          const year = columnAnchor.getFullYear() + Math.floor((q - 1) / 4);
           const actualQ = ((q - 1) % 4) + 1;
           match = Math.ceil((cd.getMonth() + 1) / 3) === actualQ && cd.getFullYear() === year;
         } else if (period === "half-year") {
-          const d = new Date(now.getFullYear(), now.getMonth() + i * 6, 1);
+          const d = new Date(columnAnchor.getFullYear(), columnAnchor.getMonth() + i * 6, 1);
           const h = Math.floor(d.getMonth() / 6) + 1;
           match = Math.floor(cd.getMonth() / 6) + 1 === h && cd.getFullYear() === d.getFullYear();
         } else if (period === "annual") {
-          match = cd.getFullYear() === now.getFullYear() + i;
+          match = cd.getFullYear() === columnAnchor.getFullYear() + i;
         }
         if (!match) return 0;
         if (scenario === "best") return amount;
         if (scenario === "worst") return prob >= 70 ? amount : 0;
         return amount * (prob / 100);
       });
-      return { opportunityId: o.id, name: o.name, accountName: account?.name || "—", cells: cellValues };
+      return {
+        opportunityId: o.id,
+        name: o.name,
+        accountId: o.accountId ?? null,
+        accountName: account?.name || "—",
+        stageId: o.stageId ?? null,
+        stageName: stage?.name || "—",
+        ownerUserId: o.ownerUserId ?? null,
+        noteCount: noteInfo?.count ?? 0,
+        notePreview: noteInfo?.preview ?? null,
+        cells: cellValues,
+      };
     });
     const totals = columns.map((_, ci) => rows.reduce((s, r) => s + (r.cells[ci] || 0), 0));
     res.json({ period, scenario, columns, rows, totals });
@@ -3707,7 +3762,22 @@ export async function registerRoutes(
         createdByUserId: userId,
       } as any);
       const updated = await storage.updateCrmOpportunity(opp.id, { projectId: project.id });
-      res.json({ opportunity: updated, project });
+
+      let budget = null;
+      const plan = await storage.getOpportunityResourcePlan(opp.id);
+      if (plan) {
+        try {
+          const { createBudgetFromResourcePlan } = await import("./finance/resource-plan-budget");
+          budget = await createBudgetFromResourcePlan(tenantId, plan.id, {
+            projectId: project.id,
+            userId,
+          });
+        } catch (budgetErr) {
+          console.warn("[crm] Budget seed on convert-to-project skipped:", budgetErr);
+        }
+      }
+
+      res.json({ opportunity: updated, project, budget });
     } catch (err) {
       console.error("Convert to project failed:", err);
       res.status(400).json({ message: "Failed to convert opportunity to project" });
@@ -4373,98 +4443,10 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/crm/seed-resource-plan-data", async (req, res) => {
-    if (process.env.NODE_ENV === "production") {
-      return res.status(403).json({ message: "Demo seed is disabled in production" });
-    }
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const tenantId = requireApiTenantId(req, res);
-      if (tenantId == null) return;
-      const existing = await storage.getResourcePlanTemplates(tenantId);
-      if (existing.length > 0) return res.json({ message: "Seed data already exists", count: existing.length });
-
-      const rc = await storage.createRateCard({ tenantId, name: "Standard 2026", description: "Default rate card for 2026 engagements", currency: "GBP", isDefault: true });
-      const roles = [
-        { roleName: "Program Manager", dailyRate: "1100" },
-        { roleName: "Project Manager", dailyRate: "950" },
-        { roleName: "Solution Architect", dailyRate: "1050" },
-        { roleName: "Business Analyst", dailyRate: "700" },
-        { roleName: "SAP FICO Consultant", dailyRate: "850" },
-        { roleName: "SAP SD/MM Consultant", dailyRate: "850" },
-        { roleName: "Integration Specialist", dailyRate: "900" },
-        { roleName: "Test Manager", dailyRate: "800" },
-        { roleName: "Change Manager", dailyRate: "750" },
-        { roleName: "Oracle Financials", dailyRate: "900" },
-        { roleName: "Developer", dailyRate: "750" },
-        { roleName: "D365 Consultant", dailyRate: "850" },
-        { roleName: "Power Platform Dev", dailyRate: "750" },
-        { roleName: "CRM Architect", dailyRate: "1000" },
-        { roleName: "CRM Developer", dailyRate: "750" },
-        { roleName: "Scrum Master", dailyRate: "800" },
-        { roleName: "Technical Lead", dailyRate: "950" },
-        { roleName: "Data Migration Lead", dailyRate: "900" },
-      ];
-      for (const r of roles) {
-        await storage.createRateCardItem({ rateCardId: rc.id, roleName: r.roleName, dailyRate: r.dailyRate });
-      }
-
-      const sapTmpl = await storage.createResourcePlanTemplate({ tenantId, name: "SAP S/4HANA", description: "SAP S/4HANA implementation template", phases: JSON.stringify(["Discovery","Build","UAT"]) });
-      const sapRows = [
-        { phase: "Discovery", roleName: "Program Manager", daysPerWeek: "5", dailyRate: "1100", defaultDurationWeeks: 34 },
-        { phase: "Discovery", roleName: "Project Manager", daysPerWeek: "5", dailyRate: "950", defaultDurationWeeks: 38 },
-        { phase: "Discovery", roleName: "Solution Architect", daysPerWeek: "4", dailyRate: "1050", defaultDurationWeeks: 6 },
-        { phase: "Build", roleName: "SAP FICO Consultant", daysPerWeek: "5", dailyRate: "850", defaultDurationWeeks: 17 },
-        { phase: "Build", roleName: "SAP SD/MM Consultant", daysPerWeek: "5", dailyRate: "850", defaultDurationWeeks: 17 },
-        { phase: "Build", roleName: "Integration Specialist", daysPerWeek: "5", dailyRate: "900", defaultDurationWeeks: 13 },
-        { phase: "Build", roleName: "Business Analyst", daysPerWeek: "5", dailyRate: "700", defaultDurationWeeks: 25 },
-        { phase: "UAT", roleName: "Test Manager", daysPerWeek: "5", dailyRate: "800", defaultDurationWeeks: 8 },
-        { phase: "UAT", roleName: "Change Manager", daysPerWeek: "3", dailyRate: "750", defaultDurationWeeks: 12 },
-      ];
-      for (let i = 0; i < sapRows.length; i++) {
-        await storage.createResourcePlanTemplateRow({ templateId: sapTmpl.id, ...sapRows[i], sortOrder: i });
-      }
-
-      const oracleTmpl = await storage.createResourcePlanTemplate({ tenantId, name: "Oracle Cloud", description: "Oracle Cloud ERP implementation template", phases: JSON.stringify(["Discovery","Build","UAT"]) });
-      const oracleRows = [
-        { phase: "Discovery", roleName: "Program Manager", daysPerWeek: "5", dailyRate: "1100", defaultDurationWeeks: 8 },
-        { phase: "Discovery", roleName: "Solution Architect", daysPerWeek: "5", dailyRate: "1050", defaultDurationWeeks: 8 },
-        { phase: "Build", roleName: "Oracle Financials", daysPerWeek: "5", dailyRate: "900", defaultDurationWeeks: 17 },
-        { phase: "Build", roleName: "Developer", daysPerWeek: "5", dailyRate: "750", defaultDurationWeeks: 13 },
-        { phase: "UAT", roleName: "Test Manager", daysPerWeek: "5", dailyRate: "800", defaultDurationWeeks: 6 },
-      ];
-      for (let i = 0; i < oracleRows.length; i++) {
-        await storage.createResourcePlanTemplateRow({ templateId: oracleTmpl.id, ...oracleRows[i], sortOrder: i });
-      }
-
-      const msTmpl = await storage.createResourcePlanTemplate({ tenantId, name: "Microsoft D365", description: "Microsoft Dynamics 365 implementation template", phases: JSON.stringify(["Discovery","Build","UAT"]) });
-      const msRows = [
-        { phase: "Discovery", roleName: "Program Manager", daysPerWeek: "5", dailyRate: "1000", defaultDurationWeeks: 6 },
-        { phase: "Build", roleName: "D365 Consultant", daysPerWeek: "5", dailyRate: "850", defaultDurationWeeks: 13 },
-        { phase: "Build", roleName: "Power Platform Dev", daysPerWeek: "5", dailyRate: "750", defaultDurationWeeks: 11 },
-        { phase: "UAT", roleName: "Test Manager", daysPerWeek: "5", dailyRate: "800", defaultDurationWeeks: 6 },
-      ];
-      for (let i = 0; i < msRows.length; i++) {
-        await storage.createResourcePlanTemplateRow({ templateId: msTmpl.id, ...msRows[i], sortOrder: i });
-      }
-
-      const crmTmpl = await storage.createResourcePlanTemplate({ tenantId, name: "CRM", description: "CRM implementation template", phases: JSON.stringify(["Discovery","Build","Go Live"]) });
-      const crmRows = [
-        { phase: "Discovery", roleName: "CRM Architect", daysPerWeek: "5", dailyRate: "1000", defaultDurationWeeks: 4 },
-        { phase: "Build", roleName: "CRM Developer", daysPerWeek: "5", dailyRate: "750", defaultDurationWeeks: 11 },
-        { phase: "Build", roleName: "Business Analyst", daysPerWeek: "4", dailyRate: "700", defaultDurationWeeks: 13 },
-        { phase: "Go Live", roleName: "Change Manager", daysPerWeek: "3", dailyRate: "750", defaultDurationWeeks: 6 },
-      ];
-      for (let i = 0; i < crmRows.length; i++) {
-        await storage.createResourcePlanTemplateRow({ templateId: crmTmpl.id, ...crmRows[i], sortOrder: i });
-      }
-
-      res.json({ success: true, templates: 4, rateCards: 1, rateCardItems: roles.length });
-    } catch (err) {
-      console.error("Failed to seed resource plan data:", err);
-      res.status(500).json({ message: "Failed to seed data" });
-    }
+  app.post("/api/crm/seed-resource-plan-data", async (_req, res) => {
+    return res.status(403).json({
+      message: "Resource plan demo seed is disabled. Create rate cards, templates, and plans via the CRM UI — all data is read from the database.",
+    });
   });
 
   // === Business Management Routes ===
@@ -5172,20 +5154,13 @@ export async function registerRoutes(
     });
   });
 
-  // Seed Apex Solutions Group demo data
-  app.post("/api/business/seed-apex-data", async (req, res) => {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    try {
-      const result = await seedApexData();
-      res.json(result);
-    } catch (err: any) {
-      console.error("Seed error:", err);
-      res.status(500).json({ message: err.message || "Seed failed" });
-    }
+  app.post("/api/business/seed-apex-data", async (_req, res) => {
+    return res.status(403).json({
+      message: "Business demo seed is disabled. Create strategy data via the Business Management UI.",
+    });
   });
 
-  // ── Business Governance API ──────────────────────────────────────────────────
+  // ── Business Governance API  // ── Business Governance API ──────────────────────────────────────────────────
 
   // Review Notes
   app.get("/api/business/review-notes", async (req, res) => {
@@ -5815,38 +5790,16 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     res.status(204).send();
   });
 
-  // Seed Jiganto Strategy Data for Business Management
-  app.post("/api/business/seed-demo", async (req, res) => {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = requireApiTenantId(req, res);
-    if (tenantId == null) return;
-    
-    try {
-      const { seedApexBusinessData } = await import("./seeds/apexBusiness");
-      const result = await seedApexBusinessData(tenantId);
-      res.json(result);
-    } catch (error) {
-      console.error("Error seeding Apex business data:", error);
-      res.status(500).json({ message: "Failed to seed Apex business data", error: String(error) });
-    }
+  app.post("/api/business/seed-demo", async (_req, res) => {
+    return res.status(403).json({
+      message: "Business demo seed is disabled. Create strategy data via the Business Management UI.",
+    });
   });
 
-  // Clear Business Strategy Data
-  app.delete("/api/business/seed-demo", async (req, res) => {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = requireApiTenantId(req, res);
-    if (tenantId == null) return;
-    
-    try {
-      const { clearApexBusinessData } = await import("./seeds/apexBusiness");
-      const result = await clearApexBusinessData(tenantId);
-      res.json(result);
-    } catch (error) {
-      console.error("Error clearing business data:", error);
-      res.status(500).json({ message: "Failed to clear business data", error: String(error) });
-    }
+  app.delete("/api/business/seed-demo", async (_req, res) => {
+    return res.status(403).json({
+      message: "Business demo clear is disabled.",
+    });
   });
 
   // ========================
@@ -6288,6 +6241,11 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const doc = await storage.getDocument(Number(req.params.id));
     if (!doc) return res.status(404).json({ message: "Not found" });
     try {
+      const { resolvePageLayoutWithFolderDefaults } = await import("@shared/document-page-layout");
+      const { buildDocumentExportBodyHtml, buildPuppeteerPageTemplates } = await import("@shared/document-export");
+      const folderDefaults = await storage.resolveFolderPageLayout(doc.folderId ?? null);
+      const { headerHtml, footerHtml } = resolvePageLayoutWithFolderDefaults(doc.metadata, folderDefaults);
+
       const puppeteer = await import("puppeteer-core");
       const browser = await puppeteer.default.launch({
         executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -6295,39 +6253,24 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
         headless: true,
       });
       const page = await browser.newPage();
-      const htmlContent = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>${doc.title}</title>
-<style>
-  body{font-family:system-ui,sans-serif;max-width:800px;margin:2rem auto;padding:0 1.5rem;line-height:1.6;color:#1a1a1a;}
-  h1,h2,h3,h4{margin-top:1.5em;margin-bottom:0.5em;}
-  table{border-collapse:collapse;width:100%;margin:1em 0;}
-  th,td{border:1px solid #ddd;padding:8px;text-align:left;}
-  th{background:#f5f5f5;font-weight:600;}
-  ul,ol{padding-left:1.5em;}
-  blockquote{border-left:4px solid #ddd;margin:1em 0;padding-left:1em;font-style:italic;}
-  code{background:#f5f5f5;padding:0.2em 0.4em;border-radius:3px;font-family:monospace;}
-  pre{background:#f5f5f5;padding:1em;border-radius:6px;overflow-x:auto;}
-  [data-callout="info"]{border-left:4px solid #3b82f6;background:#eff6ff;border-radius:6px;padding:12px 16px;margin:8px 0;}
-  [data-callout="warning"]{border-left:4px solid #f59e0b;background:#fffbeb;border-radius:6px;padding:12px 16px;margin:8px 0;}
-  [data-callout="success"]{border-left:4px solid #22c55e;background:#f0fdf4;border-radius:6px;padding:12px 16px;margin:8px 0;}
-  [data-callout="danger"]{border-left:4px solid #ef4444;background:#fef2f2;border-radius:6px;padding:12px 16px;margin:8px 0;}
-  @media print{body{margin:0;padding:1cm 1.5cm;}}
-</style>
-</head>
-<body>
-  <h1 style="border-bottom:2px solid #e5e7eb;padding-bottom:0.5rem;margin-bottom:1rem;">${doc.title}</h1>
-  <p style="color:#666;font-size:0.875rem;margin-bottom:2rem;">Last updated: ${new Date(doc.updatedAt!).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
-  ${doc.content || "<p><em>No content</em></p>"}
-</body>
-</html>`;
+      const htmlContent = buildDocumentExportBodyHtml({
+        title: doc.title,
+        content: doc.content || "",
+        updatedAt: doc.updatedAt,
+      });
+      const pageTemplates = buildPuppeteerPageTemplates({
+        headerHtml,
+        footerHtml,
+        title: doc.title,
+      });
       await page.setContent(htmlContent, { waitUntil: "domcontentloaded" });
       const pdfBuffer = await page.pdf({
         format: "A4",
-        margin: { top: "2cm", right: "1.5cm", bottom: "2cm", left: "1.5cm" },
+        margin: pageTemplates.margin,
         printBackground: true,
+        displayHeaderFooter: pageTemplates.displayHeaderFooter,
+        headerTemplate: pageTemplates.headerTemplate,
+        footerTemplate: pageTemplates.footerTemplate,
       });
       await browser.close();
       const safeTitle = doc.title.replace(/[^a-z0-9]/gi, "_");
@@ -7044,36 +6987,16 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     res.status(204).send();
   });
 
-  app.post("/api/pm/seed-erp-portfolio", async (req, res) => {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = requireApiTenantId(req, res);
-    if (tenantId == null) return;
-    try {
-      const { seedErpPortfolio } = await import("./seeds/erpPortfolioSeed");
-      const result = await seedErpPortfolio(tenantId);
-      res.json({ message: "ERP portfolio demo data seeded successfully", ...result });
-    } catch (error) {
-      console.error("Error seeding ERP portfolio:", error);
-      res.status(500).json({ message: "Failed to seed ERP portfolio", error: String(error) });
-    }
+  app.post("/api/pm/seed-erp-portfolio", async (_req, res) => {
+    return res.status(403).json({
+      message: "Portfolio demo seed is disabled. Create portfolios and projects via the Projects UI.",
+    });
   });
 
-  app.post("/api/pm/projects/:id/seed-s4hana", async (req, res) => {
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tenantId = requireApiTenantId(req, res);
-    if (tenantId == null) return;
-    const projectId = Number(req.params.id);
-    
-    try {
-      const { seedS4HanaProject } = await import("./seeds/s4hanaProject");
-      const result = await seedS4HanaProject(tenantId, projectId);
-      res.json(result);
-    } catch (error) {
-      console.error("Error seeding S/4HANA project data:", error);
-      res.status(500).json({ message: "Failed to seed S/4HANA project data", error: String(error) });
-    }
+  app.post("/api/pm/projects/:id/seed-s4hana", async (_req, res) => {
+    return res.status(403).json({
+      message: "Project demo seed is disabled. Create agile work items via the project UI.",
+    });
   });
 
   // Project Tools
@@ -10480,381 +10403,10 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  // Demo seed
-  app.post("/api/tm/seed-demo", async (req, res) => {
-    try {
-      const tenantId = requireApiTenantId(req, res);
-      if (tenantId == null) return;
-      const existing = await storage.getTmTestSuites(tenantId);
-      if (existing.length > 0) {
-        return res.status(409).json({ message: "Demo data already loaded. Clear existing suites first." });
-      }
-
-      // ── Suites ──────────────────────────────────────────────────────────
-      const suiteData = [
-        { name: "Order Management",    description: "End-to-end tests for customer order creation, modification, and cancellation", sortOrder: 1 },
-        { name: "Finance & Accounting",description: "GL posting, invoice creation, vendor payments and reconciliation", sortOrder: 2 },
-        { name: "Procurement",         description: "Purchase order lifecycle, goods receipt, and supplier management", sortOrder: 3 },
-        { name: "Customer Management", description: "Customer master data, credit management and account hierarchy", sortOrder: 4 },
-        { name: "Billing",             description: "Billing runs, payment terms, dunning and statement generation", sortOrder: 5 },
-        { name: "Integrations",        description: "API and middleware integration points between ERP and external systems", sortOrder: 6 },
-      ];
-      const suites: any[] = [];
-      for (const s of suiteData) {
-        suites.push(await storage.createTmTestSuite({ tenantId, ...s }));
-      }
-      const [sOrd, sFin, sPro, sCus, sBil, sInt] = suites;
-
-      // ── Test Cases with Steps ────────────────────────────────────────────
-      const caseRows = [
-        // Order Management
-        {
-          suiteId: sOrd.id, title: "Create Customer Order — Valid Data", priority: "high", status: "active", caseType: "manual",
-          tags: ["UAT","smoke"], estimatedDuration: 15,
-          description: "Verify that a valid customer order can be created with all mandatory fields populated, correct pricing applied, and order confirmation generated.",
-          preconditions: "Customer master data exists. User logged in with Order Entry role. Test data set ORD-TEST-01 loaded.",
-          steps: [
-            { action: "Login to system with Order Entry credentials", expectedResult: "Dashboard loads successfully. User role confirmed." },
-            { action: "Navigate to Order Management > Create New Order", expectedResult: "New Order form displayed with all mandatory fields." },
-            { action: "Enter Customer ID: CUST-0042 and press Tab", expectedResult: "Customer name and address auto-populate correctly." },
-            { action: "Add line item: PROD-100, Qty 10. Press Add.", expectedResult: "Line item added. Unit price $45.00, total $450.00 shown." },
-            { action: "Click Submit Order", expectedResult: "Order confirmation screen displays with Order ID (e.g. ORD-10042). Confirmation email triggered." },
-            { action: "Navigate to Order List and search for ORD-10042", expectedResult: "Order appears in list with status 'Confirmed'. All data matches entry." },
-          ],
-        },
-        {
-          suiteId: sOrd.id, title: "Create Order with Missing Mandatory Field", priority: "medium", status: "active", caseType: "manual",
-          tags: ["SIT","negative"], estimatedDuration: 10,
-          description: "Verify that the system prevents order creation when a mandatory field is omitted and displays an appropriate validation message.",
-          preconditions: "User logged in with Order Entry role.",
-          steps: [
-            { action: "Navigate to Order Management > Create New Order", expectedResult: "New Order form is displayed." },
-            { action: "Leave Customer ID field blank and attempt to submit", expectedResult: "System highlights Customer ID field in red and shows 'Customer is required' message." },
-            { action: "Leave Product field blank with Customer populated and submit", expectedResult: "System shows 'At least one line item is required' validation error." },
-          ],
-        },
-        {
-          suiteId: sOrd.id, title: "Create Order with Invalid Customer", priority: "high", status: "active", caseType: "manual",
-          tags: ["SIT","negative"], estimatedDuration: 10,
-          description: "Verify that the system rejects order creation for a customer ID that does not exist in the master data.",
-          preconditions: "User logged in with Order Entry role.",
-          steps: [
-            { action: "Enter Customer ID: CUST-9999 (non-existent)", expectedResult: "System shows 'Customer not found' error. Fields do not auto-populate." },
-            { action: "Attempt to submit the order", expectedResult: "Submit is blocked. Error message remains visible." },
-          ],
-        },
-        {
-          suiteId: sOrd.id, title: "Update Order Quantity Post-Confirmation", priority: "medium", status: "active", caseType: "automated",
-          tags: ["SIT","regression"], estimatedDuration: 8, automationStatus: "automated",
-          description: "Verify that an order's line item quantity can be updated after initial confirmation and that totals recalculate correctly.",
-          preconditions: "Order ORD-10042 exists in Confirmed status.",
-          steps: [
-            { action: "Open order ORD-10042 and click Edit", expectedResult: "Order opens in edit mode." },
-            { action: "Change Qty for PROD-100 from 10 to 15", expectedResult: "Line total updates to $675.00. Order total recalculates." },
-            { action: "Click Save Changes", expectedResult: "Order saved with updated quantity. Audit log entry created." },
-          ],
-        },
-        {
-          suiteId: sOrd.id, title: "Cancel Order Before Dispatch", priority: "medium", status: "active", caseType: "manual",
-          tags: ["UAT"], estimatedDuration: 12,
-          description: "Verify that an order can be cancelled before it has been dispatched and that stock is correctly returned to available inventory.",
-          preconditions: "Order ORD-10042 in Confirmed status with no dispatch note raised.",
-          steps: [
-            { action: "Open order ORD-10042 and click Cancel Order", expectedResult: "Cancellation confirmation dialog appears." },
-            { action: "Confirm cancellation with reason 'Customer request'", expectedResult: "Order status changes to 'Cancelled'. Cancellation reason recorded." },
-            { action: "Check inventory for PROD-100", expectedResult: "Available stock increased by 10 units (quantity from cancelled order)." },
-          ],
-        },
-        // Finance & Accounting
-        {
-          suiteId: sFin.id, title: "Post Journal Entry — Standard", priority: "high", status: "active", caseType: "manual",
-          tags: ["SIT"], estimatedDuration: 20,
-          description: "Verify that a standard GL journal entry can be posted with debit and credit balancing correctly.",
-          preconditions: "User has GL Posting role. Period is open.",
-          steps: [
-            { action: "Navigate to Finance > General Ledger > Create Journal Entry", expectedResult: "Journal Entry form opens." },
-            { action: "Enter debit line: Account 1100, Amount $5,000", expectedResult: "Debit line added. Running balance shows $5,000 DR." },
-            { action: "Enter credit line: Account 2100, Amount $5,000", expectedResult: "Credit line added. Journal balances to zero." },
-            { action: "Click Post Journal", expectedResult: "Journal posted with reference JE-20260309-001. Period updated." },
-          ],
-        },
-        {
-          suiteId: sFin.id, title: "Invoice Creation from Purchase Order", priority: "high", status: "active", caseType: "automated",
-          tags: ["SIT","regression"], estimatedDuration: 15, automationStatus: "automated",
-          description: "Verify that a vendor invoice can be matched to and created from an approved purchase order.",
-          preconditions: "PO-5042 in Approved status. Goods receipt GR-5042 completed.",
-          steps: [
-            { action: "Navigate to Accounts Payable > Create Invoice > Match to PO", expectedResult: "PO lookup screen opens." },
-            { action: "Search for PO-5042 and select", expectedResult: "PO lines loaded. GR-5042 matched. Invoice amount $12,500." },
-            { action: "Enter vendor invoice number and click Post", expectedResult: "Invoice INV-5042 created and posted. Payment due date calculated." },
-          ],
-        },
-        {
-          suiteId: sFin.id, title: "Vendor Payment Run", priority: "high", status: "active", caseType: "manual",
-          tags: ["UAT"], estimatedDuration: 25,
-          description: "Verify that the automatic payment run selects the correct invoices due for payment and generates the correct payment advice.",
-          preconditions: "At least 3 vendor invoices due for payment within selection date range.",
-          steps: [
-            { action: "Navigate to Accounts Payable > Payment Run > Create New Run", expectedResult: "Payment run parameters form displayed." },
-            { action: "Set payment date to today, bank account BANK-01, click Propose", expectedResult: "System proposes 3 invoices totalling $28,350." },
-            { action: "Review proposed payments and click Execute", expectedResult: "Payments posted. Payment advices generated. Bank file ready for download." },
-          ],
-        },
-        // Procurement
-        {
-          suiteId: sPro.id, title: "Create Purchase Requisition", priority: "medium", status: "active", caseType: "manual",
-          tags: ["SIT"], estimatedDuration: 12,
-          description: "Verify a purchase requisition can be raised and routed for approval.",
-          preconditions: "User has Requisitioner role. Supplier SUPP-0010 active in master data.",
-          steps: [
-            { action: "Navigate to Procurement > Purchase Requisition > New", expectedResult: "Requisition form displayed." },
-            { action: "Enter item details: PROD-200, Qty 5, estimated cost $250", expectedResult: "Line item added with estimated total $1,250." },
-            { action: "Submit for approval", expectedResult: "Requisition PR-1042 created. Approval notification sent to line manager." },
-          ],
-        },
-        {
-          suiteId: sPro.id, title: "Convert Approved Requisition to PO", priority: "high", status: "active", caseType: "automated",
-          tags: ["regression"], estimatedDuration: 10, automationStatus: "planned",
-          description: "Verify that an approved purchase requisition can be converted to a purchase order.",
-          preconditions: "PR-1042 in Approved status.",
-          steps: [
-            { action: "Open PR-1042 and click Convert to PO", expectedResult: "PO creation dialog opens with PR data pre-populated." },
-            { action: "Select supplier SUPP-0010 and confirm", expectedResult: "PO-5043 created and emailed to supplier." },
-          ],
-        },
-        // Customer Management
-        {
-          suiteId: sCus.id, title: "Create New Customer Account", priority: "high", status: "active", caseType: "manual",
-          tags: ["SIT","smoke"], estimatedDuration: 18,
-          description: "Verify that a new customer account can be created with full contact, credit, and billing information.",
-          preconditions: "User has Customer Master Admin role.",
-          steps: [
-            { action: "Navigate to Customer Management > New Customer", expectedResult: "Customer creation wizard opens on Step 1." },
-            { action: "Enter company name, address, country, and industry", expectedResult: "Step 1 validated. Proceed to Step 2." },
-            { action: "Set credit limit $50,000, payment terms NET-30", expectedResult: "Credit settings saved." },
-            { action: "Click Finish", expectedResult: "Customer CUST-0055 created. Welcome notification scheduled." },
-          ],
-        },
-        // Billing
-        {
-          suiteId: sBil.id, title: "Generate Monthly Billing Statement", priority: "high", status: "active", caseType: "manual",
-          tags: ["UAT"], estimatedDuration: 20,
-          description: "Verify that the billing run generates accurate monthly statements for all active customers.",
-          preconditions: "Month-end billing period open. At least 5 customers with outstanding invoices.",
-          steps: [
-            { action: "Navigate to Billing > Billing Run > Monthly Statement", expectedResult: "Billing run parameters form displayed." },
-            { action: "Set period to March 2026 and click Preview", expectedResult: "Preview shows 5 customers, total outstanding $142,800." },
-            { action: "Click Generate and Dispatch", expectedResult: "Statements generated as PDF. Emails dispatched. Run log shows all successful." },
-          ],
-        },
-        // Integrations
-        {
-          suiteId: sInt.id, title: "ERP to Logistics API Handshake", priority: "critical", status: "active", caseType: "automated",
-          tags: ["regression","integration"], estimatedDuration: 5, automationStatus: "automated",
-          description: "Verify that the ERP system can successfully authenticate and exchange order data with the logistics provider API.",
-          preconditions: "Logistics API sandbox environment online. API credentials configured.",
-          steps: [
-            { action: "Trigger order dispatch event for ORD-10042", expectedResult: "API call sent to logistics endpoint. HTTP 200 response received." },
-            { action: "Check logistics provider portal", expectedResult: "Shipment SHP-9988 created in logistics system with correct order details." },
-            { action: "Verify webhook callback received in ERP", expectedResult: "ERP order ORD-10042 status updated to 'Dispatched'." },
-          ],
-        },
-      ];
-
-      const createdCases: any[] = [];
-      for (const c of caseRows) {
-        const { steps, ...caseFields } = c;
-        const tc = await storage.createTmTestCase({ tenantId, ...caseFields });
-        createdCases.push(tc);
-        for (let i = 0; i < steps.length; i++) {
-          await storage.createTmTestStep({ testCaseId: tc.id, stepOrder: i + 1, ...steps[i] });
-        }
-      }
-
-      // ── Test Runs ────────────────────────────────────────────────────────
-      const sitRun = await storage.createTmTestRun({
-        tenantId, name: "SIT Cycle 2 — ERP Implementation", status: "in_progress",
-        description: "System Integration Testing cycle 2. Covers Order Mgmt, Finance, and Procurement modules.",
-        startDate: "2026-03-01", endDate: "2026-03-14",
-      });
-      const uatRun = await storage.createTmTestRun({
-        tenantId, name: "UAT Cycle 1 — ERP Implementation", status: "planned",
-        description: "User Acceptance Testing cycle 1. Business users validate end-to-end flows.",
-        startDate: "2026-03-17", endDate: "2026-03-28",
-      });
-      const regRun = await storage.createTmTestRun({
-        tenantId, name: "Regression — Billing Module v4.2", status: "completed",
-        description: "Regression suite after billing module hotfix patch v4.2.1.",
-        startDate: "2026-02-20", endDate: "2026-02-22",
-      });
-
-      // ── Test Results (seed execution data) ──────────────────────────────
-      // SIT Cycle 2: cases 0-7 (Order Mgmt + Finance)
-      const sitCaseResults = [
-        { idx: 0, status: "pass",    comment: "All steps passed. Order created and confirmed correctly.", executedBy: "sarah.k" },
-        { idx: 1, status: "pass",    comment: "Validation errors shown as expected.", executedBy: "sarah.k" },
-        { idx: 2, status: "fail",    comment: "System accepted invalid customer without error — BUG raised as DEF-233.", executedBy: "sarah.k" },
-        { idx: 3, status: "pass",    comment: "Automated test passed on all 3 environments.", executedBy: "autobot" },
-        { idx: 4, status: "not_run", comment: null, executedBy: null },
-        { idx: 5, status: "pass",    comment: "Journal balanced correctly. Period updated.", executedBy: "john.p" },
-        { idx: 6, status: "fail",    comment: "GL accounts swapped on invoice posting. Critical bug DEF-301 raised.", executedBy: "john.p" },
-        { idx: 7, status: "blocked", comment: "Cannot test — UAT environment vendor payment module not deployed.", executedBy: "john.p" },
-      ];
-      for (const r of sitCaseResults) {
-        await storage.createTmTestResult({
-          testRunId: sitRun.id,
-          testCaseId: createdCases[r.idx].id,
-          status: r.status,
-          comment: r.comment ?? undefined,
-          executedBy: r.executedBy ?? undefined,
-          executedAt: r.status !== "not_run" ? new Date("2026-03-09") : undefined,
-        });
-      }
-
-      // UAT Cycle 1: first 5 cases added, all not_run (planned)
-      for (let i = 0; i < 5; i++) {
-        await storage.createTmTestResult({
-          testRunId: uatRun.id,
-          testCaseId: createdCases[i].id,
-          status: "not_run",
-        });
-      }
-
-      // Regression Billing: case index 10 (billing), 11 (integrations)
-      const regResults = [
-        { idx: 10, status: "pass", comment: "Monthly billing statement generated correctly. All 5 customers processed.", executedBy: "peter.m" },
-        { idx: 11, status: "pass", comment: "API handshake successful. Shipment created in logistics portal.", executedBy: "autobot" },
-      ];
-      for (const r of regResults) {
-        if (createdCases[r.idx]) {
-          await storage.createTmTestResult({
-            testRunId: regRun.id,
-            testCaseId: createdCases[r.idx].id,
-            status: r.status,
-            comment: r.comment,
-            executedBy: r.executedBy,
-            executedAt: new Date("2026-02-21"),
-          });
-        }
-      }
-
-      // ── Defects ──────────────────────────────────────────────────────────
-      const defectData = [
-        { title: "Order creation fails on duplicate SKU", severity: "critical", priority: "critical", status: "open",
-          description: "When a line item with a duplicate SKU is added to an order, the system throws an unhandled exception and the order cannot be saved. Reproducible 100% of the time.", tags: ["Order Management"] },
-        { title: "Invoice posting GL mismatch", severity: "critical", priority: "critical", status: "in_progress",
-          description: "On posting an invoice matched to a PO, the GL debit and credit accounts are swapped causing incorrect financial reporting. Only affects invoices over $10,000.", tags: ["Finance"] },
-        { title: "Approval workflow timeout after 48h", severity: "high", priority: "high", status: "open",
-          description: "Purchase requisitions that remain in the approval queue for more than 48 hours are automatically rejected without notification to the requester.", tags: ["Procurement"] },
-        { title: "Payment terms not inherited from customer", severity: "high", priority: "high", status: "open",
-          description: "When creating a new order, payment terms are not automatically inherited from the customer master record. User must manually set them each time.", tags: ["Order Management"] },
-        { title: "Billing statement shows incorrect period dates", severity: "medium", priority: "medium", status: "new",
-          description: "Monthly billing statements show the previous month's date range instead of the current period. Cosmetic issue but causes customer confusion.", tags: ["Billing"] },
-        { title: "Logistics API handshake fails on retry", severity: "high", priority: "high", status: "open",
-          description: "If the first API call to the logistics provider times out and a retry is attempted, the retry returns a 401 unauthorised. Token refresh logic has a bug.", tags: ["Integrations"] },
-        { title: "GL account lookup slow (>8s) on large chart of accounts", severity: "medium", priority: "medium", status: "in_progress",
-          description: "Searching for GL accounts in the journal entry form takes 8-12 seconds when the chart of accounts has more than 2,000 accounts. Pagination not implemented.", tags: ["Finance","Performance"] },
-        { title: "Customer credit limit not enforced on order save", severity: "critical", priority: "critical", status: "open",
-          description: "Orders that exceed a customer's credit limit are accepted and saved without any warning. The credit check endpoint is not being called on the order save event.", tags: ["Order Management","Customer Management"] },
-        { title: "Order total rounds incorrectly for 3dp currencies", severity: "high", priority: "high", status: "resolved",
-          description: "For currencies with 3 decimal places (KWD, BHD), order totals are rounded to 2dp instead of 3dp causing rounding discrepancies.", tags: ["Finance","Order Management"] },
-        { title: "Login page shows error in IE11", severity: "low", priority: "low", status: "closed",
-          description: "The login page displays a JavaScript error in Internet Explorer 11. As IE11 is not a supported browser this is low priority.", tags: ["UI"] },
-      ];
-
-      for (const d of defectData) {
-        await storage.createTmDefect({ tenantId, ...d });
-      }
-
-      // ── Requirements ────────────────────────────────────────────────────────
-      // Get the created cases so we can reference them by index
-      const allCreatedCases = await storage.getTmTestCases(tenantId);
-      const caseIdsByIndex = (indices: number[]) => indices.map(i => allCreatedCases[i]?.id).filter(Boolean) as number[];
-
-      const reqData = [
-        { reqId: "REQ-001", title: "Customer Order Lifecycle Management", priority: "high", source: "BRD v2.1",
-          description: "The system shall support end-to-end order lifecycle: creation, modification, cancellation, and fulfilment tracking.",
-          linkedCaseIds: caseIdsByIndex([0, 1, 2, 3, 4]) },
-        { reqId: "REQ-002", title: "Financial Posting Accuracy", priority: "critical", source: "FRD v1.4",
-          description: "All financial transactions must post to the correct GL accounts with balanced debit and credit entries.",
-          linkedCaseIds: caseIdsByIndex([5, 6]) },
-        { reqId: "REQ-003", title: "Vendor Payment Processing", priority: "high", source: "FRD v1.4",
-          description: "Vendor invoices must be matched to approved purchase orders before payment is authorised.",
-          linkedCaseIds: caseIdsByIndex([7]) },
-        { reqId: "REQ-004", title: "Customer Account Management", priority: "medium", source: "CRM-BRD v1.0",
-          description: "Customer master data must be maintained with credit limits, account status, and contact hierarchy.",
-          linkedCaseIds: caseIdsByIndex([8, 9]) },
-        { reqId: "REQ-005", title: "Billing Statement Generation", priority: "high", source: "Billing Spec v1.1",
-          description: "The system must generate accurate billing statements with correct payment terms and dunning triggers.",
-          linkedCaseIds: caseIdsByIndex([10]) },
-        { reqId: "REQ-006", title: "External System API Integration", priority: "medium", source: "Integration Spec v2.0",
-          description: "The ERP system must expose RESTful API endpoints for real-time data exchange with external platforms.",
-          linkedCaseIds: caseIdsByIndex([11]) },
-        { reqId: "REQ-007", title: "Multi-Currency Order Support", priority: "medium", source: "BRD v2.1",
-          description: "The system must handle orders in multiple currencies with accurate conversion and rounding to currency decimal places.",
-          linkedCaseIds: caseIdsByIndex([0, 5]) },
-        { reqId: "REQ-008", title: "Data Validation & Error Messaging", priority: "low", source: "UX Spec v1.0",
-          description: "All user inputs must be validated with clear, actionable error messages displayed inline.",
-          linkedCaseIds: caseIdsByIndex([1, 2]) },
-      ];
-
-      for (const r of reqData) {
-        await storage.createTmRequirement({ tenantId, ...r });
-      }
-
-      // ── Demo Scenarios ────────────────────────────────────────────────────
-      const scenarioData = [
-        {
-          scenarioId: "SCN-001", title: "End-to-End Customer Order Fulfilment",
-          description: "A customer places an order online, the order is confirmed, picked, packed, dispatched, and a billing statement is generated.",
-          functionalArea: "Order Management", process: "Order-to-Cash",
-          priority: "critical", status: "active",
-          linkedCaseIds: caseIdsByIndex([0, 1, 2, 3, 4]),
-        },
-        {
-          scenarioId: "SCN-002", title: "Procure-to-Pay Cycle — Standard PO",
-          description: "Purchasing raises a standard purchase order, goods are received, invoice is matched and payment is processed.",
-          functionalArea: "Procurement", process: "Procure-to-Pay",
-          priority: "high", status: "active",
-          linkedCaseIds: caseIdsByIndex([5, 6, 7]),
-        },
-        {
-          scenarioId: "SCN-003", title: "Finance Month-End Close",
-          description: "GL postings are validated, inter-company reconciliations completed, and trial balance extracted at period end.",
-          functionalArea: "Finance", process: "Record-to-Report",
-          priority: "high", status: "active",
-          linkedCaseIds: caseIdsByIndex([7, 8]),
-        },
-        {
-          scenarioId: "SCN-004", title: "New Customer Onboarding",
-          description: "A new customer is created in the system with credit limit, contact hierarchy, and account status configured.",
-          functionalArea: "CRM", process: "Lead-to-Opportunity",
-          priority: "medium", status: "active",
-          linkedCaseIds: caseIdsByIndex([8, 9]),
-        },
-        {
-          scenarioId: "SCN-005", title: "Billing Statement — Overdue Dunning",
-          description: "Verify that overdue accounts trigger dunning notices at the correct intervals and escalation thresholds.",
-          functionalArea: "Billing", process: "Order-to-Cash",
-          priority: "medium", status: "draft",
-          linkedCaseIds: caseIdsByIndex([10]),
-        },
-        {
-          scenarioId: "SCN-006", title: "ERP to CRM Data Sync via API",
-          description: "Customer and order data created in ERP is synchronised in real-time to the CRM system via REST API.",
-          functionalArea: "Integration", process: "Order-to-Cash",
-          priority: "high", status: "active",
-          linkedCaseIds: caseIdsByIndex([11]),
-        },
-      ];
-      for (const s of scenarioData) {
-        await storage.createTmScenario({ tenantId, ...s });
-      }
-
-      res.json({ message: "Demo data loaded successfully", suites: suites.length, cases: caseRows.length, defects: defectData.length, requirements: reqData.length, scenarios: scenarioData.length });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
+  app.post("/api/tm/seed-demo", async (_req, res) => {
+    return res.status(403).json({
+      message: "Test Management demo seed is disabled. Create suites, cases, and runs via the TM UI — all modules read live database data only.",
+    });
   });
 
   // All results (cross-run) — used by RTM, Digital Twin, Test Navigator
@@ -11009,73 +10561,13 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  // Seed demo scenarios (idempotent — skips if any exist)
-  app.post("/api/tm/seed-scenarios", async (req, res) => {
-    try {
-      const tenantId = requireApiTenantId(req, res);
-      if (tenantId == null) return;
-      const existing = await storage.getTmScenarios(tenantId);
-      if (existing.length > 0) {
-        return res.json({ skipped: true, count: existing.length });
-      }
-      const cases = await storage.getTmTestCases(tenantId);
-      const caseIdsByIndex = (indices: number[]) =>
-        indices.map(i => cases[i]?.id).filter(Boolean) as number[];
-      const demoScenarios = [
-        {
-          scenarioId: "SCN-001", title: "End-to-End Customer Order Fulfilment",
-          description: "A customer places an order online, the order is confirmed, picked, packed, dispatched, and a billing statement is generated.",
-          functionalArea: "Order Management", process: "Order-to-Cash",
-          priority: "critical", status: "active",
-          linkedCaseIds: caseIdsByIndex([0, 1, 2, 3, 4]),
-        },
-        {
-          scenarioId: "SCN-002", title: "Procure-to-Pay Cycle — Standard PO",
-          description: "Purchasing raises a standard purchase order, goods are received, invoice is matched and payment is processed.",
-          functionalArea: "Procurement", process: "Procure-to-Pay",
-          priority: "high", status: "active",
-          linkedCaseIds: caseIdsByIndex([5, 6, 7]),
-        },
-        {
-          scenarioId: "SCN-003", title: "Finance Month-End Close",
-          description: "GL postings are validated, inter-company reconciliations completed, and trial balance extracted at period end.",
-          functionalArea: "Finance", process: "Record-to-Report",
-          priority: "high", status: "active",
-          linkedCaseIds: caseIdsByIndex([7, 8]),
-        },
-        {
-          scenarioId: "SCN-004", title: "New Customer Onboarding",
-          description: "A new customer is created in the system with credit limit, contact hierarchy, and account status configured.",
-          functionalArea: "CRM", process: "Lead-to-Opportunity",
-          priority: "medium", status: "active",
-          linkedCaseIds: caseIdsByIndex([8, 9]),
-        },
-        {
-          scenarioId: "SCN-005", title: "Billing Statement — Overdue Dunning",
-          description: "Verify that overdue accounts trigger dunning notices at the correct intervals and escalation thresholds.",
-          functionalArea: "Billing", process: "Order-to-Cash",
-          priority: "medium", status: "draft",
-          linkedCaseIds: caseIdsByIndex([10]),
-        },
-        {
-          scenarioId: "SCN-006", title: "ERP to CRM Data Sync via API",
-          description: "Customer and order data created in ERP is synchronised in real-time to the CRM system via REST API.",
-          functionalArea: "Integration", process: "Order-to-Cash",
-          priority: "high", status: "active",
-          linkedCaseIds: caseIdsByIndex([11]),
-        },
-      ];
-      // Get current project ID and link scenarios
-      const projects = await storage.getTmProjects(tenantId);
-      const projectId = projects[0]?.id;
-      for (const s of demoScenarios) {
-        await storage.createTmScenario({ tenantId, projectId, ...s });
-      }
-      res.json({ seeded: true, count: demoScenarios.length });
-    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  app.post("/api/tm/seed-scenarios", async (_req, res) => {
+    return res.status(403).json({
+      message: "TM scenario demo seed is disabled. Create scenarios via the Test Management UI.",
+    });
   });
 
-  // Test Scenarios
+  // Test Scenarios  // Test Scenarios
   app.get("/api/tm/scenarios", async (req, res) => {
     try {
       const tenantId = requireApiTenantId(req, res);
@@ -11164,312 +10656,4 @@ async function seedDatabase() {
     }
     console.log("Module catalogue seeded.");
   }
-
-  if (process.env.SEED_DEMO_TENANT !== "true") {
-    return;
-  }
-
-  const existingTenants = await storage.getTenants();
-  if (existingTenants.length > 0) {
-    return;
-  }
-
-  console.log("Seeding demo tenant (SEED_DEMO_TENANT=true)...");
-  // Optional dev sample tenant — not created on a normal first-time setup.
-  const tenant = await storage.createTenant({
-      name: "Demo Corp",
-      slug: "demo",
-      country: "USA",
-    });
-    const { ensureCommercialProfileForTenant } = await import(
-      "./customer-management/provision"
-    );
-    await ensureCommercialProfileForTenant(tenant);
-
-    // Create a demo board
-    const demoModule = (await storage.getModules()).find(m => m.key === "project-mgmt")!;
-    const board = await storage.createBoard({
-      tenantId: tenant.id,
-      moduleId: demoModule.id,
-      name: "Q1 Strategic Initiatives",
-      type: "project",
-    });
-
-    // Create columns
-    await storage.createColumn({ boardId: board.id, title: "Task Name", key: "title", type: "text", order: 0 });
-    await storage.createColumn({ boardId: board.id, title: "Status", key: "status", type: "status", order: 1, options: ["To Do", "In Progress", "Done"] });
-    await storage.createColumn({ boardId: board.id, title: "Owner", key: "owner", type: "person", order: 2 });
-    await storage.createColumn({ boardId: board.id, title: "Due Date", key: "dueDate", type: "date", order: 3 });
-
-    // Create items
-    await storage.createItem({ 
-      boardId: board.id, 
-      values: { title: "Stakeholder Analysis", status: "Done", owner: "Alice", dueDate: "2024-02-15" } 
-    });
-    await storage.createItem({ 
-      boardId: board.id, 
-      values: { title: "Communication Plan", status: "In Progress", owner: "Bob", dueDate: "2024-03-01" } 
-    });
-    
-    // Create default chat channels
-    await storage.createChannel({
-      tenantId: tenant.id,
-      name: "general",
-      description: "General company-wide discussions",
-      type: "public",
-      isDefault: true,
-    });
-    await storage.createChannel({
-      tenantId: tenant.id,
-      name: "announcements",
-      description: "Important company announcements",
-      type: "public",
-    });
-    await storage.createChannel({
-      tenantId: tenant.id,
-      name: "random",
-      description: "Off-topic conversations and fun",
-      type: "public",
-    });
-
-    // Create default CRM opportunity stages
-    const stages = [
-      { name: "Qualification", order: 0, probability: 10, color: "#6366f1", isClosed: false, isWon: false },
-      { name: "Needs Analysis", order: 1, probability: 20, color: "#8b5cf6", isClosed: false, isWon: false },
-      { name: "Proposal", order: 2, probability: 50, color: "#a855f7", isClosed: false, isWon: false },
-      { name: "Negotiation", order: 3, probability: 75, color: "#d946ef", isClosed: false, isWon: false },
-      { name: "Closed Won", order: 4, probability: 100, color: "#22c55e", isClosed: true, isWon: true },
-      { name: "Closed Lost", order: 5, probability: 0, color: "#ef4444", isClosed: true, isWon: false },
-    ];
-    for (const stage of stages) {
-      await storage.createCrmOpportunityStage({ ...stage, tenantId: tenant.id });
-    }
-
-    // Seed RACI Types
-    console.log("Seeding RACI types...");
-    const raciTypes = [
-      { code: "R", name: "Responsible", description: "Performs the work to complete the task", color: "#3b82f6", sortOrder: 1 },
-      { code: "A", name: "Accountable", description: "Ultimate accountability for task completion", color: "#ef4444", sortOrder: 2 },
-      { code: "C", name: "Consulted", description: "Provides input and expertise", color: "#f59e0b", sortOrder: 3 },
-      { code: "I", name: "Informed", description: "Kept informed of progress", color: "#22c55e", sortOrder: 4 },
-    ];
-    for (const raciType of raciTypes) {
-      await storage.createPmRaciType({ ...raciType, tenantId: tenant.id });
-    }
-
-    // Seed Projects Module Data
-    console.log("Seeding Projects Module data...");
-    
-    // Create a Portfolio
-    const portfolio1 = await storage.createPmPortfolio({
-      tenantId: tenant.id,
-      name: "Digital Transformation Portfolio",
-      description: "Strategic initiatives for enterprise digital transformation",
-      status: "active",
-      ragStatus: "green",
-      budget: "5000000",
-      startDate: "2024-01-01",
-      endDate: "2025-12-31",
-    });
-
-    // Create Programs under the portfolio
-    const program1 = await storage.createPmProgram({
-      tenantId: tenant.id,
-      portfolioId: portfolio1.id,
-      name: "Cloud Migration Program",
-      description: "Migrate on-premises infrastructure to cloud",
-      status: "active",
-      ragStatus: "amber",
-      budget: "2000000",
-      startDate: "2024-01-15",
-      endDate: "2024-12-31",
-    });
-
-    const program2 = await storage.createPmProgram({
-      tenantId: tenant.id,
-      portfolioId: portfolio1.id,
-      name: "Customer Experience Program",
-      description: "Improve customer-facing digital experiences",
-      status: "active",
-      ragStatus: "green",
-      budget: "1500000",
-      startDate: "2024-03-01",
-      endDate: "2025-06-30",
-    });
-
-    // Create Projects
-    const project1 = await storage.createPmProject({
-      tenantId: tenant.id,
-      portfolioId: portfolio1.id,
-      programId: program1.id,
-      code: "PRJ-001",
-      name: "AWS Migration Phase 1",
-      description: "Migrate core business applications to AWS",
-      projectType: "large_project",
-      methodology: "hybrid",
-      status: "active",
-      ragStatus: "green",
-      priority: "high",
-      progress: 45,
-      budget: "800000",
-      spentBudget: "360000",
-      startDate: "2024-02-01",
-      endDate: "2024-08-31",
-      enableRisks: true,
-      enableIssues: true,
-      enableDependencies: true,
-    });
-
-    const project2 = await storage.createPmProject({
-      tenantId: tenant.id,
-      portfolioId: portfolio1.id,
-      programId: program1.id,
-      code: "PRJ-002",
-      name: "Database Modernization",
-      description: "Upgrade legacy databases to cloud-native solutions",
-      projectType: "large_project",
-      methodology: "waterfall",
-      status: "planning",
-      ragStatus: "amber",
-      priority: "high",
-      progress: 15,
-      budget: "500000",
-      startDate: "2024-04-01",
-      endDate: "2024-10-31",
-      enableRisks: true,
-      enableAssumptions: true,
-    });
-
-    const project3 = await storage.createPmProject({
-      tenantId: tenant.id,
-      portfolioId: portfolio1.id,
-      programId: program2.id,
-      code: "PRJ-003",
-      name: "Mobile App Redesign",
-      description: "Complete redesign of customer mobile application",
-      projectType: "large_project",
-      methodology: "agile",
-      status: "active",
-      ragStatus: "green",
-      priority: "critical",
-      progress: 65,
-      budget: "600000",
-      spentBudget: "390000",
-      startDate: "2024-01-15",
-      endDate: "2024-06-30",
-      enableRisks: true,
-      enableDecisions: true,
-    });
-
-    // Create a standalone project not in any program
-    await storage.createPmProject({
-      tenantId: tenant.id,
-      code: "PRJ-004",
-      name: "Office IT Refresh",
-      description: "Replace aging office IT equipment",
-      projectType: "small_project",
-      methodology: "waterfall",
-      status: "active",
-      ragStatus: "green",
-      priority: "medium",
-      progress: 30,
-      budget: "150000",
-      startDate: "2024-03-01",
-      endDate: "2024-05-31",
-    });
-
-    // Create project phases for project 1 (Wagile - some waterfall, some agile)
-    await storage.createPmProjectPhase({
-      tenantId: 1,
-      projectId: project1.id,
-      name: "Discovery & Planning",
-      phaseNumber: 1,
-      description: "Initial discovery and detailed planning",
-      methodology: "waterfall",
-      status: "completed",
-      progress: 100,
-      plannedStartDate: "2024-02-01",
-      plannedEndDate: "2024-02-28",
-      order: 1,
-    });
-
-    await storage.createPmProjectPhase({
-      tenantId: 1,
-      projectId: project1.id,
-      name: "Infrastructure Setup",
-      phaseNumber: 2,
-      description: "AWS infrastructure provisioning",
-      methodology: "waterfall",
-      status: "completed",
-      progress: 100,
-      plannedStartDate: "2024-03-01",
-      plannedEndDate: "2024-03-31",
-      order: 2,
-    });
-
-    await storage.createPmProjectPhase({
-      tenantId: 1,
-      projectId: project1.id,
-      name: "Application Migration Sprint 1",
-      phaseNumber: 3,
-      description: "Migrate first batch of applications",
-      methodology: "agile",
-      status: "in_progress",
-      progress: 60,
-      plannedStartDate: "2024-04-01",
-      plannedEndDate: "2024-05-15",
-      order: 3,
-    });
-
-    // Create RAIDD items for project 1
-    await storage.createPmRaiddItem({
-      tenantId: 1,
-      projectId: project1.id,
-      type: "risk",
-      title: "Data migration complexity",
-      description: "Legacy data formats may require extensive transformation",
-      status: "open",
-      impact: "high",
-      likelihood: "medium",
-      mitigation: "Conduct detailed data profiling before migration",
-    });
-
-    await storage.createPmRaiddItem({
-      tenantId: 1,
-      projectId: project1.id,
-      type: "issue",
-      title: "Network bandwidth constraints",
-      description: "Current network capacity may slow data transfer",
-      status: "open",
-      impact: "medium",
-      response: "Upgrade network link before major data migration phase",
-    });
-
-    await storage.createPmRaiddItem({
-      tenantId: 1,
-      projectId: project1.id,
-      type: "dependency",
-      title: "Security team approval",
-      description: "Cloud security review required before go-live",
-      status: "open",
-    });
-
-    // Create phases for project 3 (Agile sprints)
-    for (let i = 1; i <= 6; i++) {
-      await storage.createPmProjectPhase({
-        tenantId: 1,
-        projectId: project3.id,
-        name: `Sprint ${i}`,
-        phaseNumber: i,
-        description: `Two-week development sprint ${i}`,
-        methodology: "agile",
-        status: i <= 4 ? "completed" : i === 5 ? "in_progress" : "not_started",
-        progress: i <= 4 ? 100 : i === 5 ? 50 : 0,
-        plannedStartDate: `2024-0${Math.floor((i - 1) / 2) + 2}-${((i - 1) % 2) * 15 + 1 < 10 ? '0' : ''}${((i - 1) % 2) * 15 + 1}`,
-        plannedEndDate: `2024-0${Math.floor((i - 1) / 2) + 2}-${((i - 1) % 2) * 15 + 14}`,
-        order: i,
-      });
-    }
-    
-    console.log("Demo tenant seeding complete.");
 }

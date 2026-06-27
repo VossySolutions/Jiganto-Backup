@@ -54,6 +54,9 @@ export function DocumentSectionNav({
           <span className="flex items-center gap-2 min-w-0">
             <ListTree className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="text-sm font-medium text-foreground">On this page</span>
+            <span className="text-[10px] text-muted-foreground font-normal hidden sm:inline">
+              · document sections
+            </span>
           </span>
           <button
             type="button"
@@ -76,6 +79,9 @@ export function DocumentSectionNav({
           <span className="flex items-center gap-2 min-w-0">
             <ListTree className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="text-sm font-medium text-foreground">On this page</span>
+            <span className="text-[10px] text-muted-foreground font-normal hidden sm:inline">
+              · document sections
+            </span>
             <span className="text-xs text-muted-foreground">
               ({headings.length} section{headings.length === 1 ? "" : "s"})
             </span>

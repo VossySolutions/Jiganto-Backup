@@ -167,7 +167,7 @@ export function AuditTrailScreen() {
       {filtered.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-10 text-center text-muted-foreground text-sm">
           {events.length === 0
-            ? "No activity recorded yet. Load demo data from the Command Centre to populate events."
+            ? "No activity recorded yet. Activity appears here as you create and execute tests."
             : "No events match the current filters."}
         </div>
       ) : (

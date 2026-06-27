@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import {
   Plus, Search, ArrowUpDown, Layers,
   ChevronDown, X, Trash2, UserCheck, Paintbrush, Calendar,
-  MoreHorizontal, Pencil, Copy, Archive, Briefcase, Settings2
+  MoreHorizontal, Pencil, Copy, Archive, Briefcase, Settings2, Users
 } from "lucide-react";
 import { OpportunityFormDialog } from "@/components/crm/OpportunityFormDialog";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
@@ -32,6 +32,21 @@ import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
 import { findSegmentField, getSegmentColor, resolveAccountSegment } from "@/lib/crm-segment";
 import { useCrmUsers } from "./CrmUsersProvider";
 import type { CrmAccount, CrmPipeline, CrmOpportunity, CrmOpportunityStage, CrmContactPicklist } from "./types";
+import { CrmColumnVisibilityMenu } from "./CrmColumnVisibilityMenu";
+import { CrmInlineEditCell } from "./CrmInlineEditCell";
+import { CrmInlineEditDate, CrmInlineEditSelect } from "./CrmInlineEditSelect";
+import { loadColumnVisibility, saveColumnVisibility, type CrmColumnDef } from "@/lib/crm-list-columns";
+
+const OPP_TABLE_COLUMNS: CrmColumnDef[] = [
+  { id: "account", label: "Account" },
+  { id: "segment", label: "Segment" },
+  { id: "stage", label: "Stage" },
+  { id: "amount", label: "Amount" },
+  { id: "probability", label: "Probability" },
+  { id: "owner", label: "Owner" },
+  { id: "closeDate", label: "Close Date" },
+  { id: "created", label: "Created" },
+];
 
 interface CrmOpportunitiesTabProps {
   opportunities: CrmOpportunity[];
@@ -42,6 +57,7 @@ interface CrmOpportunitiesTabProps {
   searchTerm?: string;
   onNavigateToTab?: (tab: string) => void;
   onOpenCustomFieldsSettings?: () => void;
+  onNavigateToResourcePlan?: (opportunityId: number, planId?: number | null) => void;
 }
 
 const VIBRANT_LOGO_COLORS = [
@@ -156,8 +172,8 @@ function StageBadge({ stage }: { stage: { name: string; color: string | null } |
   );
 }
 
-export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines, contacts, searchTerm = "", onNavigateToTab, onOpenCustomFieldsSettings }: CrmOpportunitiesTabProps) {
-  const { resolveOwner } = useCrmUsers();
+export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines, contacts, searchTerm = "", onNavigateToTab, onOpenCustomFieldsSettings, onNavigateToResourcePlan }: CrmOpportunitiesTabProps) {
+  const { users, resolveOwner } = useCrmUsers();
   const { fields: customFields } = useCrmCustomFields("opportunity");
   const { fields: accountCustomFields } = useCrmCustomFields("account");
   const segmentField = useMemo(() => findSegmentField(accountCustomFields), [accountCustomFields]);
@@ -207,9 +223,44 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
     onError: () => toast({ title: "Import failed", variant: "destructive" }),
   });
 
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() =>
+    loadColumnVisibility("crm-opportunities", OPP_TABLE_COLUMNS),
+  );
+
+  const updateOpportunityMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: number; updates: Partial<CrmOpportunity> }) =>
+      apiRequest("PUT", `/api/crm/opportunities/${id}`, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/opportunities"] });
+    },
+    onError: () => toast({ title: "Failed to update opportunity", variant: "destructive" }),
+  });
+
+  const isColVisible = (id: string) => columnVisibility[id] !== false;
+  const setColVisible = (id: string, visible: boolean) => {
+    setColumnVisibility((prev) => {
+      const next = { ...prev, [id]: visible };
+      saveColumnVisibility("crm-opportunities", next);
+      return next;
+    });
+  };
+
   const activePipelineId = selectedPipelineId || pipelines.find(p => p.isDefault)?.id || pipelines[0]?.id || null;
   const pipelineStages = stagesForActivePipeline(stages, pipelines, activePipelineId);
   const formStages = pipelineStages;
+
+  const stageSelectOptions = useMemo(
+    () => pipelineStages.map((s) => ({ value: String(s.id), label: s.name })),
+    [pipelineStages],
+  );
+
+  const ownerSelectOptions = useMemo(
+    () => [
+      { value: "", label: "Unassigned" },
+      ...users.map((u) => ({ value: u.id, label: resolveOwner(u.id).name })),
+    ],
+    [users, resolveOwner],
+  );
 
   const createPipelineMutation = useMutation({
     mutationFn: (data: { name: string }) => apiRequest("POST", "/api/crm/pipelines", data),
@@ -484,26 +535,71 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
               {companyInitials}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold truncate max-w-[200px]">{opp.name}</p>
+              <CrmInlineEditCell
+                value={opp.name}
+                displayValue={opp.name}
+                onSave={(v) => updateOpportunityMutation.mutate({ id: opp.id, updates: { name: v } })}
+                className="text-sm font-semibold"
+                testId={`inline-opp-name-${opp.id}`}
+              />
               <p className="text-xs text-muted-foreground">Opportunity</p>
             </div>
           </div>
         </td>
+        {isColVisible("account") && (
         <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "accountName"))} style={getCellStyle(opp.id, "accountName")}>
           <span className="text-sm">{opp.accountName}</span>
         </td>
+        )}
+        {isColVisible("segment") && (
         <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "accountSegment"))} style={getCellStyle(opp.id, "accountSegment")}>
           <span className="text-sm" style={{ color: getSegmentColor(opp.accountSegment) }}>{opp.accountSegment}</span>
         </td>
+        )}
+        {isColVisible("stage") && (
         <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "stageName"))} style={getCellStyle(opp.id, "stageName")}>
-          <StageBadge stage={opp.stage} />
+          <CrmInlineEditSelect
+            value={opp.stageId ? String(opp.stageId) : ""}
+            displayValue={<StageBadge stage={opp.stage} />}
+            options={stageSelectOptions}
+            onSave={(v) => {
+              const stage = stages.find((s) => String(s.id) === v);
+              updateOpportunityMutation.mutate({
+                id: opp.id,
+                updates: {
+                  stageId: v ? parseInt(v, 10) : null,
+                  probability: stage?.probability ?? opp.probability,
+                },
+              });
+            }}
+            testId={`inline-opp-stage-${opp.id}`}
+          />
         </td>
+        )}
+        {isColVisible("amount") && (
         <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "amount"))} style={getCellStyle(opp.id, "amount")}>
-          <span className="text-sm font-semibold">{formatCurrency(opp.amount)}</span>
+          <CrmInlineEditCell
+            value={opp.amount || ""}
+            displayValue={formatCurrency(opp.amount)}
+            type="number"
+            onSave={(v) => updateOpportunityMutation.mutate({ id: opp.id, updates: { amount: v || null } })}
+            className="text-sm font-semibold"
+            testId={`inline-opp-amount-${opp.id}`}
+          />
         </td>
+        )}
+        {isColVisible("probability") && (
         <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "probabilityNum"))} style={getCellStyle(opp.id, "probabilityNum")}>
-          <ProbabilityBar probability={opp.probabilityNum} />
+          <CrmInlineEditCell
+            value={String(opp.probabilityNum ?? "")}
+            type="number"
+            displayValue={<ProbabilityBar probability={opp.probabilityNum} />}
+            onSave={(v) => updateOpportunityMutation.mutate({ id: opp.id, updates: { probability: v ? parseInt(v, 10) : null } })}
+            testId={`inline-opp-probability-${opp.id}`}
+          />
         </td>
+        )}
+        {isColVisible("owner") && (
         <td className="px-4 py-3 whitespace-nowrap">
           <div className="flex items-center gap-2">
             <div
@@ -512,16 +608,33 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
             >
               {owner.initials}
             </div>
+            <CrmInlineEditSelect
+              value={opp.ownerUserId || ""}
+              displayValue={owner.name}
+              options={ownerSelectOptions}
+              onSave={(v) => updateOpportunityMutation.mutate({ id: opp.id, updates: { ownerUserId: v || null } })}
+              className="text-sm"
+              testId={`inline-opp-owner-${opp.id}`}
+            />
           </div>
         </td>
+        )}
+        {isColVisible("closeDate") && (
         <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "expectedCloseDate"))} style={getCellStyle(opp.id, "expectedCloseDate")}>
-          <span className={cn("text-sm", opp.expectedCloseDate && new Date(opp.expectedCloseDate) < new Date() ? "text-red-500 font-medium" : "text-muted-foreground")}>
-            {formatDate(opp.expectedCloseDate)}
-          </span>
+          <CrmInlineEditDate
+            value={opp.expectedCloseDate ? opp.expectedCloseDate.slice(0, 10) : ""}
+            displayValue={formatDate(opp.expectedCloseDate)}
+            onSave={(v) => updateOpportunityMutation.mutate({ id: opp.id, updates: { expectedCloseDate: v || null } })}
+            className={cn("text-sm", opp.expectedCloseDate && new Date(opp.expectedCloseDate) < new Date() ? "text-red-500 font-medium" : "text-muted-foreground")}
+            testId={`inline-opp-close-${opp.id}`}
+          />
         </td>
+        )}
+        {isColVisible("created") && (
         <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "createdAt"))} style={getCellStyle(opp.id, "createdAt")}>
           <span className="text-sm text-muted-foreground">{formatDate(opp.createdAt)}</span>
         </td>
+        )}
         <CrmCustomFieldTableCells fields={customFields} customData={opp.customData} />
         <td className="px-4 py-3 text-right whitespace-nowrap">
           <DropdownMenu>
@@ -533,6 +646,16 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => handleEdit(opp)} data-testid={`action-edit-opp-${opp.id}`}>
                 <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  sessionStorage.setItem("crm-resource-plan-opp-id", String(opp.id));
+                  onNavigateToTab?.("resourceplan");
+                  onNavigateToResourcePlan?.(opp.id);
+                }}
+                data-testid={`action-resource-plan-opp-${opp.id}`}
+              >
+                <Users className="h-3.5 w-3.5 mr-2" /> Resource Plan
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => runOppAction(() => apiRequest("POST", `/api/crm/opportunities/${opp.id}/clone`), "Opportunity cloned")} data-testid={`action-clone-opp-${opp.id}`}>
                 <Copy className="h-3.5 w-3.5 mr-2" /> Clone
@@ -731,6 +854,13 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
 
         <div className="h-6 w-px bg-border mx-1" />
 
+        <CrmColumnVisibilityMenu
+          columns={OPP_TABLE_COLUMNS}
+          visibility={columnVisibility}
+          onChange={setColVisible}
+          testId="button-opp-fields"
+        />
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -888,14 +1018,14 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
                 />
               </th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Opportunity</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Account</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Segment</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Stage</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Amount</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Probability</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Owner</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Close Date</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Created</th>
+              {isColVisible("account") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Account</th>}
+              {isColVisible("segment") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Segment</th>}
+              {isColVisible("stage") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Stage</th>}
+              {isColVisible("amount") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Amount</th>}
+              {isColVisible("probability") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Probability</th>}
+              {isColVisible("owner") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Owner</th>}
+              {isColVisible("closeDate") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Close Date</th>}
+              {isColVisible("created") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Created</th>}
               <th className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Actions</th>
             </tr>
           </thead>
@@ -984,6 +1114,14 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
           setFormOpen(false);
           setEditingOpportunity(null);
           onOpenCustomFieldsSettings?.();
+        }}
+        onNavigateToResourcePlan={(oppId, planId) => {
+          sessionStorage.setItem("crm-resource-plan-opp-id", String(oppId));
+          if (planId) sessionStorage.setItem("crm-resource-plan-id", String(planId));
+          setFormOpen(false);
+          setEditingOpportunity(null);
+          onNavigateToResourcePlan?.(oppId, planId);
+          onNavigateToTab?.("resourceplan");
         }}
       />
     </div>

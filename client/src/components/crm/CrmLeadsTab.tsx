@@ -25,6 +25,30 @@ import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { CrmCustomFieldTableHeaders, CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
 import { useCrmUsers } from "./CrmUsersProvider";
 import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
+import { CrmColumnVisibilityMenu } from "./CrmColumnVisibilityMenu";
+import { CrmInlineEditCell } from "./CrmInlineEditCell";
+import { CrmInlineEditSelect } from "./CrmInlineEditSelect";
+import { loadColumnVisibility, saveColumnVisibility, type CrmColumnDef } from "@/lib/crm-list-columns";
+
+const LEAD_STATUS_OPTIONS = [
+  { value: "new", label: "New" },
+  { value: "contacted", label: "Contacted" },
+  { value: "qualified", label: "Qualified" },
+  { value: "unqualified", label: "Unqualified" },
+  { value: "converted", label: "Converted" },
+  { value: "lost", label: "Lost" },
+];
+
+const LEAD_TABLE_COLUMNS: CrmColumnDef[] = [
+  { id: "contact", label: "Contact" },
+  { id: "title", label: "Title" },
+  { id: "status", label: "Status" },
+  { id: "score", label: "Score" },
+  { id: "rating", label: "Rating" },
+  { id: "source", label: "Source" },
+  { id: "owner", label: "Owner" },
+  { id: "created", label: "Created" },
+];
 
 interface CrmLeadsTabProps {
   leads: CrmLead[];
@@ -195,7 +219,28 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     opportunityAmount: ""
   });
   const [importOpen, setImportOpen] = useState(false);
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() =>
+    loadColumnVisibility("crm-leads", LEAD_TABLE_COLUMNS),
+  );
   const { toast } = useToast();
+
+  const updateLeadMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: number; updates: Partial<CrmLead> }) =>
+      apiRequest("PUT", `/api/crm/leads/${id}`, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads"] });
+    },
+    onError: () => toast({ title: "Failed to update lead", variant: "destructive" }),
+  });
+
+  const isColVisible = (id: string) => columnVisibility[id] !== false;
+  const setColVisible = (id: string, visible: boolean) => {
+    setColumnVisibility((prev) => {
+      const next = { ...prev, [id]: visible };
+      saveColumnVisibility("crm-leads", next);
+      return next;
+    });
+  };
 
   const importMutation = useMutation({
     mutationFn: ({ rows, mode }: { rows: Record<string, string>[]; mode: ImportMode }) =>
@@ -293,6 +338,19 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   const leadSources = useMemo(
     () => Array.from(new Set(leads.map(l => l.source).filter((s): s is string => !!s))),
     [leads]
+  );
+
+  const ownerSelectOptions = useMemo(
+    () => [
+      { value: "", label: "Unassigned" },
+      ...users.map((u) => ({ value: u.id, label: resolveOwner(u.id).name })),
+    ],
+    [users, resolveOwner],
+  );
+
+  const sourceSelectOptions = useMemo(
+    () => leadSources.map((s) => ({ value: s, label: s })),
+    [leadSources],
   );
 
   const activeFilterCount = [statusFilter, sourceFilter, ownerFilter].filter(f => f !== "all").length;
@@ -457,24 +515,70 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             </div>
           </div>
         </td>
+        {isColVisible("contact") && (
         <td className="px-4 py-3 whitespace-nowrap">
-          <span className="text-sm">{lead.firstName} {lead.lastName}</span>
+          <CrmInlineEditCell
+            value={`${lead.firstName} ${lead.lastName}`.trim()}
+            onSave={(v) => {
+              const parts = v.trim().split(/\s+/);
+              const firstName = parts[0] || lead.firstName;
+              const lastName = parts.slice(1).join(" ") || lead.lastName;
+              updateLeadMutation.mutate({ id: lead.id, updates: { firstName, lastName } });
+            }}
+            testId={`inline-lead-contact-${lead.id}`}
+          />
         </td>
+        )}
+        {isColVisible("title") && (
         <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
-          {lead.title || "—"}
+          <CrmInlineEditCell
+            value={lead.title || ""}
+            displayValue={lead.title || "—"}
+            onSave={(v) => updateLeadMutation.mutate({ id: lead.id, updates: { title: v || null } })}
+            testId={`inline-lead-title-${lead.id}`}
+          />
         </td>
+        )}
+        {isColVisible("status") && (
         <td className="px-4 py-3 whitespace-nowrap">
-          <StatusDot status={lead.status} />
+          <CrmInlineEditSelect
+            value={lead.status}
+            displayValue={<StatusDot status={lead.status} />}
+            options={LEAD_STATUS_OPTIONS}
+            onSave={(v) => updateLeadMutation.mutate({ id: lead.id, updates: { status: v } })}
+            disabled={lead.status === "converted"}
+            testId={`inline-lead-status-${lead.id}`}
+          />
         </td>
+        )}
+        {isColVisible("score") && (
         <td className="px-4 py-3 whitespace-nowrap">
-          <TemperatureDisplay score={lead.score} temperature={temp} />
+          <CrmInlineEditCell
+            value={String(lead.score ?? "")}
+            type="number"
+            displayValue={String(lead.score ?? "—")}
+            onSave={(v) => updateLeadMutation.mutate({ id: lead.id, updates: { score: v ? parseInt(v, 10) : 0 } })}
+            testId={`inline-lead-score-${lead.id}`}
+          />
         </td>
+        )}
+        {isColVisible("rating") && (
         <td className="px-4 py-3 whitespace-nowrap">
           <RatingBadge rating={lead.rating} />
         </td>
+        )}
+        {isColVisible("source") && (
         <td className="px-4 py-3 whitespace-nowrap">
-          <span className="text-sm text-foreground capitalize">{lead.source || "—"}</span>
+          <CrmInlineEditSelect
+            value={lead.source || ""}
+            displayValue={<span className="text-sm capitalize">{lead.source || "—"}</span>}
+            options={sourceSelectOptions}
+            onSave={(v) => updateLeadMutation.mutate({ id: lead.id, updates: { source: v || null } })}
+            testId={`inline-lead-source-${lead.id}`}
+          />
         </td>
+        )}
+        {isColVisible("owner") && (
         <td className="px-4 py-3 whitespace-nowrap">
           <div className="flex items-center gap-2">
             <div
@@ -483,12 +587,22 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             >
               {owner.initials}
             </div>
-            <span className="text-xs text-muted-foreground">{owner.initials}</span>
+            <CrmInlineEditSelect
+              value={lead.ownerUserId || ""}
+              displayValue={owner.name}
+              options={ownerSelectOptions}
+              onSave={(v) => updateLeadMutation.mutate({ id: lead.id, updates: { ownerUserId: v || null } })}
+              className="text-xs text-muted-foreground"
+              testId={`inline-lead-owner-${lead.id}`}
+            />
           </div>
         </td>
+        )}
+        {isColVisible("created") && (
         <td className="px-4 py-3 whitespace-nowrap">
           <span className="text-sm text-muted-foreground">{formatDate(lead.createdAt)}</span>
         </td>
+        )}
         <CrmCustomFieldTableCells fields={customFields} customData={lead.customData} />
         <td className="px-4 py-3 text-right whitespace-nowrap">
           <div className="flex items-center justify-end gap-1">
@@ -705,6 +819,13 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
           </PopoverContent>
         </Popover>
 
+        <CrmColumnVisibilityMenu
+          columns={LEAD_TABLE_COLUMNS}
+          visibility={columnVisibility}
+          onChange={setColVisible}
+          testId="button-lead-fields"
+        />
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -809,14 +930,14 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
                 />
               </th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Company</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Contact</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Title</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Status</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Score</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Rating</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Source</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Owner</th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Created</th>
+              {isColVisible("contact") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Contact</th>}
+              {isColVisible("title") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Title</th>}
+              {isColVisible("status") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Status</th>}
+              {isColVisible("score") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Score</th>}
+              {isColVisible("rating") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Rating</th>}
+              {isColVisible("source") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Source</th>}
+              {isColVisible("owner") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Owner</th>}
+              {isColVisible("created") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Created</th>}
               <CrmCustomFieldTableHeaders fields={customFields} />
               <th className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Actions</th>
             </tr>

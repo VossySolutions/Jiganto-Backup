@@ -172,7 +172,7 @@ export function DocumentAccessSection({
   );
 
   return (
-    <div className="space-y-6 max-w-3xl" data-testid="document-access-section">
+    <div className="space-y-6 w-full min-w-0 max-w-none" data-testid="document-access-section">
       <div>
         <h3 className="text-sm font-semibold text-foreground mb-1">User access for this document</h3>
         <p className="text-sm text-muted-foreground">

@@ -65,6 +65,7 @@ interface Crm360ViewTabProps {
   contracts: CrmContractListItem[];
   leads: CrmLead[];
   searchTerm: string;
+  onNavigateToTab?: (tab: string) => void;
 }
 
 const VIBRANT_COLORS = [
@@ -255,12 +256,16 @@ function accountNotesQueryKey(accountId: number) {
   return [`/api/crm/notes?entityType=account&entityId=${accountId}`];
 }
 
+function opportunityNotesQueryKey(opportunityId: number) {
+  return [`/api/crm/notes?entityType=opportunity&entityId=${opportunityId}`];
+}
+
 function accountActivitiesQueryKey(accountId: number) {
   return [`/api/crm/activities?entityType=account&entityId=${accountId}`];
 }
 
 export function Crm360ViewTab({
-  accounts, contacts, opportunities, stages, contracts, leads, searchTerm,
+  accounts, contacts, opportunities, stages, contracts, leads, searchTerm, onNavigateToTab,
 }: Crm360ViewTabProps) {
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(() => {
     const saved = sessionStorage.getItem("crm-360-account-id");
@@ -269,11 +274,26 @@ export function Crm360ViewTab({
 
   const selectAccount = (id: number | null) => {
     setSelectedAccountId(id);
+    setNotesOpportunityId(null);
     if (id) sessionStorage.setItem("crm-360-account-id", String(id));
     else sessionStorage.removeItem("crm-360-account-id");
   };
   const [sidebarSearch, setSidebarSearch] = useState("");
-  const [subTab, setSubTab] = useState("overview");
+  const [subTab, setSubTab] = useState(() => sessionStorage.getItem("crm-360-subtab") || "overview");
+  const [notesOpportunityId, setNotesOpportunityId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const savedSubTab = sessionStorage.getItem("crm-360-subtab");
+    if (savedSubTab) {
+      setSubTab(savedSubTab);
+      sessionStorage.removeItem("crm-360-subtab");
+    }
+    const savedOpportunityId = sessionStorage.getItem("crm-360-opportunity-id");
+    if (savedOpportunityId) {
+      setNotesOpportunityId(parseInt(savedOpportunityId, 10));
+      sessionStorage.removeItem("crm-360-opportunity-id");
+    }
+  }, []);
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState("");
   const [newNoteTag, setNewNoteTag] = useState("");
@@ -382,6 +402,22 @@ export function Crm360ViewTab({
     enabled: !!selectedAccount,
     staleTime: 30_000,
   });
+
+  const notesOpportunity = useMemo(
+    () => (notesOpportunityId ? opportunities.find((o) => o.id === notesOpportunityId) ?? null : null),
+    [notesOpportunityId, opportunities],
+  );
+
+  const { data: opportunityNotes = [], isLoading: opportunityNotesLoading } = useQuery<CrmNoteRecord[]>({
+    queryKey: notesOpportunityId
+      ? opportunityNotesQueryKey(notesOpportunityId)
+      : ["/api/crm/notes?disabled=opportunity"],
+    enabled: notesOpportunityId != null,
+    staleTime: 30_000,
+  });
+
+  const displayedNotes = notesOpportunityId ? opportunityNotes : accountNotes;
+  const displayedNotesLoading = notesOpportunityId ? opportunityNotesLoading : notesLoading;
 
   const { data: accountActivities = [], isLoading: activitiesLoading } = useQuery<CrmActivityRecord[]>({
     queryKey: selectedAccount
@@ -525,18 +561,28 @@ export function Crm360ViewTab({
         data.tag ? `[TAG:${data.tag}]` : "",
         data.sentiment ? `[SENTIMENT:${data.sentiment}]` : "",
       ].filter(Boolean).join("\n");
+      const entityType = notesOpportunityId ? "opportunity" : "account";
+      const entityId = notesOpportunityId ?? selectedAccount?.id;
       const res = await apiRequest("POST", "/api/crm/notes", {
-        entityType: "account",
-        entityId: selectedAccount?.id,
+        entityType,
+        entityId,
         content: noteContent,
       });
       return res.json() as Promise<CrmNoteRecord>;
     },
-    onSuccess: async (note) => {
-      if (selectedAccount) {
-        const key = accountNotesQueryKey(selectedAccount.id);
-        queryClient.setQueryData<CrmNoteRecord[]>(key, (prev) => [note, ...(prev ?? [])]);
-        await queryClient.invalidateQueries({ queryKey: key, refetchType: "active" });
+    onSuccess: (note) => {
+      const prependNote = (prev: CrmNoteRecord[] | undefined) => {
+        const list = prev ?? [];
+        if (list.some((n) => n.id === note.id)) return list;
+        return [note, ...list];
+      };
+      if (notesOpportunityId) {
+        queryClient.setQueryData<CrmNoteRecord[]>(opportunityNotesQueryKey(notesOpportunityId), prependNote);
+        queryClient.invalidateQueries({
+          predicate: (q) => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/crm/forecast-matrix"),
+        });
+      } else if (selectedAccount) {
+        queryClient.setQueryData<CrmNoteRecord[]>(accountNotesQueryKey(selectedAccount.id), prependNote);
       }
       toast({ title: "Note added" });
       setNoteDialogOpen(false);
@@ -550,9 +596,16 @@ export function Crm360ViewTab({
 
   const deleteNoteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/crm/notes/${id}`),
-    onSuccess: () => {
-      if (selectedAccount) {
-        queryClient.invalidateQueries({ queryKey: accountNotesQueryKey(selectedAccount.id) });
+    onSuccess: (_data, id) => {
+      if (notesOpportunityId) {
+        const key = opportunityNotesQueryKey(notesOpportunityId);
+        queryClient.setQueryData<CrmNoteRecord[]>(key, (prev) => (prev ?? []).filter((n) => n.id !== id));
+        queryClient.invalidateQueries({
+          predicate: (q) => typeof q.queryKey[0] === "string" && q.queryKey[0].startsWith("/api/crm/forecast-matrix"),
+        });
+      } else if (selectedAccount) {
+        const key = accountNotesQueryKey(selectedAccount.id);
+        queryClient.setQueryData<CrmNoteRecord[]>(key, (prev) => (prev ?? []).filter((n) => n.id !== id));
       }
       toast({ title: "Note deleted" });
     },
@@ -837,6 +890,14 @@ export function Crm360ViewTab({
               >
                 <Phone className="h-3.5 w-3.5" /> Call
               </button>
+              <button
+                type="button"
+                onClick={() => { setSubTab("notes"); setNoteDialogOpen(true); }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white transition-colors"
+                data-testid="button-360-add-note-top"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add Note
+              </button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -862,8 +923,16 @@ export function Crm360ViewTab({
                 <FormDialogShell
                   open={noteDialogOpen}
                   onOpenChange={setNoteDialogOpen}
-                  title={`Add Note — ${selectedAccount.name}`}
-                  subtitle="Capture account context and sentiment"
+                  title={
+                    notesOpportunity
+                      ? `Add Note — ${notesOpportunity.name}`
+                      : `Add Note — ${selectedAccount.name}`
+                  }
+                  subtitle={
+                    notesOpportunity
+                      ? "Capture opportunity context and sentiment"
+                      : "Capture account context and sentiment"
+                  }
                   saveLabel={createNoteMutation.isPending ? "Saving..." : "Save Note"}
                   onCancel={() => setNoteDialogOpen(false)}
                   onSubmit={() => createNoteMutation.mutate({ content: newNoteContent, tag: newNoteTag, sentiment: newNoteSentiment })}
@@ -1453,14 +1522,46 @@ export function Crm360ViewTab({
 
           {subTab === "notes" && (
             <SubTabPanel
-              title={`Notes — ${selectedAccount.name}`}
+              title={
+                notesOpportunity
+                  ? `Notes — ${notesOpportunity.name}`
+                  : `Notes — ${selectedAccount.name}`
+              }
               testId="360-notes-tab"
+              action={
+                <button
+                  type="button"
+                  onClick={() => setNoteDialogOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white transition-colors"
+                  data-testid="button-360-add-note-header"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Note
+                </button>
+              }
             >
-              {notesLoading ? (
+              <div className="relative min-h-[200px]">
+              {notesOpportunity && (
+                <div className="px-5 pt-4 pb-2 flex flex-wrap items-center gap-2 border-b bg-muted/20">
+                  <span className="text-xs text-muted-foreground">
+                    Opportunity notes for <span className="font-medium text-foreground">{notesOpportunity.name}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setNotesOpportunityId(null)}
+                    className="text-xs text-[#0ea5e9] font-medium hover:underline"
+                    data-testid="button-360-show-all-notes"
+                  >
+                    View all account notes
+                  </button>
+                </div>
+              )}
+              {displayedNotesLoading ? (
                 <LoadingSubTabState />
-              ) : accountNotes.length === 0 ? (
+              ) : displayedNotes.length === 0 ? (
                 <div className="py-10 text-center px-5">
-                  <p className="text-sm text-muted-foreground">No notes yet</p>
+                  <p className="text-sm text-muted-foreground">
+                    {notesOpportunity ? "No notes for this opportunity yet" : "No notes yet"}
+                  </p>
                   <button
                     type="button"
                     onClick={() => setNoteDialogOpen(true)}
@@ -1471,9 +1572,11 @@ export function Crm360ViewTab({
                 </div>
               ) : (
                 <div className="p-5 space-y-4">
-                  {accountNotes.map(note => {
+                  {displayedNotes.map(note => {
                     const { text, tag, sentiment } = parseNoteExtras(note.content);
-                    const authorName = note.createdByUserId || "Unknown";
+                    const authorName = note.createdByUserId
+                      ? resolveOwner(note.createdByUserId).name
+                      : "Unknown user";
                     const authorColor = getColorForName(authorName);
                     return (
                       <div key={note.id} className="flex gap-3 group" data-testid={`360-note-${note.id}`}>
@@ -1514,6 +1617,16 @@ export function Crm360ViewTab({
                   })}
                 </div>
               )}
+              <Button
+                size="lg"
+                className="absolute bottom-3 right-3 z-10 h-10 rounded-full shadow-md gap-1.5 px-4 bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
+                onClick={() => setNoteDialogOpen(true)}
+                data-testid="button-360-add-note-floating"
+              >
+                <Plus className="h-4 w-4" />
+                Add Note
+              </Button>
+              </div>
             </SubTabPanel>
           )}
 
@@ -1763,6 +1876,12 @@ export function Crm360ViewTab({
           accountId: c.accountId,
         }))}
         initialAccountId={!editingOpportunity && selectedAccount ? String(selectedAccount.id) : undefined}
+        onNavigateToResourcePlan={(oppId, planId) => {
+          sessionStorage.setItem("crm-resource-plan-opp-id", String(oppId));
+          if (planId) sessionStorage.setItem("crm-resource-plan-id", String(planId));
+          closeOppForm();
+          onNavigateToTab?.("resourceplan");
+        }}
       />
 
       <ContactFormDialog

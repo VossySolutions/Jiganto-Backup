@@ -147,6 +147,25 @@ function normalizeKey(value: string): string {
   return value.trim().toLowerCase();
 }
 
+/** Normalize country labels for consistent map breakdown counts. */
+export function normalizeCountryLabel(country: string | null | undefined): string | null {
+  if (!country?.trim()) return null;
+  const key = normalizeKey(country);
+  const aliases: Record<string, string> = {
+    us: "USA",
+    usa: "USA",
+    "united states": "USA",
+    "united states of america": "USA",
+    uk: "UK",
+    "united kingdom": "UK",
+    "great britain": "UK",
+    uae: "UAE",
+    "united arab emirates": "UAE",
+  };
+  if (aliases[key]) return aliases[key];
+  return country.trim().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }

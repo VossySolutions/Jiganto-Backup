@@ -8,6 +8,7 @@ export function DocumentScrollRegion({
   edge,
   title,
   description,
+  expanded,
   className,
 }: {
   children: React.ReactNode;
@@ -19,6 +20,8 @@ export function DocumentScrollRegion({
   title?: string;
   /** One-line hint shown beside the label. */
   description?: string;
+  /** Taller chrome strip while editing */
+  expanded?: boolean;
   className?: string;
 }) {
   const scrollBody = (
@@ -27,7 +30,7 @@ export function DocumentScrollRegion({
       className={cn(
         "overflow-y-auto overflow-x-hidden min-h-0",
         variant === "main" && "flex-1 min-h-0",
-        variant === "chrome" && "max-h-[3.25rem]",
+        variant === "chrome" && (expanded ? "max-h-[7rem]" : "max-h-[4rem]"),
         className,
       )}
     >

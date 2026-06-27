@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { CRM_ACCOUNT_TYPES, getAccountTypeInfo } from "@/lib/crm-account-types";
 import { cn } from "@/lib/utils";
@@ -19,12 +18,13 @@ import { LeadFormDialog } from "./LeadFormDialog";
 import { AccountDetailFormOverlay } from "./AccountDetailFormOverlay";
 import { ContactOrgChartView } from "./ContactOrgChartView";
 import { ContactRelationshipsPanel } from "./ContactRelationshipsPanel";
-import { 
+import { useCrmUsers } from "./CrmUsersProvider";
+import {
   Building2, Users, Target, TrendingUp, Phone, Mail, Calendar, 
   Plus, Globe, MapPin, DollarSign, Clock, FileText, MessageSquare,
   CheckCircle2, XCircle, X, Edit2, Trash2, Activity, Loader2,
   Briefcase, ExternalLink, User, MoreHorizontal, LayoutGrid, List, GitBranch,
-  Inbox, Send
+  Inbox, Send, Maximize2, Minimize2, Wallet
 } from "lucide-react";
 import type {
   CrmAccountDetail,
@@ -52,6 +52,8 @@ type CorrespondenceItem = {
 interface AccountDetailPanelProps {
   account: CrmAccountDetail;
   onClose: () => void;
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
 }
 
 type ContactsViewMode = "list" | "cards" | "hierarchy";
@@ -73,7 +75,8 @@ function getInitials(first: string, last: string): string {
   return `${first[0] || ""}${last[0] || ""}`.toUpperCase();
 }
 
-export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps) {
+export function AccountDetailPanel({ account, onClose, expanded = false, onToggleExpanded }: AccountDetailPanelProps) {
+  const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState("overview");
   const [isEditMode, setIsEditMode] = useState(false);
   const [isAddContactOpen, setIsAddContactOpen] = useState(false);
@@ -82,6 +85,7 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
   const [isAddActivityOpen, setIsAddActivityOpen] = useState(false);
   const [noteContent, setNoteContent] = useState("");
   const [contactsView, setContactsView] = useState<ContactsViewMode>("list");
+  const [contactsExpanded, setContactsExpanded] = useState(false);
   const [selectedContactForRelationships, setSelectedContactForRelationships] = useState<number | null>(null);
   const [contactFormData, setContactFormData] = useState({ firstName: "", lastName: "", email: "", phone: "", title: "" });
   const [activityFormData, setActivityFormData] = useState({ type: "call", subject: "", description: "", dueDate: "" });
@@ -101,6 +105,7 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
     description: account.description || "",
   });
   const { toast } = useToast();
+  const { resolveOwner } = useCrmUsers();
 
   const { data: contacts = [], isLoading: contactsLoading } = useQuery<CrmContactDetail[]>({
     queryKey: [`/api/crm/contacts?accountId=${account.id}`],
@@ -151,10 +156,17 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
   });
 
   const createNoteMutation = useMutation({
-    mutationFn: (content: string) => 
-      apiRequest("POST", "/api/crm/notes", { entityType: "account", entityId: account.id, content }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/crm/notes?entityType=account&entityId=${account.id}`] });
+    mutationFn: async (content: string) => {
+      const res = await apiRequest("POST", "/api/crm/notes", { entityType: "account", entityId: account.id, content });
+      return res.json() as Promise<CrmNoteRecord>;
+    },
+    onSuccess: (note) => {
+      const key = [`/api/crm/notes?entityType=account&entityId=${account.id}`];
+      queryClient.setQueryData<CrmNoteRecord[]>(key, (prev) => {
+        const list = prev ?? [];
+        if (list.some((n) => n.id === note.id)) return list;
+        return [note, ...list];
+      });
       setIsAddNoteOpen(false);
       setNoteContent("");
       toast({ title: "Note added successfully" });
@@ -215,6 +227,29 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
     ...tasks.map(t => ({ ...t, itemType: 'task' as const, date: new Date(t.createdAt) })),
   ].sort((a, b) => b.date.getTime() - a.date.getTime());
 
+  const getTimelineTitle = (item: (typeof allTimelineItems)[number]) => {
+    if (item.itemType === "activity") return (item as CrmActivityRecord).subject;
+    if (item.itemType === "note") {
+      const preview = (item as CrmNoteRecord).content.trim().split("\n")[0];
+      return preview
+        ? `Note: ${preview.length > 100 ? `${preview.slice(0, 100)}…` : preview}`
+        : "Note added";
+    }
+    return (item as CrmTask).subject;
+  };
+
+  const getTimelineAuthor = (item: (typeof allTimelineItems)[number]) => {
+    if (item.itemType === "note") {
+      const note = item as CrmNoteRecord;
+      return note.createdByUserId ? resolveOwner(note.createdByUserId).name : "Unknown user";
+    }
+    if (item.itemType === "activity") {
+      const act = item as CrmActivityRecord;
+      return act.ownerUserId ? resolveOwner(act.ownerUserId).name : "Unknown user";
+    }
+    return null;
+  };
+
   const correspondenceItems = useMemo<CorrespondenceItem[]>(() => {
     const logItems: CorrespondenceItem[] = emailLogs.map((log) => ({
       id: `log-${log.id}`,
@@ -271,6 +306,17 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            {onToggleExpanded && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onToggleExpanded}
+                data-testid="button-panel-maximize"
+              >
+                {expanded ? <Minimize2 className="h-4 w-4 mr-1" /> : <Maximize2 className="h-4 w-4 mr-1" />}
+                {expanded ? "Compact" : "Maximize"}
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => setIsAddLeadOpen(true)} data-testid="button-add-lead-from-account">
               <Plus className="h-4 w-4 mr-1" />
               Lead
@@ -326,13 +372,12 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
 
           <ScrollArea className="flex-1">
             <TabsContent value="overview" className="p-6 m-0 space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-6">
+              <div className="space-y-6 max-w-3xl">
                   <Card className="rounded-xl border-border/40 shadow-sm">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base">Account Information</CardTitle>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-2 gap-3 text-sm">
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                       <div className="min-w-0">
                         <p className="text-xs text-muted-foreground">Type</p>
                         <p className="font-medium capitalize truncate">{account.type}</p>
@@ -341,7 +386,7 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                         <p className="text-xs text-muted-foreground">Industry</p>
                         <p className="font-medium truncate">{account.industry || "—"}</p>
                       </div>
-                      <div className="min-w-0 col-span-2">
+                      <div className="min-w-0 sm:col-span-2">
                         <p className="text-xs text-muted-foreground">Website</p>
                         {account.website ? (
                           <a href={account.website} target="_blank" rel="noopener noreferrer" className="font-medium text-primary flex items-center gap-1 hover:underline truncate">
@@ -365,7 +410,7 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                         <p className="text-xs text-muted-foreground">Employees</p>
                         <p className="font-medium">{account.employeeCount?.toLocaleString() || "—"}</p>
                       </div>
-                      <div className="min-w-0 col-span-2">
+                      <div className="min-w-0 sm:col-span-2">
                         <p className="text-xs text-muted-foreground">Location</p>
                         <p className="font-medium break-words">
                           {[account.address, account.city, account.state, account.country].filter(Boolean).join(", ") || "—"}
@@ -419,9 +464,7 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                       )}
                     </CardContent>
                   </Card>
-                </div>
 
-                <div className="space-y-6">
                   <Card className="bg-gradient-to-br from-primary/5 to-transparent border-primary/10">
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
@@ -429,21 +472,18 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                         Pipeline Summary
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                       <div>
                         <p className="text-2xl font-bold">${totalOpportunityValue.toLocaleString()}</p>
                         <p className="text-xs text-muted-foreground">Total pipeline value</p>
                       </div>
-                      <Separator />
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-lg font-semibold text-status-blue-foreground">{openOpportunities.length}</p>
-                          <p className="text-xs text-muted-foreground">Open deals</p>
-                        </div>
-                        <div>
-                          <p className="text-lg font-semibold text-status-green-foreground">{wonOpportunities.length}</p>
-                          <p className="text-xs text-muted-foreground">Won deals</p>
-                        </div>
+                      <div>
+                        <p className="text-lg font-semibold text-status-blue-foreground">{openOpportunities.length}</p>
+                        <p className="text-xs text-muted-foreground">Open deals</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-semibold text-status-green-foreground">{wonOpportunities.length}</p>
+                        <p className="text-xs text-muted-foreground">Won deals</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -463,31 +503,33 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                       ) : allTimelineItems.length === 0 ? (
                         <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
                       ) : (
-                        <div className="space-y-3">
-                          {allTimelineItems.slice(0, 5).map((item, idx) => (
+                        <div className="space-y-4">
+                          {allTimelineItems.slice(0, 5).map((item, idx) => {
+                            const author = getTimelineAuthor(item);
+                            return (
                             <div key={`${item.itemType}-${idx}`} className="flex items-start gap-3 text-sm">
                               <div className={cn(
-                                "h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0",
+                                "h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5",
                                 item.itemType === 'activity' && "bg-status-blue/10 text-status-blue-foreground",
                                 item.itemType === 'note' && "bg-status-amber/10 text-status-amber-foreground",
                                 item.itemType === 'task' && "bg-status-purple/10 text-status-purple-foreground",
                               )}>
-                                {item.itemType === 'activity' && <Activity className="h-3.5 w-3.5" />}
-                                {item.itemType === 'note' && <MessageSquare className="h-3.5 w-3.5" />}
-                                {item.itemType === 'task' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                                {item.itemType === 'activity' && <Activity className="h-4 w-4" />}
+                                {item.itemType === 'note' && <MessageSquare className="h-4 w-4" />}
+                                {item.itemType === 'task' && <CheckCircle2 className="h-4 w-4" />}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">
-                                  {item.itemType === 'activity' && (item as CrmActivityRecord).subject}
-                                  {item.itemType === 'note' && "Note added"}
-                                  {item.itemType === 'task' && (item as CrmTask).subject}
+                                <p className="font-medium leading-snug break-words">
+                                  {getTimelineTitle(item)}
                                 </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {item.date.toLocaleDateString()}
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {author && <span className="font-medium text-foreground/80">{author}</span>}
+                                  {author && " · "}
+                                  {item.date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
                                 </p>
                               </div>
                             </div>
-                          ))}
+                          );})}
                         </div>
                       )}
                     </CardContent>
@@ -501,17 +543,16 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3 text-sm">
-                      <div className="flex justify-between">
+                      <div className="flex justify-between gap-4">
                         <span className="text-muted-foreground">Created</span>
                         <span className="font-medium">{new Date(account.createdAt).toLocaleDateString()}</span>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="flex justify-between gap-4">
                         <span className="text-muted-foreground">Last Updated</span>
                         <span className="font-medium">{new Date(account.updatedAt).toLocaleDateString()}</span>
                       </div>
                     </CardContent>
                   </Card>
-                </div>
               </div>
             </TabsContent>
 
@@ -548,11 +589,24 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                     </button>
                   </div>
                   </div>
+                  {contactsView === "list" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5"
+                      onClick={() => setContactsExpanded((v) => !v)}
+                      data-testid="contacts-view-maximize"
+                    >
+                      {contactsExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                      {contactsExpanded ? "Compact" : "Maximize"}
+                    </Button>
+                  )}
                   {contacts.length > 0 && (
-                  <Button size="sm" onClick={() => setIsAddContactOpen(true)} data-testid="button-add-contact-detail">
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Contact
-                  </Button>
+                    <Button size="sm" onClick={() => setIsAddContactOpen(true)} data-testid="button-add-contact-detail">
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add Contact
+                    </Button>
                   )}
                 </div>
               </div>
@@ -573,8 +627,22 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                   </CardContent>
                 </Card>
               ) : contactsView === "list" ? (
-                <div className="rounded-xl border border-border/40 bg-card shadow-sm overflow-hidden overflow-x-auto">
-                  <table className="w-full text-sm min-w-[520px]">
+                <div
+                  className={cn(
+                    "rounded-xl border border-border/40 bg-card shadow-sm overflow-hidden overflow-x-auto",
+                    contactsExpanded && "fixed inset-4 z-50 bg-background shadow-2xl flex flex-col",
+                  )}
+                >
+                  {contactsExpanded && (
+                    <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+                      <h3 className="font-semibold">Contacts — {account.name}</h3>
+                      <Button variant="ghost" size="sm" onClick={() => setContactsExpanded(false)}>
+                        <Minimize2 className="h-4 w-4 mr-1" /> Close
+                      </Button>
+                    </div>
+                  )}
+                  <div className={cn(contactsExpanded && "flex-1 overflow-auto")}>
+                  <table className={cn("w-full text-sm", contactsExpanded || expanded ? "min-w-full" : "min-w-[520px]")}>
                     <thead>
                       <tr className="border-b border-border/40 bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
                         <th className="text-left font-semibold px-4 py-3">Name</th>
@@ -592,13 +660,14 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                             {contact.isPrimary && <Badge variant="secondary" className="text-[10px] ml-2">Primary</Badge>}
                           </td>
                           <td className="px-4 py-3 text-muted-foreground">{contact.title || "—"}</td>
-                          <td className="px-4 py-3 text-muted-foreground truncate max-w-[160px]">{contact.email || "—"}</td>
-                          <td className="px-4 py-3 text-muted-foreground truncate max-w-[140px] tabular-nums">{contact.phone || contact.mobile || "—"}</td>
+                          <td className={cn("px-4 py-3 text-muted-foreground", contactsExpanded || expanded ? "whitespace-nowrap" : "truncate max-w-[160px]")}>{contact.email || "—"}</td>
+                          <td className={cn("px-4 py-3 text-muted-foreground tabular-nums", contactsExpanded || expanded ? "whitespace-nowrap" : "truncate max-w-[140px]")}>{contact.phone || contact.mobile || "—"}</td>
                           <td className="px-4 py-3 capitalize text-muted-foreground">{(contact.role || "contact").replace(/_/g, " ")}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               ) : contactsView === "hierarchy" ? (
                 <div className="space-y-4">
@@ -736,6 +805,28 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                               Next: {opp.nextStep}
                             </p>
                           )}
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                sessionStorage.setItem("crm-resource-plan-opp-id", String(opp.id));
+                                setLocation("/modules/crm?tab=resourceplan");
+                              }}
+                              data-testid={`opp-resource-plan-${opp.id}`}
+                            >
+                              <Users className="h-3.5 w-3.5 mr-1" />
+                              Resource Plan
+                            </Button>
+                            {opp.projectId && (
+                              <Button size="sm" variant="outline" asChild>
+                                <Link href={`/modules/finance-mgmt?tab=budgets&projectId=${opp.projectId}`}>
+                                  <Wallet className="h-3.5 w-3.5 mr-1" />
+                                  Budget
+                                </Link>
+                              </Button>
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
                     );
@@ -826,7 +917,7 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
               )}
             </TabsContent>
 
-            <TabsContent value="notes" className="p-6 m-0 space-y-4">
+            <TabsContent value="notes" className="p-6 m-0 space-y-4 relative min-h-[280px]">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Notes ({notes.length})</h3>
                 <Button size="sm" onClick={() => setIsAddNoteOpen(true)} data-testid="button-add-note-detail">
@@ -851,23 +942,40 @@ export function AccountDetailPanel({ account, onClose }: AccountDetailPanelProps
                   </CardContent>
                 </Card>
               ) : (
-                <div className="space-y-3">
-                  {notes.map(note => (
+                <div className="space-y-3 pb-16">
+                  {notes.map(note => {
+                    const authorName = note.createdByUserId
+                      ? resolveOwner(note.createdByUserId).name
+                      : "Unknown user";
+                    return (
                     <Card key={note.id} data-testid={`note-card-${note.id}`}>
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xs font-semibold text-foreground">{authorName}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(note.createdAt).toLocaleString()}
+                              </span>
+                            </div>
                             <p className="text-sm whitespace-pre-wrap">{note.content}</p>
-                            <p className="text-xs text-muted-foreground mt-2">
-                              {new Date(note.createdAt).toLocaleString()}
-                            </p>
                           </div>
                         </div>
                       </CardContent>
                     </Card>
-                  ))}
+                  );})}
                 </div>
               )}
+
+              <Button
+                size="lg"
+                className="absolute bottom-4 right-4 z-10 h-11 rounded-full shadow-lg gap-2 px-4 bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
+                onClick={() => setIsAddNoteOpen(true)}
+                data-testid="button-add-note-floating"
+              >
+                <Plus className="h-5 w-5" />
+                Add Note
+              </Button>
             </TabsContent>
 
             <TabsContent value="correspondence" className="p-6 m-0 space-y-4">

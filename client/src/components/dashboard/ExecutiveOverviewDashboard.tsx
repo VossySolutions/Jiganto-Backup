@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, MapPin, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -111,6 +111,20 @@ export function ExecutiveOverviewDashboard({
     <div className="space-y-6">
       <DashboardBriefingStrip clientId={clientId} projectId={projectId} />
       <DashboardKpiStrip clientId={clientId} projectId={projectId} />
+      <div className="flex flex-wrap gap-2" data-testid="executive-quick-links">
+        <Button variant="outline" size="sm" className="gap-1.5" asChild>
+          <Link href="/modules/crm?tab=customers">
+            <MapPin className="h-3.5 w-3.5" />
+            Customer geography
+          </Link>
+        </Button>
+        <Button variant="outline" size="sm" className="gap-1.5" asChild>
+          <Link href="/modules/crm?tab=forecasting">
+            <TrendingUp className="h-3.5 w-3.5" />
+            Pipeline forecast
+          </Link>
+        </Button>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <SummaryCard
           title="Projects"

@@ -14,7 +14,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { EntityDetailPanel } from "@/components/EntityDetailPanel";
-import { BusinessTableScroll } from "@/components/business/BusinessTableScroll";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import { useToast } from "@/hooks/use-toast";
@@ -968,11 +967,10 @@ function TableView({ rows, onCellClick, showIds, groupBy = "none", entityRefs }:
   ), [visibleDataRows, groupBy]);
 
   return (
-    <div className="rounded-xl border border-border bg-card w-full min-w-0 max-w-full" data-testid="table-view">
-      <BusinessTableScroll minWidth={1200}>
-        <table className="text-xs border-collapse w-max min-w-full table-auto">
-          <thead>
-            <tr className="border-b-2 border-border bg-muted/60">
+    <div className="rounded-xl border border-border bg-card w-full min-w-0 max-w-full max-h-[min(70vh,720px)] overflow-auto" data-testid="table-view">
+      <table className="text-xs border-collapse w-full table-auto" style={{ minWidth: 1200 }}>
+          <thead className="sticky top-0 z-20">
+            <tr className="border-b-2 border-border bg-muted/95 backdrop-blur-sm shadow-sm">
               {TABLE_COLS.map(col => (
                 <th
                   key={col.key}
@@ -1104,7 +1102,6 @@ function TableView({ rows, onCellClick, showIds, groupBy = "none", entityRefs }:
             })}
           </tbody>
         </table>
-      </BusinessTableScroll>
       <div className="px-4 py-2 border-t border-border bg-muted/20 flex items-center justify-between">
         <span className="text-xs text-muted-foreground">
           {strategyIds.length} strateg{strategyIds.length !== 1 ? "ies" : "y"} · {visibleDataRows.length} row{visibleDataRows.length !== 1 ? "s" : ""}

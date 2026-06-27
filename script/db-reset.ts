@@ -77,7 +77,7 @@ Next:
   1. npm run dev
   2. Sign in with Supabase
   3. Access pending → "Set up as first administrator" (first user)
-  4. Re-seed demo data if you use it (e.g. TM seed routes)
+  4. Create tenants, customers, and module data via the app or your migration scripts
 `);
 }
 

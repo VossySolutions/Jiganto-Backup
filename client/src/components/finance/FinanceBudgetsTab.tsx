@@ -67,6 +67,8 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
   const [contractFilter, setContractFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showImportPlan, setShowImportPlan] = useState(false);
+  const [importPlanId, setImportPlanId] = useState("");
   const [newProjectId, setNewProjectId] = useState("");
   const [newContractType, setNewContractType] = useState("fixed_price");
   const [newLabourBudget, setNewLabourBudget] = useState("");
@@ -75,6 +77,52 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
   const { data: projects = [] } = useQuery<Array<{ id: number; name: string }>>({
     queryKey: ["/api/pm/projects"],
     staleTime: 60_000,
+  });
+
+  const { data: planSummaries = [] } = useQuery<Array<{
+    opportunityId: number;
+    primaryPlanId: number;
+    primaryPlanName: string | null;
+    totalCost: number;
+    currency: string;
+    rowCount: number;
+  }>>({
+    queryKey: ["/api/crm/resource-plans/summaries"],
+    enabled: showImportPlan,
+    staleTime: 30_000,
+  });
+
+  const { data: importPreview } = useQuery<{
+    planId: number;
+    opportunityName: string | null;
+    projectId: number | null;
+    labourTotal: number;
+    rowCount: number;
+    existingBudgetId: number | null;
+  }>({
+    queryKey: importPlanId ? [`/api/finance/budgets/from-resource-plan/${importPlanId}/preview`] : ["/api/finance/budgets/from-resource-plan/0/preview?disabled"],
+    enabled: showImportPlan && !!importPlanId,
+    staleTime: 10_000,
+  });
+
+  const importPlanMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/finance/budgets/from-resource-plan", {
+        planId: Number(importPlanId),
+        projectId: importPreview?.projectId ?? undefined,
+      });
+      return res.json() as Promise<{ id: number; projectId: number }>;
+    },
+    onSuccess: (budget) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/budgets"] });
+      toast({ title: "Budget imported from CRM resource plan" });
+      setShowImportPlan(false);
+      setImportPlanId("");
+      setSelectedId(budget.id);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Import failed", description: err.message, variant: "destructive" });
+    },
   });
 
   const createMutation = useMutation({
@@ -179,9 +227,14 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
         </Select>
         <span className="text-sm text-muted-foreground">{filteredBudgets.length} budgets</span>
         {budgets.length > 0 && (
-        <Button size="sm" className="sm:ml-auto w-full sm:w-auto" onClick={() => setShowCreate(true)}>
-          <Plus className="h-4 w-4 mr-1" /> New Budget
-        </Button>
+        <div className="flex flex-wrap gap-2 sm:ml-auto w-full sm:w-auto">
+          <Button size="sm" variant="outline" onClick={() => setShowImportPlan(true)} data-testid="button-import-resource-plan-budget">
+            Import CRM plan
+          </Button>
+          <Button size="sm" onClick={() => setShowCreate(true)}>
+            <Plus className="h-4 w-4 mr-1" /> New Budget
+          </Button>
+        </div>
         )}
       </div>
 
@@ -193,7 +246,10 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
           title={budgets.length === 0 ? "No project budgets yet" : "No budgets match your filters"}
           description={budgets.length === 0 ? "Create a budget to track labour, expenses, and margins per project." : "Try adjusting your search or filter criteria."}
           action={budgets.length === 0 ? (
-            <Button size="sm" onClick={() => setShowCreate(true)}><Plus className="h-4 w-4 mr-1" /> New Budget</Button>
+            <div className="flex flex-wrap gap-2 justify-center">
+              <Button size="sm" variant="outline" onClick={() => setShowImportPlan(true)}>Import CRM plan</Button>
+              <Button size="sm" onClick={() => setShowCreate(true)}><Plus className="h-4 w-4 mr-1" /> New Budget</Button>
+            </div>
           ) : undefined}
         />
       ) : (
@@ -432,6 +488,48 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
             </div>
           </FieldGrid>
         </FormSection>
+      </FormDialogShell>
+
+      <FormDialogShell
+        open={showImportPlan}
+        onOpenChange={setShowImportPlan}
+        title="Import from CRM resource plan"
+        subtitle="Create a project budget from an opportunity staffing plan"
+        saveLabel="Import budget"
+        onCancel={() => { setShowImportPlan(false); setImportPlanId(""); }}
+        onSubmit={() => importPlanMutation.mutate()}
+        saving={importPlanMutation.isPending}
+        disabled={!importPlanId || !!importPreview?.existingBudgetId || !importPreview?.projectId}
+        testId="budget-import-plan-dialog"
+      >
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <FieldLabel required>Resource plan</FieldLabel>
+            <Select value={importPlanId} onValueChange={setImportPlanId}>
+              <SelectTrigger><SelectValue placeholder="Select CRM resource plan" /></SelectTrigger>
+              <SelectContent>
+                {planSummaries.map((s) => (
+                  <SelectItem key={s.primaryPlanId} value={String(s.primaryPlanId)}>
+                    Plan #{s.primaryPlanId}{s.primaryPlanName ? ` — ${s.primaryPlanName}` : ""} · {s.rowCount} rows
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {importPreview && (
+            <div className="rounded-lg border p-3 text-sm space-y-1">
+              <p><span className="text-muted-foreground">Opportunity:</span> {importPreview.opportunityName ?? "—"}</p>
+              <p><span className="text-muted-foreground">Labour total:</span> £{importPreview.labourTotal.toLocaleString()}</p>
+              <p><span className="text-muted-foreground">Rows:</span> {importPreview.rowCount}</p>
+              {!importPreview.projectId && (
+                <p className="text-amber-600 text-xs">Convert the opportunity to a project before importing.</p>
+              )}
+              {importPreview.existingBudgetId && (
+                <p className="text-destructive text-xs">A budget already exists for this project.</p>
+              )}
+            </div>
+          )}
+        </div>
       </FormDialogShell>
     </div>
   );

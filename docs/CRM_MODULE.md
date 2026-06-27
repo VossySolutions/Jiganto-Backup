@@ -8,6 +8,8 @@
 
 **Visibility:** Hidden when working inside a **client workspace** (master / SI org view only).
 
+**Data:** All KPIs, lists, and forecasts are computed from **live database records** only. There is no demo or mock data layer in the CRM UI. Create accounts, leads, and opportunities in-app (or via your migration/import).
+
 ---
 
 ## Who can do what

@@ -71,6 +71,7 @@ import {
   updateRateCard,
   updateRateCardItem,
 } from "./repository";
+import { createBudgetFromResourcePlan, previewBudgetFromResourcePlan } from "./resource-plan-budget";
 
 function getUserId(req: Request): string | null {
   return effectiveUserId(req);
@@ -192,6 +193,15 @@ const expenseReportSchema = z.object({
     paymentMethod: z.string().optional(),
     mileageDistance: z.union([z.string(), z.number()]).nullable().optional(),
     mileageVehicleType: z.string().nullable().optional(),
+  })).optional(),
+});
+
+const fromResourcePlanSchema = z.object({
+  planId: z.number().int().positive(),
+  projectId: z.number().int().positive().optional(),
+  expenseLines: z.array(z.object({
+    category: z.string(),
+    budgetedAmount: z.union([z.string(), z.number()]),
   })).optional(),
 });
 
@@ -392,6 +402,47 @@ export function registerFinanceRoutes(app: Express): void {
     } catch (err) {
       if (zodBadRequest(res, err)) return;
       res.status(500).json({ message: "Failed to create budget" });
+    }
+  });
+
+  app.get("/api/finance/budgets/from-resource-plan/:planId/preview", async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const tenantId = requireTenant(req, res);
+    if (tenantId == null) return;
+    const planId = parseId(req.params.planId);
+    if (!planId) return res.status(400).json({ message: "Invalid plan id" });
+    const projectId = req.query.projectId ? Number(req.query.projectId) : undefined;
+    const preview = await previewBudgetFromResourcePlan(
+      tenantId,
+      planId,
+      Number.isFinite(projectId) && projectId! > 0 ? projectId : undefined,
+    );
+    if (!preview) return res.status(404).json({ message: "Resource plan not found" });
+    res.json(preview);
+  });
+
+  app.post("/api/finance/budgets/from-resource-plan", async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const tenantId = requireTenant(req, res);
+    if (tenantId == null) return;
+    const userId = getUserId(req);
+    try {
+      const body = fromResourcePlanSchema.parse(req.body);
+      const created = await createBudgetFromResourcePlan(tenantId, body.planId, {
+        projectId: body.projectId,
+        userId,
+        expenseLines: body.expenseLines,
+      });
+      res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("project")) {
+        return res.status(400).json({ message: err.message });
+      }
+      if (err instanceof Error && err.message.includes("already exists")) {
+        return res.status(409).json({ message: err.message });
+      }
+      if (zodBadRequest(res, err)) return;
+      res.status(500).json({ message: "Failed to create budget from resource plan" });
     }
   });
 

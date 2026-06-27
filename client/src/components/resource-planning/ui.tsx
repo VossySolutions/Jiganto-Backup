@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, CircleHelp, Info } from "lucide-react";
-import type { AvatarColor, DsCell } from "./mock-data";
+import type { AvatarColor, DsCell } from "./types";
 
 /** Module accent — matches sidebar colour (#4338CA). */
 export const RP_ACCENT = "#4338CA";

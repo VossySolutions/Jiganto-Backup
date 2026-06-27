@@ -560,11 +560,12 @@ export function CrmContractsTab({ contracts, accounts, searchTerm, initialContra
               </DropdownMenuItem>
               {c.documentId ? (
                 <>
-                  <DropdownMenuItem asChild>
-                    <a href={`/modules/documents?doc=${c.documentId}`} data-testid={`action-view-document-contract-${c.id}`}>
-                      <FileText className="h-3.5 w-3.5 mr-2" />
-                      View linked document
-                    </a>
+                  <DropdownMenuItem
+                    onClick={() => window.open(`/modules/documents?doc=${c.documentId}`, "_blank", "noopener,noreferrer")}
+                    data-testid={`action-view-document-contract-${c.id}`}
+                  >
+                    <FileText className="h-3.5 w-3.5 mr-2" />
+                    View linked document
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => requestSignoff(c)} data-testid={`action-signoff-contract-${c.id}`}>
                     <FileSignature className="h-3.5 w-3.5 mr-2" />

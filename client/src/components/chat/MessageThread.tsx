@@ -21,6 +21,7 @@ import {
   User,
   Users,
 } from "lucide-react";
+import { renderChatMessageContent } from "@/lib/chat-message-content";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -389,7 +390,7 @@ export function MessageThread({
                           {message.authorSource === "jiganto" && !isOwn && (
                             <span className={cn("font-semibold text-violet-600 block mb-1", chatFont.badge)}>Jiganto AI</span>
                           )}
-                          {message.content}
+                          {renderChatMessageContent(message.content)}
                           {message.attachments?.length > 0 && (
                             <MessageAttachments attachments={message.attachments} />
                           )}

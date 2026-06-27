@@ -51,8 +51,7 @@ export function DashboardContextSelector({
 
   if (!needsContext) return null;
 
-  const showClient =
-    showContextSwitcher && !isClientUser && clients.length > 0 && isMasterView;
+  const showClient = false;
   const showProject = dashboardId === "projects" && projects.length > 1;
 
   if (!showClient && !showProject) return null;

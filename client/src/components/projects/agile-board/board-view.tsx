@@ -3,7 +3,6 @@ import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
 import { GripVertical } from "lucide-react";
 import { AppKanbanBoard, type KanbanColumnDef } from "@/components/kanban";
 import { AGILE_BOARD_COLUMNS, AGILE_PALETTE as C, priorityBg, priorityColor, statusColor, tshirtBg, tshirtColor } from "./palette";
-import { BURNDOWN_DATA } from "./demo-data";
 import type { BurndownPoint, Epic, Sprint, Story } from "./types";
 import { AgileAvatar, AgileBadge, AgileBtn, AgileProgressBar, AgileSelect, BurndownChart } from "./ui-primitives";
 
@@ -110,9 +109,9 @@ export function BoardView({ stories, epics, activeSprint, onSelectStory, burndow
         </div>
       )}
 
-      {!isKanban && showChart && (
+      {!isKanban && showChart && burndownData && burndownData.length > 1 && (
         <div style={{ margin: "12px 16px 0" }}>
-          <BurndownChart data={burndownData || BURNDOWN_DATA} title={`Sprint Burndown — ${activeSprint?.name || "Sprint"}`} height={220} sprint={activeSprint} />
+          <BurndownChart data={burndownData} title={`Sprint Burndown — ${activeSprint?.name || "Sprint"}`} height={220} sprint={activeSprint} />
         </div>
       )}
 

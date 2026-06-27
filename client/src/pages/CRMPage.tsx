@@ -111,6 +111,8 @@ import { AccountDetailPanel } from "@/components/crm/AccountDetailPanel";
 import {
   CRM_ACCOUNT_DETAIL_PANEL_MARGIN_CLASS,
   CRM_ACCOUNT_DETAIL_PANEL_WIDTH_CLASS,
+  CRM_ACCOUNT_DETAIL_PANEL_EXPANDED_WIDTH_CLASS,
+  CRM_ACCOUNT_DETAIL_PANEL_EXPANDED_MARGIN_CLASS,
 } from "@/lib/crm-layout";
 import { CrmDashboardTab } from "@/components/crm/CrmDashboardTab";
 import { CrmLeadsTab } from "@/components/crm/CrmLeadsTab";
@@ -179,13 +181,16 @@ function parseCrmUrl() {
   const tab = params.get("tab");
   const contractRaw = params.get("contract");
   const planRaw = params.get("plan");
+  const oppRaw = params.get("opp");
   const contractId = contractRaw && /^\d+$/.test(contractRaw) ? Number(contractRaw) : null;
   const planId = planRaw && /^\d+$/.test(planRaw) ? Number(planRaw) : null;
+  const opportunityId = oppRaw && /^\d+$/.test(oppRaw) ? Number(oppRaw) : null;
   return {
     tab: tab && CRM_TAB_VALUES.has(tab) ? tab : null,
     contractId,
     planId,
-    hasDeepLink: Boolean(tab || contractId || planId),
+    opportunityId,
+    hasDeepLink: Boolean(tab || contractId || planId || opportunityId),
   };
 }
 
@@ -205,6 +210,7 @@ function CRMPageContent() {
   const [activeTab, setActiveTab] = useState(urlState.tab ?? "dashboard");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAccount, setSelectedAccount] = useState<CrmAccountDetail | null>(null);
+  const [detailPanelExpanded, setDetailPanelExpanded] = useState(false);
   const tabsListRef = useRef<HTMLDivElement>(null);
 
   const pipelineTabs = new Set(["opportunities", "pipeline", "forecasting", "360view", "resourceplan"]);
@@ -317,7 +323,7 @@ function CRMPageContent() {
     <ModuleShell className="h-screen overflow-hidden bg-background" testId="crm-page" mainClassName="h-full flex flex-col overflow-hidden">
       <Tabs
         value={activeTab}
-        onValueChange={(tab) => { setActiveTab(tab); setSelectedAccount(null); }}
+        onValueChange={(tab) => { setActiveTab(tab); setSelectedAccount(null); setDetailPanelExpanded(false); }}
         className="h-full flex flex-col overflow-hidden"
       >
         <div className="px-3 sm:px-4 pt-3 sm:pt-4 hidden md:block">
@@ -363,7 +369,9 @@ function CRMPageContent() {
         <div className="flex-1 overflow-hidden flex min-h-0">
           <div className={cn(
             "flex-1 overflow-auto transition-all duration-300 min-w-0",
-            selectedAccount && CRM_ACCOUNT_DETAIL_PANEL_MARGIN_CLASS
+            selectedAccount && (detailPanelExpanded
+              ? CRM_ACCOUNT_DETAIL_PANEL_EXPANDED_MARGIN_CLASS
+              : CRM_ACCOUNT_DETAIL_PANEL_MARGIN_CLASS)
           )}>
             <div className="flex-1">
               <TabsContent value="dashboard" className="p-3 sm:p-4 md:p-6 m-0">
@@ -384,7 +392,21 @@ function CRMPageContent() {
               </TabsContent>
 
               <TabsContent value="opportunities" className="p-3 sm:p-4 md:p-6 m-0">
-                <CrmOpportunitiesTab opportunities={opportunities} stages={stages} accounts={accounts} pipelines={pipelines} contacts={contacts} searchTerm={searchTerm} onNavigateToTab={(tab) => setActiveTab(tab)} onOpenCustomFieldsSettings={openCrmCustomFieldsSettings} />
+                <CrmOpportunitiesTab
+                  opportunities={opportunities}
+                  stages={stages}
+                  accounts={accounts}
+                  pipelines={pipelines}
+                  contacts={contacts}
+                  searchTerm={searchTerm}
+                  onNavigateToTab={(tab) => setActiveTab(tab)}
+                  onOpenCustomFieldsSettings={openCrmCustomFieldsSettings}
+                  onNavigateToResourcePlan={(oppId, planId) => {
+                    sessionStorage.setItem("crm-resource-plan-opp-id", String(oppId));
+                    if (planId) sessionStorage.setItem("crm-resource-plan-id", String(planId));
+                    setActiveTab("resourceplan");
+                  }}
+                />
               </TabsContent>
 
               <TabsContent value="pipeline" className="p-3 sm:p-4 md:p-6 m-0">
@@ -410,7 +432,20 @@ function CRMPageContent() {
                   pipelines={pipelines}
                   accounts={accounts}
                   contacts={contacts}
-                  winRate90d={dashboardStats?.winRate90d ?? dashboardStats?.winRate ?? 0}
+                  onOpenOpportunityNotes={(oppId, accountId) => {
+                    sessionStorage.setItem("crm-360-opportunity-id", String(oppId));
+                    const resolvedAccountId = accountId ?? opportunities.find((o) => o.id === oppId)?.accountId ?? null;
+                    if (resolvedAccountId) {
+                      sessionStorage.setItem("crm-360-account-id", String(resolvedAccountId));
+                    }
+                    sessionStorage.setItem("crm-360-subtab", "notes");
+                    setActiveTab("360view");
+                  }}
+                  onNavigateToResourcePlan={(oppId, planId) => {
+                    sessionStorage.setItem("crm-resource-plan-opp-id", String(oppId));
+                    if (planId) sessionStorage.setItem("crm-resource-plan-id", String(planId));
+                    setActiveTab("resourceplan");
+                  }}
                 />
               </TabsContent>
 
@@ -423,11 +458,19 @@ function CRMPageContent() {
                   contracts={contracts}
                   leads={leads}
                   searchTerm={searchTerm}
+                  onNavigateToTab={(tab) => setActiveTab(tab)}
                 />
               </TabsContent>
 
               <TabsContent value="resourceplan" className="p-3 sm:p-4 md:p-6 m-0">
-                <CrmResourcePlanTab opportunities={opportunities} accounts={accounts} stages={stages} initialPlanId={urlState.planId} />
+                <CrmResourcePlanTab
+                  opportunities={opportunities}
+                  accounts={accounts}
+                  stages={stages}
+                  initialPlanId={urlState.planId}
+                  initialOpportunityId={urlState.opportunityId}
+                  onNavigateToTab={(tab) => setActiveTab(tab)}
+                />
               </TabsContent>
             </div>
           </div>
@@ -436,13 +479,18 @@ function CRMPageContent() {
             <>
               <div
                 className="fixed inset-0 z-[60] bg-black/20"
-                onClick={() => setSelectedAccount(null)}
+                onClick={() => { setSelectedAccount(null); setDetailPanelExpanded(false); }}
                 data-testid="overlay-close-detail"
               />
-              <div className={cn("fixed inset-y-0 right-0 h-full z-[70] shadow-2xl border-l border-border/40 bg-background", CRM_ACCOUNT_DETAIL_PANEL_WIDTH_CLASS)}>
+              <div className={cn(
+                "fixed inset-y-0 right-0 h-full z-[70] shadow-2xl border-l border-border/40 bg-background transition-[width] duration-200",
+                detailPanelExpanded ? CRM_ACCOUNT_DETAIL_PANEL_EXPANDED_WIDTH_CLASS : CRM_ACCOUNT_DETAIL_PANEL_WIDTH_CLASS,
+              )}>
                 <AccountDetailPanel
                   account={selectedAccount}
-                  onClose={() => setSelectedAccount(null)}
+                  onClose={() => { setSelectedAccount(null); setDetailPanelExpanded(false); }}
+                  expanded={detailPanelExpanded}
+                  onToggleExpanded={() => setDetailPanelExpanded((v) => !v)}
                 />
               </div>
             </>
