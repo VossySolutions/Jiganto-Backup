@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { C } from "@/lib/survey-constants";
+import { useSurveyColors } from "@/lib/survey-constants";
 import { SurveyCardSkeleton, SurveyButtonSpinner } from "@/components/surveys/SurveyLoadingState";
 import { fetchSurveyTemplates } from "@/lib/survey-api";
 import type { SurveyTemplate } from "@shared/models/surveys";
@@ -19,6 +19,7 @@ export function TemplatesTab({
   onUseTemplate: (tpl: SurveyTemplate) => void;
   usingTemplateId?: number;
 }) {
+  const C = useSurveyColors();
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: templates = [], isLoading, isError, refetch } = useQuery({
@@ -46,7 +47,7 @@ export function TemplatesTab({
           const settings = (t.settingsJson ?? {}) as { locked?: boolean };
           const isLocked = Boolean(settings.locked);
           return (
-            <div key={t.id} style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
+            <div key={t.id} style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: C.teal, background: C.tealL, padding: "2px 8px", borderRadius: 20 }}>
                   {TIER_LABEL[t.tier] || t.tier}{isLocked ? " · 🔒 Locked" : ""}
@@ -68,7 +69,7 @@ export function TemplatesTab({
                 </button>
                 {t.tier === "customer" && !t.submissionStatus && (
                   <button onClick={() => submitMut.mutate(t.id)} disabled={submitMut.isPending}
-                    style={{ padding: "8px 12px", border: `1px solid ${C.line}`, borderRadius: 8, background: "#fff", cursor: "pointer", fontSize: 12 }}>
+                    style={{ padding: "8px 12px", border: `1px solid ${C.line}`, borderRadius: 8, background: C.surface, cursor: "pointer", fontSize: 12 }}>
                     {submitMut.isPending ? "…" : "Submit"}
                   </button>
                 )}
@@ -90,7 +91,7 @@ export function TemplatesTab({
   if (isError) return (
     <div style={{ textAlign: "center", padding: 40 }}>
       <p style={{ color: C.rose, marginBottom: 12 }}>Failed to load templates.</p>
-      <button onClick={() => refetch()} style={{ padding: "8px 16px", border: `1px solid ${C.line}`, borderRadius: 8, background: "#fff", cursor: "pointer" }}>Retry</button>
+      <button onClick={() => refetch()} style={{ padding: "8px 16px", border: `1px solid ${C.line}`, borderRadius: 8, background: C.surface, cursor: "pointer" }}>Retry</button>
     </div>
   );
 

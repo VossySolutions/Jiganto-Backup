@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { fetchProjectPolls } from "@/lib/survey-api";
-import { C, pollLink, fmtDate } from "@/lib/survey-constants";
+import { useSurveyColors, pollLink, fmtDate } from "@/lib/survey-constants";
 import type { ModulePoll } from "@shared/models/surveys";
 
 export function ProjectPollsCard({ projectId }: { projectId: number }) {
+  const C = useSurveyColors();
   const { data: polls = [], isLoading } = useQuery<ModulePoll[]>({
     queryKey: ["/api/surveys/polls", "project", projectId],
     queryFn: () => fetchProjectPolls(projectId),
@@ -15,7 +16,7 @@ export function ProjectPollsCard({ projectId }: { projectId: number }) {
   if (isLoading || active.length === 0) return null;
 
   return (
-    <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: "14px 16px", marginTop: 14 }} data-testid="project-polls-card">
+    <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, padding: "14px 16px", marginTop: 14 }} data-testid="project-polls-card">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <div style={{ fontWeight: 700, fontSize: 13, color: C.ink2 }}>📊 Active Polls</div>
         <Link href="/modules/surveys" style={{ fontSize: 12, color: C.teal, fontWeight: 600, textDecoration: "none" }}>View all →</Link>

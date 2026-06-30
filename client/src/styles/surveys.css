@@ -474,3 +474,61 @@
   min-width: 0;
   width: 100%;
 }
+
+/* ─── Dark mode overrides ─────────────────────────────────────────────────── */
+.dark .survey-subnav {
+  border-bottom-color: var(--survey-line, #3D3B36);
+}
+
+.dark .survey-builder-mobile-tabs {
+  border-bottom-color: #3D3B36;
+  background: hsl(var(--card));
+}
+
+.dark .survey-builder-panel {
+  background: hsl(var(--card));
+}
+
+.dark .survey-builder-panel--left,
+.dark .survey-builder-panel--right {
+  border-color: #3D3B36;
+}
+
+.dark .survey-builder-panel--center {
+  background: hsl(var(--muted));
+}
+
+.dark .survey-skeleton-line,
+.dark .survey-skeleton-avatar {
+  background: #3D3B36;
+}
+
+.dark .survey-skeleton-card,
+.dark .survey-skeleton-row,
+.dark .survey-skeleton-kpi {
+  background: hsl(var(--card));
+  border-color: #3D3B36;
+}
+
+.dark .survey-share-tabs {
+  border-bottom-color: #3D3B36;
+}
+
+.dark .survey-results-header {
+  border-bottom-color: #3D3B36;
+}
+
+.dark .survey-results-title {
+  color: hsl(var(--foreground));
+}
+
+.dark .survey-results-subtitle {
+  color: hsl(var(--muted-foreground));
+}
+
+.dark .survey-results-empty-card {
+  background: hsl(var(--card));
+  border-color: #3D3B36;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+

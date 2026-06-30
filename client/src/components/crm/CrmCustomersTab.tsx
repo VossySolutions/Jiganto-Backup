@@ -668,7 +668,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
           <span className="text-sm font-medium text-blue-700 dark:text-blue-400">{selectedIds.size} selected</span>
           <button
             onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-950/60 transition-colors"
             data-testid="button-bulk-delete-customers"
           >
             <Trash2 className="h-3 w-3" />

@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { C, pollLink, fmtDate, qrCodeUrl } from "@/lib/survey-constants";
+import { C, pollLink, fmtDate, qrCodeUrl, useSurveyColors } from "@/lib/survey-constants";
 import { exportPollPng } from "@/lib/survey-exports";
 import { fetchModulePolls, fetchModulePoll } from "@/lib/survey-api";
 import type { ModulePoll } from "@shared/models/surveys";
@@ -20,10 +20,11 @@ const DURATIONS = [
 ];
 
 function PollResultBars({ poll }: { poll: { question: string; options: string[]; voteCounts: number[]; totalVotes: number; anonymous: boolean; votersByOption?: Record<number, { id: string | null; name: string | null }[]>; isClosed?: boolean } }) {
+  const C = useSurveyColors();
   const total = poll.totalVotes || 1;
   const maxIdx = poll.voteCounts.indexOf(Math.max(...poll.voteCounts));
   return (
-    <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 20, marginBottom: 12 }}>
+    <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 20, marginBottom: 12 }}>
       {poll.isClosed && <div style={{ background: C.tealL, color: C.teal, padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, marginBottom: 12 }}>Final result · Poll closed</div>}
       <div style={{ fontWeight: 600, marginBottom: 16 }}>{poll.question}</div>
       {poll.options.map((opt, i) => {
@@ -47,17 +48,18 @@ function PollResultBars({ poll }: { poll: { question: string; options: string[];
       })}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button onClick={() => exportPollPng(poll.question, poll.options, poll.voteCounts)}
-          style={{ padding: "6px 12px", border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 12 }}>↓ PNG</button>
+          style={{ padding: "6px 12px", border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", fontSize: 12 }}>↓ PNG</button>
         <button onClick={() => {
           const text = poll.options.map((o, i) => `${o}: ${poll.voteCounts[i]} (${Math.round((poll.voteCounts[i] / total) * 100)}%)`).join("\n");
           navigator.clipboard.writeText(`${poll.question}\n\n${text}`);
-        }} style={{ padding: "6px 12px", border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 12 }}>Copy summary</button>
+        }} style={{ padding: "6px 12px", border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", fontSize: 12 }}>Copy summary</button>
       </div>
     </div>
   );
 }
 
 export function PollsTab() {
+  const C = useSurveyColors();
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: chatConfig } = useChatConfig();
@@ -138,7 +140,7 @@ export function PollsTab() {
           <label><input type="checkbox" checked={allowChange} onChange={e => setAllowChange(e.target.checked)} /> Allow vote change</label>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={() => setCreating(false)} style={{ padding: "10px 18px", border: `1px solid ${C.line}`, borderRadius: 8, background: "#fff", cursor: "pointer" }}>Cancel</button>
+          <button onClick={() => setCreating(false)} style={{ padding: "10px 18px", border: `1px solid ${C.line}`, borderRadius: 8, background: C.surface, cursor: "pointer" }}>Cancel</button>
           <button onClick={() => createMut.mutate({ question, options: validOpts, pollType, durationMinutes: duration, anonymous, showResultsToVoters: showResults, allowVoteChange: allowChange })}
             disabled={!question.trim() || validOpts.length < 2 || createMut.isPending}
             style={{ padding: "10px 24px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 8 }}>
@@ -162,7 +164,7 @@ export function PollsTab() {
       {isError && (
         <div style={{ background: C.roseL, borderRadius: 10, padding: 14, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 13, color: C.rose }}>Failed to load polls.</span>
-          <button onClick={() => refetch()} style={{ padding: "6px 12px", border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer" }}>Retry</button>
+          <button onClick={() => refetch()} style={{ padding: "6px 12px", border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer" }}>Retry</button>
         </div>
       )}
 
@@ -172,7 +174,7 @@ export function PollsTab() {
             <div style={{ textAlign: "center", padding: 40, color: C.ink4, border: `2px dashed ${C.line2}`, borderRadius: 12 }}>No polls yet</div>
           ) : polls.map(p => (
             <div key={p.id} onClick={() => setSelectedPollId(p.id)}
-              style={{ background: "#fff", border: `1.5px solid ${selectedPollId === p.id ? C.teal : C.line}`, borderRadius: 10, padding: 16, marginBottom: 10, cursor: "pointer" }}>
+              style={{ background: C.surface, border: `1.5px solid ${selectedPollId === p.id ? C.teal : C.line}`, borderRadius: 10, padding: 16, marginBottom: 10, cursor: "pointer" }}>
               <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{p.question}</div>
               <div style={{ fontSize: 12, color: C.ink4 }}>
                 {p.status} · {fmtDate(p.createdAt?.toString())} · {p.createdByName || "Unknown"}
@@ -186,7 +188,7 @@ export function PollsTab() {
             {detailLoading ? <SurveyLoadingState label="Loading poll results…" size="sm" /> : detailError ? (
               <div style={{ textAlign: "center", padding: 20 }}>
                 <p style={{ color: C.rose, fontSize: 13, marginBottom: 10 }}>Failed to load poll.</p>
-                <button onClick={() => refetchDetail()} style={{ padding: "6px 12px", border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer" }}>Retry</button>
+                <button onClick={() => refetchDetail()} style={{ padding: "6px 12px", border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer" }}>Retry</button>
               </div>
             ) : pollDetail ? (
               <>
@@ -195,7 +197,7 @@ export function PollsTab() {
                   {pollDetail.token && (
                     <>
                       <button onClick={() => { navigator.clipboard.writeText(pollLink(pollDetail.token!)); toast({ title: "Link copied" }); }}
-                        style={{ padding: "8px 14px", border: `1px solid ${C.line}`, borderRadius: 8, background: "#fff", cursor: "pointer", fontSize: 13 }}>🔗 Copy link</button>
+                        style={{ padding: "8px 14px", border: `1px solid ${C.line}`, borderRadius: 8, background: C.surface, cursor: "pointer", fontSize: 13 }}>🔗 Copy link</button>
                       <img src={qrCodeUrl(pollLink(pollDetail.token))} alt="QR" width={80} height={80} style={{ borderRadius: 6, border: `1px solid ${C.line}` }} />
                     </>
                   )}

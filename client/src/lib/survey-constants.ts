@@ -1,4 +1,19 @@
-export const C = {
+import { useMemo } from "react";
+import { useTheme } from "@/hooks/use-theme";
+
+export type SurveyColors = {
+  teal: string; tealL: string; tealM: string;
+  amber: string; amberL: string;
+  violet: string; violetL: string;
+  rose: string; roseL: string;
+  blue: string; blueL: string;
+  ink: string; ink2: string; ink3: string; ink4: string;
+  paper: string; paper2: string; paper3: string;
+  line: string; line2: string;
+  surface: string;
+};
+
+export const C_LIGHT: SurveyColors = {
   teal: "#1A6B5A", tealL: "#E4F2EE", tealM: "#2E8C74",
   amber: "#B85C0A", amberL: "#FDF0E4",
   violet: "#4A2D8C", violetL: "#EEE9FA",
@@ -7,10 +22,47 @@ export const C = {
   ink: "#0F0E0C", ink2: "#2E2C28", ink3: "#5C5952", ink4: "#9C9890",
   paper: "#FAFAF7", paper2: "#F2F0EB", paper3: "#E8E5DE",
   line: "#DDD9D0", line2: "#CBC7BC",
+  surface: "#ffffff",
 };
 
-export const MC_BARS = [C.tealM, "#4AAD90", C.amber, C.rose, "#6842B8", "#1A4A8C"];
-export const CB_BARS = [C.violet, "#6842B8", "#8C5ECC", "#AA7ADE", "#C89EEA"];
+export const C_DARK: SurveyColors = {
+  teal: "#4AAD90", tealL: "#1A3D34", tealM: "#2E8C74",
+  amber: "#E8954A", amberL: "#3D2A14",
+  violet: "#9B7EDE", violetL: "#2A2040",
+  rose: "#E57373", roseL: "#3D1F1F",
+  blue: "#5B9BD5", blueL: "#1A2A40",
+  ink: "#F2F0EB", ink2: "#E8E5DE", ink3: "#9C9890", ink4: "#6B6860",
+  paper: "#1a1f2e", paper2: "#151a26", paper3: "#252a36",
+  line: "#3D3B36", line2: "#4A4840",
+  surface: "#252a36",
+};
+
+/** @deprecated Use useSurveyColors() for theme-aware colors */
+export const C = C_LIGHT;
+
+export function getSurveyColors(theme: "light" | "dark"): SurveyColors {
+  return theme === "dark" ? C_DARK : C_LIGHT;
+}
+
+export function useSurveyColors(): SurveyColors {
+  const { resolvedTheme } = useTheme();
+  return useMemo(() => getSurveyColors(resolvedTheme), [resolvedTheme]);
+}
+
+export function getStatusStyles(C: SurveyColors): Record<string, { label: string; bg: string; color: string; dot?: boolean }> {
+  return {
+    draft: { label: "Draft", bg: C.paper3, color: C.ink3 },
+    active: { label: "Active", bg: C.tealL, color: C.teal, dot: true },
+    closed: { label: "Closed", bg: C.roseL, color: C.rose },
+    archived: { label: "Archived", bg: C.paper3, color: C.ink4 },
+  };
+}
+
+/** @deprecated Use getStatusStyles(useSurveyColors()) */
+export const STATUS_STYLES = getStatusStyles(C_LIGHT);
+
+export const MC_BARS = [C_LIGHT.tealM, "#4AAD90", C_LIGHT.amber, C_LIGHT.rose, "#6842B8", "#1A4A8C"];
+export const CB_BARS = [C_LIGHT.violet, "#6842B8", "#8C5ECC", "#AA7ADE", "#C89EEA"];
 
 export const QUESTION_TYPES: { type: string; icon: string; label: string; group: string }[] = [
   { type: "mc", icon: "◉", label: "Multiple Choice", group: "Choice" },
@@ -30,13 +82,6 @@ export const QUESTION_TYPES: { type: string; icon: string; label: string; group:
 ];
 
 export const TYPE_LABEL: Record<string, string> = Object.fromEntries(QUESTION_TYPES.map(q => [q.type, q.label]));
-
-export const STATUS_STYLES: Record<string, { label: string; bg: string; color: string; dot?: boolean }> = {
-  draft: { label: "Draft", bg: C.paper3, color: C.ink3 },
-  active: { label: "Active", bg: C.tealL, color: C.teal, dot: true },
-  closed: { label: "Closed", bg: C.roseL, color: C.rose },
-  archived: { label: "Archived", bg: C.paper3, color: C.ink4 },
-};
 
 export const CATEGORY_ICONS: Record<string, string> = {
   "Retrospective": "📊", "Client Satisfaction": "🎯", "Team Wellbeing": "💡",

@@ -1114,7 +1114,7 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
                   </div>
                 ) : (
                   <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-4">
-                    <div className="bg-green-100 rounded-lg p-3">{FILE_ICON[uploadedFile.type] || <FileText className="h-6 w-6 text-green-600" />}</div>
+                    <div className="bg-green-100 dark:bg-green-900/30 rounded-lg p-3">{FILE_ICON[uploadedFile.type] || <FileText className="h-6 w-6 text-green-600 dark:text-green-400" />}</div>
                     <div className="flex-1">
                       <div className="font-semibold text-green-800">{uploadedFile.name}</div>
                       <div className="text-sm text-green-600">{uploadedFile.type.toUpperCase()} · Ready</div>

@@ -67,7 +67,7 @@ export function ResourcesAllocationsTab({
 
   const barClass = (type: string | null) => {
     if (type === "provisional" || type === "soft") return "bg-amber-400 bg-[length:8px_8px] bg-[linear-gradient(45deg,rgba(255,255,255,.3)_25%,transparent_25%,transparent_50%,rgba(255,255,255,.3)_50%,rgba(255,255,255,.3)_75%,transparent_75%,transparent)]";
-    if (type === "on_hold") return "border-2 border-dashed border-slate-400 bg-slate-200";
+    if (type === "on_hold") return "border-2 border-dashed border-slate-400 bg-slate-200 dark:bg-slate-700 dark:border-slate-500";
     return "bg-emerald-500";
   };
 

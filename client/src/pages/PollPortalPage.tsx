@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { fetchWithAuth } from "@/lib/queryClient";
-import { C } from "@/lib/survey-constants";
+import { useSurveyColors } from "@/lib/survey-constants";
 import { SurveyLoadingState, SurveyButtonSpinner } from "@/components/surveys/SurveyLoadingState";
 import { useChatConfig } from "@/hooks/use-chat-realtime";
 import { useModulePollRealtime } from "@/hooks/use-poll-realtime";
@@ -34,6 +34,7 @@ function getOrCreateVoterSession(): string {
 }
 
 export default function PollPortalPage() {
+  const C = useSurveyColors();
   const { token } = useParams<{ token: string }>();
   const [selected, setSelected] = useState<number[]>([]);
   const voterSession = useMemo(() => getOrCreateVoterSession(), []);
@@ -92,7 +93,7 @@ export default function PollPortalPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${C.teal} 0%, #0F3D31 100%)`, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px" }}>
-      <div style={{ background: "#fff", borderRadius: 20, maxWidth: 520, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
+      <div style={{ background: C.surface, borderRadius: 20, maxWidth: 520, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
         <div style={{ padding: "28px 32px", borderBottom: `1px solid ${C.line}` }}>
           {poll.isClosed && <div style={{ background: C.tealL, color: C.teal, padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, marginBottom: 12, display: "inline-block" }}>Final result</div>}
           <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{poll.question}</h1>
@@ -106,7 +107,7 @@ export default function PollPortalPage() {
             return (
               <button key={i} type="button" disabled={poll.isClosed || voteMut.isPending}
                 onClick={() => { toggle(i); if (poll.pollType === "single") voteMut.mutate([i]); }}
-                style={{ width: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 10, border: `1.5px solid ${isSel ? C.teal : C.line}`, borderRadius: 10, background: isSel ? C.tealL : "#fff", cursor: poll.isClosed ? "default" : "pointer", position: "relative", overflow: "hidden" }}>
+                style={{ width: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 10, border: `1.5px solid ${isSel ? C.teal : C.line}`, borderRadius: 10, background: isSel ? C.tealL : C.surface, cursor: poll.isClosed ? "default" : "pointer", position: "relative", overflow: "hidden" }}>
                 {showBars && (
                   <div style={{ position: "absolute", inset: 0, width: `${pct}%`, background: C.tealL, opacity: 0.5 }} />
                 )}

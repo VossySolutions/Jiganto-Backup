@@ -103,7 +103,7 @@ export function SignaturePad({ name, onNameChange, method, onMethodChange, signa
       {method === "draw" && (
         <div>
           <canvas ref={canvasRef} width={280} height={100}
-            className="w-full border border-border rounded-lg bg-white cursor-crosshair touch-none"
+            className="w-full border border-border rounded-lg bg-white dark:bg-card cursor-crosshair touch-none"
             onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
             onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw} />
           <button type="button" onClick={clearDraw} className="text-xs text-muted-foreground mt-1 hover:underline">Clear</button>

@@ -528,7 +528,7 @@ export default function SigningPortalPage() {
             )}
 
             {expired ? (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 flex items-start gap-2">
+              <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl p-4 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>This signing link has expired. Please contact the sender to request a new link.</span>
               </div>

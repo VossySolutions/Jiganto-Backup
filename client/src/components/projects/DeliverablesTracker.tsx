@@ -91,11 +91,11 @@ function initials(name: string) {
 }
 
 function ragClasses(r: string) {
-  if (r === "Green") return "bg-green-100 text-green-800";
-  if (r === "Amber") return "bg-amber-100 text-amber-900";
-  if (r === "Red") return "bg-red-100 text-red-800";
-  if (r === "Blue") return "bg-blue-100 text-blue-800";
-  return "bg-gray-100 text-gray-500";
+  if (r === "Green") return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
+  if (r === "Amber") return "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300";
+  if (r === "Red") return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
+  if (r === "Blue") return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
+  return "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400";
 }
 
 function ragDot(r: string) {
@@ -107,12 +107,12 @@ function ragDot(r: string) {
 }
 
 function statusClasses(s: string) {
-  if (s === "Completed") return "bg-sky-100 text-sky-800";
-  if (s === "Approved") return "bg-green-100 text-green-800";
-  if (s === "In Progress") return "bg-blue-100 text-blue-700";
-  if (s === "In Review") return "bg-amber-100 text-amber-900";
-  if (s === "Overdue") return "bg-red-100 text-red-800";
-  return "bg-gray-100 text-gray-500";
+  if (s === "Completed") return "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300";
+  if (s === "Approved") return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
+  if (s === "In Progress") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
+  if (s === "In Review") return "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300";
+  if (s === "Overdue") return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
+  return "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400";
 }
 
 function progColor(p: number) {
@@ -143,11 +143,11 @@ function approvalInfo(d: PmDeliverable) {
   const hasChanges = audit.some(x => x.action === "changes");
   const total = approvers.length;
   const done = approved.length;
-  if (!total) return { cls: "border-gray-200 bg-gray-50 text-gray-500", label: "No approvers", icon: "—", done: 0, total: 0 };
-  if (hasChanges) return { cls: "border-red-300 bg-red-50 text-red-800", label: "Blocked", icon: "🔴", done, total };
-  if (done === total) return { cls: "border-green-300 bg-green-50 text-green-800", label: `${done}/${total} Approved`, icon: "✓", done, total };
-  if (done > 0) return { cls: "border-amber-300 bg-amber-50 text-amber-900", label: `${done}/${total} Approved`, icon: "◑", done, total };
-  return { cls: "border-gray-200 bg-gray-50 text-gray-500", label: `0/${total} Pending`, icon: "○", done: 0, total };
+  if (!total) return { cls: "border-gray-200 bg-gray-50 text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400", label: "No approvers", icon: "—", done: 0, total: 0 };
+  if (hasChanges) return { cls: "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300", label: "Blocked", icon: "🔴", done, total };
+  if (done === total) return { cls: "border-green-300 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950/40 dark:text-green-300", label: `${done}/${total} Approved`, icon: "✓", done, total };
+  if (done > 0) return { cls: "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300", label: `${done}/${total} Approved`, icon: "◑", done, total };
+  return { cls: "border-gray-200 bg-gray-50 text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400", label: `0/${total} Pending`, icon: "○", done: 0, total };
 }
 
 interface PeopleEditorProps {
@@ -1606,7 +1606,7 @@ function PhaseRow({
                         ) : reviewedBy.has(name) ? (
                           <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold">Reviewed</span>
                         ) : (
-                          <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[11px] font-bold">Pending</span>
+                          <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 text-[11px] font-bold">Pending</span>
                         )}
                       </div>
                     </div>
@@ -1635,7 +1635,7 @@ function PhaseRow({
                         ) : changesBy.has(name) ? (
                           <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 text-[11px] font-bold">⚠ Changes</span>
                         ) : (
-                          <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[11px] font-bold">Pending</span>
+                          <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 text-[11px] font-bold">Pending</span>
                         )}
                       </div>
                     </div>

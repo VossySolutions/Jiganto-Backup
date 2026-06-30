@@ -3,18 +3,10 @@ import { useParams } from "wouter";
 import { SubmitForm } from "@/components/ui/submit-form";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import type { SurveyWithDetails, SurveyQuestion } from "@shared/models/surveys";
-import { LIKERT_OPTIONS, EMOJI_RATINGS } from "@/lib/survey-constants";
+import { LIKERT_OPTIONS, EMOJI_RATINGS, useSurveyColors } from "@/lib/survey-constants";
 import { applyLogicSkip, visibleSurveyQuestions } from "@/lib/survey-logic";
 import { SurveyLoadingState, SurveyButtonSpinner } from "@/components/surveys/SurveyLoadingState";
 import "@/styles/surveys.css";
-
-const C = {
-  teal: "#1A6B5A", tealL: "#E4F2EE", tealM: "#2E8C74",
-  amber: "#B85C0A", amberL: "#FDF0E4",
-  rose: "#9C2B2B", roseL: "#FAEAEA",
-  ink: "#0F0E0C", ink2: "#2E2C28", ink3: "#5C5952", ink4: "#9C9890",
-  paper: "#FAFAF7", paper2: "#F2F0EB", line: "#DDD9D0", line2: "#CBC7BC",
-};
 
 const TYPE_LABEL: Record<string, string> = {
   mc: "Multiple Choice", yn: "Yes / No", cb: "Checkboxes", dd: "Dropdown",
@@ -36,6 +28,7 @@ function orderQuestions(questions: SurveyQuestion[], randomize: boolean) {
 type AnswerValue = string | string[] | number | null;
 
 export default function SurveyPortalPage() {
+  const C = useSurveyColors();
   const { token } = useParams<{ token: string }>();
   const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState<Record<number, AnswerValue>>({});
@@ -71,7 +64,7 @@ export default function SurveyPortalPage() {
 
   if (error || !survey) return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${C.teal} 0%, #0F3D31 100%)`, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: "40px 36px", maxWidth: 480, textAlign: "center", width: "100%" }}>
+      <div style={{ background: C.surface, borderRadius: 20, padding: "40px 36px", maxWidth: 480, textAlign: "center", width: "100%" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
         <h2 style={{ fontFamily: "serif", fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Survey Not Available</h2>
         <p style={{ color: C.ink3, fontSize: 14 }}>{(error as Error)?.message || "This survey is not available."}</p>
@@ -123,7 +116,7 @@ export default function SurveyPortalPage() {
     const inputStyle = { width: "100%", padding: "11px 14px", border: `1.5px solid ${C.line}`, borderRadius: 10, fontFamily: "inherit", fontSize: 14, color: C.ink, outline: "none" };
     return (
       <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${C.teal} 0%, #0F3D31 100%)`, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px" }}>
-        <div style={{ background: "#fff", borderRadius: 20, maxWidth: 560, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
+        <div style={{ background: C.surface, borderRadius: 20, maxWidth: 560, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
           <div style={{ padding: "28px 36px", borderBottom: `1px solid ${C.line}` }}>
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".1em", color: C.teal, marginBottom: 8 }}>Almost done</div>
             <h1 style={{ fontFamily: "serif", fontSize: 20, fontWeight: 700, marginBottom: 4, margin: 0 }}>Your details</h1>
@@ -139,7 +132,7 @@ export default function SurveyPortalPage() {
               <input type="email" value={respondentEmail} onChange={e => setRespondentEmail(e.target.value)} style={inputStyle} placeholder="Email address (optional)" data-testid="input-respondent-email" />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 20, borderTop: `1px solid ${C.line}` }}>
-              <button type="button" onClick={handleBack} style={{ padding: "11px 22px", border: `1.5px solid ${C.line}`, borderRadius: 10, background: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 500 }}>← Back</button>
+              <button type="button" onClick={handleBack} style={{ padding: "11px 22px", border: `1.5px solid ${C.line}`, borderRadius: 10, background: C.surface, cursor: "pointer", fontSize: 14, fontWeight: 500 }}>← Back</button>
               <button type="submit" disabled={submitMut.isPending}
                 style={{ padding: "11px 28px", background: C.teal, color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 15, fontWeight: 600, opacity: submitMut.isPending ? 0.6 : 1 }}
                 data-testid="button-submit-survey">
@@ -157,7 +150,7 @@ export default function SurveyPortalPage() {
     const visibleQuestions = visibleSurveyQuestions(questions, answers);
     return (
       <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${C.teal} 0%, #0F3D31 100%)`, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px" }}>
-        <div style={{ background: "#fff", borderRadius: 20, maxWidth: 640, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
+        <div style={{ background: C.surface, borderRadius: 20, maxWidth: 640, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
           <div style={{ padding: "28px 36px", borderBottom: `1px solid ${C.line}` }}>
             <h1 style={{ fontFamily: "serif", fontSize: 22, fontWeight: 700, margin: 0 }}>{survey.title}</h1>
             {survey.description && <p style={{ fontSize: 13, color: C.ink3, marginTop: 8 }}>{survey.description}</p>}
@@ -192,7 +185,7 @@ export default function SurveyPortalPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${C.teal} 0%, #0F3D31 100%)`, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px" }}>
-      <div style={{ background: "#fff", borderRadius: 20, maxWidth: 580, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
+      <div style={{ background: C.surface, borderRadius: 20, maxWidth: 580, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
         {/* Header */}
         <div style={{ padding: "28px 36px 24px", borderBottom: `1px solid ${C.line}` }}>
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".1em", color: C.teal, marginBottom: 8 }}>
@@ -223,7 +216,7 @@ export default function SurveyPortalPage() {
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 28, paddingTop: 24, borderTop: `1px solid ${C.line}` }}>
             <button onClick={handleBack} disabled={currentQ === 0}
-              style={{ padding: "10px 20px", border: `1.5px solid ${C.line}`, borderRadius: 10, background: "#fff", cursor: currentQ === 0 ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 500, opacity: currentQ === 0 ? 0.4 : 1 }}>
+              style={{ padding: "10px 20px", border: `1.5px solid ${C.line}`, borderRadius: 10, background: C.surface, cursor: currentQ === 0 ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 500, opacity: currentQ === 0 ? 0.4 : 1 }}>
               ← Back
             </button>
             <button onClick={handleNext}
@@ -246,13 +239,14 @@ export default function SurveyPortalPage() {
 
 // ─── Question input components ─────────────────────────────────────────────
 function QuestionInput({ q, token, value, onChange }: { q: SurveyQuestion; token: string; value: AnswerValue; onChange: (v: AnswerValue) => void }) {
+  const C = useSurveyColors();
   const opts = (q.options as string[]) || [];
 
   const optStyle = (selected: boolean): React.CSSProperties => ({
     display: "flex", alignItems: "center", gap: 12, padding: "12px 16px",
     border: `1.5px solid ${selected ? C.teal : C.line}`,
     borderRadius: 10, cursor: "pointer", marginBottom: 10, fontSize: 14, fontWeight: 500,
-    background: selected ? C.tealL : "#fff", color: selected ? C.teal : C.ink2,
+    background: selected ? C.tealL : C.surface, color: selected ? C.teal : C.ink2,
     transition: "all .15s",
   });
 
@@ -262,7 +256,7 @@ function QuestionInput({ q, token, value, onChange }: { q: SurveyQuestion; token
     if (q.type === "dd") {
       return (
         <select value={value as string || ""} onChange={e => onChange(e.target.value)}
-          style={{ width: "100%", padding: "11px 14px", border: `1.5px solid ${C.line}`, borderRadius: 10, fontSize: 14, color: C.ink, outline: "none", background: "#fff" }}>
+          style={{ width: "100%", padding: "11px 14px", border: `1.5px solid ${C.line}`, borderRadius: 10, fontSize: 14, color: C.ink, outline: "none", background: C.surface }}>
           <option value="">— Select an option —</option>
           {choices.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -274,8 +268,8 @@ function QuestionInput({ q, token, value, onChange }: { q: SurveyQuestion; token
           const sel = value === c;
           return (
             <div key={c} style={optStyle(sel)} onClick={() => onChange(c)} data-testid={`option-${c}`}>
-              <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${sel ? C.teal : C.line2}`, flexShrink: 0, background: sel ? C.teal : "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {sel && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff" }} />}
+              <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${sel ? C.teal : C.line2}`, flexShrink: 0, background: sel ? C.teal : C.surface, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {sel && <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.surface }} />}
               </div>
               {c}
             </div>
@@ -296,7 +290,7 @@ function QuestionInput({ q, token, value, onChange }: { q: SurveyQuestion; token
             <div key={c} style={optStyle(sel)}
               onClick={() => onChange(sel ? selected.filter(x => x !== c) : [...selected, c])}
               data-testid={`option-${c}`}>
-              <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${sel ? C.teal : C.line2}`, flexShrink: 0, background: sel ? C.teal : "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11 }}>
+              <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${sel ? C.teal : C.line2}`, flexShrink: 0, background: sel ? C.teal : C.surface, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11 }}>
                 {sel && "✓"}
               </div>
               {c}
@@ -317,7 +311,7 @@ function QuestionInput({ q, token, value, onChange }: { q: SurveyQuestion; token
             const sel = value === n;
             return (
               <div key={n} onClick={() => onChange(n)}
-                style={{ flex: 1, textAlign: "center", padding: "12px 4px", border: `1.5px solid ${sel ? C.teal : C.line}`, borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 600, background: sel ? C.teal : "#fff", color: sel ? "#fff" : C.ink3, transition: "all .15s" }}
+                style={{ flex: 1, textAlign: "center", padding: "12px 4px", border: `1.5px solid ${sel ? C.teal : C.line}`, borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 600, background: sel ? C.teal : C.surface, color: sel ? "#fff" : C.ink3, transition: "all .15s" }}
                 data-testid={`scale-${n}`}>
                 {n}
               </div>
@@ -383,7 +377,7 @@ function QuestionInput({ q, token, value, onChange }: { q: SurveyQuestion; token
         {cols.map(c => {
           const sel = value === c;
           return (
-            <div key={c} onClick={() => onChange(c)} style={{ flex: "1 1 100px", textAlign: "center", padding: "10px 6px", border: `1.5px solid ${sel ? C.teal : C.line}`, borderRadius: 10, cursor: "pointer", fontSize: 12, background: sel ? C.tealL : "#fff", color: sel ? C.teal : C.ink2 }}>{c}</div>
+            <div key={c} onClick={() => onChange(c)} style={{ flex: "1 1 100px", textAlign: "center", padding: "10px 6px", border: `1.5px solid ${sel ? C.teal : C.line}`, borderRadius: 10, cursor: "pointer", fontSize: 12, background: sel ? C.tealL : C.surface, color: sel ? C.teal : C.ink2 }}>{c}</div>
           );
         })}
       </div>
@@ -472,7 +466,7 @@ function QuestionInput({ q, token, value, onChange }: { q: SurveyQuestion; token
                   return (
                     <td key={c} style={{ textAlign: "center", padding: 8 }}>
                       <div onClick={() => onChange({ ...matrixVal, [r]: c } as any)}
-                        style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${sel ? C.teal : C.line2}`, margin: "0 auto", background: sel ? C.teal : "#fff", cursor: "pointer" }} />
+                        style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${sel ? C.teal : C.line2}`, margin: "0 auto", background: sel ? C.teal : C.surface, cursor: "pointer" }} />
                     </td>
                   );
                 })}
@@ -488,6 +482,7 @@ function QuestionInput({ q, token, value, onChange }: { q: SurveyQuestion; token
 }
 
 function SubmittedView({ survey, token }: { survey: SurveyWithDetails; token: string }) {
+  const C = useSurveyColors();
   const showResults = !!survey.showResultsToRespondents;
   const { data: results, isLoading } = useQuery({
     queryKey: ["/api/surveys/by-token", token, "results"],
@@ -500,7 +495,7 @@ function SubmittedView({ survey, token }: { survey: SurveyWithDetails; token: st
 
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${C.teal} 0%, #0F3D31 100%)`, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px" }}>
-      <div style={{ background: "#fff", borderRadius: 20, maxWidth: showResults ? 720 : 560, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
+      <div style={{ background: C.surface, borderRadius: 20, maxWidth: showResults ? 720 : 560, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,.2)", overflow: "hidden" }}>
         <div style={{ padding: "48px 36px", textAlign: "center" }}>
           <div style={{ fontSize: 56, marginBottom: 20 }}>🎉</div>
           <h2 style={{ fontFamily: "serif", fontSize: 26, fontWeight: 700, marginBottom: 10 }}>Thank you!</h2>

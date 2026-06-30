@@ -145,7 +145,7 @@ export function GanttView({ projectId }: GanttViewProps) {
     };
     const label = status?.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()) || "Unknown";
     return (
-      <Badge variant="outline" className={statusColors[status || ""] || "bg-gray-100"}>
+      <Badge variant="outline" className={statusColors[status || ""] || "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"}>
         {label}
       </Badge>
     );

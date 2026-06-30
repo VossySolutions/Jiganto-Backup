@@ -611,10 +611,10 @@ export function FinanceTimesheetsTab({
                             className={cn(
                               "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border",
                               periodSignoff.status === "completed"
-                                ? "bg-green-50 text-green-700 border-green-200"
+                                ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800"
                                 : periodSignoff.status === "declined"
-                                ? "bg-red-50 text-red-700 border-red-200"
-                                : "bg-amber-50 text-amber-700 border-amber-200",
+                                ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+                                : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
                             )}
                           >
                             <PenLine className="h-3 w-3" />

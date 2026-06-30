@@ -665,9 +665,9 @@ export function EntityDetailPanel({ open, onClose, entityType, entity }: EntityD
                           {note.ragSnapshot && (
                             <span className={cn(
                               "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
-                              note.ragSnapshot === "green" ? "bg-green-100 text-green-700" :
-                              note.ragSnapshot === "amber" ? "bg-amber-100 text-amber-700" :
-                              "bg-red-100 text-red-700"
+                              note.ragSnapshot === "green" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                              note.ragSnapshot === "amber" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                              "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                             )}>
                               {note.ragSnapshot === "green" ? "🟢" : note.ragSnapshot === "amber" ? "🟡" : "🔴"} {note.ragSnapshot}
                             </span>

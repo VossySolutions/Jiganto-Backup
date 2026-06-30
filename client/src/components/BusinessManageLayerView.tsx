@@ -1574,7 +1574,7 @@ export function EnhancedGovernanceTab({
     { key:"ragStatus",  label:"RAG",       width:"7%",  render:r=><RagBadge rag={r.ragStatus} /> },
     { key:"progress",   label:"Progress",  width:"9%",  render:r=><ProgressBar value={r.progress ?? 0} /> },
     { key:"targetDate", label:"Target",    width:"10%", render:r=><DateCell date={r.targetDate} /> },
-    { key:"riskImpact", label:"Impact",    width:"8%",  render:r=>r.riskImpact ? <span className={`text-[10px] capitalize px-1.5 py-0.5 rounded ${r.riskImpact === "critical" ? "bg-red-100 text-red-700" : r.riskImpact === "high" ? "bg-orange-100 text-orange-700" : r.riskImpact === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600"}`}>{r.riskImpact}</span> : <span className="text-muted-foreground/40">—</span> },
+    { key:"riskImpact", label:"Impact",    width:"8%",  render:r=>r.riskImpact ? <span className={`text-[10px] capitalize px-1.5 py-0.5 rounded ${r.riskImpact === "critical" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" : r.riskImpact === "high" ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" : r.riskImpact === "medium" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"}`}>{r.riskImpact}</span> : <span className="text-muted-foreground/40">—</span> },
   ];
 
   return (

@@ -1,5 +1,5 @@
 import { useRef, useCallback } from "react";
-import { C } from "@/lib/survey-constants";
+import { useSurveyColors } from "@/lib/survey-constants";
 
 type Props = {
   value: string;
@@ -14,6 +14,7 @@ function exec(cmd: string) {
 }
 
 export function RichTextField({ value, onChange, rows = 3, placeholder, style }: Props) {
+  const C = useSurveyColors();
   const ref = useRef<HTMLDivElement>(null);
 
   const sync = useCallback(() => {
@@ -34,7 +35,7 @@ export function RichTextField({ value, onChange, rows = 3, placeholder, style }:
             onMouseDown={e => { e.preventDefault(); exec(b.cmd); sync(); }}
             style={{
               width: 28, height: 26, border: `1px solid ${C.line2}`, borderRadius: 5,
-              background: "#fff", cursor: "pointer", fontWeight: b.cmd === "bold" ? 700 : 400,
+              background: C.surface, cursor: "pointer", fontWeight: b.cmd === "bold" ? 700 : 400,
               fontStyle: b.cmd === "italic" ? "italic" : "normal", fontSize: 12,
             }}
           >
@@ -58,7 +59,7 @@ export function RichTextField({ value, onChange, rows = 3, placeholder, style }:
           fontFamily: "inherit",
           fontSize: 13,
           color: C.ink,
-          background: "#fff",
+          background: C.surface,
           outline: "none",
           lineHeight: 1.5,
           ...style,

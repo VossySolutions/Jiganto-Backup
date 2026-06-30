@@ -1,6 +1,6 @@
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { C } from "@/lib/survey-constants";
+import { useSurveyColors } from "@/lib/survey-constants";
 
 type Props = {
   label?: string;
@@ -10,6 +10,7 @@ type Props = {
 };
 
 export function SurveyLoadingState({ label = "Loading…", className, size = "md", inline }: Props) {
+  const C = useSurveyColors();
   const iconSize = size === "sm" ? 18 : size === "lg" ? 40 : 28;
   const padding = inline ? "" : size === "sm" ? "py-6" : size === "lg" ? "py-16" : "py-12";
   return (

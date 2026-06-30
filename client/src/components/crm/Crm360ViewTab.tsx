@@ -1244,7 +1244,7 @@ export function Crm360ViewTab({
                           </td>
                           <td className={cn(TABLE_CELL, "text-muted-foreground")}>{lead.source || "—"}</td>
                           <td className={TABLE_CELL}>
-                            <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full capitalize", lead.status === "new" ? "bg-blue-100 text-blue-700" : lead.status === "converted" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700")}>
+                            <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full capitalize", lead.status === "new" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : lead.status === "converted" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300")}>
                               {lead.status}
                             </span>
                           </td>
@@ -1655,7 +1655,7 @@ export function Crm360ViewTab({
                                 {activity.type}
                               </span>
                               {activity.status && (
-                                <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full", activity.status === "completed" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600")}>
+                                <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full", activity.status === "completed" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400")}>
                                   {activity.status}
                                 </span>
                               )}
@@ -1746,7 +1746,7 @@ export function Crm360ViewTab({
                           </td>
                           <td className={TABLE_CELL}>
                             {t.priority ? (
-                              <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full capitalize", t.priority === "high" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600")}>{t.priority}</span>
+                              <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full capitalize", t.priority === "high" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400")}>{t.priority}</span>
                             ) : "—"}
                           </td>
                           <td className={cn(TABLE_CELL, "text-muted-foreground text-xs")}>{format360ShortDate(t.dueDate)}</td>
@@ -1798,11 +1798,11 @@ export function Crm360ViewTab({
                           </td>
                           <td className={cn(TABLE_CELL, "text-muted-foreground text-xs")}>{ticket.source === "task" ? "Help desk task" : "Ticket activity"}</td>
                           <td className={TABLE_CELL}>
-                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 capitalize">{ticket.status || "open"}</span>
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 capitalize">{ticket.status || "open"}</span>
                           </td>
                           <td className={TABLE_CELL}>
                             {ticket.priority ? (
-                              <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full capitalize", ticket.priority === "high" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600")}>{ticket.priority}</span>
+                              <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full capitalize", ticket.priority === "high" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400")}>{ticket.priority}</span>
                             ) : "—"}
                           </td>
                           <td className={cn(TABLE_CELL, "text-muted-foreground text-xs")}>{format360ShortDate(ticket.createdAt)}</td>

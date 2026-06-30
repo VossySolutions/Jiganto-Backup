@@ -10,8 +10,9 @@ import {
 } from "recharts";
 import type { SurveyWithDetails, SurveyQuestion, SurveyResponseWithAnswers, SurveyTemplate, SurveyLogicRule } from "@shared/models/surveys";
 import {
-  C, MC_BARS, CB_BARS, QUESTION_TYPES, TYPE_LABEL, STATUS_STYLES, CATEGORY_ICONS, CATEGORIES,
+  C, MC_BARS, CB_BARS, QUESTION_TYPES, TYPE_LABEL, getStatusStyles, CATEGORY_ICONS, CATEGORIES,
   LIKERT_OPTIONS, EMOJI_RATINGS, fmtDate, fmtTime, initials, wordFrequency,
+  useSurveyColors,
   type MainTab, type View,
 } from "@/lib/survey-constants";
 import { exportSurveyToPPT, exportSurveyToCSV, exportSurveyToExcel } from "@/lib/survey-exports";
@@ -35,6 +36,7 @@ function QuestionPreview({ q, idx, selected, onClick, onDelete, onDuplicate, onM
   onClick: () => void; onDelete: () => void; onDuplicate: () => void; onMoveUp: () => void; onMoveDown: () => void;
   isFirst: boolean; isLast: boolean;
 }) {
+  const C = useSurveyColors();
   const opts = (q.options as string[]) || [];
   if (q.type === "section" || q.isSection) {
     return (
@@ -42,8 +44,8 @@ function QuestionPreview({ q, idx, selected, onClick, onDelete, onDuplicate, onM
         <div style={{ fontSize: 11, fontWeight: 600, color: C.ink4, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>Section</div>
         <div style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{q.text || "Section header"}</div>
         <div style={{ position: "absolute", right: 12, top: 12, display: "flex", gap: 4 }}>
-          <button onClick={e => { e.stopPropagation(); onDuplicate(); }} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 12 }} title="Duplicate">⧉</button>
-          <button onClick={e => { e.stopPropagation(); onDelete(); }} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", color: C.rose, fontSize: 12 }} title="Delete">✕</button>
+          <button onClick={e => { e.stopPropagation(); onDuplicate(); }} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", fontSize: 12 }} title="Duplicate">⧉</button>
+          <button onClick={e => { e.stopPropagation(); onDelete(); }} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", color: C.rose, fontSize: 12 }} title="Delete">✕</button>
         </div>
       </div>
     );
@@ -52,7 +54,7 @@ function QuestionPreview({ q, idx, selected, onClick, onDelete, onDuplicate, onM
     <div
       onClick={onClick}
       style={{
-        background: "#fff", border: `1.5px solid ${selected ? C.teal : C.line}`,
+        background: C.surface, border: `1.5px solid ${selected ? C.teal : C.line}`,
         borderRadius: 12, padding: "18px 20px", marginBottom: 10, cursor: "pointer", position: "relative",
         boxShadow: selected ? `0 0 0 3px ${C.tealL}` : undefined,
       }}
@@ -130,13 +132,13 @@ function QuestionPreview({ q, idx, selected, onClick, onDelete, onDuplicate, onM
       {/* Actions */}
       <div style={{ position: "absolute", right: 12, top: 12, display: "flex", gap: 4 }}>
         <button onClick={e => { e.stopPropagation(); onDuplicate(); }}
-          style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 12 }} title="Duplicate">⧉</button>
+          style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", fontSize: 12 }} title="Duplicate">⧉</button>
         <button onClick={e => { e.stopPropagation(); onMoveUp(); }} disabled={isFirst}
-          style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: isFirst ? "not-allowed" : "pointer", opacity: isFirst ? 0.3 : 1, fontSize: 12 }} title="Move up">↑</button>
+          style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: isFirst ? "not-allowed" : "pointer", opacity: isFirst ? 0.3 : 1, fontSize: 12 }} title="Move up">↑</button>
         <button onClick={e => { e.stopPropagation(); onMoveDown(); }} disabled={isLast}
-          style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: isLast ? "not-allowed" : "pointer", opacity: isLast ? 0.3 : 1, fontSize: 12 }} title="Move down">↓</button>
+          style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: isLast ? "not-allowed" : "pointer", opacity: isLast ? 0.3 : 1, fontSize: 12 }} title="Move down">↓</button>
         <button onClick={e => { e.stopPropagation(); onDelete(); }}
-          style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", color: C.rose, fontSize: 12 }} title="Delete">✕</button>
+          style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", color: C.rose, fontSize: 12 }} title="Delete">✕</button>
       </div>
     </div>
   );
@@ -144,12 +146,13 @@ function QuestionPreview({ q, idx, selected, onClick, onDelete, onDuplicate, onM
 
 // ─── Settings panel for selected question ─────────────────────────────────
 function QuestionSettings({ q, allQuestions, onUpdate }: { q: SurveyQuestion; allQuestions: SurveyQuestion[]; onUpdate: (data: Partial<SurveyQuestion>) => void }) {
+  const C = useSurveyColors();
   const opts = (q.options as string[]) || [];
   const matrixRows = (q.matrixRows as string[]) || ["Row 1", "Row 2"];
   const matrixCols = (q.matrixCols as string[]) || (q.type === "likert" ? LIKERT_OPTIONS : ["Strongly Agree", "Agree", "Disagree", "Strongly Disagree"]);
   const logicRules = (q.logicJson as SurveyLogicRule[]) || [];
 
-  const inputStyle = { width: "100%", padding: "8px 11px", border: `1px solid ${C.line2}`, borderRadius: 7, fontFamily: "inherit", fontSize: 13, color: C.ink, background: "#fff", outline: "none" };
+  const inputStyle = { width: "100%", padding: "8px 11px", border: `1px solid ${C.line2}`, borderRadius: 7, fontFamily: "inherit", fontSize: 13, color: C.ink, background: C.surface, outline: "none" };
   const labelStyle = { display: "block" as const, fontSize: 11, fontWeight: 600 as const, color: C.ink3, marginBottom: 5, textTransform: "uppercase" as const, letterSpacing: ".05em" };
 
   return (
@@ -172,7 +175,7 @@ function QuestionSettings({ q, allQuestions, onUpdate }: { q: SurveyQuestion; al
               <input value={opt} onChange={e => { const n = [...opts]; n[i] = e.target.value; onUpdate({ options: n }); }}
                 style={{ ...inputStyle, flex: 1 }} />
               <button onClick={() => { const n = opts.filter((_, j) => j !== i); onUpdate({ options: n }); }}
-                style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", color: C.rose, flexShrink: 0, fontSize: 13 }}>✕</button>
+                style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", color: C.rose, flexShrink: 0, fontSize: 13 }}>✕</button>
             </div>
           ))}
           <button onClick={() => onUpdate({ options: [...opts, `Option ${opts.length + 1}`] })}
@@ -207,7 +210,7 @@ function QuestionSettings({ q, allQuestions, onUpdate }: { q: SurveyQuestion; al
           {matrixCols.map((c, i) => (
             <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
               <input value={c} onChange={e => { const n = [...matrixCols]; n[i] = e.target.value; onUpdate({ matrixCols: n }); }} style={{ ...inputStyle, flex: 1 }} />
-              <button onClick={() => onUpdate({ matrixCols: matrixCols.filter((_, j) => j !== i) })} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", color: C.rose, fontSize: 13 }}>✕</button>
+              <button onClick={() => onUpdate({ matrixCols: matrixCols.filter((_, j) => j !== i) })} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", color: C.rose, fontSize: 13 }}>✕</button>
             </div>
           ))}
           <button onClick={() => onUpdate({ matrixCols: [...matrixCols, `Option ${matrixCols.length + 1}`] })} style={{ width: "100%", padding: "6px", border: `1px dashed ${C.line2}`, borderRadius: 7, background: C.paper2, cursor: "pointer", fontSize: 12, color: C.ink3 }}>+ Option</button>
@@ -243,7 +246,7 @@ function QuestionSettings({ q, allQuestions, onUpdate }: { q: SurveyQuestion; al
           {matrixRows.map((r, i) => (
             <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
               <input value={r} onChange={e => { const n = [...matrixRows]; n[i] = e.target.value; onUpdate({ matrixRows: n }); }} style={{ ...inputStyle, flex: 1 }} />
-              <button onClick={() => onUpdate({ matrixRows: matrixRows.filter((_, j) => j !== i) })} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", color: C.rose, fontSize: 13 }}>✕</button>
+              <button onClick={() => onUpdate({ matrixRows: matrixRows.filter((_, j) => j !== i) })} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", color: C.rose, fontSize: 13 }}>✕</button>
             </div>
           ))}
           <button onClick={() => onUpdate({ matrixRows: [...matrixRows, `Row ${matrixRows.length + 1}`] })} style={{ width: "100%", padding: "6px", border: `1px dashed ${C.line2}`, borderRadius: 7, background: C.paper2, cursor: "pointer", fontSize: 12, color: C.ink3, marginBottom: 10 }}>+ Row</button>
@@ -251,7 +254,7 @@ function QuestionSettings({ q, allQuestions, onUpdate }: { q: SurveyQuestion; al
           {matrixCols.map((c, i) => (
             <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
               <input value={c} onChange={e => { const n = [...matrixCols]; n[i] = e.target.value; onUpdate({ matrixCols: n }); }} style={{ ...inputStyle, flex: 1 }} />
-              <button onClick={() => onUpdate({ matrixCols: matrixCols.filter((_, j) => j !== i) })} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer", color: C.rose, fontSize: 13 }}>✕</button>
+              <button onClick={() => onUpdate({ matrixCols: matrixCols.filter((_, j) => j !== i) })} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", color: C.rose, fontSize: 13 }}>✕</button>
             </div>
           ))}
           <button onClick={() => onUpdate({ matrixCols: [...matrixCols, `Col ${matrixCols.length + 1}`] })} style={{ width: "100%", padding: "6px", border: `1px dashed ${C.line2}`, borderRadius: 7, background: C.paper2, cursor: "pointer", fontSize: 12, color: C.ink3 }}>+ Column</button>
@@ -303,11 +306,12 @@ function QuestionSettings({ q, allQuestions, onUpdate }: { q: SurveyQuestion; al
 }
 
 function ToggleRow({ label, value, onChange, last }: { label: string; value: boolean; onChange: (v: boolean) => void; last?: boolean }) {
+  const C = useSurveyColors();
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: last ? "none" : `1px solid ${C.line}` }}>
       <span style={{ fontSize: 13, color: C.ink2 }}>{label}</span>
       <div onClick={() => onChange(!value)} style={{ width: 34, height: 20, borderRadius: 10, background: value ? C.teal : C.line2, cursor: "pointer", position: "relative", transition: "background .2s", flexShrink: 0 }}>
-        <div style={{ position: "absolute", top: 2, left: value ? 14 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+        <div style={{ position: "absolute", top: 2, left: value ? 14 : 2, width: 16, height: 16, borderRadius: "50%", background: C.surface, transition: "left .2s" }} />
       </div>
     </div>
   );
@@ -315,6 +319,7 @@ function ToggleRow({ label, value, onChange, last }: { label: string; value: boo
 
 // ─── Results: horizontal bar ───────────────────────────────────────────────
 function ResultBar({ label, count, total, color }: { label: string; count: number; total: number; color: string }) {
+  const C = useSurveyColors();
   const pct = total > 0 ? Math.round((count / total) * 100) : 0;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -331,6 +336,7 @@ function ResultBar({ label, count, total, color }: { label: string; count: numbe
 
 // ─── Aggregate results per question ───────────────────────────────────────
 function QuestionResults({ q, responses, idx }: { q: SurveyQuestion; responses: SurveyResponseWithAnswers[]; idx: number }) {
+  const C = useSurveyColors();
   const answers = responses.flatMap(r => r.answers.filter(a => a.questionId === q.id));
   const n = answers.length;
 
@@ -475,7 +481,7 @@ function QuestionResults({ q, responses, idx }: { q: SurveyQuestion; responses: 
   }
 
   return (
-    <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 24, marginBottom: 16, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+    <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 24, marginBottom: 16, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
       <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4, color: C.ink }}>Q{idx + 1} — {q.text}</div>
       <div style={{ fontSize: 12, color: C.ink4, marginBottom: 16 }}>{n} {n === 1 ? "response" : "responses"} · {TYPE_LABEL[q.type] || q.type}</div>
       {content || <div style={{ fontSize: 13, color: C.ink4 }}>No responses yet.</div>}
@@ -616,6 +622,7 @@ const WIZARD_CATEGORIES = CATEGORIES;
 type CreationMode = "scratch" | "template" | "ai";
 
 function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (id: number) => void }) {
+  const C = useSurveyColors();
   // step 0 = mode picker | 1 = mode-specific | 2 = details | 3 = settings | 4 = review
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<CreationMode | null>(null);
@@ -717,7 +724,7 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,14,12,.65)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 12px 48px rgba(0,0,0,.2)", width: "100%", maxWidth: step === 1 && mode === "template" ? 780 : 640, maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column", animation: "su .2s ease" }}>
+      <div style={{ background: C.surface, borderRadius: 16, boxShadow: "0 12px 48px rgba(0,0,0,.2)", width: "100%", maxWidth: step === 1 && mode === "template" ? 780 : 640, maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column", animation: "su .2s ease" }}>
         <style>{`@keyframes su{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
 
         {/* Header */}
@@ -733,7 +740,7 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
           />
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-slate-100"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-slate-100 dark:hover:bg-muted"
             style={{ position: "absolute", right: 24, top: "50%", transform: "translateY(-50%)" }}
             data-testid="button-close-wizard"
           >
@@ -747,7 +754,7 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
             {stepLabels.map((label, i) => {
               const done = currentStepIdx > i, active = currentStepIdx === i;
               return (
-                <div key={label} style={{ flex: 1, padding: "9px 6px", textAlign: "center", fontSize: 11, fontWeight: 600, background: done ? C.tealL : active ? C.teal : "#fff", color: done ? C.teal : active ? "#fff" : C.ink4, borderRight: i < totalSteps - 1 ? `1px solid ${C.line}` : "none", transition: "all .15s" }}>
+                <div key={label} style={{ flex: 1, padding: "9px 6px", textAlign: "center", fontSize: 11, fontWeight: 600, background: done ? C.tealL : active ? C.teal : C.surface, color: done ? C.teal : active ? "#fff" : C.ink4, borderRight: i < totalSteps - 1 ? `1px solid ${C.line}` : "none", transition: "all .15s" }}>
                   <span style={{ display: "block", fontSize: 13, fontWeight: 700, marginBottom: 1 }}>{done ? "✓" : i + 1}</span>
                   {label}
                 </div>
@@ -770,7 +777,7 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
                   { id: "ai", emoji: "✨", title: "Generate with AI", desc: "Describe your survey in plain English and let AI build it." },
                 ] as { id: CreationMode; emoji: string; title: string; desc: string }[]).map(opt => (
                   <button key={opt.id} onClick={() => setMode(opt.id)} data-testid={`card-mode-${opt.id}`}
-                    style={{ padding: "20px 16px", border: `2px solid ${mode === opt.id ? C.teal : C.line2}`, borderRadius: 12, background: mode === opt.id ? C.tealL : "#fff", cursor: "pointer", textAlign: "left", transition: "all .12s", boxShadow: mode === opt.id ? `0 0 0 1px ${C.teal}` : "none" }}>
+                    style={{ padding: "20px 16px", border: `2px solid ${mode === opt.id ? C.teal : C.line2}`, borderRadius: 12, background: mode === opt.id ? C.tealL : C.surface, cursor: "pointer", textAlign: "left", transition: "all .12s", boxShadow: mode === opt.id ? `0 0 0 1px ${C.teal}` : "none" }}>
                     <div style={{ fontSize: 28, marginBottom: 10 }}>{opt.emoji}</div>
                     <div style={{ fontWeight: 700, fontSize: 14, color: C.ink, marginBottom: 6 }}>{opt.title}</div>
                     <div style={{ fontSize: 12, color: C.ink3, lineHeight: 1.5 }}>{opt.desc}</div>
@@ -785,7 +792,7 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {SURVEY_TEMPLATES.map(t => (
                 <div key={t.id}
-                  style={{ border: `2px solid ${selectedTpl === t.id ? C.teal : C.line2}`, borderRadius: 12, padding: 16, cursor: "pointer", background: selectedTpl === t.id ? C.tealL : "#fff", transition: "all .12s", boxShadow: selectedTpl === t.id ? `0 0 0 1px ${C.teal}` : "none" }}
+                  style={{ border: `2px solid ${selectedTpl === t.id ? C.teal : C.line2}`, borderRadius: 12, padding: 16, cursor: "pointer", background: selectedTpl === t.id ? C.tealL : C.surface, transition: "all .12s", boxShadow: selectedTpl === t.id ? `0 0 0 1px ${C.teal}` : "none" }}
                   onClick={() => { setSelectedTpl(t.id); if (!title) setTitle(t.name); setCategory(t.category); }}
                   data-testid={`card-template-${t.id}`}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
@@ -988,19 +995,20 @@ function ResponseModal({ response, survey, idx, total, onNav, onClose }: {
   response: SurveyResponseWithAnswers; survey: SurveyWithDetails;
   idx: number; total: number; onNav: (d: -1 | 1) => void; onClose: () => void;
 }) {
+  const C = useSurveyColors();
   const answersMap = new Map(response.answers.map(a => [a.questionId, a]));
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,14,12,.6)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,.15)", width: "100%", maxWidth: 620, maxHeight: "88vh", display: "flex", flexDirection: "column" }}>
+      <div style={{ background: C.surface, borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,.15)", width: "100%", maxWidth: 620, maxHeight: "88vh", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "16px 24px", borderBottom: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ fontWeight: 600, fontSize: 15 }}>Response from {response.respondentName || "Anonymous"}</div>
             <div style={{ fontSize: 12, color: C.ink4, marginTop: 2 }}>{fmtDate(response.completedAt?.toString())} · {fmtTime(response.timeSeconds)}</div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button onClick={() => onNav(-1)} disabled={idx === 0} style={{ width: 30, height: 30, border: `1px solid ${C.line}`, borderRadius: 7, background: "#fff", cursor: idx === 0 ? "not-allowed" : "pointer", opacity: idx === 0 ? 0.4 : 1 }}>←</button>
+            <button onClick={() => onNav(-1)} disabled={idx === 0} style={{ width: 30, height: 30, border: `1px solid ${C.line}`, borderRadius: 7, background: C.surface, cursor: idx === 0 ? "not-allowed" : "pointer", opacity: idx === 0 ? 0.4 : 1 }}>←</button>
             <span style={{ fontSize: 12, color: C.ink4 }}>{idx + 1} / {total}</span>
-            <button onClick={() => onNav(1)} disabled={idx === total - 1} style={{ width: 30, height: 30, border: `1px solid ${C.line}`, borderRadius: 7, background: "#fff", cursor: idx === total - 1 ? "not-allowed" : "pointer", opacity: idx === total - 1 ? 0.4 : 1 }}>→</button>
+            <button onClick={() => onNav(1)} disabled={idx === total - 1} style={{ width: 30, height: 30, border: `1px solid ${C.line}`, borderRadius: 7, background: C.surface, cursor: idx === total - 1 ? "not-allowed" : "pointer", opacity: idx === total - 1 ? 0.4 : 1 }}>→</button>
             <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: C.ink3, marginLeft: 4 }}>✕</button>
           </div>
         </div>
@@ -1041,6 +1049,8 @@ function ResponseModal({ response, survey, idx, total, onNav, onClose }: {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function SurveysPage() {
+  const C = useSurveyColors();
+  const statusStyles = getStatusStyles(C);
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -1270,7 +1280,7 @@ export default function SurveysPage() {
   const selectedQ = questions.find(q => q.id === selectedQId) || null;
 
   const btnPrimary: React.CSSProperties = { padding: "8px 18px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 6 };
-  const btnSecondary: React.CSSProperties = { padding: "8px 16px", background: "#fff", color: C.ink, border: `1px solid ${C.line2}`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 6 };
+  const btnSecondary: React.CSSProperties = { padding: "8px 16px", background: C.surface, color: C.ink, border: `1px solid ${C.line2}`, borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 6 };
   const btnGhost: React.CSSProperties = { padding: "7px 14px", background: "transparent", color: C.ink3, border: `1px solid ${C.line}`, borderRadius: 8, cursor: "pointer", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 5 };
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -1347,7 +1357,7 @@ export default function SurveysPage() {
           <div style={{ display: "flex", gap: 2, background: C.paper3, padding: 3, borderRadius: 10, marginBottom: 24, maxWidth: 360 }}>
             {(["active", "history"] as const).map(t => (
               <div key={t} onClick={() => setDashTab(t)}
-                style={{ flex: 1, padding: "8px", textAlign: "center", fontSize: 13, fontWeight: 500, borderRadius: 8, cursor: "pointer", background: dashTab === t ? "#fff" : "transparent", color: dashTab === t ? C.ink : C.ink3, boxShadow: dashTab === t ? "0 1px 3px rgba(0,0,0,.06)" : "none" }}>
+                style={{ flex: 1, padding: "8px", textAlign: "center", fontSize: 13, fontWeight: 500, borderRadius: 8, cursor: "pointer", background: dashTab === t ? C.surface : "transparent", color: dashTab === t ? C.ink : C.ink3, boxShadow: dashTab === t ? "0 1px 3px rgba(0,0,0,.06)" : "none" }}>
                 {t === "active" ? "Active & Recent" : "All Surveys"}
               </div>
             ))}
@@ -1368,7 +1378,7 @@ export default function SurveysPage() {
                 <option value="archived">Archived</option>
               </select>
               <button onClick={() => setListView(listView === "card" ? "list" : "card")}
-                style={{ padding: "8px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, background: "#fff", cursor: "pointer", fontSize: 12 }}>
+                style={{ padding: "8px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, background: C.surface, cursor: "pointer", fontSize: 12 }}>
                 {listView === "card" ? "☰ List" : "▦ Cards"}
               </button>
               <button onClick={() => setMainTab("templates")} style={{ padding: "8px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, background: C.tealL, color: C.teal, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>📋 Templates</button>
@@ -1381,12 +1391,12 @@ export default function SurveysPage() {
               listView === "card" && dashTab === "history" ? <SurveyCardSkeleton count={6} /> : <SurveyRowSkeleton rows={5} />
             ) : (
               (dashTab === "active" ? surveys.filter(s => ["active", "draft"].includes(s.status)).slice(0, 8) : filteredSurveys).map(s => {
-                const st = STATUS_STYLES[s.status] || STATUS_STYLES.draft;
+                const st = statusStyles[s.status] || statusStyles.draft;
                 const icon = CATEGORY_ICONS[s.category || ""] || "📋";
                 const iconBg = s.status === "active" ? C.tealL : s.status === "closed" ? C.roseL : s.status === "draft" ? C.amberL : C.blueL;
                 if (listView === "card" && dashTab === "history") {
                   return (
-                    <div key={s.id} style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)", cursor: "pointer" }} onClick={() => openResults(s.id)}>
+                    <div key={s.id} style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)", cursor: "pointer" }} onClick={() => openResults(s.id)}>
                       <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
                       <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{s.title}</div>
                       <div style={{ fontSize: 12, color: C.ink4, marginBottom: 10 }}>{s.responseCount} responses · {s.questions.length} questions</div>
@@ -1397,7 +1407,7 @@ export default function SurveysPage() {
                 return (
                   <div key={s.id} data-testid={`survey-row-${s.id}`}
                     className="survey-list-row"
-                    style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "18px 22px", marginBottom: 10, boxShadow: "0 1px 3px rgba(0,0,0,.06)", transition: "box-shadow .15s" }}>
+                    style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: "18px 22px", marginBottom: 10, boxShadow: "0 1px 3px rgba(0,0,0,.06)", transition: "box-shadow .15s" }}>
                     <div style={{ width: 46, height: 46, borderRadius: 11, background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{icon}</div>
                     <div style={{ flex: 1, cursor: "pointer", minWidth: 0 }} onClick={() => openResults(s.id)}>
                       <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.title}</div>
@@ -1454,7 +1464,7 @@ export default function SurveysPage() {
               <p style={{ fontSize: 13, color: C.ink3, marginBottom: 16 }}>Select a survey to view results.</p>
               {surveys.filter(s => s.responseCount > 0).map(s => (
                 <div key={s.id} onClick={() => openResults(s.id)}
-                  style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 10, padding: 16, marginBottom: 8, cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
+                  style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 10, padding: 16, marginBottom: 8, cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
                   <div><div style={{ fontWeight: 600 }}>{s.title}</div><div style={{ fontSize: 12, color: C.ink4 }}>{s.responseCount} responses</div></div>
                   <span style={{ color: C.teal, fontWeight: 600 }}>View →</span>
                 </div>
@@ -1482,7 +1492,7 @@ export default function SurveysPage() {
       <>
       <ModuleShell className="h-screen overflow-hidden bg-background flex" mainClassName="h-full overflow-hidden flex flex-col">
           {/* Top bar */}
-          <div className="survey-builder-topbar" style={{ background: "#fff", borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
+          <div className="survey-builder-topbar" style={{ background: C.surface, borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
               <button onClick={() => setView("dashboard")} style={btnGhost}>← Back</button>
               <span style={{ fontSize: 14, fontWeight: 600, color: C.ink2, maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{builderTitle || "Untitled Survey"}</span>
@@ -1540,7 +1550,7 @@ export default function SurveysPage() {
             {/* Centre: canvas */}
             <div className={cn(panelClass("canvas"), "survey-builder-panel--center")}>
               {/* Survey title card */}
-              <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "22px 26px", marginBottom: 18, borderTop: `4px solid ${C.teal}` }}>
+              <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: "22px 26px", marginBottom: 18, borderTop: `4px solid ${C.teal}` }}>
                 <input value={builderTitle} onChange={e => setBuilderTitle(e.target.value)}
                   style={{ fontSize: 20, fontWeight: 700, border: "none", outline: "none", width: "100%", background: "transparent", color: C.ink }} placeholder="Survey title…" />
                 <textarea value={builderDesc} onChange={e => setBuilderDesc(e.target.value)} rows={2}
@@ -1696,8 +1706,8 @@ export default function SurveysPage() {
                 <div>
                   <div className="survey-results-title-row">
                     <h1 className="survey-results-title">{activeSurvey.title}</h1>
-                    <span className="survey-results-status-badge" style={{ background: STATUS_STYLES[activeSurvey.status]?.bg, color: STATUS_STYLES[activeSurvey.status]?.color }}>
-                      {STATUS_STYLES[activeSurvey.status]?.dot && "● "}{STATUS_STYLES[activeSurvey.status]?.label}
+                    <span className="survey-results-status-badge" style={{ background: statusStyles[activeSurvey.status]?.bg, color: statusStyles[activeSurvey.status]?.color }}>
+                      {statusStyles[activeSurvey.status]?.dot && "● "}{statusStyles[activeSurvey.status]?.label}
                     </span>
                   </div>
                   <p className="survey-results-subtitle">
@@ -1742,7 +1752,7 @@ export default function SurveysPage() {
             {responsesError && (
               <div style={{ background: C.roseL, borderRadius: 10, padding: 14, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 13, color: C.rose }}>Failed to load responses.</span>
-                <button onClick={() => refetchResponses()} style={{ padding: "6px 12px", border: `1px solid ${C.line}`, borderRadius: 6, background: "#fff", cursor: "pointer" }}>Retry</button>
+                <button onClick={() => refetchResponses()} style={{ padding: "6px 12px", border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer" }}>Retry</button>
               </div>
             )}
 
@@ -1777,7 +1787,7 @@ export default function SurveysPage() {
             )}
 
             {resultsSummary && (resultsSummary.invited > 0 || (resultsSummary.invitees?.length ?? 0) > 0) && (
-              <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "16px 20px", marginBottom: 16, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+              <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: "16px 20px", marginBottom: 16, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: C.ink4, marginBottom: 12 }}>Completion breakdown</div>
                 <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
                   {[
@@ -1822,7 +1832,7 @@ export default function SurveysPage() {
             )}
 
             {activeSurvey.questions.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "48px", background: "#fff", borderRadius: 12, border: `1px solid ${C.line}`, color: C.ink4 }}>
+              <div style={{ textAlign: "center", padding: "48px", background: C.surface, borderRadius: 12, border: `1px solid ${C.line}`, color: C.ink4 }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
                 <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>No questions yet</div>
                 <button onClick={() => openBuilder(activeSurvey)} style={btnPrimary}>Open Builder →</button>
@@ -1862,7 +1872,7 @@ export default function SurveysPage() {
                 {(completedResponses.length > 0 || timelineData.length > 0) && (
                 <div className="survey-results-sidebar">
                   {timelineData.length > 0 && (
-                    <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "18px 20px", marginBottom: 14, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+                    <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: "18px 20px", marginBottom: 14, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
                       <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: C.ink4, marginBottom: 14 }}>Response Timeline</div>
                       <ResponsiveContainer width="100%" height={140}>
                         <LineChart data={timelineData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
@@ -1876,7 +1886,7 @@ export default function SurveysPage() {
                     </div>
                   )}
 
-                  <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "18px 20px", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+                  <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: "18px 20px", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
                     <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: C.ink4, marginBottom: 14 }}>Quick Actions</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       <button onClick={() => openBuilder(activeSurvey)} style={{ ...btnSecondary, justifyContent: "flex-start" }}>✏ Edit questions</button>
@@ -1890,7 +1900,7 @@ export default function SurveysPage() {
                   </div>
 
                   {completedResponses.length > 0 && (
-                    <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "18px 20px", marginTop: 14, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+                    <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: "18px 20px", marginTop: 14, boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
                       <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: C.ink4, marginBottom: 14 }}>Individual Responses</div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {completedResponses.slice(0, 5).map((r, i) => (

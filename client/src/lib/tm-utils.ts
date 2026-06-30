@@ -39,7 +39,7 @@ export const STATUS_DOT: Record<string, string> = {
   fail: "bg-red-500",
   blocked: "bg-amber-500",
   deferred: "bg-muted-foreground opacity-60",
-  not_applicable: "bg-white border-2 border-border",
+  not_applicable: "bg-muted border-2 border-border",
   ready_for_retest: "bg-sky-500",
 };
 

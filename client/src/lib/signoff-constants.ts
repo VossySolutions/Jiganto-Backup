@@ -1,20 +1,20 @@
 export const SIGNOFF_STATUS: Record<string, { label: string; color: string; icon: string }> = {
   draft: { label: "Draft", color: "bg-muted text-muted-foreground border border-border", icon: "📝" },
-  pending: { label: "Awaiting Signature", color: "bg-amber-50 text-amber-700 border border-amber-200", icon: "⏳" },
-  partially_signed: { label: "Partially Signed", color: "bg-blue-50 text-blue-700 border border-blue-200", icon: "◐" },
-  completed: { label: "Completed", color: "bg-green-50 text-green-700 border border-green-200", icon: "✅" },
-  declined: { label: "Declined", color: "bg-red-50 text-red-700 border border-red-200", icon: "✗" },
-  expired: { label: "Expired", color: "bg-gray-100 text-gray-500 border border-gray-200", icon: "⌛" },
-  voided: { label: "Voided", color: "bg-gray-100 text-gray-400 border border-gray-200 line-through", icon: "⊘" },
-  cancelled: { label: "Cancelled", color: "bg-gray-100 text-gray-500 border border-gray-200", icon: "⊘" },
+  pending: { label: "Awaiting Signature", color: "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800", icon: "⏳" },
+  partially_signed: { label: "Partially Signed", color: "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800", icon: "◐" },
+  completed: { label: "Completed", color: "bg-green-50 text-green-700 border border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800", icon: "✅" },
+  declined: { label: "Declined", color: "bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800", icon: "✗" },
+  expired: { label: "Expired", color: "bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700", icon: "⌛" },
+  voided: { label: "Voided", color: "bg-gray-100 text-gray-400 border border-gray-200 line-through dark:bg-gray-800 dark:text-gray-500 dark:border-gray-700", icon: "⊘" },
+  cancelled: { label: "Cancelled", color: "bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700", icon: "⊘" },
 };
 
 export const SIGNER_STATUS: Record<string, string> = {
-  pending: "bg-amber-50 text-amber-700 border border-amber-200",
-  notified: "bg-amber-50 text-amber-700 border border-amber-200",
-  viewed: "bg-blue-50 text-blue-700 border border-blue-200",
-  signed: "bg-green-50 text-green-700 border border-green-200",
-  declined: "bg-red-50 text-red-700 border border-red-200",
+  pending: "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
+  notified: "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
+  viewed: "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800",
+  signed: "bg-green-50 text-green-700 border border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800",
+  declined: "bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800",
 };
 
 export const SIGNER_LABEL: Record<string, string> = {

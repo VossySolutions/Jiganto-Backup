@@ -22,11 +22,11 @@ const PRI_BADGE: Record<string, string> = {
 };
 
 const IMPL_BADGE: Record<string, string> = {
-  draft:       "bg-slate-100 text-slate-600",
-  in_progress: "bg-blue-100 text-blue-700",
-  implemented: "bg-green-100 text-green-700",
-  verified:    "bg-teal-100 text-teal-700",
-  deprecated:  "bg-red-100 text-red-600",
+  draft:       "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+  in_progress: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  implemented: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  verified:    "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
+  deprecated:  "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400",
 };
 
 const RESULT_ICON: Record<string, JSX.Element> = {

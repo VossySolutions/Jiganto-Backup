@@ -631,10 +631,10 @@ export function TestCasesScreen() {
                       data-testid={`run-case-check-${tc.id}`} />
                     <span className="text-xs flex-1 truncate">{tc.title}</span>
                     <span className={cn("text-[9px] font-mono px-1.5 py-0.5 rounded capitalize flex-shrink-0", {
-                      "bg-red-100 text-red-700": tc.priority === "critical",
-                      "bg-orange-100 text-orange-700": tc.priority === "high",
-                      "bg-amber-100 text-amber-700": tc.priority === "medium",
-                      "bg-blue-100 text-blue-700": tc.priority === "low",
+                      "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400": tc.priority === "critical",
+                      "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400": tc.priority === "high",
+                      "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400": tc.priority === "medium",
+                      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400": tc.priority === "low",
                     })}>{tc.priority}</span>
                   </label>
                 ))}

@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { C, surveyLink, qrCodeUrl, embedCode } from "@/lib/survey-constants";
+import { useSurveyColors, surveyLink, qrCodeUrl, embedCode } from "@/lib/survey-constants";
 import { SurveyButtonSpinner } from "@/components/surveys/SurveyLoadingState";
 import type { SurveyWithDetails } from "@shared/models/surveys";
 
 type Tab = "link" | "workspace" | "users" | "embed" | "qr";
 
 export function ShareModal({ survey, onClose }: { survey: SurveyWithDetails; onClose: () => void }) {
+  const C = useSurveyColors();
   const { toast } = useToast();
   const [tab, setTab] = useState<Tab>("link");
   const [emails, setEmails] = useState("");
@@ -48,7 +49,7 @@ export function ShareModal({ survey, onClose }: { survey: SurveyWithDetails; onC
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,14,12,.6)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,.15)", width: "100%", maxWidth: 520, maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <div style={{ background: C.surface, borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,.15)", width: "100%", maxWidth: 520, maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "18px 24px", borderBottom: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontWeight: 600, fontSize: 16 }}>Share Survey</div>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: C.ink3 }}>✕</button>
@@ -57,7 +58,7 @@ export function ShareModal({ survey, onClose }: { survey: SurveyWithDetails; onC
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className="survey-share-tab"
-              style={{ background: tab === t.id ? C.tealL : "#fff", color: tab === t.id ? C.teal : C.ink4 }}>
+              style={{ background: tab === t.id ? C.tealL : C.surface, color: tab === t.id ? C.teal : C.ink4 }}>
               {t.label}
             </button>
           ))}

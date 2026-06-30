@@ -320,7 +320,7 @@ const STATUS_STYLES: Record<string, string> = {
   Validated: "text-green-500 border-green-500/30 bg-green-500/10",
   Invalidated: "text-red-500 border-red-500/30 bg-red-500/5",
   "In Progress": "text-amber-500 border-amber-500/30 bg-amber-500/10",
-  Closed: "text-gray-500 border-gray-300 bg-gray-100",
+  Closed: "text-gray-500 border-gray-300 bg-gray-100 dark:text-gray-400 dark:border-gray-600 dark:bg-gray-800",
   Approved: "text-green-500 border-green-500/30 bg-green-500/10",
   "Pending Approval": "text-orange-500 border-orange-500/30 bg-orange-500/5",
   "At Risk": "text-red-500 border-red-500/30 bg-red-500/5",
@@ -330,8 +330,8 @@ const STATUS_STYLES: Record<string, string> = {
   "Converted to Risk": "text-red-500 border-red-500/30 bg-red-500/5",
   Identified: "text-blue-500 border-blue-500/30 bg-blue-500/5",
   Proposed: "text-blue-500 border-blue-500/30 bg-blue-500/5",
-  Deferred: "text-gray-500 border-gray-300 bg-gray-100",
-  Superseded: "text-gray-500 border-gray-300 bg-gray-100",
+  Deferred: "text-gray-500 border-gray-300 bg-gray-100 dark:text-gray-400 dark:border-gray-600 dark:bg-gray-800",
+  Superseded: "text-gray-500 border-gray-300 bg-gray-100 dark:text-gray-400 dark:border-gray-600 dark:bg-gray-800",
   Delayed: "text-red-500 border-red-500/30 bg-red-500/5",
 };
 
@@ -795,7 +795,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
 
   const renderStatusBadge = (status: string | null) => {
     if (!status) return <span className="text-muted-foreground">-</span>;
-    return <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-0.5 rounded-full border ${STATUS_STYLES[status] || "text-gray-500 border-gray-300 bg-gray-100"}`}>{status}</span>;
+    return <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-0.5 rounded-full border ${STATUS_STYLES[status] || "text-gray-500 border-gray-300 bg-gray-100 dark:text-gray-400 dark:border-gray-600 dark:bg-gray-800"}`}>{status}</span>;
   };
 
   const renderOwner = (name: string | null) => {
@@ -1142,7 +1142,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
                       const bg = score >= 15 ? "bg-red-400 text-white" : score >= 10 ? "bg-orange-400 text-white" : score >= 5 ? "bg-amber-200 text-amber-800" : "bg-green-100 text-green-700";
                       return (
                         <div key={`${p}-${imp}`} className={`rounded flex items-center justify-center text-[11px] font-semibold cursor-pointer hover:opacity-80 transition-opacity ${bg}`} onClick={() => setStatFilter(`score_${score}`)} data-testid={`heatmap-cell-${p}-${imp}`}>
-                          {count > 0 ? <span className="bg-white/80 text-gray-800 rounded-full w-[18px] h-[18px] flex items-center justify-center text-[9px] font-bold">{count}</span> : score}
+                          {count > 0 ? <span className="bg-white/80 dark:bg-card/80 text-gray-800 dark:text-gray-200 rounded-full w-[18px] h-[18px] flex items-center justify-center text-[9px] font-bold">{count}</span> : score}
                         </div>
                       );
                     })

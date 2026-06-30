@@ -1,7 +1,8 @@
-import { C } from "@/lib/survey-constants";
+import { useSurveyColors } from "@/lib/survey-constants";
 import { SURVEY_AI_EMPTY_BANNER, useSurveyAiStatus } from "@/hooks/use-survey-ai-status";
 
 export function SurveyAiTokenBanner() {
+  const C = useSurveyColors();
   const { data, isLoading } = useSurveyAiStatus();
   if (isLoading || !data?.empty) return null;
 

@@ -268,9 +268,9 @@ export function HeatMapTab() {
         {[
           { c: "bg-emerald-100 border-emerald-500", l: "Available (0–49%)" },
           { c: "bg-amber-100 border-amber-500", l: "Partially allocated (50–79%)" },
-          { c: "bg-red-100 border-red-500", l: "Fully allocated (80–100%)" },
+          { c: "bg-red-100 border-red-500 dark:bg-red-900/30 dark:border-red-600", l: "Fully allocated (80–100%)" },
           { c: "bg-muted border-border", l: "Leave / unavailable" },
-          { c: "bg-blue-100 border-blue-400 border-dashed", l: "Soft booking (pipeline)" },
+          { c: "bg-blue-100 border-blue-400 border-dashed dark:bg-blue-900/30 dark:border-blue-600", l: "Soft booking (pipeline)" },
         ].map((x) => (
           <span key={x.l} className="flex items-center gap-1.5">
             <span className={cn("w-3.5 h-3.5 rounded border", x.c)} />{x.l}
