@@ -1,9 +1,15 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { X, Copy, Send } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useSurveyColors, surveyLink, qrCodeUrl, embedCode } from "@/lib/survey-constants";
 import { SurveyButtonSpinner } from "@/components/surveys/SurveyLoadingState";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import type { SurveyWithDetails } from "@shared/models/surveys";
 
 type Tab = "link" | "workspace" | "users" | "embed" | "qr";
@@ -48,104 +54,110 @@ export function ShareModal({ survey, onClose }: { survey: SurveyWithDetails; onC
   const workspaceId = survey.workspaceId ?? undefined;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(15,14,12,.6)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: C.surface, borderRadius: 14, boxShadow: "0 8px 32px rgba(0,0,0,.15)", width: "100%", maxWidth: 520, maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "18px 24px", borderBottom: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontWeight: 600, fontSize: 16 }}>Share Survey</div>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: C.ink3 }}>✕</button>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-5 bg-black/60 backdrop-blur-sm">
+      <div className="bg-card text-card-foreground rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col border border-border">
+        <div className="px-6 py-4 border-b border-border flex justify-between items-center">
+          <div className="font-semibold text-base">Share Survey</div>
+          <Button type="button" variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
+            <X className="h-4 w-4" />
+          </Button>
         </div>
         <div className="survey-share-tabs">
           {tabs.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className="survey-share-tab"
-              style={{ background: tab === t.id ? C.tealL : C.surface, color: tab === t.id ? C.teal : C.ink4 }}>
+            <button key={t.id} type="button" onClick={() => setTab(t.id)}
+              className={cn("survey-share-tab", tab === t.id ? "bg-accent text-accent-foreground" : "text-muted-foreground")}
+            >
               {t.label}
             </button>
           ))}
         </div>
-        <div style={{ padding: 24, overflowY: "auto" }}>
+        <div className="p-6 overflow-y-auto flex-1 w-full">
           {tab === "link" && (
             <>
-              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                <input readOnly value={link} style={{ flex: 1, padding: "9px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, fontSize: 13 }} />
-                <button onClick={() => { navigator.clipboard.writeText(link); toast({ title: "Copied ✓" }); }}
-                  style={{ padding: "9px 14px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 500 }}>Copy</button>
+              <div className="flex gap-2 mb-3 w-full">
+                <Input readOnly value={link} className="flex-1 text-sm" />
+                <Button type="button" onClick={() => { navigator.clipboard.writeText(link); toast({ title: "Copied ✓" }); }}>
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />
+                  Copy
+                </Button>
               </div>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.ink3, cursor: "pointer" }}>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
                 <input
                   type="checkbox"
                   checked={allowExternal}
                   disabled={settingsMut.isPending}
                   onChange={e => toggleAllowExternal(e.target.checked)}
+                  className="rounded"
                 />
                 Anyone with link can respond
               </label>
               {!allowExternal && (
-                <p style={{ fontSize: 12, color: C.amber, marginTop: 10, lineHeight: 1.5 }}>
-                  Link-only access is off. Only people you invite via Workspace or Users can respond (or signed-in invitees).
+                <p className="text-xs mt-2.5 leading-relaxed" style={{ color: C.amber }}>
+                  Link-only access is off. Only people you invite via Workspace or Users can respond.
                 </p>
               )}
             </>
           )}
           {tab === "workspace" && (
             <>
-              <p style={{ fontSize: 13, color: C.ink3, marginBottom: 16 }}>
+              <p className="text-sm text-muted-foreground mb-4">
                 Send to all members of {workspaceId ? "this survey's workspace" : "the current workspace context"} via notification.
               </p>
               {!workspaceId && (
-                <p style={{ fontSize: 12, color: C.amber, marginBottom: 12 }}>
+                <p className="text-xs mb-3" style={{ color: C.amber }}>
                   This survey has no workspace assigned. Open it from a workspace context or assign a workspace first.
                 </p>
               )}
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 11, fontWeight: 600, color: C.ink4, textTransform: "uppercase" }}>Reminder before close</label>
-                <select value={reminderDays} onChange={e => setReminderDays(Number(e.target.value))} style={{ width: "100%", marginTop: 6, padding: "8px", borderRadius: 8, border: `1px solid ${C.line2}` }}>
+              <div className="mb-3">
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Reminder before close</Label>
+                <select value={reminderDays} onChange={e => setReminderDays(Number(e.target.value))} className="survey-input mt-1.5">
                   <option value={0}>No reminder</option><option value={1}>1 day before</option><option value={3}>3 days before</option><option value={7}>1 week before</option>
                 </select>
               </div>
-              <button onClick={() => distributeMut.mutate({ type: "workspace", workspaceId, reminderDays: reminderDays || undefined })}
-                disabled={distributeMut.isPending || !workspaceId}
-                style={{ width: "100%", padding: "10px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: workspaceId ? "pointer" : "not-allowed", fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: workspaceId ? 1 : 0.5 }}>
-                {distributeMut.isPending && <SurveyButtonSpinner />} Send to workspace members
-              </button>
+              <Button type="button" className="w-full" onClick={() => distributeMut.mutate({ type: "workspace", workspaceId, reminderDays: reminderDays || undefined })}
+                disabled={distributeMut.isPending || !workspaceId}>
+                {distributeMut.isPending ? <SurveyButtonSpinner /> : <Send className="h-3.5 w-3.5 mr-1.5" />}
+                Send to workspace members
+              </Button>
             </>
           )}
           {tab === "users" && (
             <>
-              <p style={{ fontSize: 13, color: C.ink3, marginBottom: 8 }}>Enter email addresses (one per line). Non-users receive a unique link.</p>
-              <textarea value={emails} onChange={e => setEmails(e.target.value)} rows={4}
-                style={{ width: "100%", padding: "10px", border: `1px solid ${C.line2}`, borderRadius: 8, fontSize: 13, marginBottom: 12, boxSizing: "border-box" }}
-                placeholder="user@company.com&#10;colleague@client.com" />
-              <button onClick={() => distributeMut.mutate({ type: "specific_users", targetEmails: emails.split(/[\n,;]+/).map(e => e.trim()).filter(Boolean), reminderDays: reminderDays || undefined })}
-                disabled={distributeMut.isPending || !emails.trim()}
-                style={{ width: "100%", padding: "10px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                {distributeMut.isPending && <SurveyButtonSpinner />} Send invitations
-              </button>
+              <p className="text-sm text-muted-foreground mb-2">Enter email addresses (one per line). Non-users receive a unique link.</p>
+              <Textarea value={emails} onChange={e => setEmails(e.target.value)} rows={4}
+                className="mb-3"
+                placeholder={"user@company.com\ncolleague@client.com"} />
+              <Button type="button" className="w-full" onClick={() => distributeMut.mutate({ type: "specific_users", targetEmails: emails.split(/[\n,;]+/).map(e => e.trim()).filter(Boolean), reminderDays: reminderDays || undefined })}
+                disabled={distributeMut.isPending || !emails.trim()}>
+                {distributeMut.isPending && <SurveyButtonSpinner />}
+                Send invitations
+              </Button>
             </>
           )}
           {tab === "embed" && (
             <>
-              <p style={{ fontSize: 13, color: C.ink3, marginBottom: 12 }}>Paste this iframe code on your intranet or portal:</p>
-              <textarea readOnly value={embedCode(link)} rows={4}
-                style={{ width: "100%", padding: "10px", border: `1px solid ${C.line2}`, borderRadius: 8, fontSize: 11, fontFamily: "monospace", boxSizing: "border-box" }} />
-              <button onClick={() => { navigator.clipboard.writeText(embedCode(link)); toast({ title: "Embed code copied ✓" }); }}
-                style={{ marginTop: 10, padding: "8px 16px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Copy embed code</button>
+              <p className="text-sm text-muted-foreground mb-3">Paste this iframe code on your intranet or portal:</p>
+              <Textarea readOnly value={embedCode(link)} rows={4} className="font-mono text-xs mb-3" />
+              <Button type="button" variant="outline" onClick={() => { navigator.clipboard.writeText(embedCode(link)); toast({ title: "Embed code copied ✓" }); }}>
+                <Copy className="h-3.5 w-3.5 mr-1.5" />
+                Copy embed code
+              </Button>
             </>
           )}
           {tab === "qr" && (
-            <div style={{ textAlign: "center" }}>
-              <img src={qrCodeUrl(link)} alt="QR Code" width={200} height={200} style={{ borderRadius: 8, border: `1px solid ${C.line}` }} />
-              <p style={{ fontSize: 12, color: C.ink4, marginTop: 12 }}>Scan or print for physical distribution</p>
+            <div className="text-center">
+              <img src={qrCodeUrl(link)} alt="QR Code" width={200} height={200} className="rounded-lg border border-border mx-auto" />
+              <p className="text-xs text-muted-foreground mt-3">Scan or print for physical distribution</p>
             </div>
           )}
           {survey.status !== "active" && (
-            <div style={{ marginTop: 16, padding: "10px 14px", background: C.amberL, borderRadius: 8, fontSize: 13, color: C.amber }}>
+            <div className="mt-4 px-3.5 py-2.5 rounded-lg text-sm" style={{ background: C.amberL, color: C.amber }}>
               ⚠ Survey is <strong>{survey.status}</strong>. Activate before sharing.
             </div>
           )}
         </div>
-        <div style={{ padding: "14px 24px", borderTop: `1px solid ${C.line}`, display: "flex", justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ padding: "8px 20px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Done</button>
+        <div className="px-6 py-3.5 border-t border-border flex justify-end">
+          <Button type="button" onClick={onClose}>Done</Button>
         </div>
       </div>
     </div>

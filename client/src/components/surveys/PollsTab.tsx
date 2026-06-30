@@ -10,6 +10,8 @@ import { SurveyLoadingState, SurveyRowSkeleton, SurveyButtonSpinner } from "@/co
 import { useChatConfig } from "@/hooks/use-chat-realtime";
 import { useModulePollRealtime } from "@/hooks/use-poll-realtime";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Plus, Link2, XCircle } from "lucide-react";
 
 const DURATIONS = [
   { label: "15 minutes", minutes: 15 },
@@ -46,13 +48,16 @@ function PollResultBars({ poll }: { poll: { question: string; options: string[];
           </div>
         );
       })}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button onClick={() => exportPollPng(poll.question, poll.options, poll.voteCounts)}
-          style={{ padding: "6px 12px", border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", fontSize: 12 }}>↓ PNG</button>
-        <button onClick={() => {
+      <div className="flex gap-2 flex-wrap mt-3">
+        <Button type="button" variant="outline" size="sm" onClick={() => exportPollPng(poll.question, poll.options, poll.voteCounts)}>
+          ↓ PNG
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => {
           const text = poll.options.map((o, i) => `${o}: ${poll.voteCounts[i]} (${Math.round((poll.voteCounts[i] / total) * 100)}%)`).join("\n");
           navigator.clipboard.writeText(`${poll.question}\n\n${text}`);
-        }} style={{ padding: "6px 12px", border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", fontSize: 12 }}>Copy summary</button>
+        }}>
+          Copy summary
+        </Button>
       </div>
     </div>
   );
@@ -114,14 +119,14 @@ export function PollsTab() {
 
   if (creating) {
     return (
-      <div style={{ maxWidth: 560 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Create Poll</h2>
+      <div className="w-full max-w-2xl">
+        <h2 className="text-lg font-bold mb-4">Create Poll</h2>
         <input value={question} onChange={e => setQuestion(e.target.value.slice(0, 200))} placeholder="Question (max 200 chars)"
-          style={{ width: "100%", padding: "10px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, marginBottom: 12, boxSizing: "border-box" }} />
+          className="survey-input mb-3" />
         {options.map((opt, i) => (
           <input key={i} value={opt} onChange={e => { const n = [...options]; n[i] = e.target.value; setOptions(n); }}
             placeholder={`Option ${i + 1}`}
-            style={{ width: "100%", padding: "8px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, marginBottom: 8, boxSizing: "border-box" }} />
+            className="survey-input mb-2" />
         ))}
         {options.length < 6 && (
           <button onClick={() => setOptions([...options, ""])} style={{ background: "none", border: `1px dashed ${C.line2}`, borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer", marginBottom: 12 }}>+ Add option</button>
@@ -139,26 +144,29 @@ export function PollsTab() {
           <label><input type="checkbox" checked={showResults} onChange={e => setShowResults(e.target.checked)} /> Show results to voters</label>
           <label><input type="checkbox" checked={allowChange} onChange={e => setAllowChange(e.target.checked)} /> Allow vote change</label>
         </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={() => setCreating(false)} style={{ padding: "10px 18px", border: `1px solid ${C.line}`, borderRadius: 8, background: C.surface, cursor: "pointer" }}>Cancel</button>
-          <button onClick={() => createMut.mutate({ question, options: validOpts, pollType, durationMinutes: duration, anonymous, showResultsToVoters: showResults, allowVoteChange: allowChange })}
-            disabled={!question.trim() || validOpts.length < 2 || createMut.isPending}
-            style={{ padding: "10px 24px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 8 }}>
-            {createMut.isPending && <SurveyButtonSpinner />} {createMut.isPending ? "Creating…" : "Create Poll"}
-          </button>
+        <div className="flex gap-2 flex-wrap mt-4">
+          <Button type="button" variant="outline" onClick={() => setCreating(false)}>Cancel</Button>
+          <Button type="button" onClick={() => createMut.mutate({ question, options: validOpts, pollType, durationMinutes: duration, anonymous, showResultsToVoters: showResults, allowVoteChange: allowChange })}
+            disabled={!question.trim() || validOpts.length < 2 || createMut.isPending}>
+            {createMut.isPending && <SurveyButtonSpinner />}
+            {createMut.isPending ? "Creating…" : "Create Poll"}
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div>
+    <div className="w-full">
       <div className="survey-polls-header">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Polls</h2>
-          <p style={{ fontSize: 13, color: C.ink3, margin: "4px 0 0" }}>Quick consensus — live results, under 30 seconds to create</p>
+          <h2 className="text-lg font-bold">Polls</h2>
+          <p className="text-sm text-muted-foreground mt-1">Quick consensus — live results, under 30 seconds to create</p>
         </div>
-        <button onClick={() => setCreating(true)} style={{ padding: "8px 18px", background: C.teal, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 500 }}>+ New Poll</button>
+        <Button type="button" onClick={() => setCreating(true)}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          New Poll
+        </Button>
       </div>
 
       {isError && (
@@ -193,19 +201,22 @@ export function PollsTab() {
             ) : pollDetail ? (
               <>
                 <PollResultBars poll={pollDetail} />
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div className="flex gap-2 flex-wrap mt-2">
                   {pollDetail.token && (
                     <>
-                      <button onClick={() => { navigator.clipboard.writeText(pollLink(pollDetail.token!)); toast({ title: "Link copied" }); }}
-                        style={{ padding: "8px 14px", border: `1px solid ${C.line}`, borderRadius: 8, background: C.surface, cursor: "pointer", fontSize: 13 }}>🔗 Copy link</button>
-                      <img src={qrCodeUrl(pollLink(pollDetail.token))} alt="QR" width={80} height={80} style={{ borderRadius: 6, border: `1px solid ${C.line}` }} />
+                      <Button type="button" variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(pollLink(pollDetail.token!)); toast({ title: "Link copied" }); }}>
+                        <Link2 className="h-3.5 w-3.5 mr-1.5" />
+                        Copy link
+                      </Button>
+                      <img src={qrCodeUrl(pollLink(pollDetail.token))} alt="QR" width={80} height={80} className="rounded-md border border-border" />
                     </>
                   )}
                   {pollDetail.status === "active" && (
-                    <button onClick={() => closeMut.mutate(selectedPollId)} disabled={closeMut.isPending}
-                      style={{ padding: "8px 14px", border: `1px solid ${C.rose}`, borderRadius: 8, background: C.roseL, color: C.rose, cursor: "pointer", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      {closeMut.isPending && <SurveyButtonSpinner />} Close poll
-                    </button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => closeMut.mutate(selectedPollId)} disabled={closeMut.isPending}
+                      className="text-destructive border-destructive/30 hover:bg-destructive/10">
+                      {closeMut.isPending ? <SurveyButtonSpinner /> : <XCircle className="h-3.5 w-3.5 mr-1.5" />}
+                      Close poll
+                    </Button>
                   )}
                 </div>
               </>

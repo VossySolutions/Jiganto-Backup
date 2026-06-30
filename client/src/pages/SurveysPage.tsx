@@ -22,6 +22,9 @@ import { TemplatesTab } from "@/components/surveys/TemplatesTab";
 import { SurveyLoadingState, SurveyKpiSkeleton, SurveyRowSkeleton, SurveyCardSkeleton, SurveyButtonSpinner } from "@/components/surveys/SurveyLoadingState";
 import { asArray, fetchSurveys, fetchSurvey, fetchSurveyResponses, fetchSurveyResultsSummary } from "@/lib/survey-api";
 import { SurveyAiTokenBanner } from "@/components/surveys/SurveyAiTokenBanner";
+import { SurveyQuestionToolbar } from "@/components/surveys/SurveyQuestionToolbar";
+import { SurveyBuilderActions } from "@/components/surveys/SurveyBuilderActions";
+import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/ui/metric-card";
 import { RichTextField } from "@/components/surveys/RichTextField";
 import { useSurveyAiStatus } from "@/hooks/use-survey-ai-status";
@@ -40,22 +43,26 @@ function QuestionPreview({ q, idx, selected, onClick, onDelete, onDuplicate, onM
   const opts = (q.options as string[]) || [];
   if (q.type === "section" || q.isSection) {
     return (
-      <div onClick={onClick} style={{ background: C.paper2, border: `1.5px solid ${selected ? C.teal : C.line}`, borderRadius: 12, padding: "14px 20px", marginBottom: 10, cursor: "pointer", position: "relative" }}>
+      <div onClick={onClick} className="survey-question-card" style={{ background: C.paper2, border: `1.5px solid ${selected ? C.teal : C.line}`, borderRadius: 12, padding: "14px 20px", marginBottom: 10, cursor: "pointer" }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: C.ink4, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>Section</div>
         <div style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{q.text || "Section header"}</div>
-        <div style={{ position: "absolute", right: 12, top: 12, display: "flex", gap: 4 }}>
-          <button onClick={e => { e.stopPropagation(); onDuplicate(); }} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", fontSize: 12 }} title="Duplicate">⧉</button>
-          <button onClick={e => { e.stopPropagation(); onDelete(); }} style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", color: C.rose, fontSize: 12 }} title="Delete">✕</button>
-        </div>
+        <SurveyQuestionToolbar
+          showReorder={false}
+          onDuplicate={onDuplicate}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+          onDelete={onDelete}
+        />
       </div>
     );
   }
   return (
     <div
       onClick={onClick}
+      className="survey-question-card"
       style={{
         background: C.surface, border: `1.5px solid ${selected ? C.teal : C.line}`,
-        borderRadius: 12, padding: "18px 20px", marginBottom: 10, cursor: "pointer", position: "relative",
+        borderRadius: 12, padding: "18px 20px", marginBottom: 10, cursor: "pointer",
         boxShadow: selected ? `0 0 0 3px ${C.tealL}` : undefined,
       }}
     >
@@ -129,17 +136,14 @@ function QuestionPreview({ q, idx, selected, onClick, onDelete, onDuplicate, onM
         <div style={{ padding: "8px 12px", border: `1px dashed ${C.line2}`, borderRadius: 8, fontSize: 13, color: C.ink4 }}>File upload (max 10MB)</div>
       )}
 
-      {/* Actions */}
-      <div style={{ position: "absolute", right: 12, top: 12, display: "flex", gap: 4 }}>
-        <button onClick={e => { e.stopPropagation(); onDuplicate(); }}
-          style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", fontSize: 12 }} title="Duplicate">⧉</button>
-        <button onClick={e => { e.stopPropagation(); onMoveUp(); }} disabled={isFirst}
-          style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: isFirst ? "not-allowed" : "pointer", opacity: isFirst ? 0.3 : 1, fontSize: 12 }} title="Move up">↑</button>
-        <button onClick={e => { e.stopPropagation(); onMoveDown(); }} disabled={isLast}
-          style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: isLast ? "not-allowed" : "pointer", opacity: isLast ? 0.3 : 1, fontSize: 12 }} title="Move down">↓</button>
-        <button onClick={e => { e.stopPropagation(); onDelete(); }}
-          style={{ width: 26, height: 26, border: `1px solid ${C.line}`, borderRadius: 6, background: C.surface, cursor: "pointer", color: C.rose, fontSize: 12 }} title="Delete">✕</button>
-      </div>
+      <SurveyQuestionToolbar
+        onDuplicate={onDuplicate}
+        onMoveUp={onMoveUp}
+        onMoveDown={onMoveDown}
+        onDelete={onDelete}
+        isFirst={isFirst}
+        isLast={isLast}
+      />
     </div>
   );
 }
@@ -1297,7 +1301,7 @@ export default function SurveysPage() {
               <p style={{ color: C.ink3, fontSize: 14, margin: 0 }}>Build, distribute, and analyse surveys across your projects and teams</p>
             </div>
             {mainTab === "surveys" && (
-              <button onClick={() => setWizardOpen(true)} style={btnPrimary} data-testid="button-new-survey">+ New Survey</button>
+              <Button type="button" onClick={() => setWizardOpen(true)} data-testid="button-new-survey">+ New Survey</Button>
             )}
           </div>
 
@@ -1490,35 +1494,26 @@ export default function SurveysPage() {
       cn("survey-builder-panel", panel === builderMobilePanel ? "survey-builder-panel--active-mobile" : "survey-builder-panel--hidden-mobile");
     return (
       <>
-      <ModuleShell className="h-screen overflow-hidden bg-background flex" mainClassName="h-full overflow-hidden flex flex-col">
-          {/* Top bar */}
-          <div className="survey-builder-topbar" style={{ background: C.surface, borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-              <button onClick={() => setView("dashboard")} style={btnGhost}>← Back</button>
-              <span style={{ fontSize: 14, fontWeight: 600, color: C.ink2, maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{builderTitle || "Untitled Survey"}</span>
-            </div>
-            <div className="survey-builder-actions">
-              {autoSaveStatus === "saving" && <span style={{ fontSize: 12, color: C.ink4, display: "flex", alignItems: "center", gap: 4 }}><SurveyButtonSpinner /> Saving…</span>}
-              {autoSaveStatus === "saved" && <span style={{ fontSize: 12, color: C.teal, fontWeight: 500 }}>✓ Saved</span>}
-              <button onClick={saveBuilderMeta} disabled={updateMut.isPending} style={btnSecondary} data-testid="button-builder-save">
-                {updateMut.isPending ? <SurveyButtonSpinner /> : null} Save
-              </button>
-              {activeSurvey && <button onClick={() => setShareModal(activeSurvey)} style={btnSecondary}>🔗 Share</button>}
-              {activeSurvey?.status === "draft" && (
-                <button onClick={() => activateMut.mutate(activeSurveyId!)} disabled={activateMut.isPending} style={btnPrimary}>
-                  {activateMut.isPending ? <SurveyButtonSpinner /> : null} Activate →
-                </button>
-              )}
-              {activeSurvey?.status === "active" && (
-                <button onClick={() => openResults(activeSurveyId!)} style={btnPrimary}>Results →</button>
-              )}
-            </div>
-          </div>
+      <ModuleShell className="h-screen overflow-hidden bg-background" mainClassName="h-full overflow-hidden flex flex-col flex-1 w-full min-w-0">
+        <div className="survey-builder-root">
+          <SurveyBuilderActions
+            title={builderTitle || "Untitled Survey"}
+            onBack={() => setView("dashboard")}
+            onSave={saveBuilderMeta}
+            onShare={activeSurvey ? () => setShareModal(activeSurvey) : undefined}
+            onActivate={activeSurvey?.status === "draft" ? () => activateMut.mutate(activeSurveyId!) : undefined}
+            onResults={activeSurvey?.status === "active" ? () => openResults(activeSurveyId!) : undefined}
+            savePending={updateMut.isPending}
+            activatePending={activateMut.isPending}
+            autoSaveStatus={autoSaveStatus}
+            status={activeSurvey?.status}
+          />
 
           <div className="survey-builder-mobile-tabs">
             {([["palette", "Add"], ["canvas", "Build"], ["settings", "Settings"]] as const).map(([id, label]) => (
-              <button key={id} type="button" className="survey-builder-mobile-tab"
-                style={{ color: builderMobilePanel === id ? C.teal : C.ink3, borderBottomColor: builderMobilePanel === id ? C.teal : "transparent" }}
+              <button key={id} type="button"
+                className={cn("survey-builder-mobile-tab", builderMobilePanel === id && "text-primary border-b-2 border-primary")}
+                style={builderMobilePanel === id ? undefined : { borderBottomColor: "transparent" }}
                 onClick={() => setBuilderMobilePanel(id)}>{label}</button>
             ))}
           </div>
@@ -1536,9 +1531,7 @@ export default function SurveysPage() {
                   {QUESTION_TYPES.filter(qt => qt.group === g).map(qt => (
                     <div key={qt.type} onClick={() => activeSurveyId && addQMut.mutate({ surveyId: activeSurveyId, type: qt.type })}
                       data-testid={`add-q-${qt.type}`}
-                      style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, marginBottom: 2, color: C.ink2, border: "1px solid transparent", transition: "all .15s" }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.paper2; (e.currentTarget as HTMLElement).style.borderColor = C.line; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.borderColor = "transparent"; }}>
+                      className="survey-palette-item">
                       <div style={{ width: 26, height: 26, borderRadius: 6, background: C.paper2, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>{qt.icon}</div>
                       {qt.label}
                     </div>
@@ -1550,11 +1543,13 @@ export default function SurveysPage() {
             {/* Centre: canvas */}
             <div className={cn(panelClass("canvas"), "survey-builder-panel--center")}>
               {/* Survey title card */}
-              <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: "22px 26px", marginBottom: 18, borderTop: `4px solid ${C.teal}` }}>
+              <div className="survey-question-card" style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: "22px 26px", marginBottom: 18, borderTop: `4px solid ${C.teal}`, width: "100%", boxSizing: "border-box" }}>
                 <input value={builderTitle} onChange={e => setBuilderTitle(e.target.value)}
-                  style={{ fontSize: 20, fontWeight: 700, border: "none", outline: "none", width: "100%", background: "transparent", color: C.ink }} placeholder="Survey title…" />
+                  className="survey-input"
+                  style={{ fontSize: 20, fontWeight: 700, border: "none", padding: 0, background: "transparent", boxShadow: "none" }} placeholder="Survey title…" />
                 <textarea value={builderDesc} onChange={e => setBuilderDesc(e.target.value)} rows={2}
-                  style={{ fontFamily: "inherit", fontSize: 13, border: "none", outline: "none", width: "100%", background: "transparent", color: C.ink3, resize: "none", marginTop: 8, lineHeight: 1.5 }} placeholder="Survey description (optional)…" />
+                  className="survey-input"
+                  style={{ fontFamily: "inherit", fontSize: 13, border: "none", padding: 0, background: "transparent", color: C.ink3, resize: "none", marginTop: 8, lineHeight: 1.5, boxShadow: "none" }} placeholder="Survey description (optional)…" />
               </div>
 
               {addQMut.isPending && (
@@ -1621,7 +1616,7 @@ export default function SurveysPage() {
                     <input type="datetime-local"
                       value={activeSurvey?.closeDate ? new Date(activeSurvey.closeDate).toISOString().slice(0, 16) : ""}
                       onChange={e => activeSurveyId && updateMut.mutate({ id: activeSurveyId, data: { closeDate: e.target.value ? new Date(e.target.value).toISOString() : null } })}
-                      style={{ width: "100%", padding: "8px 11px", border: `1px solid ${C.line2}`, borderRadius: 7, fontFamily: "inherit", fontSize: 13, marginBottom: 8 }} />
+                      className="survey-input mb-2" />
                   </div>
                   {activeSurvey && (
                     <div style={{ marginTop: 16 }}>
@@ -1629,19 +1624,24 @@ export default function SurveysPage() {
                       <div style={{ fontSize: 12, color: C.ink3, background: C.paper2, padding: "8px 10px", borderRadius: 8, wordBreak: "break-all" }}>
                         {window.location.origin}/survey/{activeSurvey.token}
                       </div>
-                      <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/survey/${activeSurvey.token}`); toast({ title: "Link copied ✓" }); }}
-                        style={{ ...btnGhost, width: "100%", justifyContent: "center", marginTop: 8 }}>Copy link</button>
+                      <Button type="button" variant="outline" className="w-full mt-2"
+                        onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/survey/${activeSurvey.token}`); toast({ title: "Link copied ✓" }); }}>
+                        Copy link
+                      </Button>
                     </div>
                   )}
                   {activeSurvey?.status === "active" && (
-                    <button onClick={() => closeMut.mutate(activeSurveyId!)}
-                      style={{ ...btnGhost, width: "100%", justifyContent: "center", marginTop: 14, color: C.rose, borderColor: "#f0b8b8" }}>Close survey</button>
+                    <Button type="button" variant="outline" className="w-full mt-3.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+                      onClick={() => closeMut.mutate(activeSurveyId!)}>
+                      Close survey
+                    </Button>
                   )}
                 </div>
               )}
             </div>
           </div>
           )}
+        </div>
     </ModuleShell>
         {shareModal && <ShareModal survey={shareModal} onClose={() => setShareModal(null)} />}
       </>
