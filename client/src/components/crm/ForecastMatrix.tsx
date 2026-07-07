@@ -568,10 +568,10 @@ export function ForecastMatrix({
           className="w-32"
           testId="matrix-months-ahead"
         >
-          <SelectItem value="6">6 periods</SelectItem>
-          <SelectItem value="12">12 periods</SelectItem>
-          <SelectItem value="18">18 periods</SelectItem>
-          <SelectItem value="24">24 periods</SelectItem>
+          <SelectItem value="6">6 months</SelectItem>
+          <SelectItem value="12">12 months</SelectItem>
+          <SelectItem value="18">18 months</SelectItem>
+          <SelectItem value="24">24 months</SelectItem>
         </MatrixFilterSelect>
         <MatrixFilterSelect
           value={sortBy}

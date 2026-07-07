@@ -3189,16 +3189,7 @@ export async function registerRoutes(
     const columnAnchor = periodRange?.start ?? now;
     const columns: string[] = [];
     const defaultColCount = period === "annual" ? 4 : period === "quarterly" ? 8 : period === "half-year" ? 6 : 12;
-    let colCount = monthsAhead && monthsAhead > 0 ? Math.min(monthsAhead, 24) : defaultColCount;
-    if (periodRange && period === "monthly") {
-      const monthsInRange =
-        (periodRange.end.getFullYear() - periodRange.start.getFullYear()) * 12 +
-        (periodRange.end.getMonth() - periodRange.start.getMonth()) +
-        1;
-      colCount = Math.min(colCount, Math.max(monthsInRange, 1));
-    } else if (periodRange && period === "quarterly") {
-      colCount = Math.min(colCount, 4);
-    }
+    const colCount = monthsAhead && monthsAhead > 0 ? Math.min(monthsAhead, 24) : defaultColCount;
     for (let i = 0; i < colCount; i++) {
       if (period === "monthly") {
         const d = new Date(columnAnchor.getFullYear(), columnAnchor.getMonth() + i, 1);
