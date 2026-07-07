@@ -3262,11 +3262,14 @@ export async function registerRoutes(
         name: o.name,
         accountId: o.accountId ?? null,
         accountName: account?.name || "—",
+        accountIndustry: account?.industry ?? null,
         stageId: o.stageId ?? null,
         stageName: stage?.name || "—",
         ownerUserId: o.ownerUserId ?? null,
         noteCount: noteInfo?.count ?? 0,
         notePreview: noteInfo?.preview ?? null,
+        probability: prob,
+        expectedCloseDate: o.expectedCloseDate ?? null,
         cells: cellValues,
       };
     });
@@ -6233,35 +6236,33 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     res.status(204).send();
   });
 
-  // Server-side PDF export via Puppeteer
-  app.get("/api/documents/:id/export-pdf", async (req, res, next) => {
-    if (!/^\d+$/.test(req.params.id)) return next();
-    const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const doc = await storage.getDocument(Number(req.params.id));
-    if (!doc) return res.status(404).json({ message: "Not found" });
+  const exportDocumentPdf = async (opts: {
+    title: string;
+    content: string;
+    headerHtml: string;
+    footerHtml: string;
+    updatedAt?: Date | string | null;
+  }): Promise<Buffer> => {
+    const { buildDocumentExportBodyHtml, buildPuppeteerPageTemplates } = await import("@shared/document-export");
+    const puppeteer = await import("puppeteer-core");
+    const browser = await puppeteer.default.launch({
+      executablePath: process.env.CHROME_EXECUTABLE_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
+      headless: true,
+    });
     try {
-      const { resolvePageLayoutWithFolderDefaults } = await import("@shared/document-page-layout");
-      const { buildDocumentExportBodyHtml, buildPuppeteerPageTemplates } = await import("@shared/document-export");
-      const folderDefaults = await storage.resolveFolderPageLayout(doc.folderId ?? null);
-      const { headerHtml, footerHtml } = resolvePageLayoutWithFolderDefaults(doc.metadata, folderDefaults);
-
-      const puppeteer = await import("puppeteer-core");
-      const browser = await puppeteer.default.launch({
-        executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
-        headless: true,
-      });
       const page = await browser.newPage();
       const htmlContent = buildDocumentExportBodyHtml({
-        title: doc.title,
-        content: doc.content || "",
-        updatedAt: doc.updatedAt,
+        title: opts.title,
+        content: opts.content,
+        headerHtml: opts.headerHtml,
+        footerHtml: opts.footerHtml,
+        updatedAt: opts.updatedAt,
       });
       const pageTemplates = buildPuppeteerPageTemplates({
-        headerHtml,
-        footerHtml,
-        title: doc.title,
+        headerHtml: opts.headerHtml,
+        footerHtml: opts.footerHtml,
+        title: opts.title,
       });
       await page.setContent(htmlContent, { waitUntil: "domcontentloaded" });
       const pdfBuffer = await page.pdf({
@@ -6272,11 +6273,74 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
         headerTemplate: pageTemplates.headerTemplate,
         footerTemplate: pageTemplates.footerTemplate,
       });
+      return Buffer.from(pdfBuffer);
+    } finally {
       await browser.close();
+    }
+  };
+
+  const resolveDocumentExportLayout = async (
+    doc: { metadata?: unknown; folderId?: number | null },
+    overrides?: { headerHtml?: string; footerHtml?: string },
+  ) => {
+    const { resolvePageLayoutWithFolderDefaults } = await import("@shared/document-page-layout");
+    const folderDefaults = await storage.resolveFolderPageLayout(doc.folderId ?? null);
+    const resolved = resolvePageLayoutWithFolderDefaults(doc.metadata, folderDefaults);
+    return {
+      headerHtml: overrides?.headerHtml ?? resolved.headerHtml,
+      footerHtml: overrides?.footerHtml ?? resolved.footerHtml,
+    };
+  };
+
+  // Server-side PDF export via Puppeteer (GET uses saved document; POST accepts editor overrides)
+  app.get("/api/documents/:id/export-pdf", async (req, res, next) => {
+    if (!/^\d+$/.test(req.params.id)) return next();
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const doc = await storage.getDocument(Number(req.params.id));
+    if (!doc) return res.status(404).json({ message: "Not found" });
+    try {
+      const { headerHtml, footerHtml } = await resolveDocumentExportLayout(doc);
+      const pdfBuffer = await exportDocumentPdf({
+        title: doc.title,
+        content: doc.content || "",
+        headerHtml,
+        footerHtml,
+        updatedAt: doc.updatedAt,
+      });
       const safeTitle = doc.title.replace(/[^a-z0-9]/gi, "_");
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.pdf"`);
-      res.send(Buffer.from(pdfBuffer));
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      console.error("PDF export error:", err);
+      res.status(500).json({ message: "PDF generation failed: " + err.message });
+    }
+  });
+
+  app.post("/api/documents/:id/export-pdf", async (req, res, next) => {
+    if (!/^\d+$/.test(req.params.id)) return next();
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const doc = await storage.getDocument(Number(req.params.id));
+    if (!doc) return res.status(404).json({ message: "Not found" });
+    try {
+      const body = (req.body || {}) as { content?: string; headerHtml?: string; footerHtml?: string };
+      const { headerHtml, footerHtml } = await resolveDocumentExportLayout(doc, {
+        headerHtml: typeof body.headerHtml === "string" ? body.headerHtml : undefined,
+        footerHtml: typeof body.footerHtml === "string" ? body.footerHtml : undefined,
+      });
+      const pdfBuffer = await exportDocumentPdf({
+        title: doc.title,
+        content: typeof body.content === "string" ? body.content : (doc.content || ""),
+        headerHtml,
+        footerHtml,
+        updatedAt: doc.updatedAt,
+      });
+      const safeTitle = doc.title.replace(/[^a-z0-9]/gi, "_");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.pdf"`);
+      res.send(pdfBuffer);
     } catch (err: any) {
       console.error("PDF export error:", err);
       res.status(500).json({ message: "PDF generation failed: " + err.message });

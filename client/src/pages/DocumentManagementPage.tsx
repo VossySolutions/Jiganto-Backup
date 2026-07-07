@@ -80,7 +80,8 @@ import { DocumentScrollRegion } from "@/components/editor/DocumentContentPane";
 import { DocumentPageLayoutPanel } from "@/components/editor/DocumentPageLayoutPanel";
 import { FolderPageLayoutDialog, readFolderPageLayoutFromFolder } from "@/components/documents/FolderPageLayoutDialog";
 import { resolveEffectivePageLayout, resolveFolderPageLayoutFromTree, resolvePageLayoutFieldsForSave, mergeDocumentMetadataWithPageLayout } from "@shared/document-page-layout";
-import { wrapDocumentBodyWithPageRegions } from "@shared/document-export";
+import { buildDocumentExportBodyHtml } from "@shared/document-export";
+import { buildDocumentDocxBlob } from "@/lib/document-docx-export";
 import type { Document, DocumentFolder, DocumentVersion, DocumentComment, DocumentFile, DocumentTemplate } from "@shared/schema";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -410,39 +411,29 @@ export default function DocumentManagementPage() {
 
   const handleExport = async (format: "pdf" | "html" | "markdown" | "docx") => {
     if (!selectedDocument) return;
-    
-    let content = editContent || selectedDocument.content || "";
-    const headerHtml = editHeaderContent || "";
-    const footerHtml = editFooterContent || "";
-    const wrapWithPageRegions = (body: string) => wrapDocumentBodyWithPageRegions(body, headerHtml, footerHtml);
+
+    const content = editContentRef.current || editContent || selectedDocument.content || "";
+    const headerHtml = editHeaderContentRef.current || editHeaderContent || "";
+    const footerHtml = editFooterContentRef.current || editFooterContent || "";
     const filename = selectedDocument.title.replace(/[^a-z0-9]/gi, '_');
-    let mimeType = "text/plain";
-    let extension = "txt";
-    
-    const htmlStyles = `
-      body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
-      h1, h2, h3, h4, h5, h6 { margin-top: 1.5em; margin-bottom: 0.5em; }
-      table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-      th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-      th { background-color: #f5f5f5; font-weight: 600; }
-      ul, ol { padding-left: 1.5em; }
-      blockquote { border-left: 4px solid #ddd; margin: 1em 0; padding-left: 1em; font-style: italic; }
-      code { background-color: #f5f5f5; padding: 0.2em 0.4em; border-radius: 3px; font-family: monospace; }
-      pre { background-color: #f5f5f5; padding: 1em; border-radius: 6px; overflow-x: auto; }
-      pre code { background-color: transparent; padding: 0; }
-      img { max-width: 100%; height: auto; }
-      mark { background-color: #fff3a3; }
-      /* RAG callout blocks */
-      [data-callout="info"] { border-left: 4px solid #3b82f6; background: #eff6ff; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
-      [data-callout="warning"] { border-left: 4px solid #f59e0b; background: #fffbeb; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
-      [data-callout="success"] { border-left: 4px solid #22c55e; background: #f0fdf4; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
-      [data-callout="danger"]  { border-left: 4px solid #ef4444; background: #fef2f2; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
-    `;
-    
+
     if (format === "html") {
-      content = `<!DOCTYPE html>\n<html>\n<head>\n  <title>${selectedDocument.title}</title>\n  <style>${htmlStyles}</style>\n</head>\n<body>\n  <h1>${selectedDocument.title}</h1>\n  ${wrapWithPageRegions(`<div class="content">${content}</div>`)}\n</body>\n</html>`;
-      mimeType = "text/html";
-      extension = "html";
+      const exportHtml = buildDocumentExportBodyHtml({
+        title: selectedDocument.title,
+        content: `<div class="content">${content}</div>`,
+        headerHtml,
+        footerHtml,
+        updatedAt: selectedDocument.updatedAt,
+      });
+      const blob = new Blob([exportHtml], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${filename}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Document Exported", description: `${selectedDocument.title} exported as HTML` });
+      return;
     } else if (format === "markdown") {
       // Convert HTML to Markdown using DOM traversal
       const tempDiv = document.createElement("div");
@@ -480,14 +471,37 @@ export default function DocumentManagementPage() {
         });
         return md;
       };
-      content = `# ${selectedDocument.title}\n\n${htmlToMd(tempDiv).trim()}\n`;
-      mimeType = "text/markdown";
-      extension = "md";
+      const mdBody = htmlToMd(tempDiv).trim();
+      let mdHeader = "";
+      let mdFooter = "";
+      if (headerHtml.trim()) {
+        const headerDiv = document.createElement("div");
+        headerDiv.innerHTML = headerHtml;
+        mdHeader = `---\n**Page header:** ${htmlToMd(headerDiv).trim()}\n\n`;
+      }
+      if (footerHtml.trim()) {
+        const footerDiv = document.createElement("div");
+        footerDiv.innerHTML = footerHtml;
+        mdFooter = `\n\n---\n**Page footer:** ${htmlToMd(footerDiv).trim()}\n`;
+      }
+      const markdown = `# ${selectedDocument.title}\n\n${mdHeader}${mdBody}${mdFooter}\n`;
+      const blob = new Blob([markdown], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${filename}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Document Exported", description: `${selectedDocument.title} exported as MARKDOWN` });
+      return;
     } else if (format === "pdf") {
-      // Try server-side PDF first
       toast({ title: "Generating PDF..." });
       try {
-        const pdfRes = await fetchWithAuth(`/api/documents/${selectedDocument.id}/export-pdf`);
+        const pdfRes = await fetchWithAuth(`/api/documents/${selectedDocument.id}/export-pdf`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, headerHtml, footerHtml }),
+        });
         if (pdfRes.ok) {
           const blob = await pdfRes.blob();
           const url = URL.createObjectURL(blob);
@@ -500,10 +514,16 @@ export default function DocumentManagementPage() {
           return;
         }
       } catch { /* fall through to browser print */ }
-      // Fallback: browser print dialog
+      const printHtml = buildDocumentExportBodyHtml({
+        title: selectedDocument.title,
+        content: `<div class="content">${content}</div>`,
+        headerHtml,
+        footerHtml,
+        updatedAt: selectedDocument.updatedAt,
+      });
       const printWindow = window.open("", "_blank");
       if (printWindow) {
-        printWindow.document.write(`<!DOCTYPE html><html><head><title>${selectedDocument.title}</title><style>${htmlStyles}</style></head><body><h1>${selectedDocument.title}</h1><div class="content">${content}</div></body></html>`);
+        printWindow.document.write(printHtml);
         printWindow.document.close();
         setTimeout(() => printWindow.print(), 500);
       }
@@ -511,98 +531,12 @@ export default function DocumentManagementPage() {
     } else if (format === "docx") {
       toast({ title: "Generating Word document…" });
       try {
-        const {
-          Document: DocxDocument,
-          Packer,
-          Paragraph: DocxParagraph,
-          TextRun: DocxTextRun,
-          HeadingLevel,
-          Table: DocxTable,
-          TableRow: DocxTableRow,
-          TableCell: DocxTableCell,
-          WidthType,
-          BorderStyle,
-        } = await import("docx");
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = content;
-
-        const parseChildren = (el: Element): InstanceType<typeof DocxTextRun>[] => {
-          const runs: InstanceType<typeof DocxTextRun>[] = [];
-          el.childNodes.forEach((node) => {
-            if (node.nodeType === Node.TEXT_NODE) {
-              const text = node.textContent || "";
-              if (text) runs.push(new DocxTextRun({ text }));
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-              const n = node as Element;
-              const tag = n.tagName.toLowerCase();
-              const innerText = n.textContent || "";
-              if (tag === "strong" || tag === "b") runs.push(new DocxTextRun({ text: innerText, bold: true }));
-              else if (tag === "em" || tag === "i") runs.push(new DocxTextRun({ text: innerText, italics: true }));
-              else if (tag === "u") runs.push(new DocxTextRun({ text: innerText, underline: {} }));
-              else if (tag === "code") runs.push(new DocxTextRun({ text: innerText, font: "Courier New" }));
-              else runs.push(...parseChildren(n));
-            }
-          });
-          return runs;
-        };
-
-        const docChildren: any[] = [
-          new DocxParagraph({ text: selectedDocument.title, heading: HeadingLevel.TITLE }),
-        ];
-
-        const parseNode = (node: Element) => {
-          const tag = node.tagName?.toLowerCase();
-          if (!tag) return;
-          if (tag === "h1") docChildren.push(new DocxParagraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_1 }));
-          else if (tag === "h2") docChildren.push(new DocxParagraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_2 }));
-          else if (tag === "h3") docChildren.push(new DocxParagraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_3 }));
-          else if (tag === "h4") docChildren.push(new DocxParagraph({ children: parseChildren(node), heading: HeadingLevel.HEADING_4 }));
-          else if (tag === "p" || tag === "div") {
-            const callout = node.getAttribute("data-callout");
-            const text = node.textContent || "";
-            if (callout) {
-              docChildren.push(new DocxParagraph({
-                children: [new DocxTextRun({ text: `[${callout.toUpperCase()}] ${text}`, bold: true })],
-                border: { left: { color: callout === "info" ? "3b82f6" : callout === "warning" ? "f59e0b" : callout === "success" ? "22c55e" : "ef4444", size: 12, style: BorderStyle.SINGLE } },
-              }));
-            } else {
-              docChildren.push(new DocxParagraph({ children: parseChildren(node) }));
-            }
-          } else if (tag === "ul" || tag === "ol") {
-            node.querySelectorAll("li").forEach((li) => {
-              docChildren.push(new DocxParagraph({ text: li.textContent || "", bullet: { level: 0 } }));
-            });
-          } else if (tag === "table") {
-            const rows: InstanceType<typeof DocxTableRow>[] = [];
-            node.querySelectorAll("tr").forEach((tr) => {
-              const cells: InstanceType<typeof DocxTableCell>[] = [];
-              tr.querySelectorAll("td, th").forEach((td) => {
-                const isHeader = td.tagName.toLowerCase() === "th";
-                cells.push(new DocxTableCell({
-                  children: [new DocxParagraph({ children: parseChildren(td as Element) })],
-                  shading: isHeader ? { fill: "E5E7EB" } : undefined,
-                }));
-              });
-              if (cells.length) rows.push(new DocxTableRow({ children: cells }));
-            });
-            if (rows.length) {
-              docChildren.push(new DocxTable({ rows, width: { size: 100, type: WidthType.PERCENTAGE } }));
-            }
-          } else if (tag === "blockquote") {
-            docChildren.push(new DocxParagraph({ text: node.textContent || "", indent: { left: 720 } }));
-          } else {
-            node.childNodes.forEach((child) => {
-              if (child.nodeType === Node.ELEMENT_NODE) parseNode(child as Element);
-            });
-          }
-        };
-
-        tempDiv.childNodes.forEach((child) => {
-          if (child.nodeType === Node.ELEMENT_NODE) parseNode(child as Element);
+        const buffer = await buildDocumentDocxBlob({
+          title: selectedDocument.title,
+          contentHtml: content,
+          headerHtml,
+          footerHtml,
         });
-
-        const doc = new DocxDocument({ sections: [{ children: docChildren }] });
-        const buffer = await Packer.toBlob(doc);
         const url = URL.createObjectURL(buffer);
         const a = document.createElement("a");
         a.href = url;
@@ -615,21 +549,6 @@ export default function DocumentManagementPage() {
       }
       return;
     }
-    
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${filename}.${extension}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    toast({
-      title: "Document Exported",
-      description: `${selectedDocument.title} exported as ${format.toUpperCase()}`,
-    });
   };
 
   const { data: folders = [], isLoading: foldersLoading } = useQuery<DocumentFolder[]>({

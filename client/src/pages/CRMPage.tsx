@@ -194,6 +194,14 @@ function parseCrmUrl() {
   };
 }
 
+function CrmTabLoader() {
+  return (
+    <div className="flex justify-center py-16" data-testid="crm-tab-loading">
+      <Loader2 className="h-8 w-8 text-[#0ea5e9] animate-spin" />
+    </div>
+  );
+}
+
 export default function CRMPage() {
   return (
     <CrmUsersProvider>
@@ -213,16 +221,12 @@ function CRMPageContent() {
   const [detailPanelExpanded, setDetailPanelExpanded] = useState(false);
   const tabsListRef = useRef<HTMLDivElement>(null);
 
-  const pipelineTabs = new Set(["opportunities", "pipeline", "forecasting", "360view", "resourceplan"]);
-  const needsContacts = activeTab === "contacts" || activeTab === "opportunities" || activeTab === "360view";
-  const needsContracts = activeTab === "contracts" || activeTab === "customers" || activeTab === "360view";
-  const needsStages = pipelineTabs.has(activeTab) || activeTab === "opportunities" || activeTab === "customers";
   const needsActivities = activeTab === "dashboard";
 
   const { data: dashboardStats, isLoading: statsLoading } = useQuery<CrmDashboardStats>({
     queryKey: ["/api/crm/dashboard-stats"],
     staleTime: CRM_LIST_STALE,
-    enabled: activeTab === "dashboard" || needsActivities || activeTab === "forecasting",
+    enabled: activeTab === "dashboard" || activeTab === "forecasting",
   });
 
   const { data: accounts = [], isLoading: accountsLoading } = useQuery<CrmAccountDetail[]>({
@@ -233,7 +237,6 @@ function CRMPageContent() {
   const { data: contacts = [], isLoading: contactsLoading } = useQuery<CrmContact[]>({
     queryKey: ["/api/crm/contacts"],
     staleTime: CRM_LIST_STALE,
-    enabled: needsContacts,
   });
 
   const { data: leads = [], isLoading: leadsLoading } = useQuery<CrmLead[]>({
@@ -244,13 +247,11 @@ function CRMPageContent() {
   const { data: pipelines = [], isLoading: pipelinesLoading } = useQuery<CrmPipeline[]>({
     queryKey: ["/api/crm/pipelines"],
     staleTime: CRM_META_STALE,
-    enabled: pipelineTabs.has(activeTab),
   });
 
   const { data: stages = [], isLoading: stagesLoading } = useQuery<CrmOpportunityStage[]>({
     queryKey: ["/api/crm/stages"],
     staleTime: CRM_META_STALE,
-    enabled: needsStages,
   });
 
   const { data: opportunities = [], isLoading: opportunitiesLoading } = useQuery<CrmOpportunity[]>({
@@ -261,7 +262,6 @@ function CRMPageContent() {
   const { data: contracts = [], isLoading: contractsLoading } = useQuery<CrmContract[]>({
     queryKey: ["/api/crm/contracts"],
     staleTime: CRM_LIST_STALE,
-    enabled: needsContracts,
   });
 
   const { data: activities = [] } = useQuery<CrmActivity[]>({
@@ -270,7 +270,28 @@ function CRMPageContent() {
     enabled: needsActivities,
   });
 
-  const isLoading = statsLoading || accountsLoading || contactsLoading || leadsLoading || pipelinesLoading || stagesLoading || opportunitiesLoading || contractsLoading;
+  // Only block the shell on first paint — tab-specific queries must not hide the whole CRM page.
+  const isInitialLoading = accountsLoading || leadsLoading || opportunitiesLoading;
+
+  const tabLoading = useMemo(
+    () => ({
+      opportunities: stagesLoading || pipelinesLoading || contactsLoading,
+      pipeline: pipelinesLoading || stagesLoading,
+      customers: stagesLoading || contractsLoading,
+      contracts: contractsLoading,
+      contacts: contactsLoading,
+      forecasting: pipelinesLoading || stagesLoading || statsLoading,
+      "360view": contactsLoading || contractsLoading || stagesLoading || pipelinesLoading,
+      resourceplan: stagesLoading || pipelinesLoading,
+    }),
+    [
+      contactsLoading,
+      contractsLoading,
+      pipelinesLoading,
+      stagesLoading,
+      statsLoading,
+    ],
+  );
 
   const openCrmCustomFieldsSettings = useCallback(() => {
     const access = getSettingsAccess(platformRole, isJigantoStaff);
@@ -280,7 +301,7 @@ function CRMPageContent() {
   }, [platformRole, isJigantoStaff, setLocation]);
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isInitialLoading) return;
     const list = tabsListRef.current;
     if (!list) return;
     if (activeTab === "dashboard") {
@@ -289,13 +310,13 @@ function CRMPageContent() {
     }
     const activeEl = list.querySelector<HTMLElement>(`[data-testid="tab-${activeTab}"]`);
     activeEl?.scrollIntoView({ inline: "nearest", block: "nearest" });
-  }, [activeTab, isLoading]);
+  }, [activeTab, isInitialLoading]);
 
   if (activeClient && CLIENT_WORKSPACE_ALWAYS_HIDDEN_KEYS.has("crm")) {
     return <Redirect to={DASHBOARD_PATH} />;
   }
 
-  if (isLoading) {
+  if (isInitialLoading) {
     return (
       <ModuleShell className="h-screen overflow-hidden bg-background" testId="crm-loading" mainClassName="h-full flex items-center justify-center overflow-hidden">
           <div className="flex flex-col items-center gap-3">
@@ -392,85 +413,108 @@ function CRMPageContent() {
               </TabsContent>
 
               <TabsContent value="opportunities" className="p-3 sm:p-4 md:p-6 m-0">
-                <CrmOpportunitiesTab
-                  opportunities={opportunities}
-                  stages={stages}
-                  accounts={accounts}
-                  pipelines={pipelines}
-                  contacts={contacts}
-                  searchTerm={searchTerm}
-                  onNavigateToTab={(tab) => setActiveTab(tab)}
-                  onOpenCustomFieldsSettings={openCrmCustomFieldsSettings}
-                  onNavigateToResourcePlan={(oppId, planId) => {
-                    sessionStorage.setItem("crm-resource-plan-opp-id", String(oppId));
-                    if (planId) sessionStorage.setItem("crm-resource-plan-id", String(planId));
-                    setActiveTab("resourceplan");
-                  }}
-                />
+                {tabLoading.opportunities ? (
+                  <CrmTabLoader />
+                ) : (
+                  <CrmOpportunitiesTab
+                    opportunities={opportunities}
+                    stages={stages}
+                    accounts={accounts}
+                    pipelines={pipelines}
+                    contacts={contacts}
+                    searchTerm={searchTerm}
+                    onNavigateToTab={(tab) => setActiveTab(tab)}
+                    onOpenCustomFieldsSettings={openCrmCustomFieldsSettings}
+                    onNavigateToResourcePlan={(oppId, planId) => {
+                      sessionStorage.setItem("crm-resource-plan-opp-id", String(oppId));
+                      if (planId) sessionStorage.setItem("crm-resource-plan-id", String(planId));
+                      setActiveTab("resourceplan");
+                    }}
+                  />
+                )}
               </TabsContent>
 
               <TabsContent value="pipeline" className="p-3 sm:p-4 md:p-6 m-0">
-                <CrmPipelineTab opportunities={opportunities} stages={stages} accounts={accounts} pipelines={pipelines} searchTerm={searchTerm} />
+                {tabLoading.pipeline ? (
+                  <CrmTabLoader />
+                ) : (
+                  <CrmPipelineTab opportunities={opportunities} stages={stages} accounts={accounts} pipelines={pipelines} searchTerm={searchTerm} />
+                )}
               </TabsContent>
 
               <TabsContent value="customers" className="p-3 sm:p-4 md:p-6 m-0">
-                <CrmCustomersTab accounts={accounts} opportunities={opportunities} contracts={contracts} stages={stages} searchTerm={searchTerm} onSelectAccount={setSelectedAccount} />
+                {tabLoading.customers ? (
+                  <CrmTabLoader />
+                ) : (
+                  <CrmCustomersTab accounts={accounts} opportunities={opportunities} contracts={contracts} stages={stages} searchTerm={searchTerm} onSelectAccount={setSelectedAccount} />
+                )}
               </TabsContent>
 
               <TabsContent value="contracts" className="p-3 sm:p-4 md:p-6 m-0">
-                <CrmContractsTab contracts={contracts} accounts={accounts} searchTerm={searchTerm} initialContractId={urlState.contractId} />
+                {tabLoading.contracts ? (
+                  <CrmTabLoader />
+                ) : (
+                  <CrmContractsTab contracts={contracts} accounts={accounts} searchTerm={searchTerm} initialContractId={urlState.contractId} />
+                )}
               </TabsContent>
 
               <TabsContent value="contacts" className="p-3 sm:p-4 md:p-6 m-0">
-                <CrmContactsTab contacts={contacts} accounts={accounts} searchTerm={searchTerm} />
+                {tabLoading.contacts ? (
+                  <CrmTabLoader />
+                ) : (
+                  <CrmContactsTab contacts={contacts} accounts={accounts} searchTerm={searchTerm} />
+                )}
               </TabsContent>
 
               <TabsContent value="forecasting" className="p-3 sm:p-4 md:p-6 m-0">
-                <SalesForecastDashboard
-                  opportunities={opportunities}
-                  stages={stages}
-                  pipelines={pipelines}
-                  accounts={accounts}
-                  contacts={contacts}
-                  onOpenOpportunityNotes={(oppId, accountId) => {
-                    sessionStorage.setItem("crm-360-opportunity-id", String(oppId));
-                    const resolvedAccountId = accountId ?? opportunities.find((o) => o.id === oppId)?.accountId ?? null;
-                    if (resolvedAccountId) {
-                      sessionStorage.setItem("crm-360-account-id", String(resolvedAccountId));
-                    }
-                    sessionStorage.setItem("crm-360-subtab", "notes");
-                    setActiveTab("360view");
-                  }}
-                  onNavigateToResourcePlan={(oppId, planId) => {
-                    sessionStorage.setItem("crm-resource-plan-opp-id", String(oppId));
-                    if (planId) sessionStorage.setItem("crm-resource-plan-id", String(planId));
-                    setActiveTab("resourceplan");
-                  }}
-                />
+                {tabLoading.forecasting ? (
+                  <CrmTabLoader />
+                ) : (
+                  <SalesForecastDashboard
+                    opportunities={opportunities}
+                    stages={stages}
+                    pipelines={pipelines}
+                    accounts={accounts}
+                    contacts={contacts}
+                    onNavigateToResourcePlan={(oppId, planId) => {
+                      sessionStorage.setItem("crm-resource-plan-opp-id", String(oppId));
+                      if (planId) sessionStorage.setItem("crm-resource-plan-id", String(planId));
+                      setActiveTab("resourceplan");
+                    }}
+                  />
+                )}
               </TabsContent>
 
               <TabsContent value="360view" className="m-0">
-                <Crm360ViewTab
-                  accounts={accounts}
-                  contacts={contacts}
-                  opportunities={opportunities}
-                  stages={stages}
-                  contracts={contracts}
-                  leads={leads}
-                  searchTerm={searchTerm}
-                  onNavigateToTab={(tab) => setActiveTab(tab)}
-                />
+                {tabLoading["360view"] ? (
+                  <CrmTabLoader />
+                ) : (
+                  <Crm360ViewTab
+                    accounts={accounts}
+                    contacts={contacts}
+                    opportunities={opportunities}
+                    stages={stages}
+                    contracts={contracts}
+                    leads={leads}
+                    searchTerm={searchTerm}
+                    onNavigateToTab={(tab) => setActiveTab(tab)}
+                  />
+                )}
               </TabsContent>
 
               <TabsContent value="resourceplan" className="p-3 sm:p-4 md:p-6 m-0">
-                <CrmResourcePlanTab
-                  opportunities={opportunities}
-                  accounts={accounts}
-                  stages={stages}
-                  initialPlanId={urlState.planId}
-                  initialOpportunityId={urlState.opportunityId}
-                  onNavigateToTab={(tab) => setActiveTab(tab)}
-                />
+                {tabLoading.resourceplan ? (
+                  <CrmTabLoader />
+                ) : (
+                  <CrmResourcePlanTab
+                    opportunities={opportunities}
+                    accounts={accounts}
+                    stages={stages}
+                    initialPlanId={urlState.planId}
+                    initialOpportunityId={urlState.opportunityId}
+                    onNavigateToTab={(tab) => setActiveTab(tab)}
+                  />
+                )}
               </TabsContent>
             </div>
           </div>

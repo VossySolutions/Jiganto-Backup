@@ -77,7 +77,7 @@ export type CrmOpportunityStageSummary = Pick<
 /** Stage row used in forecast matrix (no tenantId). */
 export type CrmForecastStage = Pick<
   DbStage,
-  "id" | "pipelineId" | "name" | "order" | "probability" | "isClosed"
+  "id" | "pipelineId" | "name" | "order" | "probability" | "color" | "isClosed"
 >;
 
 export type CrmStageClosedFlag = Pick<DbStage, "id" | "isClosed">;
