@@ -18,7 +18,7 @@ import {
   MATRIX_LEVELS, getMatrixLevel, levelToProficiencyValue,
   ASSESSMENT_SOURCES, getAssessmentSource, type AssessmentSource,
 } from "./constants";
-import { ResourcesTableSkeleton, ResourcesEmptyState, TypeBadge, PersonAvatar, UtilBar } from "./ResourcesUi";
+import { ResourcesTableSkeleton, ResourcesEmptyState, TypeBadge, PersonAvatar } from "./ResourcesUi";
 import { SkillsLibraryDialog } from "./SkillsLibraryDialog";
 import type { Resource, Skill, SkillCategory, ResourceSkill, ResourceAllocation } from "@shared/models/resources";
 
@@ -123,7 +123,7 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
     return m;
   }, [allocations]);
 
-  const utilOf = (r: Resource) => Math.round(utilByResource[r.id] ?? 0);
+  const availOf = (r: Resource) => Math.max(0, Math.min(100, Math.round(100 - (utilByResource[r.id] ?? 0))));
 
   const departments = useMemo(() => Array.from(new Set(resources.map((r) => r.department).filter(Boolean))) as string[], [resources]);
 
@@ -148,10 +148,10 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
     return resources.filter((r) => {
       if (fDept !== "all" && r.department !== fDept) return false;
       if (fType !== "all" && (r.personType ?? "employee") !== fType) return false;
-      const util = utilByResource[r.id] ?? 0;
-      if (fAvail === "capacity" && util >= 80) return false;
-      if (fAvail === "busy" && (util < 80 || util >= 100)) return false;
-      if (fAvail === "full" && util < 100) return false;
+      const avail = availOf(r);
+      if (fAvail === "available" && avail < 60) return false;
+      if (fAvail === "partial" && (avail < 25 || avail >= 60)) return false;
+      if (fAvail === "full" && avail >= 25) return false;
       const rs = resourceSkills[r.id] ?? [];
       if (minProf > 0 && !rs.some((s) => (s.skillLevel ?? 3) >= minProf)) return false;
       if (fAssess !== "all" && !rs.some((s) => getAssessmentSource(s.assessmentType) === fAssess)) return false;
@@ -175,7 +175,7 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
     if (!q) { setHighlightIds(null); return; }
     const tokens = q.split(/[,;]+/).map((t) => t.trim()).filter(Boolean);
     const matches = filtered.filter((r) => tokens.every((token) => {
-      if (/avail/.test(token)) return utilOf(r) < 80;
+      if (/avail/.test(token)) return availOf(r) >= 25;
       const lvMatch = token.match(/(?:level\s*)?([1-4])\s*\+?/);
       const minLv = lvMatch ? Number(lvMatch[1]) : 1;
       const skillQuery = token.replace(/level\s*[1-4]\s*\+?|[1-4]\s*\+/g, "").replace(/available?/g, "").trim();
@@ -246,11 +246,11 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
 
   const exportMatrixCsv = () => {
     const cols = visibleGroups.flatMap((g) => expanded.has(g.id) ? g.skills.map((s) => ({ g, s })) : [{ g, s: null as Skill | null }]);
-    const header = ["Name", "Role", "Department", "Type", "Utilisation", ...cols.map((c) => c.s ? c.s.name : `${c.g.label} (best)`)];
+    const header = ["Name", "Role", "Department", "Type", "Availability", ...cols.map((c) => c.s ? c.s.name : `${c.g.label} (best)`)];
     const lines = [header.map(csv).join(",")];
     for (const r of filtered) {
       const row = [
-        `${r.firstName} ${r.lastName}`, r.jobTitle ?? "", r.department ?? "", getTypeConfig(r.personType).label, `${utilOf(r)}%`,
+        `${r.firstName} ${r.lastName}`, r.jobTitle ?? "", r.department ?? "", getTypeConfig(r.personType).label, `${availOf(r)}%`,
         ...cols.map((c) => {
           if (c.s) { const v = getLevel(r.id, c.s.id); return v ? String(v.level) : ""; }
           const b = bestInGroup(r.id, c.g); return b ? String(b.level) : "";
@@ -294,7 +294,7 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
         style={{ background: "#FEF3C7", color: "#92400E", border: "1.5px solid #D97706" }}>?</span>;
     }
     return <span className={cn("mx-auto flex items-center justify-center rounded font-extrabold", summary ? "h-6 w-10 text-[10px]" : "h-[22px] w-7 text-[11px]")}
-      style={{ background: cfg.bg, color: cfg.text, border: assess === "self" ? `2px dashed ${cfg.text}` : "none" }}>{level}</span>;
+      style={{ background: cfg.bg, color: cfg.text, border: assess === "self" ? `2px dashed ${cfg.text}` : "none" }}>{cfg.level}</span>;
   };
 
   return (
@@ -319,7 +319,7 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
             <FilterSelect label="Department" value={fDept} onChange={setFDept} options={[{ v: "all", l: "All departments" }, ...departments.map((d) => ({ v: d, l: d }))]} />
             <FilterSelect label="Person type" value={fType} onChange={setFType} options={[{ v: "all", l: "All types" }, { v: "employee", l: "Employee" }, { v: "contractor", l: "Contractor" }, { v: "customer", l: "Customer staff" }, { v: "partner", l: "Partner" }, { v: "associate", l: "Associate" }]} />
             <FilterSelect label="Min proficiency" value={fMinProf} onChange={setFMinProf} options={[{ v: "0", l: "All levels" }, { v: "2", l: "≥ 2 Practitioner" }, { v: "3", l: "≥ 3 Advanced" }, { v: "4", l: "4 Expert only" }]} />
-            <FilterSelect label="Utilisation" value={fAvail} onChange={setFAvail} options={[{ v: "all", l: "All" }, { v: "capacity", l: "Has capacity (<80%)" }, { v: "busy", l: "Busy (80–99%)" }, { v: "full", l: "Fully allocated (100%+)" }]} />
+            <FilterSelect label="Availability" value={fAvail} onChange={setFAvail} options={[{ v: "all", l: "All" }, { v: "available", l: "Available (≥60%)" }, { v: "partial", l: "Partial" }, { v: "full", l: "Fully allocated" }]} />
             <FilterSelect label="Assessment" value={fAssess} onChange={setFAssess} options={[{ v: "all", l: "All" }, { v: "validated", l: "Manager validated" }, { v: "self", l: "Self-assessed" }, { v: "pending", l: "Pending review" }]} />
             <div className="flex-1 min-w-[240px]">
               <div className="mb-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground"><Sparkles className="h-3 w-3" /> Quick find — who can do this?</div>
@@ -374,7 +374,7 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
                   <th className="sticky left-0 top-0 z-30 min-w-[210px] bg-muted p-3 text-left text-xs font-semibold text-muted-foreground">Name</th>
                   <th className="sticky top-0 z-20 min-w-[96px] bg-muted p-3 text-left text-xs font-semibold text-muted-foreground">Type</th>
                   <th className="sticky top-0 z-20 min-w-[90px] bg-muted p-3 text-left text-xs font-semibold text-muted-foreground">Dept</th>
-                  <th className="sticky top-0 z-20 min-w-[92px] border-r bg-muted p-3 text-left text-xs font-semibold text-muted-foreground">Util %</th>
+                  <th className="sticky top-0 z-20 min-w-[92px] border-r bg-muted p-3 text-left text-xs font-semibold text-muted-foreground">Avail.</th>
                   {visibleGroups.map((g) => (
                     <th key={g.id} colSpan={expanded.has(g.id) ? g.skills.length : 1} onClick={() => setExpanded((prev) => { const n = new Set(prev); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; })}
                       className="sticky top-0 z-20 cursor-pointer border-l bg-muted p-2 text-center text-[11px] font-bold uppercase tracking-wide"
@@ -383,7 +383,6 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
                       {g.label} {expanded.has(g.id) ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />}
                     </th>
                   ))}
-                  <th className="sticky top-0 z-20 border-l bg-muted" style={{ width: "100%" }} />
                 </tr>
                 <tr className="border-b bg-muted/40">
                   <th className="sticky left-0 top-[41px] z-30 bg-muted" />
@@ -397,14 +396,13 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
                       </th>
                     ))
                     : <th key={g.id} className="sticky top-[41px] z-10 min-w-[60px] border-l bg-muted p-2 text-center text-[10px] font-bold text-muted-foreground">Best</th>)}
-                  <th className="sticky top-[41px] z-10 border-l bg-muted" style={{ width: "100%" }} />
                 </tr>
               </thead>
               <tbody>
                 {grouped.map(([dept, people]) => (
                   <Fragment key={`d-${dept}`}>
                     <tr>
-                      <td colSpan={totalCols + 1} className="sticky left-0 border-b bg-muted/60 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-foreground">
+                      <td colSpan={totalCols} className="sticky left-0 border-b bg-muted/60 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-foreground">
                         {dept} <span className="ml-1 rounded-full bg-foreground/10 px-2 py-0.5 text-[10px] font-semibold">{people.length}</span>
                       </td>
                     </tr>
@@ -424,7 +422,7 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
                           </td>
                           <td className="p-3"><TypeBadge type={r.personType} /></td>
                           <td className="p-3 text-xs text-muted-foreground">{(r.department ?? "").split(" ")[0]}</td>
-                          <td className="border-r p-3"><UtilBar util={utilOf(r)} /></td>
+                          <td className="border-r p-3"><AvailCell avail={availOf(r)} /></td>
                           {visibleGroups.map((g) => expanded.has(g.id)
                             ? g.skills.map((s) => {
                               const v = getLevel(r.id, s.id);
@@ -442,7 +440,6 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
                                 </td>
                               );
                             })())}
-                          <td className="border-l" />
                         </tr>
                       );
                     })}
@@ -460,7 +457,6 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
                       const count = filtered.filter((r) => bestInGroup(r.id, g)).length;
                       return <td key={g.id} className="border-l bg-muted/50 p-1 text-center text-[11px] font-bold text-foreground">{count || <span className="text-muted-foreground/40">0</span>}</td>;
                     })())}
-                  <td className="border-l bg-muted/50" style={{ width: "100%" }} />
                 </tr>
               </tbody>
             </table>
@@ -544,6 +540,20 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/* ── Availability cell (reference logic: capacity 0–100%) ──── */
+function AvailCell({ avail }: { avail: number }) {
+  const color = avail >= 60 ? "#059669" : avail >= 25 ? "#D97706" : "#DC2626";
+  const label = avail >= 60 ? "Available" : avail >= 25 ? "Partial" : "Allocated";
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 w-[52px] overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full" style={{ width: `${avail}%`, background: color }} />
+      </div>
+      <span className="whitespace-nowrap text-[11px] font-bold tabular-nums" style={{ color }}>{avail}% · {label}</span>
     </div>
   );
 }

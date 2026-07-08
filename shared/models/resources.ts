@@ -389,12 +389,12 @@ export type InsertTimesheetIntegration = z.infer<typeof insertTimesheetIntegrati
 export type InsertTimesheetAuditLog = z.infer<typeof insertTimesheetAuditLogSchema>;
 
 /** Spec skill levels 1–5 */
+/** Client skills-matrix scale: 4 proficiency levels. */
 export const SKILL_LEVELS = [
   { level: 1, value: "awareness", label: "Awareness" },
-  { level: 2, value: "foundation", label: "Foundation" },
-  { level: 3, value: "practitioner", label: "Practitioner" },
+  { level: 2, value: "practitioner", label: "Practitioner" },
+  { level: 3, value: "advanced", label: "Advanced" },
   { level: 4, value: "expert", label: "Expert" },
-  { level: 5, value: "thought-leader", label: "Thought Leader" },
 ] as const;
 
 export const PERSON_TYPES = ["employee", "contractor", "customer", "partner", "associate"] as const;
