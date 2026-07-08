@@ -80,7 +80,7 @@ import { DocumentScrollRegion } from "@/components/editor/DocumentContentPane";
 import { DocumentPageLayoutPanel } from "@/components/editor/DocumentPageLayoutPanel";
 import { FolderPageLayoutDialog, readFolderPageLayoutFromFolder } from "@/components/documents/FolderPageLayoutDialog";
 import { resolveEffectivePageLayout, resolveFolderPageLayoutFromTree, resolvePageLayoutFieldsForSave, mergeDocumentMetadataWithPageLayout } from "@shared/document-page-layout";
-import { buildDocumentExportBodyHtml } from "@shared/document-export";
+import { buildPrintableDocumentHtml } from "@shared/document-export";
 import { buildDocumentDocxBlob } from "@/lib/document-docx-export";
 import type { Document, DocumentFolder, DocumentVersion, DocumentComment, DocumentFile, DocumentTemplate } from "@shared/schema";
 import * as pdfjsLib from "pdfjs-dist";
@@ -418,7 +418,7 @@ export default function DocumentManagementPage() {
     const filename = selectedDocument.title.replace(/[^a-z0-9]/gi, '_');
 
     if (format === "html") {
-      const exportHtml = buildDocumentExportBodyHtml({
+      const exportHtml = buildPrintableDocumentHtml({
         title: selectedDocument.title,
         content: `<div class="content">${content}</div>`,
         headerHtml,
@@ -514,7 +514,8 @@ export default function DocumentManagementPage() {
           return;
         }
       } catch { /* fall through to browser print */ }
-      const printHtml = buildDocumentExportBodyHtml({
+      toast({ title: "Server PDF unavailable — using browser print instead" });
+      const printHtml = buildPrintableDocumentHtml({
         title: selectedDocument.title,
         content: `<div class="content">${content}</div>`,
         headerHtml,
@@ -2862,7 +2863,7 @@ export default function DocumentManagementPage() {
                   description={
                     resolvedPageLayout?.headerInherited && resolvedPageLayout.headerSourceFolderName
                       ? `Inherited from folder “${resolvedPageLayout.headerSourceFolderName}”`
-                      : "Top — shown when viewing & exporting"
+                      : "Repeats on every page when exported to PDF or Word"
                   }
                 >
                   <DocumentHeaderFooterEditor
@@ -2901,7 +2902,7 @@ export default function DocumentManagementPage() {
                   description={
                     resolvedPageLayout?.footerInherited && resolvedPageLayout.footerSourceFolderName
                       ? `Inherited from folder “${resolvedPageLayout.footerSourceFolderName}”`
-                      : "Bottom — shown when viewing & exporting"
+                      : "Repeats on every page when exported to PDF or Word"
                   }
                 >
                   <DocumentHeaderFooterEditor

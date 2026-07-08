@@ -76,9 +76,12 @@ export const skills = pgTable("skills", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   categoryId: integer("category_id").references(() => skillCategories.id, { onDelete: "set null" }),
+  /** Optional parent skill — lets a skill (e.g. "SAP S/4HANA") own modules (e.g. "FICO", "MM/SD"). */
+  parentSkillId: integer("parent_skill_id"),
   name: text("name").notNull(),
   description: text("description"),
   isCertification: boolean("is_certification").default(false),
+  order: integer("order").default(0),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -96,6 +99,8 @@ export const resourceSkills = pgTable("resource_skills", {
   skillId: integer("skill_id").notNull().references(() => skills.id, { onDelete: "cascade" }),
   proficiencyLevel: text("proficiency_level").default("practitioner"),
   skillLevel: integer("skill_level").default(3),
+  /** Who assessed this: "validated" (manager), "self", or "pending" review. */
+  assessmentType: text("assessment_type").default("validated"),
   yearsExperience: decimal("years_experience", { precision: 4, scale: 1 }),
   lastUsed: timestamp("last_used"),
   certificationName: text("certification_name"),
@@ -129,6 +134,8 @@ export const resourceAllocations = pgTable("resource_allocations", {
   daysPerWeek: decimal("days_per_week", { precision: 4, scale: 1 }),
   hoursPerWeek: decimal("hours_per_week", { precision: 5, scale: 1 }),
   role: text("role"),
+  /** Who this person reports to on THIS project (may differ from their line manager). */
+  projectReportsToId: integer("project_reports_to_id"),
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
   notes: text("notes"),
@@ -390,6 +397,9 @@ export const SKILL_LEVELS = [
   { level: 5, value: "thought-leader", label: "Thought Leader" },
 ] as const;
 
-export const PERSON_TYPES = ["employee", "contractor", "third-party", "customer"] as const;
-export const RESOURCE_STATUSES = ["active", "on-leave", "inactive", "bench"] as const;
+export const PERSON_TYPES = ["employee", "contractor", "customer", "partner", "associate"] as const;
+/** Manually-set statuses. `expiring` / `expired` are derived from the end/expiry date at render time. */
+export const RESOURCE_STATUSES = ["active", "inactive"] as const;
 export const UTILISATION_TARGET_PCT = 75;
+/** Window (days) before the end/expiry date at which a resource is flagged as "expiring". */
+export const EXPIRING_WINDOW_DAYS = 30;

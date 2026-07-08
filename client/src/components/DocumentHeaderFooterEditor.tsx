@@ -5,6 +5,9 @@ import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
+import { Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 function normalizeEditorHtml(html: string): string {
@@ -14,15 +17,46 @@ function normalizeEditorHtml(html: string): string {
 const REGION_COPY = {
   header: {
     title: "Page header",
-    hint: "Top of the page — title, date, logo, or links",
+    hint: "Repeats at the top of every printed / exported page",
     placeholder: "Add header content…",
   },
   footer: {
     title: "Page footer",
-    hint: "Bottom of the page — copyright, page info, or links",
+    hint: "Repeats at the bottom of every printed / exported page",
     placeholder: "Add footer content…",
   },
 } as const;
+
+function MiniToolbarButton({
+  icon: Icon,
+  label,
+  onClick,
+  isActive,
+}: {
+  icon: React.ElementType;
+  label: string;
+  onClick: () => void;
+  isActive?: boolean;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant={isActive ? "secondary" : "ghost"}
+          size="icon"
+          className="h-6 w-6"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onClick}
+          data-testid={`header-footer-toolbar-${label.toLowerCase().replace(/\s+/g, "-")}`}
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 export function DocumentHeaderFooterEditor({
   kind,
@@ -54,7 +88,7 @@ export function DocumentHeaderFooterEditor({
       }),
       Underline,
       Link.configure({ openOnClick: !editable, HTMLAttributes: { class: "text-primary underline underline-offset-2" } }),
-      TextAlign.configure({ types: ["paragraph"] }),
+      TextAlign.configure({ types: ["paragraph"], alignments: ["left", "center", "right"], defaultAlignment: "left" }),
       Placeholder.configure({ placeholder: copy.placeholder }),
     ],
     content: content || "",
@@ -123,6 +157,23 @@ export function DocumentHeaderFooterEditor({
           <p className={cn("text-muted-foreground", isPanel ? "text-xs mt-0.5" : "text-[10px] mt-0")}>
             {copy.hint}
           </p>
+        </div>
+      )}
+      {editable && editor && (
+        <div
+          className={cn(
+            "flex items-center gap-0.5 border-b border-border/40 bg-muted/10 shrink-0",
+            isPanel ? "px-3 py-1" : "px-1.5 py-0.5",
+          )}
+          data-testid={`document-${kind}-toolbar`}
+        >
+          <MiniToolbarButton icon={Bold} label="Bold" isActive={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()} />
+          <MiniToolbarButton icon={Italic} label="Italic" isActive={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()} />
+          <MiniToolbarButton icon={UnderlineIcon} label="Underline" isActive={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()} />
+          <div className="w-px h-4 bg-border mx-1" />
+          <MiniToolbarButton icon={AlignLeft} label="Align left" isActive={editor.isActive({ textAlign: "left" })} onClick={() => editor.chain().focus().setTextAlign("left").run()} />
+          <MiniToolbarButton icon={AlignCenter} label="Align center" isActive={editor.isActive({ textAlign: "center" })} onClick={() => editor.chain().focus().setTextAlign("center").run()} />
+          <MiniToolbarButton icon={AlignRight} label="Align right" isActive={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()} />
         </div>
       )}
       <div

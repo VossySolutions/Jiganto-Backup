@@ -225,6 +225,8 @@ export async function registerRoutes(
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background: #f5f5f5; font-weight: 600; }
         .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; color: #999; font-size: 0.75rem; text-align: center; }
+        .document-header { border-bottom: 1px solid #e5e7eb; padding-bottom: 0.75rem; margin-bottom: 1.5rem; }
+        .document-footer { border-top: 1px solid #e5e7eb; padding-top: 0.75rem; margin-top: 2rem; }
         ${PUBLIC_DOCUMENT_SECTION_NAV_STYLES}
       `;
       res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -6227,6 +6229,35 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     res.status(204).send();
   });
 
+  /** Resolve a usable Chrome/Chromium binary across dev (Windows) and prod (Linux/Docker) environments. */
+  let cachedChromePath: string | null | undefined;
+  const resolveChromeExecutablePath = async (): Promise<string | null> => {
+    if (cachedChromePath !== undefined) return cachedChromePath;
+    const fs = await import("fs");
+    const candidates = [
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+      process.env.CHROME_EXECUTABLE_PATH,
+      "/usr/bin/google-chrome-stable",
+      "/usr/bin/google-chrome",
+      "/usr/bin/chromium-browser",
+      "/usr/bin/chromium",
+      "/opt/google/chrome/google-chrome",
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    ].filter((p): p is string => !!p);
+    for (const candidate of candidates) {
+      try {
+        if (fs.existsSync(candidate)) {
+          cachedChromePath = candidate;
+          return cachedChromePath;
+        }
+      } catch { /* ignore and try next */ }
+    }
+    cachedChromePath = null;
+    return null;
+  };
+
   const exportDocumentPdf = async (opts: {
     title: string;
     content: string;
@@ -6235,19 +6266,22 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     updatedAt?: Date | string | null;
   }): Promise<Buffer> => {
     const { buildDocumentExportBodyHtml, buildPuppeteerPageTemplates } = await import("@shared/document-export");
+    const executablePath = await resolveChromeExecutablePath();
+    if (!executablePath) {
+      throw new Error("No Chrome/Chromium browser found on the server for PDF generation");
+    }
     const puppeteer = await import("puppeteer-core");
     const browser = await puppeteer.default.launch({
-      executablePath: process.env.CHROME_EXECUTABLE_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      executablePath,
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
       headless: true,
     });
     try {
       const page = await browser.newPage();
+      // Body only — header/footer are rendered as real repeating page chrome via headerTemplate/footerTemplate below.
       const htmlContent = buildDocumentExportBodyHtml({
         title: opts.title,
         content: opts.content,
-        headerHtml: opts.headerHtml,
-        footerHtml: opts.footerHtml,
         updatedAt: opts.updatedAt,
       });
       const pageTemplates = buildPuppeteerPageTemplates({

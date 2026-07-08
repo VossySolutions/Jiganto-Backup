@@ -1,4 +1,4 @@
-import { SKILL_LEVELS } from "@shared/models/resources";
+import { SKILL_LEVELS, EXPIRING_WINDOW_DAYS } from "@shared/models/resources";
 
 export type ProficiencyConfig = {
   value: string;
@@ -12,26 +12,102 @@ export const PROFICIENCY_LEVELS: ProficiencyConfig[] = SKILL_LEVELS.map((s) => (
   label: s.label,
   level: s.level,
   color:
-    s.level <= 1 ? "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300" :
-    s.level === 2 ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" :
-    s.level === 3 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" :
-    s.level === 4 ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" :
-    "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+    s.level <= 1 ? "bg-slate-200 text-slate-700" :
+    s.level === 2 ? "bg-blue-100 text-blue-800" :
+    s.level === 3 ? "bg-emerald-100 text-emerald-800" :
+    s.level === 4 ? "bg-amber-100 text-amber-800" :
+    "bg-purple-100 text-purple-800",
 }));
 
+/* ── PERSON TYPES ─────────────────────────────────────────────
+ * Five resource types (client spec): Employee, Contractor, Customer staff, Partner, Associate.
+ */
 export const PERSON_TYPES = [
   { value: "employee", label: "Employee" },
   { value: "contractor", label: "Contractor" },
-  { value: "third-party", label: "Third-party" },
-  { value: "customer", label: "Customer resource" },
+  { value: "customer", label: "Customer staff" },
+  { value: "partner", label: "Partner" },
+  { value: "associate", label: "Associate" },
 ];
 
+export type PersonTypeVisual = {
+  label: string;
+  bg: string;
+  text: string;
+  dot: string;
+  gradient: string;
+};
+
+export const PERSON_TYPE_CONFIG: Record<string, PersonTypeVisual> = {
+  employee: { label: "Employee", bg: "#EEF2FF", text: "#4338CA", dot: "#4338CA", gradient: "linear-gradient(135deg,#4338CA,#6366F1)" },
+  contractor: { label: "Contractor", bg: "#FEF3C7", text: "#92400E", dot: "#D97706", gradient: "linear-gradient(135deg,#D97706,#F59E0B)" },
+  customer: { label: "Customer staff", bg: "#D1FAE5", text: "#065F46", dot: "#059669", gradient: "linear-gradient(135deg,#059669,#10B981)" },
+  partner: { label: "Partner", bg: "#EDE9FE", text: "#5B21B6", dot: "#7C3AED", gradient: "linear-gradient(135deg,#7C3AED,#A78BFA)" },
+  associate: { label: "Associate", bg: "#FCE7F3", text: "#9D174D", dot: "#DB2777", gradient: "linear-gradient(135deg,#DB2777,#F472B6)" },
+};
+
+/** Neutral styling for legacy / unknown person types found in the database. */
+function neutralTypeVisual(type: string): PersonTypeVisual {
+  const label = type
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+  return { label, bg: "#F1F5F9", text: "#475569", dot: "#94A3B8", gradient: "linear-gradient(135deg,#64748B,#94A3B8)" };
+}
+
+export function getTypeConfig(type?: string | null): PersonTypeVisual {
+  if (!type) return PERSON_TYPE_CONFIG.employee;
+  return PERSON_TYPE_CONFIG[type] ?? neutralTypeVisual(type);
+}
+
+/* ── STATUS ───────────────────────────────────────────────────
+ * Stored statuses are Active / Inactive. `expiring` and `expired` are derived
+ * from the person's end/expiry date (contractors, partners, associates, customer staff).
+ */
 export const RESOURCE_STATUSES = [
   { value: "active", label: "Active" },
-  { value: "on-leave", label: "On leave" },
   { value: "inactive", label: "Inactive" },
-  { value: "bench", label: "Bench (unallocated)" },
 ];
+
+export const STATUS_FILTERS = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "expiring", label: "Expiring <30 days" },
+  { value: "expired", label: "Expired" },
+];
+
+export type EffectiveStatus = "active" | "inactive" | "expiring" | "expired";
+
+export { EXPIRING_WINDOW_DAYS };
+
+/** Derive the display status from the stored status + end/expiry date. */
+export function getEffectiveStatus(status?: string | null, endDate?: string | Date | null): EffectiveStatus {
+  if (endDate) {
+    const diff = (new Date(endDate).getTime() - Date.now()) / 86_400_000;
+    if (diff < 0) return "expired";
+    if (diff < EXPIRING_WINDOW_DAYS) return "expiring";
+  }
+  return status === "inactive" ? "inactive" : "active";
+}
+
+/** Days until the end/expiry date (negative = already expired). Null when no expiry set. */
+export function daysUntilExpiry(endDate?: string | Date | null): number | null {
+  if (!endDate) return null;
+  return Math.ceil((new Date(endDate).getTime() - Date.now()) / 86_400_000);
+}
+
+export type StatusVisual = { label: string; bg: string; text: string; dot: string };
+
+export const STATUS_CONFIG: Record<EffectiveStatus, StatusVisual> = {
+  active: { label: "Active", bg: "#D1FAE5", text: "#065F46", dot: "#059669" },
+  inactive: { label: "Inactive", bg: "#F1F5F9", text: "#64748B", dot: "#94A3B8" },
+  expiring: { label: "Expiring", bg: "#FEF3C7", text: "#92400E", dot: "#D97706" },
+  expired: { label: "Expired", bg: "#FEE2E2", text: "#991B1B", dot: "#DC2626" },
+};
+
+/** People-view utilisation colour (client design: high utilisation = red / at risk). */
+export function peopleUtilColor(u: number): string {
+  return u >= 85 ? "#DC2626" : u >= 60 ? "#D97706" : "#059669";
+}
 
 export const ALLOCATION_TYPES = [
   { value: "confirmed", label: "Confirmed", className: "bg-emerald-500" },
@@ -50,6 +126,43 @@ export function getProficiencyConfig(level: string | null | number) {
     return PROFICIENCY_LEVELS.find((p) => p.level === level) ?? PROFICIENCY_LEVELS[2];
   }
   return PROFICIENCY_LEVELS.find((p) => p.value === level) ?? PROFICIENCY_LEVELS[2];
+}
+
+/* ── SKILLS MATRIX ────────────────────────────────────────────
+ * Client design: 4-point proficiency scale + 3 assessment sources.
+ * Levels are stored on resource_skills.skillLevel (1-4). Colours follow the
+ * shared design (awareness=slate, practitioner=blue, advanced=teal, expert=violet).
+ */
+export type MatrixLevel = { level: number; label: string; desc: string; bg: string; text: string };
+
+export const MATRIX_LEVELS: MatrixLevel[] = [
+  { level: 1, label: "Awareness", desc: "Basic theoretical knowledge, limited hands-on experience.", bg: "#CBD5E1", text: "#475569" },
+  { level: 2, label: "Practitioner", desc: "Works independently on standard tasks; some mentoring may be needed.", bg: "#93C5FD", text: "#1D4ED8" },
+  { level: 3, label: "Advanced", desc: "Leads delivery in this area, mentors others, handles complex scenarios.", bg: "#5EEAD4", text: "#0F766E" },
+  { level: 4, label: "Expert", desc: "Recognised authority; defines standards, architecture and practice direction.", bg: "#A78BFA", text: "#5B21B6" },
+];
+
+export function getMatrixLevel(level?: number | null): MatrixLevel {
+  const n = Math.max(1, Math.min(4, Number(level) || 1));
+  return MATRIX_LEVELS[n - 1];
+}
+
+/** Map a numeric matrix level to the stored proficiencyLevel string (best-effort). */
+export function levelToProficiencyValue(level: number): string {
+  const byLevel = SKILL_LEVELS.find((s) => s.level === level);
+  return byLevel?.value ?? "practitioner";
+}
+
+export type AssessmentSource = "validated" | "self" | "pending";
+
+export const ASSESSMENT_SOURCES: Array<{ value: AssessmentSource; label: string; short: string; icon: string }> = [
+  { value: "self", label: "Self-assessed", short: "Self", icon: "✏" },
+  { value: "pending", label: "Pending review", short: "Pending", icon: "⏳" },
+  { value: "validated", label: "Manager validated", short: "Validated", icon: "✓" },
+];
+
+export function getAssessmentSource(v?: string | null): AssessmentSource {
+  return v === "self" || v === "pending" ? v : "validated";
 }
 
 export const statusColors: Record<string, string> = {

@@ -14,12 +14,25 @@ export const DOCUMENT_EXPORT_BODY_STYLES = `
   blockquote{border-left:4px solid #ddd;margin:1em 0;padding-left:1em;font-style:italic;}
   code{background:#f5f5f5;padding:0.2em 0.4em;border-radius:3px;font-family:monospace;}
   pre{background:#f5f5f5;padding:1em;border-radius:6px;overflow-x:auto;}
-  .document-header{border-bottom:1px solid #e5e7eb;padding-bottom:0.75rem;margin-bottom:1.5rem;}
-  .document-footer{border-top:1px solid #e5e7eb;padding-top:0.75rem;margin-top:1.5rem;}
   [data-callout="info"]{border-left:4px solid #3b82f6;background:#eff6ff;border-radius:6px;padding:12px 16px;margin:8px 0;}
   [data-callout="warning"]{border-left:4px solid #f59e0b;background:#fffbeb;border-radius:6px;padding:12px 16px;margin:8px 0;}
   [data-callout="success"]{border-left:4px solid #22c55e;background:#f0fdf4;border-radius:6px;padding:12px 16px;margin:8px 0;}
   [data-callout="danger"]{border-left:4px solid #ef4444;background:#fef2f2;border-radius:6px;padding:12px 16px;margin:8px 0;}
+`;
+
+/** CSS that makes a `<thead>`/`<tfoot>` inside a `<table>` repeat on every printed page. Works in all major browsers. */
+export const DOCUMENT_EXPORT_REPEATING_REGION_STYLES = `
+  .page-regions-table{width:100%;border-collapse:collapse;table-layout:fixed;}
+  .page-regions-table > thead{display:table-header-group;}
+  .page-regions-table > tfoot{display:table-footer-group;}
+  .page-regions-table > tbody{display:table-row-group;}
+  .page-regions-table td{padding:0;border:none;}
+  .document-header{border-bottom:1px solid #e5e7eb;padding:0 0 0.75rem;margin-bottom:1rem;}
+  .document-footer{border-top:1px solid #e5e7eb;padding:0.75rem 0 0;margin-top:1rem;}
+  @media print{
+    .page-regions-table > thead{display:table-header-group;}
+    .page-regions-table > tfoot{display:table-footer-group;}
+  }
 `;
 
 export function escapeHtml(text: string): string {
@@ -38,11 +51,10 @@ export function sanitizeExportHtmlFragment(html: string): string {
     .replace(/on\w+='[^']*'/gi, "");
 }
 
+/** Body-only HTML for server-side (Puppeteer) PDF rendering — header/footer are rendered separately as real repeating page chrome via `buildPuppeteerPageTemplates`, so they must NOT be embedded here (avoids double header/footer). */
 export function buildDocumentExportBodyHtml(opts: {
   title: string;
   content: string;
-  headerHtml?: string;
-  footerHtml?: string;
   updatedAt?: Date | string | null;
 }): string {
   const updatedLabel = opts.updatedAt
@@ -51,14 +63,6 @@ export function buildDocumentExportBodyHtml(opts: {
   const metaLine = updatedLabel
     ? `<p style="color:#666;font-size:0.875rem;margin-bottom:2rem;">Last updated: ${escapeHtml(updatedLabel)}</p>`
     : "";
-
-  const headerHtml = opts.headerHtml ?? "";
-  const footerHtml = opts.footerHtml ?? "";
-  const wrappedContent = wrapDocumentBodyWithPageRegions(
-    opts.content || "<p><em>No content</em></p>",
-    headerHtml,
-    footerHtml,
-  );
 
   return `<!DOCTYPE html>
 <html>
@@ -71,7 +75,63 @@ export function buildDocumentExportBodyHtml(opts: {
 <div class="document-export-body">
   <h1 style="border-bottom:2px solid #e5e7eb;padding-bottom:0.5rem;margin-bottom:1rem;">${escapeHtml(opts.title)}</h1>
   ${metaLine}
-  ${wrappedContent}
+  <div class="document-body">${opts.content || "<p><em>No content</em></p>"}</div>
+</div>
+</body>
+</html>`;
+}
+
+/**
+ * Full standalone HTML page with header/footer that repeat on every *printed* page
+ * (via the `table-header-group` / `table-footer-group` CSS technique). Used for the
+ * downloadable .html export and the browser-print PDF fallback — the two paths that
+ * don't go through Puppeteer's native per-page header/footer templates.
+ */
+export function buildPrintableDocumentHtml(opts: {
+  title: string;
+  content: string;
+  headerHtml?: string;
+  footerHtml?: string;
+  updatedAt?: Date | string | null;
+}): string {
+  const updatedLabel = opts.updatedAt
+    ? new Date(opts.updatedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    : "";
+  const metaLine = updatedLabel
+    ? `<p style="color:#666;font-size:0.875rem;margin-bottom:2rem;">Last updated: ${escapeHtml(updatedLabel)}</p>`
+    : "";
+  const headerHtml = (opts.headerHtml || "").trim();
+  const footerHtml = (opts.footerHtml || "").trim();
+
+  const headerRow = headerHtml
+    ? `<thead><tr><td><header class="document-header">${headerHtml}</header></td></tr></thead>`
+    : "";
+  const footerRow = footerHtml
+    ? `<tfoot><tr><td><footer class="document-footer">${footerHtml}</footer></td></tr></tfoot>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(opts.title)}</title>
+<style>${DOCUMENT_EXPORT_BODY_STYLES}${DOCUMENT_EXPORT_REPEATING_REGION_STYLES}</style>
+</head>
+<body>
+<div class="document-export-body">
+  <table class="page-regions-table">
+    ${headerRow}
+    ${footerRow}
+    <tbody>
+      <tr>
+        <td>
+          <h1 style="border-bottom:2px solid #e5e7eb;padding-bottom:0.5rem;margin-bottom:1rem;">${escapeHtml(opts.title)}</h1>
+          ${metaLine}
+          <div class="document-body">${opts.content || "<p><em>No content</em></p>"}</div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
 </div>
 </body>
 </html>`;
@@ -105,7 +165,7 @@ export function buildPuppeteerPageTemplates(opts: {
     </div>`;
 
   return {
-    displayHeaderFooter: hasChrome,
+    displayHeaderFooter: true,
     headerTemplate,
     footerTemplate,
     margin: {
@@ -117,18 +177,15 @@ export function buildPuppeteerPageTemplates(opts: {
   };
 }
 
+/** @deprecated kept for backward compatibility with any cached callers; prefer `buildPrintableDocumentHtml`. */
 export function wrapDocumentBodyWithPageRegions(body: string, headerHtml: string, footerHtml: string): string {
   const parts: string[] = [];
   if (headerHtml.trim()) {
-    parts.push(
-      `<header class="document-header">${headerHtml}</header>`,
-    );
+    parts.push(`<header class="document-header">${headerHtml}</header>`);
   }
   parts.push(`<div class="document-body">${body}</div>`);
   if (footerHtml.trim()) {
-    parts.push(
-      `<footer class="document-footer">${footerHtml}</footer>`,
-    );
+    parts.push(`<footer class="document-footer">${footerHtml}</footer>`);
   }
   return parts.join("\n");
 }

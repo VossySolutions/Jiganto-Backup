@@ -3,9 +3,51 @@ import { Loader2, AlertCircle, RefreshCw, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { getInitials, getTypeConfig, peopleUtilColor } from "./constants";
+import type { Resource } from "@shared/models/resources";
 
 export const RESOURCES_ACCENT = "#F97316";
+
+/* ── Shared visual atoms (used across People, Skills, Org views) ── */
+
+export function TypeBadge({ type }: { type?: string | null }) {
+  const c = getTypeConfig(type);
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap"
+      style={{ background: c.bg, color: c.text }}
+    >
+      <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: c.dot }} />
+      {c.label}
+    </span>
+  );
+}
+
+export function PersonAvatar({ r, className }: { r: Pick<Resource, "firstName" | "lastName" | "personType" | "photoUrl">; className?: string }) {
+  const c = getTypeConfig(r.personType);
+  return (
+    <Avatar className={className}>
+      <AvatarImage src={r.photoUrl ?? undefined} />
+      <AvatarFallback className="text-xs font-bold text-white" style={{ background: c.gradient }}>
+        {getInitials(r.firstName, r.lastName)}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
+export function UtilBar({ util, width = 60 }: { util: number; width?: number }) {
+  const col = peopleUtilColor(util);
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="h-1.5 overflow-hidden rounded-full bg-muted" style={{ width }}>
+        <div className="h-full rounded-full" style={{ width: `${Math.min(util, 100)}%`, background: col }} />
+      </div>
+      <span className="text-[11px] font-bold tabular-nums" style={{ color: col, minWidth: 28 }}>{util}%</span>
+    </div>
+  );
+}
 
 export function ResourcesPageLoading({ label = "Loading Resources..." }: { label?: string }) {
   return (

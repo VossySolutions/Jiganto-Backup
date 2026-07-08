@@ -1,9 +1,9 @@
-Hi Peter, thanks for flagging this.
+Hi Peter, thanks, good catch and thanks for the screenshot.
 
-You were right, the 6 / 12 / 18 / 24 month selector on the forecast matrix was not working properly when a quarter was selected, for example Q3 2026. The table was stuck on 3 months even when 12 months was chosen.
+The data for 12, 18, and 24 months was actually being generated correctly, but the matrix table could not scroll sideways, so the extra columns past the visible width were being cut off. That is why 6 months looked fine, it fit on screen, but 12, 18, and 24 showed only the first columns and the rest looked missing.
 
-We fixed it. The dropdown now controls how many months show in the matrix again, starting from the selected quarter. Labels are updated to say months instead of periods.
+We fixed the table so it now scrolls horizontally. All 12, 18, or 24 months will show, scroll right to see the later months and the Total column.
 
-Please hard refresh CRM, Forecasting, pick your quarter, then try 6, 12, 18, or 24 months on the monthly view. You should see the full column range.
+Please hard refresh CRM, Forecasting, pick your quarter, choose 12 months on the monthly view, then scroll the table to the right. You should now see all the months through to the end.
 
-Let us know if anything still looks off on your side.
+Let us know if it looks right on your side.

@@ -593,7 +593,8 @@ export function ForecastMatrix({
       ) : !data || data.rows.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">No forecast data for selected filters</p>
       ) : (
-        <div className="border rounded-xl overflow-hidden bg-card max-h-[min(70vh,720px)] overflow-auto">
+        <div className="border rounded-xl overflow-hidden bg-card">
+          <div className="max-h-[min(70vh,720px)] overflow-auto">
           <table className="w-full text-xs border-collapse min-w-max">
             <thead className="sticky top-0 z-20">
               <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
@@ -644,6 +645,7 @@ export function ForecastMatrix({
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

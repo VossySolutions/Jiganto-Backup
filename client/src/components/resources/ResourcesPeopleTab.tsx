@@ -1,21 +1,27 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Upload, Download, UserCheck, List, Grid3X3, MapPin, Pencil, UserRound, Building2, DollarSign, Clock } from "lucide-react";
+import {
+  Plus, Trash2, Upload, Download, Pencil, UserRound, Building2, DollarSign, Clock,
+  Table2, Network, Workflow, Target, AlertTriangle, Briefcase,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getInitials, getProficiencyConfig, statusColors, PERSON_TYPES, RESOURCE_STATUSES } from "./constants";
+import {
+  PERSON_TYPES, RESOURCE_STATUSES, STATUS_FILTERS,
+  getTypeConfig, getEffectiveStatus, daysUntilExpiry, STATUS_CONFIG, PERSON_TYPE_CONFIG,
+  type EffectiveStatus,
+} from "./constants";
 import { ResourceProfilePanel } from "./ResourceProfilePanel";
-import { ResourcesTableSkeleton, ResourcesEmptyState } from "./ResourcesUi";
-import type { Resource, Skill, SkillCategory, ResourceSkill } from "@shared/models/resources";
+import { ResourcesTableSkeleton, ResourcesEmptyState, TypeBadge, PersonAvatar, UtilBar } from "./ResourcesUi";
+import type { Resource, Skill, SkillCategory, ResourceSkill, ResourceAllocation } from "@shared/models/resources";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 
@@ -27,6 +33,8 @@ const emptyForm = () => ({
   noticePeriodDays: "", timeZone: "", startDate: "", endDate: "", notes: "", internalNotes: "",
   rightToWorkStatus: "incomplete", reportsToId: "",
 });
+
+type ViewMode = "table" | "hierarchy" | "org" | "project";
 
 type Props = {
   resources: Resource[];
@@ -47,18 +55,283 @@ type Props = {
   canManage?: boolean;
 };
 
+function fmtDate(d?: string | Date | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+/* ── Shared visual atoms ─────────────────────────────────────── */
+
+function StatusBadge({ status }: { status: EffectiveStatus }) {
+  const c = STATUS_CONFIG[status];
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap"
+      style={{ background: c.bg, color: c.text }}
+    >
+      <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: c.dot }} />
+      {c.label}
+    </span>
+  );
+}
+
+/* ── Legend ──────────────────────────────────────────────────── */
+
+function Legend() {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
+      {Object.values(PERSON_TYPE_CONFIG).map((c) => (
+        <span key={c.label} className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full" style={{ background: c.dot }} />
+          {c.label}
+        </span>
+      ))}
+      <span className="mx-1 hidden h-3 w-px bg-border sm:inline-block" />
+      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: STATUS_CONFIG.active.dot }} /> Active</span>
+      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: STATUS_CONFIG.expiring.dot }} /> Expiring &lt;30 days</span>
+      <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: STATUS_CONFIG.expired.dot }} /> Expired</span>
+    </div>
+  );
+}
+
+/* ── Hierarchy view (reporting lines, left → right) ──────────── */
+
+type PersonNode = Resource & { children: PersonNode[] };
+
+function buildTree(people: Resource[]): PersonNode[] {
+  const map = new Map<number, PersonNode>();
+  people.forEach((p) => map.set(p.id, { ...p, children: [] }));
+  const roots: PersonNode[] = [];
+  map.forEach((node) => {
+    if (node.reportsToId && map.has(node.reportsToId)) {
+      map.get(node.reportsToId)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+  return roots;
+}
+
+function HierarchyNode({ node, onOpen, util }: { node: PersonNode; onOpen: (r: Resource) => void; util: Record<number, number> }) {
+  const eff = getEffectiveStatus(node.status, node.endDate);
+  return (
+    <div className="flex items-start">
+      <button
+        type="button"
+        onClick={() => onOpen(node)}
+        className="w-[210px] shrink-0 rounded-xl border border-border/60 bg-card p-2.5 text-left transition-all hover:border-primary/40 hover:shadow-sm"
+      >
+        <div className="mb-1.5 flex items-center gap-2">
+          <PersonAvatar r={node} className="h-7 w-7" />
+          <div className="min-w-0">
+            <p className="truncate text-xs font-bold">{node.firstName} {node.lastName}</p>
+            <p className="truncate text-[10px] text-muted-foreground">{node.jobTitle ?? "—"}</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <TypeBadge type={node.personType} />
+          <UtilBar util={util[node.id] ?? 0} width={40} />
+        </div>
+        {(eff === "expiring" || eff === "expired") && (
+          <div className="mt-1.5"><StatusBadge status={eff} /></div>
+        )}
+      </button>
+      {node.children.length > 0 && (
+        <div className="relative flex flex-col gap-3 pl-8 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-px before:bg-border">
+          {node.children.map((child) => (
+            <div
+              key={child.id}
+              className="relative before:absolute before:-left-8 before:top-5 before:h-px before:w-8 before:bg-border"
+            >
+              <HierarchyNode node={child} onOpen={onOpen} util={util} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HierarchyView({ roots, onOpen, util }: { roots: PersonNode[]; onOpen: (r: Resource) => void; util: Record<number, number> }) {
+  return (
+    <Card className="rounded-xl border-border/50">
+      <CardContent className="p-4 sm:p-6">
+        <p className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Workflow className="h-3.5 w-3.5" /> Reporting lines, left to right. Click any card to open the full profile.
+        </p>
+        <div className="overflow-x-auto pb-4">
+          <div className="flex min-w-max flex-col gap-4">
+            {roots.map((root) => (
+              <HierarchyNode key={root.id} node={root} onOpen={onOpen} util={util} />
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ── Org chart view (top → bottom) ───────────────────────────── */
+
+function OrgNode({ node, onOpen, util }: { node: PersonNode; onOpen: (r: Resource) => void; util: Record<number, number> }) {
+  return (
+    <div className="flex flex-col items-center">
+      <button
+        type="button"
+        onClick={() => onOpen(node)}
+        className="w-[170px] rounded-xl border border-border/60 bg-card p-3 text-center transition-all hover:border-primary/40 hover:shadow-sm"
+      >
+        <PersonAvatar r={node} className="mx-auto mb-1.5 h-10 w-10" />
+        <p className="truncate text-xs font-bold">{node.firstName} {node.lastName}</p>
+        <p className="truncate text-[10px] text-muted-foreground">{node.jobTitle ?? "—"}</p>
+        <div className="mt-1.5 flex justify-center"><TypeBadge type={node.personType} /></div>
+        <div className="mt-2 flex justify-center"><UtilBar util={util[node.id] ?? 0} width={50} /></div>
+      </button>
+      {node.children.length > 0 && (
+        <>
+          <div className="h-8 w-px bg-border" />
+          <div className="flex items-start gap-4 border-t border-border pt-8 [&>*]:relative [&>*]:before:absolute [&>*]:before:-top-8 [&>*]:before:left-1/2 [&>*]:before:h-8 [&>*]:before:w-px [&>*]:before:bg-border">
+            {node.children.map((child) => (
+              <OrgNode key={child.id} node={child} onOpen={onOpen} util={util} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function OrgView({ roots, onOpen, util }: { roots: PersonNode[]; onOpen: (r: Resource) => void; util: Record<number, number> }) {
+  return (
+    <Card className="rounded-xl border-border/50">
+      <CardContent className="p-4 sm:p-6">
+        <p className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Network className="h-3.5 w-3.5" /> Reporting structure, top to bottom. Click any card to open the full profile.
+        </p>
+        <div className="overflow-auto">
+          <div className="flex min-w-max justify-center gap-8 px-4 py-2">
+            {roots.map((root) => (
+              <OrgNode key={root.id} node={root} onOpen={onOpen} util={util} />
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ── Project view (per-project reporting lines) ──────────────── */
+
+type ProjectMember = { resource: Resource; role: string | null; reportsTo: number | null; children: ProjectMember[] };
+
+function ProjectNode({ node, onOpen, util }: { node: ProjectMember; onOpen: (r: Resource) => void; util: Record<number, number> }) {
+  return (
+    <div className="flex flex-col items-center">
+      <button
+        type="button"
+        onClick={() => onOpen(node.resource)}
+        className="w-[170px] rounded-xl border border-border/60 bg-card p-3 text-center transition-all hover:border-primary/40 hover:shadow-sm"
+      >
+        <PersonAvatar r={node.resource} className="mx-auto mb-1.5 h-10 w-10" />
+        <p className="truncate text-xs font-bold">{node.resource.firstName} {node.resource.lastName}</p>
+        <p className="truncate text-[10px] text-muted-foreground">{node.role ?? node.resource.jobTitle ?? "—"}</p>
+        <div className="mt-1.5 flex justify-center"><TypeBadge type={node.resource.personType} /></div>
+        <div className="mt-2 flex justify-center"><UtilBar util={util[node.resource.id] ?? 0} width={50} /></div>
+      </button>
+      {node.children.length > 0 && (
+        <>
+          <div className="h-8 w-px bg-border" />
+          <div className="flex items-start gap-4 border-t border-border pt-8 [&>*]:relative [&>*]:before:absolute [&>*]:before:-top-8 [&>*]:before:left-1/2 [&>*]:before:h-8 [&>*]:before:w-px [&>*]:before:bg-border">
+            {node.children.map((c) => (
+              <ProjectNode key={c.resource.id} node={c} onOpen={onOpen} util={util} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ProjectView({
+  resources, allocations, onOpen, util,
+}: { resources: Resource[]; allocations: ResourceAllocation[]; onOpen: (r: Resource) => void; util: Record<number, number> }) {
+  const resourceById = useMemo(() => new Map(resources.map((r) => [r.id, r])), [resources]);
+
+  const projects = useMemo(() => {
+    const active = allocations.filter((a) => a.status === "active");
+    const groups = new Map<string, { name: string; members: Map<number, ProjectMember> }>();
+
+    for (const a of active) {
+      const resource = resourceById.get(a.resourceId);
+      if (!resource) continue;
+      const key = a.projectId != null ? `p${a.projectId}` : `n:${a.projectName ?? "Unassigned"}`;
+      if (!groups.has(key)) groups.set(key, { name: a.projectName ?? "Unnamed project", members: new Map() });
+      const g = groups.get(key)!;
+      if (!g.members.has(a.resourceId)) {
+        g.members.set(a.resourceId, { resource, role: a.role, reportsTo: a.projectReportsToId ?? null, children: [] });
+      }
+    }
+
+    // Build a reporting tree per project using projectReportsToId (only when the target is on the same project).
+    return Array.from(groups.values()).map((g) => {
+      const roots: ProjectMember[] = [];
+      for (const member of g.members.values()) {
+        const parent = member.reportsTo != null ? g.members.get(member.reportsTo) : undefined;
+        if (parent && parent.resource.id !== member.resource.id) parent.children.push(member);
+        else roots.push(member);
+      }
+      return { name: g.name, count: g.members.size, roots };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [allocations, resourceById]);
+
+  if (projects.length === 0) {
+    return <ResourcesEmptyState icon={Briefcase} title="No active project assignments" description="Allocate people to projects (Capacity tab) and set their project reporting line to build this view." />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Briefcase className="h-3.5 w-3.5" /> Project reporting lines. A person can report to a different manager per project than their org line manager.
+      </p>
+      {projects.map((proj) => (
+        <Card key={proj.name} className="rounded-xl border-border/50">
+          <CardContent className="p-4 sm:p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <span className="rounded-md bg-primary/10 p-1.5 text-primary"><Briefcase className="h-4 w-4" /></span>
+              <div>
+                <p className="text-sm font-bold">{proj.name}</p>
+                <p className="text-[11px] text-muted-foreground">{proj.count} {proj.count === 1 ? "person" : "people"} allocated</p>
+              </div>
+            </div>
+            <div className="overflow-auto">
+              <div className="flex min-w-max justify-center gap-8 px-4 py-2">
+                {proj.roots.map((root) => (
+                  <ProjectNode key={root.resource.id} node={root} onOpen={onOpen} util={util} />
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+/* ── Main ────────────────────────────────────────────────────── */
+
 export function ResourcesPeopleTab({
-  resources, skills, skillCategories, resourceSkills, skillsMapLoading = false,
-  searchTerm, initialFilter, initialProfileId, onProfileOpened, utilByResource = {},
+  resources, skills, resourceSkills, skillsMapLoading = false,
+  searchTerm, initialProfileId, onProfileOpened, utilByResource = {},
   onCreate, onUpdate, onDelete, onAddSkill, onRemoveSkill, canManage = true,
 }: Props) {
   const { toast } = useToast();
   const csvRef = useRef<HTMLInputElement>(null);
-  const [viewMode, setViewMode] = useState<"list" | "cards">("list");
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState(initialFilter === "bench" ? "bench" : "all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [deptFilter, setDeptFilter] = useState("all");
   const [skillFilter, setSkillFilter] = useState("");
+  const [includeExpired, setIncludeExpired] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [editing, setEditing] = useState<Resource | null>(null);
   const [form, setForm] = useState(emptyForm());
@@ -67,6 +340,12 @@ export function ResourcesPeopleTab({
 
   const { data: rateCards = [] } = useQuery<Array<{ id: number; name: string }>>({
     queryKey: ["/api/resources/rate-cards"],
+  });
+
+  const { data: allocations = [] } = useQuery<ResourceAllocation[]>({
+    queryKey: ["/api/resources/allocations"],
+    staleTime: 30_000,
+    enabled: viewMode === "project",
   });
 
   useEffect(() => {
@@ -80,12 +359,24 @@ export function ResourcesPeopleTab({
     }
   }, [initialProfileId, resources, onProfileOpened]);
 
-  const departments = useMemo(() => Array.from(new Set(resources.map((r) => r.department).filter(Boolean))), [resources]);
+  const departments = useMemo(
+    () => Array.from(new Set(resources.map((r) => r.department).filter(Boolean))) as string[],
+    [resources],
+  );
+
+  const resourceById = useMemo(() => new Map(resources.map((r) => [r.id, r])), [resources]);
+  const managerName = (r: Resource) => {
+    if (!r.reportsToId) return "—";
+    const m = resourceById.get(r.reportsToId);
+    return m ? `${m.firstName} ${m.lastName}` : "—";
+  };
 
   const filtered = useMemo(() => {
     return resources.filter((r) => {
+      const eff = getEffectiveStatus(r.status, r.endDate);
+      if (!includeExpired && eff === "expired") return false;
       if (typeFilter !== "all" && r.personType !== typeFilter) return false;
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (statusFilter !== "all" && eff !== statusFilter) return false;
       if (deptFilter !== "all" && r.department !== deptFilter) return false;
       if (skillFilter) {
         const rs = resourceSkills[r.id] ?? [];
@@ -98,11 +389,20 @@ export function ResourcesPeopleTab({
       }
       return true;
     });
-  }, [resources, typeFilter, statusFilter, deptFilter, skillFilter, searchTerm, resourceSkills, skills]);
+  }, [resources, typeFilter, statusFilter, deptFilter, skillFilter, searchTerm, resourceSkills, skills, includeExpired]);
 
   const pagination = useTablePagination(filtered, {
-    resetKey: `${typeFilter}-${statusFilter}-${deptFilter}-${skillFilter}-${searchTerm}`,
+    resetKey: `${typeFilter}-${statusFilter}-${deptFilter}-${skillFilter}-${searchTerm}-${includeExpired}`,
   });
+
+  // Hierarchy / org views show the whole structure, gated only by the "include expired" toggle.
+  const treePeople = useMemo(
+    () => (includeExpired ? resources : resources.filter((r) => getEffectiveStatus(r.status, r.endDate) !== "expired")),
+    [resources, includeExpired],
+  );
+  const roots = useMemo(() => buildTree(treePeople), [treePeople]);
+
+  const openProfile = (r: Resource) => { setSelected(r); setShowProfile(true); };
 
   const openCreate = () => { setEditing(null); setForm(emptyForm()); setShowDialog(true); };
   const openEdit = (r: Resource) => {
@@ -111,13 +411,13 @@ export function ResourcesPeopleTab({
       firstName: r.firstName, lastName: r.lastName, email: r.email ?? "", phone: r.phone ?? "",
       jobTitle: r.jobTitle ?? "", department: r.department ?? "", location: r.location ?? "",
       personType: r.personType ?? "employee", employmentType: r.employmentType ?? "full-time",
-      status: r.status ?? "active", fte: r.fte ?? "1.0", costRate: r.costRate ?? "", billRate: r.billRate ?? "",
+      status: r.status === "inactive" ? "inactive" : "active", fte: r.fte ?? "1.0", costRate: r.costRate ?? "", billRate: r.billRate ?? "",
       currency: r.currency ?? "GBP", rateCardId: r.rateCardId ? String(r.rateCardId) : "",
       costCentre: r.costCentre ?? "", payrollId: r.payrollId ?? "",
       workingDaysPerWeek: r.workingDaysPerWeek ?? "5", dailyHours: r.dailyHours ?? "8",
       weeklyCapacityHours: r.weeklyCapacityHours ?? "40", holidayEntitlement: r.holidayEntitlement ? String(r.holidayEntitlement) : "",
       noticePeriodDays: r.noticePeriodDays ? String(r.noticePeriodDays) : "",
-      timeZone: r.timeZone ?? "",       startDate: r.startDate ? String(r.startDate).slice(0, 10) : "",
+      timeZone: r.timeZone ?? "", startDate: r.startDate ? String(r.startDate).slice(0, 10) : "",
       endDate: r.endDate ? String(r.endDate).slice(0, 10) : "", notes: r.notes ?? "", internalNotes: r.internalNotes ?? "",
       rightToWorkStatus: r.rightToWorkStatus ?? "incomplete",
       reportsToId: r.reportsToId ? String(r.reportsToId) : "",
@@ -141,10 +441,11 @@ export function ResourcesPeopleTab({
   };
 
   const exportCsv = () => {
-    const headers = ["First Name", "Last Name", "Email", "Type", "Job Title", "Department", "Status", "Utilisation %"];
+    const headers = ["First Name", "Last Name", "Email", "Type", "Job Title", "Department", "Manager", "Start Date", "Expiry Date", "Status", "Utilisation %"];
     const rows = filtered.map((r) => [
-      r.firstName, r.lastName, r.email ?? "", r.personType ?? "", r.jobTitle ?? "", r.department ?? "",
-      r.status ?? "", utilByResource[r.id] ?? 0,
+      r.firstName, r.lastName, r.email ?? "", getTypeConfig(r.personType).label, r.jobTitle ?? "", r.department ?? "",
+      managerName(r), r.startDate ? fmtDate(r.startDate) : "", r.endDate ? fmtDate(r.endDate) : "",
+      STATUS_CONFIG[getEffectiveStatus(r.status, r.endDate)].label, utilByResource[r.id] ?? 0,
     ]);
     const csv = [headers.join(","), ...rows.map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
     const a = document.createElement("a");
@@ -154,22 +455,28 @@ export function ResourcesPeopleTab({
     toast({ title: "Exported to CSV" });
   };
 
+  const viewBtn = (mode: ViewMode, icon: ReactNode, label: string) => (
+    <Button
+      variant={viewMode === mode ? "default" : "outline"}
+      size="sm"
+      onClick={() => setViewMode(mode)}
+      data-testid={`view-${mode}`}
+    >
+      {icon} {label}
+    </Button>
+  );
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2 items-center justify-between">
-        <div className="flex gap-2 flex-wrap">
-          <Button variant={viewMode === "list" ? "default" : "outline"} size="sm" onClick={() => setViewMode("list")}><List className="h-4 w-4 mr-1" /> Table</Button>
-          <Button variant={viewMode === "cards" ? "default" : "outline"} size="sm" onClick={() => setViewMode("cards")}><Grid3X3 className="h-4 w-4 mr-1" /> Cards</Button>
+      {/* View + filter bar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1.5">
+          {viewBtn("table", <Table2 className="mr-1 h-4 w-4" />, "Table")}
+          {viewBtn("hierarchy", <Workflow className="mr-1 h-4 w-4" />, "Hierarchy")}
+          {viewBtn("org", <Network className="mr-1 h-4 w-4" />, "Org Chart")}
+          {viewBtn("project", <Briefcase className="mr-1 h-4 w-4" />, "Project")}
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={() => csvRef.current?.click()}><Upload className="h-4 w-4 mr-1" /> Import CSV</Button>
-          <Button variant="outline" size="sm" onClick={exportCsv}><Download className="h-4 w-4 mr-1" /> Export</Button>
-          {canManage && <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Add Person</Button>}
-          <input ref={csvRef} type="file" accept=".csv" className="hidden" />
-        </div>
-      </div>
 
-      <div className="flex flex-wrap gap-2">
         <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger className="w-36"><SelectValue placeholder="Type" /></SelectTrigger>
           <SelectContent>
@@ -178,75 +485,113 @@ export function ResourcesPeopleTab({
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All status</SelectItem>
-            {RESOURCE_STATUSES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+            {STATUS_FILTERS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={deptFilter} onValueChange={setDeptFilter}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Department" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All departments</SelectItem>
-            {departments.map((d) => <SelectItem key={d} value={d!}>{d}</SelectItem>)}
+            {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Input className="w-48" placeholder="Filter by skill..." value={skillFilter} onChange={(e) => setSkillFilter(e.target.value)} />
+        <Input className="w-44" placeholder="Filter by skill..." value={skillFilter} onChange={(e) => setSkillFilter(e.target.value)} />
+        <label className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium text-muted-foreground">
+          <Checkbox checked={includeExpired} onCheckedChange={(v) => setIncludeExpired(Boolean(v))} data-testid="toggle-include-expired" />
+          Include expired
+        </label>
+
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => csvRef.current?.click()}><Upload className="mr-1 h-4 w-4" /> Import CSV</Button>
+          <Button variant="outline" size="sm" onClick={exportCsv}><Download className="mr-1 h-4 w-4" /> Export</Button>
+          {canManage && <Button size="sm" onClick={openCreate}><Plus className="mr-1 h-4 w-4" /> Add person</Button>}
+          <input ref={csvRef} type="file" accept=".csv" className="hidden" />
+        </div>
       </div>
 
+      <Legend />
+
       {skillsMapLoading ? (
-        <ResourcesTableSkeleton rows={8} cols={7} />
-      ) : viewMode === "list" ? (
-        filtered.length === 0 ? (
-          <ResourcesEmptyState title="No people match your filters" description="Try adjusting filters or add a new person." />
-        ) : (
+        <ResourcesTableSkeleton rows={8} cols={9} />
+      ) : viewMode === "hierarchy" ? (
+        roots.length === 0
+          ? <ResourcesEmptyState icon={Workflow} title="No people to show" description="Add people and set their Reports To field to build the hierarchy." />
+          : <HierarchyView roots={roots} onOpen={openProfile} util={utilByResource} />
+      ) : viewMode === "org" ? (
+        roots.length === 0
+          ? <ResourcesEmptyState icon={Network} title="No people to show" description="Add people and set their Reports To field to build the org chart." />
+          : <OrgView roots={roots} onOpen={openProfile} util={utilByResource} />
+      ) : viewMode === "project" ? (
+        <ProjectView resources={resources} allocations={allocations} onOpen={openProfile} util={utilByResource} />
+      ) : filtered.length === 0 ? (
+        <ResourcesEmptyState title="No people match your filters" description="Try adjusting filters or add a new person." />
+      ) : (
         <Card className="rounded-xl border-border/50 overflow-hidden">
           <CardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm min-w-[960px]">
               <thead>
                 <tr className="border-b bg-muted/30">
-                  <th className="text-left p-3">Name</th>
-                  <th className="text-left p-3">Type</th>
-                  <th className="text-left p-3">Role / Dept</th>
-                  <th className="text-left p-3">Skills</th>
-                  <th className="text-left p-3">Util %</th>
-                  <th className="text-left p-3">Status</th>
-                  <th className="text-right p-3">Actions</th>
+                  <th className="p-3 text-left">Name</th>
+                  <th className="p-3 text-left">Type</th>
+                  <th className="p-3 text-left">Role / Department</th>
+                  <th className="p-3 text-left">Manager</th>
+                  <th className="p-3 text-left">Skills</th>
+                  <th className="p-3 text-left">Start date</th>
+                  <th className="p-3 text-left">Expiry date</th>
+                  <th className="p-3 text-left">Util %</th>
+                  <th className="p-3 text-left">Status</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {pagination.paginatedItems.map((r) => {
                   const rSkills = resourceSkills[r.id] ?? [];
                   const util = utilByResource[r.id] ?? 0;
+                  const eff = getEffectiveStatus(r.status, r.endDate);
+                  const daysLeft = daysUntilExpiry(r.endDate);
                   return (
-                    <tr key={r.id} className="border-b hover:bg-muted/30 cursor-pointer" onClick={() => { setSelected(r); setShowProfile(true); }}>
+                    <tr key={r.id} className="border-b cursor-pointer hover:bg-muted/30" onClick={() => openProfile(r)}>
                       <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={r.photoUrl ?? undefined} />
-                            <AvatarFallback className="text-xs">{getInitials(r.firstName, r.lastName)}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium">{r.firstName} {r.lastName}</p>
-                            <p className="text-xs text-muted-foreground">{r.email}</p>
+                        <div className="flex items-center gap-2.5">
+                          <PersonAvatar r={r} className="h-8 w-8" />
+                          <div className="min-w-0">
+                            <p className="font-semibold">{r.firstName} {r.lastName}</p>
+                            <p className="truncate text-xs text-muted-foreground">{r.email}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="p-3 capitalize">{r.personType ?? "employee"}</td>
-                      <td className="p-3"><p>{r.jobTitle}</p><p className="text-xs text-muted-foreground">{r.department}</p></td>
+                      <td className="p-3"><TypeBadge type={r.personType} /></td>
+                      <td className="p-3"><p className="font-medium">{r.jobTitle ?? "—"}</p><p className="text-xs text-muted-foreground">{r.department ?? "—"}</p></td>
+                      <td className="p-3 text-xs text-muted-foreground">{managerName(r)}</td>
                       <td className="p-3">
-                        <div className="flex flex-wrap gap-1">
-                          {rSkills.slice(0, 3).map((rs) => {
-                            const sk = skills.find((s) => s.id === rs.skillId);
-                            return <Badge key={rs.id} variant="outline" className="text-xs">{sk?.name}</Badge>;
-                          })}
-                        </div>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary hover:bg-primary hover:text-primary-foreground"
+                          onClick={(e) => { e.stopPropagation(); openProfile(r); }}
+                        >
+                          <Target className="h-3 w-3" /> Skills
+                          <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">{rSkills.length}</span>
+                        </button>
                       </td>
-                      <td className="p-3">{util}%</td>
-                      <td className="p-3"><Badge className={cn("text-xs", statusColors[r.status ?? "active"])}>{r.status}</Badge></td>
+                      <td className="p-3 text-xs tabular-nums">{fmtDate(r.startDate)}</td>
+                      <td className="p-3 text-xs tabular-nums">
+                        {r.endDate ? (
+                          <span
+                            className={cn("inline-flex items-center gap-1 font-medium", eff === "expired" && "text-red-600", eff === "expiring" && "text-amber-600")}
+                          >
+                            {fmtDate(r.endDate)}
+                            {eff === "expiring" && daysLeft != null && <AlertTriangle className="h-3 w-3" />}
+                          </span>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="p-3"><UtilBar util={util} /></td>
+                      <td className="p-3"><StatusBadge status={eff} /></td>
                       <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => onDelete(r.id)}><Trash2 className="h-4 w-4" /></Button>
+                        {canManage && <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>}
+                        {canManage && <Button variant="ghost" size="icon" onClick={() => onDelete(r.id)}><Trash2 className="h-4 w-4" /></Button>}
                       </td>
                     </tr>
                   );
@@ -265,46 +610,17 @@ export function ResourcesPeopleTab({
             />
           </CardContent>
         </Card>
-        )
-      ) : filtered.length === 0 ? (
-        <ResourcesEmptyState title="No people match your filters" />
-      ) : (
-        <div className="space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-          {pagination.paginatedItems.map((r) => (
-            <Card key={r.id} className="cursor-pointer hover:shadow-md rounded-xl border-border/50 transition-shadow" onClick={() => { setSelected(r); setShowProfile(true); }}>
-              <CardContent className="p-4 text-center">
-                <Avatar className="h-16 w-16 mx-auto mb-2">
-                  <AvatarImage src={r.photoUrl ?? undefined} />
-                  <AvatarFallback>{getInitials(r.firstName, r.lastName)}</AvatarFallback>
-                </Avatar>
-                <p className="font-semibold">{r.firstName} {r.lastName}</p>
-                <p className="text-sm text-muted-foreground">{r.jobTitle}</p>
-                <Badge className="mt-2 text-xs capitalize">{r.personType ?? "employee"}</Badge>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <TablePagination
-          page={pagination.page}
-          totalPages={pagination.totalPages}
-          total={pagination.total}
-          startIndex={pagination.startIndex}
-          endIndex={pagination.endIndex}
-          pageSize={pagination.pageSize}
-          onPageChange={pagination.setPage}
-          onPageSizeChange={pagination.setPageSize}
-        />
-        </div>
       )}
 
       {showProfile && selected && (
         <ResourceProfilePanel
           resource={selected}
+          resources={resources}
+          allocationsProjectView
           skills={skills}
           resourceSkills={resourceSkills[selected.id] ?? []}
           onClose={() => setShowProfile(false)}
-          onEdit={() => { setShowProfile(false); openEdit(selected); }}
+          onEdit={canManage ? () => { setShowProfile(false); openEdit(selected); } : undefined}
           onAddSkill={onAddSkill}
           onRemoveSkill={onRemoveSkill}
         />
@@ -314,7 +630,7 @@ export function ResourcesPeopleTab({
         open={showDialog}
         onOpenChange={setShowDialog}
         title={editing ? "Edit person" : "Add person"}
-        subtitle={editing ? `${form.firstName} ${form.lastName}`.trim() : "Add a team member or contractor to your resource pool"}
+        subtitle={editing ? `${form.firstName} ${form.lastName}`.trim() : "Add a team member, contractor, partner or associate to your resource pool"}
         saveLabel={editing ? "Save changes" : "Create person"}
         onCancel={() => setShowDialog(false)}
         onSubmit={save}
@@ -354,7 +670,7 @@ export function ResourcesPeopleTab({
             <div className="space-y-1.5"><FieldLabel>Department</FieldLabel><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></div>
           </FieldGrid>
           <FieldGrid>
-            <div className="space-y-1.5"><FieldLabel>Reports to</FieldLabel>
+            <div className="space-y-1.5"><FieldLabel>Reports to (line manager)</FieldLabel>
               <Select value={form.reportsToId || "none"} onValueChange={(v) => setForm({ ...form, reportsToId: v === "none" ? "" : v })}>
                 <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
                 <SelectContent>
@@ -388,7 +704,7 @@ export function ResourcesPeopleTab({
             <div className="space-y-1.5"><FieldLabel>Charge rate (daily)</FieldLabel><Input value={form.billRate} onChange={(e) => setForm({ ...form, billRate: e.target.value })} /></div>
             <div className="space-y-1.5"><FieldLabel>Cost rate (daily)</FieldLabel><Input value={form.costRate} onChange={(e) => setForm({ ...form, costRate: e.target.value })} /></div>
           </FieldGrid>
-          <div className="space-y-1.5 mt-3.5"><FieldLabel>Cost centre</FieldLabel><Input value={form.costCentre} onChange={(e) => setForm({ ...form, costCentre: e.target.value })} /></div>
+          <div className="mt-3.5 space-y-1.5"><FieldLabel>Cost centre</FieldLabel><Input value={form.costCentre} onChange={(e) => setForm({ ...form, costCentre: e.target.value })} /></div>
         </FormSection>
 
         <FormDivider />
@@ -396,7 +712,7 @@ export function ResourcesPeopleTab({
         <FormSection icon={<Clock className="h-3.5 w-3.5 text-violet-600" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Dates & notes">
           <FieldGrid className="mb-3.5">
             <div className="space-y-1.5"><FieldLabel>Start date</FieldLabel><Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
-            <div className="space-y-1.5"><FieldLabel>End date</FieldLabel><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>
+            <div className="space-y-1.5"><FieldLabel>End / expiry date</FieldLabel><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>
           </FieldGrid>
           <div className="space-y-1.5"><FieldLabel>Internal notes</FieldLabel><Textarea value={form.internalNotes} onChange={(e) => setForm({ ...form, internalNotes: e.target.value })} rows={3} /></div>
         </FormSection>

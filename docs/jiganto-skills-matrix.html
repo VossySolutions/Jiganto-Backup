@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Jiganto — Resources · Skills Matrix</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --brand:#4338CA;--brand-d:#1E1B4B;--brand-l:#EEF2FF;--brand-m:#818CF8;
+  --teal:#0D9488;--teal-l:#CCFBF1;--teal-d:#0F766E;
+  --green:#059669;--green-l:#D1FAE5;--green-d:#065F46;
+  --amber:#D97706;--amber-l:#FEF3C7;--amber-d:#92400E;
+  --red:#DC2626;--red-l:#FEE2E2;--red-d:#991B1B;
+  --violet:#7C3AED;--violet-l:#EDE9FE;--violet-d:#5B21B6;
+  --pink:#DB2777;--pink-l:#FCE7F3;--pink-d:#9D174D;
+  --text:#0F172A;--text2:#334155;--text3:#64748B;--text4:#94A3B8;
+  --border:#E2E8F0;--border2:#F1F5F9;--surface:#FFFFFF;--bg:#F0F2FF;--sbg:#0F0F1A;
+  --font:'Plus Jakarta Sans',sans-serif;--mono:'DM Mono',monospace;
+  --r:8px;--rl:12px;
+
+  /* Proficiency colours */
+  --p1:#CBD5E1; --p1t:#475569;
+  --p2:#93C5FD; --p2t:#1D4ED8;
+  --p3:#5EEAD4; --p3t:#0F766E;
+  --p4:#A78BFA; --p4t:#5B21B6;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:13px;-webkit-font-smoothing:antialiased;height:100%;}
+.app{display:flex;height:100vh;overflow:hidden;}
+
+/* ── SIDEBAR ── */
+.sb{width:218px;flex-shrink:0;background:var(--sbg);display:flex;flex-direction:column;overflow-y:auto;}
+.sb-brand{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:9px;}
+.sb-mark{width:32px;height:32px;background:linear-gradient(135deg,var(--brand),var(--teal));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;}
+.sb-name{font-size:14px;font-weight:800;color:#fff;}
+.sb-sub{font-size:9px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.06em;}
+.sb-org{margin:8px;background:rgba(255,255,255,.05);border-radius:8px;padding:8px 10px;}
+.sb-org-name{font-size:12px;font-weight:600;color:rgba(255,255,255,.75);}
+.sb-org-sub{font-size:10px;color:rgba(255,255,255,.28);}
+nav{flex:1;padding:4px 0;}
+.nav-sec{padding:10px 14px 3px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.2);}
+.ni{display:flex;align-items:center;gap:9px;padding:7px 14px;cursor:pointer;border-left:2px solid transparent;font-size:12px;font-weight:500;color:rgba(255,255,255,.42);}
+.ni:hover{background:rgba(255,255,255,.04);color:rgba(255,255,255,.7);}
+.ni.on{background:rgba(67,56,202,.2);border-left-color:var(--brand-m);color:#fff;font-weight:600;}
+.ni-ic{font-size:14px;width:18px;text-align:center;}
+.sb-foot{padding:10px 12px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:8px;}
+.sb-av{width:30px;height:30px;border-radius:50%;background:var(--brand);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;}
+.sb-un{font-size:12px;font-weight:600;color:rgba(255,255,255,.75);}
+.sb-ur{font-size:10px;color:rgba(255,255,255,.3);}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:10px;flex-shrink:0;}
+.tb-mod-icon{width:34px;height:34px;border-radius:9px;background:var(--brand-l);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.tb-title{font-size:15px;font-weight:800;color:var(--text);}
+.tb-sub{font-size:11px;color:var(--text3);}
+.sp{flex:1;}
+.tb-btn{height:34px;padding:0 13px;border-radius:var(--r);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.tb-ghost{background:transparent;border:1px solid var(--border);color:var(--text2);}
+.tb-ghost:hover{background:var(--border2);}
+.tb-primary{background:var(--brand);border:none;color:#fff;}
+.tb-ai{background:linear-gradient(135deg,var(--brand),var(--violet));border:none;color:#fff;}
+input.search-box{height:34px;padding:0 12px 0 32px;border:1px solid var(--border);border-radius:var(--r);font-family:var(--font);font-size:12px;outline:none;background:var(--border2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 10px center;width:200px;}
+input.search-box:focus{background-color:var(--surface);border-color:var(--brand);}
+.subnav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;gap:0;flex-shrink:0;overflow-x:auto;}
+.snt{display:flex;align-items:center;gap:5px;padding:11px 13px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;}
+.snt:hover{color:var(--text2);}
+.snt.on{color:var(--brand);border-bottom-color:var(--brand);font-weight:700;}
+
+/* ── CONTENT WRAPPER ── */
+.content{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:14px 16px 0;}
+
+/* ── FILTER BAR ── */
+.filter-strip{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;flex-wrap:wrap;flex-shrink:0;}
+.filter-group{display:flex;flex-direction:column;gap:3px;}
+.filter-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text4);}
+.filter-sel{height:32px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r);font-family:var(--font);font-size:12px;font-weight:600;background:var(--surface);color:var(--text2);cursor:pointer;outline:none;}
+.filter-sel:focus{border-color:var(--brand);}
+.filter-sel.active{border-color:var(--brand);background:var(--brand-l);color:var(--brand-d);}
+
+/* QUICK FIND */
+.quick-find-wrap{flex:1;min-width:260px;}
+.quick-find{display:flex;gap:6px;align-items:flex-end;}
+.quick-input{height:32px;flex:1;padding:0 12px;border:1.5px solid var(--brand);border-radius:var(--r);font-family:var(--font);font-size:12px;outline:none;background:var(--brand-l);color:var(--brand-d);}
+.quick-input::placeholder{color:var(--brand-m);}
+.quick-btn{height:32px;padding:0 12px;background:var(--brand);border:none;color:#fff;border-radius:var(--r);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.quick-btn:hover{background:var(--brand-d);}
+
+/* COLUMN GROUP TOGGLES */
+.group-toggle-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;flex-shrink:0;align-items:center;}
+.gtb-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-right:2px;}
+.grp-btn{padding:4px 11px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);color:var(--text3);background:var(--surface);display:flex;align-items:center;gap:5px;}
+.grp-btn:hover{border-color:var(--brand-m);color:var(--brand-d);}
+.grp-btn.on{color:#fff;border-color:transparent;}
+.grp-all{background:var(--brand-d);color:#fff;border-color:transparent;}
+
+/* PROFICIENCY LEGEND + ASSESSMENT KEY */
+.legend-bar{display:flex;align-items:center;gap:14px;margin-bottom:8px;flex-wrap:wrap;flex-shrink:0;}
+.leg-section{display:flex;align-items:center;gap:8px;}
+.leg-divider{width:1px;height:20px;background:var(--border);}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);}
+.leg-chip{width:22px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;}
+.leg-chip.p1{background:var(--p1);color:var(--p1t);}
+.leg-chip.p2{background:var(--p2);color:var(--p2t);}
+.leg-chip.p3{background:var(--p3);color:var(--p3t);}
+.leg-chip.p4{background:var(--p4);color:var(--p4t);}
+.leg-chip.self{background:var(--p2);color:var(--p2t);border:1.5px dashed var(--p2t);}
+.leg-chip.pending{background:var(--amber-l);color:var(--amber-d);border:1.5px solid var(--amber);}
+.leg-chip.empty{background:var(--border2);color:var(--text4);}
+
+/* ── MATRIX WRAPPER ── */
+.matrix-outer{flex:1;overflow:auto;border:1px solid var(--border);border-radius:var(--rl);background:var(--surface);position:relative;}
+
+/* ── MATRIX TABLE ── */
+.matrix-tbl{border-collapse:collapse;font-size:12px;}
+
+/* Fixed left columns */
+.matrix-tbl .col-fixed{position:sticky;left:0;z-index:3;background:var(--surface);}
+.matrix-tbl .col-fixed2{position:sticky;left:220px;z-index:3;background:var(--surface);}
+.matrix-tbl .col-fixed3{position:sticky;left:330px;z-index:3;background:var(--surface);}
+.matrix-tbl .col-fixed4{position:sticky;left:430px;z-index:3;background:var(--surface);}
+
+/* Header rows */
+.matrix-tbl thead tr.hdr-top th{position:sticky;top:0;z-index:5;background:var(--brand-d);border-bottom:1px solid rgba(255,255,255,.1);}
+.matrix-tbl thead tr.hdr-sub th{position:sticky;top:38px;z-index:4;background:#1a1760;border-bottom:2px solid var(--brand);}
+
+/* Group header spanning */
+.grp-hdr{padding:8px 10px;font-size:10px;font-weight:800;color:#fff;text-align:center;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;cursor:pointer;user-select:none;}
+.grp-hdr:hover{opacity:.9;}
+.grp-hdr .collapse-icon{font-size:10px;opacity:.7;margin-left:4px;}
+
+/* Skill column headers */
+.skill-hdr{padding:7px 5px;font-size:9px;font-weight:700;color:rgba(255,255,255,.65);text-align:center;white-space:nowrap;writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);height:80px;vertical-align:bottom;min-width:36px;max-width:36px;width:36px;cursor:pointer;}
+.skill-hdr:hover{color:#fff;}
+.skill-hdr.grp-summary{writing-mode:horizontal-tb;transform:none;height:auto;padding:7px 8px;font-size:10px;font-weight:800;color:#fff;background:rgba(255,255,255,.08);min-width:60px;max-width:60px;}
+
+/* Left column headers */
+.left-hdr{padding:8px 10px;font-size:10px;font-weight:700;color:rgba(255,255,255,.6);text-align:left;white-space:nowrap;background:var(--brand-d);min-width:220px;}
+.left-hdr2{min-width:110px;}
+.left-hdr3{min-width:100px;}
+.left-hdr4{min-width:80px;}
+
+/* Department group rows */
+.dept-row td{background:var(--brand-d);padding:7px 14px;font-size:11px;font-weight:800;color:rgba(255,255,255,.85);text-transform:uppercase;letter-spacing:.06em;}
+.dept-row td.dept-name{display:flex;align-items:center;gap:8px;}
+.dept-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;}
+
+/* Person rows */
+.person-row{border-bottom:1px solid var(--border2);}
+.person-row:hover td{background:rgba(67,56,202,.025) !important;}
+.person-row.highlighted td{background:rgba(5,150,105,.06) !important;}
+.person-row.highlighted .col-fixed{background:rgba(5,150,105,.06) !important;}
+.person-row.dimmed td{opacity:.28;}
+
+/* Person left cells */
+.person-cell{display:flex;align-items:center;gap:8px;padding:7px 10px;min-width:220px;}
+.av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;}
+.av-e{background:linear-gradient(135deg,#4338CA,#6366F1);}
+.av-c{background:linear-gradient(135deg,#D97706,#F59E0B);}
+.av-p{background:linear-gradient(135deg,#7C3AED,#A78BFA);}
+.p-name{font-size:12px;font-weight:700;color:var(--text);}
+.p-role{font-size:10px;color:var(--text4);}
+.type-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+
+/* Role / dept cells */
+.role-cell{padding:7px 10px;font-size:11px;color:var(--text2);white-space:nowrap;font-weight:600;border-right:1px solid var(--border2);}
+.dept-cell{padding:7px 10px;font-size:11px;color:var(--text3);white-space:nowrap;border-right:1px solid var(--border2);}
+
+/* Availability cell */
+.avail-cell{padding:6px 10px;text-align:center;border-right:2px solid var(--border);min-width:80px;}
+.avail-inner{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.avail-bar-track{width:52px;height:6px;background:var(--border2);border-radius:3px;overflow:hidden;}
+.avail-bar-fill{height:100%;border-radius:3px;}
+.avail-pct{font-family:var(--mono);font-size:10px;font-weight:700;}
+.avail-label{font-size:9px;color:var(--text4);}
+
+/* Skill cells */
+.skill-cell{padding:3px 3px;text-align:center;border-right:1px solid var(--border2);min-width:36px;max-width:36px;vertical-align:middle;cursor:pointer;}
+.skill-cell:hover{background:var(--brand-l) !important;}
+.skill-cell.summary-cell{min-width:60px;max-width:60px;border-right:2px solid var(--border);}
+
+/* Proficiency chips */
+.chip{width:28px;height:22px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;margin:auto;}
+.chip.p1{background:var(--p1);color:var(--p1t);}
+.chip.p2{background:var(--p2);color:var(--p2t);}
+.chip.p3{background:var(--p3);color:var(--p3t);}
+.chip.p4{background:var(--p4);color:var(--p4t);}
+.chip.self{border:2px dashed;opacity:.85;}
+.chip.self.p2{border-color:var(--p2t);}
+.chip.self.p3{border-color:var(--p3t);}
+.chip.self.p4{border-color:var(--p4t);}
+.chip.pending{background:var(--amber-l);color:var(--amber-d);border:1.5px solid var(--amber);}
+.chip.empty{background:transparent;color:transparent;}
+.chip.summary-chip{width:44px;height:26px;font-size:10px;font-weight:700;}
+
+/* Summary row at bottom */
+.summary-row td{background:var(--brand-d);padding:6px 3px;text-align:center;position:sticky;bottom:0;z-index:3;}
+.summary-row .col-fixed{background:var(--brand-d);text-align:left;padding:6px 10px;font-size:10px;font-weight:700;color:rgba(255,255,255,.7);}
+.sum-bars{display:flex;flex-direction:column;gap:1px;align-items:center;}
+.sum-bar{border-radius:2px;height:4px;}
+
+/* ── SLIDE-IN PANEL ── */
+.panel-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:100;}
+.panel-overlay.show{display:block;}
+.skill-edit-panel{position:fixed;top:0;right:0;bottom:0;width:460px;background:var(--surface);box-shadow:-4px 0 24px rgba(0,0,0,.14);z-index:101;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);}
+.skill-edit-panel.show{transform:translateX(0);}
+.sep-hdr{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;}
+.sep-close{margin-left:auto;width:32px;height:32px;border-radius:var(--r);border:1px solid var(--border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text3);}
+.sep-close:hover{background:var(--border2);}
+.sep-body{flex:1;overflow-y:auto;padding:18px 20px;}
+.sep-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
+
+/* Rating selector in panel */
+.rating-selector{display:flex;gap:8px;margin-top:8px;}
+.rating-opt{flex:1;padding:10px 6px;border-radius:var(--r);border:2px solid var(--border);cursor:pointer;text-align:center;transition:.1s;}
+.rating-opt:hover{border-color:var(--brand-m);}
+.rating-opt.on{border-color:var(--brand);background:var(--brand-l);}
+.rating-opt-num{font-size:20px;font-weight:800;}
+.rating-opt-label{font-size:10px;color:var(--text3);margin-top:2px;font-weight:600;}
+.rating-opt.on .rating-opt-label{color:var(--brand-d);}
+
+/* Assessment source toggle */
+.assess-toggle{display:flex;background:var(--border2);border-radius:var(--r);padding:3px;margin-top:8px;}
+.at-opt{flex:1;padding:6px;text-align:center;font-size:12px;font-weight:600;color:var(--text3);border-radius:6px;cursor:pointer;}
+.at-opt.on{background:var(--surface);color:var(--brand);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+
+/* KPI strip */
+.kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px;}
+.kpi-mini{background:var(--border2);border-radius:var(--r);padding:10px 12px;}
+.kpi-mini-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:4px;}
+.kpi-mini-val{font-size:20px;font-weight:800;color:var(--text);font-family:var(--mono);}
+.kpi-mini-sub{font-size:10px;color:var(--text3);margin-top:2px;}
+
+.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border2);}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ════ SIDEBAR ════ -->
+<aside class="sb">
+  <div class="sb-brand">
+    <div class="sb-mark">Ji</div>
+    <div><div class="sb-name">Jiganto</div><div class="sb-sub">Enterprise AI</div></div>
+  </div>
+  <div class="sb-org">
+    <div class="sb-org-name">Main Co.</div>
+    <div class="sb-org-sub">Master org · All projects</div>
+  </div>
+  <nav>
+    <div class="nav-sec">Core</div>
+    <div class="ni"><span class="ni-ic">📊</span>Dashboard</div>
+    <div class="nav-sec">Management</div>
+    <div class="ni"><span class="ni-ic">💵</span>Finance</div>
+    <div class="ni"><span class="ni-ic">⏱</span>Timesheets</div>
+    <div class="ni on"><span class="ni-ic">👤</span>Resources</div>
+    <div class="ni"><span class="ni-ic">📅</span>Resource Planning</div>
+    <div class="nav-sec">Portfolio</div>
+    <div class="ni"><span class="ni-ic">🗂</span>Portfolio</div>
+    <div class="ni"><span class="ni-ic">📁</span>Projects</div>
+  </nav>
+  <div class="sb-foot">
+    <div class="sb-av">RM</div>
+    <div><div class="sb-un">Resource Manager</div><div class="sb-ur">Skills admin</div></div>
+  </div>
+</aside>
+
+<!-- ════ MAIN ════ -->
+<div class="main">
+  <div class="topbar">
+    <div class="tb-mod-icon">👤</div>
+    <div><div class="tb-title">Resources</div><div class="tb-sub">Skills, capacity and time management</div></div>
+    <div class="sp"></div>
+    <input class="search-box" placeholder="Search resources…">
+    <button class="tb-btn tb-ghost">⬇ Export matrix</button>
+    <button class="tb-btn tb-primary" onclick="showLibrary()">📚 Skills library</button>
+    <button class="tb-btn tb-ai">✦ AI Insights</button>
+  </div>
+
+  <div class="subnav">
+    <div class="snt">📊 Dashboard</div>
+    <div class="snt">👤 People</div>
+    <div class="snt on">🎯 Skills</div>
+    <div class="snt">📅 Capacity</div>
+    <div class="snt">💼 Pipeline</div>
+    <div class="snt">⏱ Timesheets</div>
+    <div class="snt">📈 Reports</div>
+    <div class="snt">💲 Rates</div>
+  </div>
+
+  <div class="content">
+
+    <!-- FILTER STRIP -->
+    <div class="filter-strip">
+      <div class="filter-group">
+        <div class="filter-label">Department</div>
+        <select class="filter-sel" id="fDept" onchange="applyFilters()">
+          <option value="">All departments</option>
+          <option value="Digital &amp; Development">Digital &amp; Dev</option>
+          <option value="AI &amp; Machine Learning">AI &amp; ML</option>
+          <option value="Data &amp; Analytics">Data &amp; Analytics</option>
+          <option value="Cyber Security">Cyber Security</option>
+          <option value="ERP Practice">ERP Practice</option>
+          <option value="PMO &amp; Delivery">PMO &amp; Delivery</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Person type</div>
+        <select class="filter-sel" id="fType" onchange="applyFilters()">
+          <option value="">All types</option>
+          <option value="Employee">Employee</option>
+          <option value="Contractor">Contractor</option>
+          <option value="Partner">Partner</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Min proficiency</div>
+        <select class="filter-sel" id="fMinProf" onchange="applyFilters()">
+          <option value="0">Show all levels</option>
+          <option value="2">≥ 2 Practitioner</option>
+          <option value="3">≥ 3 Advanced</option>
+          <option value="4">4 Expert only</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Availability</div>
+        <select class="filter-sel" id="fAvail" onchange="applyFilters()">
+          <option value="">All</option>
+          <option value="available">Available (capacity &gt;20%)</option>
+          <option value="partial">Partially available</option>
+          <option value="full">Fully allocated</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Assessment</div>
+        <select class="filter-sel" id="fAssess" onchange="applyFilters()">
+          <option value="">All</option>
+          <option value="validated">Manager-validated only</option>
+          <option value="self">Self-assessed</option>
+          <option value="pending">Pending review</option>
+        </select>
+      </div>
+      <div class="filter-group quick-find-wrap">
+        <div class="filter-label">✦ Quick find — who can do this?</div>
+        <div class="quick-find">
+          <input class="quick-input" id="quickInput" placeholder="e.g. Python level 3+, available…" oninput="quickFind()">
+          <button class="quick-btn" onclick="quickFind()">Find match</button>
+          <button class="tb-btn tb-ghost" style="height:32px;font-size:11px;" onclick="clearQuick()">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- COLUMN GROUP TOGGLES -->
+    <div class="group-toggle-bar">
+      <span class="gtb-label">Show groups:</span>
+      <div class="grp-btn grp-all on" onclick="toggleAllGroups()" id="grpAll">☰ All groups</div>
+      <div class="grp-btn" id="grpBtn-sw" onclick="toggleGroup('sw')" style="border-color:#6366F1;color:#4338CA;">💻 Software Dev</div>
+      <div class="grp-btn" id="grpBtn-ai" onclick="toggleGroup('ai')" style="border-color:#7C3AED;color:#5B21B6;">🤖 AI &amp; ML</div>
+      <div class="grp-btn" id="grpBtn-data" onclick="toggleGroup('data')" style="border-color:#0D9488;color:#0F766E;">📊 Data &amp; Analytics</div>
+      <div class="grp-btn" id="grpBtn-cyber" onclick="toggleGroup('cyber')" style="border-color:#DC2626;color:#991B1B;">🔐 Cyber Security</div>
+      <div class="grp-btn" id="grpBtn-erp" onclick="toggleGroup('erp')" style="border-color:#D97706;color:#92400E;">⚙ ERP Systems</div>
+      <div class="grp-btn" id="grpBtn-method" onclick="toggleGroup('method')" style="border-color:#059669;color:#065F46;">📋 Methodology</div>
+      <div class="grp-btn" id="grpBtn-lang" onclick="toggleGroup('lang')" style="border-color:#DB2777;color:#9D174D;">🌍 Languages</div>
+      <div class="grp-btn" id="grpBtn-domain" onclick="toggleGroup('domain')" style="border-color:#64748B;color:#334155;">🏛 Domain</div>
+    </div>
+
+    <!-- PROFICIENCY LEGEND -->
+    <div class="legend-bar">
+      <span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Proficiency:</span>
+      <div class="leg-section">
+        <div class="leg-item"><div class="leg-chip p1">1</div><span>Awareness</span></div>
+        <div class="leg-item"><div class="leg-chip p2">2</div><span>Practitioner</span></div>
+        <div class="leg-item"><div class="leg-chip p3">3</div><span>Advanced</span></div>
+        <div class="leg-item"><div class="leg-chip p4">4</div><span>Expert</span></div>
+      </div>
+      <div class="leg-divider"></div>
+      <span style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Assessment:</span>
+      <div class="leg-section">
+        <div class="leg-item"><div class="leg-chip p3" style="border:2px dashed var(--teal-d);">3</div><span>Self-assessed</span></div>
+        <div class="leg-item"><div class="leg-chip pending">?</div><span>Pending review</span></div>
+        <div class="leg-item"><div class="leg-chip p3">3</div><span>Manager validated</span></div>
+        <div class="leg-item"><div class="leg-chip empty">—</div><span>Not recorded</span></div>
+      </div>
+      <div class="leg-divider"></div>
+      <div class="leg-section">
+        <span style="font-size:11px;color:var(--text3);">Click any cell to view or edit · Click a person name to see full profile</span>
+      </div>
+    </div>
+
+    <!-- MATRIX TABLE -->
+    <div class="matrix-outer" id="matrixOuter">
+      <table class="matrix-tbl" id="matrixTbl">
+        <!-- thead built by JS -->
+        <tbody id="matrixBody">
+          <!-- rows built by JS -->
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ════ SLIDE-IN PANEL ════ -->
+<div class="panel-overlay" id="overlay" onclick="closePanel()"></div>
+<div class="skill-edit-panel" id="skillPanel">
+  <div class="sep-hdr">
+    <div id="panelAv" class="av av-e" style="width:40px;height:40px;font-size:13px;"></div>
+    <div>
+      <div id="panelTitle" style="font-size:15px;font-weight:800;"></div>
+      <div id="panelSub" style="font-size:12px;color:var(--text3);margin-top:2px;"></div>
+    </div>
+    <button class="sep-close" onclick="closePanel()">✕</button>
+  </div>
+  <div class="sep-body" id="panelBody"></div>
+  <div class="sep-footer">
+    <button class="tb-btn tb-ghost" onclick="closePanel()">Cancel</button>
+    <button class="tb-btn tb-primary" onclick="saveSkill()">Save assessment</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// SKILL GROUPS & SKILLS DEFINITION
+// ══════════════════════════════════════════════════════════════
+var GROUPS = [
+  { id:'sw', label:'Software Development', color:'#4338CA', bg:'#EEF2FF',
+    skills:['Java','Python','.NET / C#','JavaScript','TypeScript','React','Node.js','Go','COBOL','SQL','DevOps / CI-CD','Cloud (AWS)','Cloud (Azure)','Cloud (GCP)','Microservices'] },
+  { id:'ai', label:'AI & Machine Learning', color:'#7C3AED', bg:'#EDE9FE',
+    skills:['Machine Learning','Deep Learning','NLP / LLM','Computer Vision','TensorFlow','PyTorch','Azure OpenAI','Prompt Engineering','MLOps','AI Strategy'] },
+  { id:'data', label:'Data & Analytics', color:'#0D9488', bg:'#CCFBF1',
+    skills:['Data Engineering','ETL / dbt','Spark / Hadoop','Power BI','Tableau','SQL Analytics','Data Governance','Data Architecture','Python (Data)','Statistics'] },
+  { id:'cyber', label:'Cyber Security', color:'#DC2626', bg:'#FEE2E2',
+    skills:['Penetration Testing','ISO 27001','SOC / SIEM','Cloud Security','Identity & IAM','Threat Modelling','GDPR / DPA','Vulnerability Mgmt','Incident Response'] },
+  { id:'erp', label:'ERP Systems', color:'#D97706', bg:'#FEF3C7',
+    skills:['SAP S/4HANA','SAP FICO','SAP MM/SD','SAP BTP','SAP Analytics','Workday Finance','Workday HCM','Workday Integration','Oracle Fusion','ServiceNow'] },
+  { id:'method', label:'Methodology', color:'#059669', bg:'#D1FAE5',
+    skills:['PRINCE2','Agile / Scrum','SAFe','ITIL v4','Change Management','Business Analysis','User Research','UX Design','Programme Mgmt'] },
+  { id:'lang', label:'Languages', color:'#DB2777', bg:'#FCE7F3',
+    skills:['French','German','Spanish','Mandarin','Arabic','Dutch','Italian','Polish'] },
+  { id:'domain', label:'Industry Domain', color:'#475569', bg:'#F1F5F9',
+    skills:['Financial Services','Central Government','NHS / Healthcare','Retail','Utilities','Defence','Education','Transport'] }
+];
+
+// Build flat skill list with group refs
+var ALL_SKILLS = [];
+GROUPS.forEach(function(g){ g.skills.forEach(function(s){ ALL_SKILLS.push({group:g.id,name:s}); }); });
+
+// ══════════════════════════════════════════════════════════════
+// PEOPLE DATA  (representative sample ~45 people across 6 depts)
+// s = { skillName: [level, assessmentType] }
+// assessmentType: 'v'=validated, 's'=self, 'p'=pending
+// ══════════════════════════════════════════════════════════════
+var PEOPLE = [
+  // ── DIGITAL & DEVELOPMENT ─────────────────────────────────
+  {id:1,init:'SC',name:'Sarah Collins',type:'Employee',dept:'Digital & Development',role:'Head of Engineering',avail:30,
+   s:{'Java':[4,'v'],'Python':[3,'v'],'.NET / C#':[4,'v'],'JavaScript':[3,'v'],'TypeScript':[3,'v'],'React':[2,'v'],'Node.js':[3,'v'],'Cloud (AWS)':[4,'v'],'Cloud (Azure)':[3,'v'],'Microservices':[4,'v'],'DevOps / CI-CD':[4,'v'],'Agile / Scrum':[4,'v'],'PRINCE2':[2,'v'],'Financial Services':[3,'v']}},
+  {id:2,init:'JK',name:'James Kumar',type:'Employee',dept:'Digital & Development',role:'Senior Java Developer',avail:15,
+   s:{'Java':[4,'v'],'Python':[2,'v'],'SQL':[3,'v'],'Microservices':[3,'v'],'Cloud (AWS)':[2,'s'],'DevOps / CI-CD':[3,'v'],'Agile / Scrum':[3,'v'],'Financial Services':[2,'v']}},
+  {id:3,init:'EP',name:'Emma Patel',type:'Employee',dept:'Digital & Development',role:'.NET Developer',avail:60,
+   s:{'.NET / C#':[4,'v'],'SQL':[3,'v'],'JavaScript':[2,'v'],'Azure OpenAI':[1,'p'],'Cloud (Azure)':[2,'s'],'Agile / Scrum':[2,'v'],'Central Government':[3,'v']}},
+  {id:4,init:'OA',name:'Oliver Adeyemi',type:'Employee',dept:'Digital & Development',role:'Full Stack Developer',avail:40,
+   s:{'JavaScript':[4,'v'],'TypeScript':[4,'v'],'React':[4,'v'],'Node.js':[4,'v'],'Python':[2,'s'],'SQL':[3,'v'],'Cloud (AWS)':[2,'v'],'DevOps / CI-CD':[2,'s'],'Agile / Scrum':[3,'v']}},
+  {id:5,init:'MN',name:'Maya Nguyen',type:'Employee',dept:'Digital & Development',role:'Frontend Developer',avail:80,
+   s:{'JavaScript':[3,'v'],'TypeScript':[3,'v'],'React':[4,'v'],'UX Design':[3,'v'],'User Research':[2,'v'],'Agile / Scrum':[2,'v'],'NHS / Healthcare':[2,'v']}},
+  {id:6,init:'RC',name:'Ryan Clarke',type:'Contractor',dept:'Digital & Development',role:'DevOps Engineer',avail:25,
+   s:{'DevOps / CI-CD':[4,'v'],'Cloud (AWS)':[4,'v'],'Cloud (Azure)':[3,'v'],'Cloud (GCP)':[2,'s'],'Python':[3,'v'],'Go':[2,'s'],'Microservices':[3,'v']}},
+  {id:7,init:'LS',name:'Lena Schmidt',type:'Employee',dept:'Digital & Development',role:'COBOL / Legacy Developer',avail:70,
+   s:{'COBOL':[4,'v'],'Java':[2,'v'],'SQL':[3,'v'],'Financial Services':[4,'v'],'Central Government':[2,'v'],'PRINCE2':[1,'v']}},
+  {id:8,init:'AT',name:'Arjun Tiwari',type:'Employee',dept:'Digital & Development',role:'Cloud Architect',avail:20,
+   s:{'Cloud (AWS)':[4,'v'],'Cloud (Azure)':[4,'v'],'Cloud (GCP)':[3,'v'],'Microservices':[4,'v'],'DevOps / CI-CD':[4,'v'],'Python':[3,'v'],'ITIL v4':[2,'v'],'Financial Services':[3,'v']}},
+
+  // ── AI & MACHINE LEARNING ─────────────────────────────────
+  {id:9,init:'DW',name:'Dr Diana Wu',type:'Employee',dept:'AI & Machine Learning',role:'Head of AI Practice',avail:35,
+   s:{'Machine Learning':[4,'v'],'Deep Learning':[4,'v'],'NLP / LLM':[4,'v'],'Computer Vision':[3,'v'],'TensorFlow':[4,'v'],'PyTorch':[4,'v'],'Azure OpenAI':[4,'v'],'Prompt Engineering':[4,'v'],'MLOps':[4,'v'],'AI Strategy':[4,'v'],'Python':[4,'v'],'Statistics':[4,'v'],'Financial Services':[3,'v']}},
+  {id:10,init:'BF',name:'Ben Foster',type:'Employee',dept:'AI & Machine Learning',role:'ML Engineer',avail:45,
+   s:{'Machine Learning':[3,'v'],'Deep Learning':[3,'v'],'TensorFlow':[3,'v'],'PyTorch':[3,'v'],'MLOps':[3,'v'],'Python':[4,'v'],'Cloud (AWS)':[2,'v'],'NLP / LLM':[2,'s'],'Statistics':[3,'v']}},
+  {id:11,init:'PO',name:'Priya Osei',type:'Employee',dept:'AI & Machine Learning',role:'NLP / LLM Specialist',avail:55,
+   s:{'NLP / LLM':[4,'v'],'Machine Learning':[3,'v'],'Prompt Engineering':[4,'v'],'Azure OpenAI':[3,'v'],'Python':[4,'v'],'Deep Learning':[2,'v'],'Statistics':[3,'v'],'AI Strategy':[2,'s']}},
+  {id:12,init:'TL',name:'Tom Lawson',type:'Employee',dept:'AI & Machine Learning',role:'AI Solutions Architect',avail:20,
+   s:{'AI Strategy':[4,'v'],'Machine Learning':[3,'v'],'Azure OpenAI':[4,'v'],'Cloud (Azure)':[3,'v'],'Cloud (AWS)':[3,'v'],'Prompt Engineering':[3,'v'],'NLP / LLM':[3,'v'],'Programme Mgmt':[2,'v'],'Financial Services':[4,'v']}},
+  {id:13,init:'IB',name:'Isabelle Blanc',type:'Contractor',dept:'AI & Machine Learning',role:'Computer Vision Engineer',avail:0,
+   s:{'Computer Vision':[4,'v'],'Deep Learning':[4,'v'],'TensorFlow':[3,'v'],'Python':[4,'v'],'PyTorch':[3,'v'],'Cloud (GCP)':[2,'s'],'French':[4,'v']}},
+
+  // ── DATA & ANALYTICS ─────────────────────────────────────
+  {id:14,init:'KM',name:'Kieran Murphy',type:'Employee',dept:'Data & Analytics',role:'Head of Data',avail:30,
+   s:{'Data Engineering':[4,'v'],'Data Architecture':[4,'v'],'Data Governance':[4,'v'],'ETL / dbt':[4,'v'],'Spark / Hadoop':[3,'v'],'SQL Analytics':[4,'v'],'Power BI':[3,'v'],'Python (Data)':[4,'v'],'Statistics':[3,'v'],'Financial Services':[3,'v']}},
+  {id:15,init:'AF',name:'Anika Farooq',type:'Employee',dept:'Data & Analytics',role:'Data Engineer',avail:50,
+   s:{'Data Engineering':[3,'v'],'ETL / dbt':[4,'v'],'Spark / Hadoop':[3,'v'],'SQL Analytics':[3,'v'],'Python (Data)':[3,'v'],'Cloud (AWS)':[2,'v'],'Agile / Scrum':[2,'v']}},
+  {id:16,init:'SH',name:'Stefan Hofer',type:'Employee',dept:'Data & Analytics',role:'BI Developer',avail:65,
+   s:{'Power BI':[4,'v'],'Tableau':[4,'v'],'SQL Analytics':[4,'v'],'Data Governance':[2,'v'],'Statistics':[3,'v'],'Python (Data)':[2,'s'],'Financial Services':[3,'v'],'German':[4,'v']}},
+  {id:17,init:'NB',name:'Nadia Bouchard',type:'Employee',dept:'Data & Analytics',role:'Data Scientist',avail:40,
+   s:{'Machine Learning':[3,'s'],'Statistics':[4,'v'],'Python (Data)':[4,'v'],'SQL Analytics':[3,'v'],'Power BI':[2,'v'],'Tableau':[2,'v'],'Data Governance':[2,'p'],'French':[4,'v'],'Arabic':[3,'v']}},
+  {id:18,init:'CK',name:'Chris Kamau',type:'Partner',dept:'Data & Analytics',role:'Data Architect',avail:25,
+   s:{'Data Architecture':[4,'v'],'Data Governance':[4,'v'],'ETL / dbt':[3,'v'],'Cloud (AWS)':[3,'v'],'Cloud (Azure)':[3,'v'],'Spark / Hadoop':[4,'v'],'SQL Analytics':[4,'v']}},
+
+  // ── CYBER SECURITY ───────────────────────────────────────
+  {id:19,init:'GR',name:'Gareth Rees',type:'Employee',dept:'Cyber Security',role:'Head of Cyber',avail:20,
+   s:{'Penetration Testing':[4,'v'],'ISO 27001':[4,'v'],'Cloud Security':[4,'v'],'Threat Modelling':[4,'v'],'GDPR / DPA':[4,'v'],'Vulnerability Mgmt':[4,'v'],'Incident Response':[4,'v'],'SOC / SIEM':[3,'v'],'Identity & IAM':[3,'v'],'Financial Services':[3,'v']}},
+  {id:20,init:'FP',name:'Fatima Patel',type:'Employee',dept:'Cyber Security',role:'Pen Tester',avail:60,
+   s:{'Penetration Testing':[4,'v'],'Vulnerability Mgmt':[4,'v'],'Threat Modelling':[3,'v'],'Cloud Security':[2,'v'],'Identity & IAM':[2,'s'],'Incident Response':[3,'v']}},
+  {id:21,init:'MO',name:'Michael O\'Brien',type:'Employee',dept:'Cyber Security',role:'GRC Specialist',avail:70,
+   s:{'ISO 27001':[4,'v'],'GDPR / DPA':[4,'v'],'SOC / SIEM':[3,'v'],'Identity & IAM':[3,'v'],'Vulnerability Mgmt':[2,'v'],'ITIL v4':[3,'v'],'Central Government':[4,'v'],'Defence':[2,'v']}},
+  {id:22,init:'YT',name:'Yuki Tanaka',type:'Employee',dept:'Cyber Security',role:'Cloud Security Engineer',avail:45,
+   s:{'Cloud Security':[4,'v'],'Identity & IAM':[4,'v'],'Cloud (AWS)':[3,'v'],'Cloud (Azure)':[3,'v'],'SOC / SIEM':[2,'v'],'DevOps / CI-CD':[2,'s'],'Threat Modelling':[3,'v']}},
+  {id:23,init:'AB',name:'Anna Bergström',type:'Contractor',dept:'Cyber Security',role:'SIEM Engineer',avail:0,
+   s:{'SOC / SIEM':[4,'v'],'Incident Response':[4,'v'],'Vulnerability Mgmt':[3,'v'],'Cloud Security':[2,'v'],'Swedish':[4,'v']}},
+
+  // ── ERP PRACTICE ────────────────────────────────────────
+  {id:24,init:'RV',name:'Raj Verma',type:'Employee',dept:'ERP Practice',role:'Head of ERP',avail:25,
+   s:{'SAP S/4HANA':[4,'v'],'SAP FICO':[4,'v'],'SAP MM/SD':[3,'v'],'SAP BTP':[3,'v'],'SAP Analytics':[4,'v'],'Workday Finance':[3,'v'],'Workday HCM':[2,'v'],'Oracle Fusion':[2,'v'],'Programme Mgmt':[4,'v'],'Financial Services':[4,'v']}},
+  {id:25,init:'HK',name:'Hana Kovačević',type:'Employee',dept:'ERP Practice',role:'SAP FICO Consultant',avail:30,
+   s:{'SAP S/4HANA':[4,'v'],'SAP FICO':[4,'v'],'SAP Analytics':[3,'v'],'SAP BTP':[2,'s'],'Financial Services':[4,'v'],'German':[3,'v'],'PRINCE2':[2,'v']}},
+  {id:26,init:'DM',name:'Duncan McLeod',type:'Employee',dept:'ERP Practice',role:'SAP MM/SD Consultant',avail:50,
+   s:{'SAP S/4HANA':[3,'v'],'SAP MM/SD':[4,'v'],'SAP Analytics':[2,'v'],'Agile / Scrum':[2,'v'],'Retail':[3,'v'],'Utilities':[2,'v']}},
+  {id:27,init:'LH',name:'Linh Hoang',type:'Employee',dept:'ERP Practice',role:'Workday Finance Lead',avail:20,
+   s:{'Workday Finance':[4,'v'],'Workday HCM':[3,'v'],'Workday Integration':[4,'v'],'Oracle Fusion':[2,'v'],'Business Analysis':[3,'v'],'Financial Services':[3,'v']}},
+  {id:28,init:'CP',name:'Claire Perkins',type:'Employee',dept:'ERP Practice',role:'Workday HCM Consultant',avail:65,
+   s:{'Workday HCM':[4,'v'],'Workday Finance':[2,'s'],'Workday Integration':[3,'v'],'Business Analysis':[3,'v'],'Change Management':[3,'v'],'NHS / Healthcare':[4,'v']}},
+  {id:29,init:'FE',name:'Felix Engel',type:'Partner',dept:'ERP Practice',role:'SAP BTP Architect',avail:40,
+   s:{'SAP BTP':[4,'v'],'SAP S/4HANA':[3,'v'],'Cloud (Azure)':[3,'v'],'Cloud (AWS)':[2,'v'],'Microservices':[3,'v'],'DevOps / CI-CD':[2,'s'],'German':[4,'v'],'Dutch':[2,'v']}},
+  {id:30,init:'NK',name:'Nour Khalil',type:'Employee',dept:'ERP Practice',role:'Oracle Fusion Consultant',avail:55,
+   s:{'Oracle Fusion':[4,'v'],'SQL':[3,'v'],'Financial Services':[3,'v'],'Arabic':[4,'v'],'Business Analysis':[3,'v'],'PRINCE2':[2,'v']}},
+  {id:31,init:'SM',name:'Sophie Martin',type:'Contractor',dept:'ERP Practice',role:'ServiceNow Developer',avail:35,
+   s:{'ServiceNow':[4,'v'],'JavaScript':[3,'v'],'ITIL v4':[3,'v'],'DevOps / CI-CD':[2,'s'],'French':[3,'v'],'Central Government':[3,'v']}},
+
+  // ── PMO & DELIVERY ───────────────────────────────────────
+  {id:32,init:'VR',name:'Victoria Reed',type:'Employee',dept:'PMO & Delivery',role:'Head of PMO',avail:35,
+   s:{'PRINCE2':[4,'v'],'Programme Mgmt':[4,'v'],'Agile / Scrum':[3,'v'],'SAFe':[2,'v'],'Change Management':[4,'v'],'Business Analysis':[3,'v'],'Financial Services':[3,'v'],'Central Government':[4,'v']}},
+  {id:33,init:'MK',name:'Mark Kennedy',type:'Employee',dept:'PMO & Delivery',role:'Senior PM',avail:25,
+   s:{'PRINCE2':[4,'v'],'Agile / Scrum':[4,'v'],'Programme Mgmt':[3,'v'],'Change Management':[3,'v'],'NHS / Healthcare':[4,'v'],'Defence':[2,'v']}},
+  {id:34,init:'ZA',name:'Zara Ahmed',type:'Employee',dept:'PMO & Delivery',role:'Business Analyst',avail:60,
+   s:{'Business Analysis':[4,'v'],'User Research':[3,'v'],'UX Design':[2,'s'],'Agile / Scrum':[3,'v'],'Change Management':[2,'v'],'NHS / Healthcare':[3,'v']}},
+  {id:35,init:'JO',name:'James O\'Sullivan',type:'Employee',dept:'PMO & Delivery',role:'Project Manager',avail:45,
+   s:{'PRINCE2':[3,'v'],'Agile / Scrum':[3,'v'],'Business Analysis':[2,'v'],'Retail':[2,'v'],'Financial Services':[2,'v'],'Change Management':[2,'v']}},
+  {id:36,init:'EK',name:'Elena Kowalski',type:'Employee',dept:'PMO & Delivery',role:'Change Manager',avail:70,
+   s:{'Change Management':[4,'v'],'Business Analysis':[3,'v'],'PRINCE2':[2,'v'],'User Research':[2,'v'],'Central Government':[3,'v'],'Polish':[4,'v'],'German':[3,'v']}},
+  {id:37,init:'HL',name:'Hugo Lima',type:'Contractor',dept:'PMO & Delivery',role:'Agile Coach',avail:50,
+   s:{'Agile / Scrum':[4,'v'],'SAFe':[4,'v'],'Programme Mgmt':[3,'v'],'Change Management':[3,'v'],'Spanish':[4,'v'],'Portuguese':[4,'v'],'Financial Services':[2,'v']}},
+  {id:38,init:'GW',name:'Grace Wong',type:'Employee',dept:'PMO & Delivery',role:'UX Lead',avail:55,
+   s:{'UX Design':[4,'v'],'User Research':[4,'v'],'Agile / Scrum':[3,'v'],'JavaScript':[2,'s'],'React':[1,'p'],'NHS / Healthcare':[2,'v'],'Mandarin':[4,'v']}},
+  {id:39,init:'AJ',name:'Aarav Joshi',type:'Employee',dept:'PMO & Delivery',role:'Data Analyst',avail:40,
+   s:{'SQL Analytics':[3,'v'],'Power BI':[3,'v'],'Statistics':[2,'v'],'Python (Data)':[2,'p'],'Business Analysis':[3,'v'],'Agile / Scrum':[2,'v']}},
+  {id:40,init:'FR',name:'Fatou Ramos',type:'Employee',dept:'PMO & Delivery',role:'Technical BA',avail:35,
+   s:{'Business Analysis':[4,'v'],'SQL Analytics':[3,'v'],'User Research':[3,'v'],'Agile / Scrum':[3,'v'],'French':[4,'v'],'Spanish':[3,'v'],'Central Government':[4,'v']}},
+];
+
+// ══════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════
+var activeGroups = GROUPS.map(function(g){return g.id;}); // all on
+var expandedGroups = {}; // all collapsed by default (show summary)
+GROUPS.forEach(function(g){ expandedGroups[g.id] = false; });
+var highlightedIds = [];
+var currentPanelContext = null; // {personId, skillName}
+
+// ══════════════════════════════════════════════════════════════
+// BUILD TABLE HEADER
+// ══════════════════════════════════════════════════════════════
+function buildHeader(){
+  var tbl = document.getElementById('matrixTbl');
+  var existingHead = tbl.querySelector('thead');
+  if(existingHead) tbl.removeChild(existingHead);
+  var thead = document.createElement('thead');
+
+  // Row 1: Group headers
+  var r1 = document.createElement('tr');
+  r1.className = 'hdr-top';
+  // Fixed left cols
+  var fixedCols = [{label:'Name',cls:'col-fixed',w:'220px'},{label:'Role',cls:'col-fixed2',w:'110px'},{label:'Department',cls:'col-fixed3',w:'100px'},{label:'Avail.',cls:'col-fixed4',w:'80px'}];
+  fixedCols.forEach(function(fc){
+    var th=document.createElement('th');
+    th.className='left-hdr col-fixed '+fc.cls;
+    th.style.minWidth=fc.w;th.style.width=fc.w;
+    th.textContent=fc.label;
+    r1.appendChild(th);
+  });
+  // Group spanning headers
+  activeGroups.forEach(function(gid){
+    var g=GROUPS.find(function(x){return x.id===gid;});
+    if(!g) return;
+    var colSpan = expandedGroups[gid] ? g.skills.length : 1;
+    var th=document.createElement('th');
+    th.colSpan=colSpan;
+    th.className='grp-hdr';
+    th.style.background=g.color;
+    th.innerHTML=g.label+' <span class="collapse-icon">'+(expandedGroups[gid]?'▲':'▼')+'</span>';
+    th.title=(expandedGroups[gid]?'Click to collapse':'Click to expand')+' '+g.label;
+    th.onclick=(function(gid_){return function(){ toggleGroupExpand(gid_); };})(gid);
+    r1.appendChild(th);
+  });
+  thead.appendChild(r1);
+
+  // Row 2: Skill column headers
+  var r2 = document.createElement('tr');
+  r2.className = 'hdr-sub';
+  // Fixed left
+  fixedCols.forEach(function(fc){
+    var th=document.createElement('th');
+    th.className='left-hdr col-fixed '+fc.cls;
+    th.style.minWidth=fc.w;th.style.width=fc.w;
+    th.style.background='#1a1760';
+    th.innerHTML='';
+    r2.appendChild(th);
+  });
+  // Skill headers
+  activeGroups.forEach(function(gid){
+    var g=GROUPS.find(function(x){return x.id===gid;});
+    if(!g) return;
+    if(expandedGroups[gid]){
+      g.skills.forEach(function(s){
+        var th=document.createElement('th');
+        th.className='skill-hdr';
+        th.style.color=g.color==='#DC2626'?'#FCA5A5':'rgba(255,255,255,.8)';
+        th.textContent=s;
+        th.title=s+' ('+g.label+')';
+        r2.appendChild(th);
+      });
+    } else {
+      var th=document.createElement('th');
+      th.className='skill-hdr grp-summary';
+      th.textContent='Best';
+      th.style.background='rgba(255,255,255,.06)';
+      r2.appendChild(th);
+    }
+  });
+  thead.appendChild(r2);
+  tbl.insertBefore(thead, tbl.querySelector('tbody'));
+}
+
+// ══════════════════════════════════════════════════════════════
+// BUILD TABLE BODY
+// ══════════════════════════════════════════════════════════════
+function buildBody(filtered){
+  var tbody = document.getElementById('matrixBody');
+  tbody.innerHTML='';
+
+  var deptOrder = ['Digital & Development','AI & Machine Learning','Data & Analytics','Cyber Security','ERP Practice','PMO & Delivery'];
+  var deptColors = {'Digital & Development':'#4338CA','AI & Machine Learning':'#7C3AED','Data & Analytics':'#0D9488','Cyber Security':'#DC2626','ERP Practice':'#D97706','PMO & Delivery':'#059669'};
+  var deptIcons = {'Digital & Development':'💻','AI & Machine Learning':'🤖','Data & Analytics':'📊','Cyber Security':'🔐','ERP Practice':'⚙','PMO & Delivery':'📋'};
+
+  // Count skills coverage for summary row
+  var skillCoverage = {};
+
+  deptOrder.forEach(function(dept){
+    var deptPeople = filtered.filter(function(p){return p.dept===dept;});
+    if(deptPeople.length===0) return;
+
+    // Dept header row
+    var dtr = document.createElement('tr');
+    dtr.className='dept-row';
+    var dtd=document.createElement('td');
+    dtd.colSpan = 4 + activeGroups.reduce(function(acc,gid){
+      var g=GROUPS.find(function(x){return x.id===gid;});
+      return acc + (expandedGroups[gid] ? g.skills.length : 1);
+    }, 0);
+    dtd.innerHTML='<div style="display:flex;align-items:center;gap:10px;">'
+      +'<span style="font-size:16px;">'+deptIcons[dept]+'</span>'
+      +'<span style="font-weight:800;">'+dept+'</span>'
+      +'<span style="background:'+deptColors[dept]+'22;color:'+deptColors[dept]+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:4px;">'+deptPeople.length+' people</span>'
+      +'</div>';
+    dtr.appendChild(dtd);
+    tbody.appendChild(dtr);
+
+    deptPeople.forEach(function(p){
+      var tr=document.createElement('tr');
+      tr.className='person-row';
+      if(highlightedIds.length>0){
+        if(highlightedIds.includes(p.id)) tr.classList.add('highlighted');
+        else tr.classList.add('dimmed');
+      }
+      tr.id='pr-'+p.id;
+
+      // Name cell
+      var avClass = p.type==='Employee'?'av-e': p.type==='Contractor'?'av-c':'av-p';
+      var typeColor = p.type==='Employee'?'#4338CA': p.type==='Contractor'?'#D97706':'#7C3AED';
+      var tdName=document.createElement('td');
+      tdName.className='col-fixed';
+      tdName.style.borderRight='1px solid var(--border2)';
+      tdName.innerHTML='<div class="person-cell" onclick="openPersonPanel('+p.id+')" style="cursor:pointer;">'
+        +'<div class="av '+avClass+'">'+p.init+'</div>'
+        +'<div><div class="p-name" style="color:var(--brand);text-decoration:underline;text-underline-offset:2px;">'+p.name+'</div>'
+        +'<div class="p-role">'+p.role+'</div></div></div>';
+      tr.appendChild(tdName);
+
+      // Role cell
+      var tdRole=document.createElement('td');
+      tdRole.className='role-cell col-fixed2';
+      var typeLabel=p.type;
+      var typeBg=p.type==='Employee'?'#EEF2FF':p.type==='Contractor'?'#FEF3C7':'#EDE9FE';
+      tdRole.innerHTML='<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:'+typeBg+';color:'+typeColor+';">'+typeLabel+'</span>';
+      tr.appendChild(tdRole);
+
+      // Dept cell
+      var tdDept=document.createElement('td');
+      tdDept.className='dept-cell col-fixed3';
+      tdDept.textContent=dept.split(' ')[0]; // short label
+      tr.appendChild(tdDept);
+
+      // Availability cell
+      var tdAvail=document.createElement('td');
+      tdAvail.className='avail-cell col-fixed4';
+      var ac = p.avail>=60?'var(--green)':p.avail>=25?'var(--amber)':'var(--red)';
+      var al = p.avail>=60?'Available':p.avail>=25?'Partial':'Allocated';
+      tdAvail.innerHTML='<div class="avail-inner">'
+        +'<div class="avail-bar-track"><div class="avail-bar-fill" style="width:'+p.avail+'%;background:'+ac+';"></div></div>'
+        +'<div class="avail-pct" style="color:'+ac+';">'+p.avail+'%</div>'
+        +'<div class="avail-label">'+al+'</div></div>';
+      tr.appendChild(tdAvail);
+
+      // Skill cells
+      activeGroups.forEach(function(gid){
+        var g=GROUPS.find(function(x){return x.id===gid;});
+        if(!g) return;
+        if(expandedGroups[gid]){
+          g.skills.forEach(function(sname){
+            var td=document.createElement('td');
+            td.className='skill-cell';
+            var skillData = p.s[sname];
+            if(skillData){
+              var lv=skillData[0], atype=skillData[1];
+              var chipCls='chip p'+lv+(atype==='s'?' self':'')+(atype==='p'?' pending':'');
+              var label=atype==='p'?'?':lv;
+              td.innerHTML='<div class="'+chipCls+'">'+label+'</div>';
+              if(!skillCoverage[sname]) skillCoverage[sname]={1:0,2:0,3:0,4:0,total:0};
+              if(atype!=='p'){ skillCoverage[sname][lv]++; skillCoverage[sname].total++; }
+            } else {
+              td.innerHTML='<div class="chip empty">—</div>';
+            }
+            td.onclick=(function(pid,sn){ return function(){ openSkillCell(pid,sn); }; })(p.id,sname);
+            tr.appendChild(td);
+          });
+        } else {
+          // Summary: best level in group
+          var td=document.createElement('td');
+          td.className='skill-cell summary-cell';
+          var best=0, bestType='v';
+          g.skills.forEach(function(sn){ if(p.s[sn] && p.s[sn][0]>best){ best=p.s[sn][0]; bestType=p.s[sn][1]; }});
+          if(best>0){
+            var chipCls2='chip p'+best+' summary-chip'+(bestType==='s'?' self':'');
+            var label2=best;
+            td.innerHTML='<div class="'+chipCls2+'">'+label2+'</div>';
+          } else {
+            td.innerHTML='<div class="chip empty summary-chip">—</div>';
+          }
+          td.onclick=(function(pid,gid_){ return function(){ toggleGroupExpand(gid_); }; })(p.id,gid);
+          tr.appendChild(td);
+        }
+      });
+      tbody.appendChild(tr);
+    });
+  });
+
+  // Summary / coverage row
+  buildSummaryRow(filtered, skillCoverage);
+}
+
+function buildSummaryRow(filtered, skillCoverage){
+  var tbody = document.getElementById('matrixBody');
+  var tr = document.createElement('tr');
+  tr.className='summary-row';
+
+  var tdLabel=document.createElement('td');
+  tdLabel.className='col-fixed';
+  tdLabel.colSpan=4;
+  tdLabel.innerHTML='<div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.7);">📊 Coverage ('+filtered.length+' people shown)</div>';
+  tr.appendChild(tdLabel);
+
+  activeGroups.forEach(function(gid){
+    var g=GROUPS.find(function(x){return x.id===gid;});
+    if(!g) return;
+    if(expandedGroups[gid]){
+      g.skills.forEach(function(sname){
+        var td=document.createElement('td');
+        var cov=skillCoverage[sname]||{1:0,2:0,3:0,4:0,total:0};
+        var total=cov.total||0;
+        td.innerHTML='<div class="sum-bars" title="'+sname+': '+total+' people">'
+          +'<div style="font-size:9px;font-weight:700;color:'+(total>0?'#fff':'rgba(255,255,255,.2)')+';">'+total+'</div>'
+          +'<div class="sum-bar" style="width:'+Math.min(28,total*4)+'px;background:var(--p4);"></div></div>';
+        tr.appendChild(td);
+      });
+    } else {
+      var td=document.createElement('td');
+      var groupTotal=0;
+      g.skills.forEach(function(sn){ if(skillCoverage[sn]) groupTotal+=skillCoverage[sn].total; });
+      td.innerHTML='<div style="font-size:10px;font-weight:700;color:#fff;">'+groupTotal+'</div>';
+      tr.appendChild(td);
+    }
+  });
+  tbody.appendChild(tr);
+}
+
+// ══════════════════════════════════════════════════════════════
+// TOGGLE GROUP EXPAND / COLLAPSE
+// ══════════════════════════════════════════════════════════════
+function toggleGroupExpand(gid){
+  expandedGroups[gid] = !expandedGroups[gid];
+  render();
+}
+
+// ══════════════════════════════════════════════════════════════
+// GROUP VISIBILITY TOGGLE
+// ══════════════════════════════════════════════════════════════
+function toggleGroup(gid){
+  var idx=activeGroups.indexOf(gid);
+  if(idx>-1){ activeGroups.splice(idx,1); document.getElementById('grpBtn-'+gid).classList.remove('on'); }
+  else { activeGroups.push(gid); var g=GROUPS.find(function(x){return x.id===gid;}); var btn=document.getElementById('grpBtn-'+gid); btn.classList.add('on'); btn.style.background=g.color; btn.style.color='#fff'; btn.style.borderColor='transparent'; }
+  // reset to original state if just removed
+  if(activeGroups.indexOf(gid)===-1){ var btn2=document.getElementById('grpBtn-'+gid); if(btn2){ var g2=GROUPS.find(function(x){return x.id===gid;}); btn2.style.background=''; btn2.style.color=g2.color; btn2.style.borderColor=g2.color; } }
+  render();
+}
+
+function toggleAllGroups(){
+  activeGroups=GROUPS.map(function(g){return g.id;});
+  GROUPS.forEach(function(g){ var btn=document.getElementById('grpBtn-'+g.id); if(btn){btn.classList.remove('on');btn.style.background='';btn.style.color=g.color;btn.style.borderColor=g.color;} });
+  render();
+}
+
+// ══════════════════════════════════════════════════════════════
+// FILTERING
+// ══════════════════════════════════════════════════════════════
+function getFiltered(){
+  var dept=document.getElementById('fDept').value;
+  var type=document.getElementById('fType').value;
+  var minProf=parseInt(document.getElementById('fMinProf').value||'0');
+  var avail=document.getElementById('fAvail').value;
+  var assess=document.getElementById('fAssess').value;
+
+  return PEOPLE.filter(function(p){
+    if(dept && p.dept!==dept) return false;
+    if(type && p.type!==type) return false;
+    if(avail==='available' && p.avail<=20) return false;
+    if(avail==='partial' && (p.avail<=20||p.avail>80)) return false;
+    if(avail==='full' && p.avail>20) return false;
+    if(minProf>0){
+      var hasMin=Object.values(p.s).some(function(sv){ return sv[0]>=minProf; });
+      if(!hasMin) return false;
+    }
+    if(assess==='validated'){
+      var hasV=Object.values(p.s).some(function(sv){return sv[1]==='v';});
+      if(!hasV) return false;
+    }
+    if(assess==='self'){
+      var hasS=Object.values(p.s).some(function(sv){return sv[1]==='s';});
+      if(!hasS) return false;
+    }
+    if(assess==='pending'){
+      var hasP=Object.values(p.s).some(function(sv){return sv[1]==='p';});
+      if(!hasP) return false;
+    }
+    return true;
+  });
+}
+
+function applyFilters(){ highlightedIds=[]; render(); }
+
+// ══════════════════════════════════════════════════════════════
+// QUICK FIND
+// ══════════════════════════════════════════════════════════════
+function quickFind(){
+  var q=(document.getElementById('quickInput').value||'').toLowerCase().trim();
+  if(!q){ highlightedIds=[]; render(); return; }
+  // Parse tokens: look for skill names and optional level
+  var tokens=q.split(/[,;]+/).map(function(t){return t.trim();}).filter(Boolean);
+  var matches=PEOPLE.filter(function(p){
+    return tokens.every(function(token){
+      // check for level modifier
+      var lvMatch=token.match(/level\s*([1-4])\+?|([1-4])\+/);
+      var minLv=lvMatch?(parseInt(lvMatch[1]||lvMatch[2])):0;
+      var skillQuery=token.replace(/level\s*[1-4]\+?|[1-4]\+/,'').replace(/available?/,'').trim();
+      // check availability
+      if(token.includes('availab')){ return p.avail>20; }
+      // match skill
+      var found=false;
+      Object.entries(p.s).forEach(function(kv){
+        if(kv[0].toLowerCase().includes(skillQuery)&&kv[1][0]>=Math.max(minLv,1)) found=true;
+      });
+      return found;
+    });
+  });
+  highlightedIds=matches.map(function(p){return p.id;});
+  render();
+  // Show result count
+  var box=document.getElementById('quickInput');
+  box.style.borderColor=matches.length>0?'var(--green)':'var(--red)';
+}
+
+function clearQuick(){
+  document.getElementById('quickInput').value='';
+  document.getElementById('quickInput').style.borderColor='';
+  highlightedIds=[];
+  render();
+}
+
+// ══════════════════════════════════════════════════════════════
+// MAIN RENDER
+// ══════════════════════════════════════════════════════════════
+function render(){
+  var filtered=getFiltered();
+  buildHeader();
+  buildBody(filtered);
+}
+
+// ══════════════════════════════════════════════════════════════
+// OPEN PERSON PANEL (full profile)
+// ══════════════════════════════════════════════════════════════
+function openPersonPanel(pid){
+  var p=PEOPLE.find(function(x){return x.id===pid;});
+  if(!p) return;
+  currentPanelContext=null;
+  var avClass=p.type==='Employee'?'av-e':p.type==='Contractor'?'av-c':'av-p';
+  document.getElementById('panelAv').className='av '+avClass;
+  document.getElementById('panelAv').textContent=p.init;
+  document.getElementById('panelTitle').textContent=p.name;
+  document.getElementById('panelSub').textContent=p.role+' · '+p.dept+' · '+p.type;
+  document.querySelector('.sep-footer').style.display='none';
+
+  var skillCount=Object.keys(p.s).length;
+  var expertCount=Object.values(p.s).filter(function(sv){return sv[0]===4;}).length;
+  var pendingCount=Object.values(p.s).filter(function(sv){return sv[1]==='p';}).length;
+  var ac=p.avail>=60?'var(--green)':p.avail>=25?'var(--amber)':'var(--red)';
+
+  var html='<div class="kpi-strip">'
+    +'<div class="kpi-mini"><div class="kpi-mini-label">Availability</div><div class="kpi-mini-val" style="color:'+ac+';">'+p.avail+'%</div><div class="kpi-mini-sub">'+(p.avail>=60?'Available':p.avail>=25?'Partial':'Allocated')+'</div></div>'
+    +'<div class="kpi-mini"><div class="kpi-mini-label">Skills</div><div class="kpi-mini-val">'+skillCount+'</div><div class="kpi-mini-sub">recorded</div></div>'
+    +'<div class="kpi-mini"><div class="kpi-mini-label">Expert (4)</div><div class="kpi-mini-val" style="color:var(--violet-d);">'+expertCount+'</div><div class="kpi-mini-sub">skills</div></div>'
+    +'<div class="kpi-mini"><div class="kpi-mini-label">Pending</div><div class="kpi-mini-val" style="color:var(--amber-d);">'+pendingCount+'</div><div class="kpi-mini-sub">awaiting review</div></div>'
+    +'</div>';
+
+  // Skills by group
+  GROUPS.forEach(function(g){
+    var groupSkills=g.skills.filter(function(sn){return p.s[sn];});
+    if(groupSkills.length===0) return;
+    html+='<div class="section-title" style="color:'+g.color+';">'+g.label+'</div>';
+    groupSkills.forEach(function(sname){
+      var sv=p.s[sname]; var lv=sv[0]; var atype=sv[1];
+      var profLabel=['','Awareness','Practitioner','Advanced','Expert'][lv];
+      var profColor=['','var(--p1t)','var(--p2t)','var(--p3t)','var(--p4t)'][lv];
+      var profBg=['','var(--p1)','var(--p2)','var(--p3)','var(--p4)'][lv];
+      var assessIcon=atype==='v'?'✓ Validated':atype==='s'?'✏ Self-assessed':'⏳ Pending review';
+      var assessColor=atype==='v'?'var(--green-d)':atype==='s'?'var(--brand-d)':'var(--amber-d)';
+      html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2);">'
+        +'<div style="font-size:12px;font-weight:600;">'+sname+'</div>'
+        +'<div style="display:flex;align-items:center;gap:10px;">'
+        +'<span style="font-size:10px;color:'+assessColor+';font-weight:700;">'+assessIcon+'</span>'
+        +'<div style="display:flex;gap:3px;">'
+        +[1,2,3,4].map(function(n){ return '<div style="width:16px;height:16px;border-radius:3px;background:'+(n<=lv?profBg:'var(--border2)')+';">'+'</div>'; }).join('')
+        +'</div>'
+        +'<span style="font-size:11px;font-weight:700;color:'+profColor+';min-width:70px;text-align:right;">'+profLabel+'</span>'
+        +'</div></div>';
+    });
+  });
+  document.getElementById('panelBody').innerHTML=html;
+  showPanel();
+}
+
+// ══════════════════════════════════════════════════════════════
+// OPEN SKILL CELL (edit / assess)
+// ══════════════════════════════════════════════════════════════
+function openSkillCell(pid, skillName){
+  var p=PEOPLE.find(function(x){return x.id===pid;});
+  if(!p) return;
+  currentPanelContext={pid:pid, skillName:skillName};
+  var existing=p.s[skillName];
+  var currentLv=existing?existing[0]:0;
+  var currentType=existing?existing[1]:'v';
+  var avClass=p.type==='Employee'?'av-e':p.type==='Contractor'?'av-c':'av-p';
+  var g=GROUPS.find(function(gr){return gr.skills.includes(skillName);});
+
+  document.getElementById('panelAv').className='av '+avClass;
+  document.getElementById('panelAv').textContent=p.init;
+  document.getElementById('panelTitle').textContent=p.name+' — '+skillName;
+  document.getElementById('panelSub').textContent=(g?g.label+' · ':'')+'Click to set proficiency level';
+  document.querySelector('.sep-footer').style.display='flex';
+
+  var profDescs=['','Aware of this skill area. Has basic theoretical knowledge but limited hands-on experience.',
+    'Can work independently on standard tasks. Comfortable in most situations. Some mentoring may be needed.',
+    'Leads delivery in this area. Can mentor others. Handles complex scenarios confidently.',
+    'Recognised authority. Defines standards, architecture decisions and practice direction.'];
+  var profColors=['','var(--p1t)','var(--p2t)','var(--p3t)','var(--p4t)'];
+  var profBgs=['','var(--p1)','var(--p2)','var(--p3)','var(--p4)'];
+  var profLabels=['','Awareness','Practitioner','Advanced','Expert'];
+
+  var html='<div class="section-title">Set proficiency level</div>';
+  html+='<div class="rating-selector" id="ratingSelector">';
+  [1,2,3,4].forEach(function(n){
+    html+='<div class="rating-opt'+(n===currentLv?' on':'')+'" id="ropt-'+n+'" onclick="selectRating('+n+')">'
+      +'<div class="rating-opt-num" style="color:'+profColors[n]+';">'+n+'</div>'
+      +'<div class="rating-opt-label">'+profLabels[n]+'</div>'
+      +'</div>';
+  });
+  html+='</div>';
+  html+='<div id="ratingDesc" style="margin-top:10px;padding:10px 12px;background:var(--border2);border-radius:var(--r);font-size:12px;color:var(--text2);line-height:1.5;">'+(currentLv>0?profDescs[currentLv]:'Select a level above to see description.')+'</div>';
+  html+='<div class="section-title" style="margin-top:16px;">Assessment source</div>';
+  html+='<div class="assess-toggle" id="assessToggle">'
+    +'<div class="at-opt'+(currentType==='s'?' on':'')+'" onclick="selectAssess(\'s\')">✏ Self-assessed</div>'
+    +'<div class="at-opt'+(currentType==='p'?' on':'')+'" onclick="selectAssess(\'p\')">⏳ Pending review</div>'
+    +'<div class="at-opt'+(currentType==='v'?' on':'')+'" onclick="selectAssess(\'v\')">✓ Manager validated</div>'
+    +'</div>';
+  html+='<div class="section-title" style="margin-top:16px;">Notes</div>';
+  html+='<textarea id="skillNotes" style="width:100%;border:1px solid var(--border);border-radius:var(--r);padding:10px;font-family:var(--font);font-size:12px;min-height:72px;resize:none;outline:none;" placeholder="Optional: Add context, evidence of skill, last used, certifications, etc."></textarea>';
+  html+='<div style="margin-top:12px;font-size:11px;color:var(--text3);">Last updated: '+(existing?'14 Jun 2026 by Manager':'Not yet recorded')+'</div>';
+
+  document.getElementById('panelBody').innerHTML=html;
+  showPanel();
+}
+
+var _selectedRating=0, _selectedAssess='v';
+function selectRating(n){
+  _selectedRating=n;
+  document.querySelectorAll('.rating-opt').forEach(function(el){el.classList.remove('on');});
+  var opt=document.getElementById('ropt-'+n);
+  if(opt) opt.classList.add('on');
+  var descs=['','Aware of this skill area. Has basic theoretical knowledge but limited hands-on experience.',
+    'Can work independently on standard tasks. Comfortable in most situations. Some mentoring may be needed.',
+    'Leads delivery in this area. Can mentor others. Handles complex scenarios confidently.',
+    'Recognised authority. Defines standards, architecture decisions and practice direction.'];
+  var d=document.getElementById('ratingDesc');
+  if(d) d.textContent=descs[n]||'';
+}
+function selectAssess(t){
+  _selectedAssess=t;
+  document.querySelectorAll('.at-opt').forEach(function(el){el.classList.remove('on');});
+  var opts=document.querySelectorAll('.at-opt');
+  var map={'s':0,'p':1,'v':2};
+  if(opts[map[t]]) opts[map[t]].classList.add('on');
+}
+function saveSkill(){
+  if(!currentPanelContext) return;
+  var p=PEOPLE.find(function(x){return x.id===currentPanelContext.pid;});
+  if(!p) return;
+  if(_selectedRating>0){
+    p.s[currentPanelContext.skillName]=[_selectedRating,_selectedAssess];
+  } else {
+    delete p.s[currentPanelContext.skillName];
+  }
+  closePanel();
+  render();
+}
+
+// ══════════════════════════════════════════════════════════════
+// SKILLS LIBRARY MODAL
+// ══════════════════════════════════════════════════════════════
+function showLibrary(){
+  var html='<div style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove();">'
+    +'<div style="background:var(--surface);border-radius:14px;width:700px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.2);">'
+    +'<div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">'
+    +'<div><div style="font-size:16px;font-weight:800;">📚 Skills Library</div><div style="font-size:12px;color:var(--text3);margin-top:2px;">'+ALL_SKILLS.length+' skills across '+GROUPS.length+' categories · Click any skill to edit</div></div>'
+    +'<button onclick="this.closest(\'div[onclick]\').remove()" style="border:1px solid var(--border);border-radius:8px;background:transparent;cursor:pointer;padding:6px 12px;font-size:12px;font-family:var(--font);">✕ Close</button>'
+    +'</div>'
+    +'<div style="flex:1;overflow-y:auto;padding:18px 20px;">';
+  GROUPS.forEach(function(g){
+    html+='<div style="margin-bottom:16px;">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+      +'<div style="font-size:12px;font-weight:800;color:'+g.color+';">'+g.label+'</div>'
+      +'<button onclick="alert(\'Add skill to '+g.label+'\')" style="font-size:11px;padding:3px 10px;border:1px dashed '+g.color+';border-radius:20px;background:transparent;color:'+g.color+';cursor:pointer;font-family:var(--font);font-weight:700;">+ Add skill</button>'
+      +'</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    g.skills.forEach(function(s){
+      html+='<div style="padding:5px 12px;background:'+g.bg+';color:'+g.color+';border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;" onclick="alert(\'Edit skill: '+s+'\')">'
+        +'<span>'+s+'</span>'
+        +'<span style="font-size:10px;opacity:.6;">✎</span>'
+        +'</div>';
+    });
+    html+='</div></div>';
+  });
+  html+='</div>'
+    +'<div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:space-between;">'
+    +'<button onclick="alert(\'Add new category\')" style="padding:8px 16px;border:1.5px dashed var(--brand);border-radius:8px;background:var(--brand-l);color:var(--brand-d);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;">+ Add new category</button>'
+    +'<div style="display:flex;gap:6px;">'
+    +'<button onclick="alert(\'Importing library from CSV...\')" style="padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:transparent;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;">⬆ Import CSV</button>'
+    +'<button onclick="alert(\'Exporting library...\')" style="padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:transparent;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;">⬇ Export</button>'
+    +'</div>'
+    +'</div>'
+    +'</div></div>';
+  var el=document.createElement('div');
+  el.innerHTML=html;
+  document.body.appendChild(el.firstChild);
+}
+
+// ══════════════════════════════════════════════════════════════
+// PANEL HELPERS
+// ══════════════════════════════════════════════════════════════
+function showPanel(){
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('skillPanel').classList.add('show');
+}
+function closePanel(){
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('skillPanel').classList.remove('show');
+  currentPanelContext=null;
+}
+
+// ══════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════
+render();
+
+</script>
+</body>
+</html>

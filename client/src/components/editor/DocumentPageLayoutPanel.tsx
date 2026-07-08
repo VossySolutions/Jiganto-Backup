@@ -56,7 +56,7 @@ export function DocumentPageLayoutPanel({
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold text-foreground">Page header &amp; footer</h3>
             <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-              Shown at the top and bottom of this document when viewing and exporting — like Confluence page chrome, scoped to this document.
+              Repeats at the top and bottom of <strong className="font-medium text-foreground">every page</strong> when exported to PDF or Word — like a running header/footer in Word, scoped to this document. Use the align buttons to place content on the left, centre, or right.
             </p>
             <p className="text-xs text-muted-foreground mt-2">
               This is separate from <strong className="font-medium text-foreground">On this page</strong> headings inside the document body.

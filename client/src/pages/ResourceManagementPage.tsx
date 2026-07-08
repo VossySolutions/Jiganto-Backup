@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { useToast } from "@/hooks/use-toast";
-import { Users, CreditCard, BarChart3, List, Network, AlertCircle } from "lucide-react";
+import { Users, CreditCard, BarChart3, List, AlertCircle } from "lucide-react";
 import { RateCardManager } from "@/components/crm/RateCardManager";
 import { CapacityBoard } from "@/components/crm/CapacityBoard";
 import { FinanceTimesheetsTab } from "@/components/finance/FinanceTimesheetsTab";
@@ -18,7 +18,6 @@ import { SkillsMatrixTab } from "@/components/resources/SkillsMatrixTab";
 import { ResourcesPipelineTab } from "@/components/resources/ResourcesPipelineTab";
 import { ResourcesAllocationsTab } from "@/components/resources/ResourcesAllocationsTab";
 import { ResourcesReportsTab } from "@/components/resources/ResourcesReportsTab";
-import { ResourcesOrgChartTab } from "@/components/resources/ResourcesOrgChartTab";
 import { ResourcesPageLoading, ResourcesErrorState } from "@/components/resources/ResourcesUi";
 import { useResourceScope } from "@/hooks/use-resource-scope";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -154,7 +153,7 @@ export default function ResourceManagementPage() {
     : resources.filter((r) => (scope.visibleResourceIds as number[]).includes(r.id));
 
   const allowedTabs = scope?.allowedTabs ?? [
-    "dashboard", "people", "skills", "allocations", "pipeline", "timesheets", "reports", "rate-cards", "org-chart",
+    "dashboard", "people", "skills", "allocations", "pipeline", "timesheets", "reports", "rate-cards",
   ];
 
   const showTab = (tab: string) => allowedTabs.includes(tab);
@@ -224,7 +223,6 @@ export default function ResourceManagementPage() {
               <TabsList className="h-11 sm:h-12 bg-transparent border-0 gap-0.5 sm:gap-1 inline-flex w-max min-w-full sm:min-w-0 flex-nowrap">
                 {showTab("dashboard") && <TabsTrigger value="dashboard" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-dashboard"><ResDashboardIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Dashboard</TabsTrigger>}
                 {showTab("people") && <TabsTrigger value="people" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-people"><ResPeopleIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> People</TabsTrigger>}
-                {showTab("org-chart") && <TabsTrigger value="org-chart" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-org-chart"><Network className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Org Chart</TabsTrigger>}
                 {showTab("skills") && <TabsTrigger value="skills" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-skills-matrix"><ResSkillsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Skills</TabsTrigger>}
                 {showTab("allocations") && <TabsTrigger value="allocations" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-capacity"><ResCapacityIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Capacity</TabsTrigger>}
                 {showTab("pipeline") && <TabsTrigger value="pipeline" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-pipeline"><ResPipelineIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Pipeline</TabsTrigger>}
@@ -272,16 +270,13 @@ export default function ResourceManagementPage() {
               />
             </TabsContent>
 
-            <TabsContent value="org-chart" className={tabContentClass}>
-              <ResourcesOrgChartTab onOpenProfile={(id) => { setProfileResourceId(id); setActiveTab("people"); }} />
-            </TabsContent>
-
             <TabsContent value="skills" className={tabContentClass}>
               <SkillsMatrixTab
                 resources={visibleResources}
                 skills={skillsList}
                 categories={skillCategoriesList}
                 resourceSkills={allResourceSkills}
+                allocations={allocations}
                 isLoading={skillsLoading || skillsCategoriesLoading || skillsMapLoading}
                 onOpenProfile={(r) => { setProfileResourceId(r.id); setActiveTab("people"); }}
                 initialGapPlanId={gapPlanId}

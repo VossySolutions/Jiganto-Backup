@@ -311,7 +311,6 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
   });
   const [planView, setPlanView] = useState<"table" | "timeline">("table");
   const [rows, setRows] = useState<ResourceRow[]>([]);
-  const [addRowOpen, setAddRowOpen] = useState(false);
   const [breakModalOpen, setBreakModalOpen] = useState(false);
   const [breakRowIdx, setBreakRowIdx] = useState(-1);
   const [rateCardOpen, setRateCardOpen] = useState(false);
@@ -389,9 +388,10 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
     }
   }, [allPlans, selectedPlanId, initialPlanId]);
 
-  useEffect(() => {
-    setSelectedPlanId(null);
-  }, [selectedOppId]);
+  const selectOpportunity = useCallback((oppId: number, planId?: number) => {
+    setSelectedPlanId(planId ?? null);
+    setSelectedOppId(oppId);
+  }, []);
 
   const { data: rateCards = [] } = useQuery<RateCard[]>({
     queryKey: ["/api/resources/rate-cards"],
@@ -442,7 +442,11 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
     onSuccess: (result: ResourcePlan) => {
       queryClient.invalidateQueries({ queryKey: [`/api/crm/opportunities/${selectedOppId}/resource-plans`] });
       queryClient.invalidateQueries({ queryKey: ["/api/crm/resource-plans/summaries"] });
-      if (result?.id) setSelectedPlanId(result.id);
+      if (result?.id) {
+        queryClient.setQueryData([`/api/crm/resource-plans/${result.id}`], result);
+        queryClient.invalidateQueries({ queryKey: [`/api/crm/resource-plans/${result.id}`] });
+        setSelectedPlanId(result.id);
+      }
       toast({ title: "Resource plan saved" });
     },
     onError: () => {
@@ -701,6 +705,31 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
     resetKey: `${selectedPlanId ?? "none"}|${planView}`,
   });
 
+  const addInlineRow = useCallback(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const end = (() => { const d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString().slice(0, 10); })();
+    setRows(prev => [
+      ...prev,
+      {
+        phase: prev.length > 0 ? prev[prev.length - 1].phase : "Discovery",
+        roleName: "",
+        resourceId: null,
+        namedResourceLabel: "",
+        startDate: prev.length > 0 ? prev[prev.length - 1].startDate : today,
+        endDate: prev.length > 0 ? prev[prev.length - 1].endDate : end,
+        daysPerWeek: 5,
+        dailyRate: 0,
+        discountPercent: 0,
+        status: "Tentative",
+        sortOrder: prev.length,
+        breaks: [],
+        weekOverrides: {},
+      },
+    ]);
+    setPlanView("table");
+    planRowsPagination.setPage(Number.MAX_SAFE_INTEGER);
+  }, [planRowsPagination]);
+
   const timelineRange = useMemo(() => {
     if (rows.length === 0) return { weekStarts: [], monthGroups: [] as Array<{ label: string; span: number }> };
     const allDates = rows.flatMap(r => [r.startDate, r.endDate]).filter(Boolean);
@@ -723,6 +752,45 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
       const stg = opp.stageId ? stages.find(s => s.id === opp.stageId) : null;
       return { opp, summary, acct, stg };
     };
+
+    const oppsWithoutPlansPanel = oppsWithoutPlans.length > 0 ? (
+      <div className="border rounded-xl overflow-hidden bg-card" data-testid="opps-without-plans">
+        <div className="px-4 py-3 border-b bg-muted/20 text-sm font-semibold flex items-center justify-between gap-2">
+          <span>Create a resource plan</span>
+          <span className="text-xs font-normal text-muted-foreground">
+            {oppsWithoutPlans.length} opportunit{oppsWithoutPlans.length === 1 ? "y" : "ies"} without a plan
+          </span>
+        </div>
+        <div className="divide-y max-h-[360px] overflow-auto">
+          {oppsWithoutPlans.map((opp) => {
+            const acct = opp.accountId ? accounts.find((a) => a.id === opp.accountId) : null;
+            const stg = opp.stageId ? stages.find((s) => s.id === opp.stageId) : null;
+            return (
+              <div key={opp.id} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/20">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{opp.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{acct?.name || "No account"} · {stg?.name || "No stage"}</p>
+                </div>
+                <Button
+                  size="sm"
+                  className="shrink-0 bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
+                  disabled={createEmptyPlanMutation.isPending && createEmptyPlanMutation.variables === opp.id}
+                  onClick={() => createEmptyPlanMutation.mutate(opp.id)}
+                  data-testid={`create-resource-plan-${opp.id}`}
+                >
+                  {createEmptyPlanMutation.isPending && createEmptyPlanMutation.variables === opp.id ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  Create Plan
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ) : null;
 
     return (
       <div className="space-y-5" data-testid="resource-plan-opp-selector">
@@ -848,44 +916,17 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
                 </div>
               )}
             </div>
-            {oppsWithoutPlans.length > 0 && (
-              <div className="border rounded-xl overflow-hidden bg-card">
-                <div className="px-4 py-3 border-b bg-muted/20 text-sm font-semibold">Create a resource plan</div>
-                <div className="divide-y max-h-[360px] overflow-auto">
-                  {oppsWithoutPlans.map((opp) => {
-                    const acct = opp.accountId ? accounts.find((a) => a.id === opp.accountId) : null;
-                    const stg = opp.stageId ? stages.find((s) => s.id === opp.stageId) : null;
-                    return (
-                      <div key={opp.id} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/20">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{opp.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{acct?.name || "No account"} · {stg?.name || "No stage"}</p>
-                        </div>
-                        <Button
-                          size="sm"
-                          className="shrink-0 bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
-                          disabled={createEmptyPlanMutation.isPending}
-                          onClick={() => createEmptyPlanMutation.mutate(opp.id)}
-                          data-testid={`create-resource-plan-${opp.id}`}
-                        >
-                          <Plus className="h-3.5 w-3.5 mr-1" />
-                          Create Plan
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {oppsWithoutPlansPanel}
           </div>
         ) : oppSelectorView === "tiles" ? (
+          <div className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[calc(100vh-340px)] overflow-auto pr-1">
             {filteredOppsWithPlans.map(({ opp, summary }) => {
               const { acct, stg } = renderOppSelectorRow({ opp, summary });
               return (
                 <button
                   key={opp.id}
-                  onClick={() => setSelectedOppId(opp.id)}
+                  onClick={() => selectOpportunity(opp.id, summary.primaryPlanId)}
                   className="text-left border rounded-lg p-4 hover:border-[#0ea5e9] hover:shadow-md transition-all bg-card group"
                   data-testid={`opp-select-${opp.id}`}
                 >
@@ -930,7 +971,10 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
               </div>
             )}
           </div>
+          {oppsWithoutPlansPanel}
+          </div>
         ) : (
+          <div className="space-y-5">
           <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden max-h-[calc(100vh-340px)] overflow-auto">
             <table className="w-full min-w-[880px]">
               <thead>
@@ -950,7 +994,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
                   return (
                     <tr
                       key={opp.id}
-                      onClick={() => setSelectedOppId(opp.id)}
+                      onClick={() => selectOpportunity(opp.id, summary.primaryPlanId)}
                       className="border-b border-border/20 hover:bg-muted/20 transition-colors cursor-pointer"
                       data-testid={`opp-select-row-${opp.id}`}
                     >
@@ -978,6 +1022,8 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
             {filteredOppsWithPlans.length === 0 && (
               <p className="text-center py-12 text-sm text-muted-foreground">No resource plans match the current filters</p>
             )}
+          </div>
+          {oppsWithoutPlansPanel}
           </div>
         )}
       </div>
@@ -1037,7 +1083,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
             <Bell className="h-3.5 w-3.5" />
             Notify RM
           </Button>
-          <Button size="sm" className="gap-1.5 bg-[#0ea5e9] hover:bg-[#0284c7]" onClick={() => setAddRowOpen(true)}
+          <Button size="sm" className="gap-1.5 bg-[#0ea5e9] hover:bg-[#0284c7]" onClick={addInlineRow}
             data-testid="button-add-row">
             <Plus className="h-3.5 w-3.5" />
             New Requirement
@@ -1150,7 +1196,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
               </button>
             )}
             <div className="ml-auto flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setAddRowOpen(true)}>
+              <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={addInlineRow}>
                 <Plus className="h-3 w-3" /> Add Row
               </Button>
               {rows.length > 1 && rows[0]?.startDate && rows[0]?.endDate && (
@@ -1383,7 +1429,16 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
                   {rows.length === 0 && (
                     <tr>
                       <td colSpan={14} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                        No resource requirements yet. Load a template or add a row.
+                        No resource requirements yet. Load a template or{" "}
+                        <button
+                          type="button"
+                          onClick={addInlineRow}
+                          className="font-semibold text-[#0ea5e9] hover:underline"
+                          data-testid="button-add-first-row"
+                        >
+                          add a row
+                        </button>
+                        .
                       </td>
                     </tr>
                   )}
@@ -1486,21 +1541,6 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
           }}
         />
       )}
-
-      {/* Add Row Modal */}
-      <AddRowModal
-        open={addRowOpen}
-        onClose={() => setAddRowOpen(false)}
-        skillsList={skillsList}
-        resourcesList={resourcesList}
-        rateCardItems={selectedRateCardId ? (rateCards.find(rc => rc.id === selectedRateCardId)?.items || []) : []}
-        existingPhases={Array.from(new Set(rows.map(r => r.phase)))}
-        onAdd={(row) => {
-          setRows(prev => [...prev, { ...row, sortOrder: prev.length }]);
-          setAddRowOpen(false);
-          toast({ title: "Resource requirement added" });
-        }}
-      />
 
       {/* Break Modal */}
       {breakModalOpen && breakRowIdx >= 0 && breakRowIdx < rows.length && (

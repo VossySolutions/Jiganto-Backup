@@ -39,7 +39,7 @@ export function ResourcesAllocationsTab({
 
   const [form, setForm] = useState({
     resourceId: "", projectId: "", projectName: "", allocationType: "confirmed",
-    daysPerWeek: "5", allocationPercentage: "100", role: "", startDate: "", endDate: "", notes: "",
+    daysPerWeek: "5", allocationPercentage: "100", role: "", projectReportsToId: "", startDate: "", endDate: "", notes: "",
   });
 
   const active = allocations.filter((a) => a.status === "active");
@@ -81,6 +81,7 @@ export function ResourcesAllocationsTab({
       daysPerWeek: form.daysPerWeek,
       allocationPercentage: form.allocationPercentage,
       role: form.role,
+      projectReportsToId: form.projectReportsToId ? Number(form.projectReportsToId) : null,
       startDate: form.startDate,
       endDate: form.endDate,
       notes: form.notes,
@@ -181,7 +182,20 @@ export function ResourcesAllocationsTab({
             </div>
             <div className="space-y-1.5"><FieldLabel>Days / week</FieldLabel><Input type="number" step="0.5" min="0" max="5" value={form.daysPerWeek} onChange={(e) => setForm({ ...form, daysPerWeek: e.target.value })} /></div>
           </FieldGrid>
-          <div className="space-y-1.5"><FieldLabel>Role on project</FieldLabel><Input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} placeholder="e.g. Lead developer" /></div>
+          <FieldGrid>
+            <div className="space-y-1.5"><FieldLabel>Role on project</FieldLabel><Input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} placeholder="e.g. Lead developer" /></div>
+            <div className="space-y-1.5"><FieldLabel>Reports to on project</FieldLabel>
+              <Select value={form.projectReportsToId || "none"} onValueChange={(v) => setForm({ ...form, projectReportsToId: v === "none" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None (project lead)</SelectItem>
+                  {resources.filter((r) => String(r.id) !== form.resourceId).map((r) => (
+                    <SelectItem key={r.id} value={String(r.id)}>{r.firstName} {r.lastName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </FieldGrid>
         </FormSection>
 
         <FormDivider />

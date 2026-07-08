@@ -3170,17 +3170,26 @@ export class DatabaseStorage implements IStorage {
     }> = [];
 
     for (const [opportunityId, oppPlans] of plansByOpp) {
-      const primaryPlan = oppPlans[0];
-      const planRows = rowsByPlan.get(primaryPlan.id) ?? [];
-      if (planRows.length === 0) continue;
+      // oppPlans is sorted newest-first; prefer whichever plan actually has
+      // staffing rows so a freshly-created empty scenario doesn't hide an
+      // existing populated plan for the same opportunity.
+      let primaryPlan = oppPlans[0];
+      let primaryRows = rowsByPlan.get(primaryPlan.id) ?? [];
+      for (const plan of oppPlans) {
+        const planRows = rowsByPlan.get(plan.id) ?? [];
+        if (planRows.length > primaryRows.length) {
+          primaryPlan = plan;
+          primaryRows = planRows;
+        }
+      }
       summaries.push({
         opportunityId,
         planCount: oppPlans.length,
         primaryPlanId: primaryPlan.id,
         primaryPlanName: primaryPlan.planName,
         currency: primaryPlan.currency || "GBP",
-        rowCount: planRows.length,
-        totalCost: planRows.reduce((sum, row) => sum + calcRowCost(row), 0),
+        rowCount: primaryRows.length,
+        totalCost: primaryRows.reduce((sum, row) => sum + calcRowCost(row), 0),
       });
     }
 
@@ -6828,6 +6837,7 @@ export class DatabaseStorage implements IStorage {
         daysPerWeek: resourceAllocations.daysPerWeek,
         hoursPerWeek: resourceAllocations.hoursPerWeek,
         role: resourceAllocations.role,
+        projectReportsToId: resourceAllocations.projectReportsToId,
         startDate: resourceAllocations.startDate,
         endDate: resourceAllocations.endDate,
         notes: resourceAllocations.notes,

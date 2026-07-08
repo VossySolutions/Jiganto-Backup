@@ -17,6 +17,17 @@ function makeTextRun(
   });
 }
 
+function getAlignment(
+  el: Element,
+  AlignmentType: DocxModule["AlignmentType"],
+): (typeof AlignmentType)[keyof typeof AlignmentType] | undefined {
+  const style = (el as HTMLElement).style?.textAlign || el.getAttribute("data-text-align") || "";
+  if (style === "center") return AlignmentType.CENTER;
+  if (style === "right") return AlignmentType.RIGHT;
+  if (style === "justify") return AlignmentType.JUSTIFIED;
+  return undefined;
+}
+
 function parseChildren(el: Element, DocxTextRun: DocxModule["TextRun"]): InstanceType<DocxModule["TextRun"]>[] {
   const runs: InstanceType<DocxModule["TextRun"]>[] = [];
   el.childNodes.forEach((node) => {
@@ -43,6 +54,7 @@ function htmlToDocxParagraphs(
   DocxTextRun: DocxModule["TextRun"],
   HeadingLevel: DocxModule["HeadingLevel"],
   BorderStyle: DocxModule["BorderStyle"],
+  AlignmentType: DocxModule["AlignmentType"],
 ): InstanceType<DocxModule["Paragraph"]>[] {
   const trimmed = html.trim();
   if (!trimmed) return [];
@@ -54,15 +66,16 @@ function htmlToDocxParagraphs(
   const parseNode = (node: Element) => {
     const tag = node.tagName?.toLowerCase();
     if (!tag) return;
-    if (tag === "h1") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_1 }));
-    else if (tag === "h2") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_2 }));
-    else if (tag === "h3") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_3 }));
-    else if (tag === "h4") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_4 }));
+    const alignment = getAlignment(node, AlignmentType);
+    if (tag === "h1") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_1, alignment }));
+    else if (tag === "h2") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_2, alignment }));
+    else if (tag === "h3") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_3, alignment }));
+    else if (tag === "h4") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_4, alignment }));
     else if (tag === "p" || tag === "div") {
       const children = parseChildren(node, DocxTextRun);
-      if (children.length) paragraphs.push(new DocxParagraph({ children }));
+      if (children.length) paragraphs.push(new DocxParagraph({ children, alignment }));
       else if (node.textContent?.trim()) {
-        paragraphs.push(new DocxParagraph({ children: [makeTextRun(DocxTextRun, { text: node.textContent.trim() })] }));
+        paragraphs.push(new DocxParagraph({ children: [makeTextRun(DocxTextRun, { text: node.textContent.trim() })], alignment }));
       }
     } else if (tag === "ul" || tag === "ol") {
       node.querySelectorAll("li").forEach((li) => {
@@ -106,6 +119,7 @@ function parseBodyToDocxChildren(
   HeadingLevel: DocxModule["HeadingLevel"],
   WidthType: DocxModule["WidthType"],
   BorderStyle: DocxModule["BorderStyle"],
+  AlignmentType: DocxModule["AlignmentType"],
 ): InstanceType<DocxModule["Paragraph"] | DocxModule["Table"]>[] {
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = contentHtml;
@@ -114,10 +128,11 @@ function parseBodyToDocxChildren(
   const parseNode = (node: Element) => {
     const tag = node.tagName?.toLowerCase();
     if (!tag) return;
-    if (tag === "h1") docChildren.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_1 }));
-    else if (tag === "h2") docChildren.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_2 }));
-    else if (tag === "h3") docChildren.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_3 }));
-    else if (tag === "h4") docChildren.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_4 }));
+    const alignment = getAlignment(node, AlignmentType);
+    if (tag === "h1") docChildren.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_1, alignment }));
+    else if (tag === "h2") docChildren.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_2, alignment }));
+    else if (tag === "h3") docChildren.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_3, alignment }));
+    else if (tag === "h4") docChildren.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_4, alignment }));
     else if (tag === "p" || tag === "div") {
       const callout = node.getAttribute("data-callout");
       const text = node.textContent || "";
@@ -128,7 +143,7 @@ function parseBodyToDocxChildren(
         }));
       } else {
         const children = parseChildren(node, DocxTextRun);
-        if (children.length) docChildren.push(new DocxParagraph({ children }));
+        if (children.length) docChildren.push(new DocxParagraph({ children, alignment }));
       }
     } else if (tag === "ul" || tag === "ol") {
       node.querySelectorAll("li").forEach((li) => {
@@ -189,6 +204,7 @@ export async function buildDocumentDocxBlob(opts: {
     TableCell: DocxTableCell,
     WidthType,
     BorderStyle,
+    AlignmentType,
     Header,
     Footer,
   } = await import("docx");
@@ -203,6 +219,7 @@ export async function buildDocumentDocxBlob(opts: {
     HeadingLevel,
     WidthType,
     BorderStyle,
+    AlignmentType,
   );
 
   const headerParagraphs = htmlToDocxParagraphs(
@@ -211,6 +228,7 @@ export async function buildDocumentDocxBlob(opts: {
     DocxTextRun,
     HeadingLevel,
     BorderStyle,
+    AlignmentType,
   );
   const footerParagraphs = htmlToDocxParagraphs(
     opts.footerHtml ?? "",
@@ -218,6 +236,7 @@ export async function buildDocumentDocxBlob(opts: {
     DocxTextRun,
     HeadingLevel,
     BorderStyle,
+    AlignmentType,
   );
 
   const doc = new DocxDocument({

@@ -14,9 +14,14 @@ import { Users, XCircle, Star, Plus, Trash2, AlertTriangle, FileText, Link2, Ext
 import { cn } from "@/lib/utils";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { getInitials, getProficiencyConfig, statusColors, PROFICIENCY_LEVELS } from "./constants";
+import { getInitials, getProficiencyConfig, statusColors, PROFICIENCY_LEVELS, getEffectiveStatus, daysUntilExpiry, getTypeConfig } from "./constants";
 import { ResourcesTabLoading, ResourcesErrorState } from "./ResourcesUi";
 import type { Resource, Skill, ResourceSkill } from "@shared/models/resources";
+
+function fmtDate(d?: string | Date | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 type ProfileDocument = {
   id: number;
@@ -39,13 +44,17 @@ type Props = {
   resource: Resource;
   skills: Skill[];
   resourceSkills: ResourceSkill[];
+  /** Full people list, used to resolve the line manager name. */
+  resources?: Resource[];
+  /** Show the project-reporting block (derived from allocations) in the overview. */
+  allocationsProjectView?: boolean;
   onClose: () => void;
   onAddSkill: (data: { resourceId: number; skillId: number; proficiencyLevel: string; skillLevel: number }) => void;
   onRemoveSkill: (id: number) => void;
   onEdit?: () => void;
 };
 
-export function ResourceProfilePanel({ resource, skills, resourceSkills, onClose, onAddSkill, onRemoveSkill, onEdit }: Props) {
+export function ResourceProfilePanel({ resource, skills, resourceSkills, resources = [], allocationsProjectView = true, onClose, onAddSkill, onRemoveSkill, onEdit }: Props) {
   const { toast } = useToast();
   const [newSkillId, setNewSkillId] = useState("");
   const [newLevel, setNewLevel] = useState("3");
@@ -81,9 +90,10 @@ export function ResourceProfilePanel({ resource, skills, resourceSkills, onClose
     },
   });
 
-  const contractEnding = resource.endDate && resource.personType === "contractor"
-    ? (new Date(resource.endDate).getTime() - Date.now()) / 86400000
-    : null;
+  const expiryStatus = getEffectiveStatus(resource.status, resource.endDate);
+  const daysLeft = daysUntilExpiry(resource.endDate);
+  const typeConfig = getTypeConfig(resource.personType);
+  const lineManager = resource.reportsToId ? resources.find((r) => r.id === resource.reportsToId) ?? null : null;
 
   const availableSkills = skills.filter((s) => !resourceSkills.some((rs) => rs.skillId === s.id));
 
@@ -111,9 +121,14 @@ export function ResourceProfilePanel({ resource, skills, resourceSkills, onClose
               <p className="text-sm text-muted-foreground">{resource.jobTitle ?? "No title"}</p>
               <div className="flex gap-2 mt-1 flex-wrap">
                 <Badge className={cn("text-xs", statusColors[resource.status ?? "active"])}>{resource.status ?? "active"}</Badge>
-                {resource.personType && <Badge variant="outline" className="text-xs capitalize">{resource.personType}</Badge>}
-                {contractEnding != null && contractEnding <= 30 && contractEnding > 0 && (
-                  <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" /> Contract ends in {Math.ceil(contractEnding)}d</Badge>
+                {resource.personType && (
+                  <Badge variant="outline" className="text-xs" style={{ borderColor: typeConfig.dot, color: typeConfig.text }}>{typeConfig.label}</Badge>
+                )}
+                {expiryStatus === "expiring" && daysLeft != null && (
+                  <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" /> Expires in {daysLeft}d</Badge>
+                )}
+                {expiryStatus === "expired" && (
+                  <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" /> Expired {fmtDate(resource.endDate)}</Badge>
                 )}
               </div>
             </div>
@@ -146,15 +161,35 @@ export function ResourceProfilePanel({ resource, skills, resourceSkills, onClose
                 <div><p className="text-muted-foreground">Cost rate</p><p>{resource.costRate ? `£${resource.costRate}/day` : "—"}</p></div>
                 <div><p className="text-muted-foreground">Right to work</p><p className="capitalize">{resource.rightToWorkStatus ?? "incomplete"}</p></div>
                 <div><p className="text-muted-foreground">Jiganto user</p><p>{resource.userId ? "Yes" : "No"}</p></div>
+                <div><p className="text-muted-foreground">Start date</p><p>{fmtDate(resource.startDate)}</p></div>
+                <div><p className="text-muted-foreground">Expiry date</p><p className={cn(expiryStatus === "expired" && "text-red-600 font-medium", expiryStatus === "expiring" && "text-amber-600 font-medium")}>{fmtDate(resource.endDate)}</p></div>
               </div>
-              {(profile?.allocations?.length ?? 0) > 0 && (
-                <div>
-                  <p className="text-sm font-medium mb-2">Current allocations</p>
-                  {profile!.allocations.slice(0, 3).map((a) => (
-                    <div key={a.id} className="text-sm p-2 rounded bg-muted/40 mb-1">{a.projectName} · {a.role}</div>
-                  ))}
+
+              {/* Reporting: line manager (org) vs project reporting */}
+              <div className="rounded-lg border p-3 space-y-2.5">
+                <p className="text-sm font-medium flex items-center gap-1.5"><Users className="h-4 w-4" /> Reporting</p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Line manager</span>
+                  <span className="font-medium">{lineManager ? `${lineManager.firstName} ${lineManager.lastName}` : "—"}</span>
                 </div>
-              )}
+                {allocationsProjectView && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Project reporting</p>
+                    {(profile?.allocations?.length ?? 0) === 0 ? (
+                      <p className="text-xs text-muted-foreground">Not assigned to any project</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {profile!.allocations.map((a) => (
+                          <div key={a.id} className="flex items-center justify-between rounded bg-muted/40 px-2 py-1.5 text-sm">
+                            <span className="font-medium truncate">{a.projectName ?? "Project"}</span>
+                            <span className="text-xs text-muted-foreground shrink-0 ml-2">{a.role ?? "—"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             <TabsContent value="skills" className="mt-4 space-y-3">

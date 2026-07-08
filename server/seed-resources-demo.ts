@@ -136,12 +136,12 @@ async function main() {
   const primaryUserId = userRows[0].id;
   const contractorUserId = userRows[1]?.id ?? primaryUserId;
 
-  // --- People with org hierarchy ---
+  // --- People with org hierarchy (5 resource types + expiry-driven status) ---
   const peopleSpec = [
     {
       key: "sam",
       firstName: "Sam", lastName: "Patel", email: "sam.patel@demo.local",
-      jobTitle: "Delivery Director", department: "Delivery", personType: "employee",
+      jobTitle: "Delivery Director", department: "Management", personType: "employee",
       userId: null as string | null, reportsToId: null as number | null, fte: "1.0",
     },
     {
@@ -157,17 +157,51 @@ async function main() {
       userId: null, reportsToKey: "sam", fte: "1.0",
     },
     {
+      key: "taylor",
+      firstName: "Taylor", lastName: "Brooks", email: "taylor.brooks@demo.local",
+      jobTitle: "Developer", department: "Engineering", personType: "employee",
+      userId: null, reportsToKey: "alex", fte: "1.0",
+    },
+    {
       key: "riley",
       firstName: "Riley", lastName: "Chen", email: "riley.chen@contractor.demo",
       jobTitle: "UX Contractor", department: "Delivery", personType: "contractor",
       userId: contractorUserId, reportsToKey: "alex", fte: "0.8",
-      endDate: new Date(Date.now() + 45 * 86400000),
+      endDate: new Date(Date.now() + 60 * 86400000),
     },
     {
-      key: "taylor",
-      firstName: "Taylor", lastName: "Brooks", email: "taylor.brooks@demo.local",
-      jobTitle: "Developer", department: "Engineering", personType: "employee",
+      key: "marcus",
+      firstName: "Marcus", lastName: "Chen", email: "marcus.chen@hsbc.com",
+      jobTitle: "Chief Digital Officer", department: "Delivery", personType: "customer",
+      userId: null, reportsToKey: "sam", fte: "0.2",
+      endDate: new Date(Date.now() + 84 * 86400000),
+    },
+    {
+      key: "maria",
+      firstName: "Maria", lastName: "Koch", email: "m.koch@partner-firm.de",
+      jobTitle: "SAP FICO Specialist", department: "Delivery", personType: "partner",
       userId: null, reportsToKey: "sam", fte: "1.0",
+      endDate: new Date(Date.now() + 176 * 86400000),
+    },
+    {
+      key: "david",
+      firstName: "David", lastName: "Lee", email: "d.lee@associate.demo",
+      jobTitle: "Solutions Architect", department: "Delivery", personType: "associate",
+      userId: null, reportsToKey: "sam", fte: "0.5",
+      endDate: new Date(Date.now() + 12 * 86400000),
+    },
+    {
+      key: "laura",
+      firstName: "Laura", lastName: "Novak", email: "l.novak@demo.local",
+      jobTitle: "Project Manager", department: "Delivery", personType: "employee",
+      userId: null, reportsToKey: "sam", fte: "1.0",
+    },
+    {
+      key: "expast",
+      firstName: "Ex-Contractor", lastName: "Past", email: "past@expired.demo",
+      jobTitle: "Data Engineer", department: "Engineering", personType: "contractor",
+      userId: null, reportsToKey: "alex", fte: "1.0",
+      endDate: new Date(Date.now() - 190 * 86400000),
     },
   ] as const;
 
@@ -203,7 +237,9 @@ async function main() {
       dailyHours: "8",
       weeklyCapacityHours: "40",
       rightToWorkStatus: spec.personType === "contractor" ? "verified" : "complete",
-      startDate: new Date(Date.now() - 180 * 86400000),
+      startDate: "endDate" in spec && spec.endDate && spec.endDate.getTime() < Date.now()
+        ? new Date(spec.endDate.getTime() - 300 * 86400000)
+        : new Date(Date.now() - 180 * 86400000),
       endDate: "endDate" in spec ? spec.endDate : null,
       location: "London, UK",
       timeZone: "Europe/London",
@@ -357,7 +393,9 @@ async function main() {
   }
 
   console.log("\nResources demo seed complete.");
-  console.log("  • Org chart: Sam → Alex, Jordan, Taylor; Alex → Riley (contractor)");
+  console.log("  • Types: employee, contractor, customer staff, partner, associate");
+  console.log("  • Org chart: Sam → Alex, Jordan, Marcus, Maria, David, Laura; Alex → Taylor, Riley, Ex-Contractor");
+  console.log("  • Status demo: David (associate) expiring <30d, Ex-Contractor expired");
   console.log("  • Contractor login → auto-redirects to Resources → Timesheets");
   console.log("  • Manager bulk approval: /modules/resource-mgmt?tab=timesheets&timesheetView=approval");
   process.exit(0);

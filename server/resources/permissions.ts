@@ -28,6 +28,9 @@ export interface ResourceScope {
 
 const ADMIN_ROLES: PlatformRole[] = ["jiganto_staff", "si_super_admin"];
 
+/** External resource types are scoped to their own dashboard + timesheets. */
+const EXTERNAL_PERSON_TYPES = ["contractor", "customer", "partner", "associate"];
+
 export async function resolveResourceScope(
   userId: string,
   tenantId: number,
@@ -40,7 +43,7 @@ export async function resolveResourceScope(
     return managerScope(own?.id ?? null);
   }
 
-  if (own && (own.personType === "contractor" || own.personType === "customer")) {
+  if (own && EXTERNAL_PERSON_TYPES.includes(own.personType ?? "")) {
     return {
       role: "self",
       ownResourceId: own.id,

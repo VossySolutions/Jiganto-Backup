@@ -48,7 +48,7 @@ export function FolderPageLayoutDialog({
             </div>
             <div className="min-w-0">
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Like Confluence space defaults — applied to <strong className="font-medium text-foreground">new documents</strong> in this folder.
+                Applied to <strong className="font-medium text-foreground">new documents</strong> in this folder, and repeats on every page when exported to PDF or Word.
                 Documents without their own header/footer inherit these when opened.
               </p>
             </div>
