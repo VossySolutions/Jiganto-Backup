@@ -487,14 +487,14 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         )}
         data-testid={`lead-row-${lead.id}`}
       >
-        <td className="px-3 py-3 w-10">
+        <td className="px-3 py-2.5 align-middle w-10">
           <Checkbox
             checked={selectedIds.has(lead.id)}
             onCheckedChange={() => toggleSelectOne(lead.id)}
             data-testid={`checkbox-lead-${lead.id}`}
           />
         </td>
-        <td className="px-4 py-3 whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
           <div className="flex items-center gap-3">
             <div
               className="h-9 w-9 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0"
@@ -516,7 +516,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
           </div>
         </td>
         {isColVisible("contact") && (
-        <td className="px-4 py-3 whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
           <CrmInlineEditCell
             value={`${lead.firstName} ${lead.lastName}`.trim()}
             onSave={(v) => {
@@ -530,7 +530,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         </td>
         )}
         {isColVisible("title") && (
-        <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap text-sm text-muted-foreground">
           <CrmInlineEditCell
             value={lead.title || ""}
             displayValue={lead.title || "—"}
@@ -540,7 +540,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         </td>
         )}
         {isColVisible("status") && (
-        <td className="px-4 py-3 whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
           <CrmInlineEditSelect
             value={lead.status}
             displayValue={<StatusDot status={lead.status} />}
@@ -552,7 +552,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         </td>
         )}
         {isColVisible("score") && (
-        <td className="px-4 py-3 whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
           <CrmInlineEditCell
             value={String(lead.score ?? "")}
             type="number"
@@ -563,12 +563,12 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         </td>
         )}
         {isColVisible("rating") && (
-        <td className="px-4 py-3 whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
           <RatingBadge rating={lead.rating} />
         </td>
         )}
         {isColVisible("source") && (
-        <td className="px-4 py-3 whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
           <CrmInlineEditSelect
             value={lead.source || ""}
             displayValue={<span className="text-sm capitalize">{lead.source || "—"}</span>}
@@ -579,7 +579,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         </td>
         )}
         {isColVisible("owner") && (
-        <td className="px-4 py-3 whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
           <div className="flex items-center gap-2">
             <div
               className="h-7 w-7 rounded-full flex items-center justify-center text-white font-semibold text-[10px] shrink-0"
@@ -599,12 +599,12 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         </td>
         )}
         {isColVisible("created") && (
-        <td className="px-4 py-3 whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
           <span className="text-sm text-muted-foreground">{formatDate(lead.createdAt)}</span>
         </td>
         )}
         <CrmCustomFieldTableCells fields={customFields} customData={lead.customData} />
-        <td className="px-4 py-3 text-right whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle text-right whitespace-nowrap">
           <div className="flex items-center justify-end gap-1">
             {lead.status !== "converted" && (
               <Button
@@ -631,7 +631,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => deleteMutation.mutate(lead.id)}
-                  className="text-red-600 focus:text-red-600"
+                  className="text-red-600 focus:text-red-700"
                   data-testid={`action-delete-lead-${lead.id}`}
                 >
                   <Trash2 className="h-3.5 w-3.5 mr-2" />
@@ -919,27 +919,27 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
       </div>
 
       <div className="rounded-xl border border-border/60 bg-card overflow-x-auto w-full" data-testid="leads-table">
-        <table className="w-full">
+        <table className="w-full text-sm text-gray-700 dark:text-foreground">
           <thead>
-            <tr className="border-b border-border/60">
-              <th className="px-3 py-3 w-10">
+            <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+              <th className="px-3 py-2.5 align-middle w-10">
                 <Checkbox
                   checked={filteredLeads.length > 0 && selectedIds.size === filteredLeads.length}
                   onCheckedChange={toggleSelectAll}
                   data-testid="checkbox-select-all"
                 />
               </th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Company</th>
-              {isColVisible("contact") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Contact</th>}
-              {isColVisible("title") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Title</th>}
-              {isColVisible("status") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Status</th>}
-              {isColVisible("score") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Score</th>}
-              {isColVisible("rating") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Rating</th>}
-              {isColVisible("source") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Source</th>}
-              {isColVisible("owner") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Owner</th>}
-              {isColVisible("created") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Created</th>}
+              <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Company</th>
+              {isColVisible("contact") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Contact</th>}
+              {isColVisible("title") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Title</th>}
+              {isColVisible("status") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Status</th>}
+              {isColVisible("score") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Score</th>}
+              {isColVisible("rating") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Rating</th>}
+              {isColVisible("source") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Source</th>}
+              {isColVisible("owner") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Owner</th>}
+              {isColVisible("created") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Created</th>}
               <CrmCustomFieldTableHeaders fields={customFields} />
-              <th className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Actions</th>
+              <th className="px-3 py-2.5 text-right align-middle font-semibold whitespace-nowrap">Actions</th>
             </tr>
           </thead>
           <tbody>

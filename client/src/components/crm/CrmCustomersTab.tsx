@@ -524,20 +524,20 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
       <tr
         key={acc.id}
         className={cn(
-          "border-b border-border/30 hover:bg-muted/30 transition-colors cursor-pointer",
+          "border-b border-border/40 hover:bg-muted/30 transition-colors cursor-pointer",
           selectedIds.has(acc.id) && "bg-blue-50/50 dark:bg-blue-950/20"
         )}
         onClick={() => onSelectAccount(acc)}
         data-testid={`customer-row-${acc.id}`}
       >
-        <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+        <td className="px-3 py-2.5 align-middle w-10" onClick={(e) => e.stopPropagation()}>
           <Checkbox
             checked={selectedIds.has(acc.id)}
             onCheckedChange={() => toggleSelectOne(acc.id)}
             data-testid={`checkbox-customer-${acc.id}`}
           />
         </td>
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "name"))} style={getCellStyle(acc.id, "name")} onClick={(e) => e.stopPropagation()}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(acc.id, "name"))} style={getCellStyle(acc.id, "name")} onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-3">
             <div
               className="h-9 w-9 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0"
@@ -554,12 +554,12 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
           </div>
         </td>
         {isColVisible("segment") && (
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "segment"))} style={getCellStyle(acc.id, "segment")}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(acc.id, "segment"))} style={getCellStyle(acc.id, "segment")}>
           <span className="text-sm" style={{ color: segColor }}>{acc.segment}</span>
         </td>
         )}
         {isColVisible("industry") && (
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "industry"))} style={getCellStyle(acc.id, "industry")} onClick={(e) => e.stopPropagation()}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(acc.id, "industry"))} style={getCellStyle(acc.id, "industry")} onClick={(e) => e.stopPropagation()}>
           <CrmInlineEditCell
             value={acc.industry || ""}
             displayValue={acc.industry || "—"}
@@ -570,7 +570,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
         </td>
         )}
         {isColVisible("status") && (
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "type"))} style={getCellStyle(acc.id, "type")} onClick={(e) => e.stopPropagation()}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(acc.id, "type"))} style={getCellStyle(acc.id, "type")} onClick={(e) => e.stopPropagation()}>
           <CrmInlineEditSelect
             value={acc.type || "prospect"}
             displayValue={
@@ -588,7 +588,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
         </td>
         )}
         {isColVisible("revenue") && (
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(acc.id, "annualRevenue"))} style={getCellStyle(acc.id, "annualRevenue")} onClick={(e) => e.stopPropagation()}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(acc.id, "annualRevenue"))} style={getCellStyle(acc.id, "annualRevenue")} onClick={(e) => e.stopPropagation()}>
           <CrmInlineEditCell
             value={acc.annualRevenue || ""}
             displayValue={formatCurrency(acc.annualRevenue)}
@@ -600,7 +600,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
         </td>
         )}
         {isColVisible("email") && (
-        <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
           <CrmInlineEditCell
             value={acc.email || ""}
             displayValue={acc.email || "—"}
@@ -611,7 +611,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
         </td>
         )}
         {isColVisible("phone") && (
-        <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
           <CrmInlineEditCell
             value={acc.phone || ""}
             displayValue={acc.phone || "—"}
@@ -622,12 +622,12 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
         </td>
         )}
         {isColVisible("created") && (
-        <td className="px-4 py-3 whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
           <span className="text-sm text-muted-foreground">{new Date(acc.createdAt).getFullYear()}</span>
         </td>
         )}
         <CrmCustomFieldTableCells fields={customFields} customData={acc.customData} />
-        <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+        <td className="px-3 py-2.5 align-middle text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0" data-testid={`button-actions-customer-${acc.id}`}>
@@ -641,7 +641,7 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => deleteMutation.mutate(acc.id)}
-                className="text-red-600 focus:text-red-600"
+                className="text-red-600 focus:text-red-700"
                 data-testid={`action-delete-customer-${acc.id}`}
               >
                 <Trash2 className="h-3.5 w-3.5 mr-2" />
@@ -1132,43 +1132,43 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
 
       {viewMode === "table" && <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden w-full" data-testid="customers-table">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full text-sm text-gray-700 dark:text-foreground">
             <thead>
-              <tr className="border-b border-border/40 bg-muted/20">
-                <th className="px-4 py-3 w-10">
+              <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                <th className="px-3 py-2.5 align-middle w-10">
                   <Checkbox
                     checked={allSelected}
                     onCheckedChange={toggleSelectAll}
                     data-testid="checkbox-select-all-customers"
                   />
                 </th>
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("name")}>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("name")}>
                   Account {sortField === "name" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
                 {isColVisible("segment") && (
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("segment")}>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("segment")}>
                   Segment {sortField === "segment" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
                 )}
                 {isColVisible("industry") && (
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("industry")}>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("industry")}>
                   Industry {sortField === "industry" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
                 )}
-                {isColVisible("status") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Status</th>}
+                {isColVisible("status") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Status</th>}
                 {isColVisible("revenue") && (
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("revenue")}>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("revenue")}>
                   Annual Revenue (ARR) {sortField === "revenue" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
                 )}
-                {isColVisible("email") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Email</th>}
-                {isColVisible("phone") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Phone</th>}
+                {isColVisible("email") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Email</th>}
+                {isColVisible("phone") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Phone</th>}
                 {isColVisible("created") && (
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("created")}>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("created")}>
                   Since {sortField === "created" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
                 )}
-                <th className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Actions</th>
+                <th className="px-3 py-2.5 text-right align-middle font-semibold whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>

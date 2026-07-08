@@ -189,24 +189,24 @@ export function ImportTemplatesScreen() {
                   Preview (first {Math.min(parsed.length, 5)} of {parsed.length} rows)
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-sm text-gray-700 dark:text-foreground">
                     <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left px-3 py-2 font-semibold">Title</th>
-                        <th className="text-left px-3 py-2 font-semibold">Priority</th>
-                        <th className="text-left px-3 py-2 font-semibold">Type</th>
-                        <th className="text-left px-3 py-2 font-semibold">Tags</th>
-                        <th className="text-left px-3 py-2 font-semibold">Est. (min)</th>
+                      <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Title</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Priority</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Type</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Tags</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Est. (min)</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border/50">
+                    <tbody>
                       {parsed.slice(0, 5).map((row, i) => (
-                        <tr key={i} className="hover:bg-muted/20">
-                          <td className="px-3 py-2 max-w-[260px] truncate">{row.title}</td>
-                          <td className="px-3 py-2 capitalize">{row.priority}</td>
-                          <td className="px-3 py-2 capitalize">{row.caseType}</td>
-                          <td className="px-3 py-2">{row.tags}</td>
-                          <td className="px-3 py-2">{row.estimatedDuration}</td>
+                        <tr key={i} className="border-b border-border/40 hover:bg-muted/30">
+                          <td className="px-3 py-2.5 align-middle max-w-[260px] truncate">{row.title}</td>
+                          <td className="px-3 py-2.5 align-middle capitalize">{row.priority}</td>
+                          <td className="px-3 py-2.5 align-middle capitalize">{row.caseType}</td>
+                          <td className="px-3 py-2.5 align-middle">{row.tags}</td>
+                          <td className="px-3 py-2.5 align-middle">{row.estimatedDuration}</td>
                         </tr>
                       ))}
                     </tbody>

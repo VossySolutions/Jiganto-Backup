@@ -445,27 +445,27 @@ export function TestNavigatorScreen() {
               <div>
                 <h3 className="font-semibold text-sm mb-3">Execution History</h3>
                 <div className="border border-border rounded-xl overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/50 border-b border-border">
-                      <tr>
-                        <th className="text-left px-4 py-2 font-semibold">Result</th>
-                        <th className="text-left px-4 py-2 font-semibold">Executed By</th>
-                        <th className="text-left px-4 py-2 font-semibold">Date</th>
-                        <th className="text-left px-4 py-2 font-semibold">Comment</th>
+                  <table className="w-full text-sm text-gray-700 dark:text-foreground">
+                    <thead>
+                      <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Result</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Executed By</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Date</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Comment</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border/50">
+                    <tbody>
                       {historyPagination.paginatedItems.map(r => (
-                        <tr key={r.id} className="hover:bg-muted/20">
-                          <td className="px-4 py-2">
+                        <tr key={r.id} className="border-b border-border/40 hover:bg-muted/30">
+                          <td className="px-3 py-2.5 align-middle">
                             <div className="flex items-center gap-1.5">
                               {STATUS_ICON[r.status ?? "not_run"] ?? STATUS_ICON.not_run}
                               <span className="capitalize">{(r.status ?? "not_run").replace("_", " ")}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-2">{r.executedBy ?? "—"}</td>
-                          <td className="px-4 py-2 font-mono">{r.executedAt ? new Date(r.executedAt).toLocaleDateString() : "—"}</td>
-                          <td className="px-4 py-2 max-w-[200px] truncate text-muted-foreground">{r.comment ?? "—"}</td>
+                          <td className="px-3 py-2.5 align-middle">{r.executedBy ?? "—"}</td>
+                          <td className="px-3 py-2.5 align-middle font-mono">{r.executedAt ? new Date(r.executedAt).toLocaleDateString() : "—"}</td>
+                          <td className="px-3 py-2.5 align-middle max-w-[200px] truncate text-muted-foreground">{r.comment ?? "—"}</td>
                         </tr>
                       ))}
                     </tbody>

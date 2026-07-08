@@ -368,34 +368,34 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
           {/* Matrix */}
           <Card className="rounded-xl border-border/50 overflow-hidden">
           <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 340px)" }}>
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full border-collapse text-sm text-gray-700 dark:text-foreground">
               <thead>
-                <tr className="border-b bg-muted/40">
-                  <th className="sticky left-0 top-0 z-30 min-w-[210px] bg-muted p-3 text-left text-xs font-semibold text-muted-foreground">Name</th>
-                  <th className="sticky top-0 z-20 min-w-[96px] bg-muted p-3 text-left text-xs font-semibold text-muted-foreground">Type</th>
-                  <th className="sticky top-0 z-20 min-w-[90px] bg-muted p-3 text-left text-xs font-semibold text-muted-foreground">Dept</th>
-                  <th className="sticky top-0 z-20 min-w-[92px] border-r bg-muted p-3 text-left text-xs font-semibold text-muted-foreground">Avail.</th>
+                <tr className="border-b bg-gray-100 dark:bg-muted/80">
+                  <th className="sticky left-0 top-0 z-30 min-w-[210px] bg-gray-100 dark:bg-muted/80 p-3 text-left text-xs font-semibold text-gray-700 dark:text-foreground">Name</th>
+                  <th className="sticky top-0 z-20 min-w-[96px] bg-gray-100 dark:bg-muted/80 p-3 text-left text-xs font-semibold text-gray-700 dark:text-foreground">Type</th>
+                  <th className="sticky top-0 z-20 min-w-[90px] bg-gray-100 dark:bg-muted/80 p-3 text-left text-xs font-semibold text-gray-700 dark:text-foreground">Dept</th>
+                  <th className="sticky top-0 z-20 min-w-[92px] border-r bg-gray-100 dark:bg-muted/80 p-3 text-left text-xs font-semibold text-gray-700 dark:text-foreground">Avail.</th>
                   {visibleGroups.map((g) => (
                     <th key={g.id} colSpan={expanded.has(g.id) ? g.skills.length : 1} onClick={() => setExpanded((prev) => { const n = new Set(prev); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; })}
-                      className="sticky top-0 z-20 cursor-pointer border-l bg-muted p-2 text-center text-[11px] font-bold uppercase tracking-wide"
+                      className="sticky top-0 z-20 cursor-pointer border-l bg-gray-100 dark:bg-muted/80 p-2 text-center text-[11px] font-bold uppercase tracking-wide"
                       style={{ color: g.color, borderBottom: `2px solid ${g.color}` }}
                       title={`${expanded.has(g.id) ? "Collapse" : "Expand"} ${g.label}`}>
                       {g.label} {expanded.has(g.id) ? <ChevronUp className="inline h-3 w-3" /> : <ChevronDown className="inline h-3 w-3" />}
                     </th>
                   ))}
                 </tr>
-                <tr className="border-b bg-muted/40">
-                  <th className="sticky left-0 top-[41px] z-30 bg-muted" />
-                  <th className="sticky top-[41px] z-20 bg-muted" colSpan={3} />
+                <tr className="border-b bg-gray-100 dark:bg-muted/80">
+                  <th className="sticky left-0 top-[41px] z-30 bg-gray-100 dark:bg-muted/80" />
+                  <th className="sticky top-[41px] z-20 bg-gray-100 dark:bg-muted/80" colSpan={3} />
                   {visibleGroups.map((g) => expanded.has(g.id)
                     ? g.skills.map((s) => (
-                      <th key={s.id} className="sticky top-[41px] z-10 h-[92px] min-w-[38px] max-w-[38px] border-l bg-muted align-bottom" title={`${s.name}${childIds.has(s.id) ? " (module)" : ""}`}>
+                      <th key={s.id} className="sticky top-[41px] z-10 h-[92px] min-w-[38px] max-w-[38px] border-l bg-gray-100 dark:bg-muted/80 align-bottom" title={`${s.name}${childIds.has(s.id) ? " (module)" : ""}`}>
                         <div className="mx-auto flex h-[88px] items-end justify-center pb-1">
-                          <span className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap text-[10px] font-semibold text-muted-foreground">{childIds.has(s.id) ? "› " : ""}{s.name}</span>
+                          <span className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap text-[10px] font-semibold text-gray-700 dark:text-foreground">{childIds.has(s.id) ? "› " : ""}{s.name}</span>
                         </div>
                       </th>
                     ))
-                    : <th key={g.id} className="sticky top-[41px] z-10 min-w-[60px] border-l bg-muted p-2 text-center text-[10px] font-bold text-muted-foreground">Best</th>)}
+                    : <th key={g.id} className="sticky top-[41px] z-10 min-w-[60px] border-l bg-gray-100 dark:bg-muted/80 p-2 text-center text-[10px] font-bold text-gray-700 dark:text-foreground">Best</th>)}
                 </tr>
               </thead>
               <tbody>

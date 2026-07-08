@@ -191,10 +191,11 @@ export default function SettingsClientWorkspaceGrants({ tenantId, clients }: Pro
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
                       onClick={() => deleteMut.mutate(g.id)}
                       data-testid={`delete-grant-${g.id}`}
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>

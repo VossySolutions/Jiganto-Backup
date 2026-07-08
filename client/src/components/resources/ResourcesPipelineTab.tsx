@@ -79,30 +79,30 @@ export function ResourcesPipelineTab({ onViewPlan, onGapAnalysis }: Props) {
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm text-gray-700 dark:text-foreground">
             <thead>
-              <tr className="border-b bg-muted/30">
-                <th className="text-left p-3">Opportunity</th>
-                <th className="text-left p-3">Client</th>
-                <th className="text-left p-3">Stage</th>
-                <th className="text-left p-3">Close</th>
-                <th className="text-left p-3">Value</th>
-                <th className="text-left p-3">Plan</th>
-                <th className="text-left p-3">Skills</th>
-                <th className="text-right p-3">Actions</th>
+              <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Opportunity</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Client</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Stage</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Close</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Value</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Plan</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Skills</th>
+                <th className="px-3 py-2.5 text-right align-middle font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pagination.paginatedItems.map((o) => (
-                <tr key={o.id} className="border-b hover:bg-muted/20">
-                  <td className="p-3 font-medium">{o.name}</td>
-                  <td className="p-3 text-muted-foreground">{o.client}</td>
-                  <td className="p-3"><Badge variant="outline">{o.stage}</Badge></td>
-                  <td className="p-3">{o.expectedCloseDate ? new Date(o.expectedCloseDate).toLocaleDateString() : "—"}</td>
-                  <td className="p-3">{o.totalValue ? `£${Number(o.totalValue).toLocaleString()}` : "—"}</td>
-                  <td className="p-3">{o.hasResourcePlan ? <Badge>Yes</Badge> : <Badge variant="secondary">No</Badge>}</td>
-                  <td className="p-3 text-muted-foreground max-w-[140px] truncate">{o.skillsSummary || "—"}</td>
-                  <td className="p-3 text-right">
+                <tr key={o.id} className="border-b border-border/40 hover:bg-muted/30">
+                  <td className="px-3 py-2.5 align-middle font-medium">{o.name}</td>
+                  <td className="px-3 py-2.5 align-middle text-muted-foreground">{o.client}</td>
+                  <td className="px-3 py-2.5 align-middle"><Badge variant="outline">{o.stage}</Badge></td>
+                  <td className="px-3 py-2.5 align-middle">{o.expectedCloseDate ? new Date(o.expectedCloseDate).toLocaleDateString() : "—"}</td>
+                  <td className="px-3 py-2.5 align-middle">{o.totalValue ? `£${Number(o.totalValue).toLocaleString()}` : "—"}</td>
+                  <td className="px-3 py-2.5 align-middle">{o.hasResourcePlan ? <Badge>Yes</Badge> : <Badge variant="secondary">No</Badge>}</td>
+                  <td className="px-3 py-2.5 align-middle text-muted-foreground max-w-[140px] truncate">{o.skillsSummary || "—"}</td>
+                  <td className="px-3 py-2.5 align-middle text-right">
                     <div className="flex justify-end gap-1">
                       {o.planId && (
                         <>

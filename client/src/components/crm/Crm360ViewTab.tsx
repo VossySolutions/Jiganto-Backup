@@ -41,10 +41,6 @@ import {
   RecordLinkButton,
   StageBadge,
   SubTabPanel,
-  TABLE_CELL,
-  TABLE_HEAD,
-  TABLE_HEAD_RIGHT,
-  TABLE_ROW,
 } from "@/lib/crm-360-layout";
 import type {
   CrmAccountDetail,
@@ -1223,32 +1219,32 @@ export function Crm360ViewTab({
                 <EmptySubTabState message="No leads associated with this account" />
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px]">
+                  <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[640px]">
                     <thead>
-                      <tr className="border-b border-border/30">
-                        <th className={TABLE_HEAD}>Name</th>
-                        <th className={TABLE_HEAD}>Email</th>
-                        <th className={TABLE_HEAD}>Source</th>
-                        <th className={TABLE_HEAD}>Status</th>
-                        <th className={TABLE_HEAD_RIGHT}>Score</th>
+                      <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Name</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Email</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Source</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
+                        <th className="px-3 py-2.5 text-right align-middle font-semibold">Score</th>
                       </tr>
                     </thead>
                     <tbody>
                       {accountLeads.map((lead) => (
-                        <tr key={lead.id} className={TABLE_ROW} data-testid={`360-lead-${lead.id}`}>
-                          <td className={cn(TABLE_CELL, "font-medium")}>{lead.firstName} {lead.lastName}</td>
-                          <td className={TABLE_CELL}>
+                        <tr key={lead.id} className="border-b border-border/40 hover:bg-muted/30 transition-colors" data-testid={`360-lead-${lead.id}`}>
+                          <td className={cn("px-3 py-2.5 align-middle", "font-medium")}>{lead.firstName} {lead.lastName}</td>
+                          <td className={"px-3 py-2.5 align-middle"}>
                             {lead.email ? (
                               <a href={`mailto:${lead.email}`} className="text-primary hover:underline">{lead.email}</a>
                             ) : "—"}
                           </td>
-                          <td className={cn(TABLE_CELL, "text-muted-foreground")}>{lead.source || "—"}</td>
-                          <td className={TABLE_CELL}>
+                          <td className={cn("px-3 py-2.5 align-middle", "text-muted-foreground")}>{lead.source || "—"}</td>
+                          <td className={"px-3 py-2.5 align-middle"}>
                             <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full capitalize", lead.status === "new" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : lead.status === "converted" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300")}>
                               {lead.status}
                             </span>
                           </td>
-                          <td className={cn(TABLE_CELL, "text-right tabular-nums")}>{lead.score ?? "—"}</td>
+                          <td className={cn("px-3 py-2.5 align-middle", "text-right tabular-nums")}>{lead.score ?? "—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1273,32 +1269,32 @@ export function Crm360ViewTab({
               ) : (
                 <>
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[720px]">
+                    <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[720px]">
                       <thead>
-                        <tr className="border-b border-border/30">
-                          <th className={TABLE_HEAD}>Deal</th>
-                          <th className={TABLE_HEAD}>Stage</th>
-                          <th className={TABLE_HEAD_RIGHT}>Value</th>
-                          <th className={TABLE_HEAD_RIGHT}>Probability</th>
-                          <th className={TABLE_HEAD}>Close date</th>
+                        <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                          <th className="px-3 py-2.5 text-left align-middle font-semibold">Deal</th>
+                          <th className="px-3 py-2.5 text-left align-middle font-semibold">Stage</th>
+                          <th className="px-3 py-2.5 text-right align-middle font-semibold">Value</th>
+                          <th className="px-3 py-2.5 text-right align-middle font-semibold">Probability</th>
+                          <th className="px-3 py-2.5 text-left align-middle font-semibold">Close date</th>
                         </tr>
                       </thead>
                       <tbody>
                         {oppsPagination.paginatedItems.map((opp) => {
                           const stage = stages.find((s) => s.id === opp.stageId);
                           return (
-                            <tr key={opp.id} className={TABLE_ROW} data-testid={`360-opp-row-${opp.id}`}>
-                              <td className={TABLE_CELL}>
+                            <tr key={opp.id} className="border-b border-border/40 hover:bg-muted/30 transition-colors" data-testid={`360-opp-row-${opp.id}`}>
+                              <td className={"px-3 py-2.5 align-middle"}>
                                 <RecordLinkButton onClick={() => openEditOpportunity(opp)} testId={`360-opp-row-link-${opp.id}`}>
                                   {opp.name}
                                 </RecordLinkButton>
                               </td>
-                              <td className={TABLE_CELL}>
+                              <td className={"px-3 py-2.5 align-middle"}>
                                 <StageBadge name={stage?.name || "Unknown"} color={stage?.color} />
                               </td>
-                              <td className={cn(TABLE_CELL, "text-right font-semibold tabular-nums")}>{formatCompact(parseFloat(opp.amount || "0"))}</td>
-                              <td className={cn(TABLE_CELL, "text-right text-muted-foreground tabular-nums")}>{opp.probability ?? 0}%</td>
-                              <td className={cn(TABLE_CELL, "text-muted-foreground")}>{format360ShortDate(opp.expectedCloseDate)}</td>
+                              <td className={cn("px-3 py-2.5 align-middle", "text-right font-semibold tabular-nums")}>{formatCompact(parseFloat(opp.amount || "0"))}</td>
+                              <td className={cn("px-3 py-2.5 align-middle", "text-right text-muted-foreground tabular-nums")}>{opp.probability ?? 0}%</td>
+                              <td className={cn("px-3 py-2.5 align-middle", "text-muted-foreground")}>{format360ShortDate(opp.expectedCloseDate)}</td>
                             </tr>
                           );
                         })}
@@ -1367,14 +1363,14 @@ export function Crm360ViewTab({
                 <EmptySubTabState message="No contracts for this account" />
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[720px]">
+                  <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[720px]">
                     <thead>
-                      <tr className="border-b border-border/30">
-                        <th className={TABLE_HEAD}>Contract</th>
-                        <th className={TABLE_HEAD}>Type</th>
-                        <th className={TABLE_HEAD}>Period</th>
-                        <th className={TABLE_HEAD}>Status</th>
-                        <th className={TABLE_HEAD_RIGHT}>Value</th>
+                      <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Contract</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Type</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Period</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
+                        <th className="px-3 py-2.5 text-right align-middle font-semibold">Value</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1386,16 +1382,16 @@ export function Crm360ViewTab({
                         };
                         const sc = statusColors[c.status || "draft"] || statusColors.draft;
                         return (
-                          <tr key={c.id} className={TABLE_ROW} data-testid={`360-contract-${c.id}`}>
-                            <td className={cn(TABLE_CELL, "font-medium")}>{c.name}</td>
-                            <td className={cn(TABLE_CELL, "text-muted-foreground capitalize")}>{c.type || "—"}</td>
-                            <td className={cn(TABLE_CELL, "text-muted-foreground text-xs")}>
+                          <tr key={c.id} className="border-b border-border/40 hover:bg-muted/30 transition-colors" data-testid={`360-contract-${c.id}`}>
+                            <td className={cn("px-3 py-2.5 align-middle", "font-medium")}>{c.name}</td>
+                            <td className={cn("px-3 py-2.5 align-middle", "text-muted-foreground capitalize")}>{c.type || "—"}</td>
+                            <td className={cn("px-3 py-2.5 align-middle", "text-muted-foreground text-xs")}>
                               {format360ShortDate(c.startDate)} – {format360ShortDate(c.endDate)}
                             </td>
-                            <td className={TABLE_CELL}>
+                            <td className={"px-3 py-2.5 align-middle"}>
                               <span className="text-[10px] font-medium px-2 py-0.5 rounded-full capitalize" style={{ backgroundColor: sc.bg, color: sc.color }}>{c.status || "draft"}</span>
                             </td>
-                            <td className={cn(TABLE_CELL, "text-right font-semibold tabular-nums")}>{c.value ? formatCompact(parseFloat(c.value)) : "—"}</td>
+                            <td className={cn("px-3 py-2.5 align-middle", "text-right font-semibold tabular-nums")}>{c.value ? formatCompact(parseFloat(c.value)) : "—"}</td>
                           </tr>
                         );
                       })}
@@ -1420,14 +1416,14 @@ export function Crm360ViewTab({
                 <EmptySubTabState message="No contacts linked to this account" />
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[720px]">
+                  <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[720px]">
                     <thead>
-                      <tr className="border-b border-border/30">
-                        <th className={TABLE_HEAD}>Name</th>
-                        <th className={TABLE_HEAD}>Title</th>
-                        <th className={TABLE_HEAD}>Email</th>
-                        <th className={TABLE_HEAD}>Phone</th>
-                        <th className={TABLE_HEAD}>Role</th>
+                      <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Name</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Title</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Email</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Phone</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Role</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1435,20 +1431,20 @@ export function Crm360ViewTab({
                         const name = `${contact.firstName} ${contact.lastName}`;
                         const roleInfo = getRoleInfo(contact.role);
                         return (
-                          <tr key={contact.id} className={TABLE_ROW} data-testid={`360-contact-row-${contact.id}`}>
-                            <td className={TABLE_CELL}>
+                          <tr key={contact.id} className="border-b border-border/40 hover:bg-muted/30 transition-colors" data-testid={`360-contact-row-${contact.id}`}>
+                            <td className={"px-3 py-2.5 align-middle"}>
                               <RecordLinkButton onClick={() => openEditContact(contact)} testId={`360-contact-link-${contact.id}`}>
                                 {name}
                               </RecordLinkButton>
                             </td>
-                            <td className={cn(TABLE_CELL, "text-muted-foreground")}>{contact.title || "—"}</td>
-                            <td className={TABLE_CELL}>
+                            <td className={cn("px-3 py-2.5 align-middle", "text-muted-foreground")}>{contact.title || "—"}</td>
+                            <td className={"px-3 py-2.5 align-middle"}>
                               {contact.email ? (
                                 <a href={`mailto:${contact.email}`} className="text-primary hover:underline">{contact.email}</a>
                               ) : "—"}
                             </td>
-                            <td className={cn(TABLE_CELL, "text-muted-foreground tabular-nums")}>{contact.phone || "—"}</td>
-                            <td className={TABLE_CELL}>
+                            <td className={cn("px-3 py-2.5 align-middle", "text-muted-foreground tabular-nums")}>{contact.phone || "—"}</td>
+                            <td className={"px-3 py-2.5 align-middle"}>
                               <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: roleInfo.bg, color: roleInfo.color }}>{roleInfo.label}</span>
                             </td>
                           </tr>
@@ -1689,22 +1685,22 @@ export function Crm360ViewTab({
                 <EmptySubTabState message="No linked projects" />
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[480px]">
+                  <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[480px]">
                     <thead>
-                      <tr className="border-b border-border/30">
-                        <th className={TABLE_HEAD}>Project</th>
-                        <th className={TABLE_HEAD}>Status</th>
+                      <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Project</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
                       </tr>
                     </thead>
                     <tbody>
                       {accountProjects.map((p) => (
-                        <tr key={p.id} className={TABLE_ROW} data-testid={`360-project-${p.id}`}>
-                          <td className={TABLE_CELL}>
+                        <tr key={p.id} className="border-b border-border/40 hover:bg-muted/30 transition-colors" data-testid={`360-project-${p.id}`}>
+                          <td className={"px-3 py-2.5 align-middle"}>
                             <ModuleNavLink href={`/modules/projects/${p.id}`} testId={`360-project-link-${p.id}`}>
                               {p.name}
                             </ModuleNavLink>
                           </td>
-                          <td className={TABLE_CELL}>
+                          <td className={"px-3 py-2.5 align-middle"}>
                             <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted capitalize">{p.status || "—"}</span>
                           </td>
                         </tr>
@@ -1728,28 +1724,28 @@ export function Crm360ViewTab({
                 <EmptySubTabState message="No open tasks" />
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px]">
+                  <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[640px]">
                     <thead>
-                      <tr className="border-b border-border/30">
-                        <th className={TABLE_HEAD}>Task</th>
-                        <th className={TABLE_HEAD}>Status</th>
-                        <th className={TABLE_HEAD}>Priority</th>
-                        <th className={TABLE_HEAD}>Due</th>
+                      <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Task</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Priority</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Due</th>
                       </tr>
                     </thead>
                     <tbody>
                       {accountTasks.map((t) => (
-                        <tr key={t.id} className={TABLE_ROW} data-testid={`360-task-${t.id}`}>
-                          <td className={cn(TABLE_CELL, "font-medium")}>{t.subject}</td>
-                          <td className={TABLE_CELL}>
+                        <tr key={t.id} className="border-b border-border/40 hover:bg-muted/30 transition-colors" data-testid={`360-task-${t.id}`}>
+                          <td className={cn("px-3 py-2.5 align-middle", "font-medium")}>{t.subject}</td>
+                          <td className={"px-3 py-2.5 align-middle"}>
                             <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted capitalize">{t.status || "open"}</span>
                           </td>
-                          <td className={TABLE_CELL}>
+                          <td className={"px-3 py-2.5 align-middle"}>
                             {t.priority ? (
                               <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full capitalize", t.priority === "high" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400")}>{t.priority}</span>
                             ) : "—"}
                           </td>
-                          <td className={cn(TABLE_CELL, "text-muted-foreground text-xs")}>{format360ShortDate(t.dueDate)}</td>
+                          <td className={cn("px-3 py-2.5 align-middle", "text-muted-foreground text-xs")}>{format360ShortDate(t.dueDate)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1771,21 +1767,21 @@ export function Crm360ViewTab({
                 <EmptySubTabState message="No support tickets linked to this account" />
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[720px]">
+                  <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[720px]">
                     <thead>
-                      <tr className="border-b border-border/30">
-                        <th className={TABLE_HEAD}>Subject</th>
-                        <th className={TABLE_HEAD}>Source</th>
-                        <th className={TABLE_HEAD}>Status</th>
-                        <th className={TABLE_HEAD}>Priority</th>
-                        <th className={TABLE_HEAD}>Created</th>
-                        <th className={TABLE_HEAD}>Due</th>
+                      <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Subject</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Source</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Priority</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Created</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Due</th>
                       </tr>
                     </thead>
                     <tbody>
                       {accountTickets.map((ticket) => (
-                        <tr key={`${ticket.source}-${ticket.id}`} className={TABLE_ROW} data-testid={`360-ticket-${ticket.id}`}>
-                          <td className={TABLE_CELL}>
+                        <tr key={`${ticket.source}-${ticket.id}`} className="border-b border-border/40 hover:bg-muted/30 transition-colors" data-testid={`360-ticket-${ticket.id}`}>
+                          <td className={"px-3 py-2.5 align-middle"}>
                             {ticket.source === "activity" ? (
                               <ModuleNavLink href={`/modules/help-desk?ticket=${ticket.id}`} testId={`360-ticket-link-${ticket.id}`}>
                                 {ticket.subject}
@@ -1796,17 +1792,17 @@ export function Crm360ViewTab({
                               </ModuleNavLink>
                             )}
                           </td>
-                          <td className={cn(TABLE_CELL, "text-muted-foreground text-xs")}>{ticket.source === "task" ? "Help desk task" : "Ticket activity"}</td>
-                          <td className={TABLE_CELL}>
+                          <td className={cn("px-3 py-2.5 align-middle", "text-muted-foreground text-xs")}>{ticket.source === "task" ? "Help desk task" : "Ticket activity"}</td>
+                          <td className={"px-3 py-2.5 align-middle"}>
                             <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 capitalize">{ticket.status || "open"}</span>
                           </td>
-                          <td className={TABLE_CELL}>
+                          <td className={"px-3 py-2.5 align-middle"}>
                             {ticket.priority ? (
                               <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full capitalize", ticket.priority === "high" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400")}>{ticket.priority}</span>
                             ) : "—"}
                           </td>
-                          <td className={cn(TABLE_CELL, "text-muted-foreground text-xs")}>{format360ShortDate(ticket.createdAt)}</td>
-                          <td className={cn(TABLE_CELL, "text-muted-foreground text-xs")}>{format360ShortDate(ticket.dueDate)}</td>
+                          <td className={cn("px-3 py-2.5 align-middle", "text-muted-foreground text-xs")}>{format360ShortDate(ticket.createdAt)}</td>
+                          <td className={cn("px-3 py-2.5 align-middle", "text-muted-foreground text-xs")}>{format360ShortDate(ticket.dueDate)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1828,28 +1824,28 @@ export function Crm360ViewTab({
                 <EmptySubTabState message="No documents in this account's workspace" />
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[720px]">
+                  <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[720px]">
                     <thead>
-                      <tr className="border-b border-border/30">
-                        <th className={TABLE_HEAD}>Document</th>
-                        <th className={TABLE_HEAD}>Type</th>
-                        <th className={TABLE_HEAD}>Owner</th>
-                        <th className={TABLE_HEAD}>Updated</th>
-                        <th className={TABLE_HEAD}>Status</th>
+                      <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Document</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Type</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Owner</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Updated</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
                       </tr>
                     </thead>
                     <tbody>
                       {accountDocuments.map((doc) => (
-                        <tr key={doc.id} className={TABLE_ROW} data-testid={`360-document-${doc.id}`}>
-                          <td className={TABLE_CELL}>
+                        <tr key={doc.id} className="border-b border-border/40 hover:bg-muted/30 transition-colors" data-testid={`360-document-${doc.id}`}>
+                          <td className={"px-3 py-2.5 align-middle"}>
                             <ModuleNavLink href={`/modules/documents?document=${doc.id}`} testId={`360-document-link-${doc.id}`}>
                               {doc.title}
                             </ModuleNavLink>
                           </td>
-                          <td className={cn(TABLE_CELL, "text-muted-foreground capitalize")}>{doc.type || "Document"}</td>
-                          <td className={cn(TABLE_CELL, "text-muted-foreground")}>{doc.ownerName || "—"}</td>
-                          <td className={cn(TABLE_CELL, "text-muted-foreground text-xs")}>{format360ShortDate(doc.updatedAt)}</td>
-                          <td className={TABLE_CELL}>
+                          <td className={cn("px-3 py-2.5 align-middle", "text-muted-foreground capitalize")}>{doc.type || "Document"}</td>
+                          <td className={cn("px-3 py-2.5 align-middle", "text-muted-foreground")}>{doc.ownerName || "—"}</td>
+                          <td className={cn("px-3 py-2.5 align-middle", "text-muted-foreground text-xs")}>{format360ShortDate(doc.updatedAt)}</td>
+                          <td className={"px-3 py-2.5 align-middle"}>
                             <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted capitalize">{doc.status || "draft"}</span>
                           </td>
                         </tr>

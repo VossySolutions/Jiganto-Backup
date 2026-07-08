@@ -80,29 +80,29 @@ export function PhaseComparisonScreen() {
                 <span className="font-medium text-sm">Cycle Detail by Phase</span>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[640px]">
-                  <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
-                    <tr>
-                      <th className="text-left px-4 py-2">Phase</th>
-                      <th className="text-left px-4 py-2">Cycle</th>
-                      <th className="text-left px-4 py-2">Status</th>
-                      <th className="text-right px-4 py-2">Completion</th>
-                      <th className="text-right px-4 py-2">Pass Rate</th>
-                      <th className="text-right px-4 py-2">Failed</th>
-                      <th className="text-right px-4 py-2">Defects</th>
+                <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[640px]">
+                  <thead>
+                    <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                      <th className="px-3 py-2.5 text-left align-middle font-semibold">Phase</th>
+                      <th className="px-3 py-2.5 text-left align-middle font-semibold">Cycle</th>
+                      <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
+                      <th className="px-3 py-2.5 text-right align-middle font-semibold">Completion</th>
+                      <th className="px-3 py-2.5 text-right align-middle font-semibold">Pass Rate</th>
+                      <th className="px-3 py-2.5 text-right align-middle font-semibold">Failed</th>
+                      <th className="px-3 py-2.5 text-right align-middle font-semibold">Defects</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody>
                     {phases.flatMap((phase) =>
                       phase.cycles.map((cycle) => (
-                        <tr key={cycle.id} className="hover:bg-muted/20">
-                          <td className="px-4 py-2 text-xs font-mono">{phaseLabel(phase.phase)}</td>
-                          <td className="px-4 py-2 font-medium">{cycle.name}</td>
-                          <td className="px-4 py-2 capitalize text-xs">{cycle.status?.replace("_", " ")}</td>
-                          <td className="px-4 py-2 text-right font-mono">{cycle.metrics.completionPct}%</td>
-                          <td className="px-4 py-2 text-right font-mono">{cycle.metrics.passRatePct}%</td>
-                          <td className="px-4 py-2 text-right font-mono text-red-600">{cycle.metrics.failed}</td>
-                          <td className="px-4 py-2 text-right font-mono">{cycle.openDefects}</td>
+                        <tr key={cycle.id} className="border-b border-border/40 hover:bg-muted/30">
+                          <td className="px-3 py-2.5 align-middle text-xs font-mono">{phaseLabel(phase.phase)}</td>
+                          <td className="px-3 py-2.5 align-middle font-medium">{cycle.name}</td>
+                          <td className="px-3 py-2.5 align-middle capitalize text-xs">{cycle.status?.replace("_", " ")}</td>
+                          <td className="px-3 py-2.5 align-middle text-right font-mono">{cycle.metrics.completionPct}%</td>
+                          <td className="px-3 py-2.5 align-middle text-right font-mono">{cycle.metrics.passRatePct}%</td>
+                          <td className="px-3 py-2.5 align-middle text-right font-mono text-red-600">{cycle.metrics.failed}</td>
+                          <td className="px-3 py-2.5 align-middle text-right font-mono">{cycle.openDefects}</td>
                         </tr>
                       )),
                     )}

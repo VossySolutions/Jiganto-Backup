@@ -321,51 +321,51 @@ export function TestCasesScreen() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider font-mono">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium">Title</th>
-                  <th className="text-left px-4 py-3 font-medium">Suite</th>
-                  <th className="text-left px-4 py-3 font-medium">Priority</th>
-                  <th className="text-left px-4 py-3 font-medium">Status</th>
-                  <th className="text-left px-4 py-3 font-medium">Type</th>
-                  <th className="text-left px-4 py-3 font-medium">Tags</th>
-                  <th className="px-4 py-3" />
+            <table className="w-full text-sm text-gray-700 dark:text-foreground">
+              <thead>
+                <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Title</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Suite</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Priority</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Type</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Tags</th>
+                  <th className="px-3 py-2.5 text-right align-middle font-semibold" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody>
                 {pagination.paginatedItems.map(tc => (
-                  <tr key={tc.id} className="hover:bg-muted/30 group" data-testid={`case-row-${tc.id}`}>
-                    <td className="px-4 py-3 font-medium max-w-[240px]">
+                  <tr key={tc.id} className="border-b border-border/40 hover:bg-muted/30 group" data-testid={`case-row-${tc.id}`}>
+                    <td className="px-3 py-2.5 align-middle font-medium max-w-[240px]">
                       <div className="truncate">{tc.title}</div>
                       {tc.description && <div className="text-xs text-muted-foreground truncate">{tc.description}</div>}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs">{suiteName(tc.suiteId ?? null)}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5 align-middle text-muted-foreground text-xs">{suiteName(tc.suiteId ?? null)}</td>
+                    <td className="px-3 py-2.5 align-middle">
                       <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", priorityColors[tc.priority ?? "medium"])}>
                         {tc.priority}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5 align-middle">
                       <div className="flex items-center gap-1.5">
                         {statusIcons[tc.status ?? "draft"]}
                         <span className="text-xs capitalize">{tc.status}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground capitalize">{tc.caseType}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground capitalize">{tc.caseType}</td>
+                    <td className="px-3 py-2.5 align-middle">
                       <div className="flex flex-wrap gap-1">
                         {((tc.tags as string[]) ?? []).slice(0, 3).map(tag => (
                           <span key={tag} className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">{tag}</span>
                         ))}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5 align-middle">
                       <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 justify-end">
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(tc)} data-testid={`button-edit-case-${tc.id}`}>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40" onClick={() => openEdit(tc)} data-testid={`button-edit-case-${tc.id}`}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteMutation.mutate(tc.id)} data-testid={`button-delete-case-${tc.id}`}>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={() => deleteMutation.mutate(tc.id)} data-testid={`button-delete-case-${tc.id}`}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>

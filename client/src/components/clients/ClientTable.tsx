@@ -245,7 +245,7 @@ export function ClientTable({
                           {canDelete && !isPendingDelete && (
                             <DropdownMenuItem
                               onClick={() => onDelete(client)}
-                              className="gap-2 cursor-pointer text-destructive focus:text-destructive"
+                              className="gap-2 cursor-pointer text-red-600 focus:text-red-700"
                             >
                               <Trash2 className="h-4 w-4" /> Delete client
                             </DropdownMenuItem>

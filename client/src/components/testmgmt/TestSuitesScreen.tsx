@@ -60,10 +60,10 @@ function SuiteRow({
           <span className="text-xs text-muted-foreground truncate max-w-[200px] hidden sm:block">{suite.description}</span>
         )}
         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1">
-          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onEdit(suite)} data-testid={`suite-edit-${suite.id}`}>
+          <Button size="icon" variant="ghost" className="h-6 w-6 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40" onClick={() => onEdit(suite)} data-testid={`suite-edit-${suite.id}`}>
             <Pencil className="h-3 w-3" />
           </Button>
-          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => onDelete(suite.id)} data-testid={`suite-delete-${suite.id}`}>
+          <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={() => onDelete(suite.id)} data-testid={`suite-delete-${suite.id}`}>
             <Trash2 className="h-3 w-3" />
           </Button>
         </div>

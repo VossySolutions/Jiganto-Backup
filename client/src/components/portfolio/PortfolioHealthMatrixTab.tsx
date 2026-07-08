@@ -219,14 +219,14 @@ export function PortfolioHealthMatrixTab() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-sm min-w-[900px]">
+          <table className="w-full text-sm min-w-[900px] text-gray-700 dark:text-foreground">
             <thead>
-              <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
+              <tr className="border-b border-border/60 bg-gray-100 dark:bg-muted/80 text-xs text-gray-700 dark:text-foreground">
                 <th className="p-3 text-left w-8" />
-                <th className="p-3 text-left">Project</th>
-                <th className="p-3 text-left">Client</th>
-                <th className="p-3 text-left">PM</th>
-                {visibleDims.map((d) => <th key={d.key} className="p-3 text-center">{d.label}</th>)}
+                <th className="p-3 text-left font-semibold">Project</th>
+                <th className="p-3 text-left font-semibold">Client</th>
+                <th className="p-3 text-left font-semibold">PM</th>
+                {visibleDims.map((d) => <th key={d.key} className="p-3 text-center font-semibold">{d.label}</th>)}
               </tr>
             </thead>
             <tbody>

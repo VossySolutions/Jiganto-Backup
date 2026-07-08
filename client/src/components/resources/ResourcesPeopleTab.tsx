@@ -531,19 +531,19 @@ export function ResourcesPeopleTab({
       ) : (
         <Card className="rounded-xl border-border/50 overflow-hidden">
           <CardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-sm min-w-[960px]">
+            <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[960px]">
               <thead>
-                <tr className="border-b bg-muted/30">
-                  <th className="p-3 text-left">Name</th>
-                  <th className="p-3 text-left">Type</th>
-                  <th className="p-3 text-left">Role / Department</th>
-                  <th className="p-3 text-left">Manager</th>
-                  <th className="p-3 text-left">Skills</th>
-                  <th className="p-3 text-left">Start date</th>
-                  <th className="p-3 text-left">Expiry date</th>
-                  <th className="p-3 text-left">Util %</th>
-                  <th className="p-3 text-left">Status</th>
-                  <th className="p-3 text-right">Actions</th>
+                <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Name</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Type</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Role / Department</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Manager</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Skills</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Start date</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Expiry date</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Util %</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
+                  <th className="px-3 py-2.5 text-right align-middle font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -553,8 +553,8 @@ export function ResourcesPeopleTab({
                   const eff = getEffectiveStatus(r.status, r.endDate);
                   const daysLeft = daysUntilExpiry(r.endDate);
                   return (
-                    <tr key={r.id} className="border-b cursor-pointer hover:bg-muted/30" onClick={() => openProfile(r)}>
-                      <td className="p-3">
+                    <tr key={r.id} className="border-b border-border/40 cursor-pointer hover:bg-muted/30" onClick={() => openProfile(r)}>
+                      <td className="px-3 py-2.5 align-middle">
                         <div className="flex items-center gap-2.5">
                           <PersonAvatar r={r} className="h-8 w-8" />
                           <div className="min-w-0">
@@ -563,10 +563,10 @@ export function ResourcesPeopleTab({
                           </div>
                         </div>
                       </td>
-                      <td className="p-3"><TypeBadge type={r.personType} /></td>
-                      <td className="p-3"><p className="font-medium">{r.jobTitle ?? "—"}</p><p className="text-xs text-muted-foreground">{r.department ?? "—"}</p></td>
-                      <td className="p-3 text-xs text-muted-foreground">{managerName(r)}</td>
-                      <td className="p-3">
+                      <td className="px-3 py-2.5 align-middle"><TypeBadge type={r.personType} /></td>
+                      <td className="px-3 py-2.5 align-middle"><p className="font-medium">{r.jobTitle ?? "—"}</p><p className="text-xs text-muted-foreground">{r.department ?? "—"}</p></td>
+                      <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground">{managerName(r)}</td>
+                      <td className="px-3 py-2.5 align-middle">
                         <button
                           type="button"
                           className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary hover:bg-primary hover:text-primary-foreground"
@@ -576,8 +576,8 @@ export function ResourcesPeopleTab({
                           <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">{rSkills.length}</span>
                         </button>
                       </td>
-                      <td className="p-3 text-xs tabular-nums">{fmtDate(r.startDate)}</td>
-                      <td className="p-3 text-xs tabular-nums">
+                      <td className="px-3 py-2.5 align-middle text-xs tabular-nums">{fmtDate(r.startDate)}</td>
+                      <td className="px-3 py-2.5 align-middle text-xs tabular-nums">
                         {r.endDate ? (
                           <span
                             className={cn("inline-flex items-center gap-1 font-medium", eff === "expired" && "text-red-600", eff === "expiring" && "text-amber-600")}
@@ -587,11 +587,11 @@ export function ResourcesPeopleTab({
                           </span>
                         ) : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="p-3"><UtilBar util={util} /></td>
-                      <td className="p-3"><StatusBadge status={eff} /></td>
-                      <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        {canManage && <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>}
-                        {canManage && <Button variant="ghost" size="icon" onClick={() => onDelete(r.id)}><Trash2 className="h-4 w-4" /></Button>}
+                      <td className="px-3 py-2.5 align-middle"><UtilBar util={util} /></td>
+                      <td className="px-3 py-2.5 align-middle"><StatusBadge status={eff} /></td>
+                      <td className="px-3 py-2.5 align-middle text-right" onClick={(e) => e.stopPropagation()}>
+                        {canManage && <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>}
+                        {canManage && <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={() => onDelete(r.id)}><Trash2 className="h-4 w-4" /></Button>}
                       </td>
                     </tr>
                   );

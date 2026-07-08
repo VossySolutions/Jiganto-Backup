@@ -642,27 +642,27 @@ export function AccountDetailPanel({ account, onClose, expanded = false, onToggl
                     </div>
                   )}
                   <div className={cn(contactsExpanded && "flex-1 overflow-auto")}>
-                  <table className={cn("w-full text-sm", contactsExpanded || expanded ? "min-w-full" : "min-w-[520px]")}>
+                  <table className={cn("w-full text-sm text-gray-700 dark:text-foreground", contactsExpanded || expanded ? "min-w-full" : "min-w-[520px]")}>
                     <thead>
-                      <tr className="border-b border-border/40 bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
-                        <th className="text-left font-semibold px-4 py-3">Name</th>
-                        <th className="text-left font-semibold px-4 py-3">Title</th>
-                        <th className="text-left font-semibold px-4 py-3">Email</th>
-                        <th className="text-left font-semibold px-4 py-3">Phone</th>
-                        <th className="text-left font-semibold px-4 py-3">Role</th>
+                      <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Name</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Title</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Email</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Phone</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Role</th>
                       </tr>
                     </thead>
                     <tbody>
                       {contacts.map((contact) => (
-                        <tr key={contact.id} className="border-b border-border/30 last:border-0 hover:bg-muted/20" data-testid={`contact-row-${contact.id}`}>
-                          <td className="px-4 py-3 font-medium whitespace-nowrap">
+                        <tr key={contact.id} className="border-b border-border/40 last:border-0 hover:bg-muted/30" data-testid={`contact-row-${contact.id}`}>
+                          <td className="px-3 py-2.5 align-middle font-medium whitespace-nowrap">
                             {contact.firstName} {contact.lastName}
                             {contact.isPrimary && <Badge variant="secondary" className="text-[10px] ml-2">Primary</Badge>}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground">{contact.title || "—"}</td>
-                          <td className={cn("px-4 py-3 text-muted-foreground", contactsExpanded || expanded ? "whitespace-nowrap" : "truncate max-w-[160px]")}>{contact.email || "—"}</td>
-                          <td className={cn("px-4 py-3 text-muted-foreground tabular-nums", contactsExpanded || expanded ? "whitespace-nowrap" : "truncate max-w-[140px]")}>{contact.phone || contact.mobile || "—"}</td>
-                          <td className="px-4 py-3 capitalize text-muted-foreground">{(contact.role || "contact").replace(/_/g, " ")}</td>
+                          <td className="px-3 py-2.5 align-middle text-muted-foreground">{contact.title || "—"}</td>
+                          <td className={cn("px-3 py-2.5 align-middle text-muted-foreground", contactsExpanded || expanded ? "whitespace-nowrap" : "truncate max-w-[160px]")}>{contact.email || "—"}</td>
+                          <td className={cn("px-3 py-2.5 align-middle text-muted-foreground tabular-nums", contactsExpanded || expanded ? "whitespace-nowrap" : "truncate max-w-[140px]")}>{contact.phone || contact.mobile || "—"}</td>
+                          <td className="px-3 py-2.5 align-middle capitalize text-muted-foreground">{(contact.role || "contact").replace(/_/g, " ")}</td>
                         </tr>
                       ))}
                     </tbody>

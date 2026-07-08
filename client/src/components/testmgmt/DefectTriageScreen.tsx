@@ -76,34 +76,34 @@ export function DefectTriageScreen() {
         </div>
 
         <div className="flex-1 overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 sticky top-0">
-              <tr className="text-left text-xs text-muted-foreground uppercase tracking-wider">
-                <th className="px-4 py-2">Ref</th>
-                <th className="px-4 py-2">Title</th>
-                <th className="px-4 py-2">Severity</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Days Open</th>
-                <th className="px-4 py-2">Test Case</th>
+          <table className="w-full text-sm text-gray-700 dark:text-foreground">
+            <thead className="sticky top-0 bg-gray-100 dark:bg-muted/80">
+              <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Ref</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Title</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Severity</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Days Open</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Test Case</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody>
               {pagination.paginatedItems.map(d => (
-                <tr key={d.id} className="hover:bg-muted/30">
-                  <td className="px-4 py-2 font-mono text-xs">{d.ref}</td>
-                  <td className="px-4 py-2 text-xs font-medium max-w-[280px] truncate">{d.title}</td>
-                  <td className="px-4 py-2">
+                <tr key={d.id} className="border-b border-border/40 hover:bg-muted/30">
+                  <td className="px-3 py-2.5 align-middle font-mono text-xs">{d.ref}</td>
+                  <td className="px-3 py-2.5 align-middle text-xs font-medium max-w-[280px] truncate">{d.title}</td>
+                  <td className="px-3 py-2.5 align-middle">
                     <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded uppercase", SEV_BADGE[d.severity ?? "medium"])}>{d.severity}</span>
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-3 py-2.5 align-middle">
                     <select className="text-xs border rounded px-1 py-0.5 bg-background capitalize"
                       value={d.status} onChange={e => updateMutation.mutate({ id: d.id, status: e.target.value })}>
                       {["open", "assigned", "in_progress", "fix_ready", "retesting", "fixed", "wont_fix", "closed"].map(s =>
                         <option key={s} value={s}>{s.replace("_", " ")}</option>)}
                     </select>
                   </td>
-                  <td className="px-4 py-2 font-mono text-xs">{d.daysOpen}</td>
-                  <td className="px-4 py-2 text-xs text-muted-foreground">{d.linkedTestCaseId ? `#${d.linkedTestCaseId}` : "—"}</td>
+                  <td className="px-3 py-2.5 align-middle font-mono text-xs">{d.daysOpen}</td>
+                  <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground">{d.linkedTestCaseId ? `#${d.linkedTestCaseId}` : "—"}</td>
                 </tr>
               ))}
             </tbody>

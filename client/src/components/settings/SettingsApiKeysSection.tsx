@@ -147,6 +147,7 @@ export default function SettingsApiKeysSection() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
                       onClick={() => revokeMut.mutate(k.id)}
                       data-testid={`revoke-api-key-${k.id}`}
                     >

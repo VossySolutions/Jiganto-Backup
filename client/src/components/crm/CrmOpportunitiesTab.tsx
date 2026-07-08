@@ -519,14 +519,14 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
         )}
         data-testid={`opp-row-${opp.id}`}
       >
-        <td className="px-3 py-3 w-10">
+        <td className="px-3 py-2.5 align-middle w-10">
           <Checkbox
             checked={selectedIds.has(opp.id)}
             onCheckedChange={() => toggleSelectOne(opp.id)}
             data-testid={`checkbox-opp-${opp.id}`}
           />
         </td>
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "name"))} style={getCellStyle(opp.id, "name")}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "name"))} style={getCellStyle(opp.id, "name")}>
           <div className="flex items-center gap-3">
             <div
               className="h-9 w-9 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0"
@@ -547,17 +547,17 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
           </div>
         </td>
         {isColVisible("account") && (
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "accountName"))} style={getCellStyle(opp.id, "accountName")}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "accountName"))} style={getCellStyle(opp.id, "accountName")}>
           <span className="text-sm">{opp.accountName}</span>
         </td>
         )}
         {isColVisible("segment") && (
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "accountSegment"))} style={getCellStyle(opp.id, "accountSegment")}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "accountSegment"))} style={getCellStyle(opp.id, "accountSegment")}>
           <span className="text-sm" style={{ color: getSegmentColor(opp.accountSegment) }}>{opp.accountSegment}</span>
         </td>
         )}
         {isColVisible("stage") && (
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "stageName"))} style={getCellStyle(opp.id, "stageName")}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "stageName"))} style={getCellStyle(opp.id, "stageName")}>
           <CrmInlineEditSelect
             value={opp.stageId ? String(opp.stageId) : ""}
             displayValue={<StageBadge stage={opp.stage} />}
@@ -577,7 +577,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
         </td>
         )}
         {isColVisible("amount") && (
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "amount"))} style={getCellStyle(opp.id, "amount")}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "amount"))} style={getCellStyle(opp.id, "amount")}>
           <CrmInlineEditCell
             value={opp.amount || ""}
             displayValue={formatCurrency(opp.amount)}
@@ -589,7 +589,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
         </td>
         )}
         {isColVisible("probability") && (
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "probabilityNum"))} style={getCellStyle(opp.id, "probabilityNum")}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "probabilityNum"))} style={getCellStyle(opp.id, "probabilityNum")}>
           <CrmInlineEditCell
             value={String(opp.probabilityNum ?? "")}
             type="number"
@@ -600,7 +600,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
         </td>
         )}
         {isColVisible("owner") && (
-        <td className="px-4 py-3 whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
           <div className="flex items-center gap-2">
             <div
               className="h-7 w-7 rounded-full flex items-center justify-center text-white font-semibold text-[10px] shrink-0"
@@ -620,7 +620,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
         </td>
         )}
         {isColVisible("closeDate") && (
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "expectedCloseDate"))} style={getCellStyle(opp.id, "expectedCloseDate")}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "expectedCloseDate"))} style={getCellStyle(opp.id, "expectedCloseDate")}>
           <CrmInlineEditDate
             value={opp.expectedCloseDate ? opp.expectedCloseDate.slice(0, 10) : ""}
             displayValue={formatDate(opp.expectedCloseDate)}
@@ -631,12 +631,12 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
         </td>
         )}
         {isColVisible("created") && (
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(opp.id, "createdAt"))} style={getCellStyle(opp.id, "createdAt")}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "createdAt"))} style={getCellStyle(opp.id, "createdAt")}>
           <span className="text-sm text-muted-foreground">{formatDate(opp.createdAt)}</span>
         </td>
         )}
         <CrmCustomFieldTableCells fields={customFields} customData={opp.customData} />
-        <td className="px-4 py-3 text-right whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle text-right whitespace-nowrap">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()} data-testid={`button-actions-opp-${opp.id}`}>
@@ -666,7 +666,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
               <DropdownMenuItem onClick={() => runOppAction(() => apiRequest("POST", `/api/crm/opportunities/${opp.id}/archive`), "Opportunity archived")} data-testid={`action-archive-opp-${opp.id}`}>
                 <Archive className="h-3.5 w-3.5 mr-2" /> Archive
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => deleteMutation.mutate(opp.id)} className="text-red-600 focus:text-red-600" data-testid={`action-delete-opp-${opp.id}`}>
+              <DropdownMenuItem onClick={() => deleteMutation.mutate(opp.id)} className="text-red-600 focus:text-red-700" data-testid={`action-delete-opp-${opp.id}`}>
                 <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -1007,26 +1007,26 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
       </div>
 
       <div className="rounded-xl border border-border/60 bg-card overflow-x-auto w-full" data-testid="opp-table">
-        <table className="w-full">
+        <table className="w-full text-sm text-gray-700 dark:text-foreground">
           <thead>
-            <tr className="border-b border-border/60">
-              <th className="px-3 py-3 w-10">
+            <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+              <th className="px-3 py-2.5 align-middle w-10">
                 <Checkbox
                   checked={enrichedOpportunities.length > 0 && selectedIds.size === enrichedOpportunities.length}
                   onCheckedChange={toggleSelectAll}
                   data-testid="checkbox-select-all-opp"
                 />
               </th>
-              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Opportunity</th>
-              {isColVisible("account") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Account</th>}
-              {isColVisible("segment") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Segment</th>}
-              {isColVisible("stage") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Stage</th>}
-              {isColVisible("amount") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Amount</th>}
-              {isColVisible("probability") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Probability</th>}
-              {isColVisible("owner") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Owner</th>}
-              {isColVisible("closeDate") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Close Date</th>}
-              {isColVisible("created") && <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Created</th>}
-              <th className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Actions</th>
+              <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Opportunity</th>
+              {isColVisible("account") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Account</th>}
+              {isColVisible("segment") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Segment</th>}
+              {isColVisible("stage") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Stage</th>}
+              {isColVisible("amount") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Amount</th>}
+              {isColVisible("probability") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Probability</th>}
+              {isColVisible("owner") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Owner</th>}
+              {isColVisible("closeDate") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Close Date</th>}
+              {isColVisible("created") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Created</th>}
+              <th className="px-3 py-2.5 text-right align-middle font-semibold whitespace-nowrap">Actions</th>
             </tr>
           </thead>
           <tbody>

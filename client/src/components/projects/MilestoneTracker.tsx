@@ -378,37 +378,37 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
       {view === "table" && (
         <div className="bg-card border rounded-xl overflow-hidden shadow-sm" data-testid="milestone-table-view">
           <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm text-gray-700 dark:text-foreground">
               <thead className="sticky top-0 z-10">
-                <tr className="bg-muted/50 border-b">
+                <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
                   {showPortfolioCols && (
-                    <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ref</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Ref</th>
                   )}
                   {showPortfolioCols && (
-                    <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Client</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Client</th>
                   )}
                   {showPortfolioCols && (
-                    <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Portfolio</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Portfolio</th>
                   )}
                   {showPortfolioCols && (
-                    <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Programme</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Programme</th>
                   )}
                   {showProjectCol && (
-                    <th className={`px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider cursor-pointer hover:text-foreground ${sortKey === "projectName" ? "text-primary" : "text-muted-foreground"}`} onClick={() => handleSort("projectName")}>
+                    <th className={`px-3 py-2.5 text-left align-middle font-semibold cursor-pointer hover:text-foreground ${sortKey === "projectName" ? "text-primary" : "text-muted-foreground"}`} onClick={() => handleSort("projectName")}>
                       Project {sortKey === "projectName" ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
                     </th>
                   )}
-                  <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Phase</th>
-                  <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Workstream</th>
-                  <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Milestone</th>
-                  <th className={`px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider cursor-pointer hover:text-foreground ${sortKey === "targetDate" ? "text-primary" : "text-muted-foreground"}`} onClick={() => handleSort("targetDate")}>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Phase</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Workstream</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Milestone</th>
+                  <th className={`px-3 py-2.5 text-left align-middle font-semibold cursor-pointer hover:text-foreground ${sortKey === "targetDate" ? "text-primary" : "text-muted-foreground"}`} onClick={() => handleSort("targetDate")}>
                     Date {sortKey === "targetDate" ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
                   </th>
-                  <th className={`px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider cursor-pointer hover:text-foreground ${sortKey === "ragStatus" ? "text-primary" : "text-muted-foreground"}`} onClick={() => handleSort("ragStatus")}>
+                  <th className={`px-3 py-2.5 text-left align-middle font-semibold cursor-pointer hover:text-foreground ${sortKey === "ragStatus" ? "text-primary" : "text-muted-foreground"}`} onClick={() => handleSort("ragStatus")}>
                     RAG {sortKey === "ragStatus" ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
                   </th>
-                  <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Commentary</th>
-                  <th className="px-3 py-2.5 w-10"></th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Commentary</th>
+                  <th className="px-3 py-2.5 align-middle w-10"></th>
                 </tr>
               </thead>
               <tbody>
@@ -423,21 +423,21 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
                   const od = isOverdue(m.targetDate, m.ragStatus || "Green");
                   const cfg = RAG_CONFIG[m.ragStatus || "Green"] || RAG_CONFIG.Green;
                   return (
-                    <tr key={m.id} className="border-b last:border-b-0 hover:bg-muted/50 transition group" data-testid={`milestone-row-${m.id}`}>
+                    <tr key={m.id} className="border-b border-border/40 last:border-b-0 hover:bg-muted/30 transition group" data-testid={`milestone-row-${m.id}`}>
                       {showPortfolioCols && (
-                        <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{em.ref || `MS-${String(m.id).padStart(3, "0")}`}</td>
+                        <td className="px-3 py-2.5 align-middle font-mono text-xs text-muted-foreground">{em.ref || `MS-${String(m.id).padStart(3, "0")}`}</td>
                       )}
                       {showPortfolioCols && (
-                        <td className="px-3 py-2.5 text-xs text-muted-foreground">{em.client || "—"}</td>
+                        <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground">{em.client || "—"}</td>
                       )}
                       {showPortfolioCols && (
-                        <td className="px-3 py-2.5 text-xs text-muted-foreground">{em.portfolio || "—"}</td>
+                        <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground">{em.portfolio || "—"}</td>
                       )}
                       {showPortfolioCols && (
-                        <td className="px-3 py-2.5 text-xs text-muted-foreground">{em.programme || "—"}</td>
+                        <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground">{em.programme || "—"}</td>
                       )}
                       {showProjectCol && (
-                        <td className="px-3 py-2.5">
+                        <td className="px-3 py-2.5 align-middle">
                           {editingCell?.id === m.id && editingCell.field === "projectName" ? (
                             <input
                               className="border border-primary rounded px-1.5 py-0.5 text-[13px] w-full bg-primary/5 text-foreground outline-none font-semibold"
@@ -460,7 +460,7 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
                           )}
                         </td>
                       )}
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2.5 align-middle">
                         {editingCell?.id === m.id && editingCell.field === "phase" ? (
                           <input
                             className="border border-primary rounded px-1.5 py-0.5 text-[12.5px] w-full bg-primary/5 text-foreground outline-none"
@@ -484,7 +484,7 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
                         )}
                         <datalist id={`phase-list-${m.id}`}>{phases.map(p => <option key={p} value={p} />)}</datalist>
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2.5 align-middle">
                         {editingCell?.id === m.id && editingCell.field === "workstream" ? (
                           <input
                             className="border border-primary rounded px-1.5 py-0.5 text-[12.5px] w-full bg-primary/5 text-foreground outline-none"
@@ -508,7 +508,7 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
                         )}
                         <datalist id={`ws-list-${m.id}`}>{workstreams.map(w => <option key={w} value={w} />)}</datalist>
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2.5 align-middle">
                         {editingCell?.id === m.id && editingCell.field === "name" ? (
                           <input
                             className="border border-primary rounded px-1.5 py-0.5 text-sm w-full bg-primary/5 text-foreground outline-none font-medium"
@@ -535,7 +535,7 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2.5 align-middle">
                         {editingDate === m.id ? (
                           <input
                             type="date"
@@ -558,7 +558,7 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2.5 align-middle">
                         <div className="relative inline-block">
                           <span
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold cursor-pointer transition hover:scale-105"
@@ -587,7 +587,7 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2.5 align-middle">
                         {editingComment === m.id ? (
                           <textarea
                             className="w-full border border-primary rounded px-2 py-1 text-[12.5px] bg-primary/5 text-foreground outline-none resize-none"
@@ -611,9 +611,9 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2.5 align-middle">
                         <button
-                          className="opacity-0 group-hover:opacity-100 p-1 rounded border border-border hover:border-red-400 hover:text-red-600 dark:hover:text-red-400 transition text-muted-foreground"
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded border border-border hover:border-red-400 transition text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
                           onClick={() => onDelete(m.id)}
                           title="Delete"
                           data-testid={`delete-milestone-${m.id}`}

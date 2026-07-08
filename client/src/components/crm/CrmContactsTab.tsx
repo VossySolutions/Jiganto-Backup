@@ -416,20 +416,20 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
       <tr
         key={c.id}
         className={cn(
-          "border-b border-border/30 hover:bg-muted/30 transition-colors cursor-pointer",
+          "border-b border-border/40 hover:bg-muted/30 transition-colors cursor-pointer",
           selectedIds.has(c.id) && "bg-blue-50/50 dark:bg-blue-950/20"
         )}
         data-testid={`contact-row-${c.id}`}
         onClick={() => setDetailContactId(c.id)}
       >
-        <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+        <td className="px-3 py-2.5 align-middle w-10" onClick={(e) => e.stopPropagation()}>
           <Checkbox
             checked={selectedIds.has(c.id)}
             onCheckedChange={() => toggleSelectOne(c.id)}
             data-testid={`checkbox-contact-${c.id}`}
           />
         </td>
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(c.id, "fullName"))} style={getCellStyle(c.id, "fullName")} onClick={(e) => e.stopPropagation()}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(c.id, "fullName"))} style={getCellStyle(c.id, "fullName")} onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-3">
             <div
               className="h-9 w-9 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
@@ -462,7 +462,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
           </div>
         </td>
         {isColVisible("account") && (
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(c.id, "accountName"))} style={getCellStyle(c.id, "accountName")} onClick={(e) => e.stopPropagation()}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(c.id, "accountName"))} style={getCellStyle(c.id, "accountName")} onClick={(e) => e.stopPropagation()}>
           <CrmInlineEditSelect
             value={c.accountId ? String(c.accountId) : ""}
             displayValue={<span className={cn("text-sm text-muted-foreground", listExpanded ? "whitespace-nowrap" : "truncate max-w-[180px] block")}>{c.accountName || "—"}</span>}
@@ -473,7 +473,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
         </td>
         )}
         {isColVisible("role") && (
-        <td className={cn("px-4 py-3 whitespace-nowrap", getCellClasses(c.id, "role"))} style={getCellStyle(c.id, "role")} onClick={(e) => e.stopPropagation()}>
+        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(c.id, "role"))} style={getCellStyle(c.id, "role")} onClick={(e) => e.stopPropagation()}>
           <CrmInlineEditSelect
             value={c.role || "contact"}
             displayValue={
@@ -491,7 +491,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
         </td>
         )}
         {isColVisible("email") && (
-        <td className={cn("px-4 py-3", listExpanded ? "whitespace-nowrap" : "truncate max-w-[200px]", getCellClasses(c.id, "email"))} style={getCellStyle(c.id, "email")} onClick={(e) => e.stopPropagation()}>
+        <td className={cn("px-3 py-2.5 align-middle", listExpanded ? "whitespace-nowrap" : "truncate max-w-[200px]", getCellClasses(c.id, "email"))} style={getCellStyle(c.id, "email")} onClick={(e) => e.stopPropagation()}>
           <CrmInlineEditCell
             value={c.email || ""}
             displayValue={c.email || "—"}
@@ -502,7 +502,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
         </td>
         )}
         {isColVisible("phone") && (
-        <td className={cn("px-4 py-3", listExpanded ? "whitespace-nowrap" : "truncate max-w-[160px]")} onClick={(e) => e.stopPropagation()}>
+        <td className={cn("px-3 py-2.5 align-middle", listExpanded ? "whitespace-nowrap" : "truncate max-w-[160px]")} onClick={(e) => e.stopPropagation()}>
           <CrmInlineEditCell
             value={c.phone || ""}
             displayValue={c.phone || "—"}
@@ -513,14 +513,14 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
         </td>
         )}
         {isColVisible("created") && (
-        <td className="px-4 py-3 whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
           <span className="text-sm text-muted-foreground">
             {new Date(c.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
           </span>
         </td>
         )}
         <CrmCustomFieldTableCells fields={customFields} customData={c.customData} />
-        <td className="px-4 py-3 text-right whitespace-nowrap">
+        <td className="px-3 py-2.5 align-middle text-right whitespace-nowrap">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()} data-testid={`button-actions-contact-${c.id}`}>
@@ -538,7 +538,7 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => deleteMutation.mutate(c.id)}
-                className="text-red-600 focus:text-red-600"
+                className="text-red-600 focus:text-red-700"
                 data-testid={`action-delete-contact-${c.id}`}
               >
                 <Trash2 className="h-3.5 w-3.5 mr-2" />
@@ -834,46 +834,46 @@ export function CrmContactsTab({ contacts, accounts, searchTerm }: CrmContactsTa
           </div>
         )}
         <div className={cn("overflow-x-auto", listExpanded && "flex-1 overflow-auto")}>
-          <table className={cn("w-full", listExpanded && "min-w-full")}>
+          <table className={cn("w-full text-sm text-gray-700 dark:text-foreground", listExpanded && "min-w-full")}>
             <thead>
-              <tr className="border-b border-border/40 bg-muted/20">
-                <th className="px-4 py-3 w-10">
+              <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                <th className="px-3 py-2.5 align-middle w-10">
                   <Checkbox
                     checked={allSelected}
                     onCheckedChange={toggleSelectAll}
                     data-testid="checkbox-select-all-contacts"
                   />
                 </th>
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("name")}>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("name")}>
                   Contact {sortField === "name" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
                 {isColVisible("account") && (
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("account")}>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("account")}>
                   Account {sortField === "account" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
                 )}
                 {isColVisible("role") && (
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("role")}>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("role")}>
                   Role {sortField === "role" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
                 )}
                 {isColVisible("email") && (
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("email")}>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("email")}>
                   Email {sortField === "email" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
                 )}
                 {isColVisible("phone") && (
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">
+                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">
                   Phone
                 </th>
                 )}
                 {isColVisible("created") && (
-                <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("created")}>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("created")}>
                   Created {sortField === "created" && (sortDir === "asc" ? "↑" : "↓")}
                 </th>
                 )}
                 <CrmCustomFieldTableHeaders fields={customFields} />
-                <th className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider px-4 py-3 whitespace-nowrap">Actions</th>
+                <th className="px-3 py-2.5 text-right align-middle font-semibold whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>

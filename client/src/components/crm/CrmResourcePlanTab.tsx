@@ -976,16 +976,16 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
         ) : (
           <div className="space-y-5">
           <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden max-h-[calc(100vh-340px)] overflow-auto">
-            <table className="w-full min-w-[880px]">
+            <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[880px]">
               <thead>
-                <tr className="border-b border-border/30 bg-muted/20">
-                  <th className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Opportunity</th>
-                  <th className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Account</th>
-                  <th className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Plan</th>
-                  <th className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Stage</th>
-                  <th className="text-right text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Roles</th>
-                  <th className="text-right text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Plan cost</th>
-                  <th className="text-right text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5">Win %</th>
+                <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Opportunity</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Account</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Plan</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Stage</th>
+                  <th className="px-3 py-2.5 text-right align-middle font-semibold">Roles</th>
+                  <th className="px-3 py-2.5 text-right align-middle font-semibold">Plan cost</th>
+                  <th className="px-3 py-2.5 text-right align-middle font-semibold">Win %</th>
                 </tr>
               </thead>
               <tbody>
@@ -995,25 +995,25 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
                     <tr
                       key={opp.id}
                       onClick={() => selectOpportunity(opp.id, summary.primaryPlanId)}
-                      className="border-b border-border/20 hover:bg-muted/20 transition-colors cursor-pointer"
+                      className="border-b border-border/40 hover:bg-muted/30 transition-colors cursor-pointer"
                       data-testid={`opp-select-row-${opp.id}`}
                     >
-                      <td className="px-4 py-3 text-sm font-medium text-primary">{opp.name}</td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{acct?.name || "—"}</td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                      <td className="px-3 py-2.5 align-middle text-sm font-medium text-primary">{opp.name}</td>
+                      <td className="px-3 py-2.5 align-middle text-sm text-muted-foreground">{acct?.name || "—"}</td>
+                      <td className="px-3 py-2.5 align-middle text-sm text-muted-foreground">
                         {summary.primaryPlanName || "Resource plan"}
                         {summary.planCount > 1 ? ` (${summary.planCount})` : ""}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5 align-middle">
                         {stg ? (
                           <Badge variant="outline" className="text-[10px]" style={{ borderColor: stg.color || undefined, color: stg.color || undefined }}>
                             {stg.name}
                           </Badge>
                         ) : "—"}
                       </td>
-                      <td className="px-4 py-3 text-sm text-right tabular-nums">{summary.rowCount}</td>
-                      <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">{fmtCurrency(summary.totalCost, summary.currency)}</td>
-                      <td className="px-4 py-3 text-sm text-right tabular-nums text-muted-foreground">{opp.probability ?? "—"}{opp.probability !== null ? "%" : ""}</td>
+                      <td className="px-3 py-2.5 align-middle text-sm text-right tabular-nums">{summary.rowCount}</td>
+                      <td className="px-3 py-2.5 align-middle text-sm text-right font-semibold tabular-nums">{fmtCurrency(summary.totalCost, summary.currency)}</td>
+                      <td className="px-3 py-2.5 align-middle text-sm text-right tabular-nums text-muted-foreground">{opp.probability ?? "—"}{opp.probability !== null ? "%" : ""}</td>
                     </tr>
                   );
                 })}
@@ -1616,12 +1616,12 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
             <DialogDescription>Side-by-side comparison of all scenarios for {selectedOpp?.name}</DialogDescription>
           </DialogHeader>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm text-gray-700 dark:text-foreground">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 px-3 text-xs font-bold text-muted-foreground">Metric</th>
+                <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Metric</th>
                   {allPlans.map(p => (
-                    <th key={p.id} className="text-right py-2 px-3 text-xs font-bold">{p.planName || `Plan #${p.id}`}</th>
+                    <th key={p.id} className="px-3 py-2.5 text-right align-middle font-semibold">{p.planName || `Plan #${p.id}`}</th>
                   ))}
                 </tr>
               </thead>
@@ -1636,10 +1636,10 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
                   }},
                   { label: "Confirmed", fn: (p: ResourcePlan) => `${(p.rows || []).filter(r => r.status === "Confirmed").length} / ${p.rows?.length || 0}` },
                 ].map(row => (
-                  <tr key={row.label} className="border-b hover:bg-muted/30">
-                    <td className="py-2 px-3 font-medium text-muted-foreground">{row.label}</td>
+                  <tr key={row.label} className="border-b border-border/40 hover:bg-muted/30">
+                    <td className="px-3 py-2.5 align-middle font-medium text-muted-foreground">{row.label}</td>
                     {allPlans.map(p => (
-                      <td key={p.id} className="py-2 px-3 text-right font-mono text-xs">{row.fn(p)}</td>
+                      <td key={p.id} className="px-3 py-2.5 align-middle text-right font-mono text-xs">{row.fn(p)}</td>
                     ))}
                   </tr>
                 ))}

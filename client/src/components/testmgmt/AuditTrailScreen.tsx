@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useTmFetch } from "@/hooks/use-tm-fetch";
 import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
+import { Card, CardContent } from "@/components/ui/card";
 
 type AuditEvent = {
   id: string;
@@ -172,23 +173,24 @@ export function AuditTrailScreen() {
         </div>
       ) : (
         <>
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-muted/50 border-b border-border">
-                <tr>
-                  <th className="text-left px-4 py-2.5 font-semibold w-36">Time</th>
-                  <th className="text-left px-4 py-2.5 font-semibold w-32">Event</th>
-                  <th className="text-left px-4 py-2.5 font-semibold w-28">Actor</th>
-                  <th className="text-left px-4 py-2.5 font-semibold">Entity</th>
-                  <th className="text-left px-4 py-2.5 font-semibold">Detail</th>
+          <Card className="rounded-xl border-border/50 overflow-hidden">
+            <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full text-sm text-gray-700 dark:text-foreground">
+              <thead>
+                <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold w-36">Time</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold w-32">Event</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold w-28">Actor</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Entity</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Detail</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border/50">
+              <tbody>
                 {paged.map(event => {
                   const cfg = EVENT_CONFIG[event.eventType];
                   return (
-                    <tr key={event.id} className="hover:bg-muted/20 group" data-testid={`audit-row-${event.id}`}>
-                      <td className="px-4 py-2.5 font-mono text-[10px] text-muted-foreground">
+                    <tr key={event.id} className="border-b border-border/40 hover:bg-muted/30 group" data-testid={`audit-row-${event.id}`}>
+                      <td className="px-3 py-2.5 align-middle font-mono text-[10px] text-muted-foreground">
                         {event.timestamp ? (
                           <>
                             <div>{new Date(event.timestamp).toLocaleDateString()}</div>
@@ -196,21 +198,22 @@ export function AuditTrailScreen() {
                           </>
                         ) : "—"}
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-3 py-2.5 align-middle">
                         <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold", cfg?.cls ?? "bg-muted text-muted-foreground")}>
                           {cfg?.icon}
                           {cfg?.label ?? event.eventType}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 font-medium">{event.actor || "System"}</td>
-                      <td className="px-4 py-2.5 max-w-[200px] truncate">{event.entity}</td>
-                      <td className="px-4 py-2.5 max-w-[280px] text-muted-foreground truncate">{event.detail}</td>
+                      <td className="px-3 py-2.5 align-middle font-medium">{event.actor || "System"}</td>
+                      <td className="px-3 py-2.5 align-middle max-w-[200px] truncate">{event.entity}</td>
+                      <td className="px-3 py-2.5 align-middle max-w-[280px] text-muted-foreground truncate">{event.detail}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Pagination */}
           {totalPages > 1 && (

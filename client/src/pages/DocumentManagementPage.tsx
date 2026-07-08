@@ -3832,7 +3832,7 @@ export default function DocumentManagementPage() {
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                className="text-destructive"
+                                className="text-red-600 focus:text-red-700"
                                 onClick={(e) => { e.stopPropagation(); deleteFolderMutation.mutate(folder.id); }}
                               >
                                 <Trash2 className="h-4 w-4 mr-2" /> Delete
@@ -3992,7 +3992,7 @@ export default function DocumentManagementPage() {
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                className="text-destructive"
+                                className="text-red-600 focus:text-red-700"
                                 onClick={(e) => { e.stopPropagation(); handleDeleteDocument(doc.id); }}
                               >
                                 <Trash2 className="h-4 w-4 mr-2" /> Delete
@@ -4087,7 +4087,7 @@ export default function DocumentManagementPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-destructive"
+                            className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
                             onClick={(e) => { e.stopPropagation(); deleteFileMutation.mutate(file.id); }}
                             data-testid={`button-delete-file-${file.id}`}
                           >

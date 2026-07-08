@@ -1580,17 +1580,17 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
           ) : (
             <>
             <div className="overflow-x-auto esign-desktop-table">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm text-gray-700 dark:text-foreground">
                 <thead>
-                  <tr className="border-b border-border bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="text-left px-4 py-3 font-semibold">Document</th>
-                    <th className="text-left px-4 py-3 font-semibold">Status</th>
-                    <th className="text-left px-4 py-3 font-semibold hidden md:table-cell">Signers</th>
-                    <th className="text-left px-4 py-3 font-semibold hidden lg:table-cell">Sent</th>
-                    <th className="text-left px-4 py-3 font-semibold hidden lg:table-cell">Expiry</th>
-                    <th className="text-left px-4 py-3 font-semibold hidden xl:table-cell">Sent by</th>
-                    <th className="text-left px-4 py-3 font-semibold hidden xl:table-cell">Project</th>
-                    <th className="text-right px-4 py-3 font-semibold w-12"></th>
+                  <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Document</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold hidden md:table-cell">Signers</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold hidden lg:table-cell">Sent</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold hidden lg:table-cell">Expiry</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold hidden xl:table-cell">Sent by</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold hidden xl:table-cell">Project</th>
+                    <th className="px-3 py-2.5 text-right align-middle font-semibold w-12"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1600,16 +1600,16 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
                     const canRemind = r.status === "pending" || r.status === "partially_signed";
                     const canVoid = ["pending", "partially_signed", "draft"].includes(r.status);
                     return (
-                      <tr key={r.id} data-testid={`doc-row-${r.id}`} className="border-b last:border-b-0 border-border hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 cursor-pointer" onClick={() => openDetail(r.id)}>
+                      <tr key={r.id} data-testid={`doc-row-${r.id}`} className="border-b border-border/40 last:border-b-0 hover:bg-muted/30 transition-colors">
+                        <td className="px-3 py-2.5 align-middle cursor-pointer" onClick={() => openDetail(r.id)}>
                           <div className="font-medium truncate max-w-[200px]">{r.title}</div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5 align-middle">
                           <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium", st.color)}>
                             {st.label}
                           </span>
                         </td>
-                        <td className="px-4 py-3 hidden md:table-cell">
+                        <td className="px-3 py-2.5 align-middle hidden md:table-cell">
                           <div className="flex items-center gap-2">
                             <div className="flex -space-x-1.5">
                               {r.signers.slice(0, 4).map((s, i) => (
@@ -1623,11 +1623,11 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
                             <span className="text-xs text-muted-foreground">{signed}/{r.signers.length}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{fmtDate(r.sentAt)}</td>
-                        <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{fmtDate(r.deadline)}</td>
-                        <td className="px-4 py-3 text-muted-foreground hidden xl:table-cell truncate max-w-[120px]">{r.createdByName || "—"}</td>
-                        <td className="px-4 py-3 text-muted-foreground hidden xl:table-cell truncate max-w-[120px]">{r.project?.name || "—"}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-3 py-2.5 align-middle text-muted-foreground hidden lg:table-cell">{fmtDate(r.sentAt)}</td>
+                        <td className="px-3 py-2.5 align-middle text-muted-foreground hidden lg:table-cell">{fmtDate(r.deadline)}</td>
+                        <td className="px-3 py-2.5 align-middle text-muted-foreground hidden xl:table-cell truncate max-w-[120px]">{r.createdByName || "—"}</td>
+                        <td className="px-3 py-2.5 align-middle text-muted-foreground hidden xl:table-cell truncate max-w-[120px]">{r.project?.name || "—"}</td>
+                        <td className="px-3 py-2.5 align-middle text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button className="p-1.5 rounded-lg hover:bg-muted" aria-label="Actions"><MoreHorizontal className="h-4 w-4" /></button>
@@ -1647,7 +1647,7 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
                               {r.status !== "completed" && (
                                 <>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => handleDelete(r.id)} className="text-red-600"><Trash2 className="h-4 w-4 mr-2" /> Delete</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDelete(r.id)} className="text-red-600 focus:text-red-700"><Trash2 className="h-4 w-4 mr-2" /> Delete</DropdownMenuItem>
                                 </>
                               )}
                             </DropdownMenuContent>

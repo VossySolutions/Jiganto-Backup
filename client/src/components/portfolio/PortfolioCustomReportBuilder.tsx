@@ -298,16 +298,16 @@ export function PortfolioCustomReportBuilder() {
                   {runResult.groups.length > 1 && (
                     <div className="px-4 py-2 text-xs font-bold bg-muted/30">{g.key} ({g.rows.length})</div>
                   )}
-                  <table className="w-full text-xs">
+                  <table className="w-full text-sm text-gray-700 dark:text-foreground">
                     <thead>
-                      <tr className="text-left text-muted-foreground border-b bg-muted/20">
-                        {runResult.fields.map((f) => <th key={f} className="p-2">{f}</th>)}
+                      <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                        {runResult.fields.map((f) => <th key={f} className="px-3 py-2.5 text-left align-middle font-semibold">{f}</th>)}
                       </tr>
                     </thead>
                     <tbody>
                       {g.rows.slice(0, 100).map((row, i) => (
-                        <tr key={i} className="border-b border-border/10">
-                          {runResult.fields.map((f) => <td key={f} className="p-2">{String(row[f] ?? "—")}</td>)}
+                        <tr key={i} className="border-b border-border/40 hover:bg-muted/30">
+                          {runResult.fields.map((f) => <td key={f} className="px-3 py-2.5 align-middle">{String(row[f] ?? "—")}</td>)}
                         </tr>
                       ))}
                     </tbody>

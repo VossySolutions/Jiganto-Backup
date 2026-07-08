@@ -131,8 +131,8 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
       <Card className="border-border/30">
         <CardHeader><CardTitle className="text-base">4. Milestones</CardTitle></CardHeader>
         <CardContent>
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-muted-foreground border-b"><th className="pb-2">Name</th><th>Target</th><th>RAG</th><th>Status</th></tr></thead>
+          <table className="w-full text-sm text-gray-700 dark:text-foreground">
+            <thead><tr className="text-left text-xs text-gray-700 dark:text-foreground bg-gray-100 dark:bg-muted/80 border-b border-border/60"><th className="pb-2 font-semibold">Name</th><th className="font-semibold">Target</th><th className="font-semibold">RAG</th><th className="font-semibold">Status</th></tr></thead>
             <tbody>
               {data.milestones.map((m, i) => (
                 <tr key={i} className={cn("border-b border-border/20", m.overdue && "text-red-600")}>
@@ -165,8 +165,8 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
         <CardContent className="space-y-6">
           <div>
             <h4 className="text-sm font-bold mb-2">Top 5 Risks (Open, by severity)</h4>
-            <table className="w-full text-xs">
-              <thead><tr className="text-muted-foreground"><th className="text-left p-1">Ref</th><th>Description</th><th>Owner</th><th>Severity</th><th>Mitigation</th></tr></thead>
+            <table className="w-full text-xs text-gray-700 dark:text-foreground">
+              <thead><tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground"><th className="text-left p-1 font-semibold">Ref</th><th className="font-semibold">Description</th><th className="font-semibold">Owner</th><th className="font-semibold">Severity</th><th className="font-semibold">Mitigation</th></tr></thead>
               <tbody>{raid.topRisks.map((r, i) => (
                 <tr key={i} className="border-t border-border/20"><td className="p-1">{r.ref}</td><td>{r.description}</td><td>{r.owner}</td><td>{r.severity}</td><td>{r.mitigation}</td></tr>
               ))}</tbody>
@@ -174,8 +174,8 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
           </div>
           <div>
             <h4 className="text-sm font-bold mb-2">Top 5 Issues (Open, by priority)</h4>
-            <table className="w-full text-xs">
-              <thead><tr className="text-muted-foreground"><th className="text-left p-1">Ref</th><th>Description</th><th>Owner</th><th>Priority</th><th>Target</th></tr></thead>
+            <table className="w-full text-xs text-gray-700 dark:text-foreground">
+              <thead><tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground"><th className="text-left p-1 font-semibold">Ref</th><th className="font-semibold">Description</th><th className="font-semibold">Owner</th><th className="font-semibold">Priority</th><th className="font-semibold">Target</th></tr></thead>
               <tbody>{raid.topIssues.map((r, i) => (
                 <tr key={i} className="border-t border-border/20"><td className="p-1">{r.ref}</td><td>{r.description}</td><td>{r.owner}</td><td>{r.priority}</td><td>{r.targetResolution}</td></tr>
               ))}</tbody>
@@ -183,8 +183,8 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
           </div>
           <div>
             <h4 className="text-sm font-bold mb-2">Open Assumptions</h4>
-            <table className="w-full text-xs">
-              <thead><tr className="text-muted-foreground"><th className="text-left p-1">Ref</th><th>Assumption</th><th>Owner</th><th>Validation</th></tr></thead>
+            <table className="w-full text-xs text-gray-700 dark:text-foreground">
+              <thead><tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground"><th className="text-left p-1 font-semibold">Ref</th><th className="font-semibold">Assumption</th><th className="font-semibold">Owner</th><th className="font-semibold">Validation</th></tr></thead>
               <tbody>{raid.openAssumptions.map((r, i) => (
                 <tr key={i} className="border-t border-border/20"><td className="p-1">{r.ref}</td><td>{r.assumption}</td><td>{r.owner}</td><td>{r.validationDate}</td></tr>
               ))}</tbody>
@@ -192,8 +192,8 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
           </div>
           <div>
             <h4 className="text-sm font-bold mb-2">Open Dependencies</h4>
-            <table className="w-full text-xs">
-              <thead><tr className="text-muted-foreground"><th className="text-left p-1">Ref</th><th>Description</th><th>Direction</th><th>Required by</th><th>Status</th></tr></thead>
+            <table className="w-full text-xs text-gray-700 dark:text-foreground">
+              <thead><tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground"><th className="text-left p-1 font-semibold">Ref</th><th className="font-semibold">Description</th><th className="font-semibold">Direction</th><th className="font-semibold">Required by</th><th className="font-semibold">Status</th></tr></thead>
               <tbody>{raid.openDependencies.map((r, i) => (
                 <tr key={i} className="border-t border-border/20"><td className="p-1">{r.ref}</td><td>{r.description}</td><td>{r.direction}</td><td>{r.requiredBy}</td><td>{r.status}</td></tr>
               ))}</tbody>

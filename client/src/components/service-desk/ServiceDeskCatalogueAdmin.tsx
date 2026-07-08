@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   FormDialogShell, FormSection, FieldGrid, FieldLabel,
 } from "@/components/ui/form-dialog-shell";
@@ -189,39 +190,40 @@ export function ServiceDeskCatalogueAdmin({ categories, services }: Props) {
       </div>
 
       {manageOpen && (
-        <div className="rounded-xl border border-border/50 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-left p-2 font-medium">Service</th>
-                <th className="text-left p-2 font-medium hidden sm:table-cell">Category</th>
-                <th className="text-left p-2 font-medium hidden md:table-cell">Team</th>
-                <th className="text-left p-2 font-medium">Status</th>
-                <th className="p-2 w-10" />
+        <Card className="rounded-xl border-border/50 overflow-hidden">
+          <CardContent className="p-0 overflow-x-auto">
+          <table className="w-full text-sm text-gray-700 dark:text-foreground">
+            <thead>
+              <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Service</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold hidden sm:table-cell">Category</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold hidden md:table-cell">Team</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
+                <th className="px-3 py-2.5 align-middle w-10" />
               </tr>
             </thead>
             <tbody>
               {services.map((s) => (
-                <tr key={s.id} className="border-t border-border/40">
-                  <td className="p-2">{s.name}</td>
-                  <td className="p-2 hidden sm:table-cell text-muted-foreground">{s.categoryName ?? "—"}</td>
-                  <td className="p-2 hidden md:table-cell text-muted-foreground">{s.teamName ?? "—"}</td>
-                  <td className="p-2">
+                <tr key={s.id} className="border-b border-border/40 hover:bg-muted/30">
+                  <td className="px-3 py-2.5 align-middle">{s.name}</td>
+                  <td className="px-3 py-2.5 align-middle hidden sm:table-cell text-muted-foreground">{s.categoryName ?? "—"}</td>
+                  <td className="px-3 py-2.5 align-middle hidden md:table-cell text-muted-foreground">{s.teamName ?? "—"}</td>
+                  <td className="px-3 py-2.5 align-middle">
                     {(s as ServiceItem & { isActive?: boolean }).isActive === false ? "Inactive" : "Active"}
                   </td>
-                  <td className="p-2">
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openSvc(s)}>
+                  <td className="px-3 py-2.5 align-middle">
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40" onClick={() => openSvc(s)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                   </td>
                 </tr>
               ))}
               {categories.map((c) => (
-                <tr key={`cat-${c.id}`} className="border-t border-border/40 bg-muted/20">
-                  <td className="p-2 font-medium" colSpan={3}>{c.name}</td>
-                  <td className="p-2 text-muted-foreground text-xs">Category</td>
-                  <td className="p-2">
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openCat(c)}>
+                <tr key={`cat-${c.id}`} className="border-b border-border/40 hover:bg-muted/30 bg-muted/20">
+                  <td className="px-3 py-2.5 align-middle font-medium" colSpan={3}>{c.name}</td>
+                  <td className="px-3 py-2.5 align-middle text-muted-foreground text-xs">Category</td>
+                  <td className="px-3 py-2.5 align-middle">
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40" onClick={() => openCat(c)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                   </td>
@@ -229,7 +231,8 @@ export function ServiceDeskCatalogueAdmin({ categories, services }: Props) {
               ))}
             </tbody>
           </table>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       <FormDialogShell

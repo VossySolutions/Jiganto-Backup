@@ -1363,10 +1363,10 @@ function PhaseGroupTable({
 
   return (
     <div className="bg-background overflow-x-auto">
-      <table className="w-full border-collapse min-w-[900px]">
+      <table className="w-full text-sm text-gray-700 dark:text-foreground border-collapse min-w-[900px]">
         <thead>
-          <tr className="border-b">
-            <th className="w-9 px-3 py-2 text-left">
+          <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+            <th className="w-9 px-3 py-2.5 text-left align-middle font-semibold">
               <input
                 type="checkbox"
                 className="accent-blue-600 cursor-pointer"
@@ -1374,14 +1374,14 @@ function PhaseGroupTable({
                 data-testid={`checkbox-phase-all-${phaseName}`}
               />
             </th>
-            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left">Deliverable</th>
-            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[100px]">Type</th>
-            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[100px]">Due</th>
-            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[110px]">Status</th>
-            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[86px]">RAG</th>
-            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-left w-[96px]">Progress</th>
-            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-center w-[54px]">Ver</th>
-            <th className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-3 py-2 text-center w-[130px]">Approvals</th>
+            <th className="px-3 py-2.5 text-left align-middle font-semibold">Deliverable</th>
+            <th className="px-3 py-2.5 text-left align-middle font-semibold w-[100px]">Type</th>
+            <th className="px-3 py-2.5 text-left align-middle font-semibold w-[100px]">Due</th>
+            <th className="px-3 py-2.5 text-left align-middle font-semibold w-[110px]">Status</th>
+            <th className="px-3 py-2.5 text-left align-middle font-semibold w-[86px]">RAG</th>
+            <th className="px-3 py-2.5 text-left align-middle font-semibold w-[96px]">Progress</th>
+            <th className="px-3 py-2.5 text-center align-middle font-semibold w-[54px]">Ver</th>
+            <th className="px-3 py-2.5 text-center align-middle font-semibold w-[130px]">Approvals</th>
             <th className="w-[68px]" />
           </tr>
         </thead>
@@ -1475,14 +1475,14 @@ function PhaseRow({
   return (
     <>
       <tr
-        className={`group border-b transition cursor-pointer hover:bg-muted/30 ${isSel ? "bg-blue-50/50" : ""} ${isDrawerOpen ? "bg-purple-50/30 border-b-0" : ""}`}
+        className={`group border-b border-border/40 transition cursor-pointer hover:bg-muted/30 ${isSel ? "bg-blue-50/50" : ""} ${isDrawerOpen ? "bg-purple-50/30 border-b-0" : ""}`}
         onClick={onEdit}
         data-testid={`row-deliverable-${d.id}`}
       >
-        <td className="px-3 py-2">
+        <td className="px-3 py-2.5 align-middle">
           <input type="checkbox" className="accent-blue-600 cursor-pointer" checked={isSel} onChange={() => onToggleSelect(d.id)} onClick={e => e.stopPropagation()} data-testid={`checkbox-deliverable-${d.id}`} />
         </td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2.5 align-middle">
           <div className="flex items-center gap-2">
             <TypeIcon className="h-4 w-4 text-muted-foreground/40 shrink-0" />
             <div className="min-w-0">
@@ -1491,9 +1491,9 @@ function PhaseRow({
             </div>
           </div>
         </td>
-        <td className="px-3 py-2 text-[12.5px] text-muted-foreground">{d.type}</td>
-        <td className="px-3 py-2"><span className={`text-[12.5px] ${dateDisplay.className}`}>{dateDisplay.text}</span></td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2.5 align-middle text-[12.5px] text-muted-foreground">{d.type}</td>
+        <td className="px-3 py-2.5 align-middle"><span className={`text-[12.5px] ${dateDisplay.className}`}>{dateDisplay.text}</span></td>
+        <td className="px-3 py-2.5 align-middle">
           <span
             className={`inline-block px-2 py-0.5 rounded-full text-[11.5px] font-semibold cursor-pointer transition hover:scale-105 ${statusClasses(d.status)}`}
             onClick={e => { e.stopPropagation(); onCycleStatus(); }}
@@ -1501,7 +1501,7 @@ function PhaseRow({
             data-testid={`status-pill-${d.id}`}
           >{d.status}</span>
         </td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2.5 align-middle">
           <span
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11.5px] font-semibold cursor-pointer transition hover:scale-105 ${ragClasses(d.ragStatus)}`}
             onClick={e => { e.stopPropagation(); onCycleRag(); }}
@@ -1512,7 +1512,7 @@ function PhaseRow({
             {d.ragStatus}
           </span>
         </td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2.5 align-middle">
           <div className="flex items-center gap-1.5">
             <div className="w-14 h-1 bg-border rounded-full overflow-hidden shrink-0">
               <div className="h-full rounded-full" style={{ width: `${d.progress}%`, background: progColor(d.progress) }} />
@@ -1520,10 +1520,10 @@ function PhaseRow({
             <span className="text-[11.5px] text-muted-foreground">{d.progress}%</span>
           </div>
         </td>
-        <td className="px-3 py-2 text-center">
+        <td className="px-3 py-2.5 align-middle text-center">
           <span className="px-1.5 py-0.5 rounded bg-muted text-[10.5px] font-mono font-bold text-muted-foreground">v{d.version}.0</span>
         </td>
-        <td className="px-3 py-2 text-center">
+        <td className="px-3 py-2.5 align-middle text-center">
           <button
             className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-bold cursor-pointer transition hover:scale-105 whitespace-nowrap ${ai.cls} ${isDrawerOpen ? "ring-2 ring-current" : ""}`}
             onClick={e => { e.stopPropagation(); onToggleDrawer(); }}
@@ -1533,7 +1533,7 @@ function PhaseRow({
             {ai.icon} {ai.label}
           </button>
         </td>
-        <td className="px-3 py-2">
+        <td className="px-3 py-2.5 align-middle">
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
             {(d.type === "Sign-off" || d.status === "In Review") && (
               <button
@@ -1545,13 +1545,13 @@ function PhaseRow({
                 <FileSignature className="h-3 w-3" />
               </button>
             )}
-            <button className="w-6 h-6 rounded-md border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/30 transition cursor-pointer" title="Edit" onClick={e => { e.stopPropagation(); onEdit(); }} data-testid={`button-edit-${d.id}`}>
+            <button className="w-6 h-6 rounded-md border flex items-center justify-center text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40 hover:border-foreground/30 transition cursor-pointer" title="Edit" onClick={e => { e.stopPropagation(); onEdit(); }} data-testid={`button-edit-${d.id}`}>
               <Pencil className="h-3 w-3" />
             </button>
             <button className="w-6 h-6 rounded-md border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/30 transition cursor-pointer" title="Audit trail" onClick={e => { e.stopPropagation(); onAudit(); }} data-testid={`button-audit-${d.id}`}>
               <ClipboardList className="h-3 w-3" />
             </button>
-            <button className="w-6 h-6 rounded-md border flex items-center justify-center text-muted-foreground hover:text-red-500 hover:border-red-300 transition cursor-pointer" title="Delete" onClick={e => { e.stopPropagation(); onDelete(); }} data-testid={`button-delete-${d.id}`}>
+            <button className="w-6 h-6 rounded-md border flex items-center justify-center text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40 hover:border-red-300 transition cursor-pointer" title="Delete" onClick={e => { e.stopPropagation(); onDelete(); }} data-testid={`button-delete-${d.id}`}>
               <Trash2 className="h-3 w-3" />
             </button>
           </div>

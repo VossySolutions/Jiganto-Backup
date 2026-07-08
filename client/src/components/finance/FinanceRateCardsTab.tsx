@@ -228,8 +228,8 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
                       {card.description && <p className="text-sm text-muted-foreground mt-0.5 truncate">{card.description}</p>}
                     </div>
                     <div className="flex gap-1 shrink-0">
-                      <Button size="sm" variant="ghost" onClick={() => startEdit(card)}><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button size="sm" variant="ghost" onClick={() => deleteCardMutation.mutate(card.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                      <Button size="sm" variant="ghost" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40" onClick={() => startEdit(card)}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={() => deleteCardMutation.mutate(card.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div>
                   </div>
 
@@ -251,7 +251,7 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
                               <TableCell className="text-right tabular-nums">£{item.dailyRate}</TableCell>
                               <TableCell className="text-right tabular-nums">£{item.costRate ?? "—"}</TableCell>
                               <TableCell>
-                                <Button size="sm" variant="ghost" onClick={() => deleteItemMutation.mutate(item.id)}>
+                                <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={() => deleteItemMutation.mutate(item.id)}>
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
                               </TableCell>

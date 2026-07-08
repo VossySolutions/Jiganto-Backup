@@ -107,19 +107,19 @@ export function PortfolioProgrammesTab({ searchTerm = "" }: { searchTerm?: strin
       ) : (
         <Card className="border-border/30 overflow-hidden">
           <div className="overflow-x-auto scrollbar-thin">
-            <table className="w-full text-sm min-w-[800px]">
+            <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[800px]">
               <thead>
-                <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
-                  <th className="w-8 p-3" />
-                  <th className="p-3">Programme</th>
-                  <th className="p-3">Owner</th>
-                  <th className="p-3">Client(s)</th>
-                  <th className="p-3">Projects</th>
-                  <th className="p-3">Health</th>
-                  <th className="p-3">Progress</th>
-                  <th className="p-3">Budget</th>
-                  <th className="p-3">End Date</th>
-                  <th className="p-3">Status</th>
+                <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                  <th className="w-8 px-3 py-2.5 text-left align-middle font-semibold" />
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Programme</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Owner</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Client(s)</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Projects</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Health</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Progress</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Budget</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">End Date</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -128,32 +128,32 @@ export function PortfolioProgrammesTab({ searchTerm = "" }: { searchTerm?: strin
                   const open = expanded.has(key);
                   return (
                     <Fragment key={key}>
-                      <tr className="border-b border-border/30 hover:bg-muted/20 cursor-pointer" onClick={() => setSelected({ id: prog.id, source: prog.source })}>
-                        <td className="p-3" onClick={(e) => { e.stopPropagation(); toggle(key); }}>
+                      <tr className="border-b border-border/40 hover:bg-muted/30 cursor-pointer" onClick={() => setSelected({ id: prog.id, source: prog.source })}>
+                        <td className="px-3 py-2.5 align-middle" onClick={(e) => { e.stopPropagation(); toggle(key); }}>
                           {prog.childCount > 0 ? (open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />) : null}
                         </td>
-                        <td className="p-3 font-semibold">{prog.name}</td>
-                        <td className="p-3 text-xs">{prog.ownerName || "—"}</td>
-                        <td className="p-3 text-xs">{prog.clientNames.join(", ") || "—"}</td>
-                        <td className="p-3 font-mono text-xs">{prog.childCount}</td>
-                        <td className="p-3"><RagBadge status={prog.ragStatus} /></td>
-                        <td className="p-3 font-mono text-xs">{prog.progress}%</td>
-                        <td className="p-3 font-mono text-xs">{formatBudget(prog.budget)}</td>
-                        <td className="p-3 font-mono text-xs">{prog.endDate || "—"}</td>
-                        <td className="p-3"><Badge variant="outline" className="text-[10px]">{prog.status}</Badge></td>
+                        <td className="px-3 py-2.5 align-middle font-semibold">{prog.name}</td>
+                        <td className="px-3 py-2.5 align-middle text-xs">{prog.ownerName || "—"}</td>
+                        <td className="px-3 py-2.5 align-middle text-xs">{prog.clientNames.join(", ") || "—"}</td>
+                        <td className="px-3 py-2.5 align-middle font-mono text-xs">{prog.childCount}</td>
+                        <td className="px-3 py-2.5 align-middle"><RagBadge status={prog.ragStatus} /></td>
+                        <td className="px-3 py-2.5 align-middle font-mono text-xs">{prog.progress}%</td>
+                        <td className="px-3 py-2.5 align-middle font-mono text-xs">{formatBudget(prog.budget)}</td>
+                        <td className="px-3 py-2.5 align-middle font-mono text-xs">{prog.endDate || "—"}</td>
+                        <td className="px-3 py-2.5 align-middle"><Badge variant="outline" className="text-[10px]">{prog.status}</Badge></td>
                       </tr>
                       {open && prog.children.map((child) => (
-                        <tr key={`child-${child.id}`} className="border-b border-border/20 bg-muted/10" onClick={() => setLocation(`/modules/projects/${child.id}`)}>
+                        <tr key={`child-${child.id}`} className="border-b border-border/40 bg-muted/10 hover:bg-muted/30 cursor-pointer" onClick={() => setLocation(`/modules/projects/${child.id}`)}>
                           <td />
-                          <td className={cn("p-3 pl-8 text-muted-foreground", view === "cascade" && "pl-12")}>↳ {child.name}</td>
-                          <td className="p-3 text-xs">{child.managerName || "—"}</td>
-                          <td className="p-3 text-xs">{child.clientName || "—"}</td>
+                          <td className={cn("px-3 py-2.5 align-middle pl-8 text-muted-foreground", view === "cascade" && "pl-12")}>↳ {child.name}</td>
+                          <td className="px-3 py-2.5 align-middle text-xs">{child.managerName || "—"}</td>
+                          <td className="px-3 py-2.5 align-middle text-xs">{child.clientName || "—"}</td>
                           <td />
-                          <td className="p-3"><RagBadge status={child.ragStatus} /></td>
-                          <td className="p-3 font-mono text-xs">{child.progress}%</td>
-                          <td className="p-3 font-mono text-xs">{formatBudget(child.budget)}</td>
-                          <td className="p-3 font-mono text-xs">{child.endDate || "—"}</td>
-                          <td className="p-3"><Badge variant="outline" className="text-[10px]">{child.status}</Badge></td>
+                          <td className="px-3 py-2.5 align-middle"><RagBadge status={child.ragStatus} /></td>
+                          <td className="px-3 py-2.5 align-middle font-mono text-xs">{child.progress}%</td>
+                          <td className="px-3 py-2.5 align-middle font-mono text-xs">{formatBudget(child.budget)}</td>
+                          <td className="px-3 py-2.5 align-middle font-mono text-xs">{child.endDate || "—"}</td>
+                          <td className="px-3 py-2.5 align-middle"><Badge variant="outline" className="text-[10px]">{child.status}</Badge></td>
                         </tr>
                       ))}
                     </Fragment>

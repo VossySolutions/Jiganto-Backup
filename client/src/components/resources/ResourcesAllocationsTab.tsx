@@ -140,7 +140,7 @@ export function ResourcesAllocationsTab({
                       );
                     })}
                   </div>
-                  <Button variant="ghost" size="icon" className="shrink-0" onClick={() => allocs[0] && onDeleteAllocation(allocs[0].id)}><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" className="shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={() => allocs[0] && onDeleteAllocation(allocs[0].id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               );
             })}

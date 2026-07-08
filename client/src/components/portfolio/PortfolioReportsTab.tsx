@@ -106,20 +106,26 @@ export function PortfolioReportsTab() {
             <CardHeader><CardTitle className="text-sm">Portfolio Summary — Board View</CardTitle></CardHeader>
             <CardContent>
               <PortfolioTableShell>
-                <table className="w-full text-sm min-w-[640px]">
-                  <thead><tr className="text-left text-xs text-muted-foreground border-b">
-                    <th className="p-2">Project</th><th>Client</th><th>PM</th><th>RAG</th><th>Budget</th><th>Progress</th><th>Portfolio</th>
+                <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[640px]">
+                  <thead><tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Project</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Client</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold">PM</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold">RAG</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Budget</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Progress</th>
+                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Portfolio</th>
                   </tr></thead>
                   <tbody>
                     {summary.map((r: any, i: number) => (
-                      <tr key={i} className="border-b border-border/20">
-                        <td className="p-2 font-medium">{r.name}</td>
-                        <td className="text-xs">{r.client}</td>
-                        <td className="text-xs">{r.pm}</td>
-                        <td>{r.rag}</td>
-                        <td className="font-mono text-xs">{formatBudget(r.budget)}</td>
-                        <td className="font-mono text-xs">{r.progress}%</td>
-                        <td className="text-xs">{r.portfolios}</td>
+                      <tr key={i} className="border-b border-border/40 hover:bg-muted/30">
+                        <td className="px-3 py-2.5 align-middle font-medium">{r.name}</td>
+                        <td className="px-3 py-2.5 align-middle text-xs">{r.client}</td>
+                        <td className="px-3 py-2.5 align-middle text-xs">{r.pm}</td>
+                        <td className="px-3 py-2.5 align-middle">{r.rag}</td>
+                        <td className="px-3 py-2.5 align-middle font-mono text-xs">{formatBudget(r.budget)}</td>
+                        <td className="px-3 py-2.5 align-middle font-mono text-xs">{r.progress}%</td>
+                        <td className="px-3 py-2.5 align-middle text-xs">{r.portfolios}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -133,21 +139,28 @@ export function PortfolioReportsTab() {
           <Card className="border-border/30">
             <CardHeader><CardTitle className="text-sm">Milestone Register</CardTitle></CardHeader>
             <CardContent className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead><tr className="text-left text-muted-foreground border-b">
-                  <th className="p-2">Ref</th><th>Name</th><th>Project</th><th>Programme</th><th>Portfolio</th><th>Client</th><th>RAG</th><th>Target</th>
+              <table className="w-full text-sm text-gray-700 dark:text-foreground">
+                <thead><tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Ref</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Name</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Project</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Programme</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Portfolio</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Client</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">RAG</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Target</th>
                 </tr></thead>
                 <tbody>
                   {milestones.map((m: any) => (
-                    <tr key={m.id} className="border-b border-border/20">
-                      <td className="p-2 font-mono">{m.ref}</td>
-                      <td>{m.name}</td>
-                      <td>{m.projectName}</td>
-                      <td>{m.programme}</td>
-                      <td>{m.portfolio}</td>
-                      <td>{m.client}</td>
-                      <td>{m.ragStatus}</td>
-                      <td className="font-mono">{m.targetDate || m.dueDate}</td>
+                    <tr key={m.id} className="border-b border-border/40 hover:bg-muted/30">
+                      <td className="px-3 py-2.5 align-middle font-mono">{m.ref}</td>
+                      <td className="px-3 py-2.5 align-middle">{m.name}</td>
+                      <td className="px-3 py-2.5 align-middle">{m.projectName}</td>
+                      <td className="px-3 py-2.5 align-middle">{m.programme}</td>
+                      <td className="px-3 py-2.5 align-middle">{m.portfolio}</td>
+                      <td className="px-3 py-2.5 align-middle">{m.client}</td>
+                      <td className="px-3 py-2.5 align-middle">{m.ragStatus}</td>
+                      <td className="px-3 py-2.5 align-middle font-mono">{m.targetDate || m.dueDate}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -160,19 +173,24 @@ export function PortfolioReportsTab() {
           <Card className="border-border/30">
             <CardHeader><CardTitle className="text-sm">RAID Consolidated</CardTitle></CardHeader>
             <CardContent className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead><tr className="text-left text-muted-foreground border-b">
-                  <th className="p-2">Type</th><th>Ref</th><th>Title</th><th>Project</th><th>Priority</th><th>Status</th>
+              <table className="w-full text-sm text-gray-700 dark:text-foreground">
+                <thead><tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Type</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Ref</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Title</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Project</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Priority</th>
+                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
                 </tr></thead>
                 <tbody>
                   {raid.map((r: any) => (
-                    <tr key={r.id} className="border-b border-border/20">
-                      <td className="p-2 capitalize">{r.type}</td>
-                      <td className="font-mono">{r.code}</td>
-                      <td>{r.title}</td>
-                      <td>{r.projectName}</td>
-                      <td>{r.priority}</td>
-                      <td>{r.status}</td>
+                    <tr key={r.id} className="border-b border-border/40 hover:bg-muted/30">
+                      <td className="px-3 py-2.5 align-middle capitalize">{r.type}</td>
+                      <td className="px-3 py-2.5 align-middle font-mono">{r.code}</td>
+                      <td className="px-3 py-2.5 align-middle">{r.title}</td>
+                      <td className="px-3 py-2.5 align-middle">{r.projectName}</td>
+                      <td className="px-3 py-2.5 align-middle">{r.priority}</td>
+                      <td className="px-3 py-2.5 align-middle">{r.status}</td>
                     </tr>
                   ))}
                 </tbody>

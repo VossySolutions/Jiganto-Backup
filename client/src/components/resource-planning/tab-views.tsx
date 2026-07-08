@@ -78,16 +78,16 @@ export function ExecutiveDashboardTab({ onNavigate }: { onNavigate: TabNav }) {
       <div className="grid lg:grid-cols-3 gap-4">
         <RpSectionCard title="Resources at Risk" subtitle="Rolling off in next 30 days">
           <RpTableWrap>
-            <table className="w-full text-xs">
-              <thead><tr className="border-b text-muted-foreground"><th className="text-left py-2 px-3 font-bold">Resource</th><th className="text-left py-2 px-3">Role</th><th className="text-left py-2 px-3">Roll-off</th><th className="text-left py-2 px-3">Booking</th><th className="text-left py-2 px-3">Status</th></tr></thead>
+            <table className="w-full text-sm text-gray-700 dark:text-foreground">
+              <thead><tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60"><th className="px-3 py-2.5 text-left align-middle font-semibold">Resource</th><th className="px-3 py-2.5 text-left align-middle font-semibold">Role</th><th className="px-3 py-2.5 text-left align-middle font-semibold">Roll-off</th><th className="px-3 py-2.5 text-left align-middle font-semibold">Booking</th><th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th></tr></thead>
               <tbody>
                 {(data.atRiskResources ?? []).map((r) => (
                   <tr key={r.name} className="border-b border-border/40 hover:bg-muted/30 cursor-pointer" onClick={() => onNavigate("scheduler")}>
-                    <td className="py-2 px-3"><div className="flex items-center gap-2"><RpAvatar initials={r.initials} color={toAvatarColor(r.color, r.id)} /><span className="font-semibold">{r.name}</span></div></td>
-                    <td className="py-2 px-3 text-muted-foreground">{r.role}</td>
-                    <td className="py-2 px-3 font-semibold">{r.rolloff}</td>
-                    <td className="py-2 px-3"><RpStatusPill variant={r.bookingStatus === "Confirmed" ? "success" : r.bookingStatus === "Prospect" ? "warning" : "destructive"}>{r.bookingStatus ?? "—"}</RpStatusPill></td>
-                    <td className="py-2 px-3"><RpStatusPill variant={r.statusVariant as "destructive" | "warning" | "success"}>{r.status}</RpStatusPill></td>
+                    <td className="px-3 py-2.5 align-middle"><div className="flex items-center gap-2"><RpAvatar initials={r.initials} color={toAvatarColor(r.color, r.id)} /><span className="font-semibold">{r.name}</span></div></td>
+                    <td className="px-3 py-2.5 align-middle text-muted-foreground">{r.role}</td>
+                    <td className="px-3 py-2.5 align-middle font-semibold">{r.rolloff}</td>
+                    <td className="px-3 py-2.5 align-middle"><RpStatusPill variant={r.bookingStatus === "Confirmed" ? "success" : r.bookingStatus === "Prospect" ? "warning" : "destructive"}>{r.bookingStatus ?? "—"}</RpStatusPill></td>
+                    <td className="px-3 py-2.5 align-middle"><RpStatusPill variant={r.statusVariant as "destructive" | "warning" | "success"}>{r.status}</RpStatusPill></td>
                   </tr>
                 ))}
                 {!data.atRiskResources?.length && (
@@ -208,13 +208,13 @@ export function DemandSupplyTab({ onNavigate }: { onNavigate: TabNav }) {
       >
         <RpVirtualScrollContainer scrollRef={dsmVirtual.scrollRef} onScroll={dsmVirtual.onScroll} maxHeight={dsmVirtual.maxHeight}>
         <RpTableWrap>
-          <table className="w-full text-xs min-w-[800px]">
+          <table className="w-full text-xs min-w-[800px] text-gray-700 dark:text-foreground">
             <thead>
-              <tr className="bg-muted/50 border-b-2">
-                <th className="text-left py-2 px-3 font-bold uppercase text-[10px] text-muted-foreground">Skill / Role</th>
-                <th className="py-2 px-2 font-bold uppercase text-[10px] text-muted-foreground text-center">Supply</th>
-                {data.months.map((m) => <th key={m} className="py-2 px-2 font-bold uppercase text-[10px] text-muted-foreground text-center whitespace-nowrap">{m}</th>)}
-                <th className="py-2 px-2 font-bold uppercase text-[10px] text-muted-foreground text-center">Trend</th>
+              <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b-2 border-border/60">
+                <th className="text-left py-2 px-3 font-bold uppercase text-[10px] text-gray-700 dark:text-foreground">Skill / Role</th>
+                <th className="py-2 px-2 font-bold uppercase text-[10px] text-gray-700 dark:text-foreground text-center">Supply</th>
+                {data.months.map((m) => <th key={m} className="py-2 px-2 font-bold uppercase text-[10px] text-gray-700 dark:text-foreground text-center whitespace-nowrap">{m}</th>)}
+                <th className="py-2 px-2 font-bold uppercase text-[10px] text-gray-700 dark:text-foreground text-center">Trend</th>
               </tr>
             </thead>
             <tbody>
@@ -280,16 +280,16 @@ export function HeatMapTab() {
       <RpSectionCard title="Resource Capacity Heat Map">
         <RpVirtualScrollContainer scrollRef={virtual.scrollRef} onScroll={virtual.onScroll} maxHeight={virtual.maxHeight}>
         <RpTableWrap>
-          <table className="w-full text-xs min-w-[900px]">
+          <table className="w-full text-xs min-w-[900px] text-gray-700 dark:text-foreground">
             <thead>
-              <tr className="border-b">
-                <th className="text-left py-2 px-2 min-w-[140px]">Resource</th>
-                <th className="text-left py-2 px-2">Role</th>
+              <tr className="border-b border-border/60 bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground">
+                <th className="text-left py-2 px-2 min-w-[140px] font-semibold">Resource</th>
+                <th className="text-left py-2 px-2 font-semibold">Role</th>
                 {data.monthGroups.map((g, gi) => (
-                  <th key={`${g.label}-${gi}`} colSpan={g.weekCount} className="text-center py-2 border-b-2">{g.label}</th>
+                  <th key={`${g.label}-${gi}`} colSpan={g.weekCount} className="text-center py-2 border-b-2 font-semibold">{g.label}</th>
                 ))}
               </tr>
-              <tr className="text-muted-foreground text-[10px]">
+              <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground text-[10px]">
                 <th /><th />
                 {Array.from({ length: data.weekCount }).map((_, i) => <th key={i} className="py-1 px-0.5 text-center">W{(i % 4) + 1}</th>)}
               </tr>
@@ -574,16 +574,16 @@ export function SkillsInventoryTab({ searchTerm = "" }: { searchTerm?: string })
         </RpSectionCard>
         <RpSectionCard title="Top Demanded Skills">
           <RpTableWrap>
-            <table className="w-full text-xs">
-              <thead><tr className="border-b text-muted-foreground"><th className="text-left py-2 font-bold">Skill</th><th>Supply</th><th>Demand</th><th>Gap</th><th>Status</th></tr></thead>
+            <table className="w-full text-sm text-gray-700 dark:text-foreground">
+              <thead><tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60"><th className="px-3 py-2.5 text-left align-middle font-semibold">Skill</th><th className="px-3 py-2.5 text-center align-middle font-semibold">Supply</th><th className="px-3 py-2.5 text-center align-middle font-semibold">Demand</th><th className="px-3 py-2.5 text-center align-middle font-semibold">Gap</th><th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th></tr></thead>
               <tbody>
                 {data.topDemanded.map((s) => (
-                  <tr key={s.skill} className="border-b border-border/40">
-                    <td className="py-2 font-semibold">{s.skill}</td>
-                    <td className="py-2 text-center">{s.supply}</td>
-                    <td className="py-2 text-center">{s.demand}</td>
-                    <td className={cn("py-2 text-center font-bold", s.gap < 0 ? "text-red-600" : "text-emerald-600")}>{s.gap > 0 ? `+${s.gap}` : s.gap}</td>
-                    <td className="py-2"><RpStatusPill variant={s.variant as "destructive" | "warning" | "success"}>{s.status}</RpStatusPill></td>
+                  <tr key={s.skill} className="border-b border-border/40 hover:bg-muted/30">
+                    <td className="px-3 py-2.5 align-middle font-semibold">{s.skill}</td>
+                    <td className="px-3 py-2.5 align-middle text-center">{s.supply}</td>
+                    <td className="px-3 py-2.5 align-middle text-center">{s.demand}</td>
+                    <td className={cn("px-3 py-2.5 align-middle text-center font-bold", s.gap < 0 ? "text-red-600" : "text-emerald-600")}>{s.gap > 0 ? `+${s.gap}` : s.gap}</td>
+                    <td className="px-3 py-2.5 align-middle"><RpStatusPill variant={s.variant as "destructive" | "warning" | "success"}>{s.status}</RpStatusPill></td>
                   </tr>
                 ))}
               </tbody>
@@ -594,8 +594,8 @@ export function SkillsInventoryTab({ searchTerm = "" }: { searchTerm?: string })
       <RpSectionCard title="Resource Skills Matrix">
         <RpVirtualScrollContainer scrollRef={matrixVirtual.scrollRef} onScroll={matrixVirtual.onScroll} maxHeight={matrixVirtual.maxHeight}>
         <RpTableWrap>
-          <table className="w-full text-xs min-w-[700px]">
-            <thead><tr className="border-b bg-muted/50 text-muted-foreground"><th className="text-left py-2 px-3 font-bold">Resource</th><th className="text-left py-2 px-3">Role / Grade</th><th className="text-left py-2 px-3">Location</th><th className="text-left py-2 px-3">Languages</th><th className="text-left py-2 px-3">Top Skills</th><th className="text-left py-2 px-3">Utilisation</th></tr></thead>
+          <table className="w-full text-xs min-w-[700px] text-gray-700 dark:text-foreground">
+            <thead><tr className="border-b border-border/60 bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground"><th className="text-left py-2 px-3 font-bold">Resource</th><th className="text-left py-2 px-3 font-semibold">Role / Grade</th><th className="text-left py-2 px-3 font-semibold">Location</th><th className="text-left py-2 px-3 font-semibold">Languages</th><th className="text-left py-2 px-3 font-semibold">Top Skills</th><th className="text-left py-2 px-3 font-semibold">Utilisation</th></tr></thead>
             <tbody>
               <RpVirtualPaddingRows height={matrixVirtual.padTop} />
               {matrixVirtual.visibleRows.map((r) => (
@@ -761,19 +761,19 @@ export function RecruitmentForecastTab() {
       </div>
       <RpSectionCard title="Recruitment Timeline — 12-Month View">
         <RpTableWrap>
-          <table className="w-full text-xs">
-            <thead><tr className="border-b bg-muted/50 text-muted-foreground"><th className="text-left py-2 px-3 font-bold">Role</th><th>Grade</th><th>Headcount</th><th>Time-to-Hire</th><th>Latest Start</th><th>Go-Live</th><th>Est. Cost</th><th>Status</th></tr></thead>
+          <table className="w-full text-sm text-gray-700 dark:text-foreground">
+            <thead><tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60"><th className="px-3 py-2.5 text-left align-middle font-semibold">Role</th><th className="px-3 py-2.5 text-left align-middle font-semibold">Grade</th><th className="px-3 py-2.5 text-center align-middle font-semibold">Headcount</th><th className="px-3 py-2.5 text-center align-middle font-semibold">Time-to-Hire</th><th className="px-3 py-2.5 text-left align-middle font-semibold">Latest Start</th><th className="px-3 py-2.5 text-left align-middle font-semibold">Go-Live</th><th className="px-3 py-2.5 text-left align-middle font-semibold">Est. Cost</th><th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th></tr></thead>
             <tbody>
               {data.timeline.map((row) => (
                 <tr key={row.id} className="border-b border-border/40 hover:bg-muted/30">
-                  <td className="py-2 px-3 font-semibold">{row.role}</td>
-                  <td className="py-2 px-2"><RpStatusPill>{row.grade}</RpStatusPill></td>
-                  <td className="py-2 px-2 text-center font-bold">{row.headcount}</td>
-                  <td className="py-2 px-2 text-center">{row.tth}</td>
-                  <td className="py-2 px-2 font-semibold">{row.start}</td>
-                  <td className="py-2 px-2">{row.goLive}</td>
-                  <td className="py-2 px-2">{row.cost}</td>
-                  <td className="py-2 px-2"><RpStatusPill variant={row.statusVariant as "destructive" | "warning" | "success"}>{row.status}</RpStatusPill></td>
+                  <td className="px-3 py-2.5 align-middle font-semibold">{row.role}</td>
+                  <td className="px-3 py-2.5 align-middle"><RpStatusPill>{row.grade}</RpStatusPill></td>
+                  <td className="px-3 py-2.5 align-middle text-center font-bold">{row.headcount}</td>
+                  <td className="px-3 py-2.5 align-middle text-center">{row.tth}</td>
+                  <td className="px-3 py-2.5 align-middle font-semibold">{row.start}</td>
+                  <td className="px-3 py-2.5 align-middle">{row.goLive}</td>
+                  <td className="px-3 py-2.5 align-middle">{row.cost}</td>
+                  <td className="px-3 py-2.5 align-middle"><RpStatusPill variant={row.statusVariant as "destructive" | "warning" | "success"}>{row.status}</RpStatusPill></td>
                 </tr>
               ))}
             </tbody>
@@ -977,8 +977,8 @@ export function ScenarioPlanningTab() {
       <div className="grid lg:grid-cols-2 gap-4">
         <RpSectionCard title="Scenario Comparison">
           <RpTableWrap>
-            <table className="w-full text-xs">
-              <thead><tr className="border-b"><th className="text-left py-2 px-3 font-bold">Metric</th><th className="text-amber-600 font-bold">Worst</th><th className="text-indigo-600 font-bold">Expected</th><th className="text-emerald-600 font-bold">Best</th></tr></thead>
+            <table className="w-full text-xs text-gray-700 dark:text-foreground">
+              <thead><tr className="border-b border-border/60 bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground"><th className="text-left py-2 px-3 font-bold">Metric</th><th className="text-amber-600 font-bold">Worst</th><th className="text-indigo-600 font-bold">Expected</th><th className="text-emerald-600 font-bold">Best</th></tr></thead>
               <tbody>
                 {data.comparison.map((row) => (
                   <tr key={row.metric} className="border-b border-border/40">

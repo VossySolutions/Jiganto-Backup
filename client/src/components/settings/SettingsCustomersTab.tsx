@@ -993,6 +993,7 @@ export default function SettingsCustomersTab({ profiles, roles, tenantId }: Sett
                                   <Button
                                     variant="ghost"
                                     size="icon"
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
                                     onClick={() => deleteAssignmentMutation.mutate(assignment.id)}
                                     data-testid={`button-delete-assignment-${assignment.id}`}
                                   >

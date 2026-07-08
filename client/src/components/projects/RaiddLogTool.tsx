@@ -1012,11 +1012,11 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
         {activeView === "table" && (
           <div className="bg-background border rounded-lg overflow-hidden mb-4">
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead className="bg-muted/50 border-b">
-                  <tr>
+              <table className="w-full text-sm text-gray-700 dark:text-foreground border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
                     {visibleCols.map(c => (
-                      <th key={c.key} className={`text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap ${c.key === "cb" ? "w-9 px-2" : ""}`}>{c.label}</th>
+                      <th key={c.key} className={`text-left align-middle font-semibold whitespace-nowrap ${c.key === "cb" ? "w-9 px-2 py-2.5" : "px-3 py-2.5"}`}>{c.label}</th>
                     ))}
                   </tr>
                 </thead>
@@ -1029,18 +1029,18 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
                     </tr>
                   ) : (
                     tablePagination.paginatedItems.map(item => (
-                      <tr key={item.id} className={`border-b last:border-b-0 cursor-pointer transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-500/5 ${item.escalated ? "bg-amber-50 dark:bg-amber-500/5 border-l-[3px] border-l-amber-500" : ""} ${selectedIds.has(item.id) ? "bg-primary/5" : ""} ${item.archived ? "opacity-50" : ""}`} data-testid={`row-raidd-${item.id}`}>
+                      <tr key={item.id} className={`border-b border-border/40 last:border-b-0 cursor-pointer transition-colors hover:bg-muted/30 ${item.escalated ? "bg-amber-50 dark:bg-amber-500/5 border-l-[3px] border-l-amber-500" : ""} ${selectedIds.has(item.id) ? "bg-primary/5" : ""} ${item.archived ? "opacity-50" : ""}`} data-testid={`row-raidd-${item.id}`}>
                         {visibleCols.map(c => {
                           if (c.key === "cb") {
                             return (
-                              <td key="cb" className="px-2 py-2.5 w-9" onClick={(e) => e.stopPropagation()}>
+                              <td key="cb" className="px-2 py-2.5 align-middle w-9" onClick={(e) => e.stopPropagation()}>
                                 <input type="checkbox" className="w-[15px] h-[15px] rounded-sm accent-primary cursor-pointer" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)} data-testid={`checkbox-${item.id}`} />
                               </td>
                             );
                           }
                           if (c.key === "actions") {
                             return (
-                              <td key="actions" className="px-2 py-2.5 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
+                              <td key="actions" className="px-3 py-2.5 align-middle whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
                                 <button className="text-[11px] text-muted-foreground hover:text-primary px-1.5 py-0.5 rounded" onClick={() => setDrawerItem(item)} title="Open" data-testid={`button-edit-${item.id}`}>
                                   <Search className="w-3 h-3" />
                                 </button>
@@ -1057,7 +1057,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
                             );
                           }
                           return (
-                            <td key={c.key} className={`px-3 py-2.5 text-[12.5px] ${c.key === "title" ? "font-medium text-foreground" : "text-muted-foreground"}`} onClick={() => setDrawerItem(item)}>
+                            <td key={c.key} className={`px-3 py-2.5 align-middle text-[12.5px] ${c.key === "title" ? "font-medium text-foreground" : "text-muted-foreground"}`} onClick={() => setDrawerItem(item)}>
                               {renderCell(c, item)}
                             </td>
                           );

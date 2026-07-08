@@ -471,29 +471,29 @@ export function TraceabilityScreen() {
                 <div className="text-xs text-muted-foreground py-3">No test cases linked yet. Click "Manage Links" to connect test cases to this requirement.</div>
               ) : (
                 <div className="border border-border rounded-xl overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/50 border-b border-border">
-                      <tr>
-                        <th className="text-left px-4 py-2.5 font-semibold">Test Case</th>
-                        <th className="text-left px-4 py-2.5 font-semibold w-20">Priority</th>
-                        <th className="text-left px-4 py-2.5 font-semibold w-28">Last Result</th>
-                        <th className="px-4 py-2.5 w-10" />
+                  <table className="w-full text-sm text-gray-700 dark:text-foreground">
+                    <thead>
+                      <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Test Case</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold w-20">Priority</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold w-28">Last Result</th>
+                        <th className="px-3 py-2.5 text-right align-middle font-semibold w-10" />
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border/50">
+                    <tbody>
                       {linkedCases.map(c => {
                         const result = getLastResult(c.id);
                         return (
-                          <tr key={c.id} className="hover:bg-muted/20 group">
-                            <td className="px-4 py-2.5 font-medium">{c.title}</td>
-                            <td className="px-4 py-2.5 capitalize">{c.priority}</td>
-                            <td className="px-4 py-2.5">
+                          <tr key={c.id} className="border-b border-border/40 hover:bg-muted/30 group">
+                            <td className="px-3 py-2.5 align-middle font-medium">{c.title}</td>
+                            <td className="px-3 py-2.5 align-middle capitalize">{c.priority}</td>
+                            <td className="px-3 py-2.5 align-middle">
                               <div className="flex items-center gap-1.5">
                                 {RESULT_ICON[result] ?? RESULT_ICON.not_run}
                                 <span className="capitalize">{result?.replace("_", " ")}</span>
                               </div>
                             </td>
-                            <td className="px-4 py-2.5">
+                            <td className="px-3 py-2.5 align-middle">
                               <button onClick={() => toggleLink(selected, c.id)}
                                 className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 transition-all">
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -515,23 +515,23 @@ export function TraceabilityScreen() {
                   <Bug className="h-4 w-4 text-red-500" /> Linked Defects ({linkedDefects.length})
                 </h3>
                 <div className="border border-border rounded-xl overflow-hidden">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/50 border-b border-border">
-                      <tr>
-                        <th className="text-left px-4 py-2.5 font-semibold">Defect</th>
-                        <th className="text-left px-4 py-2.5 font-semibold w-20">Severity</th>
-                        <th className="text-left px-4 py-2.5 font-semibold w-24">Status</th>
+                  <table className="w-full text-sm text-gray-700 dark:text-foreground">
+                    <thead>
+                      <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold">Defect</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold w-20">Severity</th>
+                        <th className="px-3 py-2.5 text-left align-middle font-semibold w-24">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border/50">
+                    <tbody>
                       {linkedDefects.map(d => (
-                        <tr key={d.id} className="hover:bg-muted/20">
-                          <td className="px-4 py-2.5 font-medium">
+                        <tr key={d.id} className="border-b border-border/40 hover:bg-muted/30">
+                          <td className="px-3 py-2.5 align-middle font-medium">
                             <span className="font-mono text-[10px] text-muted-foreground mr-2">{d.ref}</span>
                             {d.title}
                           </td>
-                          <td className="px-4 py-2.5 capitalize">{d.severity}</td>
-                          <td className="px-4 py-2.5 capitalize">{d.status}</td>
+                          <td className="px-3 py-2.5 align-middle capitalize">{d.severity}</td>
+                          <td className="px-3 py-2.5 align-middle capitalize">{d.status}</td>
                         </tr>
                       ))}
                     </tbody>

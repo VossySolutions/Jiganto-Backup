@@ -51,23 +51,23 @@ export function BpmDeltaReportTable({ asIsNodes, toBeNodes }: Props) {
           </Button>
         </div>
       </div>
-      <div className="max-h-48 overflow-auto px-4 pb-3">
-        <table className="w-full text-xs">
+      <div className="max-h-48 overflow-auto overflow-x-auto px-4 pb-3">
+        <table className="w-full text-sm text-gray-700 dark:text-foreground">
           <thead>
-            <tr className="border-b text-muted-foreground">
-              <th className="text-left py-1.5 pr-2">Step</th>
-              <th className="text-left py-1.5 pr-2">Change</th>
-              <th className="text-left py-1.5">Details</th>
+            <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+              <th className="px-3 py-2.5 text-left align-middle font-semibold">Step</th>
+              <th className="px-3 py-2.5 text-left align-middle font-semibold">Change</th>
+              <th className="px-3 py-2.5 text-left align-middle font-semibold">Details</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r: DeltaStepRow) => (
-              <tr key={r.stepId + r.changeType} className="border-b border-border/30" data-testid={`delta-row-${r.stepId}`}>
-                <td className="py-1.5 pr-2 font-medium">{r.stepName}</td>
-                <td className="py-1.5 pr-2">
+              <tr key={r.stepId + r.changeType} className="border-b border-border/40 hover:bg-muted/30" data-testid={`delta-row-${r.stepId}`}>
+                <td className="px-3 py-2.5 align-middle font-medium">{r.stepName}</td>
+                <td className="px-3 py-2.5 align-middle">
                   <Badge variant="outline" className={`text-[10px] capitalize ${CHANGE_COLORS[r.changeType]}`}>{r.changeType}</Badge>
                 </td>
-                <td className="py-1.5 text-muted-foreground">{r.details}</td>
+                <td className="px-3 py-2.5 align-middle text-muted-foreground">{r.details}</td>
               </tr>
             ))}
           </tbody>

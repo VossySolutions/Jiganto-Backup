@@ -1461,7 +1461,7 @@ export function WorkspaceTableView({
     return (
       <tr
         key={row.id}
-        className={cn("border-b last:border-b-0 group", isSelected && "bg-primary/5")}
+        className={cn("border-b border-border/40 last:border-b-0 group hover:bg-muted/30", isSelected && "bg-primary/5")}
         data-testid={`table-row-${row.id}`}
       >
         <td className="w-8 px-1 border-r text-center">
@@ -1493,7 +1493,7 @@ export function WorkspaceTableView({
                   Duplicate
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => deleteRowMutation.mutate(row.id)} className="text-destructive" data-testid={`delete-row-${row.id}`}>
+                <DropdownMenuItem onClick={() => deleteRowMutation.mutate(row.id)} className="text-red-600 focus:text-red-700" data-testid={`delete-row-${row.id}`}>
                   <Trash2 className="h-4 w-4 mr-2" />
                   Delete
                 </DropdownMenuItem>
@@ -1508,7 +1508,7 @@ export function WorkspaceTableView({
             <td
               key={col.id}
               className={cn(
-                "px-3 py-1.5 border-r last:border-r-0",
+                "px-3 py-2.5 align-middle border-r last:border-r-0",
                 !["date", "rag", "checkbox", "select", "rating", "created_date"].includes(col.type || "text") && "cursor-text",
                 isEditing && "bg-accent/20 ring-1 ring-primary/30 ring-inset"
               )}
@@ -1715,10 +1715,10 @@ export function WorkspaceTableView({
                 </div>
               </div>
             ) : (
-              <table className="w-full text-sm">
+              <table className="w-full text-sm text-gray-700 dark:text-foreground">
                 <thead>
-                  <tr className="border-b bg-muted/30">
-                    <th className="w-8 px-1 py-2 border-r">
+                  <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                    <th className="w-8 px-1 py-2.5 border-r">
                       <input
                         type="checkbox"
                         checked={processedRows.length > 0 && selectedRows.size === processedRows.length}
@@ -1735,7 +1735,7 @@ export function WorkspaceTableView({
                         <th
                           key={col.id}
                           className={cn(
-                            "text-left font-medium text-muted-foreground px-3 py-2 border-r last:border-r-0 select-none group cursor-grab",
+                            "px-3 py-2.5 text-left align-middle font-semibold border-r last:border-r-0 select-none group cursor-grab",
                             dragOverColId === col.id && draggedColId !== col.id && "bg-primary/10 shadow-[inset_2px_0_0_0_hsl(var(--primary))]"
                           )}
                           style={{ minWidth: col.width || 150 }}

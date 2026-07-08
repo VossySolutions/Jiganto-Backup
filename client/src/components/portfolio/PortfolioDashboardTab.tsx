@@ -167,18 +167,22 @@ export function PortfolioDashboardTab({ onNavigate, headerSearch }: { onNavigate
             ))}
           </div>
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-xs text-muted-foreground">
-                <th className="p-3">Project</th><th>Client</th><th>PM</th><th>RAG</th><th></th>
+            <table className="w-full text-sm text-gray-700 dark:text-foreground">
+              <thead><tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Project</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">Client</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">PM</th>
+                <th className="px-3 py-2.5 text-left align-middle font-semibold">RAG</th>
+                <th className="px-3 py-2.5 text-right align-middle font-semibold"></th>
               </tr></thead>
               <tbody>
                 {pagination.paginatedItems.map((row) => (
-                  <tr key={row.id} className="border-b border-border/30 hover:bg-muted/30">
-                    <td className="p-3 font-medium">{row.name}</td>
-                    <td className="text-muted-foreground text-xs">{row.clientName || "—"}</td>
-                    <td className="text-xs">{row.children[0]?.managerName || "—"}</td>
-                    <td><RagDot status={row.ragStatus} /></td>
-                    <td><Button variant="ghost" size="sm" onClick={() => setLocation(`/modules/projects/${row.children[0]?.id || ""}`)}><ArrowUpRight className="h-3.5 w-3.5" /></Button></td>
+                  <tr key={row.id} className="border-b border-border/40 hover:bg-muted/30">
+                    <td className="px-3 py-2.5 align-middle font-medium">{row.name}</td>
+                    <td className="px-3 py-2.5 align-middle text-muted-foreground text-xs">{row.clientName || "—"}</td>
+                    <td className="px-3 py-2.5 align-middle text-xs">{row.children[0]?.managerName || "—"}</td>
+                    <td className="px-3 py-2.5 align-middle"><RagDot status={row.ragStatus} /></td>
+                    <td className="px-3 py-2.5 align-middle text-right"><Button variant="ghost" size="sm" onClick={() => setLocation(`/modules/projects/${row.children[0]?.id || ""}`)}><ArrowUpRight className="h-3.5 w-3.5" /></Button></td>
                   </tr>
                 ))}
               </tbody>
