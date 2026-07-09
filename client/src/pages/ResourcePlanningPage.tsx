@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
@@ -93,6 +94,8 @@ export default function ResourcePlanningPage() {
   );
 }
 
+const RP_TAB_IDS = RP_TABS.map((t) => t.id);
+
 function ResourcePlanningInner({
   persona,
   setPersona,
@@ -102,10 +105,7 @@ function ResourcePlanningInner({
   setPersona: (p: RpPersonaId) => void;
   allowedPersonas: RpPersonaId[];
 }) {
-  const initialTab = typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("tab") ?? "exec"
-    : "exec";
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useModuleTabUrl(RP_TAB_IDS, "exec");
   const [searchTerm, setSearchTerm] = useState("");
   const { data: dash, isLoading: dashLoading } = useRpDashboard();
   const { data: recruit } = useRpRecruitment();

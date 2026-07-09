@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -81,6 +82,8 @@ const navSections: NavSection[] = [
     ],
   },
 ];
+
+const TM_SCREEN_TABS = navSections.flatMap((s) => s.items.map((i) => i.id));
 
 function ProjectSelector({ onSelect }: { onSelect?: () => void }) {
   const { projects, activeProjectId, activeProject, setActiveProjectId, isLoading } = useTmProject();
@@ -223,7 +226,7 @@ function NavPanel({ activeScreen, onNavigate }: { activeScreen: TmScreen; onNavi
 }
 
 function TestManagementInner() {
-  const [activeScreen, setActiveScreen] = useState<TmScreen>("command-centre");
+  const [activeScreen, setActiveScreen] = useModuleTabUrl(TM_SCREEN_TABS, "command-centre");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { activeProject, activeProjectId, isLoading: projectLoading } = useTmProject();
 

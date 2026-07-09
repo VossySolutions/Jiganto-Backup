@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { useLocation } from "wouter";
+import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -111,11 +113,15 @@ td{padding:8px 10px;border-bottom:1px solid #f3f4f6}</style></head><body>
   setTimeout(() => win.print(), 400);
 }
 
+const SIGNOFF_VIEWS = ["dashboard", "templates", "compose", "detail", "audit"] as const;
+
 export default function SignOffPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [location, setLocation] = useLocation();
+  const basePath = location.split("?")[0] || "/modules/e-sign";
 
-  const [view, setView] = useState<View>("dashboard");
+  const [view, setView] = useModuleTabUrl(SIGNOFF_VIEWS, "dashboard");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState("awaiting");
   const [search, setSearch] = useState("");
@@ -173,8 +179,9 @@ export default function SignOffPage() {
     const deepRequestId = params.get("request");
     if (deepRequestId) {
       setSelectedId(Number(deepRequestId));
-      setView("detail");
-      window.history.replaceState({}, "", "/modules/e-sign");
+      params.delete("request");
+      params.set("tab", "detail");
+      setLocation(`${basePath}?${params.toString()}`);
       return;
     }
 
@@ -264,9 +271,16 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
 
     if (deepProjectId) setProjectId(Number(deepProjectId));
     if (deepDeliverableId) setDeliverableId(Number(deepDeliverableId));
-    setView("compose");
-    window.history.replaceState({}, "", "/modules/e-sign");
-  }, []);
+    for (const key of [
+      "compose", "jigantoDocId", "jigantoDocTitle", "projectId", "deliverableId", "deliverableTitle",
+      "crmContractId", "crmContractTitle", "testCycleId", "testCycleName", "testPhase",
+      "uatPassRate", "uatCompletion", "uatPassed", "uatFailed", "uatTotal",
+    ]) {
+      params.delete(key);
+    }
+    params.set("tab", "compose");
+    setLocation(`${basePath}?${params.toString()}`);
+  }, [basePath, setLocation]);
 
   const listUrl = useMemo(() => {
     const p = new URLSearchParams();

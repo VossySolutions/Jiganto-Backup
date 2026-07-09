@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { Redirect, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { DASHBOARD_PATH } from "@shared/app-routes";
@@ -171,10 +172,10 @@ function TabIcon360View() {
 const CRM_LIST_STALE = 30_000;
 const CRM_META_STALE = 60_000;
 
-const CRM_TAB_VALUES = new Set([
+const CRM_TAB_LIST = [
   "dashboard", "360view", "leads", "opportunities", "pipeline",
   "customers", "contracts", "contacts", "forecasting", "resourceplan",
-]);
+] as const;
 
 function parseCrmUrl() {
   const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
@@ -186,7 +187,7 @@ function parseCrmUrl() {
   const planId = planRaw && /^\d+$/.test(planRaw) ? Number(planRaw) : null;
   const opportunityId = oppRaw && /^\d+$/.test(oppRaw) ? Number(oppRaw) : null;
   return {
-    tab: tab && CRM_TAB_VALUES.has(tab) ? tab : null,
+    tab: tab && (CRM_TAB_LIST as readonly string[]).includes(tab) ? tab : null,
     contractId,
     planId,
     opportunityId,
@@ -215,7 +216,7 @@ function CRMPageContent() {
   const [, setLocation] = useLocation();
   const { platformRole, isJigantoStaff } = usePermissions();
   const urlState = useMemo(() => parseCrmUrl(), []);
-  const [activeTab, setActiveTab] = useState(urlState.tab ?? "dashboard");
+  const [activeTab, setActiveTab] = useModuleTabUrl(CRM_TAB_LIST, "dashboard");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAccount, setSelectedAccount] = useState<CrmAccountDetail | null>(null);
   const [detailPanelExpanded, setDetailPanelExpanded] = useState(false);

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { apiRequest } from "@/lib/queryClient";
@@ -1052,13 +1053,15 @@ function ResponseModal({ response, survey, idx, total, onNav, onClose }: {
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
+const SURVEY_VIEWS = ["dashboard", "builder", "results"] as const;
+
 export default function SurveysPage() {
   const C = useSurveyColors();
   const statusStyles = getStatusStyles(C);
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const [view, setView] = useState<View>("dashboard");
+  const [view, setView] = useModuleTabUrl(SURVEY_VIEWS, "dashboard");
   const [mainTab, setMainTab] = useState<MainTab>("surveys");
   const [listView, setListView] = useState<"card" | "list">("card");
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);

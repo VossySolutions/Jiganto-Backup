@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,11 +28,12 @@ import {
 } from "@/components/icons/ModuleIcons";
 import type { Resource, Skill, SkillCategory, ResourceAllocation, ResourceSkill } from "@shared/models/resources";
 
+const ALL_RESOURCE_TABS = [
+  "dashboard", "people", "skills", "allocations", "pipeline", "timesheets", "reports", "rate-cards",
+] as const;
+
 export default function ResourceManagementPage() {
-  const initialTab = typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("tab") ?? "dashboard"
-    : "dashboard";
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useModuleTabUrl(ALL_RESOURCE_TABS, "dashboard");
   const [tabFilter, setTabFilter] = useState<string | undefined>();
   const [searchTerm, setSearchTerm] = useState("");
   const [rateCardManagerOpen, setRateCardManagerOpen] = useState(false);
@@ -165,13 +167,10 @@ export default function ResourceManagementPage() {
   }, [scope, activeTab, allowedTabs]);
 
   useEffect(() => {
-    const tab = new URLSearchParams(window.location.search).get("tab");
-    if (tab && allowedTabs.includes(tab)) {
-      setActiveTab(tab);
-    } else if (scope?.isContractorPortal && !tab) {
+    if (scope?.isContractorPortal && !new URLSearchParams(window.location.search).get("tab")) {
       setActiveTab("timesheets");
     }
-  }, [scope, allowedTabs]);
+  }, [scope?.isContractorPortal, setActiveTab]);
 
   if (isLoading) {
     return (

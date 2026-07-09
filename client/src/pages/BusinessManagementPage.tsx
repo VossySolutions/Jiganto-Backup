@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, type ReactNode } from "react";
+import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { copyTextToClipboard, documentModuleUrl } from "@/lib/module-links";
@@ -305,8 +306,12 @@ function filterBusinessSearch<T extends { title?: string | null; name?: string |
   });
 }
 
+const BUSINESS_TABS = [
+  "dashboard", "strategy-map", "strategy", "goals", "objectives", "initiatives", "okrs", "kpis", "governance", "reviews", "documents",
+] as const;
+
 export default function BusinessManagementPage() {
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useModuleTabUrl(BUSINESS_TABS, "dashboard");
   const [searchTerm, setSearchTerm] = useState("");
   const { open: openAiInsights } = useAIInsightsPanel();
   const { toast } = useToast();

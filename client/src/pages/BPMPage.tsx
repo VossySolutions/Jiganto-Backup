@@ -1,4 +1,5 @@
 import { useState, useMemo, lazy, Suspense, useRef, useCallback } from "react";
+import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -2189,9 +2190,11 @@ type TreeNodeData = {
   path: string;
 };
 
+const BPM_PORTAL_TABS = ["library", "diagrams"] as const;
+
 function ProcessPortal() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("library");
+  const [activeTab, setActiveTab] = useModuleTabUrl(BPM_PORTAL_TABS, "library");
   const [selectedLibrary, setSelectedLibrary] = useState<number | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [viewingDiagram, setViewingDiagram] = useState<BpmDiagram | null>(null);

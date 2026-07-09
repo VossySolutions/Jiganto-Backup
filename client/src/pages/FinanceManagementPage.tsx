@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { Redirect } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { DASHBOARD_PATH } from "@shared/app-routes";
@@ -38,15 +39,10 @@ const FINANCE_TABS = ["dashboard", "budgets", "timesheets", "expenses", "invoice
 
 export default function FinanceManagementPage() {
   const { activeClient } = useClientContext();
-  const initialTab = typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("tab") ?? "dashboard"
-    : "dashboard";
   const initialProjectId = typeof window !== "undefined"
     ? Number(new URLSearchParams(window.location.search).get("projectId")) || null
     : null;
-  const [activeTab, setActiveTab] = useState(
-    FINANCE_TABS.includes(initialTab as (typeof FINANCE_TABS)[number]) ? initialTab : "dashboard",
-  );
+  const [activeTab, setActiveTab] = useModuleTabUrl(FINANCE_TABS, "dashboard");
   const [searchTerm, setSearchTerm] = useState("");
   const tabsListRef = useRef<HTMLDivElement>(null);
 
@@ -103,21 +99,6 @@ export default function FinanceManagementPage() {
     staleTime: 60_000,
     enabled: activeTab === "settings",
   });
-
-  useEffect(() => {
-    const tab = new URLSearchParams(window.location.search).get("tab");
-    if (tab && FINANCE_TABS.includes(tab as (typeof FINANCE_TABS)[number])) {
-      setActiveTab(tab);
-    }
-  }, []);
-
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-    const url = new URL(window.location.href);
-    if (tab === "dashboard") url.searchParams.delete("tab");
-    else url.searchParams.set("tab", tab);
-    window.history.replaceState({}, "", url.pathname + url.search);
-  };
 
   const isLoading = activeTab === "dashboard" && dashboardLoading && dashboard === undefined;
 
@@ -180,7 +161,7 @@ export default function FinanceManagementPage() {
             titleTestId="finance-title"
           />
 
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="px-3 sm:px-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="px-3 sm:px-4">
             <TabsList
               ref={tabsListRef}
               className="h-11 sm:h-12 bg-transparent border-0 gap-0.5 sm:gap-1 flex w-full max-w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-none scroll-smooth"
@@ -214,7 +195,7 @@ export default function FinanceManagementPage() {
                 data={dashboard}
                 isLoading={dashboardLoading}
                 searchTerm={searchTerm}
-                onNavigateTab={handleTabChange}
+                onNavigateTab={setActiveTab}
               />
             </TabsContent>
             <TabsContent value="budgets" className="p-3 sm:p-4 md:p-6 m-0">

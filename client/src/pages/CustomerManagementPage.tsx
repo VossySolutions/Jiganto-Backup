@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -233,13 +234,17 @@ function mrrTrendGrowthLabel(trend: { amountPence: number }[]): string {
   return `${formatGbp(first, true)} → ${formatGbp(last, true)} · ${pct > 0 ? "+" : ""}${pct}% over 6 months`;
 }
 
+const CUSTOMER_VIEWS = [
+  "customers", "detail", "health", "trials", "programmes", "renewal", "pricing", "billing", "settings",
+] as const;
+
 export default function CustomerManagementPage() {
   const { platformRole, isJigantoStaff, isLoading: permissionsLoading } = usePermissions();
   const settingsAccess = getSettingsAccess(platformRole, isJigantoStaff);
   const allowed = settingsAccess.tier === "system";
   const canGrantCommercial = canGrantCommercialAccess(platformRole, isJigantoStaff);
   const { toast } = useToast();
-  const [view, setView] = useState<ViewId>("customers");
+  const [view, setView] = useModuleTabUrl(CUSTOMER_VIEWS, "customers");
   const [detailSection, setDetailSection] = useState<DetailSectionId>("subscription");
   const [healthSection, setHealthSection] = useState<HealthSectionId>("attention");
   const [selectedSlug, setSelectedSlug] = useState("");

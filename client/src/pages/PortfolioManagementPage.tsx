@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
@@ -21,8 +22,10 @@ import { PortfolioRoadmapTab } from "@/components/portfolio/PortfolioRoadmapTab"
 import { PortfolioHealthMatrixTab } from "@/components/portfolio/PortfolioHealthMatrixTab";
 import { PortfolioReportsTab } from "@/components/portfolio/PortfolioReportsTab";
 
+const PORTFOLIO_TABS = ["dashboard", "portfolios", "programmes", "roadmap", "health", "reports", "milestones"] as const;
+
 export default function PortfolioManagementPage() {
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useModuleTabUrl(PORTFOLIO_TABS, "dashboard");
   const [searchTerm, setSearchTerm] = useState("");
 
   return (

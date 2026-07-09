@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { useQuery } from "@tanstack/react-query";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
@@ -27,6 +28,8 @@ const TAB_ITEMS = [
   { value: "reports", label: "Reports", short: "Reports", icon: BarChart3 },
 ] as const;
 
+const HD_TAB_VALUES = TAB_ITEMS.map((t) => t.value);
+
 function parseHelpDeskUrl() {
   const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
   const projectId = params.get("projectId");
@@ -40,7 +43,8 @@ function parseHelpDeskUrl() {
 
 export default function HelpDeskPage() {
   const urlState = useMemo(() => parseHelpDeskUrl(), []);
-  const [activeTab, setActiveTab] = useState(urlState.openTickets ? "tickets" : "dashboard");
+  const fallbackTab = urlState.openTickets ? "tickets" : "dashboard";
+  const [activeTab, setActiveTab] = useModuleTabUrl(HD_TAB_VALUES, fallbackTab as typeof HD_TAB_VALUES[number]);
   const [searchTerm, setSearchTerm] = useState("");
   const [ticketFilters, setTicketFilters] = useState<{ slaFilter?: string; status?: string; priority?: string; type?: string }>({});
   const tabsListRef = useRef<HTMLDivElement>(null);
