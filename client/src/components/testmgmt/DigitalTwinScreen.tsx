@@ -1,6 +1,9 @@
 import { MetricCard } from "@/components/ui/metric-card";
 import { cn } from "@/lib/utils";
-import { FlaskConical, Bug, Shield, TrendingUp } from "lucide-react";
+import {
+  FlaskConical,
+  Bug
+} from "lucide-react";
 import { TmScreen } from "@/types/testmgmt";
 import { useTmFetch } from "@/hooks/use-tm-fetch";
 import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";

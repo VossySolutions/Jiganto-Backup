@@ -741,7 +741,7 @@ export function registerTestMgmtExtensionRoutes(
     res.json(updated);
   }));
 
-  app.post("/api/tm/migrate-schema", tmHandler(async (req, res) => {
+  app.post("/api/tm/migrate-schema", tmHandler(async (_req, res) => {
     const sqlPath = path.resolve(process.cwd(), "scripts/sql/test-mgmt-module.sql");
     const rawSql = await readFile(sqlPath, "utf-8");
     const statements = parseSqlStatements(rawSql);

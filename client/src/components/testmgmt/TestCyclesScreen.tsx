@@ -9,7 +9,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useTmProject } from "@/contexts/TmProjectContext";
 import { CYCLE_STATUS_COLORS, TEST_PHASES, getTmLabels } from "@/lib/tm-utils";
 import type { TmCycleMetrics } from "@/types/testmgmt";
-import { Plus, Loader2, ShieldCheck, Play, Calendar, FileDown, FileSignature } from "lucide-react";
+import {
+  Plus,
+  ShieldCheck,
+  Play,
+  Calendar,
+  FileDown,
+  FileSignature
+} from "lucide-react";
 import { FormDialogShell, FormSection, FieldGrid, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { useAuth } from "@/hooks/use-auth";
 import { useTmFetch } from "@/hooks/use-tm-fetch";

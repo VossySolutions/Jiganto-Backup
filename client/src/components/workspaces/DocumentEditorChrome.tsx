@@ -1,20 +1,19 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  useState,
+  useMemo
+} from "react";
 import { cn } from "@/lib/utils";
 import {
-  ChevronRight,
   ChevronDown,
   List,
   FileText,
   Clock,
-  Type,
-  AlignLeft,
   Loader2,
   Check,
   Maximize2,
-  Minimize2,
+  Minimize2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +30,6 @@ interface HeadingItem {
 function TableOfContents({
   content,
   visible,
-  onToggle,
 }: {
   content: string;
   visible: boolean;

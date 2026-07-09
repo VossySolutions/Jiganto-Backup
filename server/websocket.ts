@@ -1,6 +1,5 @@
 import { Server as HttpServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { storage } from "./storage";
 
 interface ChatClient {
   ws: WebSocket;
@@ -67,7 +66,7 @@ class ChatWebSocketServer {
         const client = this.clients.get(clientId);
         if (client) {
           // Remove from all channel subscriptions
-          this.channelSubscriptions.forEach((subscribers, channelId) => {
+          this.channelSubscriptions.forEach((subscribers, _channelId) => {
             subscribers.delete(clientId);
           });
           // Clear typing indicators

@@ -8,9 +8,20 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Bookmark, Plus, Trash2, Star, ChevronDown, Columns3, Eye, EyeOff, ArrowUpDown, SortAsc, SortDesc, Filter } from "lucide-react";
+import {
+  Bookmark,
+  Plus,
+  Trash2,
+  Star,
+  ChevronDown,
+  Columns3,
+  Eye,
+  EyeOff,
+  ArrowUpDown,
+  SortAsc,
+  SortDesc
+} from "lucide-react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 
 type SavedView = {
@@ -65,7 +76,6 @@ export function SavedViewsDropdown({
   onApplyView,
   onColumnsChange,
   onSortChange,
-  onFilterChange
 }: SavedViewsDropdownProps) {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);

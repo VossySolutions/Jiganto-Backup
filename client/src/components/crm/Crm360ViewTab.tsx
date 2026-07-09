@@ -5,7 +5,6 @@ import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,9 +16,22 @@ import { getAccountTypeInfo, CRM_ACCOUNT_TYPES } from "@/lib/crm-account-types";
 import { MetricCard } from "@/components/ui/metric-card";
 import { cn } from "@/lib/utils";
 import {
-  Search, Mail, Phone, Plus, MoreHorizontal, Globe, MapPin, Users,
-  AlertTriangle, ChevronRight, ChevronDown, ExternalLink, Pencil, Trash2,
-  MessageSquare, CalendarDays, FileText, Briefcase
+  Search,
+  Mail,
+  Phone,
+  Plus,
+  MoreHorizontal,
+  Globe,
+  MapPin,
+  Users,
+  AlertTriangle,
+  ChevronDown,
+  Pencil,
+  Trash2,
+  MessageSquare,
+  CalendarDays,
+  FileText,
+  Briefcase
 } from "lucide-react";
 import { useCrmUsers } from "./CrmUsersProvider";
 import { CrmOwnerSelect } from "./CrmOwnerSelect";
@@ -619,7 +631,6 @@ export function Crm360ViewTab({
 
   const totalRevenue = accountOpps.reduce((s, o) => s + parseFloat(o.amount || "0"), 0);
   const openTotal = openOpps.reduce((s, o) => s + parseFloat(o.amount || "0"), 0);
-  const wonTotal = closedWonOpps.reduce((s, o) => s + parseFloat(o.amount || "0"), 0);
 
   const daysSinceLastTouch = useMemo(() => {
     const allDates: Date[] = [];

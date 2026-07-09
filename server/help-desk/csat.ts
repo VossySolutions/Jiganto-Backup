@@ -148,7 +148,6 @@ export async function processCsatSurveyResponse(surveyId: number, category: stri
   const latest = responses.find((r) => r.completedAt);
   if (!latest?.answers?.length) return;
 
-  const scaleAnswer = latest.answers.find((a) => typeof a.value === "number" || (typeof a.value === "object" && a.value != null));
   let score: number | null = null;
   for (const a of latest.answers) {
     const v = a.value;

@@ -1,8 +1,12 @@
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  sql
+} from "drizzle-orm";
 import { db } from "../db";
-import { storage } from "../storage";
 import { clients } from "@shared/models/clients";
-import { users } from "@shared/schema";
 import {
   hdMaintenanceWindows,
   hdSlaContractedHours,

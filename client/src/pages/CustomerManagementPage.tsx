@@ -41,7 +41,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger
+} from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -353,7 +357,7 @@ export default function CustomerManagementPage() {
     },
   });
 
-  const { data: detail, isLoading: detailLoading, isFetching: detailFetching } = useQuery({
+  const { data: detail, isLoading: detailLoading } = useQuery({
     queryKey: ["/api/customer-mgmt/customers", selectedSlug],
     queryFn: async () => {
       const res = await fetchWithAuth(`/api/customer-mgmt/customers/${selectedSlug}`);
@@ -446,7 +450,6 @@ export default function CustomerManagementPage() {
     },
   });
 
-  const settingsSaving = saveSettingsMut.isPending;
   const flagSaving = flagMut.isPending;
 
   const filteredCustomers = useMemo(() => {

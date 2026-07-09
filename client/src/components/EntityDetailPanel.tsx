@@ -16,11 +16,26 @@ import { SubmitForm } from "@/components/ui/submit-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Save, Trash2, ExternalLink, Calendar, Target, Flag, 
-  Crosshair, Zap, TrendingUp, BarChart3, CheckSquare, Loader2,
-  ChevronRight, ChevronUp, Link2, MessageSquare, Send, ShieldCheck, Plus,
-  FileText, Globe, X as XIcon
+import {
+  Save,
+  Trash2,
+  Calendar,
+  Target,
+  Flag,
+  Crosshair,
+  Zap,
+  TrendingUp,
+  BarChart3,
+  CheckSquare,
+  Loader2,
+  ChevronUp,
+  MessageSquare,
+  Send,
+  ShieldCheck,
+  Plus,
+  FileText,
+  Globe,
+  X as XIcon
 } from "lucide-react";
 import { format } from "date-fns";
 

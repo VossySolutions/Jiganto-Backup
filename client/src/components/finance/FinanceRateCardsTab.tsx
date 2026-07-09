@@ -5,21 +5,30 @@ import { RATE_CARD_TYPES } from "@shared/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
 import { FormDialogShell, FormSection, FieldGrid, FieldLabel } from "@/components/ui/form-dialog-shell";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Trash2, Pencil, Download, Upload, ChevronDown, ChevronRight, Star, CreditCard } from "lucide-react";
-import { FinanceTableSkeleton, FinanceEmptyState, FinanceButtonSpinner } from "./FinanceUi";
+import {
+  Plus,
+  Trash2,
+  Pencil,
+  Download,
+  Upload,
+  ChevronDown,
+  ChevronRight,
+  Star,
+  CreditCard
+} from "lucide-react";
+import {
+  FinanceTableSkeleton,
+  FinanceEmptyState
+} from "./FinanceUi";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import type { FinanceRateCard, FinanceRateCardItem } from "./types";

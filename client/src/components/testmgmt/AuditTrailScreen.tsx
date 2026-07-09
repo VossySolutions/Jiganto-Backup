@@ -2,7 +2,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   PlayCircle, Bug, Plus, Settings, CheckCircle2,
-  XCircle, MinusCircle, Clock, Filter, Search, Download
+  Filter, Search, Download
 } from "lucide-react";
 import { useTmFetch } from "@/hooks/use-tm-fetch";
 import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
@@ -25,13 +25,6 @@ const EVENT_CONFIG: Record<string, { icon: JSX.Element; label: string; cls: stri
   defect_resolved: { icon: <CheckCircle2 className="h-3.5 w-3.5" />, label: "Defect Resolved", cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
   case_created:    { icon: <Plus className="h-3.5 w-3.5" />,         label: "Case Created",    cls: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
   run_created:     { icon: <PlayCircle className="h-3.5 w-3.5" />,   label: "Run Created",     cls: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400" },
-};
-
-const STATUS_ICON: Record<string, JSX.Element> = {
-  pass:    <CheckCircle2 className="h-3 w-3 text-green-500" />,
-  fail:    <XCircle className="h-3 w-3 text-red-500" />,
-  blocked: <MinusCircle className="h-3 w-3 text-orange-500" />,
-  not_run: <Clock className="h-3 w-3 text-muted-foreground" />,
 };
 
 export function AuditTrailScreen() {
@@ -80,7 +73,6 @@ export function AuditTrailScreen() {
   // Summary stats
   const execs = events.filter(e => e.eventType === "execution").length;
   const defects = events.filter(e => e.eventType === "defect_raised").length;
-  const resolved = events.filter(e => e.eventType === "defect_resolved").length;
   const today = new Date().toDateString();
   const todayCount = events.filter(e => e.timestamp && new Date(e.timestamp).toDateString() === today).length;
 

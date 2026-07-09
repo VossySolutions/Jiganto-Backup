@@ -9,11 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
-import type { GanttTask, GanttResource, GanttDependency } from "@/components/projects/gantt.types";
 
 const AgileBoard = lazy(() => import("@/components/projects/AgileBoard"));
 const AgileDashboard = lazy(() => import("@/components/projects/AgileDashboard"));
@@ -50,12 +48,24 @@ const PmSowTrackerTool = lazy(() => import("@/components/projects/PmSecondaryToo
 const PmWbsTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmWbsTool })));
 
 import {
-  Plus, Search, ChevronRight, ChevronDown, Loader2,
-  Calendar, Users, Settings, Lightbulb,
-  X, Trash2, ArrowRight,
-  Maximize2, Minimize2, Share2, ChevronLeft,
-  LayoutGrid, TableProperties, MoreHorizontal, LayoutTemplate,
-  ArrowUpDown, ExternalLink, Check
+  Plus,
+  ChevronRight,
+  ChevronDown,
+  Loader2,
+  Calendar,
+  Lightbulb,
+  X,
+  ArrowRight,
+  Maximize2,
+  Minimize2,
+  ChevronLeft,
+  LayoutGrid,
+  TableProperties,
+  MoreHorizontal,
+  LayoutTemplate,
+  ArrowUpDown,
+  ExternalLink,
+  Check
 } from "lucide-react";
 import { SaveAsPlatformTemplateDialog } from "@/components/templates/SaveAsPlatformTemplateDialog";
 import {
@@ -156,12 +166,6 @@ const LEGACY_TYPE_MAP: Record<string, string> = {
   small_project: "project",
   large_project: "programme",
 };
-
-function getWorkType(p: any): string {
-  if (p.workType) return p.workType;
-  if (p.projectType && LEGACY_TYPE_MAP[p.projectType]) return LEGACY_TYPE_MAP[p.projectType];
-  return p.projectType || "project";
-}
 
 function getWorkTypeLabel(type: string): string {
   const allTypes = [...WORK_TYPES.main, ...WORK_TYPES.extended];
@@ -1493,8 +1497,6 @@ function ProjectDetailView({
     );
   }
 
-  const activeToolDef = findToolDefinition(currentActiveTool);
-
   return (
     <div className="flex flex-col h-full overflow-hidden w-full max-w-full" style={{ minWidth: 0 }} data-testid="project-detail-view">
       <div className="flex-shrink-0 border-b border-border bg-card px-4 py-2">
@@ -2075,76 +2077,6 @@ function ProjectSettingsPanel({ project, updateProjectMutation, toast, onClose }
       </div>
     </div>
   );
-}
-
-const PM_STATUS_TO_GANTT: Record<string, GanttTask['status']> = {
-  todo: 'notstarted',
-  in_progress: 'inprogress',
-  in_review: 'inprogress',
-  done: 'completed',
-  blocked: 'onhold',
-};
-
-const GANTT_STATUS_TO_PM: Record<GanttTask['status'], string> = {
-  notstarted: 'todo',
-  inprogress: 'in_progress',
-  completed: 'done',
-  onhold: 'blocked',
-  atrisk: 'in_progress',
-};
-
-const SUMMARY_TYPES = new Set(['project', 'release', 'phase', 'workstream']);
-
-function parseResourceNamesFromDesc(desc: string | null | undefined): string[] {
-  if (!desc) return [];
-  const match = desc.match(/^resources:(.+)$/);
-  if (!match) return [];
-  return match[1].split(';').map(s => s.trim()).filter(Boolean);
-}
-
-function pmTaskToGanttTask(t: any): GanttTask {
-  const today = new Date().toISOString().slice(0, 10);
-  const start = t.plannedStartDate || today;
-  const end = t.plannedEndDate || start;
-  const rawType = t.ganttType ? String(t.ganttType).toLowerCase() : null;
-  const VALID_TYPES = new Set(['project','release','phase','workstream','activity','task','subtask','milestone']);
-  const ganttType = (rawType && VALID_TYPES.has(rawType) ? rawType : (t.isSummary ? 'phase' : 'task')) as GanttTask['type'];
-  const resNames = parseResourceNamesFromDesc(t.description);
-  const resources = t.assigneeId ? [t.assigneeId] : resNames;
-  return {
-    id: `pm-${t.id}`,
-    name: t.name || 'Untitled',
-    type: ganttType,
-    start,
-    end,
-    progress: t.progress ?? 0,
-    status: PM_STATUS_TO_GANTT[t.status] || 'notstarted',
-    priority: (t.priority as GanttTask['priority']) || 'medium',
-    resources,
-    parent: t.parentTaskId ? `pm-${t.parentTaskId}` : undefined,
-  };
-}
-
-function ganttToPmUpdate(ganttTask: GanttTask) {
-  const numId = parseInt(ganttTask.id.replace('pm-', ''), 10);
-  const res: Record<string, any> = {
-    id: numId,
-    name: ganttTask.name,
-    plannedStartDate: ganttTask.start,
-    plannedEndDate: ganttTask.end,
-    progress: ganttTask.progress ?? 0,
-    status: GANTT_STATUS_TO_PM[ganttTask.status] || 'todo',
-    priority: ganttTask.priority,
-    ganttType: ganttTask.type.toLowerCase(),
-    isSummary: SUMMARY_TYPES.has(ganttTask.type),
-  };
-  if (ganttTask.resources && ganttTask.resources.length > 0) {
-    res.assigneeId = ganttTask.resources[0];
-  }
-  if (ganttTask.parent && ganttTask.parent.startsWith('pm-')) {
-    res.parentTaskId = parseInt(ganttTask.parent.replace('pm-', ''), 10);
-  }
-  return res;
 }
 
 function ProjectGanttWrapper({ project }: { project: any }) {

@@ -1,8 +1,5 @@
 import type { Client } from "@shared/models/clients";
-import {
-  canViewPmoMasterForRole,
-  type PlatformRole,
-} from "@shared/models/permissions";
+import { canViewPmoMasterForRole } from "@shared/models/permissions";
 import { storage } from "../storage";
 import type { EffectivePermissions } from "./permissions";
 

@@ -25,12 +25,6 @@ function daysFromNow(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function daysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-}
-
 async function ensureDeliverables(projectId: number, userId: string) {
   const existing = await db.select().from(pmDeliverables)
     .where(eq(pmDeliverables.projectId, projectId)).limit(1);

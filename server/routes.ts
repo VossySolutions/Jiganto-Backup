@@ -1,7 +1,6 @@
 
 import type { Express } from "express";
-import { createServer, type Server } from "http";
-import crypto from "crypto";
+import { type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { eq, and, isNull, inArray } from "drizzle-orm";
@@ -13,10 +12,7 @@ import {
 } from "./middleware/permissions";
 import { enforceModulePermissions } from "./middleware/module-permissions";
 import { injectApiTenantScope } from "./middleware/api-tenant-scope";
-import {
-  attachWorkspaceContext,
-  requireMasterWorkspace,
-} from "./middleware/workspace";
+import { attachWorkspaceContext } from "./middleware/workspace";
 import { enforceWorkspaceMutations } from "./middleware/workspace-enforcement";
 import { enforceArchivedWorkspaceReadOnly } from "./middleware/workspace-readonly";
 import { injectWorkspaceQueryScope } from "./middleware/workspace-query-scope";
@@ -45,7 +41,6 @@ import { registerOrgMembershipRoutes } from "./auth/orgMembershipRoutes";
 import { registerImpersonationRoutes } from "./auth/impersonationRoutes";
 import { registerChatRoutes } from "./chat";
 import { api } from "@shared/routes";
-import { isLegacySampleClient } from "@shared/sample-clients";
 import { z } from "zod";
 import { 
   insertStrategyItemSchema, 
@@ -74,13 +69,6 @@ import {
   documentFiles,
 } from "@shared/models/documents";
 import {
-  insertTaskSchema,
-  insertTaskBoardSchema,
-  insertTaskLinkSchema,
-  insertTaskSubtaskSchema,
-  insertTaskViewSchema,
-} from "@shared/models/tasks";
-import {
   insertPmPortfolioSchema,
   insertPmProgramSchema,
   insertPmProjectSchema,
@@ -97,13 +85,11 @@ import {
   insertPmSprintSchema,
   insertPmBacklogItemSchema,
   insertPmProjectToolSchema,
-  pmToolTypeEnum,
-  pmToolCategoryEnum,
   insertPmAgileWorkstreamSchema,
   insertPmEpicSchema,
   insertPmAgileSprintSchema,
   insertPmAgileStorySchema,
-  insertPmAgileDefectSchema,
+  insertPmAgileDefectSchema
 } from "@shared/models/projects";
 import {
   insertResourceSchema,
@@ -137,12 +123,10 @@ import {
 import {
   insertUserRoleSchema,
   insertUserInvitationSchema,
-  insertTenantSchema,
-  insertProfileSchema,
-  profiles,
+  profiles
 } from "@shared/schema";
 import { users as usersTable } from "@shared/models/auth";
-import { PLATFORM_ROLES, type PlatformRole } from "@shared/models/permissions";
+import { PLATFORM_ROLES } from "@shared/models/permissions";
 import { listImpersonationLogs } from "./lib/impersonation";
 import { logOrgAuditEvent, listOrgAuditEvents } from "./lib/org-audit";
 import { sendInvitationEmail, buildInviteUrl } from "./lib/invite-email";
@@ -151,12 +135,6 @@ import {
   invitationWebhookPayload,
 } from "./lib/integration-webhook";
 import { authStorage } from "./auth/storage";
-import { seedApexData } from "./seedApexData";
-import {
-  insertClientSchema,
-  insertClientUserSchema,
-} from "@shared/models/clients";
-import { slugify } from "./lib/slug";
 import { seedSpecDefaultBoard, VALID_COLUMN_TYPES } from "./workspaces/defaults";
 import type { InsertWorkspaceDatabaseColumn } from "@shared/models/workspaces";
 
@@ -187,7 +165,7 @@ export async function registerRoutes(
       const doc = await storage.getDocumentByPublicToken(token);
       if (!doc) return res.status(404).send("Document not found or link has been revoked");
 
-      const { parseDocumentPageLayout, resolvePageLayoutWithFolderDefaults } = await import("@shared/document-page-layout");
+      const { resolvePageLayoutWithFolderDefaults } = await import("@shared/document-page-layout");
       const { wrapDocumentBodyWithPageRegions } = await import("@shared/document-export");
       const folderDefaults = await storage.resolveFolderPageLayout(doc.folderId ?? null);
       const { headerHtml: pageHeaderHtml, footerHtml: pageFooterHtml } = resolvePageLayoutWithFolderDefaults(
@@ -1736,7 +1714,7 @@ export async function registerRoutes(
   });
 
   // Modules
-  app.get(api.modules.list.path, async (req, res) => {
+  app.get(api.modules.list.path, async (_req, res) => {
     const modules = await storage.getModules();
     res.json(modules);
   });
@@ -5246,7 +5224,6 @@ export async function registerRoutes(
     const tenantId = requireApiTenantId(req, res);
     if (tenantId == null) return;
     
-    const groupBy = req.query.groupBy as string | undefined;
     const filterStatus = req.query.status as string | undefined;
     const filterOwner = req.query.ownerId as string | undefined;
     const filterDepartment = req.query.departmentId ? Number(req.query.departmentId) : undefined;
@@ -5297,11 +5274,6 @@ export async function registerRoutes(
 
     function withOwnerName<T extends { ownerId?: string | null; departmentId?: number | null }>(entity: T): T & { ownerName: string | null; departmentName: string | null } {
       return { ...entity, ownerName: (entity as any).ownerName || resolveOwnerName(entity.ownerId), departmentName: resolveDeptName(entity.departmentId) };
-    }
-
-    function withAssigneeName<T extends { assigneeId?: string | null; departmentId?: number | null }>(entity: T): T & { assigneeName: string | null; ownerName: string | null; departmentName: string | null } {
-      const stored = (entity as any).ownerName as string | null | undefined;
-      return { ...entity, assigneeName: stored || resolveOwnerName(entity.assigneeId), ownerName: stored || resolveOwnerName(entity.assigneeId), departmentName: resolveDeptName(entity.departmentId) };
     }
 
     const rows: Array<{
@@ -9116,7 +9088,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
       const diagramId = Number(req.params.id);
-      const { canvasData, nodes, edges, swimlanes } = req.body;
+      const { canvasData, nodes, edges } = req.body;
 
       // Update diagram canvas data
       await storage.updateBpmDiagram(diagramId, { canvasData });
@@ -9918,7 +9890,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     }
   });
 
-  app.get("/api/workspace-pages/favorites", async (req, res) => {
+  app.get("/api/workspace-pages/favorites", async (_req, res) => {
     try {
       const results = await storage.getAllFavoritePages();
       res.json(results);
@@ -10540,7 +10512,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       // Update any records with no projectId
       const { db } = await import("./db");
       const { tmTestSuites: tSuites, tmTestCases: tCases, tmTestRuns: tRuns, tmDefects: tDefs, tmRequirements: tReqs } = await import("@shared/schema");
-      const { isNull, eq } = await import("drizzle-orm");
+      const { isNull } = await import("drizzle-orm");
       await db.update(tSuites).set({ projectId: project.id }).where(isNull(tSuites.projectId));
       await db.update(tCases).set({ projectId: project.id }).where(isNull(tCases.projectId));
       await db.update(tRuns).set({ projectId: project.id }).where(isNull(tRuns.projectId));

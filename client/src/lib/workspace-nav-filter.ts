@@ -16,13 +16,6 @@ export const NAV_ACTION_PATHS: Record<string, string> = {
   "nav-clients": "/clients",
 };
 
-const HIDDEN_MODULE_TO_PREFIX: Record<string, string[]> = {
-  "business-mgmt": ["/modules/business-mgmt"],
-  crm: ["/modules/crm"],
-  "finance-mgmt": ["/modules/finance-mgmt"],
-  clients: ["/clients", "/modules/clients"],
-};
-
 export function isCommandActionAllowedInWorkspace(
   actionId: string,
   navigatePath: string | undefined,

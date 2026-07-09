@@ -3,15 +3,26 @@ import { db } from "../db";
 import { storage } from "../storage";
 import type { TemplateModule } from "@shared/models/templates";
 import {
-  frameworks, bpmDiagrams, bpmNodes, bpmEdges, bpmTemplates,
-  surveyTemplates, surveys, surveyQuestions,
-  signoffTemplates, signoffRequests,
-  workspaceTemplates, workspacePages, workspaceDatabases, workspaceDatabaseColumns,
-  bpmlTemplates, bpmlEntries,
-  pmProjects, pmProjectTools, pmWorkstreams,
-  orgCharts, orgChartMembers,
-  tmBusinessAreas, tmBusinessProcesses, tmScenarios, tmTestCases, tmTestSteps,
-  whiteboards, stickyNotes,
+  bpmTemplates,
+  surveyTemplates,
+  surveys,
+  surveyQuestions,
+  signoffTemplates,
+  signoffRequests,
+  workspaceTemplates,
+  workspaceDatabases,
+  workspaceDatabaseColumns,
+  bpmlTemplates,
+  bpmlEntries,
+  orgCharts,
+  orgChartMembers,
+  tmBusinessAreas,
+  tmBusinessProcesses,
+  tmScenarios,
+  tmTestCases,
+  tmTestSteps,
+  whiteboards,
+  stickyNotes
 } from "@shared/schema";
 
 export async function buildSnapshot(module: TemplateModule, sourceId: number, tenantId: number): Promise<Record<string, unknown>> {

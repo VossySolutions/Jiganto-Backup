@@ -1,5 +1,11 @@
 import crypto from "crypto";
-import { and, desc, eq, inArray, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  or
+} from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { tenants } from "@shared/schema";
@@ -509,7 +515,6 @@ export async function sendRequest(id: number, actor: { name: string; email?: str
     ipAddress: actor.ip, metadata: { signerCount: request.signers.length, signingOrder: request.signingOrder },
   });
 
-  const updated = await getRequest(id)!;
   const full = (await getRequest(id))!;
   for (const signer of toNotify) {
     const s = full.signers.find(x => x.id === signer.id)!;

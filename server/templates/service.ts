@@ -1,8 +1,11 @@
 import { eq, and, or, isNull, isNotNull, desc, gte, inArray } from "drizzle-orm";
 import { db } from "../db";
 import {
-  platformTemplates, templateUsageLog, templateAiGenerations,
-  type TemplateModule, type PlatformTemplate, type PlatformTemplateWithMeta,
+  platformTemplates,
+  templateUsageLog,
+  type TemplateModule,
+  type PlatformTemplate,
+  type PlatformTemplateWithMeta
 } from "@shared/models/templates";
 import {
   surveyTemplates, bpmTemplates, signoffTemplates, workspaceTemplates, bpmlTemplates,
@@ -213,7 +216,7 @@ export async function getDiscovery(tenantId: number, userId: string) {
   return { featured, recentlyUsed, popular, newUpdated, recommended: recommendedFallback };
 }
 
-export async function listMarketplaceTemplates(tenantId: number) {
+export async function listMarketplaceTemplates(_tenantId: number) {
   const rows = await db.select().from(platformTemplates).where(
     and(
       eq(platformTemplates.tier, "system"),

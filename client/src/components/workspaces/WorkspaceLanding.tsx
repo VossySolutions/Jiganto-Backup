@@ -35,13 +35,11 @@ import {
   ArrowRight,
   Check,
   X,
-  Loader2,
   Users,
   Star,
-  SlidersHorizontal,
   Share2,
   Copy,
-  Archive,
+  Archive
 } from "lucide-react";
 import type { Workspace, WorkspacePage, WorkspaceMember } from "@shared/schema";
 import { WorkspaceIconRenderer, getWorkspaceIconDef } from "@/components/workspaces/WorkspaceIconPicker";
@@ -81,7 +79,7 @@ const MEMBER_AVATAR_COLORS = [
   "#EF4444", "#6366F1", "#14B8A6",
 ];
 
-function MemberAvatars({ members, workspaceColor }: { members: WorkspaceMember[]; workspaceColor: string }) {
+function MemberAvatars({ members }: { members: WorkspaceMember[]; workspaceColor: string }) {
   const maxShow = 3;
   const shown = members.slice(0, maxShow);
 
@@ -471,7 +469,6 @@ export function WorkspaceLanding({
   onToggleFavorite,
   onShareWorkspace,
   searchQuery: externalSearch,
-  onSearchQueryChange,
 }: {
   onSelectWorkspace: (id: number) => void;
   onEditWorkspace: (ws: Workspace) => void;
@@ -491,9 +488,8 @@ export function WorkspaceLanding({
     return stored === "list" ? "list" : "grid";
   });
   const [landingTab, setLandingTab] = useState<"all" | "favorites" | "recent" | "shared" | "mine">("all");
-  const [internalSearch, setInternalSearch] = useState("");
+  const [internalSearch] = useState("");
   const searchQuery = externalSearch ?? internalSearch;
-  const setSearchQuery = onSearchQueryChange ?? setInternalSearch;
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
@@ -520,7 +516,7 @@ export function WorkspaceLanding({
   });
   const workspaces = workspacesQuery.data ?? [];
 
-  const { data: favorites = [] } = useQuery<WorkspacePage[]>({
+  const { data: _favorites = [] } = useQuery<WorkspacePage[]>({
     queryKey: ["/api/workspace-pages/favorites"],
   });
 

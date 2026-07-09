@@ -18,7 +18,16 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
 import { z } from "zod";
 import { format, addDays, differenceInDays } from "date-fns";
-import { Plus, Calendar as CalendarIcon, Play, Pause, CheckCircle, Clock, Target, TrendingUp, Settings } from "lucide-react";
+import {
+  Plus,
+  Calendar as CalendarIcon,
+  Play,
+  CheckCircle,
+  Clock,
+  Target,
+  TrendingUp,
+  Settings
+} from "lucide-react";
 import type { PmSprint, PmBacklogItem } from "@shared/models/projects";
 
 interface SprintManagementProps {
@@ -50,7 +59,6 @@ const getSprintStatusBadge = (status: string | null | undefined) => {
 
 export function SprintManagement({ projectId }: SprintManagementProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [selectedSprintId, setSelectedSprintId] = useState<number | null>(null);
   const { toast } = useToast();
 
   const { data: sprints = [], isLoading } = useQuery<PmSprint[]>({

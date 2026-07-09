@@ -22,12 +22,47 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, Plus, Search, Download, Image, Trash2, Users, Building2, Layout, Save, Loader2, ChevronDown, UserPlus, X, Upload, Palette, Type, LayoutDashboard, Table2, FileDown, FileUp, Circle, Square, ArrowDown, ArrowRight, Presentation, ClipboardCopy, LayoutGrid, List, Copy, ArrowUpDown, SortAsc, SortDesc, Calendar, MoreVertical, LayoutTemplate } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Search,
+  Download,
+  Image,
+  Trash2,
+  Users,
+  Building2,
+  Layout,
+  Save,
+  Loader2,
+  ChevronDown,
+  UserPlus,
+  X,
+  Upload,
+  Palette,
+  Type,
+  LayoutDashboard,
+  Table2,
+  FileDown,
+  FileUp,
+  Circle,
+  Square,
+  ArrowDown,
+  ArrowRight,
+  Presentation,
+  ClipboardCopy,
+  LayoutGrid,
+  List,
+  Copy,
+  ArrowUpDown,
+  Calendar,
+  MoreVertical,
+  LayoutTemplate
+} from "lucide-react";
 import { SaveAsPlatformTemplateDialog } from "@/components/templates/SaveAsPlatformTemplateDialog";
 import { MondayTable, type ColumnDef } from "@/components/MondayTable";
 import { CHART_TYPE_THEME_COLORS, ENGAGEMENT_LEVELS } from "@shared/models/bpm-extensions";
 import { bpmFetchFormData } from "@/lib/bpm-api";
-import { BpmLoadingState, BpmCardGridSkeleton } from "@/components/bpm/BpmLoadingState";
+import { BpmCardGridSkeleton } from "@/components/bpm/BpmLoadingState";
 import type { OrgChart, OrgChartMember, OrgChartTemplate } from "@shared/models/orgchart";
 import type { Resource } from "@shared/models/resources";
 import {
@@ -748,7 +783,7 @@ function OrgChartEditorInner({
     queryKey: [`/api/org-charts/${chart.id}/members`],
   });
 
-  const { data: templates = [], isLoading: templatesLoading } = useQuery<OrgChartTemplate[]>({
+  const { data: templates = [] } = useQuery<OrgChartTemplate[]>({
     queryKey: [`/api/org-chart-templates`],
   });
 
@@ -2216,7 +2251,7 @@ function AddMemberDialog({
   const [manualPhotoUrl, setManualPhotoUrl] = useState("");
   const [manualParent, setManualParent] = useState<string>("none");
 
-  const { data: resources = [], isLoading: resourcesLoading } = useQuery<Resource[]>({
+  const { data: resources = [] } = useQuery<Resource[]>({
     queryKey: [`/api/resources`],
     enabled: open,
   });

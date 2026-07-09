@@ -4,12 +4,11 @@ import { getSupabaseAccessToken } from "./supabase-session";
 import { supabaseAuthEnabled } from "./supabase";
 
 /** Set by ClientContextProvider — scopes /api/* GETs to active client workspace. */
-let activeWorkspaceClientId: number | null = null;
-let apiReadOnly = false;
-
-export function setActiveWorkspaceClientId(clientId: number | null) {
-  activeWorkspaceClientId = clientId;
+export function setActiveWorkspaceClientId(_clientId: number | null) {
+  // Workspace scope is enforced server-side via session workspace_id (Docs §8.2).
 }
+
+let apiReadOnly = false;
 
 /** Set by ClientContextProvider when platform role is read-only (Section 3). */
 export function setApiReadOnly(readOnly: boolean) {

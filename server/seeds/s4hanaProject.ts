@@ -2,7 +2,7 @@ import { db } from "../db";
 import { 
   pmProjects, pmProjectPhases, pmWorkstreams, pmTasks, pmMilestones
 } from "@shared/models/projects";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 interface SeedResult {
   project: any;
@@ -13,8 +13,6 @@ interface SeedResult {
 }
 
 export async function seedS4HanaProject(tenantId: number, projectId?: number): Promise<SeedResult> {
-  const formatDate = (d: string) => d;
-
   let project: any;
   
   if (projectId) {
@@ -288,7 +286,7 @@ export async function seedS4HanaProject(tenantId: number, projectId?: number): P
   };
 }
 
-export async function clearS4HanaProject(tenantId: number, projectId: number) {
+export async function clearS4HanaProject(_tenantId: number, projectId: number) {
   await db.delete(pmTasks).where(eq(pmTasks.projectId, projectId));
   await db.delete(pmWorkstreams).where(eq(pmWorkstreams.projectId, projectId));
   await db.delete(pmProjectPhases).where(eq(pmProjectPhases.projectId, projectId));

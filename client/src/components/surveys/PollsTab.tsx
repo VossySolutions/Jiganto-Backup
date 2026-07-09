@@ -2,7 +2,12 @@ import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { C, pollLink, fmtDate, qrCodeUrl, useSurveyColors } from "@/lib/survey-constants";
+import {
+  pollLink,
+  fmtDate,
+  qrCodeUrl,
+  useSurveyColors
+} from "@/lib/survey-constants";
 import { exportPollPng } from "@/lib/survey-exports";
 import { fetchModulePolls, fetchModulePoll } from "@/lib/survey-api";
 import type { ModulePoll } from "@shared/models/surveys";

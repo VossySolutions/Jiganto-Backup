@@ -5,7 +5,6 @@ import {
   pmWorkstreams,
   pmMilestones,
 } from "@shared/models/projects";
-import { eq } from "drizzle-orm";
 
 export async function seedErpPortfolio(tenantId: number): Promise<{ projects: number; phases: number; milestones: number }> {
 

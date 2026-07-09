@@ -9,12 +9,22 @@ import { cn } from "@/lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, PieChart, Pie, Cell,
 } from "recharts";
-import type { SurveyWithDetails, SurveyQuestion, SurveyResponseWithAnswers, SurveyTemplate, SurveyLogicRule } from "@shared/models/surveys";
+import type { SurveyWithDetails, SurveyQuestion, SurveyResponseWithAnswers, SurveyLogicRule } from "@shared/models/surveys";
 import {
-  C, MC_BARS, CB_BARS, QUESTION_TYPES, TYPE_LABEL, getStatusStyles, CATEGORY_ICONS, CATEGORIES,
-  LIKERT_OPTIONS, EMOJI_RATINGS, fmtDate, fmtTime, initials, wordFrequency,
+  MC_BARS,
+  CB_BARS,
+  QUESTION_TYPES,
+  TYPE_LABEL,
+  getStatusStyles,
+  CATEGORY_ICONS,
+  CATEGORIES,
+  LIKERT_OPTIONS,
+  fmtDate,
+  fmtTime,
+  initials,
+  wordFrequency,
   useSurveyColors,
-  type MainTab, type View,
+  type MainTab
 } from "@/lib/survey-constants";
 import { exportSurveyToPPT, exportSurveyToCSV, exportSurveyToExcel } from "@/lib/survey-exports";
 import { ShareModal } from "@/components/surveys/ShareModal";
@@ -715,7 +725,6 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
   const goBack = () => { if (step === 2 && mode === "scratch") setStep(0); else if (step === 2 && mode !== "scratch") setStep(1); else setStep(s => s - 1); };
 
   const tpl = selectedTpl ? SURVEY_TEMPLATES.find(t => t.id === selectedTpl) : null;
-  const previewTplObj = previewTpl ? SURVEY_TEMPLATES.find(t => t.id === previewTpl) : null;
 
   const handleCreate = () => {
     createMut.mutate({

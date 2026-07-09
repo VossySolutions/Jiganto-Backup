@@ -10,11 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Clock, Loader2, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
-  HelpDeskTabLoading,
   HelpDeskErrorState,
   HelpDeskRefreshing,
   HelpDeskCardGridSkeleton,
-  HD_ACCENT,
+  HD_ACCENT
 } from "./HelpDeskUi";
 
 export function HelpDeskSlaTab() {

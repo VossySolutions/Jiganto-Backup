@@ -2,16 +2,21 @@ import { useMemo, useCallback, useState } from "react";
 import type { Node, Edge } from "@xyflow/react";
 import { MondayTable, type ColumnDef, type GroupDef } from "@/components/MondayTable";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Trash2, Download, Upload, Search, MoreHorizontal, ArrowUp, ArrowDown } from "lucide-react";
+import {
+  Plus,
+  Download,
+  Upload,
+  Search,
+  MoreHorizontal,
+  ArrowUp,
+  ArrowDown
+} from "lucide-react";
 import { NODE_DEFAULTS } from "@/components/bpm/BpmNodeTypes";
-import { cn } from "@/lib/utils";
 
 const SWIMLANE_TYPES = new Set(["swimlane_pool", "swimlane_lane"]);
-const CALLOUT_TYPES = new Set(["callout_square", "callout_rounded", "callout_oval", "callout_cloud", "note_folded", "note_lined", "annotation"]);
 
 const SHAPE_TYPE_OPTIONS = [
   { value: "start", label: "Start" },

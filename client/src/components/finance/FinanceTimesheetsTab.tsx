@@ -12,18 +12,32 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Loader2, CheckCircle2, XCircle, Clock, UserCheck, Users, Plus, Copy, Calendar, BarChart3,
-  ChevronDown, ChevronRight, PenLine, CheckSquare,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  UserCheck,
+  Users,
+  Plus,
+  Copy,
+  Calendar,
+  BarChart3,
+  ChevronDown,
+  ChevronRight,
+  PenLine,
+  CheckSquare
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { FinanceTabLoading, FinanceTableSkeleton, FinanceEmptyState, FinanceButtonSpinner } from "./FinanceUi";
+import {
+  FinanceTabLoading,
+  FinanceTableSkeleton,
+  FinanceButtonSpinner
+} from "./FinanceUi";
 import type { FinanceTimesheetPeriod } from "./types";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const TIME_TYPES = ["billable", "non_billable", "internal", "leave", "training"] as const;
 
 function formatWeekRange(start: string, end: string) {
   return `${new Date(start).toLocaleDateString()} – ${new Date(end).toLocaleDateString()}`;
@@ -110,7 +124,6 @@ export function FinanceTimesheetsTab({
   periods: periodsProp,
   pendingPeriods: pendingProp,
   isLoading: isLoadingProp,
-  searchTerm = "",
   canApprove = true,
   ownResourceId = null,
   initialViewMode = "entry",
@@ -119,7 +132,7 @@ export function FinanceTimesheetsTab({
   const [, setLocation] = useLocation();
   const [viewMode, setViewMode] = useState<"entry" | "approval" | "reports">(initialViewMode);
   const [gridMode, setGridMode] = useState<"weekly" | "daily">("weekly");
-  const [selectedDay, setSelectedDay] = useState(1);
+  const [selectedDay] = useState(1);
   const [useHhMm, setUseHhMm] = useState(false);
   const [selectedResourceId, setSelectedResourceId] = useState<string>("");
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);

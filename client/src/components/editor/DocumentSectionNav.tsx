@@ -10,7 +10,6 @@ export function DocumentSectionNav({
   className,
   variant = "inline",
   activeHeadingId = null,
-  sticky = true,
 }: {
   headings: DocumentTocHeading[];
   open: boolean;

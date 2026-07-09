@@ -198,7 +198,7 @@ export function ChartView({ columns: columnsData, items }: ChartViewProps) {
                   </div>
                   
                   <div className="space-y-3">
-                    {chartData.map((data, i) => (
+                    {chartData.map((data) => (
                       <div key={data.label} className="flex items-center gap-3">
                         <div className={cn("h-4 w-4 rounded", data.color)} />
                         <span className="text-sm">{data.label}</span>

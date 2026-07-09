@@ -1,5 +1,4 @@
 import type { Express } from "express";
-import { authStorage } from "./storage";
 import { ensureDefaultSessionUser } from "./devLogin";
 import {
   ensureUserForPreset,

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, type ReactNode } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -7,7 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tabs,
+  TabsContent
+} from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose, DialogDescription } from "@/components/ui/dialog";
 import { SubmitForm } from "@/components/ui/submit-form";
@@ -19,16 +22,14 @@ import { useToast } from "@/hooks/use-toast";
 import { ModuleShell } from "@/components/ModuleShell";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
 import { 
-  Target, TrendingUp, AlertTriangle, Building2, Settings, Briefcase, Crosshair,
-  Plus, Search, ChevronRight, ChevronDown, Loader2, Sparkles, ArrowUpRight,
-  Eye, Lightbulb, Shield, Users, Workflow, Wrench, CheckCircle2,
-  BarChart3, PieChart, Activity, Clock, Calendar, Flag, Link2,
-  FileText, ExternalLink, ShieldCheck, MessageSquarePlus, Trash2, History,
-  Bell, Send, Upload, Brain, X, RefreshCw, CheckCircle, TriangleAlert, Info, Zap, Copy
+  Target, TrendingUp, AlertTriangle, Building2, Settings, Briefcase,
+  Plus, Search, ChevronDown, Loader2, Sparkles, ArrowUpRight,
+  Shield, Workflow, Wrench, CheckCircle2,
+  BarChart3, Clock, Flag, Link2,
+  ExternalLink, ShieldCheck, MessageSquarePlus, Trash2,
+  Bell, TriangleAlert, Zap, Copy
 } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
 import { MetricCard } from "@/components/ui/metric-card";
 import { BusinessLoadingState } from "@/components/business/BusinessLoadingState";
 import { BusinessTableScroll } from "@/components/business/BusinessTableScroll";
@@ -46,7 +47,12 @@ import {
   BizExecutionIcon,
   BizDocumentsIcon,
 } from "@/components/icons/ModuleIcons";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 import { StrategyMap } from "@/components/StrategyMap";
 import { MondayTable, type ColumnDef, defaultStatusColors } from "@/components/MondayTable";
 import type { Document, DocumentInitiativeLink } from "@shared/models/documents";
@@ -105,20 +111,6 @@ type Goal = {
   endDate: string | null;
   targetDate: string | null;
   reviewCadence: string | null;
-  createdAt: string;
-};
-
-type KeyResult = {
-  id: number;
-  tenantId: number;
-  goalId: number;
-  title: string;
-  description: string | null;
-  targetValue: string | null;
-  currentValue: string | null;
-  unit: string | null;
-  ownerId: string | null;
-  status: string | null;
   createdAt: string;
 };
 
@@ -277,15 +269,6 @@ type BusinessStats = {
   openRisks: number;
 };
 
-const strategyTemplates = [
-  { type: "vision", name: "Aspirations / Vision", icon: Eye, color: "bg-status-purple" },
-  { type: "target_market", name: "Target Market", icon: Target, color: "bg-status-blue" },
-  { type: "competitor", name: "Competitor Analysis", icon: Users, color: "bg-status-amber" },
-  { type: "swot", name: "SWOT Analysis", icon: BarChart3, color: "bg-status-teal" },
-  { type: "risk", name: "Strategic Risks", icon: AlertTriangle, color: "bg-status-red" },
-  { type: "assumption", name: "Assumptions", icon: Lightbulb, color: "bg-status-green" },
-];
-
 const statusColors: Record<string, string> = {
   ...defaultStatusColors,
   on_track: "bg-status-green text-status-green-foreground",
@@ -338,12 +321,6 @@ export default function BusinessManagementPage() {
     enabled: tabActive(["dashboard", "goals"]),
   });
 
-  const { data: keyResults = [], isLoading: krLoading } = useQuery<KeyResult[]>({
-    queryKey: ["/api/business/key-results"],
-    staleTime: BUSINESS_STALE_MS,
-    enabled: tabActive(["okrs"]),
-  });
-
   const { data: kpis = [], isLoading: kpisLoading } = useQuery<Kpi[]>({
     queryKey: ["/api/business/kpis"],
     staleTime: BUSINESS_STALE_MS,
@@ -374,7 +351,7 @@ export default function BusinessManagementPage() {
     enabled: tabActive(["operations"]),
   });
 
-  const { data: risks = [], isLoading: risksLoading } = useQuery<Risk[]>({
+  const { data: risks = [] } = useQuery<Risk[]>({
     queryKey: ["/api/business/risks"],
     staleTime: BUSINESS_STALE_MS,
     enabled: tabActive(["dashboard"]),
@@ -392,7 +369,7 @@ export default function BusinessManagementPage() {
     enabled: tabActive(["okrs"]),
   });
 
-  const { data: businessTasks = [], isLoading: tasksLoading } = useQuery<BusinessTask[]>({
+  const { isLoading: tasksLoading } = useQuery<BusinessTask[]>({
     queryKey: ["/api/business/tasks"],
     staleTime: BUSINESS_STALE_MS,
     enabled: tabActive(["reviews"]),
@@ -611,12 +588,10 @@ export default function BusinessManagementPage() {
                 {tabLoading.dashboard ? (
                   <BusinessLoadingState variant="dashboard" />
                 ) : (
-                  <DashboardTab 
-                    stats={stats} 
-                    goals={filteredGoals} 
-                    initiatives={filteredInitiatives} 
+                  <DashboardTab
+                    stats={stats}
+                    goals={filteredGoals}
                     risks={filteredRisks}
-                    strategyItems={filteredStrategyItems}
                     onNavigate={setActiveTab}
                   />
                 )}
@@ -913,12 +888,10 @@ function AddInitiativeButton({ goals, onSave, isCreating }: {
 
 // ── Dashboard Tab ─────────────────────────────────────────────────────────────
 
-function DashboardTab({ stats, goals, initiatives, risks, strategyItems, onNavigate }: { 
+function DashboardTab({ stats, goals, risks, onNavigate }: { 
   stats?: BusinessStats; 
   goals: Goal[]; 
-  initiatives: Initiative[];
   risks: Risk[];
-  strategyItems: StrategyItem[];
   onNavigate?: (tab: string) => void;
 }) {
   const metrics = [
@@ -1087,302 +1060,6 @@ function DashboardTab({ stats, goals, initiatives, risks, strategyItems, onNavig
   );
 }
 
-function StrategyTab({ strategyItems, risks, onCreateStrategy, isCreating }: { 
-  strategyItems: StrategyItem[]; 
-  risks: Risk[];
-  onCreateStrategy: (data: { templateType: string; title: string; description?: string }) => void;
-  isCreating: boolean;
-}) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [newItem, setNewItem] = useState({ templateType: "", title: "", description: "" });
-
-  const handleCreate = () => {
-    if (!newItem.templateType || !newItem.title) return;
-    onCreateStrategy(newItem);
-    setNewItem({ templateType: "", title: "", description: "" });
-    setDialogOpen(false);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Strategy Framework</h2>
-          <p className="text-sm text-muted-foreground">Define your company's strategic direction</p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="rounded-xl gap-2" data-testid="button-add-strategy">
-              <Plus className="h-4 w-4" />
-              Add Strategy Item
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <SubmitForm onSubmit={handleCreate} disabled={isCreating || !newItem.title || !newItem.templateType}>
-            <DialogHeader>
-              <DialogTitle>Add Strategy Item</DialogTitle>
-              <DialogDescription>Create a new strategic element for your organization</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Template Type</Label>
-                <Select value={newItem.templateType} onValueChange={(v) => setNewItem({ ...newItem, templateType: v })}>
-                  <SelectTrigger data-testid="select-strategy-type">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {strategyTemplates.map((t) => (
-                      <SelectItem key={t.type} value={t.type}>{t.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Title</Label>
-                <Input 
-                  placeholder="Enter title" 
-                  value={newItem.title}
-                  onChange={(e) => setNewItem({ ...newItem, title: e.target.value })}
-                  data-testid="input-strategy-title"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea 
-                  placeholder="Enter description" 
-                  value={newItem.description}
-                  onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-                  data-testid="input-strategy-description"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button type="submit" data-testid="button-save-strategy">
-                {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
-              </Button>
-            </DialogFooter>
-            </SubmitForm>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {strategyTemplates.map((template) => {
-          const items = strategyItems.filter(s => s.templateType === template.type);
-          return (
-            <Card key={template.type} className="rounded-2xl hover:shadow-md transition-all" data-testid={`strategy-template-${template.type}`}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className={cn("p-2 rounded-lg", template.color)}>
-                    <template.icon className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base">{template.name}</CardTitle>
-                    <CardDescription>{items.length} items</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {items.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">No items yet</p>
-                ) : (
-                  <div className="space-y-2">
-                    {items.slice(0, 3).map((item) => (
-                      <div key={item.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
-                        <span className="text-sm truncate">{item.title}</span>
-                        <Badge className={cn("text-xs", statusColors[item.status])}>
-                          {item.status.replace("_", " ")}
-                        </Badge>
-                      </div>
-                    ))}
-                    {items.length > 3 && (
-                      <p className="text-xs text-muted-foreground text-center">+{items.length - 3} more</p>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function GoalsTab({ goals, keyResults, kpis, strategyItems, onCreateGoal, isCreating }: {
-  goals: Goal[];
-  keyResults: KeyResult[];
-  kpis: Kpi[];
-  strategyItems: StrategyItem[];
-  onCreateGoal: (data: { title: string; type: string; description?: string; strategyItemId?: number }) => void;
-  isCreating: boolean;
-}) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [newGoal, setNewGoal] = useState({ title: "", type: "objective", description: "", strategyItemId: "" });
-
-  const handleCreate = () => {
-    if (!newGoal.title) return;
-    onCreateGoal({
-      ...newGoal,
-      strategyItemId: newGoal.strategyItemId ? Number(newGoal.strategyItemId) : undefined,
-    });
-    setNewGoal({ title: "", type: "objective", description: "", strategyItemId: "" });
-    setDialogOpen(false);
-  };
-
-  const objectives = goals.filter(g => g.type === "objective");
-  const okrGoals = goals.filter(g => g.type === "okr");
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Goals & OKRs</h2>
-          <p className="text-sm text-muted-foreground">Define measurable success metrics</p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="rounded-xl gap-2" data-testid="button-add-goal">
-              <Plus className="h-4 w-4" />
-              Add Goal
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <SubmitForm onSubmit={handleCreate} disabled={isCreating || !newGoal.title}>
-            <DialogHeader>
-              <DialogTitle>Add Goal</DialogTitle>
-              <DialogDescription>Create a new objective or OKR</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Type</Label>
-                <Select value={newGoal.type} onValueChange={(v) => setNewGoal({ ...newGoal, type: v })}>
-                  <SelectTrigger data-testid="select-goal-type">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="objective">Objective</SelectItem>
-                    <SelectItem value="okr">OKR</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Title</Label>
-                <Input 
-                  placeholder="Enter goal title" 
-                  value={newGoal.title}
-                  onChange={(e) => setNewGoal({ ...newGoal, title: e.target.value })}
-                  data-testid="input-goal-title"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Linked Strategy (Optional)</Label>
-                <Select value={newGoal.strategyItemId} onValueChange={(v) => setNewGoal({ ...newGoal, strategyItemId: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Link to strategy item" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {strategyItems.map((s) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{s.title}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea 
-                  placeholder="Enter description" 
-                  value={newGoal.description}
-                  onChange={(e) => setNewGoal({ ...newGoal, description: e.target.value })}
-                  data-testid="input-goal-description"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button type="submit" data-testid="button-save-goal">
-                {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
-              </Button>
-            </DialogFooter>
-            </SubmitForm>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="rounded-2xl">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Flag className="h-5 w-5 text-status-green" />
-              Objectives ({objectives.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {objectives.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No objectives defined</p>
-            ) : (
-              <div className="space-y-3">
-                {objectives.map((goal) => (
-                  <div key={goal.id} className="p-4 rounded-xl bg-muted/30 hover-elevate" data-testid={`objective-${goal.id}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <h4 className="font-medium">{goal.title}</h4>
-                      <Badge className={cn("text-xs", statusColors[goal.status])}>
-                        {goal.status.replace("_", " ")}
-                      </Badge>
-                    </div>
-                    {goal.description && (
-                      <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{goal.description}</p>
-                    )}
-                    <div className="mt-3">
-                      <Progress value={goal.progress || 0} className="h-2" />
-                      <p className="text-xs text-muted-foreground text-right mt-1">{goal.progress || 0}%</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="h-5 w-5 text-status-purple" />
-              KPIs ({kpis.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {kpis.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No KPIs defined</p>
-            ) : (
-              <div className="space-y-3">
-                {kpis.map((kpi) => (
-                  <div key={kpi.id} className="p-4 rounded-xl bg-muted/30" data-testid={`kpi-${kpi.id}`}>
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">{kpi.name}</h4>
-                      <Badge className={cn("text-xs", statusColors[kpi.status || "on_track"])}>
-                        {(kpi.status || "on_track").replace("_", " ")}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between mt-2 text-sm">
-                      <span className="text-muted-foreground">Current: {kpi.currentValue || 0} {kpi.unit}</span>
-                      <span className="font-medium">Target: {kpi.targetValue || 0} {kpi.unit}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
 
 function OperationsTab({ departments, processes, tools, onCreateDepartment, isCreating, searchTerm = "" }: {
   departments: Department[];
@@ -1560,351 +1237,6 @@ function OperationsTab({ departments, processes, tools, onCreateDepartment, isCr
   );
 }
 
-function InitiativesTab({ initiatives, goals, onCreateInitiative, isCreating }: {
-  initiatives: Initiative[];
-  goals: Goal[];
-  onCreateInitiative: (data: { title: string; description?: string; goalId?: number; priority?: string }) => void;
-  isCreating: boolean;
-}) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [newInit, setNewInit] = useState({ title: "", description: "", goalId: "", priority: "medium" });
-
-  const handleCreate = () => {
-    if (!newInit.title) return;
-    onCreateInitiative({
-      ...newInit,
-      goalId: newInit.goalId ? Number(newInit.goalId) : undefined,
-    });
-    setNewInit({ title: "", description: "", goalId: "", priority: "medium" });
-    setDialogOpen(false);
-  };
-
-  const priorityColors: Record<string, string> = {
-    low: "bg-muted text-muted-foreground",
-    medium: "bg-status-amber text-status-amber-foreground",
-    high: "bg-status-red text-status-red-foreground",
-    critical: "bg-destructive text-destructive-foreground",
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Initiatives & Execution</h2>
-          <p className="text-sm text-muted-foreground">Track work that supports your goals</p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="rounded-xl gap-2" data-testid="button-add-initiative">
-              <Plus className="h-4 w-4" />
-              Add Initiative
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <SubmitForm onSubmit={handleCreate} disabled={isCreating || !newInit.title}>
-            <DialogHeader>
-              <DialogTitle>Add Initiative</DialogTitle>
-              <DialogDescription>Create a new initiative to support your goals</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Title</Label>
-                <Input 
-                  placeholder="Enter initiative title" 
-                  value={newInit.title}
-                  onChange={(e) => setNewInit({ ...newInit, title: e.target.value })}
-                  data-testid="input-initiative-title"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Priority</Label>
-                <Select value={newInit.priority} onValueChange={(v) => setNewInit({ ...newInit, priority: v })}>
-                  <SelectTrigger data-testid="select-initiative-priority">
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Linked Goal (Optional)</Label>
-                <Select value={newInit.goalId} onValueChange={(v) => setNewInit({ ...newInit, goalId: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Link to goal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {goals.map((g) => (
-                      <SelectItem key={g.id} value={String(g.id)}>{g.title}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea 
-                  placeholder="Enter description" 
-                  value={newInit.description}
-                  onChange={(e) => setNewInit({ ...newInit, description: e.target.value })}
-                  data-testid="input-initiative-description"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button type="submit" data-testid="button-save-initiative">
-                {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
-              </Button>
-            </DialogFooter>
-            </SubmitForm>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {initiatives.length === 0 ? (
-        <Card className="rounded-2xl">
-          <CardContent className="py-12 text-center">
-            <TrendingUp className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground">No initiatives yet. Create your first initiative to start tracking execution.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {initiatives.map((initiative) => {
-            const linkedGoal = goals.find(g => g.id === initiative.goalId);
-            return (
-              <Card key={initiative.id} className="rounded-2xl hover:shadow-md transition-all" data-testid={`initiative-card-${initiative.id}`}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-base line-clamp-2">{initiative.title}</CardTitle>
-                    <Badge className={cn("text-xs shrink-0", priorityColors[initiative.priority || "medium"])}>
-                      {initiative.priority || "medium"}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {initiative.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{initiative.description}</p>
-                  )}
-                  <div className="space-y-3">
-                    <div>
-                      <Progress value={initiative.progress || 0} className="h-2" />
-                      <div className="flex items-center justify-between mt-1">
-                        <Badge className={cn("text-xs", statusColors[initiative.status])}>
-                          {initiative.status.replace("_", " ")}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">{initiative.progress || 0}%</span>
-                      </div>
-                    </div>
-                    {linkedGoal && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Link2 className="h-3 w-3" />
-                        <span className="truncate">{linkedGoal.title}</span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── SIMPLE TABLE ─────────────────────────────────────────────────────────────
-
-type SimpleColDef<T> = {
-  key: string;
-  label: string;
-  width: string;
-  render: (row: T) => ReactNode;
-};
-
-function SimpleRenderTable<T extends { id: number }>({
-  data,
-  columns,
-  rowTestId,
-}: {
-  data: T[];
-  columns: SimpleColDef<T>[];
-  rowTestId?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border overflow-hidden">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-muted/30">
-            {columns.map((col) => (
-              <th key={col.key} className="text-left py-2.5 px-3 text-xs font-semibold text-muted-foreground" style={{ width: col.width }}>
-                {col.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((row) => (
-            <tr key={row.id} className="border-b border-border/50 hover:bg-muted/20" data-testid={rowTestId ? `${rowTestId}-${row.id}` : undefined}>
-              {columns.map((col) => (
-                <td key={col.key} className="py-2.5 px-3 align-middle">
-                  {col.render(row)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ─── OBJECTIVES TAB ──────────────────────────────────────────────────────────
-
-function ObjectivesTab({ objectives, goals }: { objectives: Objective[]; goals: Goal[] }) {
-  const ragBadge = (r: string | null) => {
-    const label = r === "green" ? "On Track" : r === "amber" ? "At Risk" : r === "red" ? "Behind" : r || "—";
-    const cls = r === "green" ? "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400" :
-      r === "amber" ? "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" :
-      r === "red" ? "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400" : "bg-muted text-muted-foreground";
-    return <Badge className={cn("text-[10px] font-semibold border-0", cls)}>{label}</Badge>;
-  };
-
-  const cols: SimpleColDef<Objective>[] = [
-    { key: "title", label: "Objective", width: "30%", render: (r) => <span className="font-medium text-sm">{r.title}</span> },
-    { key: "goalId", label: "Parent Goal", width: "22%", render: (r) => { const g = goals.find(g => g.id === r.goalId); return g ? <span className="text-xs text-muted-foreground">{g.title}</span> : <span className="text-muted-foreground/40">—</span>; } },
-    { key: "ownerName", label: "Owner", width: "13%", render: (r) => <span className="text-xs">{r.ownerName || "—"}</span> },
-    { key: "ragStatus", label: "RAG", width: "10%", render: (r) => ragBadge(r.ragStatus) },
-    { key: "progress", label: "Progress", width: "17%", render: (r) => (
-      <div className="flex items-center gap-2">
-        <Progress value={r.progress || 0} className="h-1.5 flex-1" />
-        <span className="text-[10px] text-muted-foreground w-7 text-right">{r.progress || 0}%</span>
-      </div>
-    )},
-    { key: "targetDate", label: "Target Date", width: "12%", render: (r) => <span className="text-xs text-muted-foreground">{r.targetDate || "—"}</span> },
-  ];
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Objectives</h2>
-          <p className="text-sm text-muted-foreground">{objectives.length} objectives across all goals</p>
-        </div>
-      </div>
-      {objectives.length === 0 ? (
-        <Card className="rounded-2xl">
-          <CardContent className="py-12 text-center">
-            <Crosshair className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground">No objectives yet. Create them from the Strategy Map or Manage tabs.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="w-full max-w-full min-w-0 overflow-x-hidden">
-          <SimpleRenderTable data={objectives} columns={cols} rowTestId="objective-row" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── OKRs TAB ─────────────────────────────────────────────────────────────────
-
-function OkrsTab({ okrs, goals, objectives }: { okrs: Okr[]; goals: Goal[]; objectives: Objective[] }) {
-  const ragBadge = (r: string | null) => {
-    const label = r === "green" ? "On Track" : r === "amber" ? "At Risk" : r === "red" ? "Behind" : r || "—";
-    const cls = r === "green" ? "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400" :
-      r === "amber" ? "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" :
-      r === "red" ? "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400" : "bg-muted text-muted-foreground";
-    return <Badge className={cn("text-[10px] font-semibold border-0", cls)}>{label}</Badge>;
-  };
-
-  const cols: SimpleColDef<Okr>[] = [
-    { key: "title", label: "OKR Title", width: "28%", render: (r) => <span className="font-medium text-sm">{r.title}</span> },
-    { key: "objectiveId", label: "Objective", width: "22%", render: (r) => { const o = objectives.find(o => o.id === r.objectiveId); return o ? <span className="text-xs text-muted-foreground">{o.title}</span> : <span className="text-muted-foreground/40">—</span>; } },
-    { key: "goalId", label: "Goal", width: "18%", render: (r) => { const g = goals.find(g => g.id === r.goalId); return g ? <span className="text-xs text-muted-foreground">{g.title}</span> : <span className="text-muted-foreground/40">—</span>; } },
-    { key: "ownerName", label: "Owner", width: "12%", render: (r) => <span className="text-xs">{r.ownerName || "—"}</span> },
-    { key: "ragStatus", label: "RAG", width: "10%", render: (r) => ragBadge(r.ragStatus) },
-    { key: "targetDate", label: "Target Date", width: "12%", render: (r) => <span className="text-xs text-muted-foreground">{r.targetDate || "—"}</span> },
-  ];
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">OKRs</h2>
-          <p className="text-sm text-muted-foreground">{okrs.length} Objectives and Key Results</p>
-        </div>
-      </div>
-      {okrs.length === 0 ? (
-        <Card className="rounded-2xl">
-          <CardContent className="py-12 text-center">
-            <Activity className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground">No OKRs yet. Define them in the Strategy Map or Manage tabs.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="w-full max-w-full min-w-0 overflow-x-hidden">
-          <SimpleRenderTable data={okrs} columns={cols} rowTestId="okr-row" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── KPIs TAB ─────────────────────────────────────────────────────────────────
-
-function KpisTab({ kpis, goals }: { kpis: Kpi[]; goals: Goal[] }) {
-  const statusBadge = (s: string | null) => {
-    const label = s === "on_track" ? "On Track" : s === "at_risk" ? "At Risk" : s === "off_track" ? "Off Track" : s || "—";
-    const cls = s === "on_track" ? "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400" :
-      s === "at_risk" ? "bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" :
-      s === "off_track" ? "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400" : "bg-muted text-muted-foreground";
-    return <Badge className={cn("text-[10px] font-semibold border-0", cls)}>{label}</Badge>;
-  };
-
-  const cols: SimpleColDef<Kpi>[] = [
-    { key: "name", label: "KPI Name", width: "25%", render: (r) => <span className="font-medium text-sm">{r.name}</span> },
-    { key: "goalId", label: "Linked Goal", width: "22%", render: (r) => { const g = goals.find(g => g.id === r.goalId); return g ? <span className="text-xs text-muted-foreground">{g.title}</span> : <span className="text-muted-foreground/40">—</span>; } },
-    { key: "indicatorType", label: "Type", width: "10%", render: (r) => <span className="text-xs capitalize">{r.indicatorType || "—"}</span> },
-    { key: "currentValue", label: "Current", width: "10%", render: (r) => <span className="text-xs font-mono">{r.currentValue ?? "—"}{r.unit ? ` ${r.unit}` : ""}</span> },
-    { key: "targetValue", label: "Target", width: "10%", render: (r) => <span className="text-xs font-mono text-muted-foreground">{r.targetValue ?? "—"}{r.unit ? ` ${r.unit}` : ""}</span> },
-    { key: "status", label: "Status", width: "11%", render: (r) => statusBadge(r.status) },
-    { key: "trend", label: "Trend", width: "10%", render: (r) => (
-      <span className={cn("text-xs font-semibold",
-        r.trend === "up" ? "text-green-600" : r.trend === "down" ? "text-red-500" : "text-muted-foreground"
-      )}>{r.trend === "up" ? "↑ Up" : r.trend === "down" ? "↓ Down" : r.trend || "—"}</span>
-    )},
-  ];
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">KPIs</h2>
-          <p className="text-sm text-muted-foreground">{kpis.length} Key Performance Indicators</p>
-        </div>
-      </div>
-      {kpis.length === 0 ? (
-        <Card className="rounded-2xl">
-          <CardContent className="py-12 text-center">
-            <BarChart3 className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground">No KPIs yet. Add KPIs from the Manage tab or Strategy Map.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="w-full max-w-full min-w-0 overflow-x-hidden">
-          <SimpleRenderTable data={kpis} columns={cols} rowTestId="kpi-row" />
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── EXECUTION TAB ────────────────────────────────────────────────────────────
 
@@ -2698,7 +2030,7 @@ function DocumentsTab({ initiatives }: { initiatives: Initiative[] }) {
   const columns: ColumnDef<DocTableRow>[] = [
     { id: "title", header: "Document Title", type: "text", accessor: "title", width: "280px" },
     { id: "linkType", header: "Link Type", type: "status", accessor: (r) => linkTypeLabels[r.linkType] || r.linkType, width: "180px",
-      options: Object.entries(linkTypeLabels).map(([value, label]) => ({ value: label, label, color: "bg-status-blue text-status-blue-foreground" }))
+      options: Object.entries(linkTypeLabels).map(([, label]) => ({ value: label, label, color: "bg-status-blue text-status-blue-foreground" }))
     },
     { id: "docType", header: "Document Type", type: "status", accessor: (r) => docTypeLabels[r.docType] || r.docType, width: "160px" },
     { id: "status", header: "Status", type: "status", accessor: "status", width: "120px" },
@@ -2986,3 +2318,5 @@ function RagChip({ rag }: { rag: string | null }) {
   const label = rag === "green" ? "🟢 Green" : rag === "amber" ? "🟡 Amber" : "🔴 Red";
   return <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${cls}`}>{label}</span>;
 }
+
+

@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -16,8 +15,7 @@ import { thumbnailPlaceholder } from "@/lib/whiteboard-constants";
 import { fetchWhiteboards, createWhiteboard, apiErrorMessage } from "@/lib/whiteboard-api";
 import {
   WhiteboardCardSkeleton,
-  WhiteboardButtonSpinner,
-  WhiteboardLoadingState,
+  WhiteboardLoadingState
 } from "@/components/whiteboard/WhiteboardLoadingState";
 import "@/styles/whiteboard.css";
 

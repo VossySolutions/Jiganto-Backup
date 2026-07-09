@@ -5,7 +5,7 @@ import type { Epic, Sprint, Story, Workstream } from "./types";
 import { AddStoryForm } from "./story-form";
 import { AgileAvatar, AgileBadge, AgileBtn, AgileModal, AgileProgressBar, AgileSelect, ConfirmDelete } from "./ui-primitives";
 
-export function BacklogView({ stories, epics, onSelectStory, sprints, setStories, activeSprint, ws, onAddStory, onDeleteStory, onAssignToSprint }: {
+export function BacklogView({ stories, epics, onSelectStory, setStories, activeSprint, ws, onAddStory, onDeleteStory, onAssignToSprint }: {
   stories: Story[]; epics: Epic[]; onSelectStory: (s: Story) => void; sprints: Sprint[];
   setStories: React.Dispatch<React.SetStateAction<Story[]>>; activeSprint: Sprint | undefined; ws: Workstream;
   onAddStory?: (data: any) => void; onDeleteStory?: (id: string) => void | Promise<void>;

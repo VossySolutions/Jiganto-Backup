@@ -2,7 +2,16 @@ import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Phone, Mail, Calendar, Users, Clock, CheckCircle2, AlertCircle, TrendingUp, Activity } from "lucide-react";
+import {
+  Phone,
+  Mail,
+  Users,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  TrendingUp,
+  Activity
+} from "lucide-react";
 import type { CrmActivity } from "./types";
 
 interface ActivityAnalyticsProps {

@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 import { db } from "../db";
-import { storage } from "../storage";
 import type { TemplateModule } from "@shared/models/templates";
 import { platformTemplates } from "@shared/models/templates";
 import {

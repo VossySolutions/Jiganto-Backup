@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -8,8 +8,7 @@ import {
   ServiceDeskKpiSkeleton,
   ServiceDeskTableSkeleton,
   ServiceDeskErrorState,
-  ServiceDeskEmptyState,
-  ServiceDeskTableWrap,
+  ServiceDeskTableWrap
 } from "./ServiceDeskUi";
 import { useToast } from "@/hooks/use-toast";
 

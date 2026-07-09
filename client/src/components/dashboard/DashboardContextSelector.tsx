@@ -27,8 +27,7 @@ export function DashboardContextSelector({
   onClientChange: (id: number | null) => void;
   onProjectChange: (id: number | null) => void;
 }) {
-  const { clients, activeClient, setActiveClient, isMasterView, showContextSwitcher, isClientUser } =
-    useClientContext();
+  const { clients, setActiveClient } = useClientContext();
 
   const needsContext =
     ["projects", "portfolio", "crm", "tasks", "finance", "resources", "helpdesk", "business"].includes(

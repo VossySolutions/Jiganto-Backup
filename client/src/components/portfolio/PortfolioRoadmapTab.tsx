@@ -5,23 +5,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Download, Diamond, Image } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
 import type { RoadmapData } from "./types";
 import { PortfolioToolbar, PortfolioMobileCard } from "./PortfolioUi";
 
 const ZOOM_DAYS: Record<string, number> = { Month: 30, Quarter: 90, "Half-year": 180, Year: 365 };
 
 export function PortfolioRoadmapTab() {
-  const { toast } = useToast();
   const ganttExportRef = useRef<HTMLDivElement>(null);
   const mobileExportRef = useRef<HTMLDivElement>(null);
-  const [exporting, setExporting] = useState(false);
+  const [exporting] = useState(false);
   const [zoom, setZoom] = useState("Quarter");
   const [groupBy, setGroupBy] = useState("type");
   const [showMilestones, setShowMilestones] = useState(true);
   const [showToday, setShowToday] = useState(true);
-  const [filterClient, setFilterClient] = useState("");
-  const [filterRag, setFilterRag] = useState("");
+  const [filterClient] = useState("");
+  const [filterRag] = useState("");
 
   const { data, isLoading } = useQuery<RoadmapData>({ queryKey: ["/api/portfolio/roadmap"], staleTime: 30_000 });
 

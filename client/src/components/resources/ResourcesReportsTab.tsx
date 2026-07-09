@@ -19,8 +19,6 @@ export function ResourcesReportsTab({ resources, allocations }: Props) {
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
   const [exportFormat, setExportFormat] = useState<"standard" | "summary">("standard");
-  const [integrationName, setIntegrationName] = useState("");
-  const [integrationUrl, setIntegrationUrl] = useState("");
 
   const { data: utilisation, isLoading: utilLoading, isError: utilError, refetch: refetchUtil } = useQuery({
     queryKey: ["/api/finance/timesheets/reports/utilisation"],

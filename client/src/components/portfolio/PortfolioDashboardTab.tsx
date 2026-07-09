@@ -5,7 +5,13 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, Calendar, Target, AlertTriangle, ArrowUpRight } from "lucide-react";
+import {
+  Loader2,
+  Search,
+  Calendar,
+  Target,
+  ArrowUpRight
+} from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { cn } from "@/lib/utils";
 import { useTablePagination } from "@/hooks/use-table-pagination";

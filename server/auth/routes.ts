@@ -11,7 +11,7 @@ import { permissionCache } from "../lib/permissions-cache";
 import { bootstrapFirstOrganisationAdmin } from "./devLogin";
 import { db } from "../db";
 import { and, eq } from "drizzle-orm";
-import { userInvitations, userRoles } from "@shared/schema";
+import { userRoles } from "@shared/schema";
 import { orgMemberships, PLATFORM_ROLES, type PlatformRole } from "@shared/models/permissions";
 import { storage } from "../storage";
 import { logOrgAuditEvent } from "../lib/org-audit";

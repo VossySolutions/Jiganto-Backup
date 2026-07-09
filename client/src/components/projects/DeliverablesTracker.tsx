@@ -18,10 +18,24 @@ import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import {
-  Search, ChevronRight, Settings, Upload, Download, Plus, Trash2,
-  Pencil, ClipboardList, X, GripVertical, FileText, BarChart3,
-  ClipboardCheck, FileSpreadsheet, Presentation, FileSignature,
-  Pin, FileCheck, MoreHorizontal, Loader2,
+  Search,
+  ChevronRight,
+  Settings,
+  Upload,
+  Download,
+  Plus,
+  Trash2,
+  Pencil,
+  ClipboardList,
+  GripVertical,
+  FileText,
+  BarChart3,
+  ClipboardCheck,
+  FileSpreadsheet,
+  Presentation,
+  FileSignature,
+  Pin,
+  FileCheck
 } from "lucide-react";
 
 const PHASE_PAL = ["#3b6cf4","#7c3aed","#059669","#db2777","#d97706","#dc2626","#4f46e5","#0891b2","#65a30d","#9333ea"];
@@ -231,20 +245,6 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
 
   const createPhaseMut = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/pm/deliverable-phases", data),
-  });
-
-  const updatePhaseMut = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PUT", `/api/pm/deliverable-phases/${id}`, data),
-  });
-
-  const deletePhaseMut = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/pm/deliverable-phases/${id}`),
-  });
-
-  const applyTemplateMut = useMutation({
-    mutationFn: (data: { template: string }) =>
-      apiRequest("POST", `/api/pm/projects/${projectId}/deliverable-phases/template`, data),
-    onSuccess: invalidateAll,
   });
 
   const createDelMut = useMutation({
@@ -519,7 +519,6 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
     try {
       const deliverableUpdates: Array<{ id: number; phaseName: string | null }> = [];
       const oldNameToNew = new Map<string, string | null>();
-      const newPhaseNames = new Set(tempPhases.map(tp => tp.name));
 
       for (const oldPhase of phases) {
         const match = tempPhases.find(tp => tp.id === oldPhase.id);
@@ -1444,7 +1443,7 @@ function PhaseGroupTable({
 function PhaseRow({
   d, isSel, isDrawerOpen, ai, TypeIcon, dateDisplay,
   onToggleSelect, onCycleStatus, onCycleRag, onToggleDrawer,
-  onEdit, onAudit, onDelete, onReview, deliverables, onRequestSignoff,
+  onEdit, onAudit, onDelete, onReview, deliverables: _deliverables, onRequestSignoff,
 }: {
   d: PmDeliverable;
   isSel: boolean;

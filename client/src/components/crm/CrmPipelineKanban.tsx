@@ -53,7 +53,6 @@ function PipelineOpportunityCard({
   onMoveStage,
   onOpenCardFields,
   onMovePipeline,
-  toast,
   dragHandleProps,
   isDragging,
 }: {

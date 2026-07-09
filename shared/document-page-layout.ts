@@ -134,8 +134,6 @@ export function resolveEffectivePageLayout(
 
   const hasOwnHeader = documentHasOwnPageLayoutOverride(documentMetadata, "headerHtml");
   const hasOwnFooter = documentHasOwnPageLayoutOverride(documentMetadata, "footerHtml");
-  const docHeader = hasOwnHeader ? normalizeHtml(docLayout.headerHtml) : "";
-  const docFooter = hasOwnFooter ? normalizeHtml(docLayout.footerHtml) : "";
 
   const headerInherited = !hasOwnHeader && !!folderLayout.headerHtml;
   const footerInherited = !hasOwnFooter && !!folderLayout.footerHtml;

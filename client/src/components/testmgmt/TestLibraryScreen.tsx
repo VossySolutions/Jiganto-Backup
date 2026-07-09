@@ -22,7 +22,6 @@ export function TestLibraryScreen() {
   const { activeProjectId, activeProject, qsParam } = useTmProject();
   const labels = getTmLabels(activeProject?.methodology);
   const [expandedAreas, setExpandedAreas] = useState<Set<number>>(new Set());
-  const [expandedProcesses, setExpandedProcesses] = useState<Set<number>>(new Set());
   const [creating, setCreating] = useState<"area" | "process" | null>(null);
   const [newName, setNewName] = useState("");
   const [parentAreaId, setParentAreaId] = useState<number | null>(null);

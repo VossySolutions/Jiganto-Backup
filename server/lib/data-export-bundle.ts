@@ -28,7 +28,7 @@ export type PersonalDataExportBundle = {
 
 export async function buildPersonalDataExport(
   userId: string,
-  orgId: number,
+  _orgId: number,
 ): Promise<PersonalDataExportBundle> {
   const user = await authStorage.getUser(userId);
   const [profile] = await db.select().from(profiles).where(eq(profiles.userId, userId)).limit(1);

@@ -1,6 +1,6 @@
 /** Client-side Word (.docx) export with page header/footer and Tahoma font. */
 
-export const DOCUMENT_DOCX_FONT = "Tahoma";
+const DOCUMENT_DOCX_FONT = "Tahoma";
 
 type DocxModule = typeof import("docx");
 
@@ -54,7 +54,7 @@ function htmlToDocxParagraphs(
   DocxParagraph: DocxModule["Paragraph"],
   DocxTextRun: DocxModule["TextRun"],
   HeadingLevel: DocxModule["HeadingLevel"],
-  BorderStyle: DocxModule["BorderStyle"],
+  _BorderStyle: DocxModule["BorderStyle"],
   AlignmentType: DocxModule["AlignmentType"],
   size?: number,
 ): InstanceType<DocxModule["Paragraph"]>[] {
@@ -191,7 +191,7 @@ function parseBodyToDocxChildren(
 }
 
 /** Default body font size (points) used when no override is supplied. */
-export const DOCUMENT_DOCX_DEFAULT_BODY_SIZE_PT = 11;
+const DOCUMENT_DOCX_DEFAULT_BODY_SIZE_PT = 11;
 
 export async function buildDocumentDocxBlob(opts: {
   title: string;

@@ -137,7 +137,7 @@ function getRagLabel(rag: string) {
 export function StrategyMap({ onCellClick }: StrategyMapProps) {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter] = useState<string>("all");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [ragFilter, setRagFilter] = useState<RagFilter>("all");

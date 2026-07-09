@@ -19,14 +19,31 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/use-auth";
 import { MondayTable, type ColumnDef, type StatusOption } from "@/components/MondayTable";
 import {
-  Plus, MoreHorizontal, Trash2, Mail, UserPlus, Clock, CheckCircle, XCircle,
-  Save, RefreshCw, Upload, Download, AlertCircle, FileSpreadsheet, Briefcase, Search,
-  Table2, Network, AlertTriangle, FolderKanban, SlidersHorizontal, Eye, EyeOff, Copy
+  Plus,
+  Trash2,
+  Mail,
+  UserPlus,
+  Clock,
+  CheckCircle,
+  Save,
+  RefreshCw,
+  Upload,
+  Download,
+  AlertCircle,
+  FileSpreadsheet,
+  Search,
+  Table2,
+  Network,
+  AlertTriangle,
+  FolderKanban,
+  SlidersHorizontal,
+  Eye,
+  EyeOff,
+  Copy
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
@@ -39,7 +56,11 @@ import { useTablePagination } from "@/hooks/use-table-pagination";
 import { SETTINGS_MODULE_KEYS } from "@shared/models/module-access";
 import type { Profile, UserRole, UserInvitation, UserModulePermission, OrgUnit, UserProjectAssignment } from "@shared/schema";
 import { PLATFORM_ROLE_LABELS, PLATFORM_ROLES, type PlatformRole } from "@shared/models/permissions";
-import { USER_TYPE_LABELS, USER_TYPES, ORG_UNIT_TYPE_LABELS, ASSIGNMENT_TYPES, ACCESS_LEVELS } from "@shared/schema";
+import {
+  USER_TYPE_LABELS,
+  USER_TYPES,
+  ACCESS_LEVELS
+} from "@shared/schema";
 
 type ProfileWithUser = Profile & {
   user: {
@@ -221,7 +242,7 @@ function TeamMemberMobileCard({
   );
 }
 
-function OrgChartFromReportsTo({ profiles, orgUnits }: { profiles: ProfileWithUser[]; orgUnits: OrgUnit[] }) {
+function OrgChartFromReportsTo({ profiles }: { profiles: ProfileWithUser[]; orgUnits: OrgUnit[] }) {
   const childMap = new Map<number, ProfileWithUser[]>();
   const rootProfiles: ProfileWithUser[] = [];
 
@@ -1879,7 +1900,7 @@ export default function SettingsUsersTab({
               totalCount={profiles.length}
               className="w-full min-w-0"
               onRowSelect={(ids) => setBulkSelectedIds(ids)}
-              renderBulkActions={(ids) => (
+              renderBulkActions={(_ids) => (
                 <Button
                   variant="outline"
                   size="sm"

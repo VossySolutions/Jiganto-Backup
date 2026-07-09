@@ -131,7 +131,6 @@ export function KpiCard({
   label,
   value,
   sub,
-  subTone,
   valueClassName,
   icon: Icon,
   color = CUSTOMER_MGMT_COLOR,

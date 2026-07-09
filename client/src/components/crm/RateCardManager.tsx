@@ -13,8 +13,18 @@ import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Trash2, Pencil, DollarSign, CheckCircle2, X,
-  CreditCard, Calendar, Loader2, Star, Copy, Download, Upload
+  Plus,
+  Trash2,
+  Pencil,
+  DollarSign,
+  CheckCircle2,
+  X,
+  CreditCard,
+  Calendar,
+  Loader2,
+  Star,
+  Download,
+  Upload
 } from "lucide-react";
 
 type RateCardItem = {
@@ -165,26 +175,6 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
     resetForm();
     setCreateMode(true);
   }, [resetForm]);
-
-  const handleSaveCard = () => {
-    if (!formName.trim()) {
-      toast({ title: "Name is required", variant: "destructive" });
-      return;
-    }
-    const payload = {
-      name: formName.trim(),
-      description: formDescription.trim(),
-      currency: formCurrency,
-      effectiveFrom: formEffectiveFrom,
-      effectiveTo: formEffectiveTo,
-      isDefault: formIsDefault,
-    };
-    if (editingCard) {
-      updateCardMutation.mutate({ id: editingCard.id, data: payload });
-    } else {
-      createCardMutation.mutate(payload);
-    }
-  };
 
   const handleAddItem = (cardId: number) => {
     if (!newItemRole.trim()) {

@@ -1,22 +1,45 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Toggle } from "@/components/ui/toggle";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  Bold, Italic, Underline, Strikethrough, Code, 
-  Heading1, Heading2, Heading3, Heading4, Heading5, Heading6,
-  List, ListOrdered, CheckSquare,
-  Table, Image, Video, FileUp, Link2, Quote,
-  AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  Undo2, Redo2, ChevronDown, Type, Highlighter,
-  Subscript, Superscript, RemoveFormatting, Minus,
-  PanelLeft, PanelRight, Columns, LayoutGrid,
-  FileDown, FileText, FileCode, FilePlus2
+  Bold,
+  Italic,
+  Underline,
+  Strikethrough,
+  Code,
+  Heading1,
+  Heading2,
+  Heading3,
+  Heading4,
+  Heading5,
+  Heading6,
+  List,
+  ListOrdered,
+  CheckSquare,
+  Table,
+  Image,
+  Video,
+  FileUp,
+  Link2,
+  Quote,
+  Undo2,
+  Redo2,
+  ChevronDown,
+  Type,
+  Highlighter,
+  Subscript,
+  Superscript,
+  RemoveFormatting,
+  Minus,
+  FileDown,
+  FileText,
+  FileCode,
+  FilePlus2
 } from "lucide-react";
 
 interface DocumentEditorToolbarProps {

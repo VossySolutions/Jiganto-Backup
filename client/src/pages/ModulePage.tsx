@@ -7,16 +7,14 @@ import { useTenants } from "@/hooks/use-jiganto";
 import { Plus, LayoutGrid, LayoutTemplate } from "lucide-react";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
 import { type InsertBoard } from "@shared/schema";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { TemplateSelector, type BoardTemplate } from "@/components/TemplateSelector";
-import { SubmitForm } from "@/components/ui/submit-form";
 import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 
 export function ModulePage() {
-  const [match, params] = useRoute("/modules/:key");
+  const [, params] = useRoute("/modules/:key");
   const moduleKey = params?.key;
   
   const { data: tenants } = useTenants();

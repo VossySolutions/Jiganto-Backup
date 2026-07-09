@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { SubmitForm } from "@/components/ui/submit-form";
@@ -16,11 +15,30 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Search, Plus, Download, Upload, Bell, X, Trash2, Calendar, Clock,
-  LayoutList, LayoutGrid, CalendarDays, ChevronRight, Users, Briefcase,
-  DollarSign, Target, TrendingUp, CheckCircle2, AlertTriangle,
-  Scissors, MoreHorizontal, GripVertical, Loader2, FileText,
-  CreditCard, ArrowLeft, Filter, Save, Building2, GitCompare, Copy, Wallet
+  Search,
+  Plus,
+  Download,
+  Upload,
+  Bell,
+  X,
+  Calendar,
+  LayoutList,
+  LayoutGrid,
+  CalendarDays,
+  Users,
+  Briefcase,
+  CheckCircle2,
+  Scissors,
+  Loader2,
+  FileText,
+  CreditCard,
+  ArrowLeft,
+  Filter,
+  Save,
+  Building2,
+  GitCompare,
+  Copy,
+  Wallet
 } from "lucide-react";
 import { RateCardManager } from "./RateCardManager";
 import { CrmIntegratedCapacityBoard } from "./CrmIntegratedCapacityBoard";
@@ -372,7 +390,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
     enabled: !!selectedOppId,
   });
 
-  const { data: planData, isLoading: planLoading } = useQuery<ResourcePlan | null>({
+  const { data: planData } = useQuery<ResourcePlan | null>({
     queryKey: selectedPlanId
       ? [`/api/crm/resource-plans/${selectedPlanId}`]
       : ["/api/crm/resource-plans/0?disabled=1"],
@@ -636,7 +654,6 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
   const planImportRef = useRef<HTMLInputElement>(null);
 
   const probability = selectedOpp?.probability || 0;
-  const currency = planData?.currency || "GBP";
   const totalDays = rows.reduce((s, r) => s + calcDays(r), 0);
   const totalCost = rows.reduce((s, r) => s + calcCost(r), 0);
   const confirmedCount = rows.filter(r => r.status === "Confirmed").length;
@@ -1936,165 +1953,6 @@ function WeekPopover({ state, onClose, onApply, onReset, onAddBreak }: {
   );
 }
 
-function AddRowModal({ open, onClose, skillsList, resourcesList, rateCardItems, existingPhases, onAdd }: {
-  open: boolean; onClose: () => void;
-  skillsList: Array<{ id: number; name: string }>;
-  resourcesList: ResourceEntry[];
-  rateCardItems: Array<{ roleName: string; dailyRate: string }>;
-  existingPhases: string[];
-  onAdd: (row: ResourceRow) => void;
-}) {
-  const [phase, setPhase] = useState("Discovery");
-  const [customPhase, setCustomPhase] = useState("");
-  const [role, setRole] = useState("");
-  const [resourceId, setResourceId] = useState<string>("");
-  const [start, setStart] = useState(new Date().toISOString().slice(0, 10));
-  const [end, setEnd] = useState(() => { const d = new Date(); d.setMonth(d.getMonth() + 6); return d.toISOString().slice(0, 10); });
-  const [dpw, setDpw] = useState(5);
-  const [rate, setRate] = useState(900);
-  const [disc, setDisc] = useState(0);
-  const [status, setStatus] = useState("Tentative");
-
-  const allPhases = useMemo(() => {
-    const set = new Set([...DEFAULT_PHASES, ...existingPhases]);
-    return Array.from(set);
-  }, [existingPhases]);
-
-  const mergedRoles = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const item of rateCardItems) map.set(item.roleName, item.dailyRate);
-    for (const s of skillsList) if (!map.has(s.name)) map.set(s.name, "");
-    return Array.from(map.entries()).map(([name, dailyRate]) => ({ name, dailyRate }));
-  }, [rateCardItems, skillsList]);
-
-  const handleRoleSelect = (roleName: string) => {
-    setRole(roleName);
-    const rcItem = rateCardItems.find(i => i.roleName === roleName);
-    if (rcItem) setRate(parseFloat(rcItem.dailyRate) || 900);
-  };
-
-  const effectivePhase = phase === "__custom__" ? customPhase : phase;
-
-  const handleAdd = () => {
-    const res = resourceId ? resourcesList.find(r => r.id === parseInt(resourceId)) : null;
-    onAdd({
-      phase: effectivePhase || "Discovery", roleName: role || "TBA",
-      resourceId: resourceId ? parseInt(resourceId) : null,
-      namedResourceLabel: res ? `${res.firstName} ${res.lastName}` : "",
-      startDate: start, endDate: end,
-      daysPerWeek: dpw, dailyRate: rate, discountPercent: disc,
-      status, sortOrder: 0, breaks: [], weekOverrides: {},
-    });
-  };
-
-  return (
-    <FormDialogShell
-      open={open}
-      onOpenChange={(o) => !o && onClose()}
-      title="Add Resource Requirement"
-      subtitle="Add a new row to this resource plan"
-      saveLabel="Add Resource"
-      onCancel={onClose}
-      onSubmit={handleAdd}
-      testId="add-row-modal"
-      saveTestId="button-confirm-add"
-      size="sm"
-    >
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <Label className="text-xs uppercase text-muted-foreground">Phase</Label>
-            <select value={phase} onChange={e => { setPhase(e.target.value); if (e.target.value !== "__custom__") setCustomPhase(""); }}
-              className="w-full px-3 py-2 border rounded-md text-sm outline-none focus:border-[#0ea5e9]"
-              data-testid="modal-select-phase">
-              {allPhases.map(p => <option key={p} value={p}>{p}</option>)}
-              <option value="__custom__">Other (custom)...</option>
-            </select>
-            {phase === "__custom__" && (
-              <Input value={customPhase} onChange={e => setCustomPhase(e.target.value)}
-                placeholder="Enter custom phase name..."
-                className="mt-1"
-                autoFocus
-                data-testid="modal-input-custom-phase" />
-            )}
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs uppercase text-muted-foreground">Role / Skill</Label>
-            <select
-              value={role}
-              onChange={e => handleRoleSelect(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md text-sm outline-none focus:border-[#0ea5e9]"
-              data-testid="modal-select-role"
-            >
-              <option value="">— Select a role —</option>
-              {rateCardItems.length > 0 && (
-                <optgroup label="Rate Card Roles">
-                  {rateCardItems.map(item => (
-                    <option key={`rc-${item.roleName}`} value={item.roleName}>
-                      {item.roleName} (£{item.dailyRate}/day)
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {skillsList.length > 0 && (
-                <optgroup label="Skills Library">
-                  {skillsList.filter(s => !rateCardItems.some(i => i.roleName === s.name)).map(s => (
-                    <option key={`sk-${s.id}`} value={s.name}>{s.name}</option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-            <Input value={role} onChange={e => setRole(e.target.value)}
-              placeholder="Or type a custom role name..."
-              className="mt-1 text-xs"
-              data-testid="modal-input-role" />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs uppercase text-muted-foreground">Named Resource (Optional)</Label>
-            <select value={resourceId} onChange={e => setResourceId(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md text-sm outline-none focus:border-[#0ea5e9]"
-              data-testid="modal-select-resource">
-              <option value="">— To be assigned —</option>
-              {resourcesList.map(r => (
-                <option key={r.id} value={r.id}>{r.firstName} {r.lastName} · {r.jobTitle || "—"}</option>
-              ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs uppercase text-muted-foreground">Start Date</Label>
-              <Input type="date" value={start} onChange={e => setStart(e.target.value)} data-testid="modal-input-start" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs uppercase text-muted-foreground">End Date</Label>
-              <Input type="date" value={end} onChange={e => setEnd(e.target.value)} data-testid="modal-input-end" />
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs uppercase text-muted-foreground">Days/Week</Label>
-              <Input type="number" value={dpw} min={0.5} max={5} step={0.5} onChange={e => setDpw(parseFloat(e.target.value) || 5)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs uppercase text-muted-foreground">Daily Rate £</Label>
-              <Input type="number" value={rate} onChange={e => setRate(parseFloat(e.target.value) || 0)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs uppercase text-muted-foreground">Discount %</Label>
-              <Input type="number" value={disc} min={0} max={100} onChange={e => setDisc(parseFloat(e.target.value) || 0)} />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs uppercase text-muted-foreground">Status</Label>
-            <select value={status} onChange={e => setStatus(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md text-sm outline-none focus:border-[#0ea5e9]">
-              {STATUSES.map(s => <option key={s}>{s}</option>)}
-            </select>
-          </div>
-        </div>
-    </FormDialogShell>
-  );
-}
-
 function BreakModal({ row, onClose, onUpdate }: {
   row: ResourceRow; onClose: () => void;
   onUpdate: (breaks: ResourceRow["breaks"]) => void;
@@ -2190,46 +2048,6 @@ function BreakModal({ row, onClose, onUpdate }: {
   );
 }
 
-function RateCardPicker({ open, onClose, rateCards, selectedId, onSelect }: {
-  open: boolean; onClose: () => void; rateCards: RateCard[];
-  selectedId: number | null; onSelect: (id: number) => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm" data-testid="rate-card-picker">
-        <DialogHeader>
-          <DialogTitle>Select Rate Card</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-2">
-          {rateCards.length === 0 ? (
-            <div className="text-sm text-muted-foreground text-center py-6">
-              No rate cards available. Create one in Rate Card Management.
-            </div>
-          ) : (
-            rateCards.map(rc => (
-              <button
-                key={rc.id}
-                onClick={() => onSelect(rc.id)}
-                className={cn("w-full text-left p-3 border rounded-lg transition-colors",
-                  selectedId === rc.id ? "border-[#0ea5e9] bg-[#0ea5e9]/5" : "hover:bg-muted/50")}
-                data-testid={`rate-card-${rc.id}`}
-              >
-                <div className="text-sm font-semibold">{rc.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {rc.currency} · {rc.items?.length || 0} roles defined
-                </div>
-              </button>
-            ))
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Close</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function SaveTemplateModal({ open, onClose, rows, onSaved }: {
   open: boolean;
   onClose: () => void;
@@ -2293,4 +2111,6 @@ function SaveTemplateModal({ open, onClose, rows, onSaved }: {
     </FormDialogShell>
   );
 }
+
+
 

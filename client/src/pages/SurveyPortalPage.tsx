@@ -1,18 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useParams } from "wouter";
 import { SubmitForm } from "@/components/ui/submit-form";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import type { SurveyWithDetails, SurveyQuestion } from "@shared/models/surveys";
 import { LIKERT_OPTIONS, EMOJI_RATINGS, useSurveyColors } from "@/lib/survey-constants";
 import { applyLogicSkip, visibleSurveyQuestions } from "@/lib/survey-logic";
-import { SurveyLoadingState, SurveyButtonSpinner } from "@/components/surveys/SurveyLoadingState";
+import { SurveyLoadingState } from "@/components/surveys/SurveyLoadingState";
 import "@/styles/surveys.css";
-
-const TYPE_LABEL: Record<string, string> = {
-  mc: "Multiple Choice", yn: "Yes / No", cb: "Checkboxes", dd: "Dropdown",
-  sc: "Star Rating", scale: "Scale", nps: "NPS Score", likert: "Likert", text: "Short Text",
-  para: "Paragraph", date: "Date", file: "File Upload", matrix: "Matrix", section: "Section",
-};
 
 function orderQuestions(questions: SurveyQuestion[], randomize: boolean) {
   const filtered = questions.filter(q => q.type !== "section" && !q.isSection);

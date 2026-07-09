@@ -1,13 +1,11 @@
 
 import { z } from 'zod';
-import { 
-  insertTenantSchema, 
-  insertProfileSchema, 
-  insertBoardSchema, 
-  insertColumnSchema, 
+import {
+  insertTenantSchema,
+  insertBoardSchema,
+  insertColumnSchema,
   insertItemSchema,
   tenants,
-  profiles,
   boards,
   columns,
   items,

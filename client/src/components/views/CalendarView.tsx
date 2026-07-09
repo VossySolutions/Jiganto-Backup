@@ -3,7 +3,6 @@ import { type Column, type Item } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 
 interface CalendarViewProps {
   columns: Column[];
@@ -17,7 +16,6 @@ export function CalendarView({ columns: columnsData, items, onItemClick, onDateC
   
   const dateColumn = columnsData.find(col => col.type === "date");
   const titleColumn = columnsData.find(col => col.key === "title" || col.type === "text");
-  const statusColumn = columnsData.find(col => col.type === "status");
 
   const daysInMonth = useMemo(() => {
     const year = currentDate.getFullYear();
@@ -136,7 +134,6 @@ export function CalendarView({ columns: columnsData, items, onItemClick, onDateC
                 {dateItems.slice(0, 3).map((item) => {
                   const values = item.values as Record<string, any>;
                   const title = titleColumn ? values[titleColumn.key] : `Item ${item.id}`;
-                  const status = statusColumn ? values[statusColumn.key] : null;
                   
                   return (
                     <div

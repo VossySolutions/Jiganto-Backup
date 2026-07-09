@@ -1,12 +1,8 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request } from "express";
 import { z } from "zod";
 import {
-  insertTaskSchema,
   insertTaskSubtaskSchema,
-  insertTaskViewSchema,
-  taskStatusEnum,
-  taskPriorityEnum,
-  taskSourceEnum,
+  insertTaskViewSchema
 } from "@shared/models/tasks";
 import { storage } from "../storage";
 import { getApiTenantId } from "../lib/api-tenant-id";

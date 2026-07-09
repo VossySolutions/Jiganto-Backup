@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
@@ -9,7 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Eye, Target, Flag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { ResourcesTabLoading, ResourcesTableSkeleton, ResourcesErrorState, ResourcesEmptyState } from "./ResourcesUi";
+import {
+  ResourcesTableSkeleton,
+  ResourcesErrorState
+} from "./ResourcesUi";
 
 type PipelineItem = {
   id: number;

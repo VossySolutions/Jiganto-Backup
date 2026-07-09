@@ -25,7 +25,7 @@ function UnreadBadge({ count }: { count: number }) {
   );
 }
 
-function ChannelIcon({ type, bridged }: { type: string; bridged?: boolean }) {
+function ChannelIcon({ type }: { type: string; bridged?: boolean }) {
   if (type === "private") return <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
   if (type === "direct") return <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
   if (type === "announcement") return <Megaphone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;

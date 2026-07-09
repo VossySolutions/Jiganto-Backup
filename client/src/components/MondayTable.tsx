@@ -9,11 +9,25 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { 
-  Plus, MoreHorizontal, ChevronDown, ChevronRight, GripVertical,
-  Text, Hash, Calendar as CalendarIcon, User, Tag, CheckSquare, 
-  Link2, BarChart3, AlertCircle, Copy, Archive, Trash2, Edit, Eye,
-  EyeOff, ArrowUpDown, Filter, Paintbrush
+import {
+  Plus,
+  MoreHorizontal,
+  ChevronDown,
+  ChevronRight,
+  Text,
+  Hash,
+  Calendar as CalendarIcon,
+  User,
+  Tag,
+  CheckSquare,
+  Link2,
+  BarChart3,
+  AlertCircle,
+  Copy,
+  Archive,
+  Trash2,
+  Edit,
+  Paintbrush
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -527,20 +541,6 @@ function LinkCell({ value }: { value: string | null }) {
   );
 }
 
-function NumberCell({ value, currency }: { value: number | string | null; currency?: boolean }) {
-  if (value === null || value === undefined) {
-    return <span className="text-muted-foreground">-</span>;
-  }
-  
-  const numValue = typeof value === "string" ? parseFloat(value) : value;
-  
-  if (currency) {
-    return <span className="text-sm font-medium">${numValue.toLocaleString()}</span>;
-  }
-  
-  return <span className="text-sm">{numValue.toLocaleString()}</span>;
-}
-
 type NavigationDirection = "tab" | "shift-tab" | "enter" | "shift-enter" | "arrow-left" | "arrow-right" | "arrow-up" | "arrow-down";
 
 function highlightTextParts(text: string, term: string): React.ReactNode {
@@ -768,10 +768,10 @@ interface CellRendererProps<T> {
 function CellRenderer<T>({ 
   column, 
   value, 
-  row,
+  row: _row,
   onEdit,
   isEditing,
-  isFocused,
+  isFocused: _isFocused,
   onStartEdit,
   onCommit,
   onCancel,
@@ -1360,7 +1360,7 @@ export function MondayTable<T extends { id: number | string }>({
     }
   }, [editingCell, navigateFromCell, isInlineEditableType, isToggleType, cellRefKey]);
 
-  const renderRow = (item: T, idx: number) => {
+  const renderRow = (item: T, _idx: number) => {
     const isSelected = selectedIds.has(item.id);
     const rowId = String(item.id);
     const rowFormat = formatMap[rowId]?.row;

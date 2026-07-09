@@ -12,9 +12,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   FormDialogShell,
   FormDialogViewShell,
-  FormSection,
   FieldGrid,
-  FieldLabel,
+  FieldLabel
 } from "@/components/ui/form-dialog-shell";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import MondayTable, { type ColumnDef, type GroupDef, defaultStatusColors } from "@/components/MondayTable";
+import MondayTable, { type ColumnDef, type GroupDef } from "@/components/MondayTable";
 import { useToast } from "@/hooks/use-toast";
 import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
@@ -33,10 +32,10 @@ import {
   Plus, Search, Loader2, Trash2, Bookmark, LayoutTemplate, Upload,
   Workflow, FileText, Building2, Network, Database, GitBranch, Layers,
   FolderOpen, Library, ChevronDown, ChevronRight, BookOpen, LayoutGrid, List, Clock,
-  Target, Users, ArrowRightLeft, Lightbulb, CheckCircle2, Play, Eye, Edit3,
+  Target, Users, Lightbulb, CheckCircle2, Play, Eye, Edit3,
   LogIn, LogOut, Timer, X, Link2, Unlink, ExternalLink, Rows3, Columns3,
   Download, Image, FileDown, LayoutList, Columns2, ClipboardCopy, MoreVertical, Copy, ClipboardList,
-  ArrowLeftRight, FolderTree, Video, FileQuestion, Sparkles, Globe, PanelRightOpen, PanelRightClose,
+  ArrowLeftRight, FolderTree, Sparkles, PanelRightOpen, PanelRightClose,
   ChevronsDownUp, Server,
 } from "lucide-react";
 import {
@@ -781,7 +780,7 @@ function DocumentLinkDialog({ open, onClose, onSelect, itemText }: {
   open: boolean; onClose: () => void; onSelect: (doc: { id: number; title: string }) => void; itemText: string;
 }) {
   const [search, setSearch] = useState("");
-  const { data: allDocs = [], isLoading: docsLoading } = useQuery<{ id: number; title: string; type: string; status: string }[]>({
+  const { data: allDocs = [] } = useQuery<{ id: number; title: string; type: string; status: string }[]>({
     queryKey: [`/api/documents`],
     enabled: open,
     staleTime: BPM_QUERY_STALE_MS,
@@ -2175,12 +2174,6 @@ type BpmlTemplate = {
   status: string;
 };
 
-type PortalBreadcrumb = {
-  level: number;
-  label: string;
-  value: string;
-};
-
 type TreeNodeData = {
   value: string;
   name: string;
@@ -2896,7 +2889,7 @@ function ProcessPortal() {
 
                         <div className="flex items-center gap-3 py-1.5 px-4 mb-1 sticky top-0 z-10 bg-background border-b" data-testid="resource-columns-header">
                           <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Resource Key:</span>
-                          {resourceColumns.map((col, i) => (
+                          {resourceColumns.map((col) => (
                             <div key={col} className="flex items-center gap-1">
                               <div className="w-2 h-2 rounded-full bg-muted-foreground/20" />
                               <span className="text-[10px] text-muted-foreground">{col}</span>
@@ -3144,7 +3137,7 @@ export default function BPMPage() {
     staleTime: BPM_QUERY_STALE_MS,
   });
 
-  const { data: libraries = [], isLoading: librariesLoading } = useQuery<BpmLibrary[]>({
+  const { data: libraries = [] } = useQuery<BpmLibrary[]>({
     queryKey: [`/api/bpm/libraries`],
     staleTime: BPM_QUERY_STALE_MS,
   });

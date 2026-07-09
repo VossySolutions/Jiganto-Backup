@@ -2,21 +2,15 @@ import { db } from "../db";
 import { storage } from "../storage";
 import {
   pmPortfolios,
-  pmPrograms,
-  pmProjects,
   pmProjectPortfolios,
   pmMilestones,
   pmRaiddItems,
   pmWorkstreams,
   pmDeliverables,
-  pmProjectPhases,
   pmReportSchedules,
   pmReportSnapshots,
   pmTeamMembers,
-  type PmProject,
-  type PmPortfolio,
-  type PmProgram,
-  type PmMilestone,
+  type PmMilestone
 } from "@shared/schema";
 import { and, eq, inArray, sql, or, desc, isNull } from "drizzle-orm";
 import { resources } from "@shared/schema";

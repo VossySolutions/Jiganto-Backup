@@ -325,9 +325,7 @@ export function Sidebar() {
 
   const { data: organisation, isLoading: organisationLoading } = useCurrentOrganisation();
   const {
-    isCollapsed,
     toggleCollapse,
-    hiddenModules,
     toggleModuleVisibility,
     isModuleHidden,
     mobileNavOpen,

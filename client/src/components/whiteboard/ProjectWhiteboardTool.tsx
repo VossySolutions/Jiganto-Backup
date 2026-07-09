@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 import type { WhiteboardListItem } from "@shared/models/whiteboard";
 import { thumbnailPlaceholder } from "@/lib/whiteboard-constants";
 import { fetchWhiteboards } from "@/lib/whiteboard-api";
-import { WhiteboardCardSkeleton, WhiteboardLoadingState } from "@/components/whiteboard/WhiteboardLoadingState";
+import { WhiteboardCardSkeleton } from "@/components/whiteboard/WhiteboardLoadingState";
 
 export function ProjectWhiteboardTool({ projectId }: { projectId: number }) {
   const [, navigate] = useLocation();

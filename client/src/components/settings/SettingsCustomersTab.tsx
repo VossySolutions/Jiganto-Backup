@@ -23,9 +23,19 @@ import { MondayTable, type ColumnDef, type StatusOption } from "@/components/Mon
 import { TablePagination } from "@/components/TablePagination";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import {
-  Plus, Trash2, UserPlus, Save, RefreshCw, Search,
-  AlertTriangle, FolderKanban, Upload, FileSpreadsheet, Building2,
-  SlidersHorizontal, Eye, EyeOff
+  Plus,
+  Trash2,
+  UserPlus,
+  Save,
+  RefreshCw,
+  Search,
+  AlertTriangle,
+  FolderKanban,
+  Upload,
+  Building2,
+  SlidersHorizontal,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import BulkAssignmentDialog from "@/components/settings/BulkAssignmentDialog";
 import type { Profile, UserRole, UserModulePermission, UserProjectAssignment } from "@shared/schema";
@@ -768,7 +778,7 @@ export default function SettingsCustomersTab({ profiles, roles, tenantId }: Sett
           className="border rounded-md"
           columnWidthStorageKey="jiganto-customers-col-widths"
           onRowSelect={(ids) => setBulkSelectedIds(ids)}
-          renderBulkActions={(ids) => (
+          renderBulkActions={(_ids) => (
             <Button
               variant="outline"
               size="sm"

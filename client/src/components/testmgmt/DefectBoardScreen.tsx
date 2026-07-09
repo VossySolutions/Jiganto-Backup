@@ -5,7 +5,6 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Bug, GripVertical, Loader2 } from "lucide-react";
 import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
-import { useTmProject } from "@/contexts/TmProjectContext";
 import { HD_BOARD_COLUMNS, SEV_BADGE, mapTicketToColumn, canMoveToColumn } from "@/lib/tm-utils";
 import type { TmHdDefect } from "@/types/testmgmt";
 import { useTmFetch } from "@/hooks/use-tm-fetch";

@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { Plus, Layers, GitBranch, ListTodo, Pencil, Trash2, MoreHorizontal, ChevronRight, Rocket } from "lucide-react";
 import { ReactGanttChart } from "./ReactGanttChart";
 import { PhaseFormDialog } from "./PhaseFormDialog";

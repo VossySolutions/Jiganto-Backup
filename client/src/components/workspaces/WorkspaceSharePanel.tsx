@@ -69,7 +69,6 @@ export function WorkspaceSharePanel({
     enabled: open && workspaceId > 0,
   });
   const members = membersQuery.data ?? [];
-  const membersLoading = membersQuery.isLoading;
 
   const { data: orgMembers = [] } = useQuery({
     queryKey: ["/api/chat/users", "workspace-share", workspaceId],

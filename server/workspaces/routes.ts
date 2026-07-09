@@ -1,6 +1,5 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request } from "express";
 import { requireApiTenantId } from "../lib/api-tenant-id";
-import { storage } from "../storage";
 import * as ws from "./service";
 
 function userId(req: Request): string | undefined {

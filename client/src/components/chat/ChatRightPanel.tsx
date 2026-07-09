@@ -92,7 +92,6 @@ export function ChatRightPanel({
 function ThreadPanel({
   messageId,
   channelId,
-  currentUserId,
 }: {
   messageId: number;
   channelId: number;

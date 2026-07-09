@@ -1,4 +1,11 @@
-import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  sql
+} from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import {
@@ -29,7 +36,6 @@ import {
 } from "@shared/models/service-desk";
 import { users, tenants } from "@shared/schema";
 import { clients } from "@shared/models/clients";
-import { pmProjects } from "@shared/models/projects";
 import { businessMsBetween } from "../lib/business-calendar";
 import { addBusinessHours, slaStateForTicket, effectiveResolutionDeadline } from "./sla";
 
@@ -729,7 +735,7 @@ export async function addTicketComment(
 export async function updateTicket(
   tenantId: number,
   ticketId: number,
-  userId: string,
+  _userId: string,
   patch: Partial<{
     title: string;
     priority: TicketPriority;

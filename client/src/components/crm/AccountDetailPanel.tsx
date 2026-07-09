@@ -2,7 +2,12 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,11 +25,30 @@ import { ContactOrgChartView } from "./ContactOrgChartView";
 import { ContactRelationshipsPanel } from "./ContactRelationshipsPanel";
 import { useCrmUsers } from "./CrmUsersProvider";
 import {
-  Building2, Users, Target, TrendingUp, Phone, Mail, Calendar, 
-  Plus, Globe, MapPin, DollarSign, Clock, FileText, MessageSquare,
-  CheckCircle2, XCircle, X, Edit2, Trash2, Activity, Loader2,
-  Briefcase, ExternalLink, User, MoreHorizontal, LayoutGrid, List, GitBranch,
-  Inbox, Send, Maximize2, Minimize2, Wallet
+  Building2,
+  Users,
+  TrendingUp,
+  Phone,
+  Mail,
+  Calendar,
+  Plus,
+  DollarSign,
+  Clock,
+  MessageSquare,
+  CheckCircle2,
+  X,
+  Edit2,
+  Activity,
+  Loader2,
+  ExternalLink,
+  LayoutGrid,
+  List,
+  GitBranch,
+  Inbox,
+  Send,
+  Maximize2,
+  Minimize2,
+  Wallet
 } from "lucide-react";
 import type {
   CrmAccountDetail,
@@ -57,19 +81,6 @@ interface AccountDetailPanelProps {
 }
 
 type ContactsViewMode = "list" | "cards" | "hierarchy";
-
-const CONTACT_ROLE_ORDER = ["decision_maker", "influencer", "contact"] as const;
-const CONTACT_ROLE_LABELS: Record<string, string> = {
-  decision_maker: "Decision makers",
-  influencer: "Influencers",
-  contact: "Contacts",
-  other: "Other",
-};
-
-function getContactRoleGroup(role: string | null): string {
-  if (role && CONTACT_ROLE_ORDER.includes(role as typeof CONTACT_ROLE_ORDER[number])) return role;
-  return "other";
-}
 
 function getInitials(first: string, last: string): string {
   return `${first[0] || ""}${last[0] || ""}`.toUpperCase();

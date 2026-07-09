@@ -1,14 +1,27 @@
-import { useState, useCallback, useMemo, useEffect, memo, Fragment } from "react";
+import {
+  useState,
+  useMemo,
+  useEffect,
+  memo,
+  Fragment
+} from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { SubmitForm } from "@/components/ui/submit-form";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel
+} from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -19,12 +32,42 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Plus, MoreHorizontal, ChevronDown, ChevronRight, ChevronLeft,
-  Text, Hash, Calendar as CalendarIcon, User, Tag, CheckSquare, 
-  Link2, BarChart3, AlertCircle, Copy, Archive, Trash2, Edit, Eye,
-  Filter, Search, Settings2, Save, Star, Columns, Grid3X3, List,
-  GanttChart, FileText, PieChart, Layers, X, Check, Grip,
-  ArrowUpDown, SortAsc, SortDesc, Group, FolderOpen, LayoutGrid, Clock, GripVertical
+  Plus,
+  MoreHorizontal,
+  ChevronDown,
+  ChevronRight,
+  ChevronLeft,
+  Text,
+  Hash,
+  Calendar as CalendarIcon,
+  User,
+  Tag,
+  CheckSquare,
+  Link2,
+  BarChart3,
+  AlertCircle,
+  Trash2,
+  Eye,
+  Filter,
+  Search,
+  Settings2,
+  Save,
+  Star,
+  Columns,
+  Grid3X3,
+  List,
+  GanttChart,
+  FileText,
+  PieChart,
+  Layers,
+  X,
+  Check,
+  ArrowUpDown,
+  SortAsc,
+  SortDesc,
+  FolderOpen,
+  Clock,
+  GripVertical
 } from "lucide-react";
 import { AppKanbanBoard } from "@/components/kanban";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, addDays } from "date-fns";
@@ -358,7 +401,7 @@ function PersonDisplay({ value }: { value: PersonValue | PersonValue[] | null })
 function EditableCell<T>({ 
   column, 
   value, 
-  row, 
+  row: _row, 
   isEditing, 
   onStartEdit,
   onEdit,
@@ -979,7 +1022,6 @@ function FilterBar<T>({
         <div className="space-y-3">
           <div className="font-medium text-sm">Filters</div>
           {filters.map((filter) => {
-            const column = columns.find(c => c.id === filter.columnId);
             return (
               <div key={filter.id} className="flex items-center gap-2">
                 <Select value={filter.columnId} onValueChange={(v) => updateFilter(filter.id, { columnId: v })}>
@@ -2164,14 +2206,10 @@ export function UniversalViewSystem<T extends { id: number | string }>({
   onAddItem,
   onInlineAddItem,
   onDeleteItems,
-  onDuplicateItem,
-  onArchiveItem,
   onColumnsChange,
   onAddColumn,
-  onViewChange,
   savedViews = [],
   onSaveView,
-  onDeleteView,
   dateField,
   statusField,
   titleField,
@@ -2179,7 +2217,6 @@ export function UniversalViewSystem<T extends { id: number | string }>({
   emptyMessage = "No items yet",
   addItemLabel = "Add Item",
   className,
-  moduleId,
   showViewSwitcher = true,
   defaultView = "table",
   enabledViews = ["table", "kanban", "calendar", "gantt", "list", "form", "document", "chart"],

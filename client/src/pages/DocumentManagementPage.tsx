@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo, Fragment, lazy, Suspense } from "react";
+﻿import { useState, useCallback, useRef, useEffect, useMemo, Fragment, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
@@ -16,9 +16,7 @@ import {
 } from "@/lib/document-names";
 import { normalizeDocumentHtmlForEditor } from "@/lib/document-html-normalize";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/use-auth";
 import { useShellLayout } from "@/hooks/use-shell-layout";
-import { useTablePagination } from "@/hooks/use-table-pagination";
 import { cn } from "@/lib/utils";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
@@ -30,9 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   FormDialogShell,
   FormDialogViewShell,
-  FormSection,
-  FieldGrid,
-  FieldLabel,
+  FieldLabel
 } from "@/components/ui/form-dialog-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -42,33 +38,21 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { TablePagination } from "@/components/TablePagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
   FileText, Folder, FolderPlus, FilePlus, Search, Star, Clock, ChevronRight, ChevronDown,
   MoreHorizontal, Edit, Trash2, Share2, MessageSquare, ArrowLeft, Plus,
-  FolderOpen, Home, Hash, Sparkles, Upload, Download, Link2, 
-  LayoutGrid, List, Pencil, ExternalLink, PanelLeftClose, PanelLeft,
-  GripVertical, FolderInput, Save, X, FileUp,
-  File, FileImage, FileSpreadsheet, FileArchive, Paperclip,
+  FolderOpen, Hash, Download, Link2, 
+  Pencil, ExternalLink, PanelLeftClose, PanelLeft,
+  FolderInput, Save, X, FileUp,
+  File, FileImage, FileSpreadsheet, FileArchive,
   Mail, Copy, Check, BookCopy, Globe, Building2, Layers, Palette, Users,
   FileSignature, Bell, XCircle, Eye, Loader2, RotateCcw, Info, Maximize2, Minimize2, AlertTriangle, LayoutTemplate
 } from "lucide-react";
-import {
-  DocAllIcon,
-  DocMyDocsIcon,
-  DocBusinessIcon,
-  DocCustomerIcon,
-  DocProjectIcon,
-  DocFinanceIcon,
-  DocTestingIcon,
-  DocBPMIcon,
-} from "@/components/icons/ModuleIcons";
 import type { MentionUser } from "@/components/TipTapEditor";
 const TipTapEditor = lazy(() =>
   import("@/components/TipTapEditor").then((m) => ({ default: m.TipTapEditor })),
@@ -185,8 +169,6 @@ interface FolderTreeItem extends DocumentFolder {
   files?: DocumentFile[];
 }
 
-type ViewMode = "tile" | "list";
-
 function TabLoadingState({ label = "Loading..." }: { label?: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 gap-3" data-testid="tab-loading">
@@ -233,36 +215,13 @@ function DocumentsPageSkeleton() {
   );
 }
 
-function TableLoadingSkeleton({ rows = 6 }: { rows?: number }) {
-  return (
-    <div className="border rounded-md overflow-hidden" data-testid="documents-table-loading">
-      <div className="bg-muted/50 px-4 py-3">
-        <Skeleton className="h-4 w-full" />
-      </div>
-      <div className="divide-y">
-        {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="flex items-center gap-4 px-4 py-3">
-            <Skeleton className="h-4 w-6" />
-            <Skeleton className="h-4 flex-1" />
-            <Skeleton className="h-4 w-12" />
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-28" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function DocumentManagementPage() {
   const { toast } = useToast();
-  const { user } = useAuth();
   const { isMobile } = useShellLayout();
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [highlightedDocument, setHighlightedDocument] = useState<Document | null>(null);
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [, setIsPreviewMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isNewFolderOpen, setIsNewFolderOpen] = useState(false);
   const [isNewDocOpen, setIsNewDocOpen] = useState(false);
@@ -318,8 +277,6 @@ export default function DocumentManagementPage() {
   const [activeTab, setActiveTab] = useState<"content" | "comments" | "versions" | "properties" | "signoff" | "members">("content");
   const [, setLocation] = useLocation();
   const [selectedTagColor, setSelectedTagColor] = useState("#3B82F6");
-  const [showSearch, setShowSearch] = useState(false);
-  const [folderViewMode, setFolderViewMode] = useState<ViewMode>("tile");
   const [renamingFolder, setRenamingFolder] = useState<DocumentFolder | null>(null);
   const [renamingDocument, setRenamingDocument] = useState<Document | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -343,7 +300,7 @@ export default function DocumentManagementPage() {
       return true;
     }
   });
-  const [mainRecentExpanded, setMainRecentExpanded] = useState(() => {
+  const [mainRecentExpanded] = useState(() => {
     try {
       const stored = localStorage.getItem("jiganto:documents:main-recent-expanded");
       return stored === null ? true : stored === "true";
@@ -388,14 +345,12 @@ export default function DocumentManagementPage() {
   const [shareTokenLoading, setShareTokenLoading] = useState(false);
   const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
-  const [templateFilter, setTemplateFilter] = useState<string>("all");
-  const [isCreateTemplateOpen, setIsCreateTemplateOpen] = useState(false);
+  const [, setIsCreateTemplateOpen] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
   const [newTemplateDesc, setNewTemplateDesc] = useState("");
   const [newTemplateScope, setNewTemplateScope] = useState("global");
   const [newTemplateDepartment, setNewTemplateDepartment] = useState("");
   const [newTemplateCategory, setNewTemplateCategory] = useState("");
-  const [documentCategory, setDocumentCategory] = useState<string>("all");
   const [explorerSearch, setExplorerSearch] = useState("");
   const [activeChip, setActiveChip] = useState<"recent" | "starred" | "shared">("recent");
   const [isMoveToFolderOpen, setIsMoveToFolderOpen] = useState(false);
@@ -417,7 +372,7 @@ export default function DocumentManagementPage() {
     const headerHtml = editHeaderContentRef.current || editHeaderContent || "";
     const footerHtml = editFooterContentRef.current || editFooterContent || "";
     const filename = selectedDocument.title.replace(/[^a-z0-9]/gi, '_');
-    toast({ title: "Generating Word document…" });
+    toast({ title: "Generating Word documentâ€¦" });
     try {
       const buffer = await buildDocumentDocxBlob({
         title: selectedDocument.title,
@@ -549,7 +504,7 @@ export default function DocumentManagementPage() {
           return;
         }
       } catch { /* fall through to browser print */ }
-      toast({ title: "Server PDF unavailable — using browser print instead" });
+      toast({ title: "Server PDF unavailable â€” using browser print instead" });
       const printHtml = buildPrintableDocumentHtml({
         title: selectedDocument.title,
         content: `<div class="content">${content}</div>`,
@@ -571,7 +526,7 @@ export default function DocumentManagementPage() {
     queryKey: ["/api/documents/folders"],
   });
 
-  const { data: documents = [], isLoading: docsLoading, isFetching: docsFetching } = useQuery<(Document & { ownerName: string | null })[]>({
+  const { isLoading: docsLoading } = useQuery<(Document & { ownerName: string | null })[]>({
     queryKey: ["/api/documents", selectedFolderId],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -668,7 +623,7 @@ export default function DocumentManagementPage() {
     setImportTitle(suggestUniqueDocumentTitle(importSourceTitle, importFolderId, allDocuments));
   }, [importNameConflict, importSourceTitle, importFolderId, allDocuments]);
 
-  const { data: searchResults = [], isLoading: searchLoading, isFetching: searchFetching } = useQuery<(Document & { ownerName: string | null })[]>({
+  useQuery<(Document & { ownerName: string | null })[]>({
     queryKey: ["/api/documents/search", searchQuery],
     enabled: searchQuery.length > 2,
     queryFn: async () => {
@@ -775,7 +730,7 @@ export default function DocumentManagementPage() {
     }
   }, [isMobile, selectedDocument?.id, selectedFile?.id]);
 
-  const { data: folderFiles = [], isLoading: folderFilesLoading } = useQuery<DocumentFile[]>({
+  useQuery<DocumentFile[]>({
     queryKey: ["/api/document-files", selectedFolderId],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -790,7 +745,7 @@ export default function DocumentManagementPage() {
     },
   });
 
-  const { data: allFiles = [], isLoading: allFilesLoading } = useQuery<DocumentFile[]>({
+  const { data: allFiles = [] } = useQuery<DocumentFile[]>({
     queryKey: ["/api/document-files/all"],
   });
 
@@ -954,7 +909,7 @@ export default function DocumentManagementPage() {
   });
 
   const updateDocMutation = useMutation({
-    mutationFn: async ({ id, updates, silent }: { id: number; updates: Partial<Document>; silent?: boolean }) => {
+    mutationFn: async ({ id, updates, silent: _silent }: { id: number; updates: Partial<Document>; silent?: boolean }) => {
       let lastError: Error | null = null;
       const hasContent = "content" in updates && updates.content !== undefined;
       const hasOtherUpdates = Object.keys(updates).some(k => k !== "content");
@@ -1119,30 +1074,6 @@ export default function DocumentManagementPage() {
       silent: true,
     });
   }, [selectedDocument, folderLayoutNodes, updateDocMutation]);
-
-  const uploadFileMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append("file", file);
-      if (selectedFolderId !== null) {
-        formData.append("folderId", String(selectedFolderId));
-      }
-      const res = await fetchWithAuth("/api/document-files/upload", {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/document-files", selectedFolderId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/document-files/all"] });
-      toast({ title: "File uploaded successfully" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
-    },
-  });
 
   const deleteFileMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -1423,29 +1354,6 @@ export default function DocumentManagementPage() {
     toast({ title: "Download started", description: `Downloading "${doc.title}"` });
   };
 
-  const handleDownloadFolder = (folder: DocumentFolder) => {
-    toast({ title: "Download started", description: `Preparing "${folder.name}" for download` });
-  };
-
-  const handleUploadFile = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.onchange = (e) => {
-      const files = (e.target as HTMLInputElement).files;
-      if (files) {
-        Array.from(files).forEach(file => {
-          if (file.size > 50 * 1024 * 1024) {
-            toast({ title: "File too large", description: `${file.name} exceeds 50MB limit`, variant: "destructive" });
-            return;
-          }
-          uploadFileMutation.mutate(file);
-        });
-      }
-    };
-    input.click();
-  };
-
   const isDescendantOf = (folderId: number, potentialParentId: number): boolean => {
     let current = folders.find(f => f.id === folderId);
     while (current) {
@@ -1541,11 +1449,6 @@ export default function DocumentManagementPage() {
 
   /** Folder pre-selected when creating a doc from the current explorer context. */
   const newDocDefaultFolderId = selectedFolderId ?? (ALLOW_UNCATEGORISED_DOCS ? null : defaultFolderId);
-
-  const openNewDocDialog = useCallback(() => {
-    setNewDocFolderId(newDocDefaultFolderId);
-    setIsNewDocOpen(true);
-  }, [newDocDefaultFolderId]);
 
   const openNewDocInFolder = useCallback((folderId: number) => {
     setSelectedFolderId(folderId);
@@ -1729,11 +1632,6 @@ export default function DocumentManagementPage() {
     }
   }, [allDocuments.length, folders.length]);
 
-  const getCurrentFolder = (): DocumentFolder | null => {
-    if (selectedFolderId === null) return null;
-    return folders.find(f => f.id === selectedFolderId) || null;
-  };
-
   const getBreadcrumbs = (): { id: number | null; name: string }[] => {
     const crumbs: { id: number | null; name: string }[] = [{ id: null, name: "Documents" }];
     if (selectedFolderId) {
@@ -1747,18 +1645,6 @@ export default function DocumentManagementPage() {
       crumbs.push(...findPath(selectedFolderId));
     }
     return crumbs;
-  };
-
-  const getDocTypeIcon = (type: string) => {
-    const iconClass = "h-5 w-5";
-    switch (type) {
-      case "wiki": return <FileText className={`${iconClass} text-primary`} />;
-      case "template": return <Hash className={`${iconClass} text-brand-purple`} />;
-      case "sop": return <FileText className={`${iconClass} text-brand-green`} />;
-      case "policy": return <FileText className={`${iconClass} text-brand-orange`} />;
-      case "contract": return <FileText className={`${iconClass} text-destructive`} />;
-      default: return <FileText className={`${iconClass} text-muted-foreground`} />;
-    }
   };
 
   const getSmallDocTypeIcon = (type: string) => {
@@ -1829,39 +1715,6 @@ export default function DocumentManagementPage() {
     setHighlightedDocument(null);
   };
 
-  const getSubfolders = () => folders.filter(f => f.parentId === selectedFolderId);
-
-  const getCategoryFilteredDocs = (docs: typeof documents) => {
-    if (documentCategory === "all") return docs;
-    if (documentCategory === "my") return docs.filter(d => d.ownerId === user?.id);
-    const folderNameMap = new Map(folders.map(f => [f.id, f.name.toLowerCase()]));
-    const categoryKeywords: Record<string, string[]> = {
-      business: ["business", "strategy", "management", "initiative", "enterprise"],
-      customer: ["customer", "client", "crm", "sales", "account"],
-      project: ["project", "delivery", "implementation", "deployment"],
-      finance: ["finance", "budget", "invoice", "cost", "billing", "accounting"],
-      testing: ["test", "qa", "quality", "validation", "uÐ°Ñ‚"],
-      bpm: ["bpm", "process", "workflow", "procedure", "sop"],
-    };
-    const keywords = categoryKeywords[documentCategory] || [];
-    return docs.filter(d => {
-      const title = (d.title || "").toLowerCase();
-      const folderName = d.folderId ? (folderNameMap.get(d.folderId) || "") : "";
-      return keywords.some(kw => title.includes(kw) || folderName.includes(kw));
-    });
-  };
-
-  const displayedDocs = getCategoryFilteredDocs(searchQuery.length > 2 ? searchResults : documents);
-  const subfolders = useMemo(() => getSubfolders(), [folders, selectedFolderId]);
-  const displayedDocsPagination = useTablePagination(displayedDocs ?? [], {
-    resetKey: `${selectedFolderId ?? "root"}|${documentCategory}|${searchQuery}`,
-  });
-  const folderFilesPagination = useTablePagination(folderFiles ?? [], {
-    resetKey: `${selectedFolderId ?? "root"}|${searchQuery}`,
-  });
-  const subfoldersPagination = useTablePagination(subfolders ?? [], {
-    resetKey: `${selectedFolderId ?? "root"}|${folderViewMode}`,
-  });
   const rootDocs = allDocuments.filter(d => d.folderId === null);
 
   const renderExplorerDocMenu = (doc: Document, testIdPrefix: string) => (
@@ -2097,7 +1950,7 @@ export default function DocumentManagementPage() {
     const collapsedPreview = displayChipDocs
       .slice(0, 2)
       .map((d) => d.title)
-      .join(" · ");
+      .join(" Â· ");
     const collapsedMoreCount = Math.max(0, displayChipDocs.length - 2);
 
     const statusBadgeColors: Record<string, string> = {
@@ -2196,7 +2049,7 @@ export default function DocumentManagementPage() {
                 <Info className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
                 <p className="text-[10px] text-muted-foreground flex-1 leading-relaxed">
                   <span className="font-medium text-foreground">Tip:</span> Use{" "}
-                  <span className="font-medium text-foreground">Hide</span> on the Recent list below to collapse it — click{" "}
+                  <span className="font-medium text-foreground">Hide</span> on the Recent list below to collapse it â€” click{" "}
                   <span className="font-medium text-foreground">Show</span> to expand again.
                 </p>
                 <button
@@ -2312,7 +2165,7 @@ export default function DocumentManagementPage() {
               <div>
                 <div className="flex items-center justify-between mb-1.5 group/fh">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Folders <span className="font-normal text-muted-foreground/60">Â· {folders.length}</span>
+                    Folders <span className="font-normal text-muted-foreground/60">Ã‚Â· {folders.length}</span>
                   </p>
                   <button
                     onClick={() => openNewFolderDialog(null)}
@@ -2669,9 +2522,9 @@ export default function DocumentManagementPage() {
           <div className="shrink-0 border-b bg-background w-full min-w-0" data-testid="document-view-header">
             {selectedDocument.folderId == null && isEditing && (
               <div className="mx-4 sm:mx-6 lg:mx-8 mt-2 flex items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 px-3 py-1.5">
-                <p className="text-xs text-blue-900 dark:text-blue-200">Uncategorised — pick a folder when saving.</p>
+                <p className="text-xs text-blue-900 dark:text-blue-200">Uncategorised â€” pick a folder when saving.</p>
                 <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={promptSaveLocation} data-testid="button-choose-folder-to-save">
-                  <FolderInput className="h-3.5 w-3.5 mr-1" /> Save location…
+                  <FolderInput className="h-3.5 w-3.5 mr-1" /> Save locationâ€¦
                 </Button>
               </div>
             )}
@@ -2877,7 +2730,7 @@ export default function DocumentManagementPage() {
                   title="Page header"
                   description={
                     resolvedPageLayout?.headerInherited && resolvedPageLayout.headerSourceFolderName
-                      ? `Inherited from folder “${resolvedPageLayout.headerSourceFolderName}”`
+                      ? `Inherited from folder â€œ${resolvedPageLayout.headerSourceFolderName}â€`
                       : "Repeats on every page when exported to PDF or Word"
                   }
                 >
@@ -2916,7 +2769,7 @@ export default function DocumentManagementPage() {
                   title="Page footer"
                   description={
                     resolvedPageLayout?.footerInherited && resolvedPageLayout.footerSourceFolderName
-                      ? `Inherited from folder “${resolvedPageLayout.footerSourceFolderName}”`
+                      ? `Inherited from folder â€œ${resolvedPageLayout.footerSourceFolderName}â€`
                       : "Repeats on every page when exported to PDF or Word"
                   }
                 >
@@ -3146,7 +2999,7 @@ export default function DocumentManagementPage() {
                     >
                       <Input
                         name="comment"
-                        placeholder={pendingAnchoredComment ? "Comment on selected text…" : "Add a comment..."}
+                        placeholder={pendingAnchoredComment ? "Comment on selected textâ€¦" : "Add a comment..."}
                         className="flex-1"
                         data-testid="input-add-comment"
                       />
@@ -3297,7 +3150,7 @@ export default function DocumentManagementPage() {
                                   </span>
                                   {req.sentAt && (
                                     <>
-                                      <span className="text-muted-foreground/40 text-xs">Â·</span>
+                                      <span className="text-muted-foreground/40 text-xs">Ã‚Â·</span>
                                       <span className="text-xs text-muted-foreground">
                                         Sent {new Date(req.sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                                       </span>
@@ -3305,7 +3158,7 @@ export default function DocumentManagementPage() {
                                   )}
                                   {req.deadline && (
                                     <>
-                                      <span className="text-muted-foreground/40 text-xs">Â·</span>
+                                      <span className="text-muted-foreground/40 text-xs">Ã‚Â·</span>
                                       <span className="text-xs text-muted-foreground">
                                         Due {new Date(req.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                                       </span>
@@ -3621,519 +3474,6 @@ export default function DocumentManagementPage() {
     </div>
   );
 
-  const renderFolderListView = () => (
-    <ScrollArea className="h-full">
-      <div className="p-6">
-        {selectedFolderId === null && recentDocs.length > 0 && !searchQuery && (
-          <Collapsible
-            open={mainRecentExpanded}
-            onOpenChange={setMainRecentExpanded}
-            className="mb-8 rounded-xl border border-border/60 bg-muted/15 overflow-hidden"
-            data-testid="main-recent-section"
-          >
-            <CollapsibleTrigger
-              className="group/trigger flex items-center gap-2 w-full px-4 py-3 text-left hover:bg-muted/30 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              title={mainRecentExpanded ? "Click to hide recently viewed documents" : "Click to show recently viewed documents"}
-            >
-              {mainRecentExpanded ? (
-                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-              ) : (
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-              )}
-              <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <div className="flex-1 min-w-0 text-left">
-                <p className="text-sm font-medium text-foreground">Recently viewed</p>
-                {!mainRecentExpanded && (
-                  <p className="text-xs text-muted-foreground truncate">
-                    {recentDocs.slice(0, 3).map((d) => d.title).join(" · ")}
-                    {recentDocs.length > 3 ? ` +${recentDocs.length - 3} more` : ""}
-                  </p>
-                )}
-              </div>
-              <Badge variant="secondary" className="shrink-0 text-xs">{recentDocs.length}</Badge>
-              <span className="text-xs font-semibold text-primary shrink-0 min-w-[2.5rem] text-right group-hover/trigger:underline">
-                {mainRecentExpanded ? "Hide" : "Show"}
-              </span>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-4 pt-0">
-              {recentDocs.map((doc) => (
-                <button
-                  key={doc.id}
-                  onClick={() => { setSelectedDocument(doc); setEditContent(doc.content || ""); }}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 hover:border-primary/20 transition-colors text-left group"
-                  data-testid={`recent-doc-${doc.id}`}
-                >
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/15 transition-colors">
-                    {getDocTypeIcon(doc.type)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate">{doc.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {doc.updatedAt ? getRelativeTime(doc.updatedAt) : "—"}
-                    </p>
-                  </div>
-                </button>
-              ))}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-
-        {subfolders.length > 0 && !searchQuery && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                <Folder className="h-4 w-4" /> Folders
-              </h2>
-              <div className="flex items-center gap-2">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-8 gap-1.5"
-                  onClick={handleUploadFile}
-                  disabled={uploadFileMutation.isPending}
-                  data-testid="quick-upload-file"
-                >
-                  {uploadFileMutation.isPending ? (
-                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading...</>
-                  ) : (
-                    <><Upload className="h-3.5 w-3.5" /> Upload</>
-                  )}
-                </Button>
-                <div className="h-4 w-px bg-border mx-1" />
-                <div className="flex items-center border rounded-md">
-                  <Button
-                    variant={folderViewMode === "tile" ? "secondary" : "ghost"}
-                    size="icon"
-                    className="h-8 w-8 rounded-r-none"
-                    onClick={() => setFolderViewMode("tile")}
-                    data-testid="button-view-tile"
-                  >
-                    <LayoutGrid className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant={folderViewMode === "list" ? "secondary" : "ghost"}
-                    size="icon"
-                    className="h-8 w-8 rounded-l-none"
-                    onClick={() => setFolderViewMode("list")}
-                    data-testid="button-view-list"
-                  >
-                    <List className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {folderViewMode === "tile" ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {subfoldersPagination.paginatedItems.map((folder) => (
-                  <button
-                    key={folder.id}
-                    onClick={() => setSelectedFolderId(folder.id)}
-                    className="flex items-center gap-3 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors text-left group"
-                    data-testid={`folder-item-${folder.id}`}
-                  >
-                    <div className="h-10 w-10 rounded-lg bg-brand-orange/10 flex items-center justify-center shrink-0">
-                      <Folder className="h-5 w-5 text-brand-orange" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium truncate">{folder.name}</p>
-                      <p className="text-xs text-muted-foreground">Folder</p>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        asChild
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                          data-testid={`folder-menu-${folder.id}`}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openNewFolderDialog(folder.id); }}>
-                          <FolderPlus className="h-4 w-4 mr-2" /> Create Subfolder
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleUploadFile(); }}>
-                          <Upload className="h-4 w-4 mr-2" /> Upload File
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownloadFolder(folder); }}>
-                          <Download className="h-4 w-4 mr-2" /> Download Folder
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolder(folder); setRenameValue(folder.name); setRenamingFolderColor(folder.color || "#f97316"); }}>
-                          <Pencil className="h-4 w-4 mr-2" /> Rename Folder
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("folder", folder.id, folder.name); }}>
-                          <Link2 className="h-4 w-4 mr-2" /> Share Link
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMovingFolder(folder); setMoveFolderTargetId(folder.parentId ?? null); setIsMoveFolderOpen(true); }} data-testid={`card-folder-move-${folder.id}`}>
-                          <FolderInput className="h-4 w-4 mr-2" /> Move Folder
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={(e) => { e.stopPropagation(); deleteFolderMutation.mutate(folder.id); }}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-[50%]">Name</TableHead>
-                      <TableHead className="w-[20%]">Type</TableHead>
-                      <TableHead className="w-[20%]">Modified</TableHead>
-                      <TableHead className="w-[10%] text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {subfoldersPagination.paginatedItems.map((folder) => (
-                      <TableRow 
-                        key={folder.id} 
-                        className="cursor-pointer hover:bg-muted/30"
-                        onClick={() => setSelectedFolderId(folder.id)}
-                        data-testid={`folder-row-${folder.id}`}
-                      >
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-lg bg-brand-orange/10 flex items-center justify-center shrink-0">
-                              <Folder className="h-4 w-4 text-brand-orange" />
-                            </div>
-                            <span className="font-medium">{folder.name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">Folder</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {new Date(folder.createdAt!).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`folder-list-menu-${folder.id}`}>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openNewFolderDialog(folder.id); }}>
-                                <FolderPlus className="h-4 w-4 mr-2" /> Create Subfolder
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleUploadFile(); }}>
-                                <Upload className="h-4 w-4 mr-2" /> Upload File
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownloadFolder(folder); }}>
-                                <Download className="h-4 w-4 mr-2" /> Download Folder
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolder(folder); setRenameValue(folder.name); setRenamingFolderColor(folder.color || "#f97316"); }}>
-                                <Pencil className="h-4 w-4 mr-2" /> Rename Folder
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("folder", folder.id, folder.name); }}>
-                                <Link2 className="h-4 w-4 mr-2" /> Share Link
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMovingFolder(folder); setMoveFolderTargetId(folder.parentId ?? null); setIsMoveFolderOpen(true); }} data-testid={`list-folder-move-${folder.id}`}>
-                                <FolderInput className="h-4 w-4 mr-2" /> Move Folder
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-red-600 focus:text-red-700"
-                                onClick={(e) => { e.stopPropagation(); deleteFolderMutation.mutate(folder.id); }}
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-            <div className="mt-3 rounded-md border">
-              <TablePagination
-                page={subfoldersPagination.page}
-                totalPages={subfoldersPagination.totalPages}
-                total={subfoldersPagination.total}
-                startIndex={subfoldersPagination.startIndex}
-                endIndex={subfoldersPagination.endIndex}
-                pageSize={subfoldersPagination.pageSize}
-                onPageChange={subfoldersPagination.setPage}
-                onPageSizeChange={subfoldersPagination.setPageSize}
-              />
-            </div>
-          </div>
-        )}
-
-        {subfolders.length === 0 && !searchQuery && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                <Folder className="h-4 w-4" /> Folders
-              </h2>
-              <div className="flex items-center gap-2">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-8 gap-1.5"
-                  onClick={handleUploadFile}
-                  data-testid="quick-upload-file-empty"
-                >
-                  <Upload className="h-3.5 w-3.5" /> Upload
-                </Button>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">No folders here yet.</p>
-          </div>
-        )}
-
-        <div>
-          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
-            <FileText className="h-4 w-4" /> 
-            {searchQuery ? `Search Results` : "Documents"}
-            {displayedDocs.length > 0 && <span className="text-xs">({displayedDocs.length})</span>}
-            {(searchQuery ? (searchLoading || searchFetching) : (docsLoading || docsFetching)) && (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" data-testid="documents-list-loading" />
-            )}
-          </h2>
-          
-          {(searchQuery ? searchLoading : docsLoading) ? (
-            <TableLoadingSkeleton />
-          ) : displayedDocs.length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                  {searchQuery ? (
-                    <Search className="h-8 w-8 text-muted-foreground" />
-                  ) : (
-                    <Sparkles className="h-8 w-8 text-muted-foreground" />
-                  )}
-                </div>
-                <h3 className="font-semibold text-lg mb-1">
-                  {searchQuery ? "No documents found" : "No documents yet"}
-                </h3>
-                <p className="text-muted-foreground text-sm">
-                  {searchQuery
-                    ? "Try a different search term"
-                    : "Use New Document in the toolbar to create your first document"}
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-            <div className="border rounded-md overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="w-12 text-center">#</TableHead>
-                    <TableHead>Document Name</TableHead>
-                    <TableHead className="w-20 text-center">Version</TableHead>
-                    <TableHead className="w-32">Created</TableHead>
-                    <TableHead className="w-32">Edited</TableHead>
-                    <TableHead className="w-40">Author</TableHead>
-                    <TableHead className="w-20 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {displayedDocsPagination.paginatedItems.map((doc, index) => (
-                    <TableRow 
-                      key={doc.id}
-                      className="cursor-pointer hover:bg-accent/50 transition-colors group"
-                      onClick={() => { setSelectedDocument(doc); setEditContent(doc.content || ""); }}
-                      data-testid={`document-row-${doc.id}`}
-                    >
-                      <TableCell className="text-center text-muted-foreground text-sm py-2">{displayedDocsPagination.startIndex + index}</TableCell>
-                      <TableCell className="py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="h-6 w-6 rounded bg-primary/10 flex items-center justify-center shrink-0">
-                            {getDocTypeIcon(doc.type)}
-                          </div>
-                          <span className="font-medium truncate">{doc.title}</span>
-                          {doc.isFavorite && (
-                            <Star className="h-3 w-3 fill-brand-orange text-brand-orange shrink-0" />
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center text-sm py-2">v{doc.currentVersion}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground py-2">
-                        {new Date(doc.createdAt!).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground py-2">
-                        {new Date(doc.updatedAt!).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground py-2 truncate">
-                        {doc.ownerName || "Unknown"}
-                      </TableCell>
-                      <TableCell className="text-right py-2">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={(e) => { e.stopPropagation(); toggleFavorite(doc); }}
-                            data-testid={`button-favorite-${doc.id}`}
-                          >
-                            <Star className={`h-3.5 w-3.5 ${doc.isFavorite ? "fill-brand-orange text-brand-orange" : ""}`} />
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`document-menu-${doc.id}`}>
-                                <MoreHorizontal className="h-3.5 w-3.5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDownloadDocument(doc); }}>
-                                <Download className="h-4 w-4 mr-2" /> Download File
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingDocument(doc); setRenameValue(doc.title); }}>
-                                <Pencil className="h-4 w-4 mr-2" /> Rename File
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleShareLink("document", doc.id, doc.title); }}>
-                                <Link2 className="h-4 w-4 mr-2" /> Share Link
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedDocument(doc); setMoveToFolderId(doc.folderId ?? defaultFolderId); setIsMoveToFolderOpen(true); }} data-testid={`doc-list-move-${doc.id}`}>
-                                <FolderInput className="h-4 w-4 mr-2" /> Move to Folder
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-red-600 focus:text-red-700"
-                                onClick={(e) => { e.stopPropagation(); handleDeleteDocument(doc.id); }}
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            <div className="mt-3 rounded-md border">
-              <TablePagination
-                page={displayedDocsPagination.page}
-                totalPages={displayedDocsPagination.totalPages}
-                total={displayedDocsPagination.total}
-                startIndex={displayedDocsPagination.startIndex}
-                endIndex={displayedDocsPagination.endIndex}
-                pageSize={displayedDocsPagination.pageSize}
-                onPageChange={displayedDocsPagination.setPage}
-                onPageSizeChange={displayedDocsPagination.setPageSize}
-              />
-            </div>
-            </>
-          )}
-
-        {folderFilesLoading && !searchQuery ? (
-          <div className="mt-8">
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
-              <Paperclip className="h-4 w-4" /> Uploaded Files
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            </h2>
-            <TableLoadingSkeleton rows={3} />
-          </div>
-        ) : folderFiles.length > 0 && !searchQuery && (
-          <div className="mt-8">
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
-              <Paperclip className="h-4 w-4" /> Uploaded Files
-              <span className="text-xs">({folderFiles.length})</span>
-            </h2>
-            <div className="border rounded-md overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="w-12 text-center">#</TableHead>
-                    <TableHead>File Name</TableHead>
-                    <TableHead className="w-28">Type</TableHead>
-                    <TableHead className="w-24 text-right">Size</TableHead>
-                    <TableHead className="w-32">Uploaded</TableHead>
-                    <TableHead className="w-20 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {folderFilesPagination.paginatedItems.map((file, index) => (
-                    <TableRow
-                      key={file.id}
-                      className="cursor-pointer hover:bg-accent/50 transition-colors group"
-                      onClick={() => handleFileClick(file)}
-                      data-testid={`file-row-${file.id}`}
-                    >
-                      <TableCell className="text-center text-muted-foreground text-sm py-2">{folderFilesPagination.startIndex + index}</TableCell>
-                      <TableCell className="py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="h-6 w-6 rounded bg-muted flex items-center justify-center shrink-0">
-                            {getFileIcon(file.mimeType)}
-                          </div>
-                          <span className="font-medium truncate">{file.originalName}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground py-2">
-                        {file.mimeType.split('/').pop()?.toUpperCase() || 'FILE'}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground py-2 text-right">
-                        {formatFileSize(file.size)}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground py-2">
-                        {new Date(file.createdAt!).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right py-2">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={(e) => { e.stopPropagation(); window.open(`/api/document-files/${file.id}/download`, '_blank'); }}
-                            data-testid={`button-download-file-${file.id}`}
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-                            onClick={(e) => { e.stopPropagation(); deleteFileMutation.mutate(file.id); }}
-                            data-testid={`button-delete-file-${file.id}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            <div className="mt-3 rounded-md border">
-              <TablePagination
-                page={folderFilesPagination.page}
-                totalPages={folderFilesPagination.totalPages}
-                total={folderFilesPagination.total}
-                startIndex={folderFilesPagination.startIndex}
-                endIndex={folderFilesPagination.endIndex}
-                pageSize={folderFilesPagination.pageSize}
-                onPageChange={folderFilesPagination.setPage}
-                onPageSizeChange={folderFilesPagination.setPageSize}
-              />
-            </div>
-          </div>
-        )}
-        </div>
-      </div>
-    </ScrollArea>
-  );
-
   if (foldersLoading && docsLoading) {
     return (
       <ModuleShell className="min-h-screen bg-background" testId="documents-page" mainClassName="h-screen flex flex-col overflow-hidden">
@@ -4188,7 +3528,7 @@ export default function DocumentManagementPage() {
           />
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-3 sm:px-6 pb-3 gap-2">
             <nav className="flex items-center gap-1 text-xs sm:text-sm text-muted-foreground flex-wrap min-w-0">
-              {getBreadcrumbs().map((crumb, idx, arr) => (
+              {getBreadcrumbs().map((crumb, idx) => (
                 <span key={crumb.id ?? "root"} className="flex items-center gap-1">
                   {idx > 0 && <ChevronRight className="h-3 w-3" />}
                   <button
@@ -5158,7 +4498,7 @@ export default function DocumentManagementPage() {
               </div>
             </div>
 
-            {/* Public link â€” only for documents */}
+            {/* Public link Ã¢â‚¬â€ only for documents */}
             {shareDialogDocId !== null && (
               <div className="border-t pt-4">
                 <div className="flex items-center justify-between mb-1.5">

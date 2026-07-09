@@ -20,8 +20,7 @@ import {
   Star,
   FolderOpen,
   ClipboardList,
-  TrendingUp,
-  ArrowUp,
+  ArrowUp
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type {

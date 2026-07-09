@@ -49,11 +49,6 @@ export async function fetchMarketplaceTemplates(): Promise<PlatformTemplateWithM
   return parseJson(res);
 }
 
-export async function fetchTemplateById(id: number): Promise<PlatformTemplateWithMeta> {
-  const res = await fetchWithAuth(`/api/templates/${id}`);
-  return parseJson(res);
-}
-
 export async function applyTemplate(body: {
   templateId: number;
   name?: string;

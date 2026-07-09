@@ -8,7 +8,7 @@ import type {
   PricingPlan,
 } from "@shared/models/customer-mgmt";
 import { planBadgeClass } from "@shared/models/customer-mgmt";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

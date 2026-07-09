@@ -12,8 +12,7 @@ import {
   type TaskStatus,
   type TaskPriority,
   type TaskSummaryCounts,
-  taskSourceEnum,
-  taskStatusEnum,
+  taskSourceEnum
 } from "@shared/models/tasks";
 import { clients } from "@shared/models/clients";
 import { pmTasks, pmProjects } from "@shared/models/projects";

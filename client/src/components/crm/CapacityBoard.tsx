@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -52,13 +51,6 @@ type OppResourceRow = {
   dailyRate: number;
   status: string;
   breaks: Array<{ start: string; end: string; reason: string; notes: string }>;
-};
-
-type OppPlan = {
-  id: number;
-  opportunityId: number;
-  opportunityName?: string;
-  rows: OppResourceRow[];
 };
 
 const DAYS_PER_WEEK = 5;
@@ -155,15 +147,6 @@ function buildResourceWeekMap(
   return map;
 }
 
-function getUtilColor(pct: number, hasBreak: boolean): string {
-  if (hasBreak) return "bg-amber-200 dark:bg-amber-800/40";
-  if (pct > 100) return "bg-red-700 dark:bg-red-800";
-  if (pct >= 80) return "bg-emerald-500 dark:bg-emerald-600";
-  if (pct >= 50) return "bg-amber-400 dark:bg-amber-500";
-  if (pct > 0) return "bg-slate-300 dark:bg-slate-600";
-  return "bg-slate-100 dark:bg-slate-800";
-}
-
 function getUtilTextColor(pct: number): string {
   if (pct > 100) return "text-red-600 dark:text-red-400 font-bold";
   if (pct >= 80) return "text-emerald-700 dark:text-emerald-400";
@@ -225,14 +208,12 @@ export type CapacityBoardProps = {
   onNewAllocation?: () => void;
 };
 
-export function CapacityBoard({ scope = "org", weeks = 12, pageSize = 50, onNewAllocation }: CapacityBoardProps = {}) {
+export function CapacityBoard({ weeks = 12, pageSize = 50, onNewAllocation }: CapacityBoardProps = {}) {
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [deptFilter, setDeptFilter] = useState("all");
   const [availableOnly, setAvailableOnly] = useState(false);
-  const [showConfirmed, setShowConfirmed] = useState(true);
-  const [showPipeline, setShowPipeline] = useState(true);
-  const [showLeave, setShowLeave] = useState(true);
+  const showPipeline = true;
   const [page, setPage] = useState(0);
   const [displayMode, setDisplayMode] = useState<"percent" | "days">("percent");
   const [expandedResources, setExpandedResources] = useState<Set<number>>(new Set());
@@ -244,10 +225,6 @@ export function CapacityBoard({ scope = "org", weeks = 12, pageSize = 50, onNewA
 
   const { data: allocations = [], isLoading: allocationsLoading } = useQuery<Allocation[]>({
     queryKey: ["/api/resources/allocations"],
-  });
-
-  const { data: opportunities = [] } = useQuery<Array<{ id: number; name: string }>>({
-    queryKey: ["/api/crm/opportunities"],
   });
 
   const { data: allPlanRows = [], isLoading: planRowsLoading } = useQuery<Array<OppResourceRow & { opportunityId: number; opportunityName?: string }>>({
@@ -604,7 +581,6 @@ function ResourceRows({
           const freeDays = DAYS_PER_WEEK - totalDays - (wa?.breakDays || 0);
 
           let cellContent = "";
-          let cellColor = getUtilColor(pct, hasBreak);
           let cellTextColor = getUtilTextColor(pct);
 
           if (displayMode === "percent") {

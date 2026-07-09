@@ -9,7 +9,6 @@ import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Settings2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { parseOptionsInput } from "@/lib/crm-custom-fields";
 
 type CustomField = {
   id: number;

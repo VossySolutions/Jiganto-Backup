@@ -7,7 +7,6 @@ import { eq } from "drizzle-orm";
 import { db } from "./db";
 import { users, pmProjects, resources, crmAccounts, projectBudgets, erpSyncLog } from "@shared/schema";
 import {
-  getOrCreateFinanceSettings,
   updateFinanceSettings,
   createExchangeRate,
   createRateCard,
@@ -25,7 +24,7 @@ import {
   createInvoice,
   sendInvoice,
   recordInvoicePayment,
-  createErpIntegration,
+  createErpIntegration
 } from "./finance/repository";
 import { financeInvoices } from "@shared/schema";
 
@@ -364,7 +363,7 @@ async function main() {
   await recalculateBudgetActuals(TENANT_ID, p2.id);
 
   // Invoices
-  const invDraft = await createInvoice(TENANT_ID, {
+  await createInvoice(TENANT_ID, {
     projectId: p1.id,
     clientId,
     contractType: "fixed_price",

@@ -18,7 +18,13 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MoreHorizontal, Plus, Hash, Filter, X, ChevronDown } from "lucide-react";
+import {
+  MoreHorizontal,
+  Plus,
+  Hash,
+  Filter,
+  X
+} from "lucide-react";
 import { type Column, type Item } from "@shared/schema";
 import { AttributeRenderer, AddColumnDropdown } from "@/components/attributes";
 import { ATTRIBUTE_TYPE_INFO, type AttributeType } from "@shared/attributeTypes";

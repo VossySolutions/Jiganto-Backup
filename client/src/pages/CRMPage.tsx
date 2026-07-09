@@ -13,10 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
-import {
-  Building2, Users, Target, TrendingUp,
-  BarChart3, FileText, Loader2, Handshake, Eye
-} from "lucide-react";
+import { Building2, Loader2 } from "lucide-react";
 
 function TabIconDashboard() {
   return (

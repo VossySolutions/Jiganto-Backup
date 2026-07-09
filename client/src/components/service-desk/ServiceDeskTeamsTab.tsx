@@ -13,12 +13,15 @@ import {
 import {
   FormDialogShell, FormSection, FieldGrid, FieldLabel,
 } from "@/components/ui/form-dialog-shell";
-import { Plus, Trash2, Users, GitBranch, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Users,
+  GitBranch
+} from "lucide-react";
 import {
   ServiceDeskTabLoading,
-  ServiceDeskErrorState,
-  ServiceDeskEmptyState,
-  SD_ACCENT,
+  ServiceDeskErrorState
 } from "./ServiceDeskUi";
 import { useToast } from "@/hooks/use-toast";
 import type { AgentTeam, RoutingRule } from "./types";

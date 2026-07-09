@@ -472,7 +472,6 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   };
 
   const renderRow = (lead: CrmLead) => {
-    const temp = getTemperature(lead.score);
     const companyName = lead.company || `${lead.firstName} ${lead.lastName}`;
     const companyColor = getColorForName(companyName);
     const companyInitials = getInitials(companyName);

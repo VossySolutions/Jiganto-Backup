@@ -19,8 +19,22 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
-  Search, Plus, Sparkles, Eye, LayoutTemplate, X, Loader2,
-  TrendingUp, Clock, Star, Wand2, Send, Check, ChevronRight, Filter, Menu, Store,
+  Search,
+  Plus,
+  Sparkles,
+  Eye,
+  LayoutTemplate,
+  X,
+  Loader2,
+  TrendingUp,
+  Clock,
+  Star,
+  Wand2,
+  Send,
+  ChevronRight,
+  Filter,
+  Menu,
+  Store
 } from "lucide-react";
 import type { PlatformTemplateWithMeta } from "@shared/models/templates";
 import {
@@ -28,9 +42,13 @@ import {
   AI_GENERATE_MODULES, moduleLabel, moduleColor,
 } from "@/lib/template-constants";
 import {
-  fetchTemplates, fetchTemplateModuleCounts, fetchTemplatesDiscovery, fetchMarketplaceTemplates,
-  applyTemplate, submitTemplateForReview, generateTemplateWithAi,
-  type TemplatesDiscovery,
+  fetchTemplates,
+  fetchTemplateModuleCounts,
+  fetchTemplatesDiscovery,
+  fetchMarketplaceTemplates,
+  applyTemplate,
+  submitTemplateForReview,
+  generateTemplateWithAi
 } from "@/lib/template-api";
 import {
   TemplatesPageSkeleton, TemplatesGridSkeleton, TemplatesNavSkeleton,

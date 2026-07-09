@@ -50,7 +50,6 @@ import {
 } from "./permissions";
 import { db } from "../db";
 import { timesheetIntegrations, resourceLeaves } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
 
 function getUserId(req: Request): string | null {
   return effectiveUserId(req);

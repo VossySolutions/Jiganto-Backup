@@ -4,7 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ExternalLink, Loader2, Plus, Ticket } from "lucide-react";
+import {
+  ExternalLink,
+  Plus,
+  Ticket
+} from "lucide-react";
 import { TYPE_LABELS, slaBadgeClass, type SlaState } from "../service-desk/types";
 import { HelpDeskEmptyState, HelpDeskTableSkeleton, HelpDeskTableWrap, HD_ACCENT } from "./HelpDeskUi";
 

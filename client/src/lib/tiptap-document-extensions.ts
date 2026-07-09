@@ -277,7 +277,7 @@ export function getEditorContentScrollOffset(scrollContainer: HTMLElement): numb
 /** Offset for in-page jumps so headings sit below sticky toolbars. */
 export function getDocumentHeadingScrollOffset(
   anchorEl: HTMLElement,
-  rootSelector = '[data-testid="tiptap-editor"]',
+  _rootSelector = '[data-testid="tiptap-editor"]',
 ): number {
   const scrollParent = findDocumentScrollParent(anchorEl);
   const viewportTop = scrollParent?.getBoundingClientRect().top ?? 0;

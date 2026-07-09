@@ -6,7 +6,12 @@ import type { PmMilestone } from "@shared/models/projects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
+import {
+  FormDialogShell,
+  FormSection,
+  FieldGrid,
+  FieldLabel
+} from "@/components/ui/form-dialog-shell";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import {

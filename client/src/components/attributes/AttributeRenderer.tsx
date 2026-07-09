@@ -1,7 +1,20 @@
 import { ATTRIBUTE_TYPES, type TimeTrackingValue, type ChecklistValue, type LinkValue, type LabelValue, type MembersValue, type VoteValue, type ReferenceValue } from "@shared/attributeTypes";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Clock, Calendar, ExternalLink, Paperclip, CheckSquare, Square, ThumbsUp, Star, Mail, Phone, Link2, MousePointerClick, Fingerprint, UserCheck } from "lucide-react";
+import {
+  Clock,
+  Calendar,
+  ExternalLink,
+  Paperclip,
+  CheckSquare,
+  Square,
+  ThumbsUp,
+  Star,
+  Mail,
+  Phone,
+  Link2,
+  MousePointerClick
+} from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 

@@ -35,22 +35,6 @@ interface CrmContractsTabProps {
   initialContractId?: number | null;
 }
 
-const VIBRANT_LOGO_COLORS = [
-  "#3b82f6", "#22c55e", "#f97316", "#8b5cf6",
-  "#ec4899", "#06b6d4", "#eab308", "#ef4444",
-  "#14b8a6", "#6366f1",
-];
-
-function getColorForName(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return VIBRANT_LOGO_COLORS[Math.abs(hash) % VIBRANT_LOGO_COLORS.length];
-}
-
-function getInitials(name: string): string {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join("");
-}
-
 function getDaysUntilExpiry(endDate: string | null): number | null {
   if (!endDate) return null;
   const end = new Date(endDate);
@@ -373,7 +357,6 @@ export function CrmContractsTab({ contracts, accounts, searchTerm, initialContra
   }
 
   const totalValue = enrichedContracts.reduce((sum, c) => sum + c.valueNum, 0);
-  const activeCount = enrichedContracts.filter(c => c.computedStatus === "active").length;
   const expiringCount = contracts.filter(c => getContractStatus(c.status, c.endDate) === "expiring_soon").length;
   const draftCount = contracts.filter(c => getContractStatus(c.status, c.endDate) === "draft").length;
 

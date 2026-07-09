@@ -1,11 +1,18 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, X, Save, Filter, Group, ArrowUpDown, Settings, Plus } from "lucide-react";
+import {
+  Search,
+  X,
+  Filter,
+  Group,
+  ArrowUpDown,
+  Settings,
+  Plus
+} from "lucide-react";
 import { useColumns, useItems, useCreateItem, useUpdateItem, useCreateColumn } from "@/hooks/use-jiganto";
-import { type Column, type Item } from "@shared/schema";
+import { type Item } from "@shared/schema";
 import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
-import { Label } from "@/components/ui/label";
 import {
   ViewSwitcher,
   TableView,
@@ -18,15 +25,8 @@ import {
   ChartView,
   type ViewType
 } from "@/components/views";
-import { AddColumnDropdown, AttributeEditor } from "@/components/attributes";
+import { AttributeEditor } from "@/components/attributes";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import { FilterPanel, type FilterCondition } from "@/components/FilterPanel";
 import { ExportDropdown } from "@/components/ExportDropdown";
 import { ImportDropdown } from "@/components/ImportDropdown";
@@ -58,14 +58,12 @@ export function BoardView({ boardId, boardName = "Board" }: BoardViewProps) {
   const [currentView, setCurrentView] = useState<ViewType>("table");
   const [newItemValues, setNewItemValues] = useState<Record<string, unknown>>({});
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [, setSelectedItem] = useState<Item | null>(null);
   const [newViewName, setNewViewName] = useState("");
   const [showSaveViewDialog, setShowSaveViewDialog] = useState(false);
   const [currentFilters, setCurrentFilters] = useState<Record<string, string>>({});
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<FilterCondition[]>([]);
-
-  const activeView = savedViews.find(v => v.id === activeViewId) || savedViews[0];
 
   const handleCreateItem = () => {
     createItem.mutate(

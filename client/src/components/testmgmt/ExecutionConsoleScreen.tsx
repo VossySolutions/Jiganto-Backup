@@ -7,8 +7,15 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Play, CheckCircle2, XCircle, MinusCircle, SkipForward, Ban,
-  ChevronLeft, ChevronRight, Loader2, Bug, Upload, AlertCircle,
+  Play,
+  CheckCircle2,
+  XCircle,
+  MinusCircle,
+  SkipForward,
+  Ban,
+  ChevronLeft,
+  ChevronRight,
+  Upload
 } from "lucide-react";
 import { useTmProject } from "@/contexts/TmProjectContext";
 import { useTmFetch, useTmFetchById } from "@/hooks/use-tm-fetch";
@@ -54,7 +61,7 @@ function StatusDot({ status }: { status: string }) {
 
 export function ExecutionConsoleScreen() {
   const { toast } = useToast();
-  const { activeProjectId, activeProject, qsParam } = useTmProject();
+  const { activeProjectId, activeProject } = useTmProject();
   const [selectedCycleId, setSelectedCycleId] = useState<number | null>(null);
   const [selectedResultId, setSelectedResultId] = useState<number | null>(null);
   const [stepResults, setStepResults] = useState<StepResult[]>([]);
@@ -88,7 +95,7 @@ export function ExecutionConsoleScreen() {
   const selectedCase = selectedResult ? allCases.find(c => c.id === selectedResult.testCaseId) : null;
   const selectedCycle = cycles.find(c => c.id === selectedCycleId);
 
-  const { data: steps = [], isLoading: stepsLoading } = useTmFetchById<TmTestStep[]>(
+  const { data: steps = [] } = useTmFetchById<TmTestStep[]>(
     ["/api/tm/cases/steps", selectedCase?.id],
     selectedCase ? `/api/tm/cases/${selectedCase.id}/steps` : null,
   );

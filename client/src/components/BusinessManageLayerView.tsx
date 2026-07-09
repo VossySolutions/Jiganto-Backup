@@ -5,13 +5,11 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { SubmitForm } from "@/components/ui/submit-form";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -1425,7 +1423,7 @@ const OKRS_EDIT_FIELDS: FieldDef[] = [
 ];
 
 export function EnhancedOkrsTab({
-  okrs, objectives, goals, loading,
+  okrs, objectives, goals,
 }: { okrs: OkrEx[]; objectives: ObjectiveEx[]; goals: GoalEx[]; loading?: boolean }) {
   const objMap  = useMemo(() => Object.fromEntries(objectives.map(o => [o.id, o])), [objectives]);
   const goalMap = useMemo(() => Object.fromEntries(goals.map(g => [g.id, g])), [goals]);
@@ -1563,7 +1561,7 @@ const GOVERNANCE_EDIT_FIELDS: FieldDef[] = [
 ];
 
 export function EnhancedGovernanceTab({
-  items, addButton, loading,
+  items, loading,
 }: { items: GovernanceItemEx[]; addButton?: React.ReactNode; loading?: boolean }) {
   const columns: ColDef<GovernanceItemEx>[] = [
     { key:"title",      label:"Title",     width:"24%", render:r=><TitleCell text={r.title} /> },

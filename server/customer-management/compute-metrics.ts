@@ -31,10 +31,6 @@ function sumMrr(customers: CommercialCustomer[]): number {
   return customers.reduce((sum, c) => sum + (c.mrrPence ?? 0), 0);
 }
 
-function startOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
 function daysAgo(date: Date): number {
   return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
 }

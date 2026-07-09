@@ -1,16 +1,3 @@
-import { db } from "./db";
-import { storage } from "./storage";
-import {
-  sdSettings,
-  sdServiceCategories,
-  sdServices,
-  sdServiceSlas,
-  sdAgentTeams,
-  sdAgentTeamMembers,
-  sdRoutingRules,
-  sdCabMembers,
-} from "@shared/models/service-desk";
-import { eq } from "drizzle-orm";
 import * as sd from "./service-desk/service";
 
 const DEMO_CATEGORIES = [
@@ -198,7 +185,6 @@ if (isDirectRun) {
   const tenantId = Number(process.env.SEED_TENANT_ID ?? 1);
   import("./db").then(async ({ db }) => {
     const { users } = await import("@shared/schema");
-    const { eq } = await import("drizzle-orm");
     const [admin] = await db.select().from(users).limit(1);
     if (!admin) {
       console.error("No users found — run auth sync first");

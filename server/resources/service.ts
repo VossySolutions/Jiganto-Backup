@@ -1,4 +1,10 @@
-import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray
+} from "drizzle-orm";
 import { db } from "../db";
 import {
   crmAccounts,
@@ -175,7 +181,6 @@ export async function getExtendedResourceStats(tenantId: number, resourceIds?: n
 
   const forecastSurplusDeficit = Math.round(availableCapacityDays - pipelineDemandDays);
 
-  const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
   const monthlyUtils: number[] = [];
   for (let m = 0; m < 3; m++) {
     const ms = new Date(now.getFullYear(), now.getMonth() - m, 1);

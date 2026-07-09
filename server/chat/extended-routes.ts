@@ -13,7 +13,10 @@ import {
   jigantoBotUserId,
 } from "./config";
 import type { ChannelBridgeConfig, ChatNotificationPref } from "@shared/models/chat";
-import { assertCanAccessChannel, assertCanAccessMessage, assertCanPostToChannel } from "./access";
+import {
+  assertCanAccessChannel,
+  assertCanAccessMessage
+} from "./access";
 export { assertCanPostToChannel } from "./access";
 import { db } from "../db";
 import { users } from "@shared/models/auth";

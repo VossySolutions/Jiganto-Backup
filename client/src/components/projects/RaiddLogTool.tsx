@@ -1,5 +1,9 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { ImportModal } from "@/components/ImportModal";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect
+} from "react";
 import { TablePagination } from "@/components/TablePagination";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
@@ -428,13 +432,6 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
 
   const updateMutation = useMutation({
     mutationFn: ({ id, updates }: { id: number; updates: any }) => apiRequest("PUT", `/api/pm/raidd/${id}`, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "raidd", config.typeValue] });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/pm/raidd/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "raidd", config.typeValue] });
     },

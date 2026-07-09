@@ -169,7 +169,6 @@ export function TestScenariosScreen() {
   const areas = Array.from(new Set(scenarios.map(s => s.functionalArea).filter(Boolean)));
   const draftCount = scenarios.filter(s => s.status === "draft").length;
   const activeCount = scenarios.filter(s => s.status === "active").length;
-  const completedCount = scenarios.filter(s => s.status === "completed").length;
   const totalLinked = scenarios.reduce((sum, s) => sum + (s.linkedCaseIds?.length ?? 0), 0);
 
   return (

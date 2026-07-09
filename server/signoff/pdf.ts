@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import type { SignoffAuditLog, SignoffRequestWithDetails, SignoffSigner, SignoffSignatureField } from "@shared/models/signoff";
+import type { SignoffRequestWithDetails, SignoffSigner, SignoffSignatureField } from "@shared/models/signoff";
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();

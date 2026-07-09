@@ -2027,7 +2027,7 @@ export async function sendInvoiceWithEmail(
     const pdfData = await getInvoicePdfData(tenantId, id);
     if (!pdfData) return { invoice: sent, emailSent: false, emailError: "PDF data unavailable" };
 
-    const pdf = generateInvoicePdf(
+    generateInvoicePdf(
       pdfData.invoice,
       pdfData.invoice.lines ?? [],
       pdfData.orgName,

@@ -5,7 +5,6 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { ModuleShell } from "@/components/ModuleShell";
-import { cn } from "@/lib/utils";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { useToast } from "@/hooks/use-toast";

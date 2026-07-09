@@ -1,48 +1,16 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db";
-import { storage } from "../storage";
 import {
-  crmAccounts,
-  crmContracts,
-  crmTasks,
   initiatives,
   okrs,
-  pmProjects,
-  strategyItems,
+  strategyItems
 } from "@shared/schema";
 import type {
   BusinessModuleDashboard,
   FinanceModuleDashboard,
   HelpDeskModuleDashboard,
 } from "@shared/models/dashboard";
-import { formatDashboardCurrency } from "@shared/models/dashboard";
 import type { DashboardScope } from "./metrics";
-
-function parseMoney(value: string | null | undefined): number {
-  if (!value) return 0;
-  const n = parseFloat(value);
-  return Number.isFinite(n) ? Math.round(n * 100) : 0;
-}
-
-function clientAccountIds(tenantId: number, clientId?: number): Promise<Set<number>> {
-  if (clientId == null) return Promise.resolve(new Set());
-  return db
-    .select({ id: crmAccounts.id })
-    .from(crmAccounts)
-    .where(and(eq(crmAccounts.tenantId, tenantId), eq(crmAccounts.clientId, clientId)))
-    .then((rows) => new Set(rows.map((r) => r.id)));
-}
-
-async function filterCrmTasksByClient(tenantId: number, clientId?: number) {
-  const rows = await db.select().from(crmTasks).where(eq(crmTasks.tenantId, tenantId));
-  if (clientId == null) return rows;
-  const accountIds = await clientAccountIds(tenantId, clientId);
-  return rows.filter((t) => t.accountId != null && accountIds.has(t.accountId));
-}
-
-function businessClientFilter(clientId?: number) {
-  return clientId != null ? eq(strategyItems.clientId, clientId) : sql`true`;
-}
 
 export async function loadHelpDeskModuleDashboard(
   scope: DashboardScope,

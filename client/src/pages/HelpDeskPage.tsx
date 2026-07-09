@@ -5,7 +5,6 @@ import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import { HelpDeskIcon } from "@/components/icons/ModuleIcons";
-import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { LayoutDashboard, Ticket, Globe, Clock, BarChart3, ClipboardList } from "lucide-react";

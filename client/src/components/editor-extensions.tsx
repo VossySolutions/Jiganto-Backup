@@ -5,10 +5,14 @@ import { PluginKey } from '@tiptap/pm/state';
 import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { cn } from '@/lib/utils';
 import {
-  Info, AlertTriangle, CheckCircle, AlertCircle,
-  ChevronRight, PlayCircle, Sigma, BarChart2,
-  Type, Heading1, Heading2, Heading3, Heading4,
-  List, ListOrdered, CheckSquare, Quote, Code, Minus, Layers,
+  Info,
+  AlertTriangle,
+  CheckCircle,
+  AlertCircle,
+  ChevronRight,
+  PlayCircle,
+  Sigma,
+  BarChart2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 

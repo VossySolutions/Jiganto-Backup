@@ -150,7 +150,6 @@ export function TraceabilityScreen() {
   }
 
   // Stats
-  const totalLinked = reqs.reduce((sum, r) => sum + (r.linkedCaseIds?.length ?? 0), 0);
   const coveredReqs = reqs.filter(r => (r.linkedCaseIds?.length ?? 0) > 0).length;
   const implementedCount = reqs.filter(r => (r as any).implementationStatus === "implemented" || (r as any).implementationStatus === "verified").length;
   const areas = Array.from(new Set(reqs.map(r => r.functionalArea).filter(Boolean)));

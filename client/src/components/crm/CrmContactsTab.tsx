@@ -15,8 +15,20 @@ import { cn } from "@/lib/utils";
 import { MetricCard } from "@/components/ui/metric-card";
 import { ContactFormDialog } from "./ContactFormDialog";
 import {
-  Plus, Download, Upload, Search, ArrowUpDown, Layers,
-  ChevronDown, X, Trash2, Paintbrush, Bookmark, MoreHorizontal, Pencil, Users, Maximize2, Minimize2
+  Plus,
+  Download,
+  Upload,
+  Search,
+  ArrowUpDown,
+  Layers,
+  X,
+  Trash2,
+  Paintbrush,
+  MoreHorizontal,
+  Pencil,
+  Users,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";

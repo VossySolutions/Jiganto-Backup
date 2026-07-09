@@ -15,7 +15,16 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Calendar, List, Clock, Loader2, Ticket, Paperclip, Upload, ExternalLink } from "lucide-react";
+import {
+  Plus,
+  Calendar,
+  List,
+  Clock,
+  Ticket,
+  Paperclip,
+  Upload,
+  ExternalLink
+} from "lucide-react";
 import {
   ServiceDeskTabLoading,
   ServiceDeskTableSkeleton,

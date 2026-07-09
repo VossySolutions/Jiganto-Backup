@@ -1,8 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
-import { 
-  type InsertTenant, type InsertBoard, type InsertColumn, type InsertItem, 
-  type Tenant, type Module, type Board, type Column, type Item 
+import {
+  type InsertTenant,
+  type InsertBoard,
+  type InsertColumn,
+  type InsertItem,
+  type Tenant
 } from "@shared/schema";
 import { fetchWithAuth } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";

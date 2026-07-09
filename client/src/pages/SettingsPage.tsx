@@ -12,18 +12,40 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { 
-  Settings, Building2, Users, Shield, Plus, MoreHorizontal, Edit, Trash2,
-  Mail, UserPlus, Clock, CheckCircle, XCircle, Globe, MapPin, Phone, Link2,
-  Save, RefreshCw, Upload, FileSpreadsheet, AlertCircle, Download, Palette, Type,
-  ChevronRight, ChevronDown, Network, Wallet, User, ClipboardList, Plug, CreditCard,
-  Bell, Sparkles,
+import {
+  Settings,
+  Building2,
+  Users,
+  Shield,
+  Plus,
+  Edit,
+  Trash2,
+  Save,
+  RefreshCw,
+  Upload,
+  Download,
+  Palette,
+  Type,
+  ChevronRight,
+  ChevronDown,
+  Network,
+  Wallet,
+  User,
+  ClipboardList,
+  Plug,
+  CreditCard,
+  Bell,
+  Sparkles
 } from "lucide-react";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import type { Tenant, Profile, UserRole, UserInvitation, OrgUnit, CostCentre } from "@shared/schema";
@@ -70,22 +92,6 @@ type ProfileWithUser = Profile & {
   } 
 };
 
-const availableModules = [
-  { key: "dashboard", name: "Dashboard" },
-  { key: "chat", name: "Chat" },
-  { key: "business-mgmt", name: "Business Management" },
-  { key: "crm", name: "CRM" },
-  { key: "documents", name: "Documents" },
-  { key: "tasks", name: "Tasks" },
-  { key: "portfolio-mgmt", name: "Portfolio" },
-  { key: "project-mgmt", name: "Projects" },
-  { key: "finance-mgmt", name: "Finance" },
-  { key: "resource-mgmt", name: "Resources" },
-  { key: "resource-planning", name: "Resource Planning" },
-  { key: "test-mgmt", name: "Testing" },
-  { key: "bpm", name: "BPM" },
-];
-
 const industryOptions = [
   "Aerospace & Defence",
   "Agriculture & Agribusiness",
@@ -121,7 +127,7 @@ const timezoneOptions = [
 
 export default function SettingsPage() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  useAuth();
   const { activeClient } = useClientContext();
   const [location, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<SettingsTabId>("personal");

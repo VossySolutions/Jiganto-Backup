@@ -1,4 +1,9 @@
-import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray
+} from "drizzle-orm";
 import { db } from "../db";
 import {
   crmAccounts,
@@ -15,17 +20,14 @@ import {
   recruitmentRecommendations,
   resourcePlanningScenarios,
   resourcePlanningAuditLog,
-  type Resource,
-  type ResourceAllocation,
-  UTILISATION_TARGET_PCT,
+  UTILISATION_TARGET_PCT
 } from "@shared/schema";
 import {
   computeAllocationPctForResource,
   getCapacityVsDemand,
   getExtendedResourceStats,
   getPipelineView,
-  getUtilisationTrend,
-  resourceWeeklyCapacityHours,
+  getUtilisationTrend
 } from "../resources/service";
 
 const MS_DAY = 86400000;
@@ -43,10 +45,6 @@ function initials(first: string, last: string): string {
 function avatarColor(id: number): string {
   const colors = ["#4338CA", "#059669", "#D97706", "#DC2626", "#7C3AED", "#0891B2"];
   return colors[id % colors.length];
-}
-
-function monthStart(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
 function monthEnd(d: Date): Date {
@@ -701,10 +699,8 @@ export async function deleteBooking(tenantId: number, id: number, actorUserId: s
   return true;
 }
 
-export async function autoMatchResources(tenantId: number, roleName: string, startDate: string, endDate: string) {
+export async function autoMatchResources(tenantId: number, roleName: string, _startDate: string, _endDate: string) {
   const { people, allocations, rsRows } = await loadTenantData(tenantId);
-  const start = new Date(startDate);
-  const end = new Date(endDate);
 
   const candidates = people
     .filter((p) => p.status === "active" || p.status === "bench")

@@ -21,8 +21,7 @@ import {
   getPortfolioSummaryReport,
   getRaidConsolidated,
   getMilestoneRegister,
-  getScopedMilestones,
-  getPortfolioProjectLinks,
+  getPortfolioProjectLinks
 } from "./service";
 import {
   captureHealthMatrixSnapshots,

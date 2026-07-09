@@ -4,14 +4,23 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { TmTestCase, TmTestSuite, TmTestStep } from "@shared/schema";
 import { useTmProject } from "@/contexts/TmProjectContext";
 import {
-  Plus, Pencil, Trash2, ChevronRight, X, GripVertical,
-  FlaskConical, Tag, Clock, CheckCircle2, AlertCircle, XCircle, Play, Loader2,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  FlaskConical,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Play
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { FormDialogShell, FormSection, FormDivider } from "@/components/ui/form-dialog-shell";
+import {
+  FormDialogShell,
+  FormSection
+} from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useTablePagination } from "@/hooks/use-table-pagination";

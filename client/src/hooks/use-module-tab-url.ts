@@ -1,26 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 
-/** Read `?tab=` from the current URL, validated against allowed values. */
-export function readModuleTabFromUrl(allowedTabs: readonly string[], fallback: string): string {
-  if (typeof window === "undefined") return fallback;
-  const tab = new URLSearchParams(window.location.search).get("tab");
-  return tab && allowedTabs.includes(tab) ? tab : fallback;
-}
-
-/** Write `?tab=` via replaceState (for one-off deep-link cleanup). Preserves other query params. */
-export function writeModuleTabToUrl(tab: string, defaultTab: string, omitDefault = true): void {
-  if (typeof window === "undefined") return;
-  const url = new URL(window.location.href);
-  if (omitDefault && tab === defaultTab) {
-    url.searchParams.delete("tab");
-  } else {
-    url.searchParams.set("tab", tab);
-  }
-  const qs = url.searchParams.toString();
-  window.history.replaceState({}, "", qs ? `${url.pathname}?${qs}` : url.pathname);
-}
-
 function tabFromSearch(search: string, allowedTabs: readonly string[], defaultTab: string): string {
   const tab = new URLSearchParams(search).get("tab");
   return tab && allowedTabs.includes(tab) ? tab : defaultTab;

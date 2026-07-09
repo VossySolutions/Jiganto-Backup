@@ -13,7 +13,16 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Plus, MoreHorizontal, CheckCircle2, XCircle, ArrowRight, Calendar, Settings2, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
+import {
+  Plus,
+  CheckCircle2,
+  XCircle,
+  Settings2,
+  Eye,
+  EyeOff,
+  Pencil,
+  Trash2
+} from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { useCrmUsers } from "./CrmUsersProvider";
@@ -123,7 +132,7 @@ export function CrmPipelineTab({ opportunities, stages, accounts, pipelines, sea
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [addDealStageId, setAddDealStageId] = useState<number | null>(null);
+  const [, setAddDealStageId] = useState<number | null>(null);
   const [cardFieldsOpen, setCardFieldsOpen] = useState(false);
   const [stageMgmtOpen, setStageMgmtOpen] = useState(false);
   const [newStageName, setNewStageName] = useState("");

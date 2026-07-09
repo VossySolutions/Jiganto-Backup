@@ -2,8 +2,15 @@ import crypto from "crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import {
-  whiteboards, whiteboardMembers, whiteboardShareTokens, stickyNotes, whiteboardActivity,
-  type Whiteboard, type StickyNote, type WhiteboardPermission, type WhiteboardListItem, type WhiteboardDetail,
+  whiteboards,
+  whiteboardMembers,
+  whiteboardShareTokens,
+  stickyNotes,
+  whiteboardActivity,
+  type StickyNote,
+  type WhiteboardPermission,
+  type WhiteboardListItem,
+  type WhiteboardDetail
 } from "@shared/models/whiteboard";
 import { users } from "@shared/models/auth";
 
@@ -192,7 +199,7 @@ export async function createWhiteboard(
 export async function updateWhiteboard(
   id: number,
   userId: string,
-  userName: string,
+  _userName: string,
   data: { name?: string; description?: string | null; projectId?: number | null; thumbnailUrl?: string | null },
 ) {
   const perm = await resolvePermission(id, userId);

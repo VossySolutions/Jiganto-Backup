@@ -25,7 +25,7 @@ import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 import {
   LayoutDashboard, GitBranch, Map, BookOpen, FlaskConical, Network,
   Upload, Play, Bug, LayoutGrid, ScrollText, ShieldCheck, RotateCcw,
-  ChevronDown, FolderKanban, Plus, Check, X, Loader2, Layers, Menu, GitCompare, LayoutTemplate, ClipboardList,
+  ChevronDown, FolderKanban, Plus, Check, Loader2, Layers, Menu, GitCompare, LayoutTemplate, ClipboardList,
 } from "lucide-react";
 import { TmProjectRequiredEmpty } from "@/components/testmgmt/TmProjectRequiredEmpty";
 import { ModuleTrackingBoard } from "@/components/workspaces/ModuleTrackingBoard";

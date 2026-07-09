@@ -2,7 +2,6 @@ import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar, dec
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
-import { tenants } from "../schema";
 import { users } from "./auth";
 import { documents } from "./documents";
 import {

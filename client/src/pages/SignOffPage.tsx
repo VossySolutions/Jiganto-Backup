@@ -24,8 +24,14 @@ import {
   Ban, Image as ImageIcon,
 } from "lucide-react";
 import {
-  SIGNOFF_STATUS, SIGNER_STATUS, SIGNER_LABEL, AUDIT_EVENT_LABEL, FILTER_TABS,
-  type SignoffRequest, type SignoffSigner, type SignoffTemplate, type ComposeSigner,
+  SIGNOFF_STATUS,
+  SIGNER_STATUS,
+  SIGNER_LABEL,
+  AUDIT_EVENT_LABEL,
+  FILTER_TABS,
+  type SignoffRequest,
+  type SignoffTemplate,
+  type ComposeSigner
 } from "@/lib/signoff-constants";
 import {
   EsignLoadingState, EsignKpiSkeleton, EsignTableSkeleton, EsignTemplateSkeleton,

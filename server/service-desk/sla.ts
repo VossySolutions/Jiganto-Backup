@@ -33,7 +33,6 @@ export function computeSlaState(
   if (!deadline) return "none";
   if (now > deadline) return "breached";
   const totalMs = deadline.getTime() - now.getTime();
-  const windowMs = deadline.getTime() - (deadline.getTime() - totalMs * 5); // 20% of remaining
   const atRiskThreshold = deadline.getTime() - totalMs * 0.2;
   if (now.getTime() >= atRiskThreshold) return "at_risk";
   return "within";

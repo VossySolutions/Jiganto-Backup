@@ -51,7 +51,7 @@ function isExemptFromReadOnlyGuard(path: string): boolean {
 /** Attach resolved permissions to req.permissions (per Section 3.1). */
 export async function attachPermissionContext(
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction,
 ): Promise<void> {
   if (!isApiRequest(req.path)) {

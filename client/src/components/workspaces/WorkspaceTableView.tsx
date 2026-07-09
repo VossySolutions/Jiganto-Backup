@@ -138,7 +138,6 @@ function SavedViewsStrip({
   databaseId,
   activeViewConfig,
   onApplyView,
-  onSaveView,
 }: {
   databaseId: number;
   activeViewConfig: {
@@ -519,7 +518,6 @@ function BulkActionsBar({
 
 export function WorkspaceTableView({
   databaseId,
-  workspaceId,
   isExpanded,
   onToggleExpand,
   readOnly = false,
@@ -924,7 +922,7 @@ export function WorkspaceTableView({
     queryClient.invalidateQueries({ queryKey: ["/api/workspace-databases", databaseId, "rows"] });
   };
 
-  const renderCellContent = (row: WorkspaceDatabaseRow, col: WorkspaceDatabaseColumn, cellValue: string, isEditing: boolean, rowData: Record<string, unknown>) => {
+  const renderCellContent = (row: WorkspaceDatabaseRow, col: WorkspaceDatabaseColumn, cellValue: string, isEditing: boolean, _rowData: Record<string, unknown>) => {
     const colType = col.type || "text";
 
     if (colType === "created_date") {
@@ -1391,7 +1389,7 @@ export function WorkspaceTableView({
     });
   };
 
-  const toggleRowSelection = (rowId: number, shiftKey?: boolean) => {
+  const toggleRowSelection = (rowId: number, _shiftKey?: boolean) => {
     setSelectedRows((prev) => {
       const next = new Set(prev);
       if (next.has(rowId)) next.delete(rowId);

@@ -1,4 +1,3 @@
-import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { tenants } from "@shared/schema";
 import { runNotificationDigests } from "./notification-digest";

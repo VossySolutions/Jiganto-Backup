@@ -33,7 +33,6 @@ import {
   MoreHorizontal,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   FileText,
   Trash2,
   Share2,
@@ -54,9 +53,7 @@ import {
   Minimize2,
   ArrowLeft,
   Eye,
-  Home,
   Table2,
-  History,
   MessageSquare,
   Link2,
   ClipboardList,
@@ -71,7 +68,7 @@ import {
   Lightbulb,
   BarChart3,
   Briefcase,
-  LayoutGrid,
+  LayoutGrid
 } from "lucide-react";
 import {
   Breadcrumb,
@@ -91,7 +88,6 @@ import type {
   WorkspacePage,
   WorkspaceDatabase,
 } from "@shared/schema";
-import { format } from "date-fns";
 import { useLocation } from "wouter";
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
@@ -104,7 +100,7 @@ import { WorkspaceBottomNav } from "@/components/workspaces/WorkspaceBottomNav";
 import { WorkspaceHeader } from "@/components/workspaces/WorkspaceHeader";
 import { WorkspacePageSidePanel } from "@/components/workspaces/WorkspacePageSidePanel";
 import { WorkspacePublicShareDialog } from "@/components/workspaces/WorkspacePublicShareDialog";
-import { WorkspacePresenceAvatars, useWorkspacePageSync } from "@/components/workspaces/WorkspacePresence";
+import { useWorkspacePageSync } from "@/components/workspaces/WorkspacePresence";
 import { DocumentEditorChrome, DocumentMetadataBar } from "@/components/workspaces/DocumentEditorChrome";
 import { WorkspaceIconPicker } from "@/components/workspaces/WorkspaceIconPicker";
 import {
@@ -623,40 +619,6 @@ function CoverImagePicker({
   );
 }
 
-function EditableDatabaseName({ name, onRename, dbId }: { name: string; onRename: (name: string) => void; dbId: number }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(name);
-
-  useEffect(() => { setValue(name); }, [name]);
-
-  if (editing) {
-    return (
-      <div className="flex items-center gap-2 mb-2">
-        <Table2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-        <input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={() => { if (value.trim() && value.trim() !== name) onRename(value.trim()); setEditing(false); }}
-          onKeyDown={(e) => { if (e.key === "Enter" && value.trim()) { onRename(value.trim()); setEditing(false); } if (e.key === "Escape") { setValue(name); setEditing(false); } }}
-          className="text-sm font-medium bg-transparent outline-none border-b border-primary/30 py-0.5 flex-1"
-          autoFocus
-          data-testid={`board-name-input-${dbId}`}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-2 mb-2 group">
-      <Table2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-      <span className="text-sm font-medium cursor-pointer hover:border-b hover:border-muted-foreground/30 py-0.5" onClick={() => setEditing(true)} data-testid={`board-name-${dbId}`}>{name}</span>
-      <button className="p-0.5 rounded invisible group-hover:visible hover-elevate" onClick={() => setEditing(true)} data-testid={`rename-board-${dbId}`}>
-        <Pencil className="h-3 w-3 text-muted-foreground" />
-      </button>
-    </div>
-  );
-}
-
 function DatabaseBlockWrapper({ isExpanded, children }: { isExpanded: boolean; children: React.ReactNode }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [expandStyle, setExpandStyle] = useState<React.CSSProperties>({});
@@ -698,7 +660,6 @@ function DatabaseBlockWrapper({ isExpanded, children }: { isExpanded: boolean; c
 function PageView({
   pageId,
   workspaceId,
-  onDeletePage,
   onSelectPage,
   isFullScreen,
   onToggleFullScreen,
@@ -754,7 +715,7 @@ function PageView({
     staleTime: 30_000,
   });
 
-  const { data: workspacesData = [] } = useQuery<Workspace[]>({
+  const { data: _workspacesData = [] } = useQuery<Workspace[]>({
     queryKey: ["/api/workspaces"],
     staleTime: 60_000,
   });
@@ -762,8 +723,6 @@ function PageView({
   const childPages = allPages
     .filter((p) => p.parentId === pageId)
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-
-  const currentWorkspace = workspacesData.find((w) => w.id === workspaceId);
 
   const saveContentDirectly = useCallback(async (content: string) => {
     if (abortControllerRef.current) {

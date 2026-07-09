@@ -27,7 +27,7 @@ import { evaluateConditionalFormatting, type ConditionalFormatRule } from "@/lib
 import type { ColumnDef as MondayColumnDef } from "@/components/MondayTable";
 import { opportunityMatchesPipeline, stagesForActivePipeline } from "@/lib/crm-tab-counts";
 import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
-import { CrmCustomFieldTableHeaders, CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
+import { CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
 import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
 import { findSegmentField, getSegmentColor, resolveAccountSegment } from "@/lib/crm-segment";
 import { useCrmUsers } from "./CrmUsersProvider";

@@ -8,7 +8,6 @@ import { useClientContext } from "@/hooks/use-client-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ModuleShell } from "@/components/ModuleShell";
-import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Wallet, Clock, Receipt, FileText, CreditCard, Link2, Settings,
 } from "lucide-react";

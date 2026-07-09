@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   FormDialogShell, FormSection, FieldLabel,
@@ -15,10 +14,9 @@ import {
 } from "@/components/ui/select";
 import {
   ServiceDeskCardGridSkeleton,
-  ServiceDeskTabLoading,
   ServiceDeskErrorState,
   ServiceDeskEmptyState,
-  SD_ACCENT,
+  SD_ACCENT
 } from "./ServiceDeskUi";
 import { ChevronDown, ChevronRight, Clock, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";

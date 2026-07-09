@@ -770,7 +770,6 @@ export async function syncChatPollToModule(params: {
 }
 
 export function orderQuestionsForRespondent(questions: SurveyQuestion[], randomize: boolean) {
-  const sections = questions.filter(q => !q.isSection && q.type !== "section");
   const ordered = [...questions].sort((a, b) => a.questionOrder - b.questionOrder);
   if (!randomize) return ordered.filter(q => q.type !== "section" || q.isSection);
   const nonSection = ordered.filter(q => q.type !== "section" && !q.isSection);

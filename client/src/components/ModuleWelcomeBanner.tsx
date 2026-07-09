@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
-import { X, Lightbulb, ArrowRight } from "lucide-react";
+import {
+  X,
+  Lightbulb
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getModuleByKey, categoryColors } from "@/lib/module-metadata";

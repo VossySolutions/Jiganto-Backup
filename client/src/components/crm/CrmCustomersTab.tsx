@@ -15,13 +15,24 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
-  Plus, Download, Upload, Search, ArrowUpDown, Layers,
-  ChevronDown, X, Trash2, Paintbrush, Bookmark, MoreHorizontal, Pencil, MapPin, Globe
+  Plus,
+  Download,
+  Upload,
+  Search,
+  ArrowUpDown,
+  Layers,
+  X,
+  Trash2,
+  Paintbrush,
+  MoreHorizontal,
+  Pencil,
+  MapPin,
+  Globe
 } from "lucide-react";
 import { MetricCard } from "@/components/ui/metric-card";
 import { Textarea } from "@/components/ui/textarea";
 import { CrmCustomFieldsForm } from "./CrmCustomFieldsForm";
-import { CrmCustomFieldTableHeaders, CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
+import { CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
 import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
@@ -38,7 +49,6 @@ import {
 } from "@/lib/crm-segment";
 import { CrmGeoMap } from "./CrmGeoMap";
 import { CrmOwnerSelect } from "./CrmOwnerSelect";
-import { useCrmUsers } from "./CrmUsersProvider";
 import type { CrmAccountDetail, CrmOpportunitySummary, CrmContractSummary, CrmOpportunityStage } from "./types";
 import { CrmColumnVisibilityMenu } from "./CrmColumnVisibilityMenu";
 import { CrmInlineEditCell } from "./CrmInlineEditCell";
@@ -175,7 +185,6 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
     return "table";
   });
   const EMPTY_CUSTOMER_FORM = { name: "", type: "prospect", industry: "", email: "", phone: "", website: "", address: "", city: "", state: "", country: "", postalCode: "", employeeCount: "", annualRevenue: "", description: "", parentAccountId: "", ownerUserId: "" };
-  const { resolveOwner } = useCrmUsers();
   const [formData, setFormData] = useState(EMPTY_CUSTOMER_FORM);
   const [customData, setCustomData] = useState<Record<string, unknown>>({});
   const [importOpen, setImportOpen] = useState(false);

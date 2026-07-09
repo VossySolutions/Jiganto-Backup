@@ -3,9 +3,7 @@ import { db } from "../db";
 import {
   timesheetIntegrations,
   timesheetIntegrationLog,
-  timesheetPeriods,
-  timesheetEntries,
-  resources,
+  resources
 } from "@shared/schema";
 import { exportTimesheetsCsv } from "./service";
 

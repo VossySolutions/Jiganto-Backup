@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Loader2, Plus, RefreshCw, Link2, CheckCircle2, XCircle, Settings2,
 } from "lucide-react";
-import { FinanceTabLoading, FinanceButtonSpinner } from "./FinanceUi";
+import { FinanceTabLoading } from "./FinanceUi";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import type { ErpIntegrationRow, ErpSyncLogRow } from "./types";

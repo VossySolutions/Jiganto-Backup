@@ -3,12 +3,10 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { FormDialogShell, FormSection, FieldGrid, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -23,7 +21,11 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Search, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { FinanceTableSkeleton, FinanceEmptyState, FinanceTableWrap, FinanceButtonSpinner } from "./FinanceUi";
+import {
+  FinanceTableSkeleton,
+  FinanceEmptyState,
+  FinanceTableWrap
+} from "./FinanceUi";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import type { BudgetDetail, BudgetListItem } from "./types";

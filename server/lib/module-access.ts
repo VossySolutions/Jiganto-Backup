@@ -90,7 +90,7 @@ async function getEffectiveModuleRows(profileId: number): Promise<ModulePermissi
 /** Visible module keys for sidebar; `null` = no ACL restriction (platform role default). */
 export async function resolveVisibleModuleKeys(
   profileId: number,
-  tenantId: number,
+  _tenantId: number,
   platformRole: PlatformRole,
   workspaceClientId?: number,
 ): Promise<string[] | null> {
@@ -124,7 +124,7 @@ export async function profileHasExplicitModuleAcl(profileId: number): Promise<bo
 
 export async function canAccessModuleApi(
   profileId: number,
-  tenantId: number,
+  _tenantId: number,
   platformRole: PlatformRole,
   apiPath: string,
   method: string,
