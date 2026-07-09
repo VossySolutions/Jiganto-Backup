@@ -6258,6 +6258,25 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     return null;
   };
 
+  const launchPdfBrowser = async () => {
+    const launchArgs = ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"];
+    // Prefer the bundled Chromium that ships with the full `puppeteer` package — this works
+    // regardless of what (if anything) is installed on the host, which is what makes PDF export
+    // reliable in production. Only fall back to a system Chrome/Edge install if that's unavailable.
+    try {
+      const puppeteerFull = await import("puppeteer");
+      return await puppeteerFull.default.launch({ args: launchArgs, headless: true });
+    } catch (bundledErr) {
+      console.warn("[export-pdf] Bundled Chromium unavailable, falling back to system browser:", (bundledErr as Error).message);
+    }
+    const executablePath = await resolveChromeExecutablePath();
+    if (!executablePath) {
+      throw new Error("No Chrome/Chromium browser available on the server for PDF generation");
+    }
+    const puppeteerCore = await import("puppeteer-core");
+    return await puppeteerCore.default.launch({ executablePath, args: launchArgs, headless: true });
+  };
+
   const exportDocumentPdf = async (opts: {
     title: string;
     content: string;
@@ -6266,16 +6285,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     updatedAt?: Date | string | null;
   }): Promise<Buffer> => {
     const { buildDocumentExportBodyHtml, buildPuppeteerPageTemplates } = await import("@shared/document-export");
-    const executablePath = await resolveChromeExecutablePath();
-    if (!executablePath) {
-      throw new Error("No Chrome/Chromium browser found on the server for PDF generation");
-    }
-    const puppeteer = await import("puppeteer-core");
-    const browser = await puppeteer.default.launch({
-      executablePath,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
-      headless: true,
-    });
+    const browser = await launchPdfBrowser();
     try {
       const page = await browser.newPage();
       // Body only — header/footer are rendered as real repeating page chrome via headerTemplate/footerTemplate below.

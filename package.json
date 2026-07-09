@@ -154,6 +154,7 @@
     "pdfjs-dist": "^5.4.624",
     "pg": "^8.16.3",
     "pptxgenjs": "^4.0.1",
+    "puppeteer": "^25.3.0",
     "puppeteer-core": "^25.1.0",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",

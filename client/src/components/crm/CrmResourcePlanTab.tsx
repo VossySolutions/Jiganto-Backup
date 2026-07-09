@@ -1084,7 +1084,7 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
             Notify RM
           </Button>
           <Button size="sm" className="gap-1.5 bg-[#0ea5e9] hover:bg-[#0284c7]" onClick={addInlineRow}
-            data-testid="button-add-row">
+            data-testid="button-new-requirement">
             <Plus className="h-3.5 w-3.5" />
             New Requirement
           </Button>
@@ -1196,9 +1196,6 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
               </button>
             )}
             <div className="ml-auto flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={addInlineRow}>
-                <Plus className="h-3 w-3" /> Add Row
-              </Button>
               {rows.length > 1 && rows[0]?.startDate && rows[0]?.endDate && (
                 <Button variant="ghost" size="sm" className="gap-1 text-xs text-muted-foreground"
                   onClick={() => {
@@ -1443,8 +1440,21 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
                     </tr>
                   )}
                 </tbody>
-                {rows.length > 0 && (
-                  <tfoot>
+                <tfoot>
+                  <tr className="border-t border-border/40 bg-muted/10 hover:bg-muted/20 transition-colors">
+                    <td colSpan={14} className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={addInlineRow}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0ea5e9] hover:text-[#0284c7] transition-colors"
+                        data-testid="button-add-row"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add Row
+                      </button>
+                    </td>
+                  </tr>
+                  {rows.length > 0 && (
                     <tr className="bg-emerald-50 dark:bg-emerald-900/20 border-t-2 border-emerald-500 font-bold">
                       <td colSpan={7} className="px-3 py-2.5 text-xs uppercase tracking-wider">Total</td>
                       <td className="px-3 py-2.5 text-center font-mono text-xs">{totalDays}</td>
@@ -1452,8 +1462,8 @@ export function CrmResourcePlanTab({ opportunities, accounts = [], stages = [], 
                       <td className="px-3 py-2.5 text-right font-mono text-xs">{fmtCurrency(totalCost)}</td>
                       <td colSpan={3}></td>
                     </tr>
-                  </tfoot>
-                )}
+                  )}
+                </tfoot>
               </table>
             </div>
             <TablePagination

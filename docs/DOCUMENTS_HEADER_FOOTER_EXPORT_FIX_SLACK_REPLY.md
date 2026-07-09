@@ -1,14 +1,14 @@
 Hi Peter,
 
-You're right, and thanks for the example — that made it click. What we had was showing the header/footer once at the top/bottom of the document, not repeating on every page like a real Word/PDF header & footer. That's now fixed:
+Found it — thanks for the print dialog screenshot, that was the giveaway.
 
-*What changed*
-• Header now repeats at the top of every page, footer at the bottom of every page — in both the Word (.docx) export and the PDF export
-• Fixed a bug where the header text could appear twice on a page (once in the true page header, once inline in the body)
-• Made the server-side PDF generation more reliable so it doesn't silently fall back to a plain browser print
-• Even the plain browser-print fallback now repeats the header/footer per page (uses the same trick Word documents use)
+*What was actually happening*
+The "2 headers and 2 footers" on the PDF was your Page header/footer content PLUS the browser's own default print header/footer (the date/title top corners and the "about:blank" / page number bottom corners). That combination only shows up when the PDF generator on the server can't run and it quietly falls back to a plain browser print — which is what was happening.
 
-*Left / middle / right*
-You can now position header and footer text using align buttons (left, centre, right) right in the header/footer box — same as Word's header/footer alignment. Look for the small toolbar above the Page header / Page footer box (Bold, Italic, Underline, then the 3 align icons).
+*Fix*
+The PDF generator no longer depends on a browser being separately installed on the server — it now uses its own built-in one, so it always runs properly. No more fallback, no more double header/footer, and your header/footer repeat cleanly on every page as designed.
 
-Give it another try on a multi-page document and let me know how it looks.
+*Word*
+Glad that one's coming out perfect. Added the font size option you asked about — when you click Export → Word (.docx), you'll now get a quick prompt to pick the body text size (9–16pt, default 11pt) before it downloads. Headings scale with it automatically, header/footer stay a bit smaller regardless (like a normal Word running header/footer).
+
+Please try the PDF export again on that same document and let me know.

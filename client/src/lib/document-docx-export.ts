@@ -6,7 +6,7 @@ type DocxModule = typeof import("docx");
 
 function makeTextRun(
   DocxTextRun: DocxModule["TextRun"],
-  opts: { text: string; bold?: boolean; italics?: boolean; underline?: boolean; font?: string },
+  opts: { text: string; bold?: boolean; italics?: boolean; underline?: boolean; font?: string; size?: number },
 ) {
   return new DocxTextRun({
     font: opts.font ?? DOCUMENT_DOCX_FONT,
@@ -14,6 +14,7 @@ function makeTextRun(
     bold: opts.bold,
     italics: opts.italics,
     underline: opts.underline ? {} : undefined,
+    size: opts.size,
   });
 }
 
@@ -28,21 +29,21 @@ function getAlignment(
   return undefined;
 }
 
-function parseChildren(el: Element, DocxTextRun: DocxModule["TextRun"]): InstanceType<DocxModule["TextRun"]>[] {
+function parseChildren(el: Element, DocxTextRun: DocxModule["TextRun"], size?: number): InstanceType<DocxModule["TextRun"]>[] {
   const runs: InstanceType<DocxModule["TextRun"]>[] = [];
   el.childNodes.forEach((node) => {
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent || "";
-      if (text) runs.push(makeTextRun(DocxTextRun, { text }));
+      if (text) runs.push(makeTextRun(DocxTextRun, { text, size }));
     } else if (node.nodeType === Node.ELEMENT_NODE) {
       const n = node as Element;
       const tag = n.tagName.toLowerCase();
       const innerText = n.textContent || "";
-      if (tag === "strong" || tag === "b") runs.push(makeTextRun(DocxTextRun, { text: innerText, bold: true }));
-      else if (tag === "em" || tag === "i") runs.push(makeTextRun(DocxTextRun, { text: innerText, italics: true }));
-      else if (tag === "u") runs.push(makeTextRun(DocxTextRun, { text: innerText, underline: true }));
-      else if (tag === "code") runs.push(makeTextRun(DocxTextRun, { text: innerText, font: "Courier New" }));
-      else runs.push(...parseChildren(n, DocxTextRun));
+      if (tag === "strong" || tag === "b") runs.push(makeTextRun(DocxTextRun, { text: innerText, bold: true, size }));
+      else if (tag === "em" || tag === "i") runs.push(makeTextRun(DocxTextRun, { text: innerText, italics: true, size }));
+      else if (tag === "u") runs.push(makeTextRun(DocxTextRun, { text: innerText, underline: true, size }));
+      else if (tag === "code") runs.push(makeTextRun(DocxTextRun, { text: innerText, font: "Courier New", size }));
+      else runs.push(...parseChildren(n, DocxTextRun, size));
     }
   });
   return runs;
@@ -55,6 +56,7 @@ function htmlToDocxParagraphs(
   HeadingLevel: DocxModule["HeadingLevel"],
   BorderStyle: DocxModule["BorderStyle"],
   AlignmentType: DocxModule["AlignmentType"],
+  size?: number,
 ): InstanceType<DocxModule["Paragraph"]>[] {
   const trimmed = html.trim();
   if (!trimmed) return [];
@@ -67,26 +69,26 @@ function htmlToDocxParagraphs(
     const tag = node.tagName?.toLowerCase();
     if (!tag) return;
     const alignment = getAlignment(node, AlignmentType);
-    if (tag === "h1") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_1, alignment }));
-    else if (tag === "h2") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_2, alignment }));
-    else if (tag === "h3") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_3, alignment }));
-    else if (tag === "h4") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun), heading: HeadingLevel.HEADING_4, alignment }));
+    if (tag === "h1") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun, size), heading: HeadingLevel.HEADING_1, alignment }));
+    else if (tag === "h2") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun, size), heading: HeadingLevel.HEADING_2, alignment }));
+    else if (tag === "h3") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun, size), heading: HeadingLevel.HEADING_3, alignment }));
+    else if (tag === "h4") paragraphs.push(new DocxParagraph({ children: parseChildren(node, DocxTextRun, size), heading: HeadingLevel.HEADING_4, alignment }));
     else if (tag === "p" || tag === "div") {
-      const children = parseChildren(node, DocxTextRun);
+      const children = parseChildren(node, DocxTextRun, size);
       if (children.length) paragraphs.push(new DocxParagraph({ children, alignment }));
       else if (node.textContent?.trim()) {
-        paragraphs.push(new DocxParagraph({ children: [makeTextRun(DocxTextRun, { text: node.textContent.trim() })], alignment }));
+        paragraphs.push(new DocxParagraph({ children: [makeTextRun(DocxTextRun, { text: node.textContent.trim(), size })], alignment }));
       }
     } else if (tag === "ul" || tag === "ol") {
       node.querySelectorAll("li").forEach((li) => {
         paragraphs.push(new DocxParagraph({
-          children: [makeTextRun(DocxTextRun, { text: li.textContent || "" })],
+          children: [makeTextRun(DocxTextRun, { text: li.textContent || "", size })],
           bullet: { level: 0 },
         }));
       });
     } else if (tag === "blockquote") {
       paragraphs.push(new DocxParagraph({
-        children: [makeTextRun(DocxTextRun, { text: node.textContent || "", italics: true })],
+        children: [makeTextRun(DocxTextRun, { text: node.textContent || "", italics: true, size })],
         indent: { left: 720 },
       }));
     } else {
@@ -120,6 +122,7 @@ function parseBodyToDocxChildren(
   WidthType: DocxModule["WidthType"],
   BorderStyle: DocxModule["BorderStyle"],
   AlignmentType: DocxModule["AlignmentType"],
+  bodySize?: number,
 ): InstanceType<DocxModule["Paragraph"] | DocxModule["Table"]>[] {
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = contentHtml;
@@ -138,17 +141,17 @@ function parseBodyToDocxChildren(
       const text = node.textContent || "";
       if (callout) {
         docChildren.push(new DocxParagraph({
-          children: [makeTextRun(DocxTextRun, { text: `[${callout.toUpperCase()}] ${text}`, bold: true })],
+          children: [makeTextRun(DocxTextRun, { text: `[${callout.toUpperCase()}] ${text}`, bold: true, size: bodySize })],
           border: { left: { color: callout === "info" ? "3b82f6" : callout === "warning" ? "f59e0b" : callout === "success" ? "22c55e" : "ef4444", size: 12, style: BorderStyle.SINGLE } },
         }));
       } else {
-        const children = parseChildren(node, DocxTextRun);
+        const children = parseChildren(node, DocxTextRun, bodySize);
         if (children.length) docChildren.push(new DocxParagraph({ children, alignment }));
       }
     } else if (tag === "ul" || tag === "ol") {
       node.querySelectorAll("li").forEach((li) => {
         docChildren.push(new DocxParagraph({
-          children: [makeTextRun(DocxTextRun, { text: li.textContent || "" })],
+          children: [makeTextRun(DocxTextRun, { text: li.textContent || "", size: bodySize })],
           bullet: { level: 0 },
         }));
       });
@@ -159,7 +162,7 @@ function parseBodyToDocxChildren(
         tr.querySelectorAll("td, th").forEach((td) => {
           const isHeader = td.tagName.toLowerCase() === "th";
           cells.push(new DocxTableCell({
-            children: [new DocxParagraph({ children: parseChildren(td as Element, DocxTextRun) })],
+            children: [new DocxParagraph({ children: parseChildren(td as Element, DocxTextRun, bodySize) })],
             shading: isHeader ? { fill: "E5E7EB" } : undefined,
           }));
         });
@@ -170,7 +173,7 @@ function parseBodyToDocxChildren(
       }
     } else if (tag === "blockquote") {
       docChildren.push(new DocxParagraph({
-        children: [makeTextRun(DocxTextRun, { text: node.textContent || "" })],
+        children: [makeTextRun(DocxTextRun, { text: node.textContent || "", size: bodySize })],
         indent: { left: 720 },
       }));
     } else {
@@ -187,11 +190,16 @@ function parseBodyToDocxChildren(
   return docChildren;
 }
 
+/** Default body font size (points) used when no override is supplied. */
+export const DOCUMENT_DOCX_DEFAULT_BODY_SIZE_PT = 11;
+
 export async function buildDocumentDocxBlob(opts: {
   title: string;
   contentHtml: string;
   headerHtml?: string;
   footerHtml?: string;
+  /** Body text size in points (default 11pt). Headings scale proportionally; header/footer text stays smaller. */
+  bodyFontSizePt?: number;
 }): Promise<Blob> {
   const {
     Document: DocxDocument,
@@ -209,6 +217,15 @@ export async function buildDocumentDocxBlob(opts: {
     Footer,
   } = await import("docx");
 
+  const bodyFontSizePt = opts.bodyFontSizePt && opts.bodyFontSizePt > 0 ? opts.bodyFontSizePt : DOCUMENT_DOCX_DEFAULT_BODY_SIZE_PT;
+  const scale = bodyFontSizePt / DOCUMENT_DOCX_DEFAULT_BODY_SIZE_PT;
+  const bodySizeHalfPt = Math.round(bodyFontSizePt * 2);
+  const heading1SizeHalfPt = Math.round(32 * scale);
+  const heading2SizeHalfPt = Math.round(28 * scale);
+  const heading3SizeHalfPt = Math.round(24 * scale);
+  const titleSizeHalfPt = Math.round(36 * scale);
+  const headerFooterSizeHalfPt = 18; // fixed 9pt — header/footer stay smaller than body regardless of body size
+
   const bodyChildren = parseBodyToDocxChildren(
     opts.contentHtml,
     DocxParagraph,
@@ -220,6 +237,7 @@ export async function buildDocumentDocxBlob(opts: {
     WidthType,
     BorderStyle,
     AlignmentType,
+    bodySizeHalfPt,
   );
 
   const headerParagraphs = htmlToDocxParagraphs(
@@ -229,6 +247,7 @@ export async function buildDocumentDocxBlob(opts: {
     HeadingLevel,
     BorderStyle,
     AlignmentType,
+    headerFooterSizeHalfPt,
   );
   const footerParagraphs = htmlToDocxParagraphs(
     opts.footerHtml ?? "",
@@ -237,6 +256,7 @@ export async function buildDocumentDocxBlob(opts: {
     HeadingLevel,
     BorderStyle,
     AlignmentType,
+    headerFooterSizeHalfPt,
   );
 
   const doc = new DocxDocument({
@@ -245,13 +265,13 @@ export async function buildDocumentDocxBlob(opts: {
         document: {
           run: {
             font: DOCUMENT_DOCX_FONT,
-            size: 22,
+            size: bodySizeHalfPt,
           },
         },
-        heading1: { run: { font: DOCUMENT_DOCX_FONT, size: 32, bold: true } },
-        heading2: { run: { font: DOCUMENT_DOCX_FONT, size: 28, bold: true } },
-        heading3: { run: { font: DOCUMENT_DOCX_FONT, size: 24, bold: true } },
-        title: { run: { font: DOCUMENT_DOCX_FONT, size: 36, bold: true } },
+        heading1: { run: { font: DOCUMENT_DOCX_FONT, size: heading1SizeHalfPt, bold: true } },
+        heading2: { run: { font: DOCUMENT_DOCX_FONT, size: heading2SizeHalfPt, bold: true } },
+        heading3: { run: { font: DOCUMENT_DOCX_FONT, size: heading3SizeHalfPt, bold: true } },
+        title: { run: { font: DOCUMENT_DOCX_FONT, size: titleSizeHalfPt, bold: true } },
       },
     },
     sections: [{

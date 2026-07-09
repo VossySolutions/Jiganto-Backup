@@ -408,9 +408,44 @@ export default function DocumentManagementPage() {
   const [folderLayoutFooter, setFolderLayoutFooter] = useState("");
   const docClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const docxInputRef = useRef<HTMLInputElement>(null);
+  const [docxExportDialogOpen, setDocxExportDialogOpen] = useState(false);
+  const [docxFontSizePt, setDocxFontSizePt] = useState<string>("11");
+
+  const runDocxExport = async (fontSizePt: number) => {
+    if (!selectedDocument) return;
+    const content = editContentRef.current || editContent || selectedDocument.content || "";
+    const headerHtml = editHeaderContentRef.current || editHeaderContent || "";
+    const footerHtml = editFooterContentRef.current || editFooterContent || "";
+    const filename = selectedDocument.title.replace(/[^a-z0-9]/gi, '_');
+    toast({ title: "Generating Word document…" });
+    try {
+      const buffer = await buildDocumentDocxBlob({
+        title: selectedDocument.title,
+        contentHtml: content,
+        headerHtml,
+        footerHtml,
+        bodyFontSizePt: fontSizePt,
+      });
+      const url = URL.createObjectURL(buffer);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${filename}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Word document downloaded", description: `${selectedDocument.title}.docx` });
+    } catch (err: any) {
+      toast({ title: "Export failed", description: err.message || "Failed to generate Word file", variant: "destructive" });
+    }
+  };
 
   const handleExport = async (format: "pdf" | "html" | "markdown" | "docx") => {
     if (!selectedDocument) return;
+
+    if (format === "docx") {
+      setDocxFontSizePt("11");
+      setDocxExportDialogOpen(true);
+      return;
+    }
 
     const content = editContentRef.current || editContent || selectedDocument.content || "";
     const headerHtml = editHeaderContentRef.current || editHeaderContent || "";
@@ -527,26 +562,6 @@ export default function DocumentManagementPage() {
         printWindow.document.write(printHtml);
         printWindow.document.close();
         setTimeout(() => printWindow.print(), 500);
-      }
-      return;
-    } else if (format === "docx") {
-      toast({ title: "Generating Word document…" });
-      try {
-        const buffer = await buildDocumentDocxBlob({
-          title: selectedDocument.title,
-          contentHtml: content,
-          headerHtml,
-          footerHtml,
-        });
-        const url = URL.createObjectURL(buffer);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${filename}.docx`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast({ title: "Word document downloaded", description: `${selectedDocument.title}.docx` });
-      } catch (err: any) {
-        toast({ title: "Export failed", description: err.message || "Failed to generate Word file", variant: "destructive" });
       }
       return;
     }
@@ -4594,6 +4609,35 @@ export default function DocumentManagementPage() {
         }}
         saving={saveFolderPageLayoutMutation.isPending}
       />
+
+      <FormDialogShell
+        open={docxExportDialogOpen}
+        onOpenChange={setDocxExportDialogOpen}
+        title="Export as Word (.docx)"
+        subtitle="Choose the body text size for the exported document."
+        saveLabel="Export"
+        saveTestId="button-confirm-docx-export"
+        onCancel={() => setDocxExportDialogOpen(false)}
+        onSubmit={() => {
+          setDocxExportDialogOpen(false);
+          runDocxExport(Number(docxFontSizePt) || 11);
+        }}
+      >
+        <div className="py-4 space-y-2">
+          <FieldLabel>Font size</FieldLabel>
+          <Select value={docxFontSizePt} onValueChange={setDocxFontSizePt}>
+            <SelectTrigger data-testid="select-docx-font-size">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {["9", "10", "11", "12", "14", "16"].map((size) => (
+                <SelectItem key={size} value={size}>{size} pt{size === "11" ? " (default)" : ""}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">Headings scale proportionally. Header/footer text stays smaller regardless of this setting.</p>
+        </div>
+      </FormDialogShell>
 
       <FormDialogShell
         open={!!renamingDocument}
