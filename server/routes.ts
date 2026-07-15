@@ -7013,7 +7013,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       filters.clientId = listClientId;
     }
     const projects = await storage.getPmProjects(tenantId, filters);
-    res.json(projects);
+    const enriched = await storage.enrichPmProjectsForList(projects);
+    res.json(enriched);
   });
 
   app.get("/api/pm/projects/:id", async (req, res) => {
@@ -7022,7 +7023,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const project = await storage.getPmProject(Number(req.params.id));
     if (!project) return res.status(404).json({ message: "Project not found" });
     if (!assertRecordInWorkspace(req, res, project.clientId)) return;
-    res.json(project);
+    const [enriched] = await storage.enrichPmProjectsForList([project]);
+    res.json(enriched || project);
   });
 
   app.post("/api/pm/projects", async (req, res) => {
@@ -7608,7 +7610,9 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
-      const input = insertPmTeamMemberSchema.parse(req.body);
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const input = insertPmTeamMemberSchema.parse({ ...req.body, tenantId });
       const member = await storage.createPmTeamMember(input);
       res.status(201).json(member);
     } catch (err) {

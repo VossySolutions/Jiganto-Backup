@@ -1096,6 +1096,14 @@ export interface IStorage {
 
   // Projects Module - Projects
   getPmProjects(tenantId: number, filters?: { portfolioId?: number; programId?: number; status?: string; methodology?: string; clientId?: number | null }): Promise<PmProject[]>;
+  enrichPmProjectsForList(projects: PmProject[]): Promise<Array<PmProject & {
+    leadName: string | null;
+    pmoName: string | null;
+    portfolioName: string | null;
+    healthScore: number;
+    team: Array<{ id: string; initials: string; firstName: string | null; lastName: string | null }>;
+    attention: boolean;
+  }>>;
   getClientBySlug(slug: string, tenantId: number): Promise<Client | undefined>;
   getPmProject(id: number): Promise<PmProject | undefined>;
   createPmProject(project: InsertPmProject): Promise<PmProject>;
@@ -5955,6 +5963,109 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(pmProjects.clientId, filters.clientId));
     }
     return await db.select().from(pmProjects).where(and(...conditions)).orderBy(pmProjects.name);
+  }
+
+  /** Enrich list rows for the Projects landing (lead names, portfolio, team, health score). */
+  async enrichPmProjectsForList(projects: PmProject[]): Promise<Array<PmProject & {
+    leadName: string | null;
+    pmoName: string | null;
+    portfolioName: string | null;
+    healthScore: number;
+    team: Array<{ id: string; initials: string; firstName: string | null; lastName: string | null }>;
+    attention: boolean;
+  }>> {
+    if (projects.length === 0) return [];
+
+    const projectIds = projects.map((p) => p.id);
+    const userIds = Array.from(new Set(
+      projects.flatMap((p) => [p.managerId, p.ownerId].filter(Boolean) as string[]),
+    ));
+    const portfolioIds = Array.from(new Set(
+      projects.map((p) => p.portfolioId).filter((id): id is number => id != null),
+    ));
+
+    const [userRows, portfolioRows, teamRows] = await Promise.all([
+      userIds.length
+        ? db.select({
+            id: users.id,
+            firstName: users.firstName,
+            lastName: users.lastName,
+          }).from(users).where(inArray(users.id, userIds))
+        : Promise.resolve([] as Array<{ id: string; firstName: string | null; lastName: string | null }>),
+      portfolioIds.length
+        ? db.select({ id: pmPortfolios.id, name: pmPortfolios.name })
+            .from(pmPortfolios)
+            .where(inArray(pmPortfolios.id, portfolioIds))
+        : Promise.resolve([] as Array<{ id: number; name: string }>),
+      db.select({
+          projectId: pmTeamMembers.projectId,
+          userId: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          isActive: pmTeamMembers.isActive,
+        })
+        .from(pmTeamMembers)
+        .leftJoin(users, eq(pmTeamMembers.userId, users.id))
+        .where(and(inArray(pmTeamMembers.projectId, projectIds), eq(pmTeamMembers.isActive, true))),
+    ]);
+
+    const userMap = new Map(userRows.map((u) => [u.id, u]));
+    const portfolioMap = new Map(portfolioRows.map((p) => [p.id, p.name]));
+    const teamByProject = new Map<number, Array<{ id: string; initials: string; firstName: string | null; lastName: string | null }>>();
+    for (const row of teamRows) {
+      if (!row.userId) continue;
+      const list = teamByProject.get(row.projectId) || [];
+      const initials = `${(row.firstName || "?").charAt(0)}${(row.lastName || "").charAt(0)}`.toUpperCase();
+      list.push({ id: row.userId, initials, firstName: row.firstName, lastName: row.lastName });
+      teamByProject.set(row.projectId, list);
+    }
+
+    const displayName = (id: string | null | undefined) => {
+      if (!id) return null;
+      const u = userMap.get(id);
+      if (!u) return null;
+      const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
+      return name || null;
+    };
+
+    const ragPoints = (rag: string | null | undefined) => {
+      if (rag === "green") return 100;
+      if (rag === "amber") return 60;
+      if (rag === "red") return 25;
+      if (rag === "blue") return 70;
+      return 70;
+    };
+
+    return projects.map((p) => {
+      const meta = (p.metadata && typeof p.metadata === "object" ? p.metadata : {}) as Record<string, unknown>;
+      const leadName =
+        displayName(p.managerId) ||
+        (typeof meta.leadName === "string" && meta.leadName.trim()) ||
+        p.projectManager ||
+        null;
+      const pmoName =
+        displayName(p.ownerId) ||
+        p.deliveryOwner ||
+        p.businessOwner ||
+        null;
+      const budgetRag = p.financialRag || "green";
+      const scheduleRag = p.scheduleRag || "green";
+      const scopeRag = p.ragStatus || "green";
+      const ragAvg = (ragPoints(budgetRag) + ragPoints(scheduleRag) + ragPoints(scopeRag)) / 3;
+      const riskPenalty = Math.min(40, Math.max(0, p.riskScore || 0) * 0.4);
+      const healthScore = Math.round(Math.max(0, Math.min(100, ragAvg - riskPenalty)));
+      const attention = budgetRag === "red" || scheduleRag === "red" || scopeRag === "red";
+
+      return {
+        ...p,
+        leadName,
+        pmoName,
+        portfolioName: p.portfolioId != null ? (portfolioMap.get(p.portfolioId) || null) : null,
+        healthScore,
+        team: (teamByProject.get(p.id) || []).slice(0, 6),
+        attention,
+      };
+    });
   }
 
   async getPmProject(id: number): Promise<PmProject | undefined> {
