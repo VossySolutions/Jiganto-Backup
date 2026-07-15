@@ -76,7 +76,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-type ViewMode = "dashboard" | "new" | "project";
+type ViewMode = "dashboard" | "new" | "edit" | "project";
 
 const TYPE_COLORS: Record<string, string> = {
   programme: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
@@ -1137,6 +1137,7 @@ export default function ProjectsManagementPage() {
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(() =>
     params.projectId ? Number(params.projectId) : null
   );
+  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
 
   useEffect(() => {
     if (params.projectId) {
@@ -1162,6 +1163,11 @@ export default function ProjectsManagementPage() {
     setLocation(`/modules/projects/${id}`);
   };
 
+  const handleEditProject = (id: number) => {
+    setEditingProjectId(id);
+    setCurrentView("edit");
+  };
+
   const handleBackFromProject = () => {
     setCurrentView("dashboard");
     setSelectedProjectId(null);
@@ -1177,6 +1183,7 @@ export default function ProjectsManagementPage() {
             isLoading={isLoading}
             onOpenProject={handleOpenProject}
             onNewProject={() => setCurrentView("new")}
+            onEditProject={handleEditProject}
           />
         </div>
       )}
@@ -1186,6 +1193,22 @@ export default function ProjectsManagementPage() {
           <CreateWorkItemWizard
             onCancel={() => setCurrentView("dashboard")}
             onComplete={() => setCurrentView("dashboard")}
+          />
+        </div>
+      )}
+
+      {currentView === "edit" && editingProjectId && (
+        <div className="flex-1 min-h-0 h-full overflow-hidden flex flex-col">
+          <CreateWorkItemWizard
+            projectId={editingProjectId}
+            onCancel={() => {
+              setEditingProjectId(null);
+              setCurrentView("dashboard");
+            }}
+            onComplete={() => {
+              setEditingProjectId(null);
+              setCurrentView("dashboard");
+            }}
           />
         </div>
       )}

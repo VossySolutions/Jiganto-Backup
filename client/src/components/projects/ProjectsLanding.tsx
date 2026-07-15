@@ -35,6 +35,7 @@ import {
   LayoutGrid,
   Loader2,
   Plus,
+  Pencil,
   TableProperties,
   SquareKanban,
   AlertTriangle,
@@ -72,6 +73,7 @@ interface LandingProject {
   managerId?: string | null;
   ownerId?: string | null;
   projectManager?: string | null;
+  deliveryOwner?: string | null;
   leadName?: string | null;
   pmoName?: string | null;
   portfolioName?: string | null;
@@ -97,7 +99,9 @@ type ColumnId =
   | "start"
   | "end"
   | "progress"
-  | "rag"
+  | "ragBudget"
+  | "ragSchedule"
+  | "ragScope"
   | "score";
 
 const COLUMN_DEFS: { id: ColumnId; label: string }[] = [
@@ -112,11 +116,13 @@ const COLUMN_DEFS: { id: ColumnId; label: string }[] = [
   { id: "start", label: "Start date" },
   { id: "end", label: "End date" },
   { id: "progress", label: "Progress" },
-  { id: "rag", label: "RAG status" },
+  { id: "ragBudget", label: "Budget RAG" },
+  { id: "ragSchedule", label: "Schedule RAG" },
+  { id: "ragScope", label: "Scope RAG" },
   { id: "score", label: "Health score" },
 ];
 
-const COLS_STORAGE_KEY = "pm.landing.visibleColumns";
+const COLS_STORAGE_KEY = "pm.landing.visibleColumns.v2";
 
 const TYPE_COLORS: Record<string, string> = {
   programme: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
@@ -220,26 +226,62 @@ function StatusBadge({ status }: { status: string | null | undefined }) {
   );
 }
 
-function ragWord(rag: string | null | undefined) {
-  if (!rag) return "—";
-  if (rag === "green") return "On track";
-  if (rag === "amber") return "Monitor";
-  if (rag === "red") return "At risk";
-  return rag;
+type RagDimension = "budget" | "schedule" | "scope";
+
+const RAG_LABELS: Record<RagDimension, Record<string, string>> = {
+  budget: { green: "On Track", amber: "At Risk", red: "Over Budget" },
+  schedule: { green: "On Track", amber: "At Risk", red: "Delayed" },
+  scope: { green: "On Track", amber: "At Risk", red: "Scope Increase" },
+};
+
+function normalizeRag(rag: string | null | undefined) {
+  const r = (rag || "").toLowerCase();
+  if (r === "green" || r === "amber" || r === "red" || r === "blue") return r;
+  return "";
 }
 
-function RagChip({ rag, label }: { rag: string | null | undefined; label: string }) {
-  const r = rag || "";
+function ragWord(rag: string | null | undefined, dimension: RagDimension = "scope") {
+  const r = normalizeRag(rag);
+  if (!r) return "—";
+  return RAG_LABELS[dimension][r] || r;
+}
+
+function RagChip({ rag, label, dimension = "scope" }: { rag: string | null | undefined; label?: string; dimension?: RagDimension }) {
+  const r = normalizeRag(rag);
   const cls = !r
     ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
     : RAG_CHIP[r] || RAG_CHIP.green;
+  const text = ragWord(rag, dimension);
   return (
     <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold", cls)}>
       <span className={cn(
         "h-1.5 w-1.5 rounded-full",
         !r ? "bg-slate-400" : r === "green" ? "bg-green-500" : r === "amber" ? "bg-amber-500" : r === "red" ? "bg-red-500" : "bg-blue-500",
       )} />
-      {label}: {ragWord(rag)}
+      {label ? `${label}: ${text}` : text}
+    </span>
+  );
+}
+
+/** Full-width RAG pill used as a dedicated table column (Peter mock). */
+function RagPill({ rag, dimension }: { rag: string | null | undefined; dimension: RagDimension }) {
+  const r = normalizeRag(rag) || "green";
+  const cls = RAG_CHIP[r] || RAG_CHIP.green;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center justify-center gap-1.5 min-w-[96px] px-2.5 py-1 rounded-md text-[10px] font-bold whitespace-nowrap",
+        cls,
+      )}
+      data-testid={`rag-pill-${dimension}-${r}`}
+    >
+      <span
+        className={cn(
+          "h-1.5 w-1.5 rounded-full shrink-0",
+          r === "green" ? "bg-green-500" : r === "amber" ? "bg-amber-500" : r === "red" ? "bg-red-500" : "bg-blue-500",
+        )}
+      />
+      {RAG_LABELS[dimension][r] || "On Track"}
     </span>
   );
 }
@@ -392,12 +434,14 @@ function ProjectTable({
   visible,
   onOpen,
   onOpenWorkspace,
+  onEdit,
   pagination,
 }: {
   projects: LandingProject[];
   visible: Record<ColumnId, boolean>;
   onOpen: (p: LandingProject) => void;
   onOpenWorkspace: (id: number) => void;
+  onEdit: (id: number) => void;
   pagination: {
     page: number;
     totalPages: number;
@@ -463,7 +507,9 @@ function ProjectTable({
               {visible.start && <th className={thClass} onClick={() => toggleSort("start")}><span className="inline-flex items-center gap-1">Start <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
               {visible.end && <th className={thClass} onClick={() => toggleSort("end")}><span className="inline-flex items-center gap-1">End <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
               {visible.progress && <th className={thClass} onClick={() => toggleSort("progress")}><span className="inline-flex items-center gap-1">Progress <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
-              {visible.rag && <th className={thStatic}>RAG — Budget · Schedule · Scope</th>}
+              {visible.ragBudget && <th className={thStatic}>Budget</th>}
+              {visible.ragSchedule && <th className={thStatic}>Schedule</th>}
+              {visible.ragScope && <th className={thStatic}>Scope</th>}
               {visible.score && <th className={thClass} onClick={() => toggleSort("score")}><span className="inline-flex items-center gap-1">Score <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
               <th className={cn(thStatic, "text-right")}>Actions</th>
             </tr>
@@ -518,18 +564,34 @@ function ProjectTable({
                       <ProgressBar value={p.progress || 0} completed={normalizeStatus(p.status) === "completed"} />
                     </td>
                   )}
-                  {visible.rag && (
+                  {visible.ragBudget && (
                     <td className="px-3 py-2.5 align-middle">
-                      <div className="flex flex-nowrap gap-0.5">
-                        <RagChip rag={p.financialRag} label="Bgt" />
-                        <RagChip rag={p.scheduleRag} label="Sch" />
-                        <RagChip rag={p.ragStatus} label="Scp" />
-                      </div>
+                      <RagPill rag={p.financialRag} dimension="budget" />
+                    </td>
+                  )}
+                  {visible.ragSchedule && (
+                    <td className="px-3 py-2.5 align-middle">
+                      <RagPill rag={p.scheduleRag} dimension="schedule" />
+                    </td>
+                  )}
+                  {visible.ragScope && (
+                    <td className="px-3 py-2.5 align-middle">
+                      <RagPill rag={p.ragStatus} dimension="scope" />
                     </td>
                   )}
                   {visible.score && <td className="px-3 py-2.5 align-middle"><HealthScore score={p.healthScore} /></td>}
                   <td className="px-3 py-2.5 align-middle text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="inline-flex gap-0.5 justify-end">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        onClick={() => onEdit(p.id)}
+                        title="Edit project"
+                        data-testid={`button-edit-row-${p.id}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -640,9 +702,9 @@ function ProjectCards({
             </div>
             <div className="px-4 py-2.5 bg-[#F1F5F9] dark:bg-muted/40 border-t border-[#F1F5F9] flex items-center gap-1.5 flex-wrap">
               <span className="text-[9px] font-bold text-[#94A3B8] uppercase tracking-wider mr-1">Health:</span>
-              <RagChip rag={p.financialRag} label="Budget" />
-              <RagChip rag={p.scheduleRag} label="Schedule" />
-              <RagChip rag={p.ragStatus} label="Scope" />
+              <RagChip rag={p.financialRag} label="Budget" dimension="budget" />
+              <RagChip rag={p.scheduleRag} label="Schedule" dimension="schedule" />
+              <RagChip rag={p.ragStatus} label="Scope" dimension="scope" />
             </div>
             <div className="px-4 py-2.5 border-t border-[#F1F5F9] flex items-center justify-between gap-2">
               <TeamAvatars team={p.team} />
@@ -722,8 +784,9 @@ function ProjectKanbanCard({
             <span>🏢 {project.customer || "—"}</span>
             {project.endDate && <span>📅 Due {formatDate(project.endDate)}</span>}
             <div className="mt-1 flex gap-0.5 flex-wrap">
-              <RagChip rag={project.financialRag} label="B" />
-              <RagChip rag={project.scheduleRag} label="S" />
+              <RagChip rag={project.financialRag} label="B" dimension="budget" />
+              <RagChip rag={project.scheduleRag} label="S" dimension="schedule" />
+              <RagChip rag={project.ragStatus} label="Sc" dimension="scope" />
             </div>
           </div>
         </div>
@@ -838,11 +901,13 @@ export function ProjectsLandingView({
   isLoading,
   onOpenProject,
   onNewProject,
+  onEditProject,
 }: {
   projects: LandingProject[];
   isLoading: boolean;
   onOpenProject: (id: number) => void;
   onNewProject: () => void;
+  onEditProject: (id: number) => void;
 }) {
   const { user } = useAuth();
   type DashTab = "projects" | "milestones" | "my";
@@ -853,6 +918,7 @@ export function ProjectsLandingView({
   const [customerFilter, setCustomerFilter] = useState<string>("all");
   const [portfolioFilter, setPortfolioFilter] = useState<string>("all");
   const [healthFilter, setHealthFilter] = useState<string>("all");
+  const [ragFilterOn, setRagFilterOn] = useState(false);
   const [mineFilter, setMineFilter] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [visibleCols, setVisibleCols] = useState<Record<ColumnId, boolean>>(loadVisibleColumns);
@@ -907,6 +973,12 @@ export function ProjectsLandingView({
             : "green";
         if (worst !== healthFilter) return false;
       }
+      if (ragFilterOn) {
+        const hasIssue =
+          p.attention ||
+          [p.financialRag, p.scheduleRag, p.ragStatus].some((r) => r === "red" || r === "amber");
+        if (!hasIssue) return false;
+      }
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const hay = `${p.name || ""} ${p.description || ""} ${p.code || ""} ${p.customer || ""} ${leadOf(p) || ""}`.toLowerCase();
@@ -914,10 +986,10 @@ export function ProjectsLandingView({
       }
       return true;
     });
-  }, [projects, statusFilter, typeFilter, customerFilter, portfolioFilter, healthFilter, searchQuery, mineFilter, user]);
+  }, [projects, statusFilter, typeFilter, customerFilter, portfolioFilter, healthFilter, ragFilterOn, searchQuery, mineFilter, user]);
 
   const pagination = useTablePagination(filtered, {
-    resetKey: `${statusFilter}-${typeFilter}-${customerFilter}-${portfolioFilter}-${healthFilter}-${searchQuery}-${mineFilter}-${viewMode}`,
+    resetKey: `${statusFilter}-${typeFilter}-${customerFilter}-${portfolioFilter}-${healthFilter}-${ragFilterOn}-${searchQuery}-${mineFilter}-${viewMode}`,
     enabled: viewMode !== "kanban",
   });
 
@@ -1114,6 +1186,26 @@ export function ProjectsLandingView({
                 </SelectContent>
               </Select>
 
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "h-8 text-xs font-bold tracking-wide",
+                  ragFilterOn
+                    ? "bg-red-600 text-white border-red-600 hover:bg-red-700 hover:text-white"
+                    : "text-red-700 border-red-300 hover:bg-red-50 hover:text-red-800 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-950/40",
+                )}
+                onClick={() => {
+                  const next = !ragFilterOn;
+                  setRagFilterOn(next);
+                  if (next) setHealthFilter("all");
+                }}
+                title="Show projects with any amber/red RAG (Budget, Schedule or Scope)"
+                data-testid="filter-rag-toggle"
+              >
+                RAG
+              </Button>
+
               <div className="flex-1" />
 
               {attentionCount > 0 && (
@@ -1167,6 +1259,7 @@ export function ProjectsLandingView({
                 visible={visibleCols}
                 onOpen={openPreview}
                 onOpenWorkspace={onOpenProject}
+                onEdit={onEditProject}
                 pagination={pagination}
               />
             )}
@@ -1196,6 +1289,7 @@ export function ProjectsLandingView({
         open={panelOpen}
         onOpenChange={setPanelOpen}
         onOpenWorkspace={onOpenProject}
+        onEditProject={onEditProject}
       />
     </div>
   );
@@ -1206,11 +1300,13 @@ function ProjectDetailPanel({
   open,
   onOpenChange,
   onOpenWorkspace,
+  onEditProject,
 }: {
   project: LandingProject | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenWorkspace: (id: number) => void;
+  onEditProject: (id: number) => void;
 }) {
   if (!project) return null;
   const lead = leadOf(project);
@@ -1219,44 +1315,48 @@ function ProjectDetailPanel({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-[480px] p-0 flex flex-col" data-testid="project-detail-panel">
-        <div className="bg-gradient-to-br from-[#1E1B4B] to-[#2d1b69] text-white p-5 relative">
+        <div className="border-b bg-gray-50 dark:bg-muted/40 p-5">
           <SheetHeader className="space-y-1 pr-8 text-left">
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <TypeBadge type={project.workType || project.projectType} />
               <StatusBadge status={project.status} />
             </div>
-            <SheetTitle className="text-lg font-extrabold leading-snug text-white">{project.name}</SheetTitle>
-            <p className="text-[11px] text-white/55 font-mono">{project.code || `PRJ-${project.id}`}</p>
+            <SheetTitle className="text-lg font-semibold leading-snug">{project.name}</SheetTitle>
+            <p className="text-[11px] text-muted-foreground font-mono">{project.code || `PRJ-${project.id}`}</p>
           </SheetHeader>
           <div className="grid grid-cols-3 gap-2 mt-3.5">
-            <div className="rounded-lg bg-white/10 p-2.5 text-center">
-              <div className="text-lg font-extrabold tabular-nums font-mono">{project.progress ?? 0}%</div>
-              <div className="text-[9px] text-white/50 uppercase tracking-wider mt-0.5">Progress</div>
+            <div className="rounded-lg border bg-white dark:bg-card p-2.5 text-center">
+              <div className="text-lg font-semibold tabular-nums">{project.progress ?? 0}%</div>
+              <div className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Progress</div>
             </div>
-            <div className="rounded-lg bg-white/10 p-2.5 text-center">
-              <div className="text-lg font-extrabold tabular-nums font-mono truncate">{formatBudget(project.budget)}</div>
-              <div className="text-[9px] text-white/50 uppercase tracking-wider mt-0.5">Budget</div>
+            <div className="rounded-lg border bg-white dark:bg-card p-2.5 text-center">
+              <div className="text-lg font-semibold tabular-nums truncate">{formatBudget(project.budget)}</div>
+              <div className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Budget</div>
             </div>
-            <div className="rounded-lg bg-white/10 p-2.5 text-center">
-              <div className="text-lg font-extrabold tabular-nums font-mono">{left == null ? "—" : left}</div>
-              <div className="text-[9px] text-white/50 uppercase tracking-wider mt-0.5">Days left</div>
+            <div className="rounded-lg border bg-white dark:bg-card p-2.5 text-center">
+              <div className="text-lg font-semibold tabular-nums">{left == null ? "—" : left}</div>
+              <div className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Days left</div>
             </div>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           <section>
-            <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] mb-2 pb-1.5 border-b border-[#F1F5F9]">Health status</h4>
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 pb-1.5 border-b">
+              Health status
+            </h4>
             <div className="flex flex-wrap gap-1.5 items-center">
-              <RagChip rag={project.financialRag} label="Budget" />
-              <RagChip rag={project.scheduleRag} label="Schedule" />
-              <RagChip rag={project.ragStatus} label="Scope" />
+              <RagChip rag={project.financialRag} label="Budget" dimension="budget" />
+              <RagChip rag={project.scheduleRag} label="Schedule" dimension="schedule" />
+              <RagChip rag={project.ragStatus} label="Scope" dimension="scope" />
               <HealthScore score={project.healthScore} />
             </div>
           </section>
 
           <section>
-            <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] mb-2 pb-1.5 border-b border-[#F1F5F9]">Project details</h4>
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 pb-1.5 border-b">
+              Project details
+            </h4>
             <div className="space-y-0">
               {[
                 ["Customer", project.customer || "—"],
@@ -1267,25 +1367,29 @@ function ProjectDetailPanel({
                 ["Start", formatDate(project.startDate)],
                 ["End", formatDate(project.endDate)],
               ].map(([label, val]) => (
-                <div key={label} className="flex gap-2 py-1.5 border-b border-[#F1F5F9] text-[12px] last:border-0">
-                  <span className="text-[#94A3B8] font-semibold w-[100px] shrink-0 text-[11px]">{label}</span>
-                  <span className="font-semibold text-[#334155] dark:text-foreground">{val}</span>
+                <div key={label} className="flex gap-2 py-1.5 border-b text-[12px] last:border-0">
+                  <span className="text-muted-foreground font-semibold w-[100px] shrink-0 text-[11px]">{label}</span>
+                  <span className="font-semibold">{val}</span>
                 </div>
               ))}
               {project.description && (
-                <p className="text-[11px] text-[#64748B] mt-2 leading-relaxed">{project.description}</p>
+                <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">{project.description}</p>
               )}
             </div>
           </section>
 
           <section>
-            <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] mb-2 pb-1.5 border-b border-[#F1F5F9]">Team</h4>
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 pb-1.5 border-b">
+              Team
+            </h4>
             <div className="flex flex-wrap gap-2">
-              {(project.team || []).length === 0 && <span className="text-xs text-[#94A3B8]">No team members assigned</span>}
+              {(project.team || []).length === 0 && (
+                <span className="text-xs text-muted-foreground">No team members assigned</span>
+              )}
               {(project.team || []).map((m) => {
                 const name = [m.firstName, m.lastName].filter(Boolean).join(" ") || m.initials;
                 return (
-                  <div key={m.id} className="inline-flex items-center gap-1.5 rounded-full border border-[#E2E8F0] px-2 py-1">
+                  <div key={m.id} className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1">
                     <span
                       className="h-5 w-5 rounded-full text-[8px] font-bold text-white flex items-center justify-center"
                       style={{ backgroundColor: avatarColor(name) }}
@@ -1301,7 +1405,9 @@ function ProjectDetailPanel({
 
           {project.attention && (
             <section>
-              <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] mb-2 pb-1.5 border-b border-[#F1F5F9]">Attention</h4>
+              <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 pb-1.5 border-b">
+                Attention
+              </h4>
               <div className="text-xs text-red-700 dark:text-red-400 flex items-start gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5 mt-0.5" /> Flagged for attention — review RAG status
               </div>
@@ -1309,9 +1415,20 @@ function ProjectDetailPanel({
           )}
         </div>
 
-        <div className="p-3.5 px-5 border-t border-[#E2E8F0] flex gap-2">
+        <div className="p-3.5 px-5 border-t flex flex-col gap-2">
           <Button
-            className="flex-1 bg-[#4338CA] hover:bg-[#3730A3] text-white font-bold"
+            className="w-full"
+            onClick={() => {
+              onOpenChange(false);
+              onEditProject(project.id);
+            }}
+            data-testid="button-edit-project"
+          >
+            Edit project
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
             onClick={() => {
               onOpenChange(false);
               onOpenWorkspace(project.id);

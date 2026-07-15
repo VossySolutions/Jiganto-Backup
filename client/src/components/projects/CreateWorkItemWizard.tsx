@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
@@ -225,9 +225,189 @@ type WizardData = {
   contractValue: string;
   portfolioId: string;
   methodologyId: string;
+  ragStatus: string;
+  financialRag: string;
+  scheduleRag: string;
   selectedTools: string[];
   toolInstances: Record<string, string[]>;
 };
+
+type LoadedProject = Record<string, unknown> & {
+  id: number;
+  name: string;
+  metadata?: Record<string, unknown> | null;
+};
+
+type LoadedTeamRow = {
+  id: number;
+  userId: string;
+  role?: string | null;
+};
+
+type LoadedToolRow = {
+  id: number;
+  toolType: string;
+  label?: string | null;
+  isEnabled?: boolean | null;
+};
+
+type LoadedPhaseRow = {
+  id: number;
+  name: string;
+  description?: string | null;
+};
+
+function toDecimalOrNull(raw: string) {
+  const cleaned = raw.replace(/,/g, "").trim();
+  if (!cleaned) return null;
+  if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
+  return cleaned;
+}
+
+function formatDateInput(value: string | null | undefined) {
+  if (!value) return "";
+  return String(value).slice(0, 10);
+}
+
+function formatMoneyInput(value: string | number | null | undefined) {
+  if (value == null || value === "") return "";
+  const n = typeof value === "number" ? value : Number(String(value).replace(/,/g, ""));
+  if (Number.isNaN(n)) return String(value);
+  return Number.isInteger(n) ? String(n) : String(value);
+}
+
+function buildProjectPayload(data: WizardData, phases: EditablePhase[], activePreset: MethodologyPreset) {
+  const methodologyDocs = phases.map((p) => ({
+    phase: p.name,
+    docs: p.docs.map((d) => ({ name: d.name, optional: !!d.optional })),
+  }));
+  const budgetValue = toDecimalOrNull(data.budget);
+  const contractNumeric = toDecimalOrNull(data.contractValue);
+  return {
+    name: data.name,
+    description: data.description || null,
+    code: data.code || null,
+    workType: data.workType,
+    customer: data.customer || null,
+    status: data.status,
+    priority: data.priority,
+    methodology: data.methodologyId,
+    framework: data.methodologyId,
+    startDate: data.startDate || null,
+    endDate: data.endDate || null,
+    budget: budgetValue,
+    forecastBudget: contractNumeric,
+    portfolioId: data.portfolioId ? Number(data.portfolioId) : null,
+    managerId: data.leadId || null,
+    ownerId: data.pmoOwnerId || null,
+    projectManager: data.lead || null,
+    deliveryOwner: data.pmoOwner || null,
+    executiveSponsor: data.sponsor || null,
+    strategicObjective: data.strategicObjective || null,
+    complexityLevel: data.complexityLevel || null,
+    tags: data.tags.length ? data.tags : null,
+    ragStatus: data.ragStatus || "green",
+    financialRag: data.financialRag || "green",
+    scheduleRag: data.scheduleRag || "green",
+    metadata: {
+      leadName: data.lead || undefined,
+      visibility: data.visibility,
+      statusCadence: data.statusCadence,
+      reportAudience: data.reportAudience,
+      currency: data.currency,
+      contractValue: data.contractValue || undefined,
+      contactPhone: data.contactPhone || undefined,
+      contactEmail: data.contactEmail || undefined,
+      methodologyDocs,
+      methodologyName: activePreset.name,
+    },
+  };
+}
+
+function projectToWizardData(
+  project: LoadedProject,
+  teamRows: LoadedTeamRow[],
+  toolRows: LoadedToolRow[],
+  phaseRows: LoadedPhaseRow[],
+): { wizard: WizardData; phases: EditablePhase[]; teamLabels: Record<string, string> } {
+  const meta = (project.metadata && typeof project.metadata === "object" ? project.metadata : {}) as Record<string, unknown>;
+  const methodologyDocs = Array.isArray(meta.methodologyDocs) ? meta.methodologyDocs as Array<{ phase?: string; docs?: Array<{ name: string; optional?: boolean }> }> : [];
+  const leadId = String(project.managerId || "");
+  const teamMemberIds = teamRows
+    .filter((m) => m.role === "team_member" || (m.role !== "project_manager" && m.userId !== leadId))
+    .map((m) => m.userId);
+
+  const enabledTools = toolRows.filter((t) => t.isEnabled !== false);
+  const selectedTools = Array.from(new Set([...ALWAYS_TOOLS, ...enabledTools.map((t) => t.toolType)]));
+  const toolInstances: Record<string, string[]> = {};
+  for (const tool of enabledTools) {
+    const def = Object.values(TOOL_DEFINITIONS).flatMap((c) => c.tools).find((t) => t.id === tool.toolType);
+    if (def?.multiInstance) {
+      toolInstances[tool.toolType] = [...(toolInstances[tool.toolType] || []), tool.label || def.name];
+    }
+  }
+
+  const phases: EditablePhase[] = phaseRows.length
+    ? phaseRows.map((p, i) => {
+        const docGroup = methodologyDocs.find((d) => d.phase === p.name);
+        return {
+          id: `phase-${p.id}-${i}`,
+          name: p.name,
+          duration: p.description || "",
+          docs: (docGroup?.docs || []).map((d, j) => ({
+            id: `doc-${p.id}-${j}`,
+            name: d.name,
+            optional: d.optional,
+          })),
+        };
+      })
+    : [];
+
+  const teamLabels: Record<string, string> = {};
+  for (const m of teamRows) {
+    teamLabels[m.userId] = "";
+  }
+
+  return {
+    wizard: {
+      workType: String(project.workType || project.projectType || "project"),
+      name: String(project.name || ""),
+      description: String(project.description || ""),
+      code: String(project.code || ""),
+      strategicObjective: String(project.strategicObjective || ""),
+      tags: Array.isArray(project.tags) ? (project.tags as string[]) : [],
+      visibility: String(meta.visibility || "organisation"),
+      leadId,
+      lead: String(project.projectManager || meta.leadName || ""),
+      pmoOwnerId: String(project.ownerId || ""),
+      pmoOwner: String(project.deliveryOwner || ""),
+      customer: String(project.customer || ""),
+      sponsor: String(project.executiveSponsor || ""),
+      contactPhone: String(meta.contactPhone || ""),
+      contactEmail: String(meta.contactEmail || ""),
+      teamMemberIds,
+      priority: String(project.priority || "medium"),
+      complexityLevel: String(project.complexityLevel || "medium"),
+      startDate: formatDateInput(project.startDate as string | null | undefined),
+      endDate: formatDateInput(project.endDate as string | null | undefined),
+      status: String(project.status || "planning"),
+      statusCadence: String(meta.statusCadence || "monthly"),
+      reportAudience: String(meta.reportAudience || "steering_committee"),
+      budget: formatMoneyInput(project.budget as string | number | null | undefined),
+      currency: String(meta.currency || "GBP"),
+      contractValue: formatMoneyInput((meta.contractValue as string | undefined) || (project.forecastBudget as string | number | null | undefined)),
+      portfolioId: project.portfolioId != null ? String(project.portfolioId) : "",
+      methodologyId: String(project.methodology || project.framework || "hybrid"),
+      ragStatus: String(project.ragStatus || "green"),
+      financialRag: String(project.financialRag || "green"),
+      scheduleRag: String(project.scheduleRag || "green"),
+      selectedTools,
+      toolInstances,
+    },
+    phases,
+    teamLabels,
+  };
+}
 
 const TIPS: Record<number, string> = {
   1: "Choose the work type that best matches how this engagement will be governed. You can refine tools and details in later steps.",
@@ -449,18 +629,24 @@ function ChipInput({
 }
 
 export function CreateWorkItemWizard({
+  projectId,
   onCancel,
   onComplete,
 }: {
+  projectId?: number;
   onCancel: () => void;
   onComplete: () => void;
 }) {
+  const isEditMode = projectId != null;
   const { toast } = useToast();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [showExtended, setShowExtended] = useState(false);
   const [teamDraft, setTeamDraft] = useState("");
   const [phases, setPhases] = useState<EditablePhase[]>([]);
+  const [phaseDbIds, setPhaseDbIds] = useState<number[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const initialTeamRef = useRef<LoadedTeamRow[]>([]);
+  const initialToolRowsRef = useRef<LoadedToolRow[]>([]);
   const [wizardData, setWizardData] = useState<WizardData>({
     workType: "",
     name: "",
@@ -490,9 +676,69 @@ export function CreateWorkItemWizard({
     contractValue: "",
     portfolioId: "",
     methodologyId: "hybrid",
+    ragStatus: "green",
+    financialRag: "green",
+    scheduleRag: "green",
     selectedTools: [...ALWAYS_TOOLS],
     toolInstances: {},
   });
+
+  const { data: editProject, isLoading: editProjectLoading } = useQuery<LoadedProject>({
+    queryKey: ["/api/pm/projects", projectId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/pm/projects/${projectId}`);
+      return res.json();
+    },
+    enabled: isEditMode,
+  });
+
+  const { data: editTeam = [], isLoading: editTeamLoading } = useQuery<LoadedTeamRow[]>({
+    queryKey: ["/api/pm/projects", projectId, "team"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/pm/projects/${projectId}/team`);
+      return res.json();
+    },
+    enabled: isEditMode,
+  });
+
+  const { data: editTools = [], isLoading: editToolsLoading } = useQuery<LoadedToolRow[]>({
+    queryKey: ["/api/pm/projects", projectId, "tools"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/pm/projects/${projectId}/tools`);
+      return res.json();
+    },
+    enabled: isEditMode,
+  });
+
+  const { data: editPhases = [], isLoading: editPhasesLoading } = useQuery<LoadedPhaseRow[]>({
+    queryKey: ["/api/pm/projects", projectId, "phases"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/pm/projects/${projectId}/phases`);
+      return res.json();
+    },
+    enabled: isEditMode,
+  });
+
+  const editHydratedRef = useRef(false);
+  const [editReady, setEditReady] = useState(!isEditMode);
+  const [teamLabels, setTeamLabels] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!isEditMode || !editProject || editHydratedRef.current) return;
+    if (editTeamLoading || editToolsLoading || editPhasesLoading) return;
+    const mapped = projectToWizardData(editProject, editTeam, editTools, editPhases);
+    setWizardData(mapped.wizard);
+    setTeamLabels(mapped.teamLabels);
+    initialTeamRef.current = editTeam;
+    initialToolRowsRef.current = editTools;
+    if (mapped.phases.length > 0) {
+      setPhases(mapped.phases);
+      setPhaseDbIds(editPhases.map((p) => p.id));
+    }
+    editHydratedRef.current = true;
+    setEditReady(true);
+    setStep(2);
+  }, [isEditMode, editProject, editTeam, editTools, editPhases, editTeamLoading, editToolsLoading, editPhasesLoading]);
 
   const { data: portfolios = [] } = useQuery<PortfolioRow[]>({
     queryKey: ["/api/pm/portfolios"],
@@ -504,8 +750,6 @@ export function CreateWorkItemWizard({
     queryFn: fetchOrgMemberCandidates,
     staleTime: 60_000,
   });
-
-  const [teamLabels, setTeamLabels] = useState<Record<string, string>>({});
 
   const userLabel = (id: string) => {
     const u = orgUsers.find((x) => x.id === id);
@@ -527,10 +771,11 @@ export function CreateWorkItemWizard({
   const suggestedSet = useMemo(() => new Set(activePreset.suggestedTools), [activePreset]);
 
   useEffect(() => {
+    if (isEditMode) return;
     if (step === 3 && phases.length === 0 && !activePreset.custom) {
       setPhases(presetToEditablePhases(activePreset));
     }
-  }, [step, activePreset, phases.length]);
+  }, [step, activePreset, phases.length, isEditMode]);
 
   const updateField = <K extends keyof WizardData>(field: K, value: WizardData[K]) => {
     setWizardData((prev) => ({ ...prev, [field]: value }));
@@ -666,59 +911,147 @@ export function CreateWorkItemWizard({
     updateField("selectedTools", Array.from(new Set([...wizardData.selectedTools, ...ids])));
   };
 
+  const syncTeamMembers = async (projectId: number, data: WizardData, followUpErrors: string[]) => {
+    const desiredTeamIds = new Set(data.teamMemberIds.filter(Boolean));
+    const initialRows = initialTeamRef.current.filter((m) => m.role === "team_member");
+
+    for (const row of initialRows) {
+      if (!desiredTeamIds.has(row.userId)) {
+        try {
+          await apiRequest("DELETE", `/api/pm/team/${row.id}`);
+        } catch (e: any) {
+          followUpErrors.push(`Remove team member: ${e?.message || "failed"}`);
+        }
+      }
+    }
+
+    const existingTeamUserIds = new Set(initialRows.map((m) => m.userId));
+    for (const memberUserId of desiredTeamIds) {
+      if (existingTeamUserIds.has(memberUserId)) continue;
+      try {
+        await apiRequest("POST", "/api/pm/team", {
+          projectId,
+          userId: memberUserId,
+          role: "team_member",
+          isActive: true,
+        });
+      } catch (e: any) {
+        followUpErrors.push(`Team member: ${e?.message || "failed"}`);
+      }
+    }
+
+    const leadOnTeam = initialTeamRef.current.some((m) => m.userId === data.leadId);
+    if (data.leadId && !leadOnTeam && !desiredTeamIds.has(data.leadId)) {
+      try {
+        await apiRequest("POST", "/api/pm/team", {
+          projectId,
+          userId: data.leadId,
+          role: "project_manager",
+          isActive: true,
+        });
+      } catch {
+        // non-fatal
+      }
+    }
+  };
+
+  const syncPhases = async (projectId: number, data: WizardData, followUpErrors: string[]) => {
+    for (let i = 0; i < phases.length; i++) {
+      const phase = phases[i];
+      const dbId = phaseDbIds[i];
+      try {
+        if (dbId) {
+          await apiRequest("PUT", `/api/pm/phases/${dbId}`, {
+            name: phase.name,
+            phaseNumber: i + 1,
+            order: i,
+            methodology: data.methodologyId,
+            description: phase.duration || null,
+          });
+        } else {
+          await apiRequest("POST", "/api/pm/phases", {
+            projectId,
+            name: phase.name,
+            phaseNumber: i + 1,
+            order: i,
+            methodology: data.methodologyId,
+            description: phase.duration || null,
+            status: "not_started",
+          });
+        }
+      } catch (e: any) {
+        followUpErrors.push(`Phase "${phase.name}": ${e?.message || "failed"}`);
+      }
+    }
+
+    for (let i = phases.length; i < phaseDbIds.length; i++) {
+      const dbId = phaseDbIds[i];
+      if (!dbId) continue;
+      try {
+        await apiRequest("DELETE", `/api/pm/phases/${dbId}`);
+      } catch (e: any) {
+        followUpErrors.push(`Remove phase: ${e?.message || "failed"}`);
+      }
+    }
+  };
+
+  const syncTools = async (projectId: number, data: WizardData, followUpErrors: string[]) => {
+    const existingByType = new Map<string, LoadedToolRow[]>();
+    for (const row of initialToolRowsRef.current.filter((t) => t.isEnabled !== false)) {
+      const list = existingByType.get(row.toolType) || [];
+      list.push(row);
+      existingByType.set(row.toolType, list);
+    }
+
+    const selectedSet = new Set(data.selectedTools);
+    for (const [toolType, rows] of existingByType.entries()) {
+      if (selectedSet.has(toolType) || (ALWAYS_TOOLS as readonly string[]).includes(toolType)) continue;
+      for (const row of rows) {
+        try {
+          await apiRequest("DELETE", `/api/pm/project-tools/${row.id}`);
+        } catch (e: any) {
+          followUpErrors.push(`Remove tool: ${e?.message || "failed"}`);
+        }
+      }
+    }
+
+    const toolRows: Array<{ toolType: string; toolCategory: string; label: string; sortOrder: number }> = [];
+    let order = initialToolRowsRef.current.length;
+    for (const toolId of data.selectedTools) {
+      if (existingByType.has(toolId)) continue;
+      const def = findToolDefinition(toolId);
+      const instances = data.toolInstances[toolId];
+      if (instances?.length) {
+        for (const label of instances) {
+          toolRows.push({
+            toolType: toolId,
+            toolCategory: def?.category || "planning_scheduling",
+            label: label.trim() || def?.name || toolId,
+            sortOrder: order++,
+          });
+        }
+      } else {
+        toolRows.push({
+          toolType: toolId,
+          toolCategory: def?.category || "planning_scheduling",
+          label: def?.name || toolId,
+          sortOrder: order++,
+        });
+      }
+    }
+
+    if (toolRows.length > 0) {
+      try {
+        await apiRequest("POST", `/api/pm/projects/${projectId}/tools/bulk`, { tools: toolRows });
+      } catch (e: any) {
+        followUpErrors.push(`Tools: ${e?.message || "failed"}`);
+      }
+    }
+  };
+
   const createMutation = useMutation({
     mutationFn: async (data: WizardData) => {
-      const methodologyDocs = phases.map((p) => ({
-        phase: p.name,
-        docs: p.docs.map((d) => ({ name: d.name, optional: !!d.optional })),
-      }));
-
-      /** Only valid numerics for decimal columns — reject free text like "test". */
-      const toDecimalOrNull = (raw: string) => {
-        const cleaned = raw.replace(/,/g, "").trim();
-        if (!cleaned) return null;
-        if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
-        return cleaned;
-      };
-      const budgetValue = toDecimalOrNull(data.budget);
-      const contractNumeric = toDecimalOrNull(data.contractValue);
-
-      const res = await apiRequest("POST", "/api/pm/projects", {
-        name: data.name,
-        description: data.description || null,
-        code: data.code || null,
-        workType: data.workType,
-        customer: data.customer || null,
-        status: data.status,
-        priority: data.priority,
-        methodology: data.methodologyId,
-        framework: data.methodologyId,
-        startDate: data.startDate || null,
-        endDate: data.endDate || null,
-        budget: budgetValue,
-        forecastBudget: contractNumeric,
-        portfolioId: data.portfolioId ? Number(data.portfolioId) : null,
-        managerId: data.leadId || null,
-        ownerId: data.pmoOwnerId || null,
-        projectManager: data.lead || null,
-        deliveryOwner: data.pmoOwner || null,
-        executiveSponsor: data.sponsor || null,
-        strategicObjective: data.strategicObjective || null,
-        complexityLevel: data.complexityLevel || null,
-        tags: data.tags.length ? data.tags : null,
-        metadata: {
-          leadName: data.lead || undefined,
-          visibility: data.visibility,
-          statusCadence: data.statusCadence,
-          reportAudience: data.reportAudience,
-          currency: data.currency,
-          contractValue: data.contractValue || undefined,
-          contactPhone: data.contactPhone || undefined,
-          contactEmail: data.contactEmail || undefined,
-          methodologyDocs,
-          methodologyName: activePreset.name,
-        },
-      });
+      const res = await apiRequest("POST", "/api/pm/projects", buildProjectPayload(data, phases, activePreset));
       const projectData = await res.json();
       const followUpErrors: string[] = [];
 
@@ -770,33 +1103,7 @@ export function CreateWorkItemWizard({
         }
       }
 
-      const teamIds = Array.from(new Set(data.teamMemberIds.filter(Boolean)));
-      for (const memberUserId of teamIds) {
-        try {
-          await apiRequest("POST", "/api/pm/team", {
-            projectId: projectData.id,
-            userId: memberUserId,
-            role: "team_member",
-            isActive: true,
-          });
-        } catch (e: any) {
-          followUpErrors.push(`Team member: ${e?.message || "failed"}`);
-        }
-      }
-
-      // Also ensure lead is on the team roster when selected
-      if (data.leadId && !teamIds.includes(data.leadId)) {
-        try {
-          await apiRequest("POST", "/api/pm/team", {
-            projectId: projectData.id,
-            userId: data.leadId,
-            role: "project_manager",
-            isActive: true,
-          });
-        } catch {
-          // non-fatal if lead already exists or insert fails
-        }
-      }
+      await syncTeamMembers(projectData.id, data, followUpErrors);
 
       if (followUpErrors.length > 0) {
         return { project: projectData, warnings: followUpErrors };
@@ -822,6 +1129,52 @@ export function CreateWorkItemWizard({
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async (data: WizardData) => {
+      if (!projectId) throw new Error("Missing project id");
+      const existingMeta = (editProject?.metadata && typeof editProject.metadata === "object" ? editProject.metadata : {}) as Record<string, unknown>;
+      const payload = buildProjectPayload(data, phases, activePreset);
+      const res = await apiRequest("PUT", `/api/pm/projects/${projectId}`, {
+        ...payload,
+        metadata: { ...existingMeta, ...(payload.metadata as Record<string, unknown>) },
+      });
+      const projectData = await res.json();
+      const followUpErrors: string[] = [];
+
+      await syncPhases(projectId, data, followUpErrors);
+      await syncTools(projectId, data, followUpErrors);
+      await syncTeamMembers(projectId, data, followUpErrors);
+
+      if (followUpErrors.length > 0) {
+        return { project: projectData, warnings: followUpErrors };
+      }
+      return { project: projectData, warnings: [] as string[] };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "team"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "tools"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "phases"] });
+      if (result.warnings.length > 0) {
+        toast({
+          title: "Project updated with warnings",
+          description: result.warnings.join("; "),
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Project updated successfully" });
+      }
+      onComplete();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error updating project", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const saveMutation = isEditMode ? updateMutation : createMutation;
+  const editLoading = isEditMode && (!editReady || editProjectLoading);
+
   const handleNext = () => {
     const nextErrors = validateStep(step);
     setErrors(nextErrors);
@@ -836,7 +1189,7 @@ export function CreateWorkItemWizard({
     if (step === 1) setStep(2);
     else if (step === 2) setStep(3);
     else if (step === 3) setStep(4);
-    else createMutation.mutate(wizardData);
+    else saveMutation.mutate(wizardData);
   };
 
   const steps = [
@@ -855,12 +1208,26 @@ export function CreateWorkItemWizard({
     setTeamDraft("");
   };
 
+  if (editLoading) {
+    return (
+      <div className="flex h-full flex-1 items-center justify-center font-sans" data-testid="wizard-edit-loading">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p className="text-sm">Loading project details…</p>
+        </div>
+      </div>
+    );
+  }
+
+  const wizardTitle = isEditMode ? "Edit Work Item" : "New Work Item";
+  const wizardSubtitle = isEditMode ? "Update your project in four steps" : "Configure your project in four steps.";
+
   return (
     <div className="flex h-full flex-1 w-full min-h-0 overflow-hidden font-sans" style={{ fontFamily: "var(--font-sans)" }} data-testid="wizard-view">
       {/* Left stepper */}
       <div className="w-[280px] h-full flex-shrink-0 border-r border-border bg-card p-7 flex flex-col min-h-0">
-        <h3 className="text-base font-semibold text-foreground mb-1 font-sans">New Work Item</h3>
-        <p className="text-xs text-muted-foreground mb-7 leading-relaxed font-sans">Configure your project in four steps.</p>
+        <h3 className="text-base font-semibold text-foreground mb-1 font-sans">{wizardTitle}</h3>
+        <p className="text-xs text-muted-foreground mb-7 leading-relaxed font-sans">{wizardSubtitle}</p>
 
         <div className="flex-1 min-h-0 overflow-y-auto">
           {steps.map((s, i) => (
@@ -905,8 +1272,8 @@ export function CreateWorkItemWizard({
       <div className="flex-1 flex flex-col min-w-0 h-full min-h-0 bg-muted/30">
         <div className="flex-shrink-0 h-[52px] border-b border-border bg-card px-6 flex items-center gap-3">
           <div>
-            <div className="text-[15px] font-semibold font-sans">New Work Item</div>
-            <div className="text-[11px] text-muted-foreground font-sans">Set up your project in four steps</div>
+            <div className="text-[15px] font-semibold font-sans">{wizardTitle}</div>
+            <div className="text-[11px] text-muted-foreground font-sans">{isEditMode ? "Update key project information" : "Set up your project in four steps"}</div>
           </div>
           <div className="flex-1" />
         </div>
@@ -1256,6 +1623,42 @@ export function CreateWorkItemWizard({
                       {["draft", "planning", "active", "on_hold", "completed", "cancelled"].map((s) => (
                         <SelectItem key={s} value={s}>{s.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}</SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </FormSection>
+
+              <FormSection icon="🚦" iconClass="bg-green-100 text-green-900 dark:bg-green-900/40" title="Health & RAG" subtitle="Overall delivery health indicators.">
+                <div className="space-y-1">
+                  <FieldLabel>Scope RAG</FieldLabel>
+                  <Select value={wizardData.ragStatus} onValueChange={(v) => updateField("ragStatus", v)}>
+                    <SelectTrigger data-testid="select-wizard-rag-scope"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="green">Green — on track</SelectItem>
+                      <SelectItem value="amber">Amber — monitor</SelectItem>
+                      <SelectItem value="red">Red — at risk</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <FieldLabel>Budget RAG</FieldLabel>
+                  <Select value={wizardData.financialRag} onValueChange={(v) => updateField("financialRag", v)}>
+                    <SelectTrigger data-testid="select-wizard-rag-budget"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="green">Green — on track</SelectItem>
+                      <SelectItem value="amber">Amber — monitor</SelectItem>
+                      <SelectItem value="red">Red — at risk</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <FieldLabel>Schedule RAG</FieldLabel>
+                  <Select value={wizardData.scheduleRag} onValueChange={(v) => updateField("scheduleRag", v)}>
+                    <SelectTrigger data-testid="select-wizard-rag-schedule"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="green">Green — on track</SelectItem>
+                      <SelectItem value="amber">Amber — monitor</SelectItem>
+                      <SelectItem value="red">Red — at risk</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1648,13 +2051,13 @@ export function CreateWorkItemWizard({
             )}
             <Button
               onClick={handleNext}
-              disabled={createMutation.isPending}
+              disabled={saveMutation.isPending}
               className="font-medium font-sans px-7"
               data-testid="button-wizard-next"
             >
-              {createMutation.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-              {step === 4 ? "Review & Create →" : "Next →"}
-              {step < 4 && !createMutation.isPending && <ArrowRight className="h-3.5 w-3.5 ml-1 hidden" />}
+              {saveMutation.isPending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+              {step === 4 ? (isEditMode ? "Save changes →" : "Review & Create →") : "Next →"}
+              {step < 4 && !saveMutation.isPending && <ArrowRight className="h-3.5 w-3.5 ml-1 hidden" />}
             </Button>
           </div>
         </div>
