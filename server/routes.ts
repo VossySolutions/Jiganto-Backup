@@ -3920,6 +3920,60 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  // CRM Attachments (polymorphic: lead, account, etc.)
+  app.get("/api/crm/attachments", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
+    const entityType = req.query.entityType as string;
+    if (!entityType) return res.status(400).json({ message: "entityType required" });
+    // entityId omitted returns all attachments of this entityType (used for table-column count summaries)
+    const entityId = req.query.entityId ? Number(req.query.entityId) : undefined;
+    const attachments = await storage.getCrmAttachments(tenantId, entityType, entityId);
+    res.json(attachments);
+  });
+
+  app.post("/api/crm/attachments", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    try {
+      const tenantId = requireApiTenantId(req, res);
+      if (tenantId == null) return;
+      const { entityType, entityId, fileName, fileType, fileSize, fileUrl } = req.body || {};
+      if (!entityType || !entityId || !fileName) {
+        return res.status(400).json({ message: "entityType, entityId, and fileName are required" });
+      }
+      const attachment = await storage.createCrmAttachment({
+        entityType: String(entityType),
+        entityId: Number(entityId),
+        fileName: String(fileName),
+        fileType: fileType ?? null,
+        fileSize: fileSize != null ? Number(fileSize) : null,
+        fileUrl: fileUrl ?? null,
+        tenantId,
+        uploadedByUserId: userId,
+      });
+      res.status(201).json(attachment);
+    } catch (err) {
+      console.error("CRM attachment create failed:", err);
+      const msg = err instanceof Error ? err.message : "Failed to create attachment";
+      const missingTable = /crm_attachments|does not exist|relation/i.test(msg);
+      res.status(missingTable ? 503 : 400).json({
+        message: missingTable
+          ? "Attachments table is missing. Run npm run db:push, then try again."
+          : "Failed to create attachment",
+      });
+    }
+  });
+
+  app.delete("/api/crm/attachments/:id", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    await storage.deleteCrmAttachment(Number(req.params.id));
+    res.status(204).send();
+  });
+
   // CRM Contracts
   app.get("/api/crm/contracts", async (req, res) => {
     const userId = getUserId(req);

@@ -27,7 +27,9 @@ import {
   Archive,
   Trash2,
   Edit,
-  Paintbrush
+  Paintbrush,
+  Paperclip,
+  ListTodo,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -53,7 +55,9 @@ export type ColumnType =
   | "currency"
   | "link" 
   | "progress"
-  | "rag";
+  | "rag"
+  | "files"
+  | "checklist";
 
 export interface StatusOption {
   value: string;
@@ -80,6 +84,10 @@ export interface ColumnDef<T = Record<string, unknown>> {
   options?: StatusOption[];
   hidden?: boolean;
   sticky?: boolean;
+  /** monday.com-style "Edit Labels" for status/select columns */
+  onEditLabels?: () => void;
+  /** Custom cell renderer, overrides the built-in type-based rendering (e.g. Files/Subtasks count columns). */
+  render?: (row: T, value: unknown) => React.ReactNode;
 }
 
 export interface GroupDef<T = Record<string, unknown>> {
@@ -123,7 +131,11 @@ export interface MondayTableProps<T extends { id: number | string }> {
   /** Client-side pagination (default: enabled). Pass false to show all rows. */
   pagination?: boolean | { defaultPageSize?: number; resetKey?: string | number };
   /** Highlights matching text in read-only text cells (case-insensitive). */
+  /** Called when files are dropped onto a row (monday-style attachment drop). */
+  onRowFilesDrop?: (row: T, files: File[]) => void;
   searchHighlightTerm?: string;
+  /** Row density — Infinity-style expand/compact (default: comfortable). */
+  density?: "compact" | "comfortable" | "expanded";
 }
 
 const columnTypeIcons: Record<ColumnType, typeof Text> = {
@@ -141,46 +153,48 @@ const columnTypeIcons: Record<ColumnType, typeof Text> = {
   link: Link2,
   progress: BarChart3,
   rag: AlertCircle,
+  files: Paperclip,
+  checklist: ListTodo,
 };
 
 export const defaultStatusColors: Record<string, string> = {
-  not_started: "bg-muted text-muted-foreground",
-  in_progress: "bg-status-green text-status-green-foreground",
-  working_on_it: "bg-status-amber text-status-amber-foreground",
-  done: "bg-status-blue text-status-blue-foreground",
-  complete: "bg-status-blue text-status-blue-foreground",
-  completed: "bg-status-blue text-status-blue-foreground",
-  stuck: "bg-status-red text-status-red-foreground",
-  delayed: "bg-status-red text-status-red-foreground",
-  at_risk: "bg-status-amber text-status-amber-foreground",
-  active: "bg-status-green text-status-green-foreground",
-  approved: "bg-status-purple text-status-purple-foreground",
-  on_hold: "bg-status-amber text-status-amber-foreground",
-  not_applicable: "bg-muted text-muted-foreground",
-  draft: "bg-muted text-muted-foreground",
-  pending: "bg-status-amber text-status-amber-foreground",
-  cancelled: "bg-muted text-muted-foreground",
-  closed: "bg-muted text-muted-foreground",
-  archived: "bg-muted text-muted-foreground",
-  fit: "bg-status-green text-status-green-foreground",
-  gap: "bg-status-red text-status-red-foreground",
-  workaround: "bg-status-amber text-status-amber-foreground",
-  custom_dev: "bg-status-purple text-status-purple-foreground",
-  not_assessed: "bg-muted text-muted-foreground",
-  critical: "bg-status-red text-status-red-foreground",
-  high: "bg-status-amber text-status-amber-foreground",
-  medium: "bg-status-blue text-status-blue-foreground",
-  low: "bg-status-green text-status-green-foreground",
-  simple: "bg-status-green text-status-green-foreground",
-  complex: "bg-status-red text-status-red-foreground",
+  not_started: "bg-[#c4c4c4] text-white",
+  in_progress: "bg-[#fdab3d] text-white",
+  working_on_it: "bg-[#fdab3d] text-white",
+  done: "bg-[#00c875] text-white",
+  complete: "bg-[#00c875] text-white",
+  completed: "bg-[#00c875] text-white",
+  stuck: "bg-[#e2445c] text-white",
+  delayed: "bg-[#e2445c] text-white",
+  at_risk: "bg-[#fdab3d] text-white",
+  active: "bg-[#00c875] text-white",
+  approved: "bg-[#a25ddc] text-white",
+  on_hold: "bg-[#ffcb00] text-[#323338]",
+  not_applicable: "bg-[#c4c4c4] text-white",
+  draft: "bg-[#c4c4c4] text-white",
+  pending: "bg-[#fdab3d] text-white",
+  cancelled: "bg-[#c4c4c4] text-white",
+  closed: "bg-[#c4c4c4] text-white",
+  archived: "bg-[#c4c4c4] text-white",
+  fit: "bg-[#00c875] text-white",
+  gap: "bg-[#e2445c] text-white",
+  workaround: "bg-[#fdab3d] text-white",
+  custom_dev: "bg-[#a25ddc] text-white",
+  not_assessed: "bg-[#c4c4c4] text-white",
+  critical: "bg-[#e2445c] text-white",
+  high: "bg-[#e2445c] text-white",
+  medium: "bg-[#fdab3d] text-white",
+  low: "bg-[#579bfc] text-white",
+  simple: "bg-[#00c875] text-white",
+  complex: "bg-[#e2445c] text-white",
 };
 
 const priorityColors: Record<string, string> = {
-  low: "bg-muted text-muted-foreground",
-  medium: "bg-status-blue text-status-blue-foreground",
-  high: "bg-status-amber text-status-amber-foreground",
-  critical: "bg-status-red text-status-red-foreground",
-  urgent: "bg-status-red text-status-red-foreground",
+  low: "bg-[#579bfc] text-white",
+  medium: "bg-[#fdab3d] text-white",
+  high: "bg-[#e2445c] text-white",
+  critical: "bg-[#e2445c] text-white",
+  urgent: "bg-[#e2445c] text-white",
 };
 
 const ragColors: Record<string, string> = {
@@ -202,12 +216,14 @@ function StatusCell({
   value, 
   options,
   editable,
-  onChange 
+  onChange,
+  onEditLabels,
 }: { 
   value: string; 
   options?: StatusOption[];
   editable?: boolean;
   onChange?: (value: string) => void;
+  onEditLabels?: () => void;
 }) {
   const getColor = () => {
     if (options) {
@@ -222,28 +238,29 @@ function StatusCell({
       const option = options.find(o => o.value === value);
       return option?.label || value?.replace(/_/g, " ");
     }
-    return value?.replace(/_/g, " ") || "Not Set";
+    return value?.replace(/_/g, " ") || "—";
   };
 
+  // monday.com: status fills the cell as a saturated rectangle (not a small pill)
+  const mondayCellClass = cn(
+    "w-full min-h-[32px] px-2 flex items-center justify-center",
+    "rounded-[4px] text-[13px] font-medium capitalize text-center leading-tight",
+    "transition-opacity",
+    getColor(),
+  );
+
   if (!editable || !onChange) {
-    return (
-      <span className={cn("px-2.5 py-1 rounded-full text-xs font-medium capitalize inline-block", getColor())}>
-        {getLabel()}
-      </span>
-    );
+    return <span className={mondayCellClass}>{getLabel()}</span>;
   }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className={cn(
-          "px-2.5 py-1 rounded-full text-xs font-medium capitalize cursor-pointer hover:opacity-80 transition-opacity",
-          getColor()
-        )}>
+        <button type="button" className={cn(mondayCellClass, "cursor-pointer hover:opacity-90")}>
           {getLabel()}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[140px]">
+      <DropdownMenuContent align="start" className="min-w-[180px] p-1">
         {(options || Object.keys(defaultStatusColors).slice(0, 6)).map((opt) => {
           const optValue = typeof opt === "string" ? opt : opt.value;
           const optLabel = typeof opt === "string" ? opt.replace(/_/g, " ") : opt.label;
@@ -252,14 +269,32 @@ function StatusCell({
             <DropdownMenuItem
               key={optValue}
               onClick={() => onChange(optValue)}
-              className="capitalize"
+              className="p-1 focus:bg-transparent"
             >
-              <span className={cn("px-2 py-0.5 rounded-full text-xs mr-2", optColor)}>
+              <span className={cn(
+                "w-full min-h-[28px] px-2 rounded-[4px] text-[13px] font-medium capitalize",
+                "flex items-center justify-center",
+                optColor,
+              )}>
                 {optLabel}
               </span>
             </DropdownMenuItem>
           );
         })}
+        {onEditLabels && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.preventDefault();
+                onEditLabels();
+              }}
+              data-testid="button-edit-status-labels"
+            >
+              Edit labels
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -331,33 +366,35 @@ function PriorityCell({
   onChange?: (value: string) => void;
 }) {
   const getColor = () => priorityColors[value?.toLowerCase()] || priorityColors.medium;
+  const mondayCellClass = cn(
+    "w-full min-h-[32px] px-2 flex items-center justify-center",
+    "rounded-[4px] text-[13px] font-medium capitalize text-center leading-tight",
+    getColor(),
+  );
 
   if (!editable || !onChange) {
-    return (
-      <span className={cn("px-2.5 py-1 rounded-full text-xs font-medium capitalize inline-block", getColor())}>
-        {value || "Medium"}
-      </span>
-    );
+    return <span className={mondayCellClass}>{value || "Medium"}</span>;
   }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className={cn(
-          "px-2.5 py-1 rounded-full text-xs font-medium capitalize cursor-pointer hover:opacity-80 transition-opacity",
-          getColor()
-        )}>
+        <button type="button" className={cn(mondayCellClass, "cursor-pointer hover:opacity-90")}>
           {value || "Medium"}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[120px]">
+      <DropdownMenuContent align="start" className="min-w-[140px] p-1">
         {Object.entries(priorityColors).map(([priority, color]) => (
           <DropdownMenuItem
             key={priority}
             onClick={() => onChange(priority)}
-            className="capitalize"
+            className="p-1 focus:bg-transparent capitalize"
           >
-            <span className={cn("px-2 py-0.5 rounded-full text-xs mr-2", color)}>
+            <span className={cn(
+              "w-full min-h-[28px] px-2 rounded-[4px] text-[13px] font-medium",
+              "flex items-center justify-center",
+              color,
+            )}>
               {priority}
             </span>
           </DropdownMenuItem>
@@ -768,7 +805,7 @@ interface CellRendererProps<T> {
 function CellRenderer<T>({ 
   column, 
   value, 
-  row: _row,
+  row,
   onEdit,
   isEditing,
   isFocused: _isFocused,
@@ -780,6 +817,10 @@ function CellRenderer<T>({
 }: CellRendererProps<T>) {
   const editable = column.editable && !!onEdit;
 
+  if (column.render) {
+    return <>{column.render(row, value)}</>;
+  }
+
   switch (column.type) {
     case "status":
       return (
@@ -788,6 +829,7 @@ function CellRenderer<T>({
           options={column.options}
           editable={editable}
           onChange={onEdit as (v: string) => void}
+          onEditLabels={column.onEditLabels}
         />
       );
     case "select":
@@ -915,7 +957,13 @@ export function MondayTable<T extends { id: number | string }>({
   onConditionalFormatRulesChange,
   pagination = true,
   searchHighlightTerm,
+  density = "comfortable",
+  onRowFilesDrop,
 }: MondayTableProps<T>) {
+  const rowMinHeight =
+    density === "compact" ? "min-h-[32px]" : density === "expanded" ? "min-h-[56px]" : "min-h-[44px]";
+  const headerMinHeight =
+    density === "compact" ? "min-h-[32px]" : density === "expanded" ? "min-h-[48px]" : "min-h-[40px]";
   const [selectedIds, setSelectedIds] = useState<Set<number | string>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
@@ -1371,21 +1419,33 @@ export function MondayTable<T extends { id: number | string }>({
       <div
         key={item.id}
         className={cn(
-          "grid items-center min-h-[44px] transition-colors group",
-          "hover:bg-accent/30",
-          isSelected && "bg-primary/5",
+          "grid items-center transition-colors group",
+          rowMinHeight,
+          "hover:bg-[#f5f6f8]",
+          isSelected && "bg-[#cce5ff]/35",
           onRowClick && "cursor-pointer",
-          gridLines ? "border-b border-border/30" : "border-b border-border/10",
+          "border-b border-[#d0d4e4]/70",
           rowStyle?.className
         )}
         style={{ gridTemplateColumns, ...rowStyle?.inlineStyle }}
         onClick={() => onRowClick?.(item)}
+        onDragOver={onRowFilesDrop ? (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "copy";
+        } : undefined}
+        onDrop={onRowFilesDrop ? (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const files = Array.from(e.dataTransfer.files || []);
+          if (files.length) onRowFilesDrop(item, files);
+        } : undefined}
         data-testid={`table-row-${item.id}`}
       >
         {selectable && (
           <div className={cn(
             "flex items-center justify-center px-2",
-            gridLines && "border-r border-border/30"
+            gridLines && "border-r border-[#d0d4e4]/80"
           )}>
             <Checkbox
               checked={isSelected}
@@ -1416,11 +1476,14 @@ export function MondayTable<T extends { id: number | string }>({
               }}
               tabIndex={isEditable ? 0 : undefined}
               className={cn(
-                "px-3 py-2 flex items-center overflow-hidden outline-none",
+                "flex items-center overflow-hidden outline-none",
+                column.type === "status" || column.type === "priority" || column.render
+                  ? "px-1 py-1"
+                  : "px-3 py-2",
                 colIdx === 0 && "font-medium",
-                gridLines && !isLastCol && "border-r border-border/30",
-                isCellFocused && !isCellEditing && "bg-primary/5 border-b-2 border-b-primary/60",
-                isCellEditing && "bg-primary/5",
+                gridLines && !isLastCol && "border-r border-[#d0d4e4]/80",
+                isCellFocused && !isCellEditing && "bg-[#cce5ff]/40 border-b-2 border-b-[#0073ea]",
+                isCellEditing && "bg-[#cce5ff]/30",
                 cellStyle?.className
               )}
               style={cellStyle?.inlineStyle}
@@ -1516,27 +1579,42 @@ export function MondayTable<T extends { id: number | string }>({
       : group.items;
     if (visibleItemIds && pageItems.length === 0) return null;
 
+    const colorValue = group.color || "";
+    const isRawColor =
+      colorValue.startsWith("#") ||
+      colorValue.startsWith("hsl") ||
+      colorValue.startsWith("rgb");
+
     return (
       <div key={group.id} className="mb-4" data-testid={`table-group-${group.id}`}>
         <button
           onClick={() => toggleGroup(group.id)}
           className={cn(
-            "flex items-center gap-2 w-full px-3 py-2 rounded-lg font-medium text-sm",
-            "hover:bg-accent/50 transition-colors text-left",
-            group.color || "bg-primary/10"
+            "flex items-center gap-2 w-full px-2 py-1.5 font-bold text-sm tracking-tight",
+            "hover:bg-black/[0.02] transition-colors text-left",
+            !isRawColor && (group.color || "text-[#323338]")
           )}
+          style={
+            isRawColor
+              ? { color: colorValue }
+              : undefined
+          }
         >
           {isCollapsed ? (
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4 shrink-0 opacity-70" />
           ) : (
-            <ChevronDown className="h-4 w-4" />
+            <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />
           )}
-          <span>{group.title}</span>
-          <Badge variant="secondary" className="ml-2">
+          <span
+            className="h-6 w-1.5 rounded-full shrink-0"
+            style={isRawColor ? { backgroundColor: colorValue } : undefined}
+          />
+          <span className={cn(!isRawColor && "text-[#323338]")}>{group.title}</span>
+          <span className="text-xs font-normal text-[#676879] ml-1">
             {visibleItemIds ? pageItems.length : (group.count ?? group.items.length)}
-          </Badge>
+          </span>
           {group.summary && (
-            <span className="text-muted-foreground ml-auto text-xs">{group.summary}</span>
+            <span className="text-[#676879] ml-auto text-xs font-normal">{group.summary}</span>
           )}
         </button>
         
@@ -1572,10 +1650,10 @@ export function MondayTable<T extends { id: number | string }>({
   const activeCfRuleCount = cfRules.filter(r => r.enabled).length;
 
   return (
-    <div className={cn("rounded-md border border-border/10 bg-card w-full max-w-full min-w-0", className)}>
+    <div className={cn("rounded-lg border border-[#d0d4e4] bg-white w-full max-w-full min-w-0 shadow-[0_4px_8px_rgba(0,0,0,0.04)]", className)}>
       {selectedIds.size > 0 ? (
-        <div className="flex items-center gap-3 px-4 py-2 bg-primary/5 border-b border-border/10">
-          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+        <div className="flex items-center gap-3 px-4 py-2 bg-[#cce5ff]/50 border-b border-[#d0d4e4]">
+          <span className="text-sm font-medium text-[#323338]">{selectedIds.size} selected</span>
           {renderBulkActions && renderBulkActions(Array.from(selectedIds))}
           {onDeleteItems && (
             <Button 
@@ -1592,14 +1670,17 @@ export function MondayTable<T extends { id: number | string }>({
           </Button>
         </div>
       ) : (
-        <div className="flex items-center justify-end px-2 py-1 border-b border-border/10">
+        <div className="flex items-center justify-end px-2 py-1 border-b border-[#d0d4e4]/80">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setCfPanelOpen(true)}
-                className={cn(activeCfRuleCount > 0 && "text-primary")}
+                className={cn(
+                  "text-[#676879] hover:text-[#323338] hover:bg-[#f5f6f8]",
+                  activeCfRuleCount > 0 && "text-[#0073ea]",
+                )}
                 data-testid="button-conditional-formatting"
               >
                 <Paintbrush className="h-3.5 w-3.5 mr-1.5" />
@@ -1617,21 +1698,22 @@ export function MondayTable<T extends { id: number | string }>({
       )}
 
       <div
-        className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)] overscroll-x-contain touch-pan-x [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
+        className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)] overscroll-x-contain touch-pan-x [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#c5c7d0]"
         ref={tableContainerRef}
       >
         <div style={{ minWidth: `${totalMinWidth}px` }}>
           <div
             className={cn(
-              "grid items-center bg-muted min-h-[40px] text-sm font-medium text-muted-foreground sticky top-0 z-20",
-              gridLines ? "border-b-2 border-border/40" : "border-b border-border/10"
+              "grid items-center bg-[#f5f6f8] text-[13px] font-medium text-[#676879] sticky top-0 z-20",
+              headerMinHeight,
+              "border-b border-[#d0d4e4]",
             )}
             style={{ gridTemplateColumns }}
           >
             {selectable && (
               <div className={cn(
                 "flex items-center justify-center px-2",
-                gridLines && "border-r border-border/30"
+                gridLines && "border-r border-[#d0d4e4]/80"
               )}>
                 <Checkbox
                   checked={isAllSelected}
@@ -1653,9 +1735,9 @@ export function MondayTable<T extends { id: number | string }>({
                   key={column.id}
                   className={cn(
                     "px-3 py-2 flex items-center gap-1.5 relative select-none cursor-grab",
-                    gridLines && !isLastCol && "border-r border-border/30",
+                    gridLines && !isLastCol && "border-r border-[#d0d4e4]/80",
                     isDragSource && "opacity-40",
-                    isDragOver && "bg-primary/10"
+                    isDragOver && "bg-[#cce5ff]/60"
                   )}
                   draggable
                   onDragStart={(e) => {
@@ -1701,13 +1783,13 @@ export function MondayTable<T extends { id: number | string }>({
                     {column.header}
                   </span>
                   {isDragOver && (
-                    <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary z-10" />
+                    <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#0073ea] z-10" />
                   )}
                   <div
                     className={cn(
                       "absolute right-0 top-0 bottom-0 w-1 cursor-col-resize",
-                      "bg-transparent hover:bg-primary/30 transition-colors",
-                      resizingColumn === column.id && "bg-primary/50"
+                      "bg-transparent hover:bg-[#0073ea]/30 transition-colors",
+                      resizingColumn === column.id && "bg-[#0073ea]/50"
                     )}
                     onMouseDown={(e) => {
                       e.stopPropagation();
@@ -1744,7 +1826,7 @@ export function MondayTable<T extends { id: number | string }>({
               {onAddItem && (
                 <button
                   onClick={() => onAddItem()}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors border-t border-border/10"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#676879] hover:text-[#0073ea] hover:bg-[#f5f6f8] transition-colors border-t border-[#d0d4e4]/80"
                   data-testid="button-add-item"
                 >
                   <Plus className="h-4 w-4" />

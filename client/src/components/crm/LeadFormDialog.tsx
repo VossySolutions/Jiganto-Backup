@@ -96,9 +96,11 @@ interface Props {
   onOpenCustomFieldsSettings?: () => void;
   stacked?: boolean;
   initialValues?: Partial<LeadFormData>;
+  /** Called after a new lead is created (with the created lead payload). */
+  onCreated?: (lead: { id: number }) => void;
 }
 
-export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSettings, stacked, initialValues }: Props) {
+export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSettings, stacked, initialValues, onCreated }: Props) {
   const { toast } = useToast();
   const [form, setForm] = useState<LeadFormData>(EMPTY_FORM);
   const [customData, setCustomData] = useState<Record<string, unknown>>({});
@@ -135,16 +137,19 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
   }, [open, editing, initialValues]);
 
   const createMutation = useMutation({
-    mutationFn: (data: LeadFormData) =>
-      apiRequest("POST", "/api/crm/leads", {
+    mutationFn: async (data: LeadFormData) => {
+      const res = await apiRequest("POST", "/api/crm/leads", {
         ...data,
         score: data.score ? parseInt(data.score, 10) : 0,
         rating: data.rating || null,
         customData,
-      }),
-    onSuccess: () => {
+      });
+      return res.json() as Promise<{ id: number }>;
+    },
+    onSuccess: (lead) => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/leads"] });
       toast({ title: "Lead created successfully" });
+      onCreated?.(lead);
       onClose();
     },
     onError: () => toast({ title: "Failed to create lead", variant: "destructive" }),

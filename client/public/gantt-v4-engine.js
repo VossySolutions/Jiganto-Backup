@@ -39,9 +39,7 @@ function buildRagPillCell(t,id,dim){
   return '<div class="task-rag-pill-col" onclick="event.stopPropagation();cycleRagDim('+id+',\''+dim+'\')" title="Click to cycle '+dim+' RAG">'+
     '<span class="rag-pill rag-pill-'+v+'"><span class="rag-pill-dot"></span><span class="rag-pill-lbl">'+lbl+'</span></span></div>';
 }
-const BAR_PALETTE=['#4f46e5','#0891b2','#059669','#d97706','#db2477','#ea580c','#7c3aed','#0f766e','#9333ea','#0369a1'];
 const TYPE_ICONS={0:'🔷',1:'📁',2:'📋',3:'🔀',4:'⚡',5:'☑',6:'◆'};
-const AV_COLORS={'#4f46e5':'#4f46e5','#059669':'#059669','#0891b2':'#0891b2','#d97706':'#d97706','#db2477':'#db2477','#ea580c':'#ea580c'};
 
 // ── OWNERS (populated from init data) ────────────────────────
 const OWNERS = [];
@@ -649,13 +647,6 @@ function expandAll(){
     hideLoading();
   }
 }
-/** Header "+" pill — add a child under the currently selected row (falls back to a root-level add) */
-function headerAddChild(){
-  const sel=getSelectedTask();
-  if(sel) quickAddChild(sel.id);
-  else addNewItem();
-}
-
 function indentTask(){
   const t=getSelectedTask();
   if(!t||t.type===1) return;
@@ -1603,19 +1594,6 @@ async function withLoading(msg,fn,btnEl){
   } finally {
     hideLoading();
   }
-}
-function showExportToast(msg){
-  // Back-compat shim → unified toast (loading handled separately)
-  if(!msg) return;
-  const lower=String(msg).toLowerCase();
-  if(lower.includes('generating')||lower.includes('exporting')||lower.includes('saving')||lower.includes('importing')||lower.includes('loading')){
-    showLoading(msg);
-    return;
-  }
-  hideLoading();
-  if(lower.includes('fail')||lower.includes('error')) showToast(msg,'err',2800);
-  else if(lower.includes('✓')||lower.includes('downloaded')||lower.includes('saved')||lower.includes('imported')) showToast(msg,'ok',2200);
-  else showToast(msg,'info',2200);
 }
 
 function loadExportScript(src,timeoutMs){

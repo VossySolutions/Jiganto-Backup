@@ -24,6 +24,7 @@ export function CrmColumnVisibilityMenu({
   testId = "button-column-visibility",
 }: CrmColumnVisibilityMenuProps) {
   const hiddenCount = columns.filter((c) => visibility[c.id] === false).length;
+  const active = hiddenCount > 0;
 
   return (
     <DropdownMenu>
@@ -31,16 +32,19 @@ export function CrmColumnVisibilityMenu({
         <button
           type="button"
           className={cn(
-            "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-            hiddenCount > 0
-              ? "bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400"
-              : "bg-background border-border text-foreground hover:bg-muted",
+            "inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[13px] font-medium transition-colors",
+            "text-[#323338] hover:bg-[#dcdfec]/60",
+            active && "bg-[#cce5ff] text-[#0073ea] hover:bg-[#cce5ff]",
           )}
           data-testid={testId}
         >
           <Columns3 className="h-3.5 w-3.5" />
-          Show/Hide Fields
-          {hiddenCount > 0 && <span className="text-xs opacity-70">({columns.length - hiddenCount}/{columns.length})</span>}
+          Hide
+          {active && (
+            <span className="h-4 min-w-4 px-1 rounded-full bg-[#0073ea] text-white text-[10px] flex items-center justify-center">
+              {hiddenCount}
+            </span>
+          )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52">

@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/sheet";
 import { ArrowUpRight, Pencil } from "lucide-react";
 import type { CrmLead } from "./types";
+import { LeadExtrasPanel } from "./LeadExtrasPanel";
 
 export type { CrmLead };
 
@@ -31,6 +32,7 @@ interface Props {
   ownerName: string;
   statusLabel: React.ReactNode;
   temperatureLabel: React.ReactNode;
+  initialExtrasTab?: "comments" | "files" | "subtasks";
 }
 
 export function LeadDetailSheet({
@@ -44,6 +46,7 @@ export function LeadDetailSheet({
   ownerName,
   statusLabel,
   temperatureLabel,
+  initialExtrasTab = "comments",
 }: Props) {
   if (!lead) return null;
 
@@ -78,57 +81,34 @@ export function LeadDetailSheet({
                 </span>
               )}
             </div>
-          </SheetHeader>
-          <div className="flex gap-2 mt-4">
-            <Button size="sm" variant="outline" className="gap-1.5 flex-1" onClick={() => { onClose(); onEdit(lead); }}>
-              <Pencil className="h-3.5 w-3.5" />
-              Edit
-            </Button>
-            {lead.status !== "converted" && (
-              <Button
-                size="sm"
-                className="gap-1.5 flex-1 bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
-                onClick={() => { onClose(); onConvert(lead); }}
-              >
-                <ArrowUpRight className="h-3.5 w-3.5" />
-                Convert
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => onEdit(lead)} data-testid="button-edit-lead-sheet">
+                <Pencil className="h-3.5 w-3.5 mr-1" />
+                Edit
               </Button>
-            )}
-          </div>
+              {lead.status !== "converted" && (
+                <Button size="sm" className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90" onClick={() => onConvert(lead)}>
+                  <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
+                  Convert
+                </Button>
+              )}
+            </div>
+          </SheetHeader>
         </div>
 
-        <div className="px-6 py-4 space-y-5">
-          <section>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Contact</p>
-            <div className="rounded-xl border bg-muted/20 px-4">
-              <DetailRow label="Email" value={lead.email} />
-              <DetailRow label="Phone" value={lead.phone} />
-              <DetailRow label="Owner" value={ownerName} />
-            </div>
-          </section>
-
-          <section>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Company</p>
-            <div className="rounded-xl border bg-muted/20 px-4">
-              <DetailRow label="Industry" value={lead.industry} />
-              <DetailRow label="Website" value={lead.website} />
-              <DetailRow label="Source" value={lead.source} />
-            </div>
-          </section>
-
-          {lead.description && (
-            <section>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Notes</p>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap rounded-xl border bg-muted/20 p-4">
-                {lead.description}
-              </p>
-            </section>
-          )}
-
-          <p className="text-[11px] text-muted-foreground">
-            Created {new Date(lead.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
-          </p>
+        <div className="px-6 py-4 space-y-1">
+          <DetailRow label="Email" value={lead.email} />
+          <DetailRow label="Phone" value={lead.phone} />
+          <DetailRow label="Company" value={lead.company} />
+          <DetailRow label="Title" value={lead.title} />
+          <DetailRow label="Source" value={lead.source} />
+          <DetailRow label="Owner" value={ownerName} />
+          <DetailRow label="Industry" value={lead.industry} />
+          <DetailRow label="Website" value={lead.website} />
+          <DetailRow label="Description" value={lead.description} />
         </div>
+
+        <LeadExtrasPanel lead={lead} initialTab={initialExtrasTab} />
       </SheetContent>
     </Sheet>
   );

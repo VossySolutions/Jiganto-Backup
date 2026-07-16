@@ -41,6 +41,7 @@ import {
   crmTasks,
   crmNotes,
   crmContracts,
+  crmAttachments,
   crmCustomerSystems,
   crmSavedViews,
   crmEmailTemplates,
@@ -153,6 +154,8 @@ import {
   type InsertCrmTask,
   type CrmNote,
   type InsertCrmNote,
+  type CrmAttachment,
+  type InsertCrmAttachment,
   type CrmContract,
   type InsertCrmContract,
   type CrmCustomerSystem,
@@ -477,7 +480,7 @@ import {
   type ClientModuleVisibility, type ClientInvitation,
 } from "@shared/models/clients";
 import { db } from "./db";
-import { eq, and, desc, asc, isNull, or, sql, inArray, gt, lt, ne } from "drizzle-orm";
+import { eq, and, desc, asc, isNull, isNotNull, or, sql, inArray, gt, lt, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { modulePermissionsCache } from "./lib/module-permissions-cache";
 import { users } from "@shared/models/auth";
@@ -811,6 +814,11 @@ export interface IStorage {
   createCrmNote(note: InsertCrmNote): Promise<CrmNote>;
   updateCrmNote(id: number, content: string): Promise<CrmNote | undefined>;
   deleteCrmNote(id: number): Promise<void>;
+
+  // CRM Attachments
+  getCrmAttachments(tenantId: number, entityType: string, entityId?: number): Promise<CrmAttachment[]>;
+  createCrmAttachment(attachment: InsertCrmAttachment): Promise<CrmAttachment>;
+  deleteCrmAttachment(id: number): Promise<void>;
 
   // CRM Contracts
   getCrmContracts(tenantId: number, accountId?: number, clientId?: number): Promise<CrmContract[]>;
@@ -3697,6 +3705,7 @@ export class DatabaseStorage implements IStorage {
     else if (entityType === "contact" && entityId) conditions.push(eq(crmTasks.contactId, entityId));
     else if (entityType === "opportunity" && entityId) conditions.push(eq(crmTasks.opportunityId, entityId));
     else if (entityType === "lead" && entityId) conditions.push(eq(crmTasks.leadId, entityId));
+    else if (entityType === "lead" && !entityId) conditions.push(isNotNull(crmTasks.leadId));
     else if (accountId) conditions.push(eq(crmTasks.accountId, accountId));
 
     if (clientId !== undefined) {
@@ -3835,6 +3844,29 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCrmNote(id: number): Promise<void> {
     await db.delete(crmNotes).where(eq(crmNotes.id, id));
+  }
+
+  // CRM Attachments
+  async getCrmAttachments(tenantId: number, entityType: string, entityId?: number): Promise<CrmAttachment[]> {
+    const conditions = [
+      eq(crmAttachments.tenantId, tenantId),
+      eq(crmAttachments.entityType, entityType),
+    ];
+    if (entityId != null) conditions.push(eq(crmAttachments.entityId, entityId));
+    return await db
+      .select()
+      .from(crmAttachments)
+      .where(and(...conditions))
+      .orderBy(desc(crmAttachments.createdAt));
+  }
+
+  async createCrmAttachment(attachment: InsertCrmAttachment): Promise<CrmAttachment> {
+    const [result] = await db.insert(crmAttachments).values(attachment).returning();
+    return result;
+  }
+
+  async deleteCrmAttachment(id: number): Promise<void> {
+    await db.delete(crmAttachments).where(eq(crmAttachments.id, id));
   }
 
   // CRM Contracts

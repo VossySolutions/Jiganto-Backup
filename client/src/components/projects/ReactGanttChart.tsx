@@ -558,7 +558,7 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${projectName.replace(/</g, "&lt;")} — Gantt</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260716p">
+<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260716q">
 </head>
 <body>
 <div class="main">
@@ -567,7 +567,7 @@ ${ganttBodyHTML}
 </div>
 ${modalsHTML}
 <script>window.GANTT_INIT_DATA = ${dataJson};</script>
-<script src="/gantt-v4-engine.js?v=20260716p"></script>
+<script src="/gantt-v4-engine.js?v=20260716q"></script>
 </body>
 </html>`;
 }
@@ -692,7 +692,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
 
   return (
     <iframe
-      key={`${projectId}-${refreshKey}-v20260716p`}
+      key={`${projectId}-${refreshKey}-v20260716q`}
       title={`Gantt — ${project.name}`}
       srcDoc={srcDoc ?? undefined}
       style={{ width: "100%", height: "100%", minHeight: 400, border: "none", display: "block" }}

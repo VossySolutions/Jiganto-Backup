@@ -1,60 +1,117 @@
-import { useState, useMemo } from "react";
-import { useCrmPagination } from "@/hooks/use-crm-pagination";
-import { CrmTablePagination } from "./CrmTablePagination";
+import { useState, useMemo, useCallback } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { LeadFormDialog } from "./LeadFormDialog";
 import { LeadDetailSheet, type CrmLead } from "./LeadDetailSheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   Plus, Download, Upload, ArrowUpRight, Search,
-  SlidersHorizontal, ArrowUpDown, Layers, Trash2,
-  UserCheck, ChevronDown, X, MoreHorizontal, Pencil
+  SlidersHorizontal, ArrowUpDown, Layers,
+  UserCheck, ChevronDown, Maximize2, Minimize2,
+  Columns3, Table2, List, Calendar, Settings2,
+  MessageSquare, Paperclip, ListTodo, Sparkles, FolderPlus, X,
 } from "lucide-react";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
-import { CrmCustomFieldTableHeaders, CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
 import { useCrmUsers } from "./CrmUsersProvider";
 import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
 import { CrmColumnVisibilityMenu } from "./CrmColumnVisibilityMenu";
-import { CrmInlineEditCell } from "./CrmInlineEditCell";
-import { CrmInlineEditSelect } from "./CrmInlineEditSelect";
+import { CrmLeadLabelEditorDialog } from "./CrmLeadLabelEditorDialog";
+import {
+  CrmLeadListView,
+  CrmLeadBoardView,
+  CrmLeadCalendarView,
+} from "./CrmLeadAlternateViews";
 import { loadColumnVisibility, saveColumnVisibility, type CrmColumnDef } from "@/lib/crm-list-columns";
+import { formatCustomFieldDisplayValue } from "@/lib/crm-custom-fields";
+import {
+  loadLeadStatusOptions,
+  saveLeadStatusOptions,
+  loadLeadRatingOptions,
+  saveLeadRatingOptions,
+} from "@/lib/crm-lead-labels";
+import {
+  loadManualLeadGroups,
+  saveManualLeadGroups,
+  createManualLeadGroup,
+  moveLeadsToGroup,
+  ungroupLeads,
+  deleteManualGroup,
+  compareLeadsByRules,
+  LEAD_SORT_FIELDS,
+  type ManualLeadGroup,
+  type LeadSortRule,
+  type LeadSortField,
+} from "@/lib/crm-lead-manual-groups";
+import MondayTable, {
+  type ColumnDef,
+  type GroupDef,
+  type StatusOption,
+} from "@/components/MondayTable";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
-const LEAD_STATUS_OPTIONS = [
-  { value: "new", label: "New" },
-  { value: "contacted", label: "Contacted" },
-  { value: "qualified", label: "Qualified" },
-  { value: "unqualified", label: "Unqualified" },
-  { value: "converted", label: "Converted" },
-  { value: "lost", label: "Lost" },
-];
-
+/** Infinity-style field customize checklist (standard columns) */
 const LEAD_TABLE_COLUMNS: CrmColumnDef[] = [
   { id: "contact", label: "Contact" },
+  { id: "email", label: "Email", defaultVisible: false },
+  { id: "phone", label: "Phone", defaultVisible: false },
   { id: "title", label: "Title" },
+  { id: "files", label: "Files" },
   { id: "status", label: "Status" },
   { id: "score", label: "Score" },
   { id: "rating", label: "Rating" },
   { id: "source", label: "Source" },
   { id: "owner", label: "Owner" },
+  { id: "industry", label: "Industry", defaultVisible: false },
+  { id: "website", label: "Website", defaultVisible: false },
+  { id: "description", label: "Description", defaultVisible: false },
+  { id: "subtasks", label: "Subtasks" },
+  { id: "followUp", label: "Follow-up date", defaultVisible: false },
   { id: "created", label: "Created" },
 ];
 
-interface CrmLeadsTabProps {
-  leads: CrmLead[];
-  searchTerm: string;
-  onNavigateToTab?: (tab: string) => void;
-  onOpenCustomFieldsSettings?: () => void;
+type LeadFilterField = "status" | "source" | "rating" | "temperature" | "industry" | "title";
+
+const FILTER_FIELDS: { field: LeadFilterField; label: string }[] = [
+  { field: "status", label: "Status" },
+  { field: "source", label: "Source" },
+  { field: "rating", label: "Rating" },
+  { field: "temperature", label: "Temperature" },
+  { field: "industry", label: "Industry" },
+  { field: "title", label: "Title" },
+];
+
+interface LeadFilterRule {
+  id: string;
+  field: LeadFilterField;
+  value: string;
+}
+
+type LeadAttachmentSummaryRow = { id: number; entityId: number };
+type LeadTaskSummaryRow = { id: number; leadId: number | null; status?: string | null; completedAt?: string | null };
+type LeadSubtaskRecord = { id: string; title: string; done: boolean };
+
+function getLocalLeadSubtasks(lead: CrmLead): LeadSubtaskRecord[] {
+  const raw = lead.customData && typeof lead.customData === "object"
+    ? (lead.customData as Record<string, unknown>)["_subtasks"]
+    : undefined;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((s): s is LeadSubtaskRecord => !!s && typeof s === "object" && typeof (s as LeadSubtaskRecord).id === "string")
+    .map((s) => ({ id: s.id, title: String(s.title || ""), done: !!s.done }));
 }
 
 function getTemperature(score: number | null): "hot" | "warm" | "cold" {
@@ -64,18 +121,47 @@ function getTemperature(score: number | null): "hot" | "warm" | "cold" {
   return "cold";
 }
 
-function RatingBadge({ rating }: { rating?: string | null }) {
-  if (!rating) return <span className="text-muted-foreground">—</span>;
-  const styles: Record<string, string> = {
-    hot: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400",
-    warm: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400",
-    cold: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400",
-  };
-  return (
-    <Badge variant="outline" className={cn("text-[10px] capitalize border-0", styles[rating] || "")}>
-      {rating}
-    </Badge>
-  );
+type LeadGroupBy =
+  | "none"
+  | "status"
+  | "owner"
+  | "source"
+  | "temperature"
+  | "rating"
+  | "title"
+  | "industry"
+  | "manual"
+  | "followUp";
+
+type TableDensity = "compact" | "comfortable" | "expanded";
+type LeadViewMode = "table" | "list" | "board" | "calendar";
+
+const VIEW_OPTIONS: { id: LeadViewMode; label: string; icon: typeof Table2 }[] = [
+  { id: "table", label: "Table", icon: Table2 },
+  { id: "list", label: "List", icon: List },
+  { id: "board", label: "Board", icon: Columns3 },
+  { id: "calendar", label: "Calendar", icon: Calendar },
+];
+
+interface CrmLeadsTabProps {
+  leads: CrmLead[];
+  searchTerm: string;
+  onNavigateToTab?: (tab: string) => void;
+  onOpenCustomFieldsSettings?: () => void;
+}
+
+function getLeadFollowUpDate(lead: CrmLead): string | null {
+  const raw = lead.customData && typeof lead.customData === "object"
+    ? (lead.customData as Record<string, unknown>)["_followUpDate"]
+    : undefined;
+  return typeof raw === "string" && raw ? raw : null;
+}
+
+function formatFollowUpGroupKey(value: string | null): string {
+  if (!value) return "No follow-up";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "No follow-up";
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
 const VIBRANT_LOGO_COLORS = [
@@ -99,13 +185,6 @@ function getInitials(name: string): string {
     .map(w => w[0])
     .join("")
     .toUpperCase();
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const month = date.toLocaleString("en-US", { month: "short" });
-  const day = date.getDate();
-  return `${month} ${day}`;
 }
 
 function FlameIcon({ className }: { className?: string }) {
@@ -138,18 +217,6 @@ function ColdIcon({ className }: { className?: string }) {
       <circle cx="12.5" cy="11.5" r="1" fill="#93c5fd"/>
       <circle cx="12.5" cy="4.5" r="1" fill="#93c5fd"/>
       <circle cx="3.5" cy="11.5" r="1" fill="#93c5fd"/>
-    </svg>
-  );
-}
-
-function AllIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 16 16" fill="none">
-      <rect x="1" y="3" width="4" height="4" rx="1" fill="#3b82f6"/>
-      <rect x="6" y="3" width="4" height="4" rx="1" fill="#22c55e"/>
-      <rect x="11" y="3" width="4" height="4" rx="1" fill="#f97316"/>
-      <rect x="3.5" y="9" width="4" height="4" rx="1" fill="#8b5cf6"/>
-      <rect x="8.5" y="9" width="4" height="4" rx="1" fill="#ec4899"/>
     </svg>
   );
 }
@@ -191,25 +258,44 @@ function StatusDot({ status }: { status: string }) {
   );
 }
 
+const GROUP_COLOR_HEX: Record<string, string> = {
+  Hot: "#e2445c",
+  Warm: "#fdab3d",
+  Cold: "#579bfc",
+  New: "#00c875",
+  Contacted: "#fdab3d",
+  Qualified: "#579bfc",
+  Unqualified: "#c4c4c4",
+  Converted: "#a25ddc",
+  Lost: "#e2445c",
+};
+
 export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFieldsSettings }: CrmLeadsTabProps) {
   const { users, resolveOwner } = useCrmUsers();
   const { fields: customFields } = useCrmCustomFields("lead");
-  const tableColSpan = 11 + customFields.length;
   const [formOpen, setFormOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<CrmLead | null>(null);
   const [viewingLead, setViewingLead] = useState<CrmLead | null>(null);
+  const [extrasTab, setExtrasTab] = useState<"comments" | "files" | "subtasks">("comments");
   const [isConvertOpen, setIsConvertOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<CrmLead | null>(null);
-  const [temperatureFilter, setTemperatureFilter] = useState<"all" | "hot" | "warm" | "cold">("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [sourceFilter, setSourceFilter] = useState("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [filterRules, setFilterRules] = useState<LeadFilterRule[]>([]);
   const [localSearch, setLocalSearch] = useState("");
-  const [sortField, setSortField] = useState<"date" | "score" | "name">("date");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [groupBy, setGroupBy] = useState<"none" | "owner" | "status" | "source" | "temperature">("none");
+  const [sortRules, setSortRules] = useState<LeadSortRule[]>([{ field: "date", dir: "desc" }]);
+  const [groupBy, setGroupBy] = useState<LeadGroupBy>("none");
+  const [manualGroups, setManualGroups] = useState<ManualLeadGroup[]>(() => loadManualLeadGroups());
+  const [selectedLeadIds, setSelectedLeadIds] = useState<(number | string)[]>([]);
+  const [density, setDensity] = useState<TableDensity>("comfortable");
+  const [viewMode, setViewMode] = useState<LeadViewMode>(() => {
+    if (typeof window === "undefined") return "table";
+    const stored = localStorage.getItem("crm-leads-view-mode") as LeadViewMode | null;
+    return stored && VIEW_OPTIONS.some((v) => v.id === stored) ? stored : "table";
+  });
+  const [statusOptions, setStatusOptions] = useState<StatusOption[]>(() => loadLeadStatusOptions());
+  const [ratingOptions, setRatingOptions] = useState<StatusOption[]>(() => loadLeadRatingOptions());
+  const [labelEditor, setLabelEditor] = useState<"status" | "rating" | null>(null);
   const [convertOptions, setConvertOptions] = useState({
     createAccount: true,
     createContact: true,
@@ -291,7 +377,6 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     mutationFn: (ids: (number | string)[]) => apiRequest("POST", "/api/crm/leads/bulk-delete", { ids }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/leads"] });
-      setSelectedIds(new Set());
       toast({ title: "Leads deleted successfully" });
     },
     onError: () => toast({ title: "Failed to delete leads", variant: "destructive" }),
@@ -329,10 +414,6 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     setIsConvertOpen(true);
   };
 
-  const toggleTemperatureFilter = (filter: "all" | "hot" | "warm" | "cold") => {
-    setTemperatureFilter(prev => prev === filter ? "all" : filter);
-  };
-
   const effectiveSearch = searchTerm || localSearch;
 
   const leadSources = useMemo(
@@ -340,20 +421,77 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     [leads]
   );
 
-  const ownerSelectOptions = useMemo(
+  const sourceSelectOptions: StatusOption[] = useMemo(
+    () => leadSources.map((s) => ({ value: s, label: s, color: "" })),
+    [leadSources],
+  );
+
+  const ownerSelectOptions: StatusOption[] = useMemo(
     () => [
-      { value: "", label: "Unassigned" },
-      ...users.map((u) => ({ value: u.id, label: resolveOwner(u.id).name })),
+      { value: "", label: "Unassigned", color: "" },
+      ...users.map((u) => ({ value: u.id, label: resolveOwner(u.id).name, color: "" })),
     ],
     [users, resolveOwner],
   );
 
-  const sourceSelectOptions = useMemo(
-    () => leadSources.map((s) => ({ value: s, label: s })),
-    [leadSources],
-  );
+  const setViewModePersist = (mode: LeadViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem("crm-leads-view-mode", mode);
+  };
 
-  const activeFilterCount = [statusFilter, sourceFilter, ownerFilter].filter(f => f !== "all").length;
+  const allAddableColumns = useMemo((): CrmColumnDef[] => {
+    const customCols: CrmColumnDef[] = customFields.map((f) => ({
+      id: `custom_${f.fieldName}`,
+      label: f.fieldLabel,
+      defaultVisible: true,
+    }));
+    return [...LEAD_TABLE_COLUMNS, ...customCols];
+  }, [customFields]);
+
+  const hiddenAddableCount = allAddableColumns.filter((c) => !isColVisible(c.id)).length;
+  const activeFilterCount = filterRules.filter((r) => r.value).length;
+
+  const getLeadFilterFieldValue = (lead: CrmLead, field: LeadFilterField): string => {
+    switch (field) {
+      case "status": return lead.status || "";
+      case "source": return lead.source || "";
+      case "rating": return lead.rating || "";
+      case "temperature": return getTemperature(lead.score);
+      case "industry": return lead.industry || "";
+      case "title": return lead.title || "";
+      default: return "";
+    }
+  };
+
+  const getFilterFieldOptions = (field: LeadFilterField): { value: string; label: string }[] => {
+    switch (field) {
+      case "status": return statusOptions.map((o) => ({ value: o.value, label: o.label }));
+      case "rating": return ratingOptions.map((o) => ({ value: o.value, label: o.label }));
+      case "source": return leadSources.map((s) => ({ value: s, label: s }));
+      case "temperature": return [
+        { value: "hot", label: `Hot (${hotCount})` },
+        { value: "warm", label: `Warm (${warmCount})` },
+        { value: "cold", label: `Cold (${coldCount})` },
+      ];
+      case "industry": return Array.from(new Set(leads.map((l) => l.industry).filter((v): v is string => !!v)))
+        .map((v) => ({ value: v, label: v }));
+      case "title": return Array.from(new Set(leads.map((l) => l.title).filter((v): v is string => !!v)))
+        .map((v) => ({ value: v, label: v }));
+      default: return [];
+    }
+  };
+
+  const addFilterRule = () => {
+    setFilterRules((prev) => [...prev, { id: `f_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, field: "status", value: "" }]);
+  };
+
+  const updateFilterRule = (id: string, patch: Partial<LeadFilterRule>) => {
+    setFilterRules((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch, ...(patch.field ? { value: "" } : {}) } : r)));
+  };
+
+  const removeFilterRule = (id: string) => {
+    setFilterRules((prev) => prev.filter((r) => r.id !== id));
+  };
 
   const filteredLeads = useMemo(() => {
     let result = leads.filter(l => {
@@ -362,35 +500,303 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         l.company?.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
         l.email?.toLowerCase().includes(effectiveSearch.toLowerCase());
       if (!matchesSearch) return false;
-      if (temperatureFilter !== "all" && getTemperature(l.score) !== temperatureFilter) return false;
-      if (statusFilter !== "all" && l.status !== statusFilter) return false;
-      if (sourceFilter !== "all" && l.source !== sourceFilter) return false;
+      for (const rule of filterRules) {
+        if (!rule.value) continue;
+        if (getLeadFilterFieldValue(l, rule.field) !== rule.value) return false;
+      }
       if (ownerFilter === "__unassigned__" && l.ownerUserId) return false;
       if (ownerFilter !== "all" && ownerFilter !== "__unassigned__" && l.ownerUserId !== ownerFilter) return false;
       return true;
     });
 
-    result.sort((a, b) => {
-      const dir = sortDir === "asc" ? 1 : -1;
-      if (sortField === "date") return dir * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      if (sortField === "score") return dir * ((a.score ?? 0) - (b.score ?? 0));
-      return dir * `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
-    });
-
-    return result;
-  }, [leads, effectiveSearch, temperatureFilter, statusFilter, sourceFilter, ownerFilter, sortField, sortDir]);
-
-  const pagination = useCrmPagination(filteredLeads, {
-    resetKey: `${effectiveSearch}|${temperatureFilter}|${statusFilter}|${sourceFilter}|${ownerFilter}|${sortField}|${sortDir}|${groupBy}`,
-    enabled: groupBy === "none",
-  });
+    return [...result].sort((a, b) => compareLeadsByRules(a, b, sortRules));
+  }, [leads, effectiveSearch, filterRules, ownerFilter, sortRules]);
 
   const hotCount = leads.filter(l => getTemperature(l.score) === "hot").length;
   const warmCount = leads.filter(l => getTemperature(l.score) === "warm").length;
   const coldCount = leads.filter(l => getTemperature(l.score) === "cold").length;
 
-  const groupedLeads = useMemo(() => {
-    if (groupBy === "none") return null;
+  const { data: allLeadAttachments = [] } = useQuery<LeadAttachmentSummaryRow[]>({
+    queryKey: ["/api/crm/attachments?entityType=lead"],
+  });
+  const { data: allLeadTasks = [] } = useQuery<LeadTaskSummaryRow[]>({
+    queryKey: ["/api/crm/tasks?entityType=lead"],
+  });
+
+  const attachmentCountByLead = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const a of allLeadAttachments) {
+      map.set(a.entityId, (map.get(a.entityId) || 0) + 1);
+    }
+    return map;
+  }, [allLeadAttachments]);
+
+  const linkedSubtaskProgressByLead = useMemo(() => {
+    const map = new Map<number, { done: number; total: number }>();
+    for (const t of allLeadTasks) {
+      if (t.leadId == null) continue;
+      const done = t.status === "completed" || !!t.completedAt;
+      const prev = map.get(t.leadId) || { done: 0, total: 0 };
+      prev.total += 1;
+      if (done) prev.done += 1;
+      map.set(t.leadId, prev);
+    }
+    return map;
+  }, [allLeadTasks]);
+
+  const getSubtaskProgress = useCallback((lead: CrmLead) => {
+    const linked = linkedSubtaskProgressByLead.get(lead.id) || { done: 0, total: 0 };
+    const local = getLocalLeadSubtasks(lead);
+    const localDone = local.filter((s) => s.done).length;
+    return { done: linked.done + localDone, total: linked.total + local.length };
+  }, [linkedSubtaskProgressByLead]);
+
+  const tableColumns: ColumnDef<CrmLead>[] = useMemo(() => {
+    const cols: ColumnDef<CrmLead>[] = [
+      {
+        id: "company",
+        header: "Company",
+        type: "text",
+        accessor: (row) => row.company || `${row.firstName} ${row.lastName}`,
+        width: "220px",
+        sticky: true,
+        editable: true,
+      },
+      {
+        id: "contact",
+        header: "Contact",
+        type: "text",
+        accessor: (row) => `${row.firstName} ${row.lastName}`.trim(),
+        width: "160px",
+        editable: true,
+        hidden: !isColVisible("contact"),
+      },
+      {
+        id: "email",
+        header: "Email",
+        type: "text",
+        accessor: (row) => row.email || "",
+        width: "180px",
+        editable: true,
+        hidden: !isColVisible("email"),
+      },
+      {
+        id: "phone",
+        header: "Phone",
+        type: "text",
+        accessor: (row) => row.phone || "",
+        width: "130px",
+        editable: true,
+        hidden: !isColVisible("phone"),
+      },
+      {
+        id: "title",
+        header: "Title",
+        type: "text",
+        accessor: (row) => row.title || "",
+        width: "140px",
+        editable: true,
+        hidden: !isColVisible("title"),
+      },
+      {
+        id: "files",
+        header: "Files",
+        type: "files",
+        accessor: (row) => attachmentCountByLead.get(row.id) || 0,
+        width: "80px",
+        editable: false,
+        hidden: !isColVisible("files"),
+        render: (row) => {
+          const count = attachmentCountByLead.get(row.id) || 0;
+          return (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); openLeadExtras(row, "files"); }}
+              className={cn(
+                "w-full h-full min-h-[28px] flex items-center justify-center gap-1 rounded-[4px] text-[12px] font-medium transition-colors",
+                count > 0 ? "text-[#323338] hover:bg-[#dcdfec]/50" : "text-[#c4c4c4] hover:bg-[#dcdfec]/50",
+              )}
+              data-testid={`cell-files-lead-${row.id}`}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+              {count > 0 && <span>{count}</span>}
+            </button>
+          );
+        },
+      },
+      {
+        id: "status",
+        header: "Status",
+        type: "status",
+        accessor: "status",
+        width: "130px",
+        editable: true,
+        editableCondition: (row) => row.status !== "converted",
+        options: statusOptions,
+        onEditLabels: () => setLabelEditor("status"),
+        hidden: !isColVisible("status"),
+      },
+      {
+        id: "score",
+        header: "Score",
+        type: "number",
+        accessor: (row) => row.score,
+        width: "90px",
+        editable: true,
+        hidden: !isColVisible("score"),
+      },
+      {
+        id: "rating",
+        header: "Rating",
+        type: "status",
+        accessor: (row) => row.rating || "",
+        width: "110px",
+        editable: true,
+        options: ratingOptions,
+        onEditLabels: () => setLabelEditor("rating"),
+        hidden: !isColVisible("rating"),
+      },
+      {
+        id: "source",
+        header: "Source",
+        type: "select",
+        accessor: (row) => row.source || "",
+        width: "130px",
+        editable: true,
+        options: sourceSelectOptions,
+        hidden: !isColVisible("source"),
+      },
+      {
+        id: "owner",
+        header: "Owner",
+        type: "select",
+        accessor: (row) => row.ownerUserId || "",
+        width: "150px",
+        editable: true,
+        options: ownerSelectOptions,
+        hidden: !isColVisible("owner"),
+      },
+      {
+        id: "industry",
+        header: "Industry",
+        type: "text",
+        accessor: (row) => row.industry || "",
+        width: "140px",
+        editable: true,
+        hidden: !isColVisible("industry"),
+      },
+      {
+        id: "website",
+        header: "Website",
+        type: "link",
+        accessor: (row) => row.website || "",
+        width: "160px",
+        editable: false,
+        hidden: !isColVisible("website"),
+      },
+      {
+        id: "description",
+        header: "Description",
+        type: "text",
+        accessor: (row) => row.description || "",
+        width: "200px",
+        editable: true,
+        hidden: !isColVisible("description"),
+      },
+      {
+        id: "subtasks",
+        header: "Subtasks",
+        type: "checklist",
+        accessor: (row) => getSubtaskProgress(row).total,
+        width: "100px",
+        editable: false,
+        hidden: !isColVisible("subtasks"),
+        render: (row) => {
+          const { done, total } = getSubtaskProgress(row);
+          return (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); openLeadExtras(row, "subtasks"); }}
+              className={cn(
+                "w-full h-full min-h-[28px] flex items-center justify-center gap-1 rounded-[4px] text-[12px] font-medium transition-colors",
+                total > 0 ? "text-[#323338] hover:bg-[#dcdfec]/50" : "text-[#c4c4c4] hover:bg-[#dcdfec]/50",
+              )}
+              data-testid={`cell-subtasks-lead-${row.id}`}
+            >
+              <ListTodo className="h-3.5 w-3.5" />
+              {total > 0 && <span>{done}/{total}</span>}
+            </button>
+          );
+        },
+      },
+      {
+        id: "followUp",
+        header: "Follow-up",
+        type: "date",
+        accessor: (row) => getLeadFollowUpDate(row),
+        width: "130px",
+        editable: true,
+        hidden: !isColVisible("followUp"),
+      },
+      {
+        id: "created",
+        header: "Created",
+        type: "date",
+        accessor: (row) => row.createdAt,
+        width: "120px",
+        editable: false,
+        hidden: !isColVisible("created"),
+      },
+    ];
+
+    for (const field of customFields) {
+      const colId = `custom_${field.fieldName}`;
+      const editableType = field.fieldType === "text" || field.fieldType === "number" || field.fieldType === "textarea";
+      cols.push({
+        id: colId,
+        header: field.fieldLabel,
+        type: field.fieldType === "number" ? "number" : "text",
+        accessor: (row) => {
+          const raw = row.customData?.[field.fieldName];
+          if (editableType) {
+            if (raw == null || raw === "") return "";
+            return String(raw);
+          }
+          return formatCustomFieldDisplayValue(field, raw, resolveOwner);
+        },
+        width: "140px",
+        editable: editableType,
+        hidden: !isColVisible(colId),
+      });
+    }
+
+    return cols;
+  }, [columnVisibility, customFields, sourceSelectOptions, ownerSelectOptions, resolveOwner, statusOptions, ratingOptions, attachmentCountByLead, getSubtaskProgress]);
+
+  const tableGroups: GroupDef<CrmLead>[] | undefined = useMemo(() => {
+    if (groupBy === "none") return undefined;
+
+    if (groupBy === "manual") {
+      const assigned = new Set(manualGroups.flatMap((g) => g.leadIds));
+      const groups: GroupDef<CrmLead>[] = manualGroups.map((g) => ({
+        id: g.id,
+        title: g.title,
+        color: g.color,
+        items: filteredLeads.filter((l) => g.leadIds.includes(l.id)),
+        count: filteredLeads.filter((l) => g.leadIds.includes(l.id)).length,
+      }));
+      const ungrouped = filteredLeads.filter((l) => !assigned.has(l.id));
+      if (ungrouped.length > 0) {
+        groups.push({
+          id: "ungrouped",
+          title: "Ungrouped",
+          color: "#c4c4c4",
+          items: ungrouped,
+          count: ungrouped.length,
+        });
+      }
+      return groups;
+    }
 
     const groups: Record<string, CrmLead[]> = {};
     for (const lead of filteredLeads) {
@@ -400,26 +806,164 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
       } else if (groupBy === "status") {
         key = lead.status.charAt(0).toUpperCase() + lead.status.slice(1);
       } else if (groupBy === "source") {
-        key = lead.source ? lead.source.charAt(0).toUpperCase() + lead.source.slice(1).replace(/_/g, " ") : "Unknown";
+        key = lead.source
+          ? lead.source.charAt(0).toUpperCase() + lead.source.slice(1).replace(/_/g, " ")
+          : "Unknown";
+      } else if (groupBy === "rating") {
+        key = lead.rating
+          ? lead.rating.charAt(0).toUpperCase() + lead.rating.slice(1)
+          : "No Rating";
+      } else if (groupBy === "title") {
+        key = lead.title?.trim() || "No Title";
+      } else if (groupBy === "industry") {
+        key = lead.industry?.trim() || "No Industry";
+      } else if (groupBy === "followUp") {
+        key = formatFollowUpGroupKey(getLeadFollowUpDate(lead));
       } else {
-        key = getTemperature(lead.score).charAt(0).toUpperCase() + getTemperature(lead.score).slice(1);
+        const temp = getTemperature(lead.score);
+        key = temp.charAt(0).toUpperCase() + temp.slice(1);
       }
       if (!groups[key]) groups[key] = [];
       groups[key].push(lead);
     }
-    return groups;
-  }, [filteredLeads, groupBy, resolveOwner]);
 
-  const groupColors: Record<string, string> = {
-    Hot: "#ef4444", Warm: "#f59e0b", Cold: "#3b82f6",
-    New: "#22c55e", Contacted: "#f59e0b", Qualified: "#22c55e", Converted: "#8b5cf6", Lost: "#ef4444",
+    return Object.entries(groups).map(([title, items]) => ({
+      id: title,
+      title,
+      color: GROUP_COLOR_HEX[title] || "#579bfc",
+      items,
+      count: items.length,
+    }));
+  }, [filteredLeads, groupBy, resolveOwner, manualGroups]);
+
+  const persistManualGroups = (next: ManualLeadGroup[]) => {
+    setManualGroups(next);
+    saveManualLeadGroups(next);
+  };
+
+  const handleCreateManualGroup = () => {
+    const title = window.prompt("New group name");
+    if (title == null) return;
+    const leadIds = selectedLeadIds.map((id) => (typeof id === "string" ? Number(id) : id)).filter((n) => !Number.isNaN(n));
+    // Remove from other groups first, then create with those IDs
+    let next = ungroupLeads(manualGroups, leadIds);
+    const group = createManualLeadGroup(title, leadIds, next.length);
+    next = [...next, group];
+    persistManualGroups(next);
+    setGroupBy("manual");
+    toast({
+      title: `Group “${group.title}” created`,
+      description: leadIds.length
+        ? `${leadIds.length} selected lead${leadIds.length === 1 ? "" : "s"} moved into the group.`
+        : "Select leads and use “Move to group” to add them.",
+    });
+  };
+
+  const handleMoveSelectedToGroup = (groupId: string, ids: (number | string)[]) => {
+    const leadIds = ids.map((id) => (typeof id === "string" ? Number(id) : id)).filter((n) => !Number.isNaN(n));
+    if (!leadIds.length) return;
+    if (groupId === "ungrouped") {
+      persistManualGroups(ungroupLeads(manualGroups, leadIds));
+      toast({ title: `${leadIds.length} lead(s) ungrouped` });
+      return;
+    }
+    persistManualGroups(moveLeadsToGroup(manualGroups, groupId, leadIds));
+    setGroupBy("manual");
+    toast({ title: `${leadIds.length} lead(s) moved to group` });
+  };
+
+  const openLeadExtras = (lead: CrmLead, tab: "comments" | "files" | "subtasks") => {
+    setExtrasTab(tab);
+    setViewingLead(lead);
+  };
+
+  const handleCellEdit = useCallback((rowId: number | string, columnId: string, value: unknown) => {
+    const id = typeof rowId === "string" ? Number(rowId) : rowId;
+    const updates: Partial<CrmLead> = {};
+
+    switch (columnId) {
+      case "company":
+        updates.company = String(value || "") || null;
+        break;
+      case "contact": {
+        const parts = String(value || "").trim().split(/\s+/);
+        updates.firstName = parts[0] || "";
+        updates.lastName = parts.slice(1).join(" ") || "";
+        break;
+      }
+      case "email":
+        updates.email = String(value || "") || null;
+        break;
+      case "phone":
+        updates.phone = String(value || "") || null;
+        break;
+      case "title":
+        updates.title = String(value || "") || null;
+        break;
+      case "status":
+        updates.status = String(value);
+        break;
+      case "score":
+        updates.score = value === "" || value == null ? 0 : Number(value);
+        break;
+      case "rating":
+        updates.rating = String(value || "") || null;
+        break;
+      case "source":
+        updates.source = String(value || "") || null;
+        break;
+      case "owner":
+        updates.ownerUserId = String(value || "") || null;
+        break;
+      case "industry":
+        updates.industry = String(value || "") || null;
+        break;
+      case "description":
+        updates.description = String(value || "") || null;
+        break;
+      case "followUp": {
+        const lead = leads.find((l) => l.id === id);
+        const prev = (lead?.customData && typeof lead.customData === "object") ? { ...lead.customData } : {};
+        const dateVal = value ? String(value) : null;
+        if (dateVal) prev._followUpDate = dateVal;
+        else delete prev._followUpDate;
+        updates.customData = prev;
+        break;
+      }
+      default: {
+        if (columnId.startsWith("custom_")) {
+          const fieldName = columnId.replace(/^custom_/, "");
+          const field = customFields.find((f) => f.fieldName === fieldName);
+          const lead = leads.find((l) => l.id === id);
+          const prev = (lead?.customData && typeof lead.customData === "object") ? { ...lead.customData } : {};
+          if (field?.fieldType === "number") {
+            const n = value === "" || value == null ? null : Number(value);
+            prev[fieldName] = Number.isFinite(n as number) ? n : null;
+          } else {
+            prev[fieldName] = value === "" || value == null ? null : String(value);
+          }
+          updates.customData = prev;
+          break;
+        }
+        return;
+      }
+    }
+
+    updateLeadMutation.mutate({ id, updates });
+  }, [updateLeadMutation, leads, customFields]);
+
+  const handleBulkStatusChange = (ids: (number | string)[], status: string) => {
+    Promise.all(ids.map(id => apiRequest("PUT", `/api/crm/leads/${id}`, { status }))).then(() => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads"] });
+      toast({ title: `${ids.length} leads updated to ${status}` });
+    });
   };
 
   const exportToCSV = () => {
     const headers = ["Company", "Contact", "Status", "Score", "Temperature", "Source", "Created"];
     const rows = filteredLeads.map(l => [
       l.company || "", `${l.firstName} ${l.lastName}`, l.status || "", String(l.score || ""),
-      getTemperature(l.score), l.source || "", formatDate(l.createdAt)
+      getTemperature(l.score), l.source || "", new Date(l.createdAt).toLocaleDateString()
     ]);
     const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${(c || "").replace(/"/g, '""')}"`).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -432,394 +976,303 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     toast({ title: "Leads exported to CSV" });
   };
 
-  const handleSort = (field: "date" | "score" | "name") => {
-    if (sortField === field) {
-      setSortDir(d => d === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortDir("desc");
-    }
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filteredLeads.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredLeads.map(l => l.id)));
-    }
-  };
-
-  const toggleSelectOne = (id: number) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  const handleSortToggle = (field: LeadSortField) => {
+    setSortRules((prev) => {
+      const existing = prev.find((r) => r.field === field);
+      if (existing) {
+        if (existing.dir === "desc") {
+          return prev.map((r) => (r.field === field ? { ...r, dir: "asc" as const } : r));
+        }
+        return prev.filter((r) => r.field !== field);
+      }
+      return [...prev, { field, dir: "desc" }];
     });
   };
 
-  const handleBulkStatusChange = (status: string) => {
-    const ids = Array.from(selectedIds);
-    Promise.all(ids.map(id => apiRequest("PUT", `/api/crm/leads/${id}`, { status }))).then(() => {
-      queryClient.invalidateQueries({ queryKey: ["/api/crm/leads"] });
-      setSelectedIds(new Set());
-      toast({ title: `${ids.length} leads updated to ${status}` });
+  const addSortRule = (field: LeadSortField) => {
+    setSortRules((prev) => {
+      if (prev.some((r) => r.field === field)) return prev;
+      return [...prev, { field, dir: "desc" }];
     });
   };
 
-  const handleBulkDelete = () => {
-    bulkDeleteMutation.mutate(Array.from(selectedIds));
+  const removeSortRule = (field: LeadSortField) => {
+    setSortRules((prev) => {
+      const next = prev.filter((r) => r.field !== field);
+      return next.length ? next : [{ field: "date", dir: "desc" }];
+    });
   };
 
-  const renderRow = (lead: CrmLead) => {
-    const companyName = lead.company || `${lead.firstName} ${lead.lastName}`;
-    const companyColor = getColorForName(companyName);
-    const companyInitials = getInitials(companyName);
-    const owner = resolveOwner(lead.ownerUserId);
-
-    return (
-      <tr
-        key={lead.id}
-        className={cn(
-          "border-b border-border/40 hover:bg-muted/30 transition-colors",
-          selectedIds.has(lead.id) && "bg-[#0ea5e9]/5"
-        )}
-        data-testid={`lead-row-${lead.id}`}
-      >
-        <td className="px-3 py-2.5 align-middle w-10">
-          <Checkbox
-            checked={selectedIds.has(lead.id)}
-            onCheckedChange={() => toggleSelectOne(lead.id)}
-            data-testid={`checkbox-lead-${lead.id}`}
-          />
-        </td>
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-          <div className="flex items-center gap-3">
-            <div
-              className="h-9 w-9 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0"
-              style={{ backgroundColor: companyColor }}
-            >
-              {companyInitials}
-            </div>
-            <div className="min-w-0">
-              <button
-                type="button"
-                onClick={() => setViewingLead(lead)}
-                className="text-sm font-semibold truncate max-w-[200px] text-left text-[#0ea5e9] hover:underline"
-                data-testid={`link-lead-company-${lead.id}`}
-              >
-                {companyName}
-              </button>
-              <p className="text-xs text-muted-foreground">Lead</p>
-            </div>
-          </div>
-        </td>
-        {isColVisible("contact") && (
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-          <CrmInlineEditCell
-            value={`${lead.firstName} ${lead.lastName}`.trim()}
-            onSave={(v) => {
-              const parts = v.trim().split(/\s+/);
-              const firstName = parts[0] || lead.firstName;
-              const lastName = parts.slice(1).join(" ") || lead.lastName;
-              updateLeadMutation.mutate({ id: lead.id, updates: { firstName, lastName } });
-            }}
-            testId={`inline-lead-contact-${lead.id}`}
-          />
-        </td>
-        )}
-        {isColVisible("title") && (
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap text-sm text-muted-foreground">
-          <CrmInlineEditCell
-            value={lead.title || ""}
-            displayValue={lead.title || "—"}
-            onSave={(v) => updateLeadMutation.mutate({ id: lead.id, updates: { title: v || null } })}
-            testId={`inline-lead-title-${lead.id}`}
-          />
-        </td>
-        )}
-        {isColVisible("status") && (
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-          <CrmInlineEditSelect
-            value={lead.status}
-            displayValue={<StatusDot status={lead.status} />}
-            options={LEAD_STATUS_OPTIONS}
-            onSave={(v) => updateLeadMutation.mutate({ id: lead.id, updates: { status: v } })}
-            disabled={lead.status === "converted"}
-            testId={`inline-lead-status-${lead.id}`}
-          />
-        </td>
-        )}
-        {isColVisible("score") && (
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-          <CrmInlineEditCell
-            value={String(lead.score ?? "")}
-            type="number"
-            displayValue={String(lead.score ?? "—")}
-            onSave={(v) => updateLeadMutation.mutate({ id: lead.id, updates: { score: v ? parseInt(v, 10) : 0 } })}
-            testId={`inline-lead-score-${lead.id}`}
-          />
-        </td>
-        )}
-        {isColVisible("rating") && (
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-          <RatingBadge rating={lead.rating} />
-        </td>
-        )}
-        {isColVisible("source") && (
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-          <CrmInlineEditSelect
-            value={lead.source || ""}
-            displayValue={<span className="text-sm capitalize">{lead.source || "—"}</span>}
-            options={sourceSelectOptions}
-            onSave={(v) => updateLeadMutation.mutate({ id: lead.id, updates: { source: v || null } })}
-            testId={`inline-lead-source-${lead.id}`}
-          />
-        </td>
-        )}
-        {isColVisible("owner") && (
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-          <div className="flex items-center gap-2">
-            <div
-              className="h-7 w-7 rounded-full flex items-center justify-center text-white font-semibold text-[10px] shrink-0"
-              style={{ backgroundColor: owner.color }}
-            >
-              {owner.initials}
-            </div>
-            <CrmInlineEditSelect
-              value={lead.ownerUserId || ""}
-              displayValue={owner.name}
-              options={ownerSelectOptions}
-              onSave={(v) => updateLeadMutation.mutate({ id: lead.id, updates: { ownerUserId: v || null } })}
-              className="text-xs text-muted-foreground"
-              testId={`inline-lead-owner-${lead.id}`}
-            />
-          </div>
-        </td>
-        )}
-        {isColVisible("created") && (
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-          <span className="text-sm text-muted-foreground">{formatDate(lead.createdAt)}</span>
-        </td>
-        )}
-        <CrmCustomFieldTableCells fields={customFields} customData={lead.customData} />
-        <td className="px-3 py-2.5 align-middle text-right whitespace-nowrap">
-          <div className="flex items-center justify-end gap-1">
-            {lead.status !== "converted" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => { e.stopPropagation(); handleConvert(lead); }}
-                className="text-[#0ea5e9] hover:text-[#0ea5e9]/80 hover:bg-[#0ea5e9]/10"
-                data-testid={`button-convert-lead-${lead.id}`}
-              >
-                <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
-                Convert
-              </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()} data-testid={`button-actions-lead-${lead.id}`}>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleEdit(lead)} data-testid={`action-edit-lead-${lead.id}`}>
-                  <Pencil className="h-3.5 w-3.5 mr-2" />
-                  Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => deleteMutation.mutate(lead.id)}
-                  className="text-red-600 focus:text-red-700"
-                  data-testid={`action-delete-lead-${lead.id}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-2" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </td>
-      </tr>
+  const cycleDensity = () => {
+    setDensity((prev) =>
+      prev === "comfortable" ? "expanded" : prev === "expanded" ? "compact" : "comfortable",
     );
   };
 
+  const groupByLabel =
+    groupBy === "none" ? "Group by" : `Group by ${groupBy}`;
+
+  /** monday.com board toolbar control */
+  const toolBtn = (active = false) =>
+    cn(
+      "inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[13px] font-medium transition-colors",
+      "text-[#323338] hover:bg-[#dcdfec]/60",
+      active && "bg-[#cce5ff] text-[#0073ea] hover:bg-[#cce5ff]",
+    );
+
   return (
-    <div className="space-y-4">
-      {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2.5 bg-[#0ea5e9]/10 border border-[#0ea5e9]/30 rounded-lg" data-testid="bulk-actions-bar">
-          <span className="text-sm font-medium text-[#0ea5e9]">{selectedIds.size} selected</span>
-          <div className="h-4 w-px bg-[#0ea5e9]/30" />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" data-testid="button-bulk-status">
-                <UserCheck className="h-3 w-3" />
-                Change Status
-                <ChevronDown className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => handleBulkStatusChange("new")}>New</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleBulkStatusChange("contacted")}>Contacted</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleBulkStatusChange("qualified")}>Qualified</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+    <div className="space-y-3">
+      {/* monday.com-style board toolbar */}
+      <div className="flex flex-wrap items-center gap-1.5" data-testid="filter-temperature-bar">
           <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-            onClick={handleBulkDelete}
-            disabled={bulkDeleteMutation.isPending}
-            data-testid="button-bulk-delete"
-          >
-            <Trash2 className="h-3 w-3" />
-            Delete
+          className="h-8 bg-[#0073ea] hover:bg-[#0060b9] text-white gap-1.5 rounded-md text-[13px] font-medium shadow-none px-3"
+          data-testid="button-add-lead"
+          onClick={openCreateForm}
+        >
+          <Plus className="h-4 w-4" />
+          New Lead
           </Button>
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            className="text-xs text-muted-foreground hover:text-foreground ml-auto"
-            data-testid="button-clear-selection"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+
+        <div className="relative ml-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#676879]" />
+          <Input
+            placeholder="Search / Filter Board"
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            className="pl-8 h-8 w-48 rounded-md border-[#c5c7d0] text-[13px] bg-white focus-visible:ring-[#0073ea]"
+            data-testid="input-search-leads"
+          />
         </div>
-      )}
 
-      <div className="flex flex-wrap items-center gap-2" data-testid="filter-temperature-bar">
-        <button
-          onClick={() => toggleTemperatureFilter("all")}
-          className={cn(
-            "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-            temperatureFilter === "all"
-              ? "bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400"
-              : "bg-background border-border text-foreground hover:bg-violet-50/50 dark:hover:bg-violet-950/20"
-          )}
-          data-testid="button-filter-all"
-        >
-          <AllIcon className="h-4 w-4" />
-          All ({leads.length})
-        </button>
-        <button
-          onClick={() => toggleTemperatureFilter("hot")}
-          className={cn(
-            "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-            temperatureFilter === "hot"
-              ? "bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400"
-              : "bg-background border-border text-foreground hover:bg-red-50/50 dark:hover:bg-red-950/20"
-          )}
-          data-testid="button-filter-hot"
-        >
-          <FlameIcon className="h-4 w-4" />
-          Hot ({hotCount})
-        </button>
-        <button
-          onClick={() => toggleTemperatureFilter("warm")}
-          className={cn(
-            "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-            temperatureFilter === "warm"
-              ? "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"
-              : "bg-background border-border text-foreground hover:bg-amber-50/50 dark:hover:bg-amber-950/20"
-          )}
-          data-testid="button-filter-warm"
-        >
-          <WarmIcon className="h-4 w-4" />
-          Warm ({warmCount})
-        </button>
-        <button
-          onClick={() => toggleTemperatureFilter("cold")}
-          className={cn(
-            "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-            temperatureFilter === "cold"
-              ? "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400"
-              : "bg-background border-border text-foreground hover:bg-blue-50/50 dark:hover:bg-blue-950/20"
-          )}
-          data-testid="button-filter-cold"
-        >
-          <ColdIcon className="h-4 w-4" />
-          Cold ({coldCount})
-        </button>
+        <div className="h-5 w-px bg-[#d0d4e4] mx-1" />
 
-        <div className="h-6 w-px bg-border mx-1" />
+        <div className="flex items-center gap-1" data-testid="owner-avatar-filter">
+        <button
+            type="button"
+            onClick={() => setOwnerFilter("all")}
+            className={toolBtn(ownerFilter === "all")}
+            title="All people"
+          >
+            Person
+        </button>
+        <button
+            type="button"
+            onClick={() => setOwnerFilter(ownerFilter === "__unassigned__" ? "all" : "__unassigned__")}
+          className={cn(
+              "h-7 w-7 rounded-full border text-[10px] font-semibold transition-colors",
+              ownerFilter === "__unassigned__"
+                ? "ring-2 ring-[#0073ea] border-[#0073ea]"
+                : "border-[#c5c7d0] bg-[#f5f6f8] text-[#676879]",
+            )}
+            title="Unassigned"
+          >
+            —
+        </button>
+          {users.slice(0, 12).map((user) => {
+            const owner = resolveOwner(user.id);
+            const active = ownerFilter === user.id;
+            return (
+        <button
+                key={user.id}
+                type="button"
+                title={owner.name}
+                onClick={() => setOwnerFilter(active ? "all" : user.id)}
+          className={cn(
+                  "h-7 w-7 rounded-full text-white text-[10px] font-semibold transition-transform",
+                  active && "ring-2 ring-offset-1 ring-[#0073ea] scale-105",
+                )}
+                style={{ backgroundColor: owner.color }}
+                data-testid={`filter-owner-avatar-${user.id}`}
+              >
+                {owner.initials}
+        </button>
+            );
+          })}
+        </div>
+
+        <div className="h-5 w-px bg-[#d0d4e4] mx-1" />
 
         <Popover open={filterOpen} onOpenChange={setFilterOpen}>
           <PopoverTrigger asChild>
             <button
-              className={cn(
-                "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-                activeFilterCount > 0
-                  ? "bg-[#0ea5e9]/10 border-[#0ea5e9]/30 text-[#0ea5e9]"
-                  : "border-border bg-background text-foreground hover:bg-muted"
-              )}
+              className={toolBtn(activeFilterCount > 0)}
               data-testid="button-filter"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
               Filter
               {activeFilterCount > 0 && (
-                <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{activeFilterCount}</Badge>
+                <span className="h-4 min-w-4 px-1 rounded-full bg-[#0073ea] text-white text-[10px] flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
               )}
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-72 space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Status</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-8" data-testid="filter-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="new">New</SelectItem>
-                  <SelectItem value="contacted">Contacted</SelectItem>
-                  <SelectItem value="qualified">Qualified</SelectItem>
-                  <SelectItem value="unqualified">Unqualified</SelectItem>
-                  <SelectItem value="converted">Converted</SelectItem>
-                  <SelectItem value="lost">Lost</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Source</Label>
-              <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                <SelectTrigger className="h-8" data-testid="filter-source">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All sources</SelectItem>
-                  {leadSources.map(source => (
-                    <SelectItem key={source} value={source}>{source}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Owner</Label>
-              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-                <SelectTrigger className="h-8" data-testid="filter-owner">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All owners</SelectItem>
-                  <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                  {users.map(user => (
-                    <SelectItem key={user.id} value={user.id}>{resolveOwner(user.id).name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <PopoverContent align="start" className="w-[420px] space-y-2 p-3">
+            {filterRules.length === 0 ? (
+              <p className="text-xs text-muted-foreground px-1">No filters applied.</p>
+            ) : (
+              <div className="space-y-2">
+                {filterRules.map((rule, idx) => (
+                  <div key={rule.id} className="flex items-center gap-1.5" data-testid={`filter-rule-${idx}`}>
+                    <span className="text-xs text-[#676879] w-9 shrink-0">{idx === 0 ? "Where" : "and"}</span>
+                    <Select value={rule.field} onValueChange={(v) => updateFilterRule(rule.id, { field: v as LeadFilterField })}>
+                      <SelectTrigger className="h-8 w-28 text-xs shrink-0" data-testid={`filter-rule-field-${idx}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FILTER_FIELDS.map((f) => (
+                          <SelectItem key={f.field} value={f.field}>{f.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <span className="text-xs text-[#676879] w-5 shrink-0 text-center">is</span>
+                    <Select value={rule.value} onValueChange={(v) => updateFilterRule(rule.id, { value: v })}>
+                      <SelectTrigger className="h-8 flex-1 text-xs" data-testid={`filter-rule-value-${idx}`}>
+                        <SelectValue placeholder="Select…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getFilterFieldOptions(rule.field).map((o) => (
+                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => removeFilterRule(rule.id)}
+                      data-testid={`button-remove-filter-${idx}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="w-full"
-              onClick={() => { setStatusFilter("all"); setSourceFilter("all"); setOwnerFilter("all"); }}
-              data-testid="button-clear-filters"
+              className="text-[#0073ea] hover:text-[#0073ea] hover:bg-[#cce5ff]/40 gap-1 h-7 px-1.5"
+              onClick={addFilterRule}
+              data-testid="button-new-filter"
             >
-              Clear filters
+              <Plus className="h-3.5 w-3.5" />
+              New Filter
             </Button>
+            {filterRules.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => setFilterRules([])}
+                data-testid="button-clear-filters"
+              >
+                Clear filters
+              </Button>
+            )}
           </PopoverContent>
         </Popover>
 
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={toolBtn(sortRules.length > 1 || sortRules[0]?.field !== "date")}
+              data-testid="button-sort"
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              Sort{sortRules.length > 1 ? ` (${sortRules.length})` : ""}
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Active sorts</div>
+            {sortRules.map((rule, idx) => {
+              const meta = LEAD_SORT_FIELDS.find((f) => f.field === rule.field);
+              return (
+                <div key={rule.field} className="flex items-center gap-1 px-2 py-1">
+                  <span className="text-xs text-muted-foreground w-4">{idx + 1}.</span>
+                  <button
+                    type="button"
+                    className="flex-1 text-left text-sm hover:underline"
+                    onClick={() => handleSortToggle(rule.field)}
+                  >
+                    {meta?.label || rule.field} ({rule.dir})
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => removeSortRule(rule.field)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              );
+            })}
+            <DropdownMenuSeparator />
+            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Add sort</div>
+            {LEAD_SORT_FIELDS.filter((f) => !sortRules.some((r) => r.field === f.field)).map((f) => (
+              <DropdownMenuItem key={f.field} onClick={() => addSortRule(f.field)}>
+                {f.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {viewMode === "table" && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+                className={toolBtn(groupBy !== "none")}
+                title={groupByLabel}
+                aria-label={groupBy === "none" ? "Group leads" : groupByLabel}
+              data-testid="button-group"
+            >
+                <Layers className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{groupByLabel}</span>
+                <ChevronDown className="h-3 w-3 opacity-60" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={() => setGroupBy("none")} data-testid="group-none">None</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGroupBy("status")} data-testid="group-status">Status</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGroupBy("owner")} data-testid="group-owner">Owner</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGroupBy("source")} data-testid="group-source">Source</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGroupBy("temperature")} data-testid="group-temperature">Temperature</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGroupBy("rating")} data-testid="group-rating">Rating</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGroupBy("title")} data-testid="group-title">Title</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGroupBy("industry")} data-testid="group-industry">Industry</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGroupBy("followUp")} data-testid="group-followup">Follow-up date</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGroupBy("manual")} data-testid="group-manual">Manual groups</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleCreateManualGroup} data-testid="group-create-manual">
+                <FolderPlus className="h-3.5 w-3.5 mr-2" />
+                Create new group{selectedLeadIds.length > 0 ? ` (${selectedLeadIds.length} selected)` : ""}…
+            </DropdownMenuItem>
+              {manualGroups.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Delete group</div>
+                  {manualGroups.map((g) => (
+                    <DropdownMenuItem
+                      key={`del-${g.id}`}
+                      className="text-destructive"
+                      onClick={() => {
+                        persistManualGroups(deleteManualGroup(manualGroups, g.id));
+                        toast({ title: `Deleted group “${g.title}”` });
+                      }}
+                    >
+                      Delete “{g.title}”
+            </DropdownMenuItem>
+                  ))}
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
         <CrmColumnVisibilityMenu
-          columns={LEAD_TABLE_COLUMNS}
+          columns={allAddableColumns}
           visibility={columnVisibility}
           onChange={setColVisible}
           testId="button-lead-fields"
@@ -828,77 +1281,138 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
-              data-testid="button-sort"
+              className={toolBtn(hiddenAddableCount > 0)}
+              data-testid="button-add-column"
             >
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              Sort: {sortField === "date" ? "Date" : sortField === "score" ? "Score" : "Name"}
-              <ChevronDown className="h-3 w-3" />
+              <Plus className="h-3.5 w-3.5" />
+              Columns
+              {hiddenAddableCount > 0 && (
+                <span className="h-4 min-w-4 px-1 rounded-full bg-[#0073ea] text-white text-[10px] flex items-center justify-center">
+                  {hiddenAddableCount}
+                </span>
+              )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={() => handleSort("date")}>Date {sortField === "date" ? `(${sortDir})` : ""}</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSort("score")}>Score {sortField === "score" ? `(${sortDir})` : ""}</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSort("name")}>Name {sortField === "name" ? `(${sortDir})` : ""}</DropdownMenuItem>
+          <DropdownMenuContent align="start" className="w-56 max-h-80 overflow-y-auto">
+            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Standard columns</div>
+            {LEAD_TABLE_COLUMNS.map((col) => (
+              <DropdownMenuCheckboxItem
+                key={col.id}
+                checked={isColVisible(col.id)}
+                onCheckedChange={(checked) => setColVisible(col.id, checked === true)}
+                onSelect={(e) => e.preventDefault()}
+                data-testid={`add-column-${col.id}`}
+              >
+                {col.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+            {customFields.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Custom fields</div>
+                {customFields.map((f) => {
+                  const id = `custom_${f.fieldName}`;
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={id}
+                      checked={isColVisible(id)}
+                      onCheckedChange={(checked) => setColVisible(id, checked === true)}
+                      onSelect={(e) => e.preventDefault()}
+                      data-testid={`add-column-${id}`}
+                    >
+                      {f.fieldLabel}
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
+              </>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onOpenCustomFieldsSettings?.()}
+              data-testid="button-create-custom-field"
+            >
+              <Settings2 className="h-3.5 w-3.5 mr-2" />
+              Create custom field…
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setLabelEditor("status")} data-testid="button-edit-status-labels-menu">
+              Edit status labels…
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setLabelEditor("rating")} data-testid="button-edit-rating-labels-menu">
+              Edit rating labels…
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button
-              className={cn(
-                "inline-flex items-center justify-center h-9 w-9 rounded-lg border transition-colors",
-                groupBy !== "none"
-                  ? "bg-[#0ea5e9]/10 border-[#0ea5e9]/30 text-[#0ea5e9]"
-                  : "border-border bg-background text-foreground hover:bg-muted"
-              )}
-              title={groupBy === "none" ? "Group" : `Grouped by ${groupBy}`}
-              aria-label={groupBy === "none" ? "Group leads" : `Grouped by ${groupBy}`}
-              data-testid="button-group"
-            >
-              <Layers className="h-4 w-4" />
+            <button className={toolBtn()} data-testid="view-switcher-leads">
+              {(() => {
+                const current = VIEW_OPTIONS.find((v) => v.id === viewMode) || VIEW_OPTIONS[0];
+                const Icon = current.icon;
+                return (
+                  <>
+                    <Icon className="h-3.5 w-3.5" />
+                    {current.label}
+                    <ChevronDown className="h-3 w-3 opacity-60" />
+                  </>
+                );
+              })()}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={() => setGroupBy("none")} data-testid="group-none">
-              None
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setGroupBy("owner")} data-testid="group-owner">
-              Owner
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setGroupBy("status")} data-testid="group-status">
-              Status
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setGroupBy("source")} data-testid="group-source">
-              Source
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setGroupBy("temperature")} data-testid="group-temperature">
-              Temperature
-            </DropdownMenuItem>
+          <DropdownMenuContent align="start" className="w-44">
+            {VIEW_OPTIONS.map((view) => (
+              <DropdownMenuItem
+                key={view.id}
+                onClick={() => setViewModePersist(view.id)}
+                className="gap-2"
+                data-testid={`view-leads-${view.id}`}
+              >
+                <view.icon className="h-4 w-4" />
+                {view.label}
+              </DropdownMenuItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {viewMode === "table" && (
+          <button
+            type="button"
+            onClick={cycleDensity}
+            className={cn(toolBtn(), "px-2")}
+            title={`Density: ${density}`}
+            aria-label={`Table density ${density}`}
+            data-testid="button-density"
+          >
+            {density === "compact" ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          </button>
+        )}
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={cn(toolBtn(), "opacity-50 cursor-not-allowed px-2")}
+                data-testid="button-ai-leads"
+                aria-label="AI assistant coming soon"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>AI assistant — coming later</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
         <div className="flex-1" />
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search leads..."
-            value={localSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
-            className="pl-9 h-9 w-52 rounded-lg"
-            data-testid="input-search-leads"
-          />
-        </div>
-
-        <Button variant="outline" size="sm" onClick={exportToCSV} className="gap-1.5" data-testid="button-export-leads">
+        <button type="button" onClick={exportToCSV} className={toolBtn()} data-testid="button-export-leads">
           <Download className="h-3.5 w-3.5" />
           Export
-        </Button>
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportOpen(true)} data-testid="button-import-leads">
+        </button>
+        <button type="button" className={toolBtn()} onClick={() => setImportOpen(true)} data-testid="button-import-leads">
           <Upload className="h-3.5 w-3.5" />
           Import
-        </Button>
+        </button>
         <ImportModal
           isOpen={importOpen}
           onClose={() => setImportOpen(false)}
@@ -908,100 +1422,258 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
           currentCount={leads.length}
           onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
         />
-
-        {filteredLeads.length > 0 && (
-        <Button className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white gap-1.5" data-testid="button-add-lead" onClick={openCreateForm}>
-          <Plus className="h-4 w-4" />
-          New Lead
-        </Button>
-        )}
       </div>
 
-      <div className="rounded-xl border border-border/60 bg-card overflow-x-auto w-full" data-testid="leads-table">
-        <table className="w-full text-sm text-gray-700 dark:text-foreground">
-          <thead>
-            <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
-              <th className="px-3 py-2.5 align-middle w-10">
-                <Checkbox
-                  checked={filteredLeads.length > 0 && selectedIds.size === filteredLeads.length}
-                  onCheckedChange={toggleSelectAll}
-                  data-testid="checkbox-select-all"
-                />
-              </th>
-              <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Company</th>
-              {isColVisible("contact") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Contact</th>}
-              {isColVisible("title") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Title</th>}
-              {isColVisible("status") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Status</th>}
-              {isColVisible("score") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Score</th>}
-              {isColVisible("rating") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Rating</th>}
-              {isColVisible("source") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Source</th>}
-              {isColVisible("owner") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Owner</th>}
-              {isColVisible("created") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Created</th>}
-              <CrmCustomFieldTableHeaders fields={customFields} />
-              <th className="px-3 py-2.5 text-right align-middle font-semibold whitespace-nowrap">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredLeads.length === 0 ? (
-              <tr>
-                <td colSpan={tableColSpan} className="text-center py-16 text-muted-foreground">
-                  <div className="flex flex-col items-center gap-2">
-                    <FlameIcon className="h-10 w-10 opacity-30" />
-                    <p className="text-sm">No leads yet. Capture leads to grow your sales pipeline.</p>
+      <div data-testid="leads-table">
+        {viewMode === "table" && (
+          <MondayTable
+            columns={tableColumns}
+            data={filteredLeads}
+            groups={tableGroups}
+            selectable
+            gridLines
+            density={density}
+            emptyMessage="No leads yet. Capture leads to grow your sales pipeline."
+            addItemLabel="Add Lead"
+            onRowSelect={(ids) => setSelectedLeadIds(ids)}
+            onRowFilesDrop={async (lead, files) => {
+              try {
+                for (const file of files) {
+                  const fileUrl = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(String(reader.result));
+                    reader.onerror = () => reject(new Error("Failed to read file"));
+                    reader.readAsDataURL(file);
+                  });
+                  await apiRequest("POST", "/api/crm/attachments", {
+                    entityType: "lead",
+                    entityId: lead.id,
+                    fileName: file.name,
+                    fileType: file.type || null,
+                    fileSize: file.size,
+                    fileUrl,
+                  });
+                }
+                queryClient.invalidateQueries({
+                  queryKey: [`/api/crm/attachments?entityType=lead&entityId=${lead.id}`],
+                });
+                queryClient.invalidateQueries({ queryKey: ["/api/crm/attachments?entityType=lead"] });
+                toast({ title: `${files.length} file(s) attached` });
+                openLeadExtras(lead, "files");
+              } catch {
+                toast({
+                  title: "Upload failed",
+                  description: "If this persists, run npm run db:push to create the attachments table.",
+                  variant: "destructive",
+                });
+              }
+            }}
+            onAddItem={(groupId) => {
+              if (groupId && groupId !== "ungrouped" && manualGroups.some((g) => g.id === groupId)) {
+                sessionStorage.setItem("crm-leads-pending-group", groupId);
+              } else {
+                sessionStorage.removeItem("crm-leads-pending-group");
+              }
+              openCreateForm();
+            }}
+            onRowClick={(lead) => {
+              setExtrasTab("comments");
+              setViewingLead(lead);
+            }}
+            onCellEdit={handleCellEdit}
+            onEditItem={handleEdit}
+            onDeleteItems={(ids) => {
+              if (ids.length === 1) {
+                deleteMutation.mutate(typeof ids[0] === "string" ? Number(ids[0]) : ids[0]);
+              } else {
+                bulkDeleteMutation.mutate(ids);
+              }
+            }}
+            searchHighlightTerm={effectiveSearch}
+            columnWidthStorageKey="jiganto-crm-leads-col-widths"
+            pagination={
+              groupBy === "none"
+                ? { defaultPageSize: 25, resetKey: `${effectiveSearch}|${JSON.stringify(filterRules)}|${ownerFilter}|${JSON.stringify(sortRules)}` }
+                : false
+            }
+            totalCount={leads.length}
+            className="border rounded-xl border-border/60"
+            alwaysShowRowActions
+            renderRowActions={(lead) => (
+              <div className="flex items-center gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  title="Comments"
+                  onClick={(e) => { e.stopPropagation(); openLeadExtras(lead, "comments"); }}
+                  data-testid={`button-comments-lead-${lead.id}`}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </Button>
+                {manualGroups.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title="Move to group"
+                        onClick={(e) => e.stopPropagation()}
+                        data-testid={`button-move-group-lead-${lead.id}`}
+                      >
+                        <FolderPlus className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                      {manualGroups.map((g) => (
+                        <DropdownMenuItem
+                          key={g.id}
+                          onClick={() => handleMoveSelectedToGroup(g.id, [lead.id])}
+                        >
+                          {g.title}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => handleMoveSelectedToGroup("ungrouped", [lead.id])}>
+                        Ungroup
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                {lead.status !== "converted" && (
                     <Button
+                    variant="ghost"
                       size="sm"
-                      className="mt-2 bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
-                      onClick={openCreateForm}
+                    onClick={(e) => { e.stopPropagation(); handleConvert(lead); }}
+                    className="text-[#0ea5e9] hover:text-[#0ea5e9]/80 hover:bg-[#0ea5e9]/10 h-7 px-2"
+                    data-testid={`button-convert-lead-${lead.id}`}
                     >
-                      <Plus className="h-4 w-4 mr-1" />
-                      New Lead
+                    <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
+                    Convert
                     </Button>
+                )}
                   </div>
-                </td>
-              </tr>
-            ) : groupedLeads ? (
-              Object.entries(groupedLeads).flatMap(([groupName, groupLeads]) => [
-                <tr key={`group-header-${groupName}`} className="bg-muted/40 border-b border-border/40" data-testid={`group-${groupName}`}>
-                  <td colSpan={tableColSpan} className="px-4 py-2">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="h-2.5 w-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: groupColors[groupName] || "#6b7280" }}
-                      />
-                      <span className="text-sm font-semibold">{groupName}</span>
-                      <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-                        {groupLeads.length}
-                      </Badge>
-                    </div>
-                  </td>
-                </tr>,
-                ...groupLeads.map(renderRow)
-              ])
-            ) : (
-              pagination.paginatedItems.map(renderRow)
             )}
-          </tbody>
-        </table>
-        {groupBy !== "none" && filteredLeads.length > 0 && (
-          <div className="px-4 py-2.5 border-t border-border/40 bg-muted/20 text-xs text-muted-foreground" data-testid="leads-count-footer">
-            {filteredLeads.length} of {leads.length} leads
-            {selectedIds.size > 0 && <span className="ml-2 text-[#0ea5e9]">({selectedIds.size} selected)</span>}
+            renderBulkActions={(ids) => (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" data-testid="button-bulk-status">
+                      <UserCheck className="h-3 w-3" />
+                      Change Status
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    {statusOptions.filter((o) => o.value !== "converted").map((opt) => (
+                      <DropdownMenuItem key={opt.value} onClick={() => handleBulkStatusChange(ids, opt.value)}>
+                        {opt.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" data-testid="button-bulk-move-group">
+                      <FolderPlus className="h-3 w-3" />
+                      Move to group
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    {manualGroups.length === 0 ? (
+                      <DropdownMenuItem onClick={handleCreateManualGroup}>Create first group…</DropdownMenuItem>
+                    ) : (
+                      <>
+                        {manualGroups.map((g) => (
+                          <DropdownMenuItem key={g.id} onClick={() => handleMoveSelectedToGroup(g.id, ids)}>
+                            {g.title}
+                          </DropdownMenuItem>
+                        ))}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleMoveSelectedToGroup("ungrouped", ids)}>
+                          Ungroup
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleCreateManualGroup}>
+                          New group with selection…
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
           </div>
         )}
-        {groupBy === "none" && (
-          <CrmTablePagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            total={pagination.total}
-            startIndex={pagination.startIndex}
-            endIndex={pagination.endIndex}
-            pageSize={pagination.pageSize}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
-            extra={selectedIds.size > 0 ? <span className="text-[#0ea5e9]">({selectedIds.size} selected)</span> : undefined}
+          />
+        )}
+
+        {viewMode === "list" && (
+          <CrmLeadListView
+            leads={filteredLeads}
+            statusOptions={statusOptions}
+            resolveOwner={resolveOwner}
+            onOpenLead={setViewingLead}
+            onConvert={handleConvert}
+            onAddLead={openCreateForm}
+          />
+        )}
+
+        {viewMode === "board" && (
+          <CrmLeadBoardView
+            leads={filteredLeads}
+            statusOptions={statusOptions}
+            resolveOwner={resolveOwner}
+            onOpenLead={setViewingLead}
+            onConvert={handleConvert}
+            onAddLead={openCreateForm}
+            onStatusChange={async (leadId, status) => {
+              try {
+                await updateLeadMutation.mutateAsync({ id: leadId, updates: { status } });
+                toast({ title: "Status updated" });
+              } catch {
+                toast({ title: "Failed to update status", variant: "destructive" });
+                throw new Error("status update failed");
+              }
+            }}
+          />
+        )}
+
+        {viewMode === "calendar" && (
+          <CrmLeadCalendarView
+            leads={filteredLeads}
+            statusOptions={statusOptions}
+            resolveOwner={resolveOwner}
+            onOpenLead={setViewingLead}
+            onConvert={handleConvert}
+            onAddLead={openCreateForm}
           />
         )}
       </div>
+
+      <CrmLeadLabelEditorDialog
+        open={labelEditor === "status"}
+        onOpenChange={(open) => !open && setLabelEditor(null)}
+        title="Edit status labels"
+        options={statusOptions}
+        lockedValues={["converted"]}
+        onSave={(next) => {
+          setStatusOptions(next);
+          saveLeadStatusOptions(next);
+          toast({ title: "Status labels updated" });
+        }}
+      />
+
+      <CrmLeadLabelEditorDialog
+        open={labelEditor === "rating"}
+        onOpenChange={(open) => !open && setLabelEditor(null)}
+        title="Edit rating labels"
+        options={ratingOptions}
+        onSave={(next) => {
+          setRatingOptions(next);
+          saveLeadRatingOptions(next);
+          toast({ title: "Rating labels updated" });
+        }}
+      />
 
       <FormDialogShell
         open={isConvertOpen}
@@ -1041,17 +1713,17 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
               </div>
 
               <div className="space-y-3">
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
                   <Checkbox
                     id="createAccount"
                     checked={convertOptions.createAccount}
                     onCheckedChange={(checked) => setConvertOptions(prev => ({ ...prev, createAccount: !!checked }))}
                     data-testid="checkbox-create-account"
                   />
-                  <Label htmlFor="createAccount" className="font-medium">Create Account</Label>
+                  <Label htmlFor="createAccount">Create Account</Label>
                 </div>
                 {convertOptions.createAccount && (
-                  <div className="ml-6">
+                  <div className="pl-6">
                     <Label htmlFor="accountName" className="text-sm">Account Name</Label>
                     <Input
                       id="accountName"
@@ -1063,29 +1735,27 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
                   </div>
                 )}
 
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
                   <Checkbox
                     id="createContact"
                     checked={convertOptions.createContact}
                     onCheckedChange={(checked) => setConvertOptions(prev => ({ ...prev, createContact: !!checked }))}
-                    disabled={!convertOptions.createAccount}
                     data-testid="checkbox-create-contact"
                   />
-                  <Label htmlFor="createContact" className="font-medium">Create Contact</Label>
+                  <Label htmlFor="createContact">Create Contact</Label>
                 </div>
 
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
                   <Checkbox
                     id="createOpportunity"
                     checked={convertOptions.createOpportunity}
                     onCheckedChange={(checked) => setConvertOptions(prev => ({ ...prev, createOpportunity: !!checked }))}
-                    disabled={!convertOptions.createAccount}
                     data-testid="checkbox-create-opportunity"
                   />
-                  <Label htmlFor="createOpportunity" className="font-medium">Create Opportunity</Label>
+                  <Label htmlFor="createOpportunity">Create Opportunity</Label>
                 </div>
-                {convertOptions.createOpportunity && convertOptions.createAccount && (
-                  <div className="ml-6 space-y-2">
+                {convertOptions.createOpportunity && (
+                  <div className="pl-6 space-y-3">
                     <div>
                       <Label htmlFor="opportunityName" className="text-sm">Opportunity Name</Label>
                       <Input
@@ -1137,6 +1807,15 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
           createdAt: editingLead.createdAt,
           updatedAt: editingLead.updatedAt,
         } : null}
+        onCreated={(lead) => {
+          const pendingGroup = sessionStorage.getItem("crm-leads-pending-group");
+          if (pendingGroup && lead?.id) {
+            persistManualGroups(moveLeadsToGroup(manualGroups, pendingGroup, [lead.id]));
+            setGroupBy("manual");
+            sessionStorage.removeItem("crm-leads-pending-group");
+            toast({ title: "Lead added to group" });
+          }
+        }}
         onOpenCustomFieldsSettings={() => {
           setFormOpen(false);
           setEditingLead(null);
@@ -1155,6 +1834,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         ownerName={viewingLead ? resolveOwner(viewingLead.ownerUserId).name : "—"}
         statusLabel={viewingLead ? <StatusDot status={viewingLead.status} /> : null}
         temperatureLabel={viewingLead ? <TemperatureDisplay score={viewingLead.score} temperature={getTemperature(viewingLead.score)} /> : null}
+        initialExtrasTab={extrasTab}
       />
     </div>
   );
