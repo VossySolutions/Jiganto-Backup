@@ -385,23 +385,25 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
 <div class="gantt-body" id="ganttBody">
   <div class="gantt-view" id="ganttView">
     <div class="task-panel" id="taskPanel">
-      <div class="tp-header" id="tpHeader">
-        <div class="th-cell th-wbs">#</div>
-        <div class="th-cell th-name">Task name</div>
-        <div class="th-cell th-owner">Owner</div>
-        <div class="th-cell th-date">Start time</div>
-        <div class="th-cell th-date">End</div>
-        <div class="th-cell th-dur">Duration</div>
-        <div class="th-cell th-pred">Predecessors</div>
-        <div class="th-cell th-prog">%</div>
-        <div class="th-cell th-rag-col">Budget</div>
-        <div class="th-cell th-rag-col">Sched</div>
-        <div class="th-cell th-rag-col">Scope</div>
-        <div id="tpCustomHeaders" class="tp-custom-headers"></div>
-        <div class="th-cell th-add-col" onclick="promptAddColumn()" title="Add a Column">+ Add a Column</div>
-        <div class="th-cell th-row-add" onclick="headerAddChild()" title="Add child under selected row">+</div>
+      <div class="tp-grid-x" id="tpGridX">
+        <div class="tp-header" id="tpHeader">
+          <div class="th-cell th-wbs">#</div>
+          <div class="th-cell th-name">Task name</div>
+          <div class="th-cell th-owner">Owner</div>
+          <div class="th-cell th-date">Start time</div>
+          <div class="th-cell th-date">End</div>
+          <div class="th-cell th-dur">Duration</div>
+          <div class="th-cell th-pred">Predecessors</div>
+          <div class="th-cell th-prog">%</div>
+          <div class="th-cell th-rag-col">Budget</div>
+          <div class="th-cell th-rag-col">Sched</div>
+          <div class="th-cell th-rag-col">Scope</div>
+          <div id="tpCustomHeaders" class="tp-custom-headers"></div>
+          <div class="th-cell th-add-col" onclick="promptAddColumn()" title="Add a Column">Add a Column</div>
+          <div class="grid-filler"></div>
+        </div>
+        <div class="tp-scroll" id="taskScroll"></div>
       </div>
-      <div class="tp-scroll" id="taskScroll"></div>
       <div class="add-row">
         <button class="add-new-item-btn" onclick="addNewItem()" title="Add a new work item">+ Add a New Item</button>
         <button class="add-btn-mini" onclick="addItemOfTypeAfterSelected('phase')">＋ Phase</button>
@@ -556,7 +558,7 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${projectName.replace(/</g, "&lt;")} — Gantt</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260716h">
+<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260716p">
 </head>
 <body>
 <div class="main">
@@ -565,7 +567,7 @@ ${ganttBodyHTML}
 </div>
 ${modalsHTML}
 <script>window.GANTT_INIT_DATA = ${dataJson};</script>
-<script src="/gantt-v4-engine.js?v=20260716h"></script>
+<script src="/gantt-v4-engine.js?v=20260716p"></script>
 </body>
 </html>`;
 }
@@ -690,7 +692,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
 
   return (
     <iframe
-      key={`${projectId}-${refreshKey}-v20260716h`}
+      key={`${projectId}-${refreshKey}-v20260716p`}
       title={`Gantt — ${project.name}`}
       srcDoc={srcDoc ?? undefined}
       style={{ width: "100%", height: "100%", minHeight: 400, border: "none", display: "block" }}

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -263,25 +263,35 @@ function RagChip({ rag, label, dimension = "scope" }: { rag: string | null | und
   );
 }
 
-/** Full-width RAG pill used as a dedicated table column (Peter mock). */
-function RagPill({ rag, dimension }: { rag: string | null | undefined; dimension: RagDimension }) {
+/** Full-width RAG pill used as a dedicated table column — left-aligned so dots line up. */
+function RagPill({
+  rag,
+  dimension,
+  compact = false,
+}: {
+  rag: string | null | undefined;
+  dimension: RagDimension;
+  compact?: boolean;
+}) {
   const r = normalizeRag(rag) || "green";
   const cls = RAG_CHIP[r] || RAG_CHIP.green;
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 min-w-[96px] px-2.5 py-1 rounded-md text-[10px] font-bold whitespace-nowrap",
+        "inline-flex items-center justify-start gap-1.5 rounded-md font-bold whitespace-nowrap",
+        compact ? "w-auto px-1.5 py-0.5 text-[9px]" : "w-[108px] px-2.5 py-1 text-[10px]",
         cls,
       )}
       data-testid={`rag-pill-${dimension}-${r}`}
     >
       <span
         className={cn(
-          "h-1.5 w-1.5 rounded-full shrink-0",
+          "rounded-full shrink-0",
+          compact ? "h-1.5 w-1.5" : "h-1.5 w-1.5",
           r === "green" ? "bg-green-500" : r === "amber" ? "bg-amber-500" : r === "red" ? "bg-red-500" : "bg-blue-500",
         )}
       />
-      {RAG_LABELS[dimension][r] || "On Track"}
+      <span className="truncate">{RAG_LABELS[dimension][r] || "On Track"}</span>
     </span>
   );
 }
@@ -508,7 +518,7 @@ function ProjectTable({
               {visible.end && <th className={thClass} onClick={() => toggleSort("end")}><span className="inline-flex items-center gap-1">End <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
               {visible.progress && <th className={thClass} onClick={() => toggleSort("progress")}><span className="inline-flex items-center gap-1">Progress <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
               {visible.ragBudget && <th className={thStatic}>Budget</th>}
-              {visible.ragSchedule && <th className={thStatic}>Schedule</th>}
+              {visible.ragSchedule && <th className={thStatic}>Sched</th>}
               {visible.ragScope && <th className={thStatic}>Scope</th>}
               {visible.score && <th className={thClass} onClick={() => toggleSort("score")}><span className="inline-flex items-center gap-1">Score <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
               <th className={cn(thStatic, "text-right")}>Actions</th>
@@ -700,11 +710,10 @@ function ProjectCards({
                 </div>
               )}
             </div>
-            <div className="px-4 py-2.5 bg-[#F1F5F9] dark:bg-muted/40 border-t border-[#F1F5F9] flex items-center gap-1.5 flex-wrap">
-              <span className="text-[9px] font-bold text-[#94A3B8] uppercase tracking-wider mr-1">Health:</span>
-              <RagChip rag={p.financialRag} label="Budget" dimension="budget" />
-              <RagChip rag={p.scheduleRag} label="Schedule" dimension="schedule" />
-              <RagChip rag={p.ragStatus} label="Scope" dimension="scope" />
+            <div className="px-4 py-2.5 bg-[#F1F5F9] dark:bg-muted/40 border-t border-[#F1F5F9] flex items-center gap-2 flex-wrap">
+              <RagPill rag={p.financialRag} dimension="budget" />
+              <RagPill rag={p.scheduleRag} dimension="schedule" />
+              <RagPill rag={p.ragStatus} dimension="scope" />
             </div>
             <div className="px-4 py-2.5 border-t border-[#F1F5F9] flex items-center justify-between gap-2">
               <TeamAvatars team={p.team} />
@@ -784,9 +793,9 @@ function ProjectKanbanCard({
             <span>🏢 {project.customer || "—"}</span>
             {project.endDate && <span>📅 Due {formatDate(project.endDate)}</span>}
             <div className="mt-1 flex gap-0.5 flex-wrap">
-              <RagChip rag={project.financialRag} label="B" dimension="budget" />
-              <RagChip rag={project.scheduleRag} label="S" dimension="schedule" />
-              <RagChip rag={project.ragStatus} label="Sc" dimension="scope" />
+              <RagPill rag={project.financialRag} dimension="budget" compact />
+              <RagPill rag={project.scheduleRag} dimension="schedule" compact />
+              <RagPill rag={project.ragStatus} dimension="scope" compact />
             </div>
           </div>
         </div>
@@ -916,7 +925,6 @@ export function ProjectsLandingView({
   const [customerFilter, setCustomerFilter] = useState<string>("all");
   const [portfolioFilter, setPortfolioFilter] = useState<string>("all");
   const [healthFilter, setHealthFilter] = useState<string>("all");
-  const [ragFilterOn, setRagFilterOn] = useState(false);
   const [mineFilter, setMineFilter] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [visibleCols, setVisibleCols] = useState<Record<ColumnId, boolean>>(loadVisibleColumns);
@@ -977,13 +985,14 @@ export function ProjectsLandingView({
           : [p.financialRag, p.scheduleRag, p.ragStatus].includes("amber")
             ? "amber"
             : "green";
-        if (worst !== healthFilter) return false;
-      }
-      if (ragFilterOn) {
-        const hasIssue =
-          p.attention ||
-          [p.financialRag, p.scheduleRag, p.ragStatus].some((r) => r === "red" || r === "amber");
-        if (!hasIssue) return false;
+        if (healthFilter === "attention") {
+          const hasIssue =
+            p.attention ||
+            [p.financialRag, p.scheduleRag, p.ragStatus].some((r) => r === "red" || r === "amber");
+          if (!hasIssue) return false;
+        } else if (worst !== healthFilter) {
+          return false;
+        }
       }
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -992,10 +1001,10 @@ export function ProjectsLandingView({
       }
       return true;
     });
-  }, [projects, statusFilter, typeFilter, customerFilter, portfolioFilter, healthFilter, ragFilterOn, searchQuery, mineFilter, user]);
+  }, [projects, statusFilter, typeFilter, customerFilter, portfolioFilter, healthFilter, searchQuery, mineFilter, user]);
 
   const pagination = useTablePagination(filtered, {
-    resetKey: `${statusFilter}-${typeFilter}-${customerFilter}-${portfolioFilter}-${healthFilter}-${ragFilterOn}-${searchQuery}-${mineFilter}-${viewMode}`,
+    resetKey: `${statusFilter}-${typeFilter}-${customerFilter}-${portfolioFilter}-${healthFilter}-${searchQuery}-${mineFilter}-${viewMode}`,
     enabled: viewMode !== "kanban",
   });
 
@@ -1183,34 +1192,15 @@ export function ProjectsLandingView({
               </Select>
 
               <Select value={healthFilter} onValueChange={(v) => { setHealthFilter(v); }}>
-                <SelectTrigger className="w-[150px] h-8 text-foreground" data-testid="filter-health"><SelectValue placeholder="RAG" /></SelectTrigger>
+                <SelectTrigger className="w-[170px] h-8 text-foreground" data-testid="filter-health"><SelectValue placeholder="RAG" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">RAG</SelectItem>
+                  <SelectItem value="attention">Needs attention</SelectItem>
                   <SelectItem value="red">Red — needs attention</SelectItem>
                   <SelectItem value="amber">Amber — monitor</SelectItem>
                   <SelectItem value="green">Green — on track</SelectItem>
                 </SelectContent>
               </Select>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "h-8 text-xs font-bold tracking-wide",
-                  ragFilterOn
-                    ? "bg-red-600 text-white border-red-600 hover:bg-red-700 hover:text-white"
-                    : "text-red-700 border-red-300 hover:bg-red-50 hover:text-red-800 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-950/40",
-                )}
-                onClick={() => {
-                  const next = !ragFilterOn;
-                  setRagFilterOn(next);
-                  if (next) setHealthFilter("all");
-                }}
-                title="Show projects with any amber/red RAG (Budget, Schedule or Scope)"
-                data-testid="filter-rag-toggle"
-              >
-                RAG
-              </Button>
 
               <div className="flex-1" />
 
@@ -1364,9 +1354,9 @@ function ProjectDetailPanel({
               Health status
             </h4>
             <div className="flex flex-wrap gap-1.5 items-center">
-              <RagChip rag={project.financialRag} label="Budget" dimension="budget" />
-              <RagChip rag={project.scheduleRag} label="Schedule" dimension="schedule" />
-              <RagChip rag={project.ragStatus} label="Scope" dimension="scope" />
+              <RagPill rag={project.financialRag} dimension="budget" />
+              <RagPill rag={project.scheduleRag} dimension="schedule" />
+              <RagPill rag={project.ragStatus} dimension="scope" />
               <HealthScore score={project.healthScore} />
             </div>
           </section>

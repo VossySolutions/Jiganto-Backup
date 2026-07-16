@@ -581,7 +581,8 @@ function buildTaskRowHTML(t){
     buildRagPillCell(t,t.id,'sch')+
     buildRagPillCell(t,t.id,'scp')+
     customCells+
-    '<div class="task-row-add-col" onclick="event.stopPropagation();quickAddChild('+t.id+')" title="Add child item">+</div>'+
+    '<div class="task-row-add-col" onclick="event.stopPropagation();quickAddChild('+t.id+')" title="Add child item"></div>'+
+    '<div class="grid-filler"></div>'+
   '</div>';
 }
 
