@@ -1,37 +1,12 @@
-Okay, the other thing is the grouping. 
-You can see straight away, based on the available fields, it shows you the fields, and I say group by status or group by due date or group by assignees or cancel it. 
-Very, very easy, and that’s one thing we’d really like to have. 
-The other thing is customization: I can see all the fields and I can say do I want it there or not. 
-Quick and easy. 
-That’s what we’d like, and that’s important. 
-And then I’ve got the expand button to increase or decrease, and of course there’s the AI button that will come later on, but it’s that capability and the ability to then add another tab and I can choose whatever view based off the master data, and that is very powerful. 
-And then the other thing is adding a new line item, quick and easy, and you can simply tab through, so it’s very easy to go through and it’s not difficult. 
-You can drag files there, you can add subtasks, you can do a drop down, and you can see all these values here and you can scroll across nicely. 
-And then of course here you can add a column, now you can choose from all these different attributes, so that feature, that functionality of adding columns in this table design is very good, very powerful, and lovely. 
-So all the features of Infinity.com, we want to try to make sure we’ve got that capability in Giganto, but what my first customer said is they use monday.com, which is very similar to Infinity but it has a slightly different look and feel. 
-So in this example here we’ve got a pipeline, and what my customer likes is the ability to create these groupings; again that’s just using a group. 
-It’s also got the filters, exactly that or very similar to Infinity, and then you can filter by person so it’s showing you the icons. 
-Of course you can search, and then you can also create new groups or import data. 
-But what they like here is, for example, you can see you’ve got the information there, you can click and see who the owner is. 
-If I scroll along, you can obviously add comments, you can create drop downs, and what they like a lot over here is there’s reason, category, closed date, and if you drop down you can see the colors here, very nice, and you can edit the labels. 
-That feature in monday.com is good. 
-So you’ve got your drop down, but you can go and add more if you want to for that table, and that’s very, very good. 
-And of course at the very end, yes, you can also add columns, so there’s some standard columns or you can add more columns, and there’s a whole big checklist. 
-And if I click on more columns, you can see all the things that you can add if you wanted to. 
-So this look and feel, this color scheme, my customer likes, and I’m happy to have that in Giganto, but what they like is also the features from Infinity in this one here: the table, these views, the grouping, very easy, very quick, the sorting, very simple, and add new sort or customize which fields you want on and off. 
-You can expand, you can add more views, you can add more rows, and then you can click in any of these and it’s very easy to go through and edit. 
-So that’s what we’d like. 
-So if I go to CRM and I choose Leads and I want to filter, the filter is slightly different, so the filter here is different to the filter in Tasks or Workspaces.
-If I wanted to group, that’s relatively easy, but it’s missing some other fields here, so we just need to be consistent. 
-If I go to Tasks, there we go, so that’s reasonably close. 
-That’s nice to have these capabilities. 
-Filter is not too bad, but it’s slightly different to the other one. 
-Grouping is missing a few other fields. 
-It’s only got these two fields here. 
-Normally you should be able to add fields, and that’s what’s missing. 
-So one last thing: if I go to Workspaces and I look at any workspace and I click on that, now something’s changed here: this view and this bar in the middle. 
-So you’ve got all this white space here and I can’t use that. 
-I can click on my boards and I can see the boards below, but this has definitely changed and I don’t know what happened there. 
-But I can show you the old version of how it used to work. 
-What I wanted to show below here is that you can have table view, list view, board view, and calendar view, and that should just be a dropdown over here. 
-We need to be consistent across all areas. 
+Hiroshi, I just want to cover the workspaces now. 
+There's a small issue with the designer, I don't know what's changed. 
+So for example, if I go to the original one that I had, if you go to workspaces, so let's say from tasks, and then you go to workspaces, you can choose any workspace here, and let's just take this one here, SAP. 
+I've got my menu on the left hand side, I can see all the different boards, documents, this is also allowed sections, but I think we've done away with that, we don't need sections, although it is a nice feature if you want to break it further down, but it's not necessary. 
+But boards, so I can go into board 1, and I can see all my tasks that I'm tracking, I can go back, and I can go to board 2, and I can see it, and I can navigate this way as well, I can just flip between the two, and I've got the options to delete, or I can add another one, and I can add a board, etc. 
+And also, I can click here, and add another board, and it comes with the default there, and I can give it a title, and say board 3, enter, and there it is. 
+Let's take that one and delete that. Same with documents, I've got my first document, I've got my second document, etc., and I can see if I wanted to, I can add, and I can go and say, document 3, enter, and there I have it. If I go to hours now, something has definitely changed, so if I click on workspaces, and I choose one here, and this menu is nice, or the KPIs, you can see your favorites, oops, recent, shared, that's all nice. 
+If I go back to all, and I click on that one, I can see the menu on the left there, but I can't close it anymore, and I've got this line here, so if I choose a board, it's all on the bottom here, and it's stuck. 
+If I maximize, then I see now that I can, but it's a bit strange, if I reduce it, yeah, I've got all that white space there, and I think that's the thing that's a bit strange. 
+If I go to documents, I can see them there, but I have to always then maximize there to see the documents, so I think we need to just fix this, and make it more user friendly, and hopefully that all makes sense. 
+But also, coming back to the boards, the table list view, we need to change the design there to make it a bit more consistent, and hopefully this makes sense, and I'll upload these videos for you, but I'll try to put some documentation together to show that as well.
+Thank you.

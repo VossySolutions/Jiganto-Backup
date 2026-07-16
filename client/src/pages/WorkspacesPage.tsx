@@ -59,6 +59,7 @@ import {
   FolderOpen,
   Maximize2,
   Minimize2,
+  PanelLeft,
   ArrowLeft,
   Eye,
   Table2,
@@ -717,6 +718,23 @@ function PageView({
     staleTime: 30_000,
   });
 
+  // Board pages use full width by default — no need to Maximize first.
+  useEffect(() => {
+    if (!page || (page as any).pageType !== "database") return;
+    if (databases.length === 0) return;
+    setExpandedDatabases((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const db of databases) {
+        if (!next.has(db.id)) {
+          next.add(db.id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [page, databases]);
+
   const { data: allPages = [] } = useQuery<WorkspacePage[]>({
     queryKey: ["/api/workspaces", workspaceId, "pages"],
     enabled: !!workspaceId,
@@ -908,12 +926,22 @@ function PageView({
           onChange={(e) => setTitleValue(e.target.value)}
           onBlur={() => { setIsEditingTitle(false); if (titleValue !== page.title) updatePageMutation.mutate({ title: titleValue }); }}
           onKeyDown={(e) => { if (e.key === "Enter") { setIsEditingTitle(false); if (titleValue !== page.title) updatePageMutation.mutate({ title: titleValue }); } }}
-          className="text-4xl font-bold border-0 p-0 h-auto focus-visible:ring-0 bg-transparent mb-2"
+          className={cn(
+            "font-bold border-0 p-0 h-auto focus-visible:ring-0 bg-transparent mb-2",
+            pageType === "database" ? "text-xl sm:text-2xl" : "text-4xl",
+          )}
           autoFocus
           data-testid="page-title-input"
         />
       ) : (
-        <h1 className="text-4xl font-bold cursor-text mb-2" onClick={() => { setIsEditingTitle(true); setTitleValue(page.title || ""); }} data-testid="page-title">
+        <h1
+          className={cn(
+            "font-bold cursor-text mb-2",
+            pageType === "database" ? "text-xl sm:text-2xl" : "text-4xl",
+          )}
+          onClick={() => { setIsEditingTitle(true); setTitleValue(page.title || ""); }}
+          data-testid="page-title"
+        >
           {page.title || "Untitled"}
         </h1>
       )}
@@ -1093,14 +1121,14 @@ function PageView({
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto" data-testid="page-view" id="page-content-scroll">
+    <div className="flex flex-col h-full overflow-y-auto min-w-0" data-testid="page-view" id="page-content-scroll">
       {pageHeader}
-      <div className="w-full px-6 flex-1">
+      <div className="w-full px-3 sm:px-4 flex-1 min-w-0">
         {pageTitle}
         {childPagesGrid}
 
         {pageType === "database" && (
-          <div className="mb-8">
+          <div className="mb-4 min-w-0">
             {databases.length === 0 ? (
               <div className="text-center py-8">
                 <Table2 className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
@@ -1282,9 +1310,24 @@ export default function WorkspacesPage() {
   const [editIcon, setEditIcon] = useState<string | null>(null);
   const [editColor, setEditColor] = useState<string>(WORKSPACE_COLORS[0]);
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [sidebarPanelOpen, setSidebarPanelOpen] = useState(true);
+  const [sidebarPanelOpen, setSidebarPanelOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem("jiganto_workspace_sidebar_open");
+      return saved === null ? true : saved === "true";
+    } catch {
+      return true;
+    }
+  });
   const [landingSearch, setLandingSearch] = useState("");
   const isResizingRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("jiganto_workspace_sidebar_open", String(sidebarPanelOpen));
+    } catch {
+      /* ignore */
+    }
+  }, [sidebarPanelOpen]);
 
   const { data: pages = [] } = useQuery<WorkspacePage[]>({
     queryKey: ["/api/workspaces", selectedWorkspaceId, "pages"],
@@ -1514,7 +1557,7 @@ export default function WorkspacesPage() {
     setSelectedWorkspaceId(id);
     setSelectedPageId(null);
     setNavState("overview");
-    if (isMobile) setSidebarPanelOpen(true);
+    setSidebarPanelOpen(true);
     apiRequest("POST", `/api/workspaces/${id}/access`).catch(() => {});
     const recentIds: number[] = (() => { try { return JSON.parse(localStorage.getItem("jiganto_recent_workspaces") || "[]"); } catch { return []; } })();
     const updated = [id, ...recentIds.filter((r: number) => r !== id)].slice(0, 5);
@@ -1650,15 +1693,16 @@ export default function WorkspacesPage() {
   }, [selectedWorkspaceId, selectedPageId, navState]);
 
   const showSidebar = navState !== "landing" && !isFullScreen;
-  const sidebarVisible = showSidebar && (!isMobile || sidebarPanelOpen);
+  // Honor sidebarPanelOpen on desktop too — PanelLeft toggle was a no-op before.
+  const sidebarVisible = showSidebar && sidebarPanelOpen;
 
   return (
     <ModuleShell
-      className={cn(navState === "landing" ? modulePageShellClass : "h-screen")}
+      className={cn(navState === "landing" ? modulePageShellClass : "h-screen overflow-hidden")}
       testId="workspaces-page"
       mainClassName={cn(
-        "transition-all duration-300",
-        navState === "landing" ? modulePageMainClass : "flex h-full",
+        "transition-all duration-300 min-h-0",
+        navState === "landing" ? modulePageMainClass : "h-full overflow-hidden",
       )}
     >
       {navState === "landing" ? (
@@ -1709,8 +1753,8 @@ export default function WorkspacesPage() {
           </div>
         </>
       ) : (
-      <>
-        {showSidebar && isMobile && sidebarPanelOpen && (
+      <div className="flex flex-row flex-1 min-h-0 overflow-hidden" data-testid="workspace-workspace-layout">
+        {showSidebar && sidebarPanelOpen && isMobile && (
           <button
             type="button"
             className="fixed inset-0 z-40 bg-black/40 md:hidden"
@@ -1722,7 +1766,7 @@ export default function WorkspacesPage() {
         {sidebarVisible && (
           <div
             className={cn(
-              "flex-shrink-0 flex flex-col border-r bg-muted/20 relative z-50",
+              "flex-shrink-0 flex flex-col border-r bg-muted/20 relative z-50 h-full",
               isMobile && "fixed left-0 top-0 bottom-0 shadow-xl"
             )}
             style={{ width: isMobile ? "min(100vw - 3rem, 280px)" : `${sidebarWidth}px` }}
@@ -1818,29 +1862,38 @@ export default function WorkspacesPage() {
           </div>
         )}
 
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {(!selectedWorkspaceId || navState === "page") && (
-            <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/10 flex-shrink-0" data-testid="workspace-breadcrumb-bar">
-              <Breadcrumb>
-                <BreadcrumbList>
-                  <BreadcrumbItem>
-                    <BreadcrumbLink
-                      className="cursor-pointer text-xs"
-                      onClick={() => { setNavState("landing"); setSelectedWorkspaceId(null); setSelectedPageId(null); }}
-                      data-testid="breadcrumb-workspaces"
-                    >
-                      Workspaces
-                    </BreadcrumbLink>
-                  </BreadcrumbItem>
-                  {selectedWorkspaceId && (
-                    <>
-                      <BreadcrumbSeparator />
-                      <BreadcrumbItem>
-                        {navState === "overview" ? (
-                          <BreadcrumbPage className="text-xs" data-testid="breadcrumb-workspace-name">
-                            {getWorkspaceName(selectedWorkspaceId)}
-                          </BreadcrumbPage>
-                        ) : (
+        <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+          {/* Slim top bar on page view — avoids stacking WorkspaceHeader + breadcrumb + bottom nav */}
+          {navState === "page" && (
+            <div className="flex items-center justify-between gap-2 px-2 sm:px-3 py-1.5 border-b bg-muted/10 flex-shrink-0" data-testid="workspace-breadcrumb-bar">
+              <div className="flex items-center gap-1 min-w-0 flex-1">
+                {!isFullScreen && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    onClick={() => setSidebarPanelOpen((prev) => !prev)}
+                    title={sidebarPanelOpen ? "Hide boards menu" : "Show boards menu"}
+                    data-testid="workspace-page-sidebar-toggle"
+                  >
+                    <PanelLeft className="h-4 w-4" />
+                  </Button>
+                )}
+                <Breadcrumb className="min-w-0 overflow-hidden">
+                  <BreadcrumbList className="flex-nowrap">
+                    <BreadcrumbItem>
+                      <BreadcrumbLink
+                        className="cursor-pointer text-xs"
+                        onClick={() => { setNavState("landing"); setSelectedWorkspaceId(null); setSelectedPageId(null); }}
+                        data-testid="breadcrumb-workspaces"
+                      >
+                        Workspaces
+                      </BreadcrumbLink>
+                    </BreadcrumbItem>
+                    {selectedWorkspaceId && (
+                      <>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
                           <BreadcrumbLink
                             className="cursor-pointer text-xs"
                             onClick={() => { setNavState("overview"); setSelectedPageId(null); }}
@@ -1848,38 +1901,38 @@ export default function WorkspacesPage() {
                           >
                             {getWorkspaceName(selectedWorkspaceId)}
                           </BreadcrumbLink>
-                        )}
-                      </BreadcrumbItem>
-                    </>
-                  )}
-                  {navState === "page" && selectedPageId && (
-                    <>
-                      {getPageParentChain(selectedPageId).map((parent) => (
-                        <span key={parent.id} className="contents">
-                          <BreadcrumbSeparator />
-                          <BreadcrumbItem>
-                            <BreadcrumbLink
-                              className="cursor-pointer text-xs"
-                              onClick={() => handleSelectPage(parent.id)}
-                              data-testid={`breadcrumb-page-${parent.id}`}
-                            >
-                              {parent.title || "Untitled"}
-                            </BreadcrumbLink>
-                          </BreadcrumbItem>
-                        </span>
-                      ))}
-                      <BreadcrumbSeparator />
-                      <BreadcrumbItem>
-                        <BreadcrumbPage className="text-xs" data-testid="breadcrumb-current-page">
-                          {getPageTitle(selectedPageId)}
-                        </BreadcrumbPage>
-                      </BreadcrumbItem>
-                    </>
-                  )}
-                </BreadcrumbList>
-              </Breadcrumb>
-              <div className="flex items-center gap-1">
-                {navState === "page" && selectedPageData && (
+                        </BreadcrumbItem>
+                      </>
+                    )}
+                    {selectedPageId && (
+                      <>
+                        {getPageParentChain(selectedPageId).map((parent) => (
+                          <span key={parent.id} className="contents">
+                            <BreadcrumbSeparator />
+                            <BreadcrumbItem>
+                              <BreadcrumbLink
+                                className="cursor-pointer text-xs"
+                                onClick={() => handleSelectPage(parent.id)}
+                                data-testid={`breadcrumb-page-${parent.id}`}
+                              >
+                                {parent.title || "Untitled"}
+                              </BreadcrumbLink>
+                            </BreadcrumbItem>
+                          </span>
+                        ))}
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
+                          <BreadcrumbPage className="text-xs truncate max-w-[160px] sm:max-w-[240px]" data-testid="breadcrumb-current-page">
+                            {getPageTitle(selectedPageId)}
+                          </BreadcrumbPage>
+                        </BreadcrumbItem>
+                      </>
+                    )}
+                  </BreadcrumbList>
+                </Breadcrumb>
+              </div>
+              <div className="flex items-center gap-0.5 shrink-0">
+                {selectedPageData && (
                   <>
                     <Button variant="ghost" size="sm" onClick={() => togglePageFavoriteMutation.mutate(selectedPageData.id)} className="gap-1 text-xs h-7" data-testid="toggle-page-favorite">
                       <Star className={cn("h-3.5 w-3.5", selectedPageData.isFavorite && "text-yellow-500 fill-yellow-500")} />
@@ -1918,7 +1971,8 @@ export default function WorkspacesPage() {
               </div>
             </div>
           )}
-          {selectedWorkspace && (
+          {/* Full workspace header only on overview — not stacked on boards/docs */}
+          {selectedWorkspace && navState === "overview" && (
             <WorkspaceHeader
               workspace={selectedWorkspace}
               members={selectedWorkspaceMembers}
@@ -1935,7 +1989,7 @@ export default function WorkspacesPage() {
             />
           )}
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden min-w-0">
           {navState === "overview" && selectedWorkspaceId && (
             <WorkspaceOverview
               workspaceId={selectedWorkspaceId}
@@ -1974,7 +2028,8 @@ export default function WorkspacesPage() {
             </div>
           )}
           </div>
-          {(navState === "overview" || navState === "page") && selectedWorkspaceId && (
+          {/* Bottom page flipper only on small screens — desktop uses the boards sidebar */}
+          {isMobile && (navState === "overview" || navState === "page") && selectedWorkspaceId && (
             <WorkspaceBottomNav
               pages={pages.filter((p) => !p.parentId).map((p) => ({ id: p.id, title: p.title || "Untitled" }))}
               currentPageId={selectedPageId}
@@ -1985,7 +2040,7 @@ export default function WorkspacesPage() {
             />
           )}
         </div>
-      </>
+      </div>
       )}
 
       <NewPageDialog

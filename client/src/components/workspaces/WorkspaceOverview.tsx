@@ -5,7 +5,6 @@ import { cn } from "@/lib/utils";
 import {
   FileText,
   Clock,
-  ArrowLeft,
   Loader2,
   ChevronRight,
   Plus,
@@ -334,7 +333,7 @@ function ColoredTopCard({
 
 export function WorkspaceOverview({
   workspaceId,
-  onBack,
+  onBack: _onBack,
   onSelectPage,
   onCreatePage,
   onEditWorkspace,
@@ -412,14 +411,7 @@ export function WorkspaceOverview({
 
   return (
     <div className="flex-1 overflow-y-auto" data-testid="workspace-overview">
-      <div className="p-4">
-        <Button variant="ghost" size="sm" onClick={onBack} className="gap-1 text-xs mb-4" data-testid="overview-back-button">
-          <ArrowLeft className="h-3.5 w-3.5" />
-          All Workspaces
-        </Button>
-      </div>
-
-      <div className="max-w-5xl mx-auto px-6 pb-8">
+      <div className="w-full px-4 sm:px-6 py-4 pb-8">
         <div className="flex items-start gap-5 mb-6">
           <WorkspaceIconRenderer
             iconKey={getWorkspaceIconDef(workspace?.icon) ? workspace?.icon : null}

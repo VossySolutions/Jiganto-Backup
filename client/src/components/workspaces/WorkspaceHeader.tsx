@@ -79,42 +79,27 @@ export function WorkspaceHeader({
   const accent = workspace.color || "#7C3AED";
 
   return (
-    <header className="border-b bg-background" data-testid="workspace-header">
-      <div className="h-1 w-full" style={{ backgroundColor: accent }} />
-      <div className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3 sm:px-4">
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex items-center gap-2">
-            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={onBack} data-testid="workspace-header-back">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => !readOnly && name.trim() !== (workspace.name || "") && onUpdateWorkspace?.({ name: name.trim() })}
-              className="h-9 min-w-0 flex-1 sm:max-w-[460px] border-transparent px-2 text-base sm:text-lg font-semibold shadow-none hover:bg-muted/40 focus-visible:border-input"
-              disabled={readOnly}
-              data-testid="workspace-header-name"
-            />
-            <Badge variant="secondary" className="hidden sm:inline-flex shrink-0">
-              Workspace
-            </Badge>
-          </div>
+    <header className="border-b bg-background flex-shrink-0" data-testid="workspace-header">
+      <div className="h-0.5 w-full" style={{ backgroundColor: accent }} />
+      <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-4">
+        <div className="min-w-0 flex-1 flex items-center gap-2">
+          <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={onBack} data-testid="workspace-header-back">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <Input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onBlur={() =>
-              !readOnly &&
-              description.trim() !== (workspace.description || "") &&
-              onUpdateWorkspace?.({ description: description.trim() })
-            }
-            placeholder="Add workspace description..."
-            className="h-8 border-transparent px-2 text-sm text-muted-foreground shadow-none hover:bg-muted/40 focus-visible:border-input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => !readOnly && name.trim() !== (workspace.name || "") && onUpdateWorkspace?.({ name: name.trim() })}
+            className="h-8 min-w-0 flex-1 sm:max-w-[420px] border-transparent px-2 text-base font-semibold shadow-none hover:bg-muted/40 focus-visible:border-input"
             disabled={readOnly}
-            data-testid="workspace-header-description"
+            data-testid="workspace-header-name"
           />
+          <Badge variant="secondary" className="hidden sm:inline-flex shrink-0">
+            Workspace
+          </Badge>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0 self-end sm:self-start">
+        <div className="flex items-center gap-1 shrink-0">
           {workspaceId ? (
             <WorkspacePresenceAvatars workspaceId={workspaceId} currentPageId={currentPageId} className="mr-1 hidden md:flex" />
           ) : null}
@@ -161,6 +146,7 @@ export function WorkspaceHeader({
             size="icon"
             className="h-8 w-8"
             onClick={onToggleSidebar}
+            title="Toggle boards menu"
             data-testid="workspace-header-sidebar-toggle"
           >
             <PanelLeft className="h-4 w-4" />
@@ -194,6 +180,23 @@ export function WorkspaceHeader({
           </DropdownMenu>
         </div>
       </div>
+      {description || !readOnly ? (
+        <div className="px-3 pb-2 sm:px-4 sm:pl-14">
+          <Input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            onBlur={() =>
+              !readOnly &&
+              description.trim() !== (workspace.description || "") &&
+              onUpdateWorkspace?.({ description: description.trim() })
+            }
+            placeholder="Add workspace description..."
+            className="h-7 border-transparent px-2 text-sm text-muted-foreground shadow-none hover:bg-muted/40 focus-visible:border-input"
+            disabled={readOnly}
+            data-testid="workspace-header-description"
+          />
+        </div>
+      ) : null}
     </header>
   );
 }
