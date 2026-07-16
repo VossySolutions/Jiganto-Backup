@@ -65,6 +65,18 @@ import { ModuleHeader } from "@/components/ModuleHeader";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+  ModulePageLoadingShell,
+} from "@/components/ModulePageChrome";
 import { FinanceIcon } from "@/components/icons/ModuleIcons";
 import {
   CostAlertBanner,
@@ -543,19 +555,12 @@ export default function CustomerManagementPage() {
   };
 
   if (permissionsLoading) {
-    return (
-      <ModuleShell className="h-screen overflow-hidden bg-background" testId="customer-mgmt-loading" mainClassName="h-full flex items-center justify-center overflow-hidden">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin" style={{ color: CUSTOMER_MGMT_COLOR }} />
-            <p className="text-sm text-muted-foreground">Loading Customer Management...</p>
-          </div>
-      </ModuleShell>
-    );
+    return <ModulePageLoadingShell label="Loading Customer Management..." testId="customer-mgmt-loading" />;
   }
 
   if (!allowed) {
     return (
-      <ModuleShell className="h-screen overflow-hidden bg-background" testId="customer-mgmt-denied" mainClassName="h-full flex flex-col overflow-hidden">
+      <ModuleShell className={modulePageShellClass} testId="customer-mgmt-denied" mainClassName={modulePageMainClass}>
           <div className="flex-1 flex items-center justify-center p-6">
             <Card className="max-w-md rounded-xl">
               <CardHeader>
@@ -575,20 +580,13 @@ export default function CustomerManagementPage() {
   }
 
   if (dashboardLoading && dataStatus === undefined) {
-    return (
-      <ModuleShell className="h-screen overflow-hidden bg-background" testId="customer-mgmt-loading" mainClassName="h-full flex items-center justify-center overflow-hidden">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin" style={{ color: CUSTOMER_MGMT_COLOR }} />
-            <p className="text-sm text-muted-foreground">Loading commercial data...</p>
-          </div>
-      </ModuleShell>
-    );
+    return <ModulePageLoadingShell label="Loading commercial data..." testId="customer-mgmt-loading" />;
   }
 
   if (!dashboard) {
     return (
       <>
-        <ModuleShell className="h-screen overflow-hidden bg-background" testId="customer-mgmt-empty" mainClassName="h-full flex flex-col overflow-hidden">
+        <ModuleShell className={modulePageShellClass} testId="customer-mgmt-empty" mainClassName={modulePageMainClass}>
             <div className="flex-1 flex items-center justify-center p-6">
               <Card className="max-w-lg rounded-xl">
                 <CardHeader>
@@ -645,8 +643,8 @@ export default function CustomerManagementPage() {
 
   return (
     <>
-    <ModuleShell className="h-screen overflow-hidden bg-background" testId="customer-mgmt-page" mainClassName="h-full flex flex-col overflow-hidden">
-        <div className="px-4 pt-4 shrink-0">
+    <ModuleShell className={modulePageShellClass} testId="customer-mgmt-page" mainClassName={modulePageMainClass}>
+        <div className={modulePageBannerWrapClass}>
           <ModuleWelcomeBanner
             moduleKey="customer-mgmt"
             features={[
@@ -658,7 +656,7 @@ export default function CustomerManagementPage() {
           />
         </div>
 
-        <div className="border-b border-border/30 bg-card backdrop-blur-sm sticky top-0 z-50 shrink-0">
+        <div className={modulePageStickyHeaderClass}>
           <ModuleHeader
             icon={FinanceIcon}
             title="Customer Management"
@@ -700,7 +698,7 @@ export default function CustomerManagementPage() {
             }
           />
 
-          <div className="px-4 pb-3 md:hidden">
+          <div className={cn(modulePageTabsWrapClass, "pb-3 md:hidden")}>
             <Select value={view} onValueChange={(v) => setView(v as ViewId)}>
               <SelectTrigger className="w-full h-10" data-testid="select-customer-mgmt-view-mobile">
                 <SelectValue placeholder="Select view" />
@@ -716,15 +714,15 @@ export default function CustomerManagementPage() {
             </Select>
           </div>
 
-          <Tabs value={view} onValueChange={(v) => setView(v as ViewId)} className="px-4 pb-0 hidden md:block">
-            <TabsList className="h-12 w-full justify-start bg-transparent border-0 gap-1 overflow-x-auto flex-nowrap scrollbar-thin">
+          <Tabs value={view} onValueChange={(v) => setView(v as ViewId)} className={cn(modulePageTabsWrapClass, "pb-0 hidden md:block")}>
+            <TabsList className={modulePageTabsListClass}>
               {navItems.map((item) => {
                 const TabIcon = item.icon;
                 return (
                   <TabsTrigger
                     key={item.id}
                     value={item.id}
-                    className="gap-1.5 lg:gap-2 rounded-lg shrink-0 data-[state=active]:bg-[#534AB7]/10 data-[state=active]:text-[#534AB7]"
+                    className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-[#534AB7]/10 data-[state=active]:text-[#534AB7]")}
                     data-testid={`tab-customer-mgmt-${item.id}`}
                   >
                     <TabIcon className="h-4 w-4 shrink-0" />
@@ -749,14 +747,15 @@ export default function CustomerManagementPage() {
           </Tabs>
         </div>
 
-        <div className="flex-1 overflow-auto relative">
+        <div className={cn(modulePageContentOuterClass, "relative")}>
+          <div className={modulePageContentScrollClass}>
           {anyApiPending && (
             <div className="absolute top-2 right-4 z-20 flex items-center gap-2 rounded-md border bg-background/95 px-3 py-1.5 text-xs shadow-sm">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
               Saving…
             </div>
           )}
-          <div className="p-4 md:p-6 space-y-6">
+          <div className="p-3 sm:p-4 md:p-6 space-y-6">
             {showBillingCostAlert && (
               <CostAlertBanner
                 title="Free access cost alert — threshold reached"
@@ -2331,6 +2330,7 @@ export default function CustomerManagementPage() {
                   </SectionCard>
                 </>
               )}
+          </div>
           </div>
         </div>
     </ModuleShell>

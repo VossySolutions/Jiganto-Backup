@@ -6,6 +6,17 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ModuleShell } from "@/components/ModuleShell";
+import {
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+  ModulePageLoadingShell,
+} from "@/components/ModulePageChrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -699,7 +710,7 @@ export default function SettingsPage() {
 
   if (missingOrg) {
     return (
-      <ModuleShell className="min-h-screen bg-background" testId="settings-page" mainClassName="h-screen flex items-center justify-center">
+      <ModuleShell className={modulePageShellClass} testId="settings-page" mainClassName="h-full flex items-center justify-center">
           <Card className="max-w-md">
             <CardHeader>
               <CardTitle>No organisation linked</CardTitle>
@@ -714,16 +725,12 @@ export default function SettingsPage() {
   }
 
   if (isLoading) {
-    return (
-      <ModuleShell className="min-h-screen bg-background" testId="settings-page" mainClassName="h-screen flex items-center justify-center">
-          <div className="animate-pulse text-muted-foreground">Loading settings...</div>
-      </ModuleShell>
-    );
+    return <ModulePageLoadingShell label="Loading settings..." testId="settings-page" />;
   }
 
   return (
-    <ModuleShell className="min-h-screen bg-background" testId="settings-page" mainClassName="h-screen flex flex-col overflow-hidden">
-        <div className="border-b border-border/30 bg-card backdrop-blur-sm sticky top-0 z-50">
+    <ModuleShell className={modulePageShellClass} testId="settings-page" mainClassName={modulePageMainClass}>
+        <div className={modulePageStickyHeaderClass}>
           <ModuleHeader
             icon={Settings}
             title="Settings"
@@ -731,7 +738,7 @@ export default function SettingsPage() {
             titleTestId="settings-title"
           />
 
-          <div className="px-4 pb-2 flex items-center gap-2 flex-wrap">
+          <div className={cn(modulePageTabsWrapClass, "pb-2 flex items-center gap-2 flex-wrap")}>
             <Badge variant="outline" data-testid="settings-tier-badge">
               {settingsAccess.tierLabel}
             </Badge>
@@ -739,13 +746,13 @@ export default function SettingsPage() {
           <Tabs
             value={activeTab}
             onValueChange={(v) => handleSettingsTabChange(v as SettingsTabId)}
-            className="px-4 overflow-x-auto"
+            className={cn(modulePageTabsWrapClass, "overflow-x-auto")}
           >
-            <TabsList className="h-12 bg-transparent border-0 gap-1 flex-nowrap w-max min-w-full">
+            <TabsList className={modulePageTabsListClass}>
               {settingsAccess.tabs.includes("personal") && (
                 <TabsTrigger
                   value="personal"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-personal"
                 >
                   <div className="p-1 rounded-md bg-status-blue">
@@ -757,7 +764,7 @@ export default function SettingsPage() {
               {settingsAccess.tabs.includes("organization") && (
                 <TabsTrigger
                   value="organization"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-organization"
                 >
                   <div className="p-1 rounded-md bg-status-blue">
@@ -769,7 +776,7 @@ export default function SettingsPage() {
               {settingsAccess.tabs.includes("users") && (
                 <TabsTrigger
                   value="users"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-users"
                 >
                   <div className="p-1 rounded-md bg-status-green">
@@ -781,7 +788,7 @@ export default function SettingsPage() {
               {settingsAccess.tabs.includes("customers") && (
                 <TabsTrigger
                   value="customers"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-customers"
                 >
                   <div className="p-1 rounded-md bg-status-amber">
@@ -793,7 +800,7 @@ export default function SettingsPage() {
               {settingsAccess.tabs.includes("cost-centres") && (
                 <TabsTrigger
                   value="cost-centres"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-cost-centres"
                 >
                   <div className="p-1 rounded-md bg-status-purple">
@@ -805,7 +812,7 @@ export default function SettingsPage() {
               {settingsAccess.tabs.includes("branding") && (
                 <TabsTrigger
                   value="branding"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-branding"
                 >
                   <div className="p-1 rounded-md bg-status-amber">
@@ -817,7 +824,7 @@ export default function SettingsPage() {
               {settingsAccess.tabs.includes("roles") && (
                 <TabsTrigger
                   value="roles"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-roles"
                 >
                   <div className="p-1 rounded-md bg-status-purple">
@@ -829,7 +836,7 @@ export default function SettingsPage() {
               {settingsAccess.tabs.includes("audit") && (
                 <TabsTrigger
                   value="audit"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-audit"
                 >
                   <div className="p-1 rounded-md bg-status-amber">
@@ -841,7 +848,7 @@ export default function SettingsPage() {
               {settingsAccess.tabs.includes("integrations") && (
                 <TabsTrigger
                   value="integrations"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-integrations"
                 >
                   <div className="p-1 rounded-md bg-status-blue">
@@ -853,7 +860,7 @@ export default function SettingsPage() {
               {settingsAccess.tabs.includes("notifications") && (
                 <TabsTrigger
                   value="notifications"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-notifications"
                 >
                   <div className="p-1 rounded-md bg-status-blue">
@@ -865,7 +872,7 @@ export default function SettingsPage() {
               {settingsAccess.tabs.includes("billing") && (
                 <TabsTrigger
                   value="billing"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-billing"
                 >
                   <div className="p-1 rounded-md bg-status-green">
@@ -877,7 +884,7 @@ export default function SettingsPage() {
               {settingsAccess.tabs.includes("data") && (
                 <TabsTrigger
                   value="data"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-data"
                 >
                   <div className="p-1 rounded-md bg-status-purple">
@@ -889,7 +896,7 @@ export default function SettingsPage() {
               {settingsAccess.tabs.includes("ai-usage") && (
                 <TabsTrigger
                   value="ai-usage"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-ai-usage"
                 >
                   <div className="p-1 rounded-md bg-status-purple">
@@ -901,7 +908,7 @@ export default function SettingsPage() {
               {settingsAccess.tabs.includes("crm") && (
                 <TabsTrigger
                   value="crm"
-                  className="gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
                   data-testid="tab-crm"
                 >
                   <div className="p-1 rounded-md bg-sky-100 dark:bg-sky-900/30">
@@ -914,17 +921,18 @@ export default function SettingsPage() {
           </Tabs>
         </div>
 
-        <div
-          className={cn(
-            "flex-1 min-h-0",
-            activeTab === "users" || activeTab === "customers" || activeTab === "cost-centres"
-              ? "overflow-auto"
-              : "overflow-y-auto overflow-x-hidden",
-          )}
-        >
+        <div className={modulePageContentOuterClass}>
           <div
             className={cn(
-              "p-4 md:p-6",
+              modulePageContentScrollClass,
+              activeTab === "users" || activeTab === "customers" || activeTab === "cost-centres"
+                ? "overflow-auto"
+                : "overflow-y-auto overflow-x-hidden",
+            )}
+          >
+          <div
+            className={cn(
+              "p-3 sm:p-4 md:p-6",
               activeTab === "users" || activeTab === "customers" || activeTab === "cost-centres"
                 ? "min-w-0 w-full"
                 : "min-w-0 max-w-4xl",
@@ -1906,6 +1914,7 @@ export default function SettingsPage() {
                 <CrmCustomFieldsSettings />
               </TabsContent>
             </Tabs>
+          </div>
           </div>
         </div>
     </ModuleShell>

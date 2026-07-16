@@ -6,6 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ModuleHeader } from "@/components/ModuleHeader";
+import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageStickyHeaderClass,
+  modulePageTabContentClass,
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+  ModulePageLoading,
+} from "@/components/ModulePageChrome";
 import { TablePagination } from "@/components/TablePagination";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTablePagination } from "@/hooks/use-table-pagination";
@@ -1015,7 +1025,7 @@ export function ProjectsLandingView({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <ModulePageLoading label="Loading projects..." />
       </div>
     );
   }
@@ -1028,7 +1038,10 @@ export function ProjectsLandingView({
 
   return (
     <div className="font-sans min-h-full" data-testid="projects-landing">
-      <div className="border-b border-border/30 bg-card/80 backdrop-blur-sm sticky top-0 z-50">
+      <div className={modulePageBannerWrapClass}>
+        <ModuleWelcomeBanner moduleKey="projects" features={["Portfolio views", "Milestones", "Kanban & table", "Work item wizard"]} />
+      </div>
+      <div className={modulePageStickyHeaderClass}>
         <ModuleHeader
           icon={PmProjectIcon}
           title="Projects"
@@ -1043,38 +1056,39 @@ export function ProjectsLandingView({
             </Button>
           }
         />
-        <Tabs
-          value={dashTab}
-          onValueChange={(v) => {
-            const next = v as DashTab;
-            setDashTab(next);
-            if (next === "my") { setMineFilter(true); }
-            if (next === "projects") { setMineFilter(false); }
-          }}
-          className="px-3 sm:px-4"
-          data-testid="projects-dash-tabs"
-        >
-          <TabsList className="h-11 sm:h-12 bg-transparent border-0 gap-0.5 sm:gap-1 inline-flex w-full justify-start rounded-none p-0 overflow-hidden">
-            {tabs.map((tab) => (
-              <TabsTrigger
-                key={tab.id}
-                value={tab.id}
-                className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0"
-                data-testid={`tab-${tab.id}`}
-              >
-                {tab.label}
-                {tab.count != null && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-muted text-muted-foreground">
-                    {tab.count}
-                  </span>
-                )}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <div className={modulePageTabsWrapClass}>
+          <Tabs
+            value={dashTab}
+            onValueChange={(v) => {
+              const next = v as DashTab;
+              setDashTab(next);
+              if (next === "my") { setMineFilter(true); }
+              if (next === "projects") { setMineFilter(false); }
+            }}
+            data-testid="projects-dash-tabs"
+          >
+            <TabsList className={modulePageTabsListClass}>
+              {tabs.map((tab) => (
+                <TabsTrigger
+                  key={tab.id}
+                  value={tab.id}
+                  className={modulePageTabTriggerClass}
+                  data-testid={`tab-${tab.id}`}
+                >
+                  {tab.label}
+                  {tab.count != null && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-muted text-muted-foreground">
+                      {tab.count}
+                    </span>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
       </div>
 
-      <div className="p-4 pb-12">
+      <div className={modulePageTabContentClass}>
         {dashTab === "milestones" && (
           <Suspense fallback={<div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
             <MilestoneTracker mode="cross-project" />

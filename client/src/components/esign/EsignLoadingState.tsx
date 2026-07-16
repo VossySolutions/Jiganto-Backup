@@ -1,5 +1,6 @@
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ModulePageLoading, ModuleTabLoading, modulePageLoadingAccentClass } from "@/components/ModulePageChrome";
 
 type Props = {
   label?: string;
@@ -9,23 +10,36 @@ type Props = {
 };
 
 export function EsignLoadingState({ label = "Loading…", className, size = "md", inline }: Props) {
-  const iconSize = size === "sm" ? 18 : size === "lg" ? 40 : 28;
-  const padding = inline ? "" : size === "sm" ? "py-6" : size === "lg" ? "py-16" : "py-12";
-  return (
-    <div
-      className={cn("esign-loading flex flex-col items-center justify-center gap-2.5", padding, className)}
-      data-testid="esign-loading"
-      role="status"
-      aria-live="polite"
-    >
-      <Loader2 style={{ width: iconSize, height: iconSize }} className="animate-spin text-primary" />
-      {label && <p className="text-sm text-muted-foreground m-0">{label}</p>}
-    </div>
-  );
+  if (inline || size === "sm") {
+    return (
+      <div
+        className={cn(
+          "esign-loading flex items-center gap-2",
+          !inline && "flex-col justify-center gap-2.5 py-6",
+          className,
+        )}
+        data-testid="esign-loading"
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2
+          className={cn(modulePageLoadingAccentClass, size === "sm" && "!h-[18px] !w-[18px]")}
+          aria-hidden
+        />
+        {label ? <p className="text-sm text-muted-foreground m-0">{label}</p> : null}
+      </div>
+    );
+  }
+
+  if (size === "lg") {
+    return <ModulePageLoading label={label} testId="esign-loading" className={cn("py-16", className)} />;
+  }
+
+  return <ModuleTabLoading label={label} testId="esign-loading" className={cn("py-12", className)} />;
 }
 
 export function EsignButtonSpinner() {
-  return <Loader2 className="h-4 w-4 animate-spin" />;
+  return <Loader2 className="h-4 w-4 animate-spin text-[#0ea5e9]" />;
 }
 
 export function EsignKpiSkeleton() {

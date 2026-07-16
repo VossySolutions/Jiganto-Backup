@@ -29,6 +29,18 @@ import { cn } from "@/lib/utils";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
 import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+  ModuleTabLoading,
+} from "@/components/ModulePageChrome";
+import {
   Plus, Search, Loader2, Trash2, Bookmark, LayoutTemplate, Upload,
   Workflow, FileText, Building2, Network, Database, GitBranch, Layers,
   FolderOpen, Library, ChevronDown, ChevronRight, BookOpen, LayoutGrid, List, Clock,
@@ -570,7 +582,7 @@ function FrameworksCatalogue({ onOpenFramework, onCreateNew }: { onOpenFramework
           </div>
         </div>
         {isLoading ? (
-          <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>
+          <ModuleTabLoading label="Loading frameworks…" />
         ) : filtered.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-16">
@@ -1643,9 +1655,7 @@ function DiagramCatalogue({
         )}
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 text-primary animate-spin" />
-          </div>
+          <ModuleTabLoading label="Loading diagrams…" className="py-20" />
         ) : filtered.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-16">
@@ -2043,11 +2053,7 @@ function DiagramCompareView({ asIsId, toBeId, onBack }: { asIsId: number; toBeId
   }, [asIsDiagram, toBeDiagram, diffResult]);
 
   if (!asIsDiagram || !toBeDiagram) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 text-primary animate-spin" />
-      </div>
-    );
+    return <ModuleTabLoading label="Loading comparison…" className="flex-1" />;
   }
 
   return (
@@ -3430,17 +3436,17 @@ export default function BPMPage() {
 
   return (
     <ModuleShell
-      className="h-screen bg-background"
+      className={modulePageShellClass}
       showSidebar={view === "catalogue"}
       fullBleed={view !== "catalogue"}
-      mainClassName="flex flex-col h-full min-w-0"
+      mainClassName={modulePageMainClass}
     >
         {view === "catalogue" && (
           <>
-            <div className="px-4 pt-4">
+            <div className={modulePageBannerWrapClass}>
               <ModuleWelcomeBanner moduleKey="bpm" features={["Process diagrams", "Canvas editor", "Org charts", "Frameworks"]} />
             </div>
-            <header className="bg-card border-b border-border/30">
+            <div className={modulePageStickyHeaderClass}>
               <ModuleHeader
                 icon={Workflow}
                 title="BPM"
@@ -3453,28 +3459,32 @@ export default function BPMPage() {
                   </Button>
                 }
               />
-            </header>
-            <Tabs value={activeSection} onValueChange={(v) => setActiveSection(v as ActiveSection)} className="px-2 sm:px-4">
-              <TabsList className="h-auto min-h-12 bg-transparent border-0 gap-1 flex flex-wrap overflow-x-auto pb-1 w-full justify-start">
-                {SUB_NAV_ITEMS.map(item => (
-                  <TabsTrigger
-                    key={item.key}
-                    value={item.key}
-                    className="gap-1.5 sm:gap-2 rounded-lg shrink-0 data-[state=active]:bg-primary/10 data-[state=active]:text-primary text-xs sm:text-sm"
-                    data-testid={`tab-section-${item.key}`}
-                  >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    <span className="hidden sm:inline">{item.label}</span>
-                    <span className="sm:hidden">{item.label.split(" ")[0]}</span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+              <div className={modulePageTabsWrapClass}>
+                <Tabs value={activeSection} onValueChange={(v) => setActiveSection(v as ActiveSection)}>
+                  <TabsList className={modulePageTabsListClass}>
+                    {SUB_NAV_ITEMS.map(item => (
+                      <TabsTrigger
+                        key={item.key}
+                        value={item.key}
+                        className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-primary/10 data-[state=active]:text-primary")}
+                        data-testid={`tab-section-${item.key}`}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span className="hidden sm:inline">{item.label}</span>
+                        <span className="sm:hidden">{item.label.split(" ")[0]}</span>
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+              </div>
+            </div>
           </>
         )}
 
         {view === "catalogue" ? (
-          activeSection === "portal" ? (
+          <div className={modulePageContentOuterClass}>
+            <div className={modulePageContentScrollClass}>
+          {activeSection === "portal" ? (
             <ProcessPortal />
           ) : activeSection === "frameworks" ? (
             activeFramework ? (
@@ -3483,15 +3493,15 @@ export default function BPMPage() {
               <FrameworksCatalogue onOpenFramework={handleOpenFramework} onCreateNew={() => setShowCreateFrameworkDialog(true)} />
             )
           ) : activeSection === "bpml" ? (
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
+            <Suspense fallback={<ModuleTabLoading label="Loading BPML…" className="flex-1" />}>
               <BpmlView />
             </Suspense>
           ) : activeSection === "orgchart" ? (
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
+            <Suspense fallback={<ModuleTabLoading label="Loading org chart…" className="flex-1" />}>
               <OrgChartView />
             </Suspense>
           ) : activeSection === "task-tracker" ? (
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+            <div className="p-3 sm:p-4 md:p-6">
               <ModuleTrackingBoard
                 apiPath="/api/bpm/tracking-board"
                 queryKey={["/api/bpm/tracking-board"]}
@@ -3514,7 +3524,9 @@ export default function BPMPage() {
               typeFilter={SECTION_TYPE_FILTERS[activeSection]}
               libraries={libraries}
             />
-          )
+          )}
+            </div>
+          </div>
         ) : view === "compare" && compareAsIsId && compareToBeId ? (
           <DiagramCompareView
             asIsId={compareAsIsId}
@@ -3526,11 +3538,7 @@ export default function BPMPage() {
             }}
           />
         ) : activeDiagram ? (
-          <Suspense fallback={
-            <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 text-primary animate-spin" />
-            </div>
-          }>
+          <Suspense fallback={<ModuleTabLoading label="Loading canvas…" className="flex-1" />}>
             <BpmCanvasEditor
               diagram={activeDiagram}
               onBack={handleBackToCatalogue}

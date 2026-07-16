@@ -5,6 +5,21 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-p
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ModuleShell } from "@/components/ModuleShell";
+import { ModuleHeader } from "@/components/ModuleHeader";
+import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+  ModulePageLoadingShell,
+} from "@/components/ModulePageChrome";
+import { SurveysIcon } from "@/components/icons/ModuleIcons";
 import { cn } from "@/lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, PieChart, Pie, Cell,
@@ -1303,19 +1318,45 @@ export default function SurveysPage() {
   // RENDER: DASHBOARD
   // ════════════════════════════════════════════════════════════════════════════
   if (view === "dashboard") return (
-    <ModuleShell className="h-screen overflow-hidden bg-background flex" mainClassName="h-full overflow-y-auto flex-1 w-full min-w-0">
+    <ModuleShell className={modulePageShellClass} mainClassName={modulePageMainClass}>
+        <div className={modulePageBannerWrapClass}>
+          <ModuleWelcomeBanner moduleKey="surveys" features={["Build & distribute", "Live polls", "AI analysis", "Templates"]} />
+        </div>
+        <div className={modulePageStickyHeaderClass}>
+          <ModuleHeader
+            icon={SurveysIcon}
+            title="Surveys & Polls"
+            subtitle="Build, distribute, and analyse surveys across your projects and teams"
+            titleTestId="surveys-title"
+            actions={
+              mainTab === "surveys" ? (
+                <Button type="button" onClick={() => setWizardOpen(true)} data-testid="button-new-survey">+ New Survey</Button>
+              ) : undefined
+            }
+          />
+          <div className={modulePageTabsWrapClass}>
+            <div className={cn(modulePageTabsListClass, "pb-1")}>
+              {([["surveys", "Surveys"], ["polls", "Polls"], ["templates", "Templates"], ["results", "Results"]] as [MainTab, string][]).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => { setMainTab(id); if (id === "results" && surveys[0]) openResults(surveys[0].id); }}
+                  className={cn(
+                    modulePageTabTriggerClass,
+                    "inline-flex items-center py-1.5 font-medium transition-colors",
+                    mainTab === id ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className={modulePageContentOuterClass}>
+          <div className={modulePageContentScrollClass}>
         <div className="survey-page-wrap">
           <SurveyAiTokenBanner />
-          {/* Header */}
-          <div className="survey-page-header">
-            <div>
-              <h1 style={{ fontSize: "clamp(22px, 4vw, 26px)", fontWeight: 700, margin: 0, marginBottom: 4 }}>Surveys & Polls</h1>
-              <p style={{ color: C.ink3, fontSize: 14, margin: 0 }}>Build, distribute, and analyse surveys across your projects and teams</p>
-            </div>
-            {mainTab === "surveys" && (
-              <Button type="button" onClick={() => setWizardOpen(true)} data-testid="button-new-survey">+ New Survey</Button>
-            )}
-          </div>
 
           {isError && (
             <div style={{ background: C.roseL, border: `1px solid ${C.rose}`, borderRadius: 10, padding: 16, marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -1323,17 +1364,6 @@ export default function SurveysPage() {
               <button onClick={() => refetch()} style={btnSecondary}>Retry</button>
             </div>
           )}
-
-          {/* Sub-navigation (Module 17 spec) */}
-          <div className="survey-subnav">
-            {([["surveys", "Surveys"], ["polls", "Polls"], ["templates", "Templates"], ["results", "Results"]] as [MainTab, string][]).map(([id, label]) => (
-              <button key={id} onClick={() => { setMainTab(id); if (id === "results" && surveys[0]) openResults(surveys[0].id); }}
-                className="survey-subnav-btn"
-                style={{ borderBottom: `2px solid ${mainTab === id ? C.teal : "transparent"}`, color: mainTab === id ? C.teal : C.ink3 }}>
-                {label}
-              </button>
-            ))}
-          </div>
 
           {fromTemplateMut.isPending && (
             <div style={{ background: C.tealL, borderRadius: 10, padding: 12, marginBottom: 16, display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: C.teal }}>
@@ -1490,6 +1520,8 @@ export default function SurveysPage() {
               )}
             </div>
           )}
+        </div>
+          </div>
         </div>
 
         {wizardOpen && <NewSurveyWizard onClose={() => setWizardOpen(false)} onCreated={id => { setWizardOpen(false); setActiveSurveyId(id); openBuilder(surveys.find(s => s.id === id) || { id, title: "", questions: [], responseCount: 0 } as any); }} />}
@@ -1665,11 +1697,7 @@ export default function SurveysPage() {
   // ════════════════════════════════════════════════════════════════════════════
   if (view === "results" && (!activeSurvey || surveyDetailLoading || responsesLoading)) {
     const loadingLabel = !activeSurvey || surveyDetailLoading ? "Loading survey…" : "Loading responses…";
-    return (
-      <ModuleShell className="h-screen overflow-hidden bg-background flex" mainClassName="survey-page-loading-main h-full overflow-hidden">
-          <SurveyLoadingState label={loadingLabel} size="lg" />
-      </ModuleShell>
-    );
+    return <ModulePageLoadingShell label={loadingLabel} />;
   }
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -1957,9 +1985,5 @@ export default function SurveysPage() {
     );
   }
 
-  return (
-    <ModuleShell className="h-screen overflow-hidden bg-background flex" mainClassName="survey-page-loading-main h-full overflow-hidden">
-        <SurveyLoadingState label="Loading survey…" size="lg" />
-    </ModuleShell>
-  );
+  return <ModulePageLoadingShell label="Loading survey…" />;
 }

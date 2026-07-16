@@ -1,6 +1,6 @@
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSurveyColors } from "@/lib/survey-constants";
+import { ModulePageLoading, ModuleTabLoading, modulePageLoadingAccentClass } from "@/components/ModulePageChrome";
 
 type Props = {
   label?: string;
@@ -10,20 +10,32 @@ type Props = {
 };
 
 export function SurveyLoadingState({ label = "Loading…", className, size = "md", inline }: Props) {
-  const C = useSurveyColors();
-  const iconSize = size === "sm" ? 18 : size === "lg" ? 40 : 28;
-  const padding = inline ? "" : size === "sm" ? "py-6" : size === "lg" ? "py-16" : "py-12";
-  return (
-    <div
-      className={cn("flex flex-col items-center justify-center gap-2.5", padding, className)}
-      data-testid="survey-loading"
-      role="status"
-      aria-live="polite"
-    >
-      <Loader2 style={{ width: iconSize, height: iconSize, color: C.teal }} className="animate-spin" />
-      {label && <p style={{ fontSize: 13, color: C.ink4, margin: 0 }}>{label}</p>}
-    </div>
-  );
+  if (inline || size === "sm") {
+    return (
+      <div
+        className={cn(
+          "flex items-center gap-2",
+          !inline && "flex-col justify-center gap-2.5 py-6",
+          className,
+        )}
+        data-testid="survey-loading"
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2
+          className={cn(modulePageLoadingAccentClass, size === "sm" && "!h-[18px] !w-[18px]")}
+          aria-hidden
+        />
+        {label ? <p className="text-sm text-muted-foreground m-0">{label}</p> : null}
+      </div>
+    );
+  }
+
+  if (size === "lg") {
+    return <ModulePageLoading label={label} testId="survey-loading" className={cn("py-16", className)} />;
+  }
+
+  return <ModuleTabLoading label={label} testId="survey-loading" className={cn("py-12", className)} />;
 }
 
 export function SurveyCardSkeleton({ count = 4 }: { count?: number }) {

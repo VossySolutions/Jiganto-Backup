@@ -6,6 +6,19 @@ import { Redirect } from "wouter";
 
 import { ModuleShell } from "@/components/ModuleShell";
 
+import { ModuleHeader } from "@/components/ModuleHeader";
+
+import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+} from "@/components/ModulePageChrome";
+
 import { useClientContext } from "@/hooks/use-client-context";
 
 import { usePermissions } from "@/hooks/use-permissions";
@@ -420,73 +433,61 @@ export default function ClientsPage() {
 
     <>
 
-    <ModuleShell className="flex h-screen bg-background" mainClassName="flex-1 flex flex-col overflow-hidden">
+    <ModuleShell className={modulePageShellClass} mainClassName={modulePageMainClass}>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className={modulePageBannerWrapClass}>
 
-          <div className="sticky top-0 z-10 border-b bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75">
+          <ModuleWelcomeBanner moduleKey="clients" />
 
-            <div className="px-4 sm:px-6 py-4 sm:py-5">
+        </div>
 
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className={modulePageStickyHeaderClass}>
 
-                <div className="min-w-0">
+          <ModuleHeader
 
-                  <div className="flex items-center gap-2">
+            icon={Briefcase}
 
-                    <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            title="Client Workspaces"
 
-                      <Briefcase className="h-4 w-4 text-primary" />
+            subtitle="Manage engagements and switch between isolated client views"
 
-                    </div>
+            titleTestId="clients-title"
 
-                    <div>
+            actions={
 
-                      <h1 className="text-lg sm:text-xl font-bold tracking-tight">Client Workspaces</h1>
+              canCreate ? (
 
-                      <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 line-clamp-2 sm:line-clamp-1">
+                <Button
 
-                        Manage engagements and switch between isolated client views
+                  size="sm"
 
-                      </p>
+                  className="gap-2 w-full sm:w-auto shrink-0"
 
-                    </div>
+                  onClick={() => openForm()}
 
-                  </div>
+                  data-testid="button-add-client"
 
-                </div>
+                >
 
-                {canCreate && (
+                  <Plus className="h-4 w-4" />
 
-                  <Button
+                  Add Client
 
-                    size="sm"
+                </Button>
 
-                    className="gap-2 w-full sm:w-auto shrink-0"
+              ) : undefined
 
-                    onClick={() => openForm()}
+            }
 
-                    data-testid="button-add-client"
+          />
 
-                  >
+        </div>
 
-                    <Plus className="h-4 w-4" />
+        <div className={modulePageContentOuterClass}>
 
-                    Add Client
+          <div className={modulePageContentScrollClass}>
 
-                  </Button>
-
-                )}
-
-              </div>
-
-            </div>
-
-          </div>
-
-
-
-          <div className="px-4 sm:px-6 py-5 sm:py-6 space-y-5 sm:space-y-6 max-w-[1600px]">
+          <div className="p-3 sm:p-4 md:p-6 space-y-5 sm:space-y-6 max-w-[1600px]">
 
             {kpisBusy ? (
 
@@ -821,6 +822,8 @@ export default function ClientsPage() {
             </ClientsPanelState>
 
           </div>
+
+        </div>
 
         </div>
 

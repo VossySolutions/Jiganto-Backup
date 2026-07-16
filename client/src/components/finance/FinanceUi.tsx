@@ -3,29 +3,17 @@ import { Loader2, AlertCircle, RefreshCw, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ModulePageLoading, ModuleTabLoading } from "@/components/ModulePageChrome";
 import { cn } from "@/lib/utils";
 
 export const FINANCE_ACCENT = "#10B981";
 
 export function FinancePageLoading({ label = "Loading Finance..." }: { label?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 py-24" data-testid="finance-page-loading">
-      <div className="relative">
-        <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl animate-pulse" />
-        <Loader2 className="h-10 w-10 text-emerald-500 animate-spin relative" />
-      </div>
-      <p className="text-sm text-muted-foreground">{label}</p>
-    </div>
-  );
+  return <ModulePageLoading label={label} testId="finance-page-loading" className="py-24" />;
 }
 
 export function FinanceTabLoading({ label = "Loading..." }: { label?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 py-16 sm:py-20" data-testid="finance-tab-loading">
-      <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
-      <p className="text-sm text-muted-foreground">{label}</p>
-    </div>
-  );
+  return <ModuleTabLoading label={label} testId="finance-tab-loading" className="sm:py-20" />;
 }
 
 export function FinanceKpiSkeleton({ count = 6 }: { count?: number }) {

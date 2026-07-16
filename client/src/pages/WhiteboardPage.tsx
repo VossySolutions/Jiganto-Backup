@@ -2,21 +2,28 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { ModuleShell } from "@/components/ModuleShell";
+import { ModuleHeader } from "@/components/ModuleHeader";
 import { cn } from "@/lib/utils";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  ModulePageLoading,
+} from "@/components/ModulePageChrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormDialogShell, FormSection, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, RefreshCw, LayoutGrid } from "lucide-react";
+import { Plus, RefreshCw, LayoutGrid } from "lucide-react";
 import type { WhiteboardListItem } from "@shared/models/whiteboard";
 import { thumbnailPlaceholder } from "@/lib/whiteboard-constants";
 import { fetchWhiteboards, createWhiteboard, apiErrorMessage } from "@/lib/whiteboard-api";
-import {
-  WhiteboardCardSkeleton,
-  WhiteboardLoadingState
-} from "@/components/whiteboard/WhiteboardLoadingState";
+import { WhiteboardLoadingState } from "@/components/whiteboard/WhiteboardLoadingState";
 import "@/styles/whiteboard.css";
 
 function fmtDate(d: string | Date | null | undefined) {
@@ -88,42 +95,37 @@ export function WhiteboardPage() {
 
   return (
     <>
-    <ModuleShell className="min-h-screen bg-background wb-page">
-        <div className="px-4 sm:px-8 pt-3 sm:pt-4">
+    <ModuleShell className={cn(modulePageShellClass, "wb-page")} mainClassName={modulePageMainClass}>
+        <div className={modulePageBannerWrapClass}>
           <ModuleWelcomeBanner moduleKey="whiteboarding" />
         </div>
 
-        <div className="wb-landing-padding space-y-5 sm:space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-semibold font-display flex items-center gap-2">
-                <LayoutGrid className="h-6 w-6 text-[#a855f7] hidden sm:block" />
-                Whiteboards
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Collaborative sticky-note canvases for brainstorming
-              </p>
-            </div>
-            <Button
-              className="w-full sm:w-auto shrink-0"
-              onClick={() => setCreateOpen(true)}
-              data-testid="wb-new-btn"
-            >
-              <Plus className="h-4 w-4 mr-2" /> New Whiteboard
-            </Button>
-          </div>
+        <div className={modulePageStickyHeaderClass}>
+          <ModuleHeader
+            icon={LayoutGrid}
+            title="Whiteboards"
+            subtitle="Collaborative sticky-note canvases for brainstorming"
+            searchPlaceholder="Search whiteboards…"
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchTestId="wb-search"
+            titleTestId="wb-title"
+            actions={
+              <Button
+                className="w-full sm:w-auto shrink-0"
+                onClick={() => setCreateOpen(true)}
+                data-testid="wb-new-btn"
+              >
+                <Plus className="h-4 w-4 mr-2" /> New Whiteboard
+              </Button>
+            }
+          />
+        </div>
 
+        <div className={modulePageContentOuterClass}>
+          <div className={modulePageContentScrollClass}>
+        <div className="wb-landing-padding space-y-5 sm:space-y-6">
           <div className="wb-filters">
-            <div className="relative flex-1 min-w-0 sm:max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                className="pl-9"
-                placeholder="Search whiteboards…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                data-testid="wb-search"
-              />
-            </div>
             <div className="flex gap-2 flex-wrap sm:flex-nowrap">
               <Select value={filter} onValueChange={setFilter}>
                 <SelectTrigger className="w-full sm:w-[150px]"><SelectValue /></SelectTrigger>
@@ -149,7 +151,7 @@ export function WhiteboardPage() {
           </div>
 
           {isLoading ? (
-            <WhiteboardCardSkeleton />
+            <ModulePageLoading label="Loading whiteboards..." className="py-24" />
           ) : isError ? (
             <div className="wb-error-state">
               <p className="font-medium text-destructive mb-1">Could not load whiteboards</p>
@@ -212,6 +214,8 @@ export function WhiteboardPage() {
               ))}
             </div>
           )}
+        </div>
+          </div>
         </div>
     </ModuleShell>
 

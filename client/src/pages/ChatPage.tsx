@@ -11,6 +11,13 @@ import {
 import { motion } from "framer-motion";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
+import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+} from "@/components/ModulePageChrome";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useShellLayout } from "@/hooks/use-shell-layout";
@@ -391,14 +398,16 @@ export function ChatPage() {
 
   return (
     <>
-    <ModuleShell className="min-h-screen bg-background" testId="chat-page" mainClassName="h-screen flex flex-col">
-        <div className="border-b border-border/30 bg-card shrink-0">
+    <ModuleShell className={modulePageShellClass} testId="chat-page" mainClassName={modulePageMainClass}>
+        <div className={modulePageBannerWrapClass}>
+          <ModuleWelcomeBanner moduleKey="chat" />
+        </div>
+        <div className={modulePageStickyHeaderClass}>
           <ModuleHeader
             icon={MessageSquare}
             title="Chat"
             subtitle={isMobile ? undefined : "Team messaging and collaboration"}
             titleTestId="text-chat-title"
-            compact
             actions={
               <>
                 <Button variant="outline" size="sm" className="gap-1.5 hidden sm:inline-flex" onClick={() => setIsNewChatOpen(true)}>

@@ -1,6 +1,6 @@
-import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ModulePageLoading, ModuleTabLoading } from "@/components/ModulePageChrome";
 
 type Props = {
   label?: string;
@@ -9,14 +9,13 @@ type Props = {
 };
 
 export function BpmLoadingState({ label = "Loading…", className, size = "md" }: Props) {
-  const iconSize = size === "sm" ? "h-5 w-5" : size === "lg" ? "h-10 w-10" : "h-8 w-8";
-  const padding = size === "sm" ? "py-8" : size === "lg" ? "py-20" : "py-16";
-  return (
-    <div className={cn("flex flex-col items-center justify-center gap-3", padding, className)} data-testid="bpm-loading">
-      <Loader2 className={cn(iconSize, "text-primary animate-spin")} />
-      {label && <p className="text-sm text-muted-foreground">{label}</p>}
-    </div>
-  );
+  if (size === "sm") {
+    return <ModuleTabLoading label={label} testId="bpm-loading" className={cn("py-8", className)} />;
+  }
+  if (size === "lg") {
+    return <ModulePageLoading label={label} testId="bpm-loading" className={cn("py-20", className)} />;
+  }
+  return <ModuleTabLoading label={label} testId="bpm-loading" className={className} />;
 }
 
 export function BpmCardGridSkeleton({ count = 6 }: { count?: number }) {

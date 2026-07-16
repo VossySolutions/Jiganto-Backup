@@ -8,12 +8,26 @@ import { useClientContext } from "@/hooks/use-client-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ModuleShell } from "@/components/ModuleShell";
+import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Wallet, Clock, Receipt, FileText, CreditCard, Link2, Settings,
 } from "lucide-react";
 import { FinanceIcon } from "@/components/icons/ModuleIcons";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  modulePageTabContentClass,
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+  ModulePageLoadingShell,
+} from "@/components/ModulePageChrome";
 import { FinanceDashboardTab } from "@/components/finance/FinanceDashboardTab";
 import { FinanceBudgetsTab } from "@/components/finance/FinanceBudgetsTab";
 import { FinanceTimesheetsTab } from "@/components/finance/FinanceTimesheetsTab";
@@ -22,7 +36,6 @@ import { FinanceInvoicesTab } from "@/components/finance/FinanceInvoicesTab";
 import { FinanceRateCardsTab } from "@/components/finance/FinanceRateCardsTab";
 import { FinanceIntegrationsTab } from "@/components/finance/FinanceIntegrationsTab";
 import { FinanceSettingsTab } from "@/components/finance/FinanceSettingsTab";
-import { FinancePageLoading } from "@/components/finance/FinanceUi";
 import type { FinanceDashboardData } from "@/components/finance/types";
 import type { BudgetListItem } from "@/components/finance/types";
 import type { ExpenseReportRow } from "@/components/finance/types";
@@ -121,11 +134,7 @@ export default function FinanceManagementPage() {
   }
 
   if (isLoading) {
-    return (
-      <ModuleShell className="h-screen overflow-hidden bg-background" testId="finance-loading" mainClassName="h-full flex items-center justify-center overflow-hidden">
-          <FinancePageLoading />
-      </ModuleShell>
-    );
+    return <ModulePageLoadingShell label="Loading Finance..." testId="finance-loading" />;
   }
 
   const tabItems = [
@@ -140,15 +149,15 @@ export default function FinanceManagementPage() {
   ];
 
   return (
-    <ModuleShell className="h-screen overflow-hidden bg-background" testId="finance-mgmt-page" mainClassName="h-full flex flex-col overflow-hidden">
-        <div className="px-3 sm:px-4 pt-3 sm:pt-4 hidden md:block">
+    <ModuleShell className={modulePageShellClass} testId="finance-mgmt-page" mainClassName={modulePageMainClass}>
+        <div className={modulePageBannerWrapClass}>
           <ModuleWelcomeBanner
             moduleKey="finance-mgmt"
             features={["Project budgets & RAG", "Timesheet approvals", "Expense & invoice workflows", "ERP integrations"]}
           />
         </div>
 
-        <div className="border-b border-border/30 bg-card backdrop-blur-sm sticky top-0 z-50 shrink-0">
+        <div className={modulePageStickyHeaderClass}>
           <ModuleHeader
             icon={FinanceIcon}
             title="Finance"
@@ -160,70 +169,74 @@ export default function FinanceManagementPage() {
             titleTestId="finance-title"
           />
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="px-3 sm:px-4">
-            <TabsList
-              ref={tabsListRef}
-              className="h-11 sm:h-12 bg-transparent border-0 gap-0.5 sm:gap-1 flex w-full max-w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-none scroll-smooth"
-            >
-              {tabItems.map((tab) => (
-                <TabsTrigger
-                  key={tab.value}
-                  value={tab.value}
-                  aria-label={tab.label}
-                  title={tab.label}
-                  className="gap-1.5 sm:gap-2 shrink-0 px-2 sm:px-3 text-xs sm:text-sm rounded-lg whitespace-nowrap data-[state=active]:bg-emerald-500/10 data-[state=active]:text-emerald-600"
-                  data-testid={`tab-${tab.value}`}
-                >
-                  <tab.icon className="h-4 w-4" style={{ color: activeTab === tab.value ? FINANCE_COLOR : undefined }} />
-                  <span className="hidden sm:inline">{tab.label}</span>
-                  {tab.count !== null && tab.count > 0 && (
-                    <Badge variant="secondary" className="ml-0.5 sm:ml-1 h-5 px-1.5 text-[10px] font-medium">
-                      {tab.count}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          <div className={modulePageTabsWrapClass}>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList
+                ref={tabsListRef}
+                className={modulePageTabsListClass}
+              >
+                {tabItems.map((tab) => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    aria-label={tab.label}
+                    title={tab.label}
+                    className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-emerald-500/10 data-[state=active]:text-emerald-600")}
+                    data-testid={`tab-${tab.value}`}
+                  >
+                    <tab.icon className="h-4 w-4" style={{ color: activeTab === tab.value ? FINANCE_COLOR : undefined }} />
+                    <span className="hidden sm:inline">{tab.label}</span>
+                    {tab.count !== null && tab.count > 0 && (
+                      <Badge variant="secondary" className="ml-0.5 sm:ml-1 h-5 px-1.5 text-[10px] font-medium">
+                        {tab.count}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-auto min-h-0">
-          <Tabs value={activeTab} className="h-full">
-            <TabsContent value="dashboard" className="p-3 sm:p-4 md:p-6 m-0">
-              <FinanceDashboardTab
-                data={dashboard}
-                isLoading={dashboardLoading}
-                searchTerm={searchTerm}
-                onNavigateTab={setActiveTab}
-              />
-            </TabsContent>
-            <TabsContent value="budgets" className="p-3 sm:p-4 md:p-6 m-0">
-              <FinanceBudgetsTab budgets={budgets} isLoading={budgetsLoading} searchTerm={searchTerm} filterProjectId={initialProjectId} />
-            </TabsContent>
-            <TabsContent value="timesheets" className="p-3 sm:p-4 md:p-6 m-0">
-              <FinanceTimesheetsTab
-                periods={timesheetPeriods}
-                pendingPeriods={approvalQueue}
-                isLoading={periodsLoading}
-                searchTerm={searchTerm}
-              />
-            </TabsContent>
-            <TabsContent value="expenses" className="p-3 sm:p-4 md:p-6 m-0">
-              <FinanceExpensesTab reports={expenseReports} isLoading={expensesLoading} searchTerm={searchTerm} />
-            </TabsContent>
-            <TabsContent value="invoices" className="p-3 sm:p-4 md:p-6 m-0">
-              <FinanceInvoicesTab invoices={invoices} isLoading={invoicesLoading} searchTerm={searchTerm} />
-            </TabsContent>
-            <TabsContent value="rate-cards" className="p-3 sm:p-4 md:p-6 m-0">
-              <FinanceRateCardsTab rateCards={rateCards} isLoading={rateCardsLoading} searchTerm={searchTerm} />
-            </TabsContent>
-            <TabsContent value="integrations" className="p-3 sm:p-4 md:p-6 m-0">
-              <FinanceIntegrationsTab integrations={integrations} isLoading={integrationsLoading} />
-            </TabsContent>
-            <TabsContent value="settings" className="p-3 sm:p-4 md:p-6 m-0">
-              <FinanceSettingsTab settings={settings} isLoading={settingsLoading} />
-            </TabsContent>
-          </Tabs>
+        <div className={modulePageContentOuterClass}>
+          <div className={modulePageContentScrollClass}>
+            <Tabs value={activeTab} className="h-full">
+              <TabsContent value="dashboard" className={modulePageTabContentClass}>
+                <FinanceDashboardTab
+                  data={dashboard}
+                  isLoading={dashboardLoading}
+                  searchTerm={searchTerm}
+                  onNavigateTab={setActiveTab}
+                />
+              </TabsContent>
+              <TabsContent value="budgets" className={modulePageTabContentClass}>
+                <FinanceBudgetsTab budgets={budgets} isLoading={budgetsLoading} searchTerm={searchTerm} filterProjectId={initialProjectId} />
+              </TabsContent>
+              <TabsContent value="timesheets" className={modulePageTabContentClass}>
+                <FinanceTimesheetsTab
+                  periods={timesheetPeriods}
+                  pendingPeriods={approvalQueue}
+                  isLoading={periodsLoading}
+                  searchTerm={searchTerm}
+                />
+              </TabsContent>
+              <TabsContent value="expenses" className={modulePageTabContentClass}>
+                <FinanceExpensesTab reports={expenseReports} isLoading={expensesLoading} searchTerm={searchTerm} />
+              </TabsContent>
+              <TabsContent value="invoices" className={modulePageTabContentClass}>
+                <FinanceInvoicesTab invoices={invoices} isLoading={invoicesLoading} searchTerm={searchTerm} />
+              </TabsContent>
+              <TabsContent value="rate-cards" className={modulePageTabContentClass}>
+                <FinanceRateCardsTab rateCards={rateCards} isLoading={rateCardsLoading} searchTerm={searchTerm} />
+              </TabsContent>
+              <TabsContent value="integrations" className={modulePageTabContentClass}>
+                <FinanceIntegrationsTab integrations={integrations} isLoading={integrationsLoading} />
+              </TabsContent>
+              <TabsContent value="settings" className={modulePageTabContentClass}>
+                <FinanceSettingsTab settings={settings} isLoading={settingsLoading} />
+              </TabsContent>
+            </Tabs>
+          </div>
         </div>
     </ModuleShell>
   );

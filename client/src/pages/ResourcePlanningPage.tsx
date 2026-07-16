@@ -3,6 +3,19 @@ import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  modulePageTabContentClass,
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+  ModulePageLoadingShell,
+} from "@/components/ModulePageChrome";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -55,7 +68,7 @@ const PERSONA_DEFAULT_TAB: Record<string, string> = {
   hr: "recruit",
 };
 
-const TAB_CONTENT_CLASS = "p-3 sm:p-4 md:p-6 m-0 mt-0";
+const TAB_CONTENT_CLASS = modulePageTabContentClass;
 
 export default function ResourcePlanningPage() {
   const { data: personaConfig, isLoading: personasLoading } = useRpPersonas();
@@ -76,11 +89,7 @@ export default function ResourcePlanningPage() {
   }, [allowedPersonas, persona]);
 
   if (personasLoading && !personaConfig) {
-    return (
-      <ModuleShell className="h-screen overflow-hidden bg-background" testId="resource-planning-page">
-        <div className="flex items-center justify-center flex-1 py-20 text-sm text-muted-foreground">Loading resource planning…</div>
-      </ModuleShell>
-    );
+    return <ModulePageLoadingShell label="Loading resource planning…" testId="resource-planning-page" />;
   }
 
   return (
@@ -135,15 +144,15 @@ function ResourcePlanningInner({
   };
 
   return (
-    <ModuleShell className="h-screen overflow-hidden bg-background" testId="resource-planning-page" mainClassName="h-full flex flex-col overflow-hidden">
-        <div className="px-3 sm:px-4 pt-3 sm:pt-4 hidden md:block">
+    <ModuleShell className={modulePageShellClass} testId="resource-planning-page" mainClassName={modulePageMainClass}>
+        <div className={modulePageBannerWrapClass}>
           <ModuleWelcomeBanner
             moduleKey="resource-planning"
             features={["Demand vs supply matrix", "Resource heat map & scheduler", "Pipeline-driven recruitment forecast", "AI workforce planner"]}
           />
         </div>
 
-        <div className="border-b border-border/30 bg-card backdrop-blur-sm sticky top-0 z-50 shrink-0">
+        <div className={modulePageStickyHeaderClass}>
           <ModuleHeader
             icon={ResourcePlanningIcon}
             title="Resource Planning"
@@ -175,57 +184,61 @@ function ResourcePlanningInner({
             }
           />
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="px-3 sm:px-4">
-            <TabsList className="h-11 sm:h-12 bg-transparent border-0 gap-0.5 sm:gap-1 flex w-full max-w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-none scroll-smooth pb-1">
-              {visibleTabs.map((tab, idx) => {
-                const prev = visibleTabs[idx - 1];
-                const showDivider = prev && prev.group !== tab.group;
-                const Icon = tab.icon;
-                return (
-                  <span key={tab.id} className="contents">
-                    {showDivider && <span className="w-px h-6 bg-border/60 mx-0.5 self-center shrink-0" aria-hidden />}
-                    <TabsTrigger
-                      value={tab.id}
-                      aria-label={tab.label}
-                      title={tab.label}
-                      className="gap-1.5 sm:gap-2 shrink-0 px-2 sm:px-3 text-xs sm:text-sm rounded-lg whitespace-nowrap data-[state=active]:bg-indigo-500/10 data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400"
-                      data-testid={`tab-rp-${tab.id}`}
-                    >
-                      <Icon
-                        className="h-3.5 w-3.5 sm:h-4 sm:w-4"
-                        style={{ color: activeTab === tab.id ? RP_ACCENT : undefined }}
-                      />
-                      <span className="hidden sm:inline">{tab.label}</span>
-                      <span className="sm:hidden">{tab.label.split(" ")[0]}</span>
-                      {"badgeKey" in tab && tabBadges[tab.badgeKey] && (
-                        <Badge
-                          variant={"badgeVariant" in tab ? tab.badgeVariant : "secondary"}
-                          className="ml-0.5 sm:ml-1 h-5 px-1.5 text-[10px] font-medium"
-                        >
-                          {(tab.badgeKey === "dsm" && (dashLoading || dsmLoading)) ? "…" : tabBadges[tab.badgeKey]}
-                        </Badge>
-                      )}
-                    </TabsTrigger>
-                  </span>
-                );
-              })}
-            </TabsList>
-          </Tabs>
+          <div className={modulePageTabsWrapClass}>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className={modulePageTabsListClass}>
+                {visibleTabs.map((tab, idx) => {
+                  const prev = visibleTabs[idx - 1];
+                  const showDivider = prev && prev.group !== tab.group;
+                  const Icon = tab.icon;
+                  return (
+                    <span key={tab.id} className="contents">
+                      {showDivider && <span className="w-px h-6 bg-border/60 mx-0.5 self-center shrink-0" aria-hidden />}
+                      <TabsTrigger
+                        value={tab.id}
+                        aria-label={tab.label}
+                        title={tab.label}
+                        className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-indigo-500/10 data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400")}
+                        data-testid={`tab-rp-${tab.id}`}
+                      >
+                        <Icon
+                          className="h-3.5 w-3.5 sm:h-4 sm:w-4"
+                          style={{ color: activeTab === tab.id ? RP_ACCENT : undefined }}
+                        />
+                        <span className="hidden sm:inline">{tab.label}</span>
+                        <span className="sm:hidden">{tab.label.split(" ")[0]}</span>
+                        {"badgeKey" in tab && tabBadges[tab.badgeKey] && (
+                          <Badge
+                            variant={"badgeVariant" in tab ? tab.badgeVariant : "secondary"}
+                            className="ml-0.5 sm:ml-1 h-5 px-1.5 text-[10px] font-medium"
+                          >
+                            {(tab.badgeKey === "dsm" && (dashLoading || dsmLoading)) ? "…" : tabBadges[tab.badgeKey]}
+                          </Badge>
+                        )}
+                      </TabsTrigger>
+                    </span>
+                  );
+                })}
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-auto min-h-0">
-          <Tabs value={activeTab} className="h-full">
-            <TabsContent value="exec" className={TAB_CONTENT_CLASS}><ExecutiveDashboardTab onNavigate={navigateTab} /></TabsContent>
-            <TabsContent value="dsm" className={TAB_CONTENT_CLASS}><DemandSupplyTab onNavigate={navigateTab} /></TabsContent>
-            <TabsContent value="heatmap" className={TAB_CONTENT_CLASS}><HeatMapTab /></TabsContent>
-            <TabsContent value="scheduler" className={TAB_CONTENT_CLASS}><SchedulerTab /></TabsContent>
-            <TabsContent value="skills" className={TAB_CONTENT_CLASS}><SkillsInventoryTab searchTerm={searchTerm} /></TabsContent>
-            <TabsContent value="pipeline" className={TAB_CONTENT_CLASS}><PipelineDemandTab onNavigate={navigateTab} /></TabsContent>
-            <TabsContent value="recruit" className={TAB_CONTENT_CLASS}><RecruitmentForecastTab /></TabsContent>
-            <TabsContent value="bench" className={TAB_CONTENT_CLASS}><BenchManagementTab onNavigate={navigateTab} persona={persona} /></TabsContent>
-            <TabsContent value="ai" className={TAB_CONTENT_CLASS}><AiWorkforceTab onNavigate={navigateTab} /></TabsContent>
-            <TabsContent value="scenario" className={TAB_CONTENT_CLASS}><ScenarioPlanningTab /></TabsContent>
-          </Tabs>
+        <div className={modulePageContentOuterClass}>
+          <div className={modulePageContentScrollClass}>
+            <Tabs value={activeTab} className="h-full">
+              <TabsContent value="exec" className={TAB_CONTENT_CLASS}><ExecutiveDashboardTab onNavigate={navigateTab} /></TabsContent>
+              <TabsContent value="dsm" className={TAB_CONTENT_CLASS}><DemandSupplyTab onNavigate={navigateTab} /></TabsContent>
+              <TabsContent value="heatmap" className={TAB_CONTENT_CLASS}><HeatMapTab /></TabsContent>
+              <TabsContent value="scheduler" className={TAB_CONTENT_CLASS}><SchedulerTab /></TabsContent>
+              <TabsContent value="skills" className={TAB_CONTENT_CLASS}><SkillsInventoryTab searchTerm={searchTerm} /></TabsContent>
+              <TabsContent value="pipeline" className={TAB_CONTENT_CLASS}><PipelineDemandTab onNavigate={navigateTab} /></TabsContent>
+              <TabsContent value="recruit" className={TAB_CONTENT_CLASS}><RecruitmentForecastTab /></TabsContent>
+              <TabsContent value="bench" className={TAB_CONTENT_CLASS}><BenchManagementTab onNavigate={navigateTab} persona={persona} /></TabsContent>
+              <TabsContent value="ai" className={TAB_CONTENT_CLASS}><AiWorkforceTab onNavigate={navigateTab} /></TabsContent>
+              <TabsContent value="scenario" className={TAB_CONTENT_CLASS}><ScenarioPlanningTab /></TabsContent>
+            </Tabs>
+          </div>
         </div>
     </ModuleShell>
   );

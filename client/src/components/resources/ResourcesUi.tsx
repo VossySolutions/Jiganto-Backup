@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ModulePageLoading, ModuleTabLoading } from "@/components/ModulePageChrome";
 import { cn } from "@/lib/utils";
 import { getInitials, getTypeConfig, peopleUtilColor } from "./constants";
 import type { Resource } from "@shared/models/resources";
@@ -50,24 +51,11 @@ export function UtilBar({ util, width = 60 }: { util: number; width?: number }) 
 }
 
 export function ResourcesPageLoading({ label = "Loading Resources..." }: { label?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 py-20 sm:py-28" data-testid="resources-page-loading">
-      <div className="relative">
-        <div className="absolute inset-0 rounded-full bg-orange-500/20 blur-xl animate-pulse" />
-        <Loader2 className="h-10 w-10 text-orange-500 animate-spin relative" />
-      </div>
-      <p className="text-sm text-muted-foreground">{label}</p>
-    </div>
-  );
+  return <ModulePageLoading label={label} testId="resources-page-loading" className="py-20 sm:py-28" />;
 }
 
 export function ResourcesTabLoading({ label = "Loading..." }: { label?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 py-14 sm:py-20" data-testid="resources-tab-loading">
-      <Loader2 className="h-8 w-8 text-orange-500 animate-spin" />
-      <p className="text-sm text-muted-foreground">{label}</p>
-    </div>
-  );
+  return <ModuleTabLoading label={label} testId="resources-tab-loading" className="py-14 sm:py-20" />;
 }
 
 export function ResourcesKpiSkeleton({ count = 8 }: { count?: number }) {

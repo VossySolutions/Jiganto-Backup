@@ -21,6 +21,13 @@ import { cn } from "@/lib/utils";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  ModulePageLoadingShell,
+} from "@/components/ModulePageChrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -3475,11 +3482,7 @@ export default function DocumentManagementPage() {
   );
 
   if (foldersLoading && docsLoading) {
-    return (
-      <ModuleShell className="min-h-screen bg-background" testId="documents-page" mainClassName="h-screen flex flex-col overflow-hidden">
-          <DocumentsPageSkeleton />
-      </ModuleShell>
-    );
+    return <ModulePageLoadingShell label="Loading documents..." testId="documents-page" />;
   }
 
   const inDocumentFocus = isDocumentFullScreen && !!selectedDocument;
@@ -3487,21 +3490,21 @@ export default function DocumentManagementPage() {
   return (
     <>
     <ModuleShell
-      className="min-h-screen bg-background"
+      className={modulePageShellClass}
       testId="documents-page"
       showSidebar={!inDocumentFocus}
       fullBleed={inDocumentFocus}
       mainClassName={cn(
-        "h-screen flex flex-col overflow-hidden",
+        modulePageMainClass,
         inDocumentFocus && "fixed inset-0 z-50 bg-background",
       )}
     >
         {!inDocumentFocus && (
         <>
-        <div className="px-3 sm:px-4 pt-3 sm:pt-4 hidden md:block">
+        <div className={modulePageBannerWrapClass}>
           <ModuleWelcomeBanner moduleKey="documents" features={["Rich text editing", "Version control", "Folder hierarchy", "Access control"]} />
         </div>
-        <header className="border-b border-border/30 bg-card backdrop-blur-sm sticky top-0 z-10 shrink-0">
+        <header className={modulePageStickyHeaderClass}>
           <ModuleHeader
             icon={FileText}
             title="Documents"

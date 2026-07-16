@@ -7,6 +7,19 @@ import { Button } from "@/components/ui/button";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  modulePageTabContentClass,
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+  ModulePageLoadingShell,
+} from "@/components/ModulePageChrome";
 import { useToast } from "@/hooks/use-toast";
 import { Users, CreditCard, BarChart3, List, AlertCircle } from "lucide-react";
 import { RateCardManager } from "@/components/crm/RateCardManager";
@@ -18,7 +31,7 @@ import { SkillsMatrixTab } from "@/components/resources/SkillsMatrixTab";
 import { ResourcesPipelineTab } from "@/components/resources/ResourcesPipelineTab";
 import { ResourcesAllocationsTab } from "@/components/resources/ResourcesAllocationsTab";
 import { ResourcesReportsTab } from "@/components/resources/ResourcesReportsTab";
-import { ResourcesPageLoading, ResourcesErrorState } from "@/components/resources/ResourcesUi";
+import { ResourcesErrorState } from "@/components/resources/ResourcesUi";
 import { useResourceScope } from "@/hooks/use-resource-scope";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -172,16 +185,12 @@ export default function ResourceManagementPage() {
   }, [scope?.isContractorPortal, setActiveTab]);
 
   if (isLoading) {
-    return (
-      <ModuleShell className="h-screen overflow-hidden bg-background" mainClassName="h-full flex items-center justify-center">
-          <ResourcesPageLoading />
-      </ModuleShell>
-    );
+    return <ModulePageLoadingShell label="Loading Resources..." />;
   }
 
   if (isError) {
     return (
-      <ModuleShell className="h-screen overflow-hidden bg-background" mainClassName="h-full flex items-center justify-center p-4">
+      <ModuleShell className={modulePageShellClass} mainClassName="h-full flex items-center justify-center p-4">
           <div className="max-w-md w-full">
             <ResourcesErrorState message="Could not load resources" onRetry={() => refetch()} />
           </div>
@@ -189,13 +198,13 @@ export default function ResourceManagementPage() {
     );
   }
 
-  const tabContentClass = "p-4 sm:p-6 m-0";
-
   return (
-    <ModuleShell className="h-screen overflow-hidden bg-background" mainClassName="h-full flex flex-col overflow-hidden">
-        <div className="px-3 sm:px-4 pt-3 sm:pt-4 space-y-3">
+    <ModuleShell className={modulePageShellClass} mainClassName={modulePageMainClass}>
+        <div className={modulePageBannerWrapClass}>
           <ModuleWelcomeBanner moduleKey="resource-mgmt" features={["Skills matrix", "Capacity board", "Timesheets & approvals", "Pipeline planning"]} />
-          {scope?.isContractorPortal && (
+        </div>
+        {scope?.isContractorPortal && (
+          <div className="px-3 sm:px-4 shrink-0 pb-2">
             <Alert className="border-orange-500/30 bg-orange-500/5">
               <AlertCircle className="h-4 w-4 text-orange-500" />
               <AlertTitle className="text-sm">Contractor Portal</AlertTitle>
@@ -203,9 +212,9 @@ export default function ResourceManagementPage() {
                 You can view your dashboard and submit timesheets. Contact your resource manager for other requests.
               </AlertDescription>
             </Alert>
-          )}
-        </div>
-        <div className="border-b border-border/30 bg-card/80 backdrop-blur-sm sticky top-0 z-50">
+          </div>
+        )}
+        <div className={modulePageStickyHeaderClass}>
           <ModuleHeader
             icon={Users}
             title="Resources"
@@ -216,25 +225,26 @@ export default function ResourceManagementPage() {
             searchTestId="input-resource-search"
             titleTestId="text-module-title"
           />
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="px-3 sm:px-4">
-            <div className="overflow-x-auto scrollbar-thin -mx-1 px-1 pb-1">
-              <TabsList className="h-11 sm:h-12 bg-transparent border-0 gap-0.5 sm:gap-1 inline-flex w-max min-w-full sm:min-w-0 flex-nowrap">
-                {showTab("dashboard") && <TabsTrigger value="dashboard" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-dashboard"><ResDashboardIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Dashboard</TabsTrigger>}
-                {showTab("people") && <TabsTrigger value="people" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-people"><ResPeopleIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> People</TabsTrigger>}
-                {showTab("skills") && <TabsTrigger value="skills" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-skills-matrix"><ResSkillsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Skills</TabsTrigger>}
-                {showTab("allocations") && <TabsTrigger value="allocations" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-capacity"><ResCapacityIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Capacity</TabsTrigger>}
-                {showTab("pipeline") && <TabsTrigger value="pipeline" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-pipeline"><ResPipelineIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Pipeline</TabsTrigger>}
-                {showTab("timesheets") && <TabsTrigger value="timesheets" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-timesheets"><ResTimesheetsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Timesheets</TabsTrigger>}
-                {showTab("reports") && <TabsTrigger value="reports" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-reports"><BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Reports</TabsTrigger>}
-                {showTab("rate-cards") && <TabsTrigger value="rate-cards" className="gap-1.5 sm:gap-2 text-xs sm:text-sm shrink-0" data-testid="tab-rate-cards"><CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Rates</TabsTrigger>}
+          <div className={modulePageTabsWrapClass}>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className={modulePageTabsListClass}>
+                {showTab("dashboard") && <TabsTrigger value="dashboard" className={modulePageTabTriggerClass} data-testid="tab-dashboard"><ResDashboardIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Dashboard</TabsTrigger>}
+                {showTab("people") && <TabsTrigger value="people" className={modulePageTabTriggerClass} data-testid="tab-people"><ResPeopleIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> People</TabsTrigger>}
+                {showTab("skills") && <TabsTrigger value="skills" className={modulePageTabTriggerClass} data-testid="tab-skills-matrix"><ResSkillsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Skills</TabsTrigger>}
+                {showTab("allocations") && <TabsTrigger value="allocations" className={modulePageTabTriggerClass} data-testid="tab-capacity"><ResCapacityIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Capacity</TabsTrigger>}
+                {showTab("pipeline") && <TabsTrigger value="pipeline" className={modulePageTabTriggerClass} data-testid="tab-pipeline"><ResPipelineIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Pipeline</TabsTrigger>}
+                {showTab("timesheets") && <TabsTrigger value="timesheets" className={modulePageTabTriggerClass} data-testid="tab-timesheets"><ResTimesheetsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Timesheets</TabsTrigger>}
+                {showTab("reports") && <TabsTrigger value="reports" className={modulePageTabTriggerClass} data-testid="tab-reports"><BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Reports</TabsTrigger>}
+                {showTab("rate-cards") && <TabsTrigger value="rate-cards" className={modulePageTabTriggerClass} data-testid="tab-rate-cards"><CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Rates</TabsTrigger>}
               </TabsList>
-            </div>
-          </Tabs>
+            </Tabs>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <div className={modulePageContentOuterClass}>
+          <div className={modulePageContentScrollClass}>
           <Tabs value={activeTab}>
-            <TabsContent value="dashboard" className={tabContentClass}>
+            <TabsContent value="dashboard" className={modulePageTabContentClass}>
               <ResourcesDashboardTab
                 resources={visibleResources}
                 allocations={allocations}
@@ -244,7 +254,7 @@ export default function ResourceManagementPage() {
               />
             </TabsContent>
 
-            <TabsContent value="people" className={tabContentClass}>
+            <TabsContent value="people" className={modulePageTabContentClass}>
               <ResourcesPeopleTab
                 resources={visibleResources}
                 canManage={scope?.canManagePeople ?? true}
@@ -268,7 +278,7 @@ export default function ResourceManagementPage() {
               />
             </TabsContent>
 
-            <TabsContent value="skills" className={tabContentClass}>
+            <TabsContent value="skills" className={modulePageTabContentClass}>
               <SkillsMatrixTab
                 resources={visibleResources}
                 skills={skillsList}
@@ -281,7 +291,7 @@ export default function ResourceManagementPage() {
               />
             </TabsContent>
 
-            <TabsContent value="allocations" className={tabContentClass}>
+            <TabsContent value="allocations" className={modulePageTabContentClass}>
               <div className="space-y-4">
                 <div className="flex flex-wrap gap-2">
                   <Button variant={capacityViewMode === "basic" ? "default" : "outline"} size="sm" onClick={() => setCapacityViewMode("basic")}>
@@ -307,7 +317,7 @@ export default function ResourceManagementPage() {
               </div>
             </TabsContent>
 
-            <TabsContent value="pipeline" className={tabContentClass}>
+            <TabsContent value="pipeline" className={modulePageTabContentClass}>
               <ResourcesPipelineTab
                 onViewPlan={(planId) => {
                   window.location.href = `/modules/crm?tab=resourceplan&plan=${planId}`;
@@ -319,7 +329,7 @@ export default function ResourceManagementPage() {
               />
             </TabsContent>
 
-            <TabsContent value="timesheets" className={tabContentClass}>
+            <TabsContent value="timesheets" className={modulePageTabContentClass}>
               <FinanceTimesheetsTab
                 canApprove={scope?.canApproveTimesheets ?? true}
                 ownResourceId={scope?.ownResourceId ?? null}
@@ -327,11 +337,11 @@ export default function ResourceManagementPage() {
               />
             </TabsContent>
 
-            <TabsContent value="reports" className={tabContentClass}>
+            <TabsContent value="reports" className={modulePageTabContentClass}>
               <ResourcesReportsTab resources={visibleResources} allocations={allocations} />
             </TabsContent>
 
-            <TabsContent value="rate-cards" className={tabContentClass}>
+            <TabsContent value="rate-cards" className={modulePageTabContentClass}>
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                   <div>
@@ -344,6 +354,7 @@ export default function ResourceManagementPage() {
               <RateCardManager open={rateCardManagerOpen} onClose={() => setRateCardManagerOpen(false)} />
             </TabsContent>
           </Tabs>
+          </div>
         </div>
     </ModuleShell>
   );

@@ -1,5 +1,6 @@
-import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ModulePageLoading } from "@/components/ModulePageChrome";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -14,10 +15,10 @@ interface Props {
 export function TmScreenShell({ loading, error, onRetry, label = "Loading…", className, children }: Props) {
   if (loading) {
     return (
-      <div className={cn("flex flex-col items-center justify-center min-h-[280px] gap-3 p-6", className)}>
-        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
-        <p className="text-sm text-muted-foreground">{label}</p>
-      </div>
+      <ModulePageLoading
+        label={label}
+        className={cn("min-h-[280px] p-6", className)}
+      />
     );
   }
 

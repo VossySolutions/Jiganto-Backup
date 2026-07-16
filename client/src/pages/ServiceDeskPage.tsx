@@ -4,9 +4,22 @@ import { useQuery } from "@tanstack/react-query";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  modulePageTabContentClass,
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+} from "@/components/ModulePageChrome";
 import { ServiceDeskIcon } from "@/components/icons/ModuleIcons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, BookOpen, Ticket, Users, Clock, BarChart3, ClipboardList,
 } from "lucide-react";
@@ -84,8 +97,8 @@ export default function ServiceDeskPage() {
   };
 
   return (
-    <ModuleShell className="min-h-screen sm:h-screen sm:overflow-hidden bg-background" testId="service-desk-page" mainClassName="sm:h-full sm:flex sm:flex-col sm:overflow-hidden">
-        <div className="px-3 sm:px-4 pt-3 sm:pt-4 hidden md:block shrink-0">
+    <ModuleShell className={modulePageShellClass} testId="service-desk-page" mainClassName={modulePageMainClass}>
+        <div className={modulePageBannerWrapClass}>
           <ModuleWelcomeBanner
             moduleKey="service-desk"
             features={[
@@ -97,7 +110,7 @@ export default function ServiceDeskPage() {
           />
         </div>
 
-        <div className="border-b border-border/30 bg-card/80 backdrop-blur-sm sticky top-0 z-50 shrink-0">
+        <div className={modulePageStickyHeaderClass}>
           <ModuleHeader
             icon={ServiceDeskIcon}
             title="Service Desk"
@@ -110,79 +123,82 @@ export default function ServiceDeskPage() {
             }}
             searchTestId="input-service-desk-search"
             titleTestId="text-service-desk-title"
-            compact
           />
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="px-3 sm:px-4">
-            <TabsList
-              ref={tabsListRef}
-              className="h-11 sm:h-12 bg-transparent border-0 gap-0.5 sm:gap-1 flex w-full max-w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-none scroll-smooth mb-0"
-            >
-              {TAB_ITEMS.map((tab) => (
-                <TabsTrigger
-                  key={tab.value}
-                  value={tab.value}
-                  aria-label={tab.label}
-                  title={tab.label}
-                  data-testid={`sd-tab-${tab.value}`}
-                  className="gap-1.5 shrink-0 px-2.5 sm:px-3 text-xs sm:text-sm rounded-lg whitespace-nowrap data-[state=active]:bg-teal-500/10 data-[state=active]:text-teal-700 dark:data-[state=active]:text-teal-300"
-                >
-                  <tab.icon
-                    className="h-4 w-4 shrink-0"
-                    style={{ color: activeTab === tab.value ? SD_ACCENT : undefined }}
-                  />
-                  <span className="hidden xs:inline sm:inline">{tab.label}</span>
-                  <span className="xs:hidden sm:hidden">{tab.short}</span>
-                  {tab.value === "tickets" && openCount > 0 && (
-                    <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px]">
-                      {openCount}
-                    </Badge>
-                  )}
-                  {tab.value === "dashboard" && (dashboard?.kpis.slaBreached ?? 0) > 0 && (
-                    <Badge variant="destructive" className="ml-0.5 h-5 px-1.5 text-[10px]">
-                      {dashboard!.kpis.slaBreached}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          <div className={modulePageTabsWrapClass}>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList
+                ref={tabsListRef}
+                className={modulePageTabsListClass}
+              >
+                {TAB_ITEMS.map((tab) => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    aria-label={tab.label}
+                    title={tab.label}
+                    data-testid={`sd-tab-${tab.value}`}
+                    className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-teal-500/10 data-[state=active]:text-teal-700 dark:data-[state=active]:text-teal-300")}
+                  >
+                    <tab.icon
+                      className="h-4 w-4 shrink-0"
+                      style={{ color: activeTab === tab.value ? SD_ACCENT : undefined }}
+                    />
+                    <span className="hidden xs:inline sm:inline">{tab.label}</span>
+                    <span className="xs:hidden sm:hidden">{tab.short}</span>
+                    {tab.value === "tickets" && openCount > 0 && (
+                      <Badge variant="secondary" className="ml-0.5 h-5 px-1.5 text-[10px]">
+                        {openCount}
+                      </Badge>
+                    )}
+                    {tab.value === "dashboard" && (dashboard?.kpis.slaBreached ?? 0) > 0 && (
+                      <Badge variant="destructive" className="ml-0.5 h-5 px-1.5 text-[10px]">
+                        {dashboard!.kpis.slaBreached}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsContent value="dashboard" className="mt-0 focus-visible:outline-none">
-              <ServiceDeskDashboardTab onFilterTickets={handleDashboardFilter} />
-            </TabsContent>
-            <TabsContent value="catalogue" className="mt-0 focus-visible:outline-none">
-              <ServiceDeskCatalogueTab />
-            </TabsContent>
-            <TabsContent value="tickets" className="mt-0 focus-visible:outline-none">
-              <ServiceDeskTicketsTab
-                initialFilters={ticketFilters}
-                searchQuery={searchTerm}
-                initialTicketId={urlState.ticketId}
-                key={`${JSON.stringify(ticketFilters)}-${searchTerm}-${urlState.ticketId ?? ""}`}
-              />
-            </TabsContent>
-            <TabsContent value="task-tracker" className="mt-0 focus-visible:outline-none">
-              <ModuleTrackingBoard
-                apiPath="/api/service-desk/tracking-board"
-                queryKey={["/api/service-desk/tracking-board"]}
-                title="Service Desk Task Tracker"
-                description="Track ITSM actions, change tasks, and operational follow-ups."
-              />
-            </TabsContent>
-            <TabsContent value="teams" className="mt-0 focus-visible:outline-none">
-              <ServiceDeskTeamsTab />
-            </TabsContent>
-            <TabsContent value="sla" className="mt-0 focus-visible:outline-none">
-              <ServiceDeskSlaTab />
-            </TabsContent>
-            <TabsContent value="reports" className="mt-0 focus-visible:outline-none">
-              <ServiceDeskReportsTab />
-            </TabsContent>
-          </Tabs>
+        <div className={modulePageContentOuterClass}>
+          <div className={modulePageContentScrollClass}>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsContent value="dashboard" className={modulePageTabContentClass}>
+                <ServiceDeskDashboardTab onFilterTickets={handleDashboardFilter} />
+              </TabsContent>
+              <TabsContent value="catalogue" className={modulePageTabContentClass}>
+                <ServiceDeskCatalogueTab />
+              </TabsContent>
+              <TabsContent value="tickets" className={modulePageTabContentClass}>
+                <ServiceDeskTicketsTab
+                  initialFilters={ticketFilters}
+                  searchQuery={searchTerm}
+                  initialTicketId={urlState.ticketId}
+                  key={`${JSON.stringify(ticketFilters)}-${searchTerm}-${urlState.ticketId ?? ""}`}
+                />
+              </TabsContent>
+              <TabsContent value="task-tracker" className={modulePageTabContentClass}>
+                <ModuleTrackingBoard
+                  apiPath="/api/service-desk/tracking-board"
+                  queryKey={["/api/service-desk/tracking-board"]}
+                  title="Service Desk Task Tracker"
+                  description="Track ITSM actions, change tasks, and operational follow-ups."
+                />
+              </TabsContent>
+              <TabsContent value="teams" className={modulePageTabContentClass}>
+                <ServiceDeskTeamsTab />
+              </TabsContent>
+              <TabsContent value="sla" className={modulePageTabContentClass}>
+                <ServiceDeskSlaTab />
+              </TabsContent>
+              <TabsContent value="reports" className={modulePageTabContentClass}>
+                <ServiceDeskReportsTab />
+              </TabsContent>
+            </Tabs>
+          </div>
         </div>
     </ModuleShell>
   );

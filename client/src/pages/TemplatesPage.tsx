@@ -4,6 +4,17 @@ import { useLocation } from "wouter";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+} from "@/components/ModulePageChrome";
 import { TemplatesIcon } from "@/components/icons/ModuleIcons";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -454,37 +465,53 @@ export default function TemplatesPage() {
 
   return (
     <>
-    <ModuleShell className="min-h-screen bg-background">
-        <ModuleWelcomeBanner moduleKey="templates" />
-        <ModuleHeader
-          icon={TemplatesIcon}
-          title="Templates"
-          subtitle="Browse, apply, and manage starters across all modules"
-          actions={headerActions}
-        />
+    <ModuleShell className={modulePageShellClass} mainClassName={modulePageMainClass}>
+        <div className={modulePageBannerWrapClass}>
+          <ModuleWelcomeBanner moduleKey="templates" />
+        </div>
+        <div className={modulePageStickyHeaderClass}>
+          <ModuleHeader
+            icon={TemplatesIcon}
+            title="Templates"
+            subtitle="Browse, apply, and manage starters across all modules"
+            actions={headerActions}
+          />
 
-        <SubmittedTemplatesReview />
-
-        <div className="px-4 sm:px-6 pt-3 flex gap-2 border-b bg-card/40">
-          <Button
-            variant={viewMode === "library" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("library")}
-            data-testid="tab-template-library"
-          >
-            <LayoutTemplate className="h-4 w-4 mr-1.5" /> My library
-          </Button>
-          <Button
-            variant={viewMode === "marketplace" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("marketplace")}
-            data-testid="tab-template-marketplace"
-          >
-            <Store className="h-4 w-4 mr-1.5" /> Marketplace
-          </Button>
+          <div className={modulePageTabsWrapClass}>
+            <div className={cn(modulePageTabsListClass, "pb-1")}>
+              <button
+                type="button"
+                onClick={() => setViewMode("library")}
+                data-testid="tab-template-library"
+                className={cn(
+                  modulePageTabTriggerClass,
+                  "inline-flex items-center py-1.5 font-medium transition-colors gap-1.5",
+                  viewMode === "library" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <LayoutTemplate className="h-4 w-4" /> My library
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("marketplace")}
+                data-testid="tab-template-marketplace"
+                className={cn(
+                  modulePageTabTriggerClass,
+                  "inline-flex items-center py-1.5 font-medium transition-colors gap-1.5",
+                  viewMode === "marketplace" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Store className="h-4 w-4" /> Marketplace
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row min-h-[calc(100vh-11rem)]">
+        <div className={modulePageContentOuterClass}>
+          <div className={modulePageContentScrollClass}>
+        <SubmittedTemplatesReview />
+
+        <div className="flex flex-col lg:flex-row min-h-0 flex-1">
           <aside className="hidden lg:block w-56 xl:w-60 border-r bg-card/40 flex-shrink-0">
             <div className="p-4 border-b sticky top-0 bg-card/80 backdrop-blur-sm z-10">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Modules</p>
@@ -654,6 +681,8 @@ export default function TemplatesPage() {
                 </>
               )}
             </div>
+          </div>
+        </div>
           </div>
         </div>
     </ModuleShell>

@@ -6,6 +6,21 @@ import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { ModuleShell } from "@/components/ModuleShell";
+import { ModuleHeader } from "@/components/ModuleHeader";
+import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+} from "@/components/ModulePageChrome";
+import { DigitalSigningIcon } from "@/components/icons/ModuleIcons";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -682,7 +697,7 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
   });
 
   const shell = (children: React.ReactNode) => (
-    <ModuleShell className="esign-page h-screen overflow-hidden bg-background" mainClassName="h-full overflow-y-auto">
+    <ModuleShell className={cn("esign-page", modulePageShellClass)} mainClassName={modulePageMainClass}>
       {children}
     </ModuleShell>
   );
@@ -1482,9 +1497,9 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
     return shell(
       <>
         <PageHeader view={view} setView={setView} onNew={() => openCompose()} />
+        <div className={modulePageContentOuterClass}>
+          <div className={modulePageContentScrollClass}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-1">Templates</h1>
-          <p className="text-muted-foreground mb-8">Start a new sign-off request from a template</p>
           {templatesLoading ? (
             <EsignTemplateSkeleton />
           ) : templatesError ? (
@@ -1512,6 +1527,8 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
           </div>
           )}
         </div>
+          </div>
+        </div>
       </>
     );
   }
@@ -1521,12 +1538,9 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
     <>
       <PageHeader view={view} setView={setView} onNew={() => openCompose()} />
 
+      <div className={modulePageContentOuterClass}>
+        <div className={modulePageContentScrollClass}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-1">e-Sign Requests</h1>
-          <p className="text-muted-foreground text-sm sm:text-base">Manage document approvals and track signer progress</p>
-        </div>
-
         {kpiLoading ? (
           <div className="mb-8"><EsignKpiSkeleton /></div>
         ) : (
@@ -1701,7 +1715,9 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
             </>
           )}
         </div>
-      </div>
+        </div>
+          </div>
+        </div>
 
       <Dialog open={voidDialogOpen} onOpenChange={setVoidDialogOpen}>
         <DialogContent>
@@ -1727,33 +1743,45 @@ function PageHeader({ view, setView, onNew }: { view: View; setView: (v: View) =
     { key: "templates" as View, label: "Templates" },
   ];
   return (
-    <div className="esign-page-header bg-card border-b border-border px-4 sm:px-6 py-3 sticky top-0 z-10">
-      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-        <div className="font-bold text-base sm:text-lg flex items-center gap-2 shrink-0">
-          Jiganto <span className="text-[10px] sm:text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full uppercase tracking-wide">e-Sign</span>
-        </div>
-        <div className="esign-page-header-nav hidden sm:flex gap-1 bg-muted p-0.5 rounded-lg">
-          {tabs.map(t => (
-            <button key={t.key} onClick={() => setView(t.key)}
-              className={cn("px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                view === t.key ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground")}>
-              {t.label}
-            </button>
-          ))}
+    <>
+      <div className={modulePageBannerWrapClass}>
+        <ModuleWelcomeBanner moduleKey="esign" />
+      </div>
+      <div className={modulePageStickyHeaderClass}>
+        <ModuleHeader
+          icon={DigitalSigningIcon}
+          title="e-Sign"
+          subtitle="Electronic sign-off & approvals"
+          titleTestId="esign-title"
+          actions={
+            <Button size="sm" onClick={onNew} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">New e-Sign</span>
+              <span className="sm:hidden">New</span>
+            </Button>
+          }
+        />
+        <div className={modulePageTabsWrapClass}>
+          <div className={cn(modulePageTabsListClass, "pb-2")}>
+            {tabs.map(t => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setView(t.key)}
+                className={cn(
+                  modulePageTabTriggerClass,
+                  "inline-flex items-center py-1.5 font-medium transition-colors",
+                  view === t.key
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-      <button onClick={onNew} className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 shrink-0 justify-self-end">
-        <Plus className="h-4 w-4" /> <span className="hidden sm:inline">New e-Sign</span><span className="sm:hidden">New</span>
-      </button>
-      <div className="esign-page-header-nav sm:hidden flex gap-1 bg-muted p-0.5 rounded-lg">
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setView(t.key)}
-            className={cn("flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors",
-              view === t.key ? "bg-card shadow text-foreground" : "text-muted-foreground")}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-    </div>
+    </>
   );
 }

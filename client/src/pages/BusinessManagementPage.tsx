@@ -58,6 +58,16 @@ import { MondayTable, type ColumnDef, defaultStatusColors } from "@/components/M
 import type { Document, DocumentInitiativeLink } from "@shared/models/documents";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+} from "@/components/ModulePageChrome";
 import { useAIInsightsPanel } from "@/hooks/use-ai-insights-panel";
 import {
   EnhancedStrategyTab, EnhancedGoalsTab, EnhancedObjectivesTab,
@@ -482,11 +492,11 @@ export default function BusinessManagementPage() {
   const currentManageItem = manageSubmenu.find(item => item.id === activeTab);
 
   return (
-    <ModuleShell className="h-screen overflow-hidden bg-background" testId="business-page" mainClassName="h-full flex flex-col overflow-hidden">
-        <div className="px-3 sm:px-4 pt-3 sm:pt-4">
+    <ModuleShell className={modulePageShellClass} testId="business-page" mainClassName={modulePageMainClass}>
+        <div className={modulePageBannerWrapClass}>
           <ModuleWelcomeBanner moduleKey="business-mgmt" features={["Strategy mapping", "Governance layer", "RAG status rollup", "AI insights"]} />
         </div>
-        <div className="border-b border-border/30 bg-card/95 backdrop-blur-md sticky top-0 z-50 shadow-sm">
+        <div className={modulePageStickyHeaderClass}>
           <ModuleHeader
             icon={Briefcase}
             title="Business Management"
@@ -500,13 +510,14 @@ export default function BusinessManagementPage() {
           />
 
           <ScrollArea className="w-full">
-          <div className="px-3 sm:px-4 flex items-center gap-1 pb-3 min-w-max sm:min-w-0 flex-wrap sm:flex-nowrap">
+          <div className={cn(modulePageTabsWrapClass, "flex items-center gap-1 pb-3 min-w-max sm:min-w-0 flex-wrap sm:flex-nowrap")}>
             {primaryTabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "inline-flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors hover-elevate shrink-0",
+                  modulePageTabTriggerClass,
+                  "inline-flex items-center py-1.5 font-medium transition-colors hover-elevate",
                   activeTab === tab.id 
                     ? "bg-primary/10 text-primary shadow-sm" 
                     : "text-muted-foreground hover:text-foreground"
@@ -521,7 +532,8 @@ export default function BusinessManagementPage() {
               <DropdownMenuTrigger asChild>
                 <button
                   className={cn(
-                    "inline-flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors hover-elevate shrink-0",
+                    modulePageTabTriggerClass,
+                    "inline-flex items-center py-1.5 font-medium transition-colors hover-elevate",
                     isManageTab 
                       ? "bg-primary/10 text-primary shadow-sm" 
                       : "text-muted-foreground hover:text-foreground"
@@ -553,7 +565,8 @@ export default function BusinessManagementPage() {
             <button
               onClick={() => setActiveTab("reviews")}
               className={cn(
-                "inline-flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors hover-elevate shrink-0",
+                modulePageTabTriggerClass,
+                "inline-flex items-center py-1.5 font-medium transition-colors hover-elevate",
                 activeTab === "reviews"
                   ? "bg-primary/10 text-primary shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
@@ -566,7 +579,8 @@ export default function BusinessManagementPage() {
             <button
               onClick={() => setActiveTab("documents")}
               className={cn(
-                "inline-flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-colors hover-elevate shrink-0",
+                modulePageTabTriggerClass,
+                "inline-flex items-center py-1.5 font-medium transition-colors hover-elevate",
                 activeTab === "documents" 
                   ? "bg-primary/10 text-primary shadow-sm" 
                   : "text-muted-foreground hover:text-foreground"
@@ -581,8 +595,9 @@ export default function BusinessManagementPage() {
           </ScrollArea>
         </div>
 
-        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden">
-          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-[1600px] mx-auto w-full min-w-0">
+        <div className={modulePageContentOuterClass}>
+          <div className={modulePageContentScrollClass}>
+          <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 max-w-[1600px] mx-auto w-full min-w-0">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsContent value="dashboard" className="m-0 w-full min-w-0 max-w-full overflow-x-hidden">
                 {tabLoading.dashboard ? (
@@ -679,6 +694,7 @@ export default function BusinessManagementPage() {
                 <DocumentsTab initiatives={filteredInitiatives} />
               </TabsContent>
             </Tabs>
+          </div>
           </div>
         </div>
     </ModuleShell>

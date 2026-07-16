@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
-import { Building2, Loader2 } from "lucide-react";
+import { Building2 } from "lucide-react";
 
 function TabIconDashboard() {
   return (
@@ -105,6 +105,20 @@ function TabIconForecasting() {
 
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+  modulePageTabContentClass,
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+  ModulePageLoadingShell,
+  ModuleTabLoading,
+} from "@/components/ModulePageChrome";
 import { AccountDetailPanel } from "@/components/crm/AccountDetailPanel";
 import {
   CRM_ACCOUNT_DETAIL_PANEL_MARGIN_CLASS,
@@ -190,14 +204,6 @@ function parseCrmUrl() {
     opportunityId,
     hasDeepLink: Boolean(tab || contractId || planId || opportunityId),
   };
-}
-
-function CrmTabLoader() {
-  return (
-    <div className="flex justify-center py-16" data-testid="crm-tab-loading">
-      <Loader2 className="h-8 w-8 text-[#0ea5e9] animate-spin" />
-    </div>
-  );
 }
 
 export default function CRMPage() {
@@ -315,14 +321,7 @@ function CRMPageContent() {
   }
 
   if (isInitialLoading) {
-    return (
-      <ModuleShell className="h-screen overflow-hidden bg-background" testId="crm-loading" mainClassName="h-full flex items-center justify-center overflow-hidden">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 text-[#0ea5e9] animate-spin" />
-            <p className="text-sm text-muted-foreground">Loading CRM...</p>
-          </div>
-      </ModuleShell>
-    );
+    return <ModulePageLoadingShell label="Loading CRM..." testId="crm-loading" />;
   }
 
   const tabItems = [
@@ -339,16 +338,16 @@ function CRMPageContent() {
   ];
 
   return (
-    <ModuleShell className="h-screen overflow-hidden bg-background" testId="crm-page" mainClassName="h-full flex flex-col overflow-hidden">
+    <ModuleShell className={modulePageShellClass} testId="crm-page" mainClassName={modulePageMainClass}>
       <Tabs
         value={activeTab}
         onValueChange={(tab) => { setActiveTab(tab); setSelectedAccount(null); setDetailPanelExpanded(false); }}
         className="h-full flex flex-col overflow-hidden"
       >
-        <div className="px-3 sm:px-4 pt-3 sm:pt-4 hidden md:block">
+        <div className={modulePageBannerWrapClass}>
           <ModuleWelcomeBanner moduleKey="crm" features={["Pipeline management", "Lead tracking", "Sales forecasting", "Activity analytics"]} />
         </div>
-        <div className="border-b border-border/30 bg-card backdrop-blur-sm sticky top-0 z-50 shrink-0">
+        <div className={modulePageStickyHeaderClass}>
           <ModuleHeader
             icon={Building2}
             title="CRM"
@@ -360,16 +359,16 @@ function CRMPageContent() {
             titleTestId="crm-title"
           />
 
-          <div className="px-3 sm:px-4">
+          <div className={modulePageTabsWrapClass}>
             <TabsList
               ref={tabsListRef}
-              className="h-11 sm:h-12 bg-transparent border-0 gap-0.5 sm:gap-1 flex w-full max-w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-none scroll-smooth"
+              className={modulePageTabsListClass}
             >
               {tabItems.map(tab => (
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
-                  className="gap-1.5 sm:gap-2 shrink-0 px-2 sm:px-3 text-xs sm:text-sm rounded-lg whitespace-nowrap data-[state=active]:bg-[#0ea5e9]/10 data-[state=active]:text-[#0ea5e9]"
+                  className={cn(modulePageTabTriggerClass, "data-[state=active]:bg-[#0ea5e9]/10 data-[state=active]:text-[#0ea5e9]")}
                   data-testid={`tab-${tab.value}`}
                 >
                   {tab.svgIcon}
@@ -385,15 +384,16 @@ function CRMPageContent() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-hidden flex min-h-0">
+        <div className={modulePageContentOuterClass}>
           <div className={cn(
-            "flex-1 overflow-auto transition-all duration-300 min-w-0",
+            modulePageContentScrollClass,
+            "transition-all duration-300",
             selectedAccount && (detailPanelExpanded
               ? CRM_ACCOUNT_DETAIL_PANEL_EXPANDED_MARGIN_CLASS
               : CRM_ACCOUNT_DETAIL_PANEL_MARGIN_CLASS)
           )}>
             <div className="flex-1">
-              <TabsContent value="dashboard" className="p-3 sm:p-4 md:p-6 m-0">
+              <TabsContent value="dashboard" className={modulePageTabContentClass}>
                 <CrmDashboardTab
                   stats={dashboardStats}
                   isLoading={statsLoading}
@@ -406,13 +406,13 @@ function CRMPageContent() {
                 />
               </TabsContent>
 
-              <TabsContent value="leads" className="p-3 sm:p-4 md:p-6 m-0">
+              <TabsContent value="leads" className={modulePageTabContentClass}>
                 <CrmLeadsTab leads={leads} searchTerm={searchTerm} onNavigateToTab={(tab) => setActiveTab(tab)} onOpenCustomFieldsSettings={openCrmCustomFieldsSettings} />
               </TabsContent>
 
-              <TabsContent value="opportunities" className="p-3 sm:p-4 md:p-6 m-0">
+              <TabsContent value="opportunities" className={modulePageTabContentClass}>
                 {tabLoading.opportunities ? (
-                  <CrmTabLoader />
+                  <ModuleTabLoading testId="crm-tab-loading" />
                 ) : (
                   <CrmOpportunitiesTab
                     opportunities={opportunities}
@@ -432,41 +432,41 @@ function CRMPageContent() {
                 )}
               </TabsContent>
 
-              <TabsContent value="pipeline" className="p-3 sm:p-4 md:p-6 m-0">
+              <TabsContent value="pipeline" className={modulePageTabContentClass}>
                 {tabLoading.pipeline ? (
-                  <CrmTabLoader />
+                  <ModuleTabLoading testId="crm-tab-loading" />
                 ) : (
                   <CrmPipelineTab opportunities={opportunities} stages={stages} accounts={accounts} pipelines={pipelines} searchTerm={searchTerm} />
                 )}
               </TabsContent>
 
-              <TabsContent value="customers" className="p-3 sm:p-4 md:p-6 m-0">
+              <TabsContent value="customers" className={modulePageTabContentClass}>
                 {tabLoading.customers ? (
-                  <CrmTabLoader />
+                  <ModuleTabLoading testId="crm-tab-loading" />
                 ) : (
                   <CrmCustomersTab accounts={accounts} opportunities={opportunities} contracts={contracts} stages={stages} searchTerm={searchTerm} onSelectAccount={setSelectedAccount} />
                 )}
               </TabsContent>
 
-              <TabsContent value="contracts" className="p-3 sm:p-4 md:p-6 m-0">
+              <TabsContent value="contracts" className={modulePageTabContentClass}>
                 {tabLoading.contracts ? (
-                  <CrmTabLoader />
+                  <ModuleTabLoading testId="crm-tab-loading" />
                 ) : (
                   <CrmContractsTab contracts={contracts} accounts={accounts} searchTerm={searchTerm} initialContractId={urlState.contractId} />
                 )}
               </TabsContent>
 
-              <TabsContent value="contacts" className="p-3 sm:p-4 md:p-6 m-0">
+              <TabsContent value="contacts" className={modulePageTabContentClass}>
                 {tabLoading.contacts ? (
-                  <CrmTabLoader />
+                  <ModuleTabLoading testId="crm-tab-loading" />
                 ) : (
                   <CrmContactsTab contacts={contacts} accounts={accounts} searchTerm={searchTerm} />
                 )}
               </TabsContent>
 
-              <TabsContent value="forecasting" className="p-3 sm:p-4 md:p-6 m-0">
+              <TabsContent value="forecasting" className={modulePageTabContentClass}>
                 {tabLoading.forecasting ? (
-                  <CrmTabLoader />
+                  <ModuleTabLoading testId="crm-tab-loading" />
                 ) : (
                   <SalesForecastDashboard
                     opportunities={opportunities}
@@ -485,7 +485,7 @@ function CRMPageContent() {
 
               <TabsContent value="360view" className="m-0">
                 {tabLoading["360view"] ? (
-                  <CrmTabLoader />
+                  <ModuleTabLoading testId="crm-tab-loading" />
                 ) : (
                   <Crm360ViewTab
                     accounts={accounts}
@@ -500,9 +500,9 @@ function CRMPageContent() {
                 )}
               </TabsContent>
 
-              <TabsContent value="resourceplan" className="p-3 sm:p-4 md:p-6 m-0">
+              <TabsContent value="resourceplan" className={modulePageTabContentClass}>
                 {tabLoading.resourceplan ? (
-                  <CrmTabLoader />
+                  <ModuleTabLoading testId="crm-tab-loading" />
                 ) : (
                   <CrmResourcePlanTab
                     opportunities={opportunities}

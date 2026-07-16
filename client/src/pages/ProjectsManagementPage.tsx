@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ModuleShell } from "@/components/ModuleShell";
+import {
+  modulePageMainClass,
+  modulePageShellClass,
+} from "@/components/ModulePageChrome";
 import { cn } from "@/lib/utils";
 import { ProjectsLandingView } from "@/components/projects/ProjectsLanding";
 import {
@@ -1169,7 +1173,7 @@ export default function ProjectsManagementPage() {
   };
 
   return (
-    <ModuleShell className="flex h-screen bg-background" mainClassName="flex-1 flex flex-col overflow-hidden min-h-0">
+    <ModuleShell className={modulePageShellClass} mainClassName={modulePageMainClass}>
       {currentView === "dashboard" && (
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
           <ProjectsLandingView

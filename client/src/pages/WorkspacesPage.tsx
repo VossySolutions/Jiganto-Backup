@@ -4,6 +4,14 @@ import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+} from "@/components/ModulePageChrome";
 import { WorkspacesIcon } from "@/components/icons/ModuleIcons";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { TipTapEditor } from "@/components/TipTapEditor";
@@ -1646,16 +1654,16 @@ export default function WorkspacesPage() {
 
   return (
     <ModuleShell
-      className={cn(navState === "landing" ? "min-h-screen bg-background" : "h-screen")}
+      className={cn(navState === "landing" ? modulePageShellClass : "h-screen")}
       testId="workspaces-page"
       mainClassName={cn(
         "transition-all duration-300",
-        navState === "landing" ? "min-h-screen flex flex-col" : "flex h-full",
+        navState === "landing" ? modulePageMainClass : "flex h-full",
       )}
     >
       {navState === "landing" ? (
         <>
-          <div className="px-3 sm:px-4 pt-3 sm:pt-4">
+          <div className={modulePageBannerWrapClass}>
             <ModuleWelcomeBanner
               moduleKey="workspaces"
               features={[
@@ -1667,7 +1675,7 @@ export default function WorkspacesPage() {
             />
           </div>
 
-          <div className="border-b border-border/30 bg-card/95 backdrop-blur sticky top-0 z-40">
+          <div className={modulePageStickyHeaderClass}>
             <ModuleHeader
               icon={WorkspacesIcon}
               title="Workspaces"
@@ -1687,14 +1695,18 @@ export default function WorkspacesPage() {
             />
           </div>
 
-          <WorkspaceLanding
-            onSelectWorkspace={handleSelectWorkspace}
-            onEditWorkspace={openEditDialog}
-            onToggleFavorite={(id) => toggleFavoriteMutation.mutate(id)}
-            onShareWorkspace={(id) => { setShareWorkspaceId(id); setSharePanelOpen(true); }}
-            searchQuery={landingSearch}
-            onSearchQueryChange={setLandingSearch}
-          />
+          <div className={modulePageContentOuterClass}>
+            <div className={modulePageContentScrollClass}>
+              <WorkspaceLanding
+                onSelectWorkspace={handleSelectWorkspace}
+                onEditWorkspace={openEditDialog}
+                onToggleFavorite={(id) => toggleFavoriteMutation.mutate(id)}
+                onShareWorkspace={(id) => { setShareWorkspaceId(id); setSharePanelOpen(true); }}
+                searchQuery={landingSearch}
+                onSearchQueryChange={setLandingSearch}
+              />
+            </div>
+          </div>
         </>
       ) : (
       <>

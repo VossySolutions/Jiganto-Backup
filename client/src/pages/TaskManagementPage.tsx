@@ -7,6 +7,14 @@ import { cn } from "@/lib/utils";
 import { ModuleShell } from "@/components/ModuleShell";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageContentScrollClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+} from "@/components/ModulePageChrome";
 import { UniversalViewSystem, ColumnDef as ViewColumnDef } from "@/components/UniversalViewSystem";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckSquare, LayoutList, LayoutGrid } from "lucide-react";
@@ -195,8 +203,8 @@ export default function TaskManagementPage() {
   const metaLoading = workspacesQuery.isLoading || projectsQuery.isLoading;
 
   return (
-    <ModuleShell className="min-h-screen bg-background" testId="task-mgmt-page" mainClassName="min-h-screen flex flex-col">
-        <div className="px-3 sm:px-4 pt-3 sm:pt-4">
+    <ModuleShell className={modulePageShellClass} testId="task-mgmt-page" mainClassName={modulePageMainClass}>
+        <div className={modulePageBannerWrapClass}>
           <ModuleWelcomeBanner
             moduleKey="tasks"
             features={[
@@ -208,7 +216,7 @@ export default function TaskManagementPage() {
           />
         </div>
 
-        <div className="border-b border-border/30 bg-card/95 backdrop-blur sticky top-0 z-40">
+        <div className={modulePageStickyHeaderClass}>
           <ModuleHeader
             icon={CheckSquare}
             title="My Tasks"
@@ -220,8 +228,10 @@ export default function TaskManagementPage() {
           />
         </div>
 
+        <div className={modulePageContentOuterClass}>
+          <div className={modulePageContentScrollClass}>
         <TaskQueryShell query={tasksQuery} skeleton="full">
-          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 max-w-[1600px] w-full mx-auto">
+          <div className="p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4 max-w-[1600px] w-full mx-auto">
             <TaskQueryShell query={summaryQuery} skeleton="kpi">
               <TaskKpiStrip
                 summary={summaryQuery.data}
@@ -317,6 +327,8 @@ export default function TaskManagementPage() {
             <TaskAiTools filters={filters} tasks={tasks} onPrioritized={setAiOrder} />
           </div>
         </TaskQueryShell>
+          </div>
+        </div>
 
         <TaskDetailSheet
           task={selectedTask}

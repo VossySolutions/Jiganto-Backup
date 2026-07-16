@@ -4,6 +4,16 @@ import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { ModuleShell } from "@/components/ModuleShell";
+import { ModuleHeader } from "@/components/ModuleHeader";
+import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
+import {
+  modulePageBannerWrapClass,
+  modulePageContentOuterClass,
+  modulePageMainClass,
+  modulePageShellClass,
+  modulePageStickyHeaderClass,
+} from "@/components/ModulePageChrome";
+import { TestManagementIcon } from "@/components/icons/ModuleIcons";
 import { TmProjectProvider, useTmProject } from "@/contexts/TmProjectContext";
 import { CommandCentreScreen } from "@/components/testmgmt/CommandCentreScreen";
 import { TestCasesScreen } from "@/components/testmgmt/TestCasesScreen";
@@ -184,19 +194,8 @@ function SaveTmProjectAsTemplate() {
 function NavPanel({ activeScreen, onNavigate }: { activeScreen: TmScreen; onNavigate: (s: TmScreen) => void }) {
   return (
     <>
-      <div className="px-4 py-4 border-b border-border flex-shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-            <FlaskConical className="h-4 w-4 text-primary" />
-          </div>
-          <div>
-            <div className="text-sm font-semibold leading-tight">Test Management</div>
-            <div className="text-[10px] text-muted-foreground font-mono">QA & Testing</div>
-          </div>
-        </div>
-      </div>
       <div className="border-b border-border pb-2 flex-shrink-0">
-        <div className="px-4 pt-2 pb-0 text-[10px] font-semibold text-muted-foreground tracking-[0.12em] uppercase font-mono">Project</div>
+        <div className="px-4 pt-3 pb-0 text-[10px] font-semibold text-muted-foreground tracking-[0.12em] uppercase font-mono">Project</div>
         <ProjectSelector onSelect={() => {}} />
         <SaveTmProjectAsTemplate />
       </div>
@@ -276,35 +275,48 @@ function TestManagementInner() {
   }
 
   return (
-    <ModuleShell className="flex h-screen overflow-hidden bg-background" mainClassName="flex flex-1 flex-col lg:flex-row h-screen overflow-hidden">
-        {/* Desktop sidebar */}
-        <div className="hidden lg:flex w-[220px] min-w-[220px] border-r border-border bg-card flex-col overflow-hidden">
-          <NavPanel activeScreen={activeScreen} onNavigate={navigate} />
+    <ModuleShell className={modulePageShellClass} testId="test-mgmt-page" mainClassName={modulePageMainClass}>
+        <div className={modulePageBannerWrapClass}>
+          <ModuleWelcomeBanner
+            moduleKey="test-mgmt"
+            features={["Command centre", "Test library & cycles", "Execution console", "Defect triage"]}
+          />
+        </div>
+        <div className={modulePageStickyHeaderClass}>
+          <ModuleHeader
+            icon={TestManagementIcon}
+            title="Test Management"
+            subtitle={activeProject?.name ? `${currentLabel} · ${activeProject.name}` : "QA planning, execution & defect management"}
+            titleTestId="text-test-mgmt-title"
+            actions={
+              <div className="lg:hidden">
+                <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+                  <SheetTrigger asChild>
+                    <button className="p-2 rounded-lg border border-border hover:bg-muted/60" aria-label="Open menu">
+                      <Menu className="h-5 w-5" />
+                    </button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-[min(100vw,280px)] p-0 flex flex-col">
+                    <SheetHeader className="sr-only"><SheetTitle>Test Management navigation</SheetTitle></SheetHeader>
+                    <NavPanel activeScreen={activeScreen} onNavigate={navigate} />
+                  </SheetContent>
+                </Sheet>
+              </div>
+            }
+          />
         </div>
 
-        {/* Mobile header + sheet nav */}
-        <div className="lg:hidden flex items-center gap-2 px-3 py-2 border-b border-border bg-card flex-shrink-0">
-          <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-            <SheetTrigger asChild>
-              <button className="p-2 rounded-lg border border-border hover:bg-muted/60" aria-label="Open menu">
-                <Menu className="h-5 w-5" />
-              </button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[min(100vw,280px)] p-0 flex flex-col">
-              <SheetHeader className="sr-only"><SheetTitle>Test Management navigation</SheetTitle></SheetHeader>
-              <NavPanel activeScreen={activeScreen} onNavigate={navigate} />
-            </SheetContent>
-          </Sheet>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold truncate">{currentLabel}</div>
-            <div className="text-[10px] text-muted-foreground truncate">{activeProject?.name ?? "No project"}</div>
+        <div className={cn(modulePageContentOuterClass, "flex-col lg:flex-row")}>
+          {/* Desktop sidebar */}
+          <div className="hidden lg:flex w-[220px] min-w-[220px] border-r border-border bg-card flex-col overflow-hidden shrink-0">
+            <NavPanel activeScreen={activeScreen} onNavigate={navigate} />
           </div>
-        </div>
 
-        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-          <TmScreenShell loading={projectLoading && !activeProject} label="Loading project…">
-            {renderScreen(activeScreen)}
-          </TmScreenShell>
+          <div className="flex-1 overflow-hidden flex flex-col min-h-0 min-w-0">
+            <TmScreenShell loading={projectLoading && !activeProject} label="Loading project…">
+              {renderScreen(activeScreen)}
+            </TmScreenShell>
+          </div>
         </div>
     </ModuleShell>
   );

@@ -1,11 +1,19 @@
 import { Loader2 } from "lucide-react";
+import { ModulePageLoading, modulePageLoadingAccentClass } from "@/components/ModulePageChrome";
 import { cn } from "@/lib/utils";
 
 export function ChatSpinner({ className, label }: { className?: string; label?: string }) {
+  if (label) {
+    return (
+      <ModulePageLoading
+        label={label}
+        className={cn("py-8", className)}
+      />
+    );
+  }
   return (
-    <div className={cn("flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground", className)}>
-      <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
-      {label ? <p className="text-xs">{label}</p> : null}
+    <div className={cn("flex flex-col items-center justify-center gap-3 py-8", className)}>
+      <Loader2 className={modulePageLoadingAccentClass} aria-hidden />
     </div>
   );
 }
