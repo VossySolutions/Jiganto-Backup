@@ -1,0 +1,27 @@
+Hiroshi, I just wanted to share a video with you on a product called or made by DHTMLX. 
+I'll send the link to you. 
+It's a Gantt chart, but it's very simple, but very clean and very effective. 
+And I'm trying to see if you are able to replicate this and make the same or similar Gantt chart to make it very easy to use. 
+So what I like about this is if I click anywhere, one click and I'm already in edit mode. 
+If I just tap, I can automatically edit and change the fields. 
+I can click anywhere else once and I'm straight away in edit mode.
+I can add a line or a task at any place, anywhere along the line here. 
+I can collapse the rows if I make a change over here and let's just add one, two, three. 
+I can undo that very easily and it'll fix it. 
+But also what's nice is if you click on these bars here, you can actually drag them. 
+And as you drag them, it changes the dates over here, the start and the end date. 
+You can see the critical path in this case, it's just the one over there. 
+And you can zoom to fit. 
+So I can show quarters above there, I can show the years and I can also show if I scroll down, weeks, and then of course I can go and show days. 
+And then you can scroll along here. 
+Nice and easy. 
+So my question to you is, are you able to create something similar to this? 
+The similar look and feel. 
+We can still keep the top menu above on ours, but in this case, it would be nice to see if we can create something similar, which is like, where is it, where is it, where is it?
+I'm actually in this one over here. 
+I need to cancel, go back to hours. 
+And if I look at ours and I collapse it, it's very small font. 
+None of this does drag, but it doesn't change here. 
+So even if I move, it doesn't quite work. 
+I can't, I find it difficult to filter a bit on here. 
+And I'm just wondering if we can try to replicate the features from DHTXTML and I'll send you the link shortly.

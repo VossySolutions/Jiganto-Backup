@@ -23,7 +23,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { AppKanbanBoard } from "@/components/kanban";
+import { EditWorkItemPanel } from "@/components/projects/EditWorkItemPanel";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -901,13 +901,11 @@ export function ProjectsLandingView({
   isLoading,
   onOpenProject,
   onNewProject,
-  onEditProject,
 }: {
   projects: LandingProject[];
   isLoading: boolean;
   onOpenProject: (id: number) => void;
   onNewProject: () => void;
-  onEditProject: (id: number) => void;
 }) {
   const { user } = useAuth();
   type DashTab = "projects" | "milestones" | "my";
@@ -924,6 +922,14 @@ export function ProjectsLandingView({
   const [visibleCols, setVisibleCols] = useState<Record<ColumnId, boolean>>(loadVisibleColumns);
   const [selected, setSelected] = useState<LandingProject | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [editProjectId, setEditProjectId] = useState<number | null>(null);
+  const [editPanelOpen, setEditPanelOpen] = useState(false);
+
+  const openEdit = (id: number) => {
+    setPanelOpen(false);
+    setEditProjectId(id);
+    setEditPanelOpen(true);
+  };
 
   useEffect(() => {
     localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(visibleCols));
@@ -1177,9 +1183,9 @@ export function ProjectsLandingView({
               </Select>
 
               <Select value={healthFilter} onValueChange={(v) => { setHealthFilter(v); }}>
-                <SelectTrigger className="w-[150px] h-8" data-testid="filter-health"><SelectValue placeholder="Health" /></SelectTrigger>
+                <SelectTrigger className="w-[150px] h-8 text-foreground" data-testid="filter-health"><SelectValue placeholder="RAG" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All health</SelectItem>
+                  <SelectItem value="all">RAG</SelectItem>
                   <SelectItem value="red">Red — needs attention</SelectItem>
                   <SelectItem value="amber">Amber — monitor</SelectItem>
                   <SelectItem value="green">Green — on track</SelectItem>
@@ -1259,7 +1265,7 @@ export function ProjectsLandingView({
                 visible={visibleCols}
                 onOpen={openPreview}
                 onOpenWorkspace={onOpenProject}
-                onEdit={onEditProject}
+                onEdit={openEdit}
                 pagination={pagination}
               />
             )}
@@ -1289,7 +1295,19 @@ export function ProjectsLandingView({
         open={panelOpen}
         onOpenChange={setPanelOpen}
         onOpenWorkspace={onOpenProject}
-        onEditProject={onEditProject}
+        onEditProject={openEdit}
+      />
+
+      <EditWorkItemPanel
+        projectId={editProjectId}
+        open={editPanelOpen}
+        onOpenChange={(open) => {
+          setEditPanelOpen(open);
+          if (!open) setEditProjectId(null);
+        }}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/pm/projects"] });
+        }}
       />
     </div>
   );

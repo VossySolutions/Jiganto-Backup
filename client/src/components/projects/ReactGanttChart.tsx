@@ -27,12 +27,52 @@ function mapTaskVisualRag(status?: string | null, progress = 0): "g" | "a" | "r"
   return "g";
 }
 
+function deriveScheduleRag(
+  status?: string | null,
+  progress = 0,
+  start?: string | null,
+  end?: string | null
+): "g" | "a" | "r" {
+  const base = mapTaskVisualRag(status, progress);
+  if (base !== "g" || progress >= 100) return base;
+  const today = new Date().toISOString().slice(0, 10);
+  const endDate = end ? safeDate(end, today) : today;
+  const startDate = start ? safeDate(start, endDate) : endDate;
+  if (endDate < today) return "r";
+  const total = new Date(endDate).getTime() - new Date(startDate).getTime();
+  const elapsed = new Date(today).getTime() - new Date(startDate).getTime();
+  if (total > 0 && elapsed / total > 0.75 && progress < 60) return "a";
+  return "g";
+}
+
+function deriveBudgetRag(progress: number, scheduleRag: "g" | "a" | "r"): "g" | "a" | "r" {
+  if (scheduleRag === "r") return "a";
+  if (progress >= 90) return "g";
+  if (progress < 25) return "a";
+  return "g";
+}
+
+function deriveItemRags(
+  scopeRag: "g" | "a" | "r",
+  progress: number,
+  status?: string | null,
+  start?: string | null,
+  end?: string | null
+) {
+  const ragSch = deriveScheduleRag(status, progress, start, end);
+  const ragBgt = deriveBudgetRag(progress, ragSch);
+  return { rag: scopeRag, ragBgt, ragSch, ragScp: scopeRag };
+}
+
 function safeDate(d?: string | Date | null, fallback = "2025-01-01"): string {
   if (!d) return fallback;
   if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0, 10);
   const dt = new Date(d as string);
   if (isNaN(dt.getTime())) return fallback;
-  return dt.toISOString().split("T")[0];
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const day = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 // ID namespacing: keep Jiganto DB IDs out of conflict
@@ -47,6 +87,9 @@ interface V4Task {
   end: string;
   prog: number;
   rag: "g" | "a" | "r";
+  ragBgt?: "g" | "a" | "r";
+  ragSch?: "g" | "a" | "r";
+  ragScp?: "g" | "a" | "r";
   parent: number | null;
   predId: number | null;
   depType: string;
@@ -62,6 +105,7 @@ interface GanttInitData {
   nextId: number;
   projectId: number;
   tenantId: number;
+  projectName?: string;
   authToken?: string;
 }
 
@@ -115,6 +159,9 @@ function buildGanttData(
   });
 
   // Project (type 1)
+  const projRag = mapRag(project.ragStatus);
+  const projBgt = mapRag((project as { financialRag?: string | null }).financialRag);
+  const projSch = mapRag((project as { scheduleRag?: string | null }).scheduleRag);
   items.push({
     id: PFX.project,
     name: project.name,
@@ -123,7 +170,10 @@ function buildGanttData(
     start: safeDate(project.startDate, today),
     end: safeDate(project.endDate, oneYearLater),
     prog: project.progress ?? 0,
-    rag: mapRag(project.ragStatus),
+    rag: projRag,
+    ragBgt: projBgt,
+    ragSch: projSch,
+    ragScp: projRag,
     parent: null,
     predId: null,
     depType: "FS",
@@ -134,6 +184,13 @@ function buildGanttData(
 
   // Phases (type 2)
   phases.forEach((ph) => {
+    const phRags = deriveItemRags(
+      mapRag(ph.ragStatus),
+      ph.progress ?? 0,
+      ph.status,
+      ph.plannedStartDate,
+      ph.plannedEndDate
+    );
     items.push({
       id: PFX.phase + ph.id,
       name: ph.name,
@@ -142,7 +199,7 @@ function buildGanttData(
       start: safeDate(ph.plannedStartDate, today),
       end: safeDate(ph.plannedEndDate, oneYearLater),
       prog: ph.progress ?? 0,
-      rag: mapRag(ph.ragStatus),
+      ...phRags,
       parent: PFX.project,
       predId: null,
       depType: "FS",
@@ -161,6 +218,13 @@ function buildGanttData(
     const phEnd = ws.phaseId
       ? safeDate(phases.find((p) => p.id === ws.phaseId)?.plannedEndDate, oneYearLater)
       : oneYearLater;
+    const wsRags = deriveItemRags(
+      mapRag(ws.ragStatus),
+      ws.progress ?? 0,
+      ws.status,
+      ws.plannedStartDate ?? phStart,
+      ws.plannedEndDate ?? phEnd
+    );
     items.push({
       id: PFX.ws + ws.id,
       name: ws.name,
@@ -169,7 +233,7 @@ function buildGanttData(
       start: safeDate(ws.plannedStartDate, phStart),
       end: safeDate(ws.plannedEndDate, phEnd),
       prog: ws.progress ?? 0,
-      rag: mapRag(ws.ragStatus),
+      ...wsRags,
       parent: parentId,
       predId: null,
       depType: "FS",
@@ -201,6 +265,8 @@ function buildGanttData(
     const start = safeDate(t.plannedStartDate, today);
     const end = safeDate(t.plannedEndDate, start);
 
+    const scopeRag = mapRag((t as { ragStatus?: string | null }).ragStatus) || mapTaskVisualRag(t.status, t.progress ?? 0);
+    const taskRags = deriveItemRags(scopeRag, t.progress ?? 0, t.status, start, end);
     items.push({
       id: PFX.task + t.id,
       name: t.name,
@@ -209,7 +275,7 @@ function buildGanttData(
       start,
       end,
       prog: t.progress ?? 0,
-      rag: mapTaskVisualRag(t.status, t.progress ?? 0),
+      ...taskRags,
       parent: parentId,
       predId,
       depType: "FS",
@@ -223,6 +289,9 @@ function buildGanttData(
   milestones.forEach((ms) => {
     const parentId = ms.phaseId ? PFX.phase + ms.phaseId : PFX.project;
     const d = safeDate(ms.dueDate, today);
+    const msScope = mapRag(ms.ragStatus);
+    const msProg = ms.status === "completed" ? 100 : 0;
+    const msRags = deriveItemRags(msScope, msProg, ms.status, d, d);
     items.push({
       id: PFX.ms + ms.id,
       name: ms.name,
@@ -230,8 +299,8 @@ function buildGanttData(
       owner: "",
       start: d,
       end: d,
-      prog: ms.status === "completed" ? 100 : 0,
-      rag: mapRag(ms.ragStatus),
+      prog: msProg,
+      ...msRags,
       parent: parentId,
       predId: null,
       depType: "FS",
@@ -252,6 +321,7 @@ function buildGanttData(
     nextId: 5000,
     projectId: project.id,
     tenantId: project.tenantId,
+    projectName: project.name,
   };
 }
 
@@ -263,10 +333,11 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
 <div class="gtb" id="ganttToolbar">
   <span style="font-size:10px;color:var(--g500);font-weight:600;flex-shrink:0;">ZOOM</span>
   <div class="zoom-group">
-    <div class="zb" onclick="setZoom('day',this)">Day</div>
-    <div class="zb on" onclick="setZoom('week',this)">Week</div>
-    <div class="zb" onclick="setZoom('month',this)">Month</div>
-    <div class="zb" onclick="setZoom('quarter',this)">Quarter</div>
+    <div class="zb" data-zoom="day" onclick="setZoom('day',this)">Day</div>
+    <div class="zb on" data-zoom="week" onclick="setZoom('week',this)">Week</div>
+    <div class="zb" data-zoom="month" onclick="setZoom('month',this)">Month</div>
+    <div class="zb" data-zoom="quarter" onclick="setZoom('quarter',this)">Quarter</div>
+    <div class="zb" data-zoom="year" onclick="setZoom('year',this)">Year</div>
   </div>
   <div class="gtb-sep"></div>
   <span style="font-size:10px;color:var(--g500);font-weight:600;flex-shrink:0;">FILTER</span>
@@ -288,8 +359,9 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
     <option value="a">🟡 Amber</option>
     <option value="r">🔴 Red</option>
   </select>
+  <input class="tb-search" id="f-search" placeholder="Search tasks…" oninput="renderAll()">
   <div class="gtb-sep"></div>
-  <div class="cp-toggle" id="cpBtn" onclick="toggleCP()" title="Highlight critical path">⚡ Critical Path</div>
+  <div class="cp-toggle" id="cpBtn" onclick="toggleCP()" title="Highlight critical path">Critical path</div>
   <div class="dep-draw-btn" id="depDrawBtn" onclick="toggleDepDraw()" title="Click two bars to draw a dependency">🔗 Draw Dep</div>
   <div style="margin-left:auto;display:flex;gap:5px;align-items:center;flex-shrink:0;">
     <button class="btn btn-ghost" onclick="jumpToToday()" title="Scroll to today">📍 Today</button>
@@ -301,46 +373,83 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
     <div style="width:1px;height:16px;background:var(--g200);"></div>
     <button class="btn btn-excel" onclick="openImportExport('export')">↓ Export</button>
     <button class="btn btn-green" onclick="openImportExport('import')">↑ Import</button>
-    <button class="btn btn-p" onclick="addItemAfterSelected()">＋ Add</button>
+    <button class="btn btn-p" onclick="addNewItem()">+ Add a New Item</button>
     <div class="view-group">
-      <div class="vb on" onclick="setView('gantt',this)">📅 Gantt</div>
-      <div class="vb" onclick="setView('list',this)">≡ List</div>
+      <button type="button" class="vb on" id="viewGanttBtn" onclick="setView('gantt',this)">📅 Gantt</button>
+      <button type="button" class="vb" id="viewListBtn" onclick="setView('list',this)">≡ List</button>
     </div>
   </div>
 </div>`;
 
   const ganttBodyHTML = `
 <div class="gantt-body" id="ganttBody">
-  <div class="task-panel" id="taskPanel">
-    <div class="tp-header">
-      <div class="th-cell th-wbs">WBS</div>
-      <div class="th-cell th-name">Task / Work Item</div>
-      <div class="th-cell th-owner">Owner</div>
-      <div class="th-cell" style="width:58px;font-size:9px;border-right:1px solid var(--g200);">Start</div>
-      <div class="th-cell" style="width:58px;font-size:9px;border-right:1px solid var(--g200);">End</div>
-      <div class="th-cell th-prog">%</div>
-      <div class="th-cell th-rag">RAG</div>
-    </div>
-    <div class="tp-scroll" id="taskScroll"></div>
-    <div class="add-row">
-      <button class="add-btn-mini" onclick="addItemAfterSelected()">＋ Task</button>
-      <button class="add-btn-mini" onclick="addItemOfTypeAfterSelected('phase')">＋ Phase</button>
-      <button class="add-btn-mini" onclick="addItemOfTypeAfterSelected('milestone')">◆ Milestone</button>
-    </div>
-  </div>
-  <div class="panel-splitter" id="panelSplitter" title="Drag to resize columns"></div>
-  <div class="timeline-panel">
-    <div class="tl-scroll-wrap" id="tlWrap">
-      <div class="tl-inner" id="tlInner">
-        <div class="tl-header" id="tlHeader"></div>
-        <div class="tl-rows" id="tlRows" style="position:relative;"></div>
-        <div class="today-line" id="todayLine" style="display:none;">
-          <div class="today-marker"></div>
-        </div>
-        <svg class="dep-svg" id="depSvg" style="position:absolute;top:0;left:0;pointer-events:none;z-index:8;overflow:visible;"></svg>
+  <div class="gantt-view" id="ganttView">
+    <div class="task-panel" id="taskPanel">
+      <div class="tp-header" id="tpHeader">
+        <div class="th-cell th-wbs">#</div>
+        <div class="th-cell th-name">Task name</div>
+        <div class="th-cell th-owner">Owner</div>
+        <div class="th-cell th-date">Start time</div>
+        <div class="th-cell th-date">End</div>
+        <div class="th-cell th-dur">Duration</div>
+        <div class="th-cell th-pred">Predecessors</div>
+        <div class="th-cell th-prog">%</div>
+        <div class="th-cell th-rag-col">Budget</div>
+        <div class="th-cell th-rag-col">Sched</div>
+        <div class="th-cell th-rag-col">Scope</div>
+        <div id="tpCustomHeaders" class="tp-custom-headers"></div>
+        <div class="th-cell th-add-col" onclick="promptAddColumn()" title="Add a Column">+ Add a Column</div>
+        <div class="th-cell th-row-add" onclick="headerAddChild()" title="Add child under selected row">+</div>
+      </div>
+      <div class="tp-scroll" id="taskScroll"></div>
+      <div class="add-row">
+        <button class="add-new-item-btn" onclick="addNewItem()" title="Add a new work item">+ Add a New Item</button>
+        <button class="add-btn-mini" onclick="addItemOfTypeAfterSelected('phase')">＋ Phase</button>
+        <button class="add-btn-mini" onclick="addItemOfTypeAfterSelected('milestone')">◆ Milestone</button>
       </div>
     </div>
+    <div class="panel-splitter" id="panelSplitter" title="Drag to resize columns"></div>
+    <div class="timeline-panel">
+      <div class="tl-header-wrap" id="tlHeaderWrap">
+        <div class="tl-header" id="tlHeader"></div>
+      </div>
+      <div class="tl-scroll-wrap" id="tlWrap">
+        <div class="tl-inner" id="tlInner">
+          <div class="tl-rows" id="tlRows"></div>
+          <div class="today-line" id="todayLine" style="display:none;">
+            <div class="today-marker"></div>
+          </div>
+          <svg class="dep-svg" id="depSvg"></svg>
+        </div>
+      </div>
+      <div class="tl-panel-footer" aria-hidden="true"></div>
+    </div>
   </div>
+  <div class="list-view" id="listView" hidden></div>
+</div>
+<div class="gantt-bottom-bar" id="ganttBottomBar">
+  <label class="dhx-switch"><input type="checkbox" id="switchCollapse" onchange="toggleCollapseRows(true)"><span class="slider"></span>Collapse rows</label>
+  <button class="btn-icon-lbl" onclick="undo()" id="undoBtn" disabled title="Undo (Ctrl+Z)"><span class="btn-ico">↶</span> Undo</button>
+  <button class="btn-icon-lbl" onclick="redo()" id="redoBtn" disabled title="Redo (Ctrl+Y)"><span class="btn-ico">↷</span> Redo</button>
+  <label class="dhx-switch"><input type="checkbox" id="switchAutoSched" onchange="toggleAutoSchedule(true)"><span class="slider"></span>Auto scheduling</label>
+  <label class="dhx-switch"><input type="checkbox" id="switchCP" onchange="toggleCP(true)"><span class="slider"></span>Critical path</label>
+  <label class="dhx-switch"><input type="checkbox" id="switchZoomFit" onchange="toggleZoomFit(true)"><span class="slider"></span>Zoom to fit</label>
+  <span class="zoom-to-label">Zoom to:</span>
+  <select class="tb-select zoom-to-select" onchange="if(this.value){setZoom(this.value,document.querySelector('.zb[data-zoom=&quot;'+this.value+'&quot;]'));this.value='';}">
+    <option value="">—</option>
+    <option value="day">Days</option>
+    <option value="week">Weeks</option>
+    <option value="month">Months</option>
+    <option value="quarter">Quarters</option>
+    <option value="year">Years</option>
+  </select>
+  <div class="bottom-exports">
+    <button class="btn btn-export-outline" onclick="exportGanttPDF(event)">Export to PDF</button>
+    <button class="btn btn-export-outline" onclick="exportGanttPNG(event)">Export to PNG</button>
+    <button class="btn btn-export-outline" onclick="downloadCurrentPlan(event)">Export to Excel</button>
+    <button class="btn btn-export-outline" onclick="downloadMSProject(event)">Export to MS Project</button>
+  </div>
+  <button class="btn btn-p btn-fullscreen" onclick="toggleFullscreen()" title="Fullscreen">FULLSCREEN</button>
 </div>`;
 
   const modalsHTML = `
@@ -446,8 +555,8 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${projectName.replace(/</g, "&lt;")} — Gantt</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/gantt-v4-engine.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260716h">
 </head>
 <body>
 <div class="main">
@@ -456,7 +565,7 @@ ${ganttBodyHTML}
 </div>
 ${modalsHTML}
 <script>window.GANTT_INIT_DATA = ${dataJson};</script>
-<script src="/gantt-v4-engine.js"></script>
+<script src="/gantt-v4-engine.js?v=20260716h"></script>
 </body>
 </html>`;
 }
@@ -494,7 +603,6 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
       queryClient.refetchQueries({ queryKey: [`/api/pm/projects/${projectId}/milestones`] }),
       queryClient.refetchQueries({ queryKey: [`/api/pm/projects/${projectId}/team`] }),
     ]);
-    setRefreshKey((k) => k + 1);
   }, [queryClient, projectId]);
 
   useEffect(() => {
@@ -560,7 +668,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
       authToken: authToken || undefined,
     };
     return buildSrcDoc(data, project.name);
-  }, [project, phases, workstreams, dbTasks, milestones, team, authToken, authReady]);
+  }, [project, phases, workstreams, dbTasks, milestones, team, authToken, authReady, refreshKey]);
 
   if (isLoading) {
     return (
@@ -582,11 +690,13 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
 
   return (
     <iframe
-      key={`${projectId}-${refreshKey}`}
+      key={`${projectId}-${refreshKey}-v20260716h`}
       title={`Gantt — ${project.name}`}
       srcDoc={srcDoc ?? undefined}
       style={{ width: "100%", height: "100%", minHeight: 400, border: "none", display: "block" }}
       sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+      allow="fullscreen"
+      allowFullScreen
     />
   );
 }
