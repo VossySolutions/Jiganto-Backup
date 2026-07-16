@@ -16,9 +16,11 @@ import { cn } from "@/lib/utils";
 import {
   Plus, Download, Upload, ArrowUpRight, Search,
   SlidersHorizontal, ArrowUpDown, Layers,
-  UserCheck, ChevronDown, Maximize2, Minimize2,
-  Columns3, Table2, List, Calendar, Settings2,
+  UserCheck, ChevronDown,   Maximize2, Minimize2,
+  Columns3, Table2, List, Calendar, Settings2, GanttChart, FileText,
   MessageSquare, Paperclip, ListTodo, Sparkles, FolderPlus, X,
+  ChevronsUpDown, ChevronsDownUp, Pin, ClipboardPaste,
+  BarChart3, LayoutDashboard, Clock, FormInput,
 } from "lucide-react";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { useCrmUsers } from "./CrmUsersProvider";
@@ -30,13 +32,26 @@ import {
   CrmLeadBoardView,
   CrmLeadCalendarView,
 } from "./CrmLeadAlternateViews";
+import { CrmLeadGanttView, CrmLeadDocumentView } from "./CrmLeadGanttDocumentViews";
+import {
+  CrmLeadChartView,
+  CrmLeadDashboardView,
+  CrmLeadFormView,
+  CrmLeadTimesheetView,
+} from "./CrmLeadExtraViews";
+import { CrmLeadSavedViewTabs } from "./CrmLeadSavedViewTabs";
+import { CrmLeadAddColumnDialog } from "./CrmLeadAddColumnDialog";
+import { CrmLeadPasteDialog } from "./CrmLeadPasteDialog";
 import { loadColumnVisibility, saveColumnVisibility, type CrmColumnDef } from "@/lib/crm-list-columns";
-import { formatCustomFieldDisplayValue } from "@/lib/crm-custom-fields";
+import { formatCustomFieldDisplayValue, parseFieldOptions } from "@/lib/crm-custom-fields";
 import {
   loadLeadStatusOptions,
   saveLeadStatusOptions,
   loadLeadRatingOptions,
   saveLeadRatingOptions,
+  loadLeadSourceOptions,
+  saveLeadSourceOptions,
+  mergeSourceOptionsWithData,
 } from "@/lib/crm-lead-labels";
 import {
   loadManualLeadGroups,
@@ -72,6 +87,7 @@ const LEAD_TABLE_COLUMNS: CrmColumnDef[] = [
   { id: "files", label: "Files" },
   { id: "status", label: "Status" },
   { id: "score", label: "Score" },
+  { id: "scoreBand", label: "Score band", defaultVisible: false },
   { id: "rating", label: "Rating" },
   { id: "source", label: "Source" },
   { id: "owner", label: "Owner" },
@@ -83,22 +99,15 @@ const LEAD_TABLE_COLUMNS: CrmColumnDef[] = [
   { id: "created", label: "Created" },
 ];
 
-type LeadFilterField = "status" | "source" | "rating" | "temperature" | "industry" | "title";
-
-const FILTER_FIELDS: { field: LeadFilterField; label: string }[] = [
-  { field: "status", label: "Status" },
-  { field: "source", label: "Source" },
-  { field: "rating", label: "Rating" },
-  { field: "temperature", label: "Temperature" },
-  { field: "industry", label: "Industry" },
-  { field: "title", label: "Title" },
-];
-
-interface LeadFilterRule {
-  id: string;
-  field: LeadFilterField;
-  value: string;
-}
+import {
+  FILTER_FIELDS,
+  FILTER_OPERATORS,
+  matchLeadFilterValue,
+  type LeadFilterField,
+  type LeadFilterOperator,
+  type LeadFilterRule,
+} from "@/lib/crm-lead-filters";
+import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
 
 type LeadAttachmentSummaryRow = { id: number; entityId: number };
 type LeadTaskSummaryRow = { id: number; leadId: number | null; status?: string | null; completedAt?: string | null };
@@ -134,13 +143,29 @@ type LeadGroupBy =
   | "followUp";
 
 type TableDensity = "compact" | "comfortable" | "expanded";
-type LeadViewMode = "table" | "list" | "board" | "calendar";
+type LeadViewMode =
+  | "table"
+  | "list"
+  | "board"
+  | "calendar"
+  | "gantt"
+  | "document"
+  | "chart"
+  | "form"
+  | "dashboard"
+  | "timesheet";
 
 const VIEW_OPTIONS: { id: LeadViewMode; label: string; icon: typeof Table2 }[] = [
   { id: "table", label: "Table", icon: Table2 },
   { id: "list", label: "List", icon: List },
   { id: "board", label: "Board", icon: Columns3 },
   { id: "calendar", label: "Calendar", icon: Calendar },
+  { id: "gantt", label: "Gantt", icon: GanttChart },
+  { id: "document", label: "Document", icon: FileText },
+  { id: "chart", label: "Chart", icon: BarChart3 },
+  { id: "form", label: "Form", icon: FormInput },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "timesheet", label: "Timesheet", icon: Clock },
 ];
 
 interface CrmLeadsTabProps {
@@ -241,20 +266,22 @@ function TemperatureDisplay({ score, temperature }: { score: number | null; temp
 
 function StatusDot({ status }: { status: string }) {
   const colors: Record<string, string> = {
-    new: "#22c55e",
-    contacted: "#f59e0b",
-    qualified: "#22c55e",
-    unqualified: "#6b7280",
-    converted: "#8b5cf6",
-    lost: "#ef4444",
+    new: "#00c875",
+    contacted: "#fdab3d",
+    qualified: "#579bfc",
+    unqualified: "#c4c4c4",
+    converted: "#a25ddc",
+    lost: "#e2445c",
   };
-  const color = colors[status] || "#6b7280";
+  const color = colors[status] || "#c4c4c4";
   const label = status.charAt(0).toUpperCase() + status.slice(1);
   return (
-    <div className="flex items-center gap-2">
-      <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-      <span className="text-sm">{label}</span>
-    </div>
+    <span
+      className="inline-flex items-center justify-center min-h-[22px] px-2 rounded-[4px] text-[12px] font-medium text-white"
+      style={{ backgroundColor: color }}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -288,6 +315,32 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   const [manualGroups, setManualGroups] = useState<ManualLeadGroup[]>(() => loadManualLeadGroups());
   const [selectedLeadIds, setSelectedLeadIds] = useState<(number | string)[]>([]);
   const [density, setDensity] = useState<TableDensity>("comfortable");
+  const [expandAllSignal, setExpandAllSignal] = useState(0);
+  const [collapseAllSignal, setCollapseAllSignal] = useState(0);
+  const [pinCompany, setPinCompany] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("crm-leads-pin-company") !== "0";
+  });
+  const [rowOrderIds, setRowOrderIds] = useState<number[]>(() => {
+    try {
+      const raw = localStorage.getItem("crm-leads-row-order");
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((n: unknown) => typeof n === "number") : [];
+    } catch {
+      return [];
+    }
+  });
+  const [columnOrderIds, setColumnOrderIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("crm-leads-column-order");
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((n: unknown) => typeof n === "string") : [];
+    } catch {
+      return [];
+    }
+  });
   const [viewMode, setViewMode] = useState<LeadViewMode>(() => {
     if (typeof window === "undefined") return "table";
     const stored = localStorage.getItem("crm-leads-view-mode") as LeadViewMode | null;
@@ -295,7 +348,17 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   });
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>(() => loadLeadStatusOptions());
   const [ratingOptions, setRatingOptions] = useState<StatusOption[]>(() => loadLeadRatingOptions());
-  const [labelEditor, setLabelEditor] = useState<"status" | "rating" | null>(null);
+  const [sourceOptions, setSourceOptions] = useState<StatusOption[]>(() => loadLeadSourceOptions());
+  const [labelEditor, setLabelEditor] = useState<"status" | "rating" | "source" | null>(null);
+  const [customDropdownEditor, setCustomDropdownEditor] = useState<{
+    id: number;
+    fieldName: string;
+    fieldLabel: string;
+    options: StatusOption[];
+  } | null>(null);
+  const [formViewLead, setFormViewLead] = useState<CrmLead | null>(null);
+  const [addColumnOpen, setAddColumnOpen] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
   const [convertOptions, setConvertOptions] = useState({
     createAccount: true,
     createContact: true,
@@ -421,10 +484,12 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     [leads]
   );
 
-  const sourceSelectOptions: StatusOption[] = useMemo(
-    () => leadSources.map((s) => ({ value: s, label: s, color: "" })),
-    [leadSources],
+  const mergedSourceOptions = useMemo(
+    () => mergeSourceOptionsWithData(sourceOptions, leadSources),
+    [sourceOptions, leadSources],
   );
+
+  const sourceSelectOptions: StatusOption[] = mergedSourceOptions;
 
   const ownerSelectOptions: StatusOption[] = useMemo(
     () => [
@@ -449,7 +514,14 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   }, [customFields]);
 
   const hiddenAddableCount = allAddableColumns.filter((c) => !isColVisible(c.id)).length;
-  const activeFilterCount = filterRules.filter((r) => r.value).length;
+  const activeFilterCount = filterRules.filter((r) => {
+    const op = FILTER_OPERATORS.find((o) => o.value === (r.operator || "is")) || FILTER_OPERATORS[0];
+    return !op.needsValue || !!r.value;
+  }).length;
+
+  const hotCount = leads.filter((l) => getTemperature(l.score) === "hot").length;
+  const warmCount = leads.filter((l) => getTemperature(l.score) === "warm").length;
+  const coldCount = leads.filter((l) => getTemperature(l.score) === "cold").length;
 
   const getLeadFilterFieldValue = (lead: CrmLead, field: LeadFilterField): string => {
     switch (field) {
@@ -459,6 +531,9 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
       case "temperature": return getTemperature(lead.score);
       case "industry": return lead.industry || "";
       case "title": return lead.title || "";
+      case "company": return lead.company || "";
+      case "owner": return lead.ownerUserId || "";
+      case "score": return lead.score != null ? String(lead.score) : "";
       default: return "";
     }
   };
@@ -467,7 +542,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     switch (field) {
       case "status": return statusOptions.map((o) => ({ value: o.value, label: o.label }));
       case "rating": return ratingOptions.map((o) => ({ value: o.value, label: o.label }));
-      case "source": return leadSources.map((s) => ({ value: s, label: s }));
+      case "source": return mergedSourceOptions.map((o) => ({ value: o.value, label: o.label }));
       case "temperature": return [
         { value: "hot", label: `Hot (${hotCount})` },
         { value: "warm", label: `Warm (${warmCount})` },
@@ -477,16 +552,41 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         .map((v) => ({ value: v, label: v }));
       case "title": return Array.from(new Set(leads.map((l) => l.title).filter((v): v is string => !!v)))
         .map((v) => ({ value: v, label: v }));
+      case "company": return Array.from(new Set(leads.map((l) => l.company).filter((v): v is string => !!v)))
+        .map((v) => ({ value: v, label: v }));
+      case "owner": return [
+        { value: "__unassigned__", label: "Unassigned" },
+        ...users.map((u) => ({ value: u.id, label: resolveOwner(u.id).name })),
+      ];
+      case "score": return ["0", "40", "80", "100"].map((v) => ({ value: v, label: v }));
       default: return [];
     }
   };
 
   const addFilterRule = () => {
-    setFilterRules((prev) => [...prev, { id: `f_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, field: "status", value: "" }]);
+    setFilterRules((prev) => [
+      ...prev,
+      {
+        id: `f_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        field: "status",
+        operator: "is",
+        value: "",
+      },
+    ]);
   };
 
   const updateFilterRule = (id: string, patch: Partial<LeadFilterRule>) => {
-    setFilterRules((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch, ...(patch.field ? { value: "" } : {}) } : r)));
+    setFilterRules((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              ...patch,
+              ...(patch.field ? { value: "", operator: patch.operator || r.operator || "is" } : {}),
+            }
+          : r,
+      ),
+    );
   };
 
   const removeFilterRule = (id: string) => {
@@ -494,27 +594,129 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   };
 
   const filteredLeads = useMemo(() => {
-    let result = leads.filter(l => {
+    let result = leads.filter((l) => {
       const matchesSearch =
         `${l.firstName} ${l.lastName}`.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
         l.company?.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
         l.email?.toLowerCase().includes(effectiveSearch.toLowerCase());
       if (!matchesSearch) return false;
       for (const rule of filterRules) {
-        if (!rule.value) continue;
-        if (getLeadFilterFieldValue(l, rule.field) !== rule.value) return false;
+        const op = (rule.operator || "is") as LeadFilterOperator;
+        const opMeta = FILTER_OPERATORS.find((o) => o.value === op);
+        if (opMeta?.needsValue && !rule.value) continue;
+        const raw = getLeadFilterFieldValue(l, rule.field);
+        const forEmpty = rule.field === "owner" ? (l.ownerUserId || "") : raw;
+        const forCompare =
+          rule.field === "owner"
+            ? (l.ownerUserId || "__unassigned__")
+            : raw;
+        const fieldVal = op === "is_empty" || op === "is_not_empty" ? forEmpty : forCompare;
+        if (!matchLeadFilterValue(fieldVal, op, rule.value)) return false;
       }
       if (ownerFilter === "__unassigned__" && l.ownerUserId) return false;
       if (ownerFilter !== "all" && ownerFilter !== "__unassigned__" && l.ownerUserId !== ownerFilter) return false;
       return true;
     });
 
-    return [...result].sort((a, b) => compareLeadsByRules(a, b, sortRules));
-  }, [leads, effectiveSearch, filterRules, ownerFilter, sortRules]);
+    const sorted = [...result].sort((a, b) => compareLeadsByRules(a, b, sortRules));
+    if (rowOrderIds.length === 0) return sorted;
+    const orderMap = new Map(rowOrderIds.map((id, idx) => [id, idx]));
+    return [...sorted].sort((a, b) => {
+      const ai = orderMap.has(a.id) ? (orderMap.get(a.id) as number) : Number.MAX_SAFE_INTEGER;
+      const bi = orderMap.has(b.id) ? (orderMap.get(b.id) as number) : Number.MAX_SAFE_INTEGER;
+      if (ai !== bi) return ai - bi;
+      return 0;
+    });
+  }, [leads, effectiveSearch, filterRules, ownerFilter, sortRules, rowOrderIds]);
 
-  const hotCount = leads.filter(l => getTemperature(l.score) === "hot").length;
-  const warmCount = leads.filter(l => getTemperature(l.score) === "warm").length;
-  const coldCount = leads.filter(l => getTemperature(l.score) === "cold").length;
+  const leadOpToSaved = (op: LeadFilterOperator): FilterConfig["operator"] => {
+    if (op === "contains" || op === "not_contains") return "contains";
+    if (op === "gt") return "greaterThan";
+    if (op === "lt") return "lessThan";
+    return "equals";
+  };
+
+  const currentFilters = useMemo((): FilterConfig[] => (
+    filterRules.map((r) => ({
+      columnId: `${r.field}|${r.operator || "is"}`,
+      operator: leadOpToSaved(r.operator || "is"),
+      value: r.value,
+    }))
+  ), [filterRules]);
+
+  const currentSorts = useMemo((): SortConfig[] => (
+    sortRules.map((r) => ({ columnId: r.field, direction: r.dir }))
+  ), [sortRules]);
+
+  const savedViewColumns = useMemo(() => (
+    LEAD_TABLE_COLUMNS.map((c, idx) => ({
+      id: c.id,
+      header: c.label,
+      visible: isColVisible(c.id),
+      order: columnOrderIds.indexOf(c.id) >= 0 ? columnOrderIds.indexOf(c.id) : idx,
+    }))
+  ), [columnVisibility, columnOrderIds]);
+
+  const applySavedView = (filters: FilterConfig[], sorts?: SortConfig[], columns?: { id: string; visible: boolean; order: number }[], extras?: { viewMode?: string; groupBy?: string }) => {
+    const nextRules: LeadFilterRule[] = filters.map((f, i) => {
+      const [fieldPart, opPart] = String(f.columnId).split("|");
+      const field = (FILTER_FIELDS.some((x) => x.field === fieldPart) ? fieldPart : "status") as LeadFilterField;
+      let operator: LeadFilterOperator = (FILTER_OPERATORS.some((o) => o.value === opPart) ? opPart : "is") as LeadFilterOperator;
+      if (!opPart) {
+        if (f.operator === "contains") operator = "contains";
+        else if (f.operator === "greaterThan") operator = "gt";
+        else if (f.operator === "lessThan") operator = "lt";
+        else operator = "is";
+      }
+      return {
+        id: `sv_${Date.now()}_${i}`,
+        field,
+        operator,
+        value: f.value || "",
+      };
+    });
+    setFilterRules(nextRules);
+    if (sorts && sorts.length > 0) {
+      const nextSorts = sorts
+        .filter((s) => LEAD_SORT_FIELDS.some((f) => f.field === s.columnId))
+        .map((s) => ({ field: s.columnId as LeadSortField, dir: s.direction }));
+      if (nextSorts.length) setSortRules(nextSorts);
+    }
+    if (columns && columns.length > 0) {
+      const vis: Record<string, boolean> = { ...columnVisibility };
+      for (const c of columns) vis[c.id] = c.visible;
+      setColumnVisibility(vis);
+      saveColumnVisibility("crm-leads", vis);
+      const ordered = [...columns].sort((a, b) => a.order - b.order).map((c) => c.id);
+      setColumnOrderIds(ordered);
+      localStorage.setItem("crm-leads-column-order", JSON.stringify(ordered));
+    }
+    if (extras?.viewMode && VIEW_OPTIONS.some((v) => v.id === extras.viewMode)) {
+      setViewModePersist(extras.viewMode as LeadViewMode);
+    }
+    if (extras?.groupBy) {
+      setGroupBy(extras.groupBy as LeadGroupBy);
+    }
+  };
+
+  const applyViewSnapshot = (snap: {
+    filters: FilterConfig[];
+    sorts: SortConfig[];
+    columns: { id: string; visible: boolean; order: number }[];
+    viewMode?: string;
+    groupBy?: string;
+  }) => {
+    applySavedView(snap.filters, snap.sorts, snap.columns, {
+      viewMode: snap.viewMode,
+      groupBy: snap.groupBy,
+    });
+  };
+
+  const persistRowOrder = (ids: (number | string)[]) => {
+    const nums = ids.map((id) => (typeof id === "string" ? Number(id) : id)).filter((n) => Number.isFinite(n));
+    setRowOrderIds(nums);
+    localStorage.setItem("crm-leads-row-order", JSON.stringify(nums));
+  };
 
   const { data: allLeadAttachments = [] } = useQuery<LeadAttachmentSummaryRow[]>({
     queryKey: ["/api/crm/attachments?entityType=lead"],
@@ -559,8 +761,9 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         type: "text",
         accessor: (row) => row.company || `${row.firstName} ${row.lastName}`,
         width: "220px",
-        sticky: true,
+        sticky: pinCompany,
         editable: true,
+        summary: "count",
       },
       {
         id: "contact",
@@ -606,6 +809,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         width: "80px",
         editable: false,
         hidden: !isColVisible("files"),
+        summary: "sum",
         render: (row) => {
           const count = attachmentCountByLead.get(row.id) || 0;
           return (
@@ -644,6 +848,21 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         width: "90px",
         editable: true,
         hidden: !isColVisible("score"),
+        summary: "avg",
+      },
+      {
+        id: "scoreBand",
+        header: "Score band",
+        type: "formula",
+        accessor: (row) => getTemperature(row.score),
+        formula: (row) => {
+          const t = getTemperature(row.score);
+          return t.charAt(0).toUpperCase() + t.slice(1);
+        },
+        width: "110px",
+        editable: false,
+        hidden: !isColVisible("scoreBand"),
+        summary: "filled",
       },
       {
         id: "rating",
@@ -659,11 +878,12 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
       {
         id: "source",
         header: "Source",
-        type: "select",
+        type: "status",
         accessor: (row) => row.source || "",
         width: "130px",
         editable: true,
         options: sourceSelectOptions,
+        onEditLabels: () => setLabelEditor("source"),
         hidden: !isColVisible("source"),
       },
       {
@@ -711,6 +931,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         width: "100px",
         editable: false,
         hidden: !isColVisible("subtasks"),
+        summary: "sum",
         render: (row) => {
           const { done, total } = getSubtaskProgress(row);
           return (
@@ -752,26 +973,69 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     for (const field of customFields) {
       const colId = `custom_${field.fieldName}`;
       const editableType = field.fieldType === "text" || field.fieldType === "number" || field.fieldType === "textarea";
+      const isDropdown = field.fieldType === "dropdown";
+      const dropdownOpts: StatusOption[] = isDropdown
+        ? parseFieldOptions(field.options).map((o, i) => ({
+            value: o,
+            label: o,
+            color: ["bg-[#00c875] text-white", "bg-[#fdab3d] text-white", "bg-[#579bfc] text-white", "bg-[#a25ddc] text-white", "bg-[#c4c4c4] text-white"][i % 5],
+          }))
+        : [];
       cols.push({
         id: colId,
         header: field.fieldLabel,
-        type: field.fieldType === "number" ? "number" : "text",
+        type: field.fieldType === "number" ? "number" : isDropdown ? "status" : field.fieldType === "date" ? "date" : field.fieldType === "url" ? "link" : "text",
         accessor: (row) => {
           const raw = row.customData?.[field.fieldName];
-          if (editableType) {
+          if (editableType || isDropdown) {
             if (raw == null || raw === "") return "";
             return String(raw);
           }
           return formatCustomFieldDisplayValue(field, raw, resolveOwner);
         },
         width: "140px",
-        editable: editableType,
+        editable: editableType || isDropdown,
+        options: isDropdown ? dropdownOpts : undefined,
+        onEditLabels: isDropdown
+          ? () =>
+              setCustomDropdownEditor({
+                id: field.id,
+                fieldName: field.fieldName,
+                fieldLabel: field.fieldLabel,
+                options: dropdownOpts,
+              })
+          : undefined,
         hidden: !isColVisible(colId),
+        summary: field.fieldType === "number" ? "avg" : undefined,
       });
     }
 
-    return cols;
-  }, [columnVisibility, customFields, sourceSelectOptions, ownerSelectOptions, resolveOwner, statusOptions, ratingOptions, attachmentCountByLead, getSubtaskProgress]);
+    if (columnOrderIds.length === 0) return cols;
+    const orderMap = new Map(columnOrderIds.map((id, idx) => [id, idx]));
+    return [...cols].sort((a, b) => {
+      const ai = orderMap.has(a.id) ? (orderMap.get(a.id) as number) : Number.MAX_SAFE_INTEGER;
+      const bi = orderMap.has(b.id) ? (orderMap.get(b.id) as number) : Number.MAX_SAFE_INTEGER;
+      if (ai !== bi) return ai - bi;
+      return 0;
+    });
+  }, [columnVisibility, customFields, sourceSelectOptions, ownerSelectOptions, resolveOwner, statusOptions, ratingOptions, attachmentCountByLead, getSubtaskProgress, pinCompany, columnOrderIds]);
+
+  const handleColumnReorder = (fromColumnId: string, toColumnId: string) => {
+    setColumnOrderIds((prev) => {
+      const base = prev.length > 0 ? [...prev] : tableColumns.map((c) => c.id);
+      const ids = base.filter((id) => tableColumns.some((c) => c.id === id));
+      for (const c of tableColumns) {
+        if (!ids.includes(c.id)) ids.push(c.id);
+      }
+      const fromIdx = ids.indexOf(fromColumnId);
+      const toIdx = ids.indexOf(toColumnId);
+      if (fromIdx < 0 || toIdx < 0) return prev;
+      ids.splice(fromIdx, 1);
+      ids.splice(toIdx, 0, fromColumnId);
+      localStorage.setItem("crm-leads-column-order", JSON.stringify(ids));
+      return ids;
+    });
+  };
 
   const tableGroups: GroupDef<CrmLead>[] | undefined = useMemo(() => {
     if (groupBy === "none") return undefined;
@@ -1022,6 +1286,18 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
 
   return (
     <div className="space-y-3">
+      <CrmLeadSavedViewTabs
+        entityType="lead"
+        current={{
+          filters: currentFilters,
+          sorts: currentSorts,
+          columns: savedViewColumns,
+          viewMode,
+          groupBy,
+        }}
+        onApply={applyViewSnapshot}
+      />
+
       {/* monday.com-style board toolbar */}
       <div className="flex flex-wrap items-center gap-1.5" data-testid="filter-temperature-bar">
           <Button
@@ -1107,35 +1383,70 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
               )}
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-[420px] space-y-2 p-3">
+          <PopoverContent align="start" className="w-[520px] space-y-2 p-3">
             {filterRules.length === 0 ? (
               <p className="text-xs text-muted-foreground px-1">No filters applied.</p>
             ) : (
               <div className="space-y-2">
-                {filterRules.map((rule, idx) => (
+                {filterRules.map((rule, idx) => {
+                  const op = rule.operator || "is";
+                  const opMeta = FILTER_OPERATORS.find((o) => o.value === op) || FILTER_OPERATORS[0];
+                  const useTextInput =
+                    op === "contains" ||
+                    op === "not_contains" ||
+                    op === "gt" ||
+                    op === "lt" ||
+                    rule.field === "company" ||
+                    rule.field === "title" ||
+                    rule.field === "industry";
+                  return (
                   <div key={rule.id} className="flex items-center gap-1.5" data-testid={`filter-rule-${idx}`}>
                     <span className="text-xs text-[#676879] w-9 shrink-0">{idx === 0 ? "Where" : "and"}</span>
                     <Select value={rule.field} onValueChange={(v) => updateFilterRule(rule.id, { field: v as LeadFilterField })}>
-                      <SelectTrigger className="h-8 w-28 text-xs shrink-0" data-testid={`filter-rule-field-${idx}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
+                      <SelectTrigger className="h-8 w-[100px] text-xs shrink-0" data-testid={`filter-rule-field-${idx}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
                         {FILTER_FIELDS.map((f) => (
                           <SelectItem key={f.field} value={f.field}>{f.label}</SelectItem>
                         ))}
-                      </SelectContent>
-                    </Select>
-                    <span className="text-xs text-[#676879] w-5 shrink-0 text-center">is</span>
-                    <Select value={rule.value} onValueChange={(v) => updateFilterRule(rule.id, { value: v })}>
-                      <SelectTrigger className="h-8 flex-1 text-xs" data-testid={`filter-rule-value-${idx}`}>
-                        <SelectValue placeholder="Select…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getFilterFieldOptions(rule.field).map((o) => (
+                </SelectContent>
+              </Select>
+                    <Select
+                      value={op}
+                      onValueChange={(v) => updateFilterRule(rule.id, { operator: v as LeadFilterOperator, value: FILTER_OPERATORS.find((o) => o.value === v)?.needsValue ? rule.value : "" })}
+                    >
+                      <SelectTrigger className="h-8 w-[120px] text-xs shrink-0" data-testid={`filter-rule-op-${idx}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                        {FILTER_OPERATORS.map((o) => (
                           <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  ))}
+                </SelectContent>
+              </Select>
+                    {opMeta.needsValue && (
+                      useTextInput ? (
+                        <Input
+                          className="h-8 flex-1 text-xs"
+                          value={rule.value}
+                          placeholder={op === "gt" || op === "lt" ? "Value…" : "Text…"}
+                          onChange={(e) => updateFilterRule(rule.id, { value: e.target.value })}
+                          data-testid={`filter-rule-value-${idx}`}
+                        />
+                      ) : (
+                        <Select value={rule.value} onValueChange={(v) => updateFilterRule(rule.id, { value: v })}>
+                          <SelectTrigger className="h-8 flex-1 text-xs" data-testid={`filter-rule-value-${idx}`}>
+                            <SelectValue placeholder="Select…" />
+                </SelectTrigger>
+                <SelectContent>
+                            {getFilterFieldOptions(rule.field).map((o) => (
+                              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+                      )
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -1145,8 +1456,9 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
                     >
                       <X className="h-3 w-3" />
                     </Button>
-                  </div>
-                ))}
+            </div>
+                  );
+                })}
               </div>
             )}
             <Button
@@ -1160,15 +1472,15 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
               New Filter
             </Button>
             {filterRules.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
                 onClick={() => setFilterRules([])}
-                data-testid="button-clear-filters"
-              >
-                Clear filters
-              </Button>
+              data-testid="button-clear-filters"
+            >
+              Clear filters
+            </Button>
             )}
           </PopoverContent>
         </Popover>
@@ -1271,6 +1583,77 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
           </DropdownMenu>
         )}
 
+        {viewMode === "table" && groupBy !== "none" && (
+          <>
+            <button
+              type="button"
+              className={toolBtn()}
+              title="Expand all groups"
+              onClick={() => setExpandAllSignal((n) => n + 1)}
+              data-testid="button-expand-all-groups"
+            >
+              <ChevronsUpDown className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">Expand</span>
+            </button>
+            <button
+              type="button"
+              className={toolBtn()}
+              title="Collapse all groups"
+              onClick={() => setCollapseAllSignal((n) => n + 1)}
+              data-testid="button-collapse-all-groups"
+            >
+              <ChevronsDownUp className="h-3.5 w-3.5" />
+              <span className="hidden lg:inline">Collapse</span>
+            </button>
+          </>
+        )}
+
+        {viewMode === "table" && (
+          <button
+            type="button"
+            className={toolBtn(pinCompany)}
+            title={pinCompany ? "Unpin Company column" : "Pin Company column"}
+            onClick={() => {
+              setPinCompany((v) => {
+                const next = !v;
+                localStorage.setItem("crm-leads-pin-company", next ? "1" : "0");
+                return next;
+              });
+            }}
+            data-testid="button-pin-company"
+          >
+            <Pin className="h-3.5 w-3.5" />
+            <span className="hidden lg:inline">Pin</span>
+          </button>
+        )}
+
+        <SavedViewsDropdown
+          entityType="lead"
+          currentFilters={currentFilters}
+          currentSorts={currentSorts}
+          columns={savedViewColumns}
+          onApplyView={applySavedView}
+          onColumnsChange={(cols) => {
+            const vis: Record<string, boolean> = { ...columnVisibility };
+            for (const c of cols) vis[c.id] = c.visible;
+            setColumnVisibility(vis);
+            saveColumnVisibility("crm-leads", vis);
+            const ordered = [...cols].sort((a, b) => a.order - b.order).map((c) => c.id);
+            setColumnOrderIds(ordered);
+            localStorage.setItem("crm-leads-column-order", JSON.stringify(ordered));
+          }}
+          onSortChange={(sorts) => {
+            if (!sorts.length) {
+              setSortRules([{ field: "date", dir: "desc" }]);
+              return;
+            }
+            const next = sorts
+              .filter((s) => LEAD_SORT_FIELDS.some((f) => f.field === s.columnId))
+              .map((s) => ({ field: s.columnId as LeadSortField, dir: s.direction }));
+            if (next.length) setSortRules(next);
+          }}
+        />
+
         <CrmColumnVisibilityMenu
           columns={allAddableColumns}
           visibility={columnVisibility}
@@ -1328,17 +1711,27 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
+              onClick={() => setAddColumnOpen(true)}
+              data-testid="button-add-column-type"
+            >
+              <Plus className="h-3.5 w-3.5 mr-2" />
+              Add column (choose type)…
+            </DropdownMenuItem>
+            <DropdownMenuItem
               onClick={() => onOpenCustomFieldsSettings?.()}
               data-testid="button-create-custom-field"
             >
               <Settings2 className="h-3.5 w-3.5 mr-2" />
-              Create custom field…
+              Manage custom fields…
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setLabelEditor("status")} data-testid="button-edit-status-labels-menu">
               Edit status labels…
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setLabelEditor("rating")} data-testid="button-edit-rating-labels-menu">
               Edit rating labels…
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setLabelEditor("source")} data-testid="button-edit-source-labels-menu">
+              Edit source labels…
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -1359,7 +1752,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
               })()}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-44">
+          <DropdownMenuContent align="start" className="w-48">
             {VIEW_OPTIONS.map((view) => (
               <DropdownMenuItem
                 key={view.id}
@@ -1409,6 +1802,10 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
           <Download className="h-3.5 w-3.5" />
           Export
         </button>
+        <button type="button" className={toolBtn()} onClick={() => setPasteOpen(true)} data-testid="button-paste-leads">
+          <ClipboardPaste className="h-3.5 w-3.5" />
+          Paste
+        </button>
         <button type="button" className={toolBtn()} onClick={() => setImportOpen(true)} data-testid="button-import-leads">
           <Upload className="h-3.5 w-3.5" />
           Import
@@ -1433,6 +1830,12 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             selectable
             gridLines
             density={density}
+            reorderable
+            onRowReorder={persistRowOrder}
+            onColumnReorder={handleColumnReorder}
+            expandAllSignal={expandAllSignal}
+            collapseAllSignal={collapseAllSignal}
+            showColumnSummary
             emptyMessage="No leads yet. Capture leads to grow your sales pipeline."
             addItemLabel="Add Lead"
             onRowSelect={(ids) => setSelectedLeadIds(ids)}
@@ -1499,25 +1902,26 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             totalCount={leads.length}
             className="border rounded-xl border-border/60"
             alwaysShowRowActions
+            rowActionsWidth="minmax(140px, max-content)"
             renderRowActions={(lead) => (
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center justify-end gap-0.5 shrink-0 whitespace-nowrap">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-7 w-7 shrink-0"
                   title="Comments"
                   onClick={(e) => { e.stopPropagation(); openLeadExtras(lead, "comments"); }}
                   data-testid={`button-comments-lead-${lead.id}`}
                 >
                   <MessageSquare className="h-3.5 w-3.5" />
-                </Button>
+        </Button>
                 {manualGroups.length > 0 && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7"
+                        className="h-7 w-7 shrink-0"
                         title="Move to group"
                         onClick={(e) => e.stopPropagation()}
                         data-testid={`button-move-group-lead-${lead.id}`}
@@ -1546,7 +1950,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
                     variant="ghost"
                       size="sm"
                     onClick={(e) => { e.stopPropagation(); handleConvert(lead); }}
-                    className="text-[#0ea5e9] hover:text-[#0ea5e9]/80 hover:bg-[#0ea5e9]/10 h-7 px-2"
+                    className="text-[#0073ea] hover:text-[#0060b9] hover:bg-[#cce5ff]/40 h-7 px-2 shrink-0"
                     data-testid={`button-convert-lead-${lead.id}`}
                     >
                     <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
@@ -1648,7 +2052,137 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             onAddLead={openCreateForm}
           />
         )}
+
+        {viewMode === "gantt" && (
+          <CrmLeadGanttView
+            leads={filteredLeads}
+            statusOptions={statusOptions}
+            resolveOwner={resolveOwner}
+            onOpenLead={setViewingLead}
+            onConvert={handleConvert}
+            onAddLead={openCreateForm}
+            onFollowUpChange={async (leadId, isoDate) => {
+              const lead = leads.find((l) => l.id === leadId);
+              const prev = (lead?.customData && typeof lead.customData === "object")
+                ? { ...lead.customData }
+                : {};
+              prev._followUpDate = isoDate;
+              await updateLeadMutation.mutateAsync({ id: leadId, updates: { customData: prev } });
+              toast({ title: "Follow-up date updated" });
+            }}
+          />
+        )}
+
+        {viewMode === "document" && (
+          <CrmLeadDocumentView
+            leads={filteredLeads}
+            statusOptions={statusOptions}
+            resolveOwner={resolveOwner}
+            onOpenLead={setViewingLead}
+            onConvert={handleConvert}
+            onAddLead={openCreateForm}
+            onSaveDescription={async (leadId, description) => {
+              await updateLeadMutation.mutateAsync({ id: leadId, updates: { description } });
+              toast({ title: "Document saved" });
+            }}
+          />
+        )}
+
+        {viewMode === "chart" && (
+          <CrmLeadChartView
+            leads={filteredLeads}
+            statusOptions={statusOptions}
+            ratingOptions={ratingOptions}
+            sourceOptions={mergedSourceOptions}
+            resolveOwner={resolveOwner}
+            onOpenLead={setViewingLead}
+            onAddLead={openCreateForm}
+          />
+        )}
+
+        {viewMode === "dashboard" && (
+          <CrmLeadDashboardView
+            leads={filteredLeads}
+            statusOptions={statusOptions}
+            resolveOwner={resolveOwner}
+            onOpenLead={setViewingLead}
+            onAddLead={openCreateForm}
+          />
+        )}
+
+        {viewMode === "form" && (
+          <CrmLeadFormView
+            key={formViewLead?.id ?? "new"}
+            leads={filteredLeads}
+            statusOptions={statusOptions}
+            ratingOptions={ratingOptions}
+            sourceOptions={mergedSourceOptions}
+            resolveOwner={resolveOwner}
+            onOpenLead={(lead) => {
+              if (!lead?.id) setFormViewLead(null);
+              else setFormViewLead(lead);
+            }}
+            editingLead={formViewLead}
+            onAddLead={() => {
+              setFormViewLead(null);
+              openCreateForm();
+            }}
+            onSubmit={async (data) => {
+              const payload = {
+                firstName: data.firstName || "Unknown",
+                lastName: data.lastName || "Unknown",
+                email: data.email || null,
+                phone: data.phone || null,
+                company: data.company || null,
+                title: data.title || null,
+                source: data.source || null,
+                status: data.status || "new",
+                rating: data.rating || null,
+                score: data.score ? Number(data.score) : null,
+                industry: data.industry || null,
+                website: data.website || null,
+                description: data.description || null,
+              };
+              if (formViewLead) {
+                await updateLeadMutation.mutateAsync({ id: formViewLead.id, updates: payload });
+                toast({ title: "Lead updated" });
+              } else {
+                await apiRequest("POST", "/api/crm/leads", payload);
+                queryClient.invalidateQueries({ queryKey: ["/api/crm/leads"] });
+                toast({ title: "Lead created" });
+                setFormViewLead(null);
+              }
+            }}
+          />
+        )}
+
+        {viewMode === "timesheet" && (
+          <CrmLeadTimesheetView
+            leads={filteredLeads}
+            statusOptions={statusOptions}
+            resolveOwner={resolveOwner}
+            onOpenLead={setViewingLead}
+            onAddLead={openCreateForm}
+            onSaveTimesheet={async (leadId, entries) => {
+              const lead = leads.find((l) => l.id === leadId);
+              const prev = (lead?.customData && typeof lead.customData === "object")
+                ? { ...lead.customData }
+                : {};
+              prev._timesheet = entries;
+              await updateLeadMutation.mutateAsync({ id: leadId, updates: { customData: prev } });
+              toast({ title: "Timesheet saved" });
+            }}
+          />
+        )}
       </div>
+
+      <CrmLeadAddColumnDialog
+        open={addColumnOpen}
+        onOpenChange={setAddColumnOpen}
+        existingCount={customFields.length}
+        onCreated={(fieldName) => setColVisible(`custom_${fieldName}`, true)}
+      />
+      <CrmLeadPasteDialog open={pasteOpen} onOpenChange={setPasteOpen} />
 
       <CrmLeadLabelEditorDialog
         open={labelEditor === "status"}
@@ -1675,6 +2209,38 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
         }}
       />
 
+      <CrmLeadLabelEditorDialog
+        open={labelEditor === "source"}
+        onOpenChange={(open) => !open && setLabelEditor(null)}
+        title="Edit source labels"
+        options={mergedSourceOptions}
+        onSave={(next) => {
+          setSourceOptions(next);
+          saveLeadSourceOptions(next);
+          toast({ title: "Source labels updated" });
+        }}
+      />
+
+      <CrmLeadLabelEditorDialog
+        open={!!customDropdownEditor}
+        onOpenChange={(open) => !open && setCustomDropdownEditor(null)}
+        title={customDropdownEditor ? `Edit ${customDropdownEditor.fieldLabel} labels` : "Edit labels"}
+        options={customDropdownEditor?.options || []}
+        onSave={async (next) => {
+          if (!customDropdownEditor) return;
+          try {
+            await apiRequest("PUT", `/api/crm/custom-fields/${customDropdownEditor.id}`, {
+              options: next.map((o) => o.label || o.value),
+            });
+            queryClient.invalidateQueries({ queryKey: ["/api/crm/custom-fields?entityType=lead"] });
+            setCustomDropdownEditor(null);
+            toast({ title: "Dropdown labels updated" });
+          } catch {
+            toast({ title: "Failed to update dropdown", variant: "destructive" });
+          }
+        }}
+      />
+
       <FormDialogShell
         open={isConvertOpen}
         onOpenChange={setIsConvertOpen}
@@ -1694,9 +2260,9 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
       >
           {selectedLead && (
             <div className="space-y-4 py-4">
-              <div className="p-3 bg-muted rounded-lg flex items-center gap-3">
+              <div className="p-3 bg-[#f5f6f8] border border-[#d0d4e4] rounded-md flex items-center gap-3">
                 <div
-                  className="h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0"
+                  className="h-10 w-10 rounded-md flex items-center justify-center text-white font-bold text-sm shrink-0"
                   style={{ backgroundColor: getColorForName(selectedLead.company || selectedLead.firstName) }}
                 >
                   {getInitials(selectedLead.company || `${selectedLead.firstName} ${selectedLead.lastName}`)}

@@ -6,17 +6,20 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { ArrowUpRight, Pencil } from "lucide-react";
+import { ArrowUpRight, Pencil, X } from "lucide-react";
 import type { CrmLead } from "./types";
 import { LeadExtrasPanel } from "./LeadExtrasPanel";
+import { cn } from "@/lib/utils";
 
 export type { CrmLead };
 
 function DetailRow({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-2.5 border-b border-border/40 last:border-0">
-      <span className="text-xs font-semibold text-muted-foreground shrink-0">{label}</span>
-      <span className="text-sm font-medium text-right break-words">{value?.trim() || "—"}</span>
+    <div className="grid grid-cols-[120px_1fr] gap-3 py-2.5 border-b border-[#e6e9ef] last:border-0 items-start">
+      <span className="text-[13px] text-[#676879] shrink-0 pt-0.5">{label}</span>
+      <span className="text-[14px] font-medium text-[#323338] break-words min-h-[20px]">
+        {value?.trim() || "—"}
+      </span>
     </div>
   );
 }
@@ -35,6 +38,7 @@ interface Props {
   initialExtrasTab?: "comments" | "files" | "subtasks";
 }
 
+/** monday.com-style item side panel (column fields + updates). */
 export function LeadDetailSheet({
   lead,
   open,
@@ -54,40 +58,65 @@ export function LeadDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto p-0">
-        <div className="px-6 pt-6 pb-4 border-b border-border/40">
+      <SheetContent
+        className={cn(
+          "w-full sm:max-w-md overflow-y-auto p-0 border-l border-[#d0d4e4]",
+          "[&>button]:hidden",
+        )}
+      >
+        <div className="px-5 pt-4 pb-4 border-b border-[#d0d4e4] bg-white sticky top-0 z-10">
           <SheetHeader className="text-left space-y-3">
-            <div className="flex items-start gap-3 pr-6">
+            <div className="flex items-start gap-3">
               <div
-                className="h-12 w-12 rounded-xl flex items-center justify-center text-white font-bold text-sm shrink-0"
+                className="h-10 w-10 rounded-[4px] flex items-center justify-center text-white font-semibold text-sm shrink-0"
                 style={{ backgroundColor: companyColor }}
               >
                 {companyInitials}
               </div>
               <div className="min-w-0 flex-1">
-                <SheetTitle className="text-lg leading-tight">{companyName}</SheetTitle>
-                <SheetDescription className="mt-1">
+                <SheetTitle className="text-[18px] font-medium leading-tight text-[#323338]">
+                  {companyName}
+                </SheetTitle>
+                <SheetDescription className="mt-0.5 text-[13px] text-[#676879]">
                   {lead.firstName} {lead.lastName}
                   {lead.title ? ` · ${lead.title}` : ""}
                 </SheetDescription>
               </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-8 w-8 rounded-[4px] flex items-center justify-center text-[#676879] hover:bg-[#dcdfec]/60 shrink-0"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {statusLabel}
               {temperatureLabel}
               {lead.rating && (
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted capitalize">
+                <span className="text-[12px] font-medium min-h-[22px] px-2 rounded-[4px] bg-[#f5f6f8] text-[#323338] capitalize inline-flex items-center">
                   {lead.rating}
                 </span>
               )}
             </div>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => onEdit(lead)} data-testid="button-edit-lead-sheet">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onEdit(lead)}
+                data-testid="button-edit-lead-sheet"
+                className="h-8 border-[#c5c7d0] text-[#323338] hover:bg-[#dcdfec]/60"
+              >
                 <Pencil className="h-3.5 w-3.5 mr-1" />
                 Edit
               </Button>
               {lead.status !== "converted" && (
-                <Button size="sm" className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90" onClick={() => onConvert(lead)}>
+                <Button
+                  size="sm"
+                  className="h-8 bg-[#0073ea] hover:bg-[#0060b9] text-white shadow-none"
+                  onClick={() => onConvert(lead)}
+                >
                   <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
                   Convert
                 </Button>
@@ -96,7 +125,8 @@ export function LeadDetailSheet({
           </SheetHeader>
         </div>
 
-        <div className="px-6 py-4 space-y-1">
+        <div className="px-5 py-3">
+          <p className="text-[12px] font-medium text-[#676879] uppercase tracking-wide mb-1">Columns</p>
           <DetailRow label="Email" value={lead.email} />
           <DetailRow label="Phone" value={lead.phone} />
           <DetailRow label="Company" value={lead.company} />

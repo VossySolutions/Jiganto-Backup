@@ -3928,6 +3928,17 @@ export class DatabaseStorage implements IStorage {
         industry: row.industry || row["Industry"] || null,
         website: row.website || row["Website"] || null,
         description: row.description || row["Description"] || null,
+        score: row.score || row["Score"] ? Number(row.score || row["Score"]) || null : null,
+        customData: (() => {
+          const raw = row.__customData || row.customData;
+          if (!raw) return {};
+          try {
+            const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+            return parsed && typeof parsed === "object" ? parsed : {};
+          } catch {
+            return {};
+          }
+        })(),
       });
       imported++;
     }

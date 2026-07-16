@@ -6,8 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { X } from "lucide-react";
 
+/** monday.com Vibe-aligned field control chrome */
+export const MONDAY_FIELD_CONTROL =
+  "h-9 rounded-[4px] border-[#c5c7d0] text-[14px] text-[#323338] bg-white placeholder:text-[#c5c7d0] focus-visible:ring-1 focus-visible:ring-[#0073ea] focus-visible:border-[#0073ea]";
+
 export function CrmFormDivider() {
-  return <div className="h-px bg-slate-100 dark:bg-border/40 my-5" />;
+  return <div className="h-px bg-[#e6e9ef] my-4" />;
 }
 
 export function CrmFormSection({
@@ -26,20 +30,20 @@ export function CrmFormSection({
   children: ReactNode;
 }) {
   return (
-    <section className={cn("mb-5", className)}>
-      <div className="flex items-center gap-2 mb-3">
+    <section className={cn("mb-4", className)}>
+      <div className="flex items-center gap-2 mb-2.5">
         {icon != null && (
           <div
             className={cn(
-              "w-[22px] h-[22px] rounded-md flex items-center justify-center text-xs shrink-0",
-              iconClassName ?? "bg-slate-100 dark:bg-muted",
+              "w-5 h-5 rounded-[4px] flex items-center justify-center text-[11px] shrink-0",
+              iconClassName ?? "bg-[#f5f6f8] text-[#676879]",
             )}
           >
             {icon}
           </div>
         )}
-        <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">{title}</h3>
-        {tag && <span className="text-[10px] text-muted-foreground font-semibold ml-auto">{tag}</span>}
+        <h3 className="text-[14px] font-medium text-[#323338]">{title}</h3>
+        {tag && <span className="text-[12px] text-[#676879] font-normal ml-auto">{tag}</span>}
       </div>
       {children}
     </section>
@@ -72,9 +76,9 @@ export function CrmFieldGrid({
 
 export function CrmFieldLabel({ children, required }: { children: ReactNode; required?: boolean }) {
   return (
-    <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+    <Label className="text-[13px] font-medium text-[#323338] flex items-center gap-1">
       {children}
-      {required && <span className="text-red-600">*</span>}
+      {required && <span className="text-[#e2445c]">*</span>}
     </Label>
   );
 }
@@ -87,9 +91,9 @@ export function CrmRatingPills({
   onChange: (rating: string) => void;
 }) {
   const options = [
-    { id: "hot", label: "Hot", on: "bg-red-50 border-red-500 text-red-700 dark:bg-red-950/30 dark:text-red-400", off: "border-red-200" },
-    { id: "warm", label: "Warm", on: "bg-amber-50 border-amber-500 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400", off: "border-amber-200" },
-    { id: "cold", label: "Cold", on: "bg-blue-50 border-blue-600 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400", off: "border-blue-200" },
+    { id: "hot", label: "Hot", color: "bg-[#e2445c] text-white" },
+    { id: "warm", label: "Warm", color: "bg-[#fdab3d] text-white" },
+    { id: "cold", label: "Cold", color: "bg-[#579bfc] text-white" },
   ] as const;
 
   return (
@@ -100,8 +104,10 @@ export function CrmRatingPills({
           type="button"
           onClick={() => onChange(value === opt.id ? "" : opt.id)}
           className={cn(
-            "px-3 py-1.5 rounded-full text-xs font-bold border-[1.5px] transition-colors capitalize",
-            value === opt.id ? opt.on : cn("bg-background text-muted-foreground", opt.off, "hover:bg-muted/40"),
+            "min-h-[28px] px-3 rounded-[4px] text-[12px] font-medium transition-opacity capitalize",
+            value === opt.id
+              ? cn(opt.color, "opacity-100")
+              : "bg-[#f5f6f8] text-[#676879] hover:bg-[#dcdfec]/60",
           )}
           data-testid={`select-rating-${opt.id}`}
         >
@@ -122,13 +128,13 @@ export function CrmScoreBar({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-2.5">
-        <div className="flex-1 h-2 bg-slate-100 dark:bg-muted rounded overflow-hidden">
+        <div className="flex-1 h-2 bg-[#e6e9ef] rounded overflow-hidden">
           <div
-            className="h-full rounded bg-gradient-to-r from-amber-500 to-emerald-600 transition-all"
+            className="h-full rounded bg-[#00c875] transition-all"
             style={{ width: `${value}%` }}
           />
         </div>
-        <span className="text-base font-extrabold text-emerald-700 dark:text-emerald-400 tabular-nums min-w-[30px]">
+        <span className="text-[15px] font-semibold text-[#323338] tabular-nums min-w-[30px]">
           {value || "—"}
         </span>
       </div>
@@ -176,16 +182,16 @@ export function CrmFormHeader({
   showClose?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-slate-100 dark:border-border/50 shrink-0">
+    <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-[#d0d4e4] shrink-0 bg-white">
       <div className="min-w-0">
-        <h2 className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-foreground">{title}</h2>
-        {subtitle && <p className="text-xs text-muted-foreground mt-0.5 truncate">{subtitle}</p>}
+        <h2 className="text-[18px] font-medium tracking-tight text-[#323338]">{title}</h2>
+        {subtitle && <p className="text-[13px] text-[#676879] mt-0.5 truncate">{subtitle}</p>}
       </div>
       {showClose && onClose && (
         <button
           type="button"
           onClick={onClose}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-slate-100 dark:hover:bg-muted shrink-0"
+          className="w-8 h-8 rounded-md flex items-center justify-center text-[#676879] hover:bg-[#dcdfec]/60 hover:text-[#323338] shrink-0"
           aria-label="Close"
         >
           <X className="h-4 w-4" />
@@ -211,17 +217,24 @@ export function CrmFormFooter({
   saveTestId?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 dark:border-border/50 bg-slate-50 dark:bg-muted/20 rounded-b-2xl shrink-0">
-      <span className="text-[11px] text-muted-foreground">{meta}</span>
+    <div className="flex items-center justify-between gap-3 px-6 py-3.5 border-t border-[#d0d4e4] bg-[#f5f6f8] rounded-b-lg shrink-0">
+      <span className="text-[12px] text-[#676879]">{meta}</span>
       <div className="flex gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={saving} className="font-bold">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onCancel}
+          disabled={saving}
+          className="h-8 px-3 text-[13px] font-medium border-[#c5c7d0] text-[#323338] hover:bg-[#dcdfec]/60"
+        >
           Cancel
         </Button>
         <Button
           type="submit"
           size="sm"
           disabled={disabled || saving}
-          className="font-bold bg-blue-600 hover:bg-blue-700 text-white"
+          className="h-8 px-3 text-[13px] font-medium bg-[#0073ea] hover:bg-[#0060b9] text-white shadow-none"
           data-testid={saveTestId}
         >
           {saving ? "Saving…" : saveLabel}

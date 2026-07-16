@@ -30,6 +30,8 @@ import {
   Paintbrush,
   Paperclip,
   ListTodo,
+  GripVertical,
+  Pin,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -57,7 +59,10 @@ export type ColumnType =
   | "progress"
   | "rag"
   | "files"
-  | "checklist";
+  | "checklist"
+  | "formula";
+
+export type ColumnSummaryKind = "sum" | "avg" | "count" | "filled";
 
 export interface StatusOption {
   value: string;
@@ -83,11 +88,16 @@ export interface ColumnDef<T = Record<string, unknown>> {
   editableCondition?: (row: T) => boolean;
   options?: StatusOption[];
   hidden?: boolean;
+  /** Pin column to the left while scrolling horizontally (Infinity / monday). */
   sticky?: boolean;
   /** monday.com-style "Edit Labels" for status/select columns */
   onEditLabels?: () => void;
   /** Custom cell renderer, overrides the built-in type-based rendering (e.g. Files/Subtasks count columns). */
   render?: (row: T, value: unknown) => React.ReactNode;
+  /** Infinity-style column footer aggregation. */
+  summary?: ColumnSummaryKind | ((rows: T[]) => React.ReactNode);
+  /** For type "formula" — computed cell value. */
+  formula?: (row: T) => unknown;
 }
 
 export interface GroupDef<T = Record<string, unknown>> {
@@ -115,6 +125,8 @@ export interface MondayTableProps<T extends { id: number | string }> {
   renderRowActions?: (row: T) => React.ReactNode;
   renderBulkActions?: (selectedIds: (number | string)[]) => React.ReactNode;
   alwaysShowRowActions?: boolean;
+  /** CSS grid track size for the custom row-actions column (default widens when alwaysShowRowActions). */
+  rowActionsWidth?: string;
   selectable?: boolean;
   loading?: boolean;
   emptyMessage?: string;
@@ -136,6 +148,15 @@ export interface MondayTableProps<T extends { id: number | string }> {
   searchHighlightTerm?: string;
   /** Row density — Infinity-style expand/compact (default: comfortable). */
   density?: "compact" | "comfortable" | "expanded";
+  /** Infinity expand/collapse-all: bump these counters to expand or collapse all groups. */
+  expandAllSignal?: number;
+  collapseAllSignal?: number;
+  /** Enable drag-handle row reorder (Infinity table). */
+  reorderable?: boolean;
+  /** Called with the new full order of visible item ids after a row drag. */
+  onRowReorder?: (orderedIds: (number | string)[]) => void;
+  /** Show per-column summary footer (Infinity Summarize). Default true when any column has summary. */
+  showColumnSummary?: boolean;
 }
 
 const columnTypeIcons: Record<ColumnType, typeof Text> = {
@@ -155,6 +176,7 @@ const columnTypeIcons: Record<ColumnType, typeof Text> = {
   rag: AlertCircle,
   files: Paperclip,
   checklist: ListTodo,
+  formula: Hash,
 };
 
 export const defaultStatusColors: Record<string, string> = {
@@ -821,6 +843,15 @@ function CellRenderer<T>({
     return <>{column.render(row, value)}</>;
   }
 
+  if (column.type === "formula") {
+    const computed = column.formula ? column.formula(row) : value;
+    return (
+      <span className="text-[13px] tabular-nums text-[#323338]">
+        {computed == null || computed === "" ? "—" : String(computed)}
+      </span>
+    );
+  }
+
   switch (column.type) {
     case "status":
       return (
@@ -942,6 +973,7 @@ export function MondayTable<T extends { id: number | string }>({
   renderRowActions,
   renderBulkActions,
   alwaysShowRowActions = false,
+  rowActionsWidth,
   selectable = true,
   loading = false,
   emptyMessage = "No items yet",
@@ -959,6 +991,11 @@ export function MondayTable<T extends { id: number | string }>({
   searchHighlightTerm,
   density = "comfortable",
   onRowFilesDrop,
+  expandAllSignal,
+  collapseAllSignal,
+  reorderable = false,
+  onRowReorder,
+  showColumnSummary,
 }: MondayTableProps<T>) {
   const rowMinHeight =
     density === "compact" ? "min-h-[32px]" : density === "expanded" ? "min-h-[56px]" : "min-h-[44px]";
@@ -966,6 +1003,7 @@ export function MondayTable<T extends { id: number | string }>({
     density === "compact" ? "min-h-[32px]" : density === "expanded" ? "min-h-[48px]" : "min-h-[40px]";
   const [selectedIds, setSelectedIds] = useState<Set<number | string>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [dragRowId, setDragRowId] = useState<string | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
     if (columnWidthStorageKey) {
       try {
@@ -1036,8 +1074,13 @@ export function MondayTable<T extends { id: number | string }>({
 
   const hasResizedWidths = Object.keys(columnWidths).length > 0;
 
+  const resolvedRowActionsWidth =
+    rowActionsWidth || (alwaysShowRowActions ? "minmax(132px, max-content)" : "40px");
+  const rowActionsMinPx = alwaysShowRowActions ? 132 : 40;
+
   const gridTemplateColumns = useMemo(() => {
     const parts: string[] = [];
+    if (reorderable) parts.push("28px");
     if (selectable) parts.push("40px");
     visibleColumns.forEach((col, idx) => {
       if (hasResizedWidths && columnWidths[col.id]) {
@@ -1050,13 +1093,14 @@ export function MondayTable<T extends { id: number | string }>({
         parts.push("minmax(120px, auto)");
       }
     });
-    if (renderRowActions) parts.push("40px");
+    if (renderRowActions) parts.push(resolvedRowActionsWidth);
     parts.push("40px");
     return parts.join(" ");
-  }, [visibleColumns, selectable, renderRowActions, columnWidths, hasResizedWidths]);
+  }, [visibleColumns, selectable, renderRowActions, columnWidths, hasResizedWidths, resolvedRowActionsWidth, reorderable]);
 
   const totalMinWidth = useMemo(() => {
     let total = 0;
+    if (reorderable) total += 28;
     if (selectable) total += 40;
     visibleColumns.forEach((col, idx) => {
       if (hasResizedWidths && columnWidths[col.id]) {
@@ -1074,10 +1118,10 @@ export function MondayTable<T extends { id: number | string }>({
         total += idx === 0 ? 200 : 140;
       }
     });
-    if (renderRowActions) total += 40;
+    if (renderRowActions) total += rowActionsMinPx;
     total += 40;
     return Math.max(total, 640);
-  }, [visibleColumns, selectable, renderRowActions, columnWidths, hasResizedWidths]);
+  }, [visibleColumns, selectable, renderRowActions, columnWidths, hasResizedWidths, rowActionsMinPx, reorderable]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent, columnId: string) => {
     e.preventDefault();
@@ -1182,6 +1226,41 @@ export function MondayTable<T extends { id: number | string }>({
       return newSet;
     });
   }, []);
+
+  useEffect(() => {
+    if (!expandAllSignal) return;
+    setCollapsedGroups(new Set());
+  }, [expandAllSignal]);
+
+  useEffect(() => {
+    if (!collapseAllSignal || !groups?.length) return;
+    setCollapsedGroups(new Set(groups.map((g) => g.id)));
+  }, [collapseAllSignal, groups]);
+
+  const resolveColWidthPx = useCallback((col: ColumnDef<T>, idx: number) => {
+    if (columnWidths[col.id]) return columnWidths[col.id];
+    if (col.width?.includes("px")) {
+      const n = parseInt(col.width, 10);
+      if (!Number.isNaN(n)) return n;
+    }
+    return idx === 0 ? 220 : 140;
+  }, [columnWidths]);
+
+  const stickyLeftById = useMemo(() => {
+    const map = new Map<string, number>();
+    let left = 0;
+    if (reorderable) left += 28;
+    if (selectable) left += 40;
+    visibleColumns.forEach((col, idx) => {
+      if (!col.sticky) return;
+      map.set(col.id, left);
+      left += resolveColWidthPx(col, idx);
+    });
+    return map;
+  }, [visibleColumns, selectable, reorderable, resolveColWidthPx]);
+
+  const hasStickyColumns = stickyLeftById.size > 0;
+  const checkboxStickyLeft = reorderable ? 28 : 0;
 
   const allItems = useMemo(() => {
     if (groups) {
@@ -1408,6 +1487,92 @@ export function MondayTable<T extends { id: number | string }>({
     }
   }, [editingCell, navigateFromCell, isInlineEditableType, isToggleType, cellRefKey]);
 
+  const computeSummaryValue = useCallback((column: ColumnDef<T>, rows: readonly T[]) => {
+    if (!column.summary) return null;
+    if (typeof column.summary === "function") return column.summary(rows as T[]);
+    const nums = rows
+      .map((r) => {
+        const raw = column.formula ? column.formula(r) : getCellValue(r, column.accessor);
+        const n = typeof raw === "number" ? raw : Number(raw);
+        return Number.isFinite(n) ? n : null;
+      })
+      .filter((n): n is number => n != null);
+    if (column.summary === "count") return String(rows.length);
+    if (column.summary === "filled") {
+      const filled = rows.filter((r) => {
+        const raw = column.formula ? column.formula(r) : getCellValue(r, column.accessor);
+        return raw != null && raw !== "";
+      }).length;
+      return `${filled}/${rows.length}`;
+    }
+    if (nums.length === 0) return "—";
+    if (column.summary === "sum") return String(Math.round(nums.reduce((a, b) => a + b, 0) * 100) / 100);
+    if (column.summary === "avg") return String(Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100);
+    return null;
+  }, []);
+
+  const summaryEnabled = showColumnSummary ?? visibleColumns.some((c) => !!c.summary);
+
+  const renderSummaryRow = (rows: readonly T[], keySuffix: string) => {
+    if (!summaryEnabled) return null;
+    return (
+      <div
+        key={`summary-${keySuffix}`}
+        className={cn("grid items-center bg-[#f5f6f8] border-t border-[#d0d4e4] text-[12px] text-[#676879]", rowMinHeight)}
+        style={{ gridTemplateColumns }}
+        data-testid={`table-summary-${keySuffix}`}
+      >
+        {reorderable && <div />}
+        {selectable && (
+          <div
+            className={cn(hasStickyColumns && "sticky z-[15] bg-[#f5f6f8]")}
+            style={hasStickyColumns ? { left: checkboxStickyLeft } : undefined}
+          />
+        )}
+        {visibleColumns.map((column) => {
+          const left = stickyLeftById.get(column.id);
+          const label =
+            column.summary === "sum" ? "Σ "
+              : column.summary === "avg" ? "avg "
+                : column.summary === "count" ? "count "
+                  : column.summary === "filled" ? ""
+                    : "";
+          const val = computeSummaryValue(column, rows);
+          return (
+            <div
+              key={column.id}
+              className={cn(
+                "px-3 py-1 tabular-nums truncate",
+                left != null && "sticky z-[15] bg-[#f5f6f8] shadow-[2px_0_4px_rgba(0,0,0,0.04)]",
+              )}
+              style={left != null ? { left } : undefined}
+            >
+              {val != null ? `${label}${val}` : ""}
+            </div>
+          );
+        })}
+        {renderRowActions && <div />}
+        <div />
+      </div>
+    );
+  };
+
+  const handleRowDropReorder = (targetId: number | string) => {
+    if (!onRowReorder || !dragRowId) return;
+    const ids = allItems.map((i) => i.id);
+    const from = ids.findIndex((id) => String(id) === dragRowId);
+    const to = ids.findIndex((id) => id === targetId);
+    if (from < 0 || to < 0 || from === to) {
+      setDragRowId(null);
+      return;
+    }
+    const next = [...ids];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onRowReorder(next);
+    setDragRowId(null);
+  };
+
   const renderRow = (item: T, _idx: number) => {
     const isSelected = selectedIds.has(item.id);
     const rowId = String(item.id);
@@ -1425,28 +1590,62 @@ export function MondayTable<T extends { id: number | string }>({
           isSelected && "bg-[#cce5ff]/35",
           onRowClick && "cursor-pointer",
           "border-b border-[#d0d4e4]/70",
+          dragRowId === rowId && "opacity-60",
           rowStyle?.className
         )}
         style={{ gridTemplateColumns, ...rowStyle?.inlineStyle }}
         onClick={() => onRowClick?.(item)}
-        onDragOver={onRowFilesDrop ? (e) => {
+        onDragOver={onRowFilesDrop || onRowReorder ? (e) => {
           e.preventDefault();
           e.stopPropagation();
-          e.dataTransfer.dropEffect = "copy";
+          if (dragRowId) e.dataTransfer.dropEffect = "move";
+          else e.dataTransfer.dropEffect = "copy";
         } : undefined}
-        onDrop={onRowFilesDrop ? (e) => {
+        onDrop={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          const files = Array.from(e.dataTransfer.files || []);
-          if (files.length) onRowFilesDrop(item, files);
-        } : undefined}
+          if (dragRowId && onRowReorder) {
+            handleRowDropReorder(item.id);
+            return;
+          }
+          if (onRowFilesDrop) {
+            const files = Array.from(e.dataTransfer.files || []);
+            if (files.length) onRowFilesDrop(item, files);
+          }
+        }}
         data-testid={`table-row-${item.id}`}
       >
+        {reorderable && (
+          <div
+            className={cn(
+              "flex items-center justify-center text-[#c5c7d0] hover:text-[#676879] cursor-grab active:cursor-grabbing",
+              hasStickyColumns && "sticky z-[16] bg-white group-hover:bg-[#f5f6f8]",
+              isSelected && hasStickyColumns && "bg-[#cce5ff]/35",
+            )}
+            style={hasStickyColumns ? { left: 0 } : undefined}
+            draggable
+            onDragStart={(e) => {
+              e.stopPropagation();
+              setDragRowId(rowId);
+              e.dataTransfer.effectAllowed = "move";
+            }}
+            onDragEnd={() => setDragRowId(null)}
+            onClick={(e) => e.stopPropagation()}
+            title="Drag to reorder"
+            data-testid={`row-drag-${item.id}`}
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </div>
+        )}
         {selectable && (
           <div className={cn(
             "flex items-center justify-center px-2",
-            gridLines && "border-r border-[#d0d4e4]/80"
-          )}>
+            gridLines && "border-r border-[#d0d4e4]/80",
+            hasStickyColumns && "sticky z-[16] bg-white group-hover:bg-[#f5f6f8]",
+            isSelected && hasStickyColumns && "bg-[#cce5ff]/35",
+          )}
+            style={hasStickyColumns ? { left: checkboxStickyLeft } : undefined}
+          >
             <Checkbox
               checked={isSelected}
               onCheckedChange={(checked) => handleSelectRow(item.id, checked as boolean)}
@@ -1458,13 +1657,14 @@ export function MondayTable<T extends { id: number | string }>({
         )}
         
         {visibleColumns.map((column, colIdx) => {
-          const value = getCellValue(item, column.accessor);
+          const value = column.formula ? column.formula(item) : getCellValue(item, column.accessor);
           const isLastCol = colIdx === visibleColumns.length - 1 && !renderRowActions;
           const cellFmt = cellFormats?.[column.id];
           const cellStyle = cellFmt ? styleToClassAndInline(cellFmt) : null;
           const isCellFocused = focusedCell?.rowId === item.id && focusedCell?.columnId === column.id;
           const isCellEditing = editingCell?.rowId === item.id && editingCell?.columnId === column.id;
           const isEditable = column.editable && !!onCellEdit && (!column.editableCondition || column.editableCondition(item));
+          const stickyLeft = stickyLeftById.get(column.id);
           
           return (
             <div
@@ -1484,9 +1684,14 @@ export function MondayTable<T extends { id: number | string }>({
                 gridLines && !isLastCol && "border-r border-[#d0d4e4]/80",
                 isCellFocused && !isCellEditing && "bg-[#cce5ff]/40 border-b-2 border-b-[#0073ea]",
                 isCellEditing && "bg-[#cce5ff]/30",
+                stickyLeft != null && "sticky z-[16] bg-white group-hover:bg-[#f5f6f8] shadow-[2px_0_4px_rgba(0,0,0,0.04)]",
+                isSelected && stickyLeft != null && "bg-[#cce5ff]/35",
                 cellStyle?.className
               )}
-              style={cellStyle?.inlineStyle}
+              style={{
+                ...(cellStyle?.inlineStyle || {}),
+                ...(stickyLeft != null ? { left: stickyLeft } : {}),
+              }}
               onClick={() => {
                 if (isEditable) {
                   handleCellStartEdit(item.id, column.id);
@@ -1526,7 +1731,7 @@ export function MondayTable<T extends { id: number | string }>({
 
         {renderRowActions && (
           <div className={cn(
-            "px-2 flex items-center justify-center transition-opacity",
+            "px-1.5 flex items-center justify-end gap-0.5 overflow-visible shrink-0 transition-opacity",
             alwaysShowRowActions ? "opacity-100" : "opacity-0 group-hover:opacity-100"
           )}>
             {renderRowActions(item)}
@@ -1621,6 +1826,7 @@ export function MondayTable<T extends { id: number | string }>({
         {!isCollapsed && (
           <div className="mt-1">
             {pageItems.map((item, idx) => renderRow(item, idx))}
+            {renderSummaryRow(pageItems, group.id)}
             {onAddItem && (
               <button
                 onClick={() => onAddItem(group.id)}
@@ -1710,11 +1916,20 @@ export function MondayTable<T extends { id: number | string }>({
             )}
             style={{ gridTemplateColumns }}
           >
+            {reorderable && (
+              <div
+                className={cn(hasStickyColumns && "sticky z-[25] bg-[#f5f6f8]")}
+                style={hasStickyColumns ? { left: 0 } : undefined}
+              />
+            )}
             {selectable && (
               <div className={cn(
                 "flex items-center justify-center px-2",
-                gridLines && "border-r border-[#d0d4e4]/80"
-              )}>
+                gridLines && "border-r border-[#d0d4e4]/80",
+                hasStickyColumns && "sticky z-[25] bg-[#f5f6f8]",
+              )}
+                style={hasStickyColumns ? { left: checkboxStickyLeft } : undefined}
+              >
                 <Checkbox
                   checked={isAllSelected}
                   onCheckedChange={handleSelectAll}
@@ -1729,6 +1944,7 @@ export function MondayTable<T extends { id: number | string }>({
               const isLastCol = colIdx === visibleColumns.length - 1 && !renderRowActions;
               const isDragSource = dragHeaderId === column.id;
               const isDragOver = dragOverHeaderId === column.id && dragHeaderId !== column.id;
+              const stickyLeft = stickyLeftById.get(column.id);
               
               return (
                 <div
@@ -1737,9 +1953,12 @@ export function MondayTable<T extends { id: number | string }>({
                     "px-3 py-2 flex items-center gap-1.5 relative select-none cursor-grab",
                     gridLines && !isLastCol && "border-r border-[#d0d4e4]/80",
                     isDragSource && "opacity-40",
-                    isDragOver && "bg-[#cce5ff]/60"
+                    isDragOver && "bg-[#cce5ff]/60",
+                    stickyLeft != null && "sticky z-[25] bg-[#f5f6f8] shadow-[2px_0_4px_rgba(0,0,0,0.04)]",
                   )}
+                  style={stickyLeft != null ? { left: stickyLeft } : undefined}
                   draggable
+                  data-testid={`column-header-${column.id}`}
                   onDragStart={(e) => {
                     setDragHeaderId(column.id);
                     e.dataTransfer.effectAllowed = "move";
@@ -1776,12 +1995,14 @@ export function MondayTable<T extends { id: number | string }>({
                     setDragHeaderId(null);
                     setDragOverHeaderId(null);
                   }}
-                  data-testid={`column-header-${column.id}`}
                 >
                   <Icon className="h-3.5 w-3.5 opacity-50 flex-shrink-0" />
                   <span className="truncate" title={column.header}>
                     {column.header}
                   </span>
+                  {column.sticky && (
+                    <Pin className="h-3 w-3 text-[#0073ea] shrink-0" aria-label="Pinned" />
+                  )}
                   {isDragOver && (
                     <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#0073ea] z-10" />
                   )}
@@ -1823,6 +2044,7 @@ export function MondayTable<T extends { id: number | string }>({
           ) : (
             <div>
               {displayData.map((item, idx) => renderRow(item, idx))}
+              {renderSummaryRow(displayData, "all")}
               {onAddItem && (
                 <button
                   onClick={() => onAddItem()}

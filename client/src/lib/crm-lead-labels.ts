@@ -27,6 +27,11 @@ export const LABEL_COLOR_PRESETS: { id: string; className: string; swatch: strin
   { id: "red", className: "bg-[#e2445c] text-white", swatch: "#e2445c" },
   { id: "yellow", className: "bg-[#ffcb00] text-[#323338]", swatch: "#ffcb00" },
   { id: "gray", className: "bg-[#c4c4c4] text-white", swatch: "#c4c4c4" },
+  { id: "dark-blue", className: "bg-[#0086c0] text-white", swatch: "#0086c0" },
+  { id: "pink", className: "bg-[#ff5ac4] text-white", swatch: "#ff5ac4" },
+  { id: "lime", className: "bg-[#9cd326] text-[#323338]", swatch: "#9cd326" },
+  { id: "peach", className: "bg-[#ffadad] text-[#323338]", swatch: "#ffadad" },
+  { id: "sky", className: "bg-[#66ccff] text-[#323338]", swatch: "#66ccff" },
 ];
 
 const LEGACY_COLOR_MAP: Record<string, string> = {
@@ -81,6 +86,43 @@ export function loadLeadRatingOptions(): StatusOption[] {
 
 export function saveLeadRatingOptions(options: StatusOption[]) {
   saveOptions(RATING_KEY, options);
+}
+
+const SOURCE_KEY = "crm-lead-source-labels";
+
+export const DEFAULT_LEAD_SOURCE_OPTIONS: StatusOption[] = [
+  { value: "website", label: "Website", color: "bg-[#579bfc] text-white" },
+  { value: "referral", label: "Referral", color: "bg-[#00c875] text-white" },
+  { value: "linkedin", label: "LinkedIn", color: "bg-[#0086c0] text-white" },
+  { value: "cold_call", label: "Cold call", color: "bg-[#fdab3d] text-white" },
+  { value: "event", label: "Event", color: "bg-[#a25ddc] text-white" },
+  { value: "other", label: "Other", color: "bg-[#c4c4c4] text-white" },
+];
+
+export function loadLeadSourceOptions(): StatusOption[] {
+  return loadOptions(SOURCE_KEY, DEFAULT_LEAD_SOURCE_OPTIONS);
+}
+
+export function saveLeadSourceOptions(options: StatusOption[]) {
+  saveOptions(SOURCE_KEY, options);
+}
+
+/** Merge catalog with values already present on leads (Infinity-style). */
+export function mergeSourceOptionsWithData(
+  catalog: StatusOption[],
+  sourcesOnLeads: string[],
+): StatusOption[] {
+  const byValue = new Map(catalog.map((o) => [o.value, o]));
+  for (const raw of sourcesOnLeads) {
+    const value = raw.trim();
+    if (!value || byValue.has(value)) continue;
+    byValue.set(value, {
+      value,
+      label: value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      color: "bg-[#c4c4c4] text-white",
+    });
+  }
+  return Array.from(byValue.values());
 }
 
 export function slugifyLabelValue(label: string): string {

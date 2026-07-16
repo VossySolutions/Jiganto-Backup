@@ -19,16 +19,17 @@ import type { CrmCustomFieldDef } from "@/lib/crm-custom-fields";
 import {
   CrmFieldGrid,
   CrmFieldLabel,
-  CrmFollowUpCard,
   CrmFormDivider,
   CrmFormSection,
   CrmRatingPills,
   CrmScoreBar,
   formatCrmRecordMeta,
+  MONDAY_FIELD_CONTROL,
 } from "@/lib/crm-form-layout";
-import { Building2, Clock, Settings2, Sparkles, StickyNote, Target, UserRound } from "lucide-react";
+import { Building2, Clock, Settings2, StickyNote, Target, UserRound } from "lucide-react";
 import { AccountDetailFormOverlay } from "./AccountDetailFormOverlay";
 import { Button } from "@/components/ui/button";
+import { loadLeadStatusOptions } from "@/lib/crm-lead-labels";
 
 export type LeadFormData = {
   firstName: string;
@@ -73,14 +74,6 @@ const SOURCE_OPTIONS = [
   { value: "linkedin", label: "LinkedIn" },
   { value: "inbound", label: "Inbound" },
   { value: "other", label: "Other" },
-];
-
-const STATUS_OPTIONS = [
-  { value: "new", label: "New" },
-  { value: "contacted", label: "Contacted" },
-  { value: "qualified", label: "Qualified" },
-  { value: "unqualified", label: "Disqualified" },
-  { value: "lost", label: "Lost" },
 ];
 
 interface Props {
@@ -196,69 +189,77 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
     setCustomData((prev) => ({ ...prev, [key]: value }));
 
   const formBody = (
-    <div className="space-y-0">
-        <CrmFormSection icon={<UserRound className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Contact">
-          <CrmFieldGrid className="mb-3.5">
-            <div className="space-y-1.5">
+    <div className="space-y-0 [&_input]:h-9 [&_button[role=combobox]]:h-9">
+        <CrmFormSection title="Contact" icon={<UserRound className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] text-[#676879]">
+          <CrmFieldGrid className="mb-3">
+            <div className="space-y-1">
               <CrmFieldLabel required>First name</CrmFieldLabel>
-              <Input id="firstName" placeholder="Jane" value={form.firstName} onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))} data-testid="input-lead-firstName" />
+              <Input id="firstName" placeholder="Jane" className={MONDAY_FIELD_CONTROL} value={form.firstName} onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))} data-testid="input-lead-firstName" />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <CrmFieldLabel required>Last name</CrmFieldLabel>
-              <Input id="lastName" placeholder="Smith" value={form.lastName} onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))} data-testid="input-lead-lastName" />
+              <Input id="lastName" placeholder="Smith" className={MONDAY_FIELD_CONTROL} value={form.lastName} onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))} data-testid="input-lead-lastName" />
             </div>
           </CrmFieldGrid>
-          <CrmFieldGrid className="mb-3.5">
-            <div className="space-y-1.5">
+          <CrmFieldGrid className="mb-3">
+            <div className="space-y-1">
               <CrmFieldLabel>Title</CrmFieldLabel>
-              <Input id="title" placeholder="Chief Digital Officer" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} data-testid="input-lead-title" />
+              <Input id="title" placeholder="Chief Digital Officer" className={MONDAY_FIELD_CONTROL} value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} data-testid="input-lead-title" />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <CrmFieldLabel required>Company</CrmFieldLabel>
-              <Input id="company" placeholder="Global Retail Corp" value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))} data-testid="input-lead-company" />
+              <Input id="company" placeholder="Global Retail Corp" className={MONDAY_FIELD_CONTROL} value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))} data-testid="input-lead-company" />
             </div>
           </CrmFieldGrid>
           <CrmFieldGrid>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <CrmFieldLabel required>Email</CrmFieldLabel>
-              <Input id="email" type="email" placeholder="jane@company.com" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} data-testid="input-lead-email" />
+              <Input id="email" type="email" placeholder="jane@company.com" className={MONDAY_FIELD_CONTROL} value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} data-testid="input-lead-email" />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <CrmFieldLabel>Phone</CrmFieldLabel>
-              <Input id="phone" placeholder="+44 7700 900123" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} data-testid="input-lead-phone" />
+              <Input id="phone" placeholder="+44 7700 900123" className={MONDAY_FIELD_CONTROL} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} data-testid="input-lead-phone" />
             </div>
           </CrmFieldGrid>
         </CrmFormSection>
 
         <CrmFormDivider />
 
-        <CrmFormSection icon={<Target className="h-3.5 w-3.5 text-red-600" />} iconClassName="bg-red-50 dark:bg-red-950/40" title="Qualification">
-          <CrmFieldGrid cols={3} className="mb-3.5">
-            <div className="space-y-1.5">
+        <CrmFormSection title="Qualification" icon={<Target className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] text-[#676879]">
+          <CrmFieldGrid cols={3} className="mb-3">
+            <div className="space-y-1">
               <CrmFieldLabel>Rating</CrmFieldLabel>
               <CrmRatingPills value={form.rating} onChange={(r) => setForm((f) => ({ ...f, rating: r }))} />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <CrmFieldLabel>Lead score</CrmFieldLabel>
               <CrmScoreBar value={numericScore} onChange={setScore} />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <CrmFieldLabel>Status</CrmFieldLabel>
               <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-                <SelectTrigger data-testid="select-lead-status"><SelectValue /></SelectTrigger>
+                <SelectTrigger className={cn(MONDAY_FIELD_CONTROL, "w-full")} data-testid="select-lead-status">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {STATUS_OPTIONS.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                  ))}
+                  {loadLeadStatusOptions()
+                    .filter((s) => s.value !== "converted")
+                    .map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        <span className={cn("inline-flex min-h-[22px] px-2 rounded-[4px] text-[12px] font-medium", s.color)}>
+                          {s.label}
+                        </span>
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
           </CrmFieldGrid>
           <CrmFieldGrid>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <CrmFieldLabel>Lead source</CrmFieldLabel>
               <Select value={form.source || "none"} onValueChange={(v) => setForm((f) => ({ ...f, source: v === "none" ? "" : v }))}>
-                <SelectTrigger data-testid="select-lead-source"><SelectValue placeholder="Select source…" /></SelectTrigger>
+                <SelectTrigger className={cn(MONDAY_FIELD_CONTROL, "w-full")} data-testid="select-lead-source"><SelectValue placeholder="Select source…" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Select source…</SelectItem>
                   {SOURCE_OPTIONS.map((o) => (
@@ -267,10 +268,11 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <CrmFieldLabel>Tags</CrmFieldLabel>
               <Input
                 placeholder="e.g. Enterprise, Renewal risk"
+                className={MONDAY_FIELD_CONTROL}
                 value={String(customData._tags || "")}
                 onChange={(e) => setCustom("_tags", e.target.value || undefined)}
               />
@@ -280,19 +282,19 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
 
         <CrmFormDivider />
 
-        <CrmFormSection icon={<Building2 className="h-3.5 w-3.5 text-emerald-600" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Company details">
-          <CrmFieldGrid className="mb-3.5">
-            <div className="space-y-1.5">
+        <CrmFormSection title="Company details" icon={<Building2 className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] text-[#676879]">
+          <CrmFieldGrid className="mb-3">
+            <div className="space-y-1">
               <CrmFieldLabel>Industry</CrmFieldLabel>
-              <Input id="industry" placeholder="Retail" value={form.industry} onChange={(e) => setForm((f) => ({ ...f, industry: e.target.value }))} data-testid="input-lead-industry" />
+              <Input id="industry" placeholder="Retail" className={MONDAY_FIELD_CONTROL} value={form.industry} onChange={(e) => setForm((f) => ({ ...f, industry: e.target.value }))} data-testid="input-lead-industry" />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <CrmFieldLabel>Company size</CrmFieldLabel>
               <Select
                 value={String(customData._companySize || "none")}
                 onValueChange={(v) => setCustom("_companySize", v === "none" ? undefined : v)}
               >
-                <SelectTrigger><SelectValue placeholder="Select size…" /></SelectTrigger>
+                <SelectTrigger className={cn(MONDAY_FIELD_CONTROL, "w-full")}><SelectValue placeholder="Select size…" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Select size…</SelectItem>
                   <SelectItem value="1-10">1–10</SelectItem>
@@ -306,14 +308,15 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
             </div>
           </CrmFieldGrid>
           <CrmFieldGrid>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <CrmFieldLabel>Website</CrmFieldLabel>
-              <Input id="website" placeholder="https://company.com" value={form.website} onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))} data-testid="input-lead-website" />
+              <Input id="website" placeholder="https://company.com" className={MONDAY_FIELD_CONTROL} value={form.website} onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))} data-testid="input-lead-website" />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <CrmFieldLabel>Country / region</CrmFieldLabel>
               <Input
                 placeholder="e.g. United States"
+                className={MONDAY_FIELD_CONTROL}
                 value={String(customData._country || "")}
                 onChange={(e) => setCustom("_country", e.target.value || undefined)}
               />
@@ -323,54 +326,56 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
 
         <CrmFormDivider />
 
-        <CrmFormSection icon={<Clock className="h-3.5 w-3.5 text-violet-600" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Ownership & follow-up">
-          <CrmFieldGrid className="mb-3.5">
-            <div className="space-y-1.5">
+        <CrmFormSection title="Ownership & follow-up" icon={<Clock className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] text-[#676879]">
+          <CrmFieldGrid className="mb-3">
+            <div className="space-y-1">
               <CrmOwnerSelect
                 value={form.ownerUserId}
                 onChange={(v) => setForm((f) => ({ ...f, ownerUserId: v }))}
                 testId="select-lead-owner"
-                className={cn(!form.ownerUserId && "[&_button]:border-amber-400 [&_button]:bg-amber-50 dark:[&_button]:bg-amber-950/20")}
+                className={cn(!form.ownerUserId && "[&_button]:border-[#fdab3d]")}
               />
               {!form.ownerUserId && (
-                <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                  ⚠ This lead has no owner assigned
+                <p className="text-[12px] text-[#fdab3d] flex items-center gap-1">
+                  This lead has no owner assigned
                 </p>
               )}
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <CrmFieldLabel>Last contacted</CrmFieldLabel>
               <Input
                 type="date"
+                className={MONDAY_FIELD_CONTROL}
                 value={String(customData._lastContacted || "")}
                 onChange={(e) => setCustom("_lastContacted", e.target.value || undefined)}
               />
             </div>
           </CrmFieldGrid>
-          <CrmFollowUpCard>
-            <div className="flex-1 space-y-1.5">
+          <div className="rounded-[4px] border border-[#d0d4e4] bg-[#f5f6f8] p-3 flex flex-col sm:flex-row gap-3 sm:items-end">
+            <div className="flex-1 space-y-1">
               <CrmFieldLabel>
                 Next follow-up{" "}
-                <span className="ml-1 text-[10px] font-bold text-white bg-violet-600 px-1.5 py-0.5 rounded-md normal-case tracking-normal">Recommended</span>
+                <span className="ml-1 text-[10px] font-medium text-white bg-[#0073ea] px-1.5 py-0.5 rounded-[3px]">Recommended</span>
               </CrmFieldLabel>
-              <Input type="date" value={nextFollowUp} onChange={(e) => setCustom("_nextFollowUpDate", e.target.value || undefined)} />
+              <Input type="date" className={MONDAY_FIELD_CONTROL} value={nextFollowUp} onChange={(e) => setCustom("_nextFollowUpDate", e.target.value || undefined)} />
             </div>
-            <div className="flex-1 space-y-1.5">
+            <div className="flex-1 space-y-1">
               <CrmFieldLabel>Next step</CrmFieldLabel>
-              <Input placeholder="e.g. Send proposal, schedule demo" value={nextStep} onChange={(e) => setCustom("_nextStep", e.target.value || undefined)} />
+              <Input className={MONDAY_FIELD_CONTROL} placeholder="e.g. Send proposal, schedule demo" value={nextStep} onChange={(e) => setCustom("_nextStep", e.target.value || undefined)} />
             </div>
-          </CrmFollowUpCard>
+          </div>
         </CrmFormSection>
 
         <CrmFormDivider />
 
-        <CrmFormSection icon={<StickyNote className="h-3.5 w-3.5 text-muted-foreground" />} title="Notes">
+        <CrmFormSection title="Notes" icon={<StickyNote className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] text-[#676879]">
           <Textarea
             id="description"
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             rows={4}
             placeholder="Context, next steps, or relationship history…"
+            className="rounded-[4px] border-[#c5c7d0] text-[14px] focus-visible:ring-1 focus-visible:ring-[#0073ea] focus-visible:border-[#0073ea]"
             data-testid="input-lead-description"
           />
         </CrmFormSection>
@@ -378,19 +383,19 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
         <CrmFormDivider />
 
         <CrmFormSection
-          icon={<Sparkles className="h-3.5 w-3.5 text-amber-600" />}
-          iconClassName="bg-amber-50 dark:bg-amber-950/40"
           title="Custom fields"
+          icon={<Settings2 className="h-3 w-3" />}
+          iconClassName="bg-[#f5f6f8] text-[#676879]"
           tag={customFields.length > 0 ? `${customFields.filter((f) => customData[f.fieldName] != null && customData[f.fieldName] !== "").length} of ${customFields.length} used` : undefined}
         >
           {customFields.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-blue-300/60 bg-blue-50/50 dark:bg-blue-950/20 p-6 text-center">
-              <p className="text-sm font-semibold mb-1">No custom fields yet</p>
-              <p className="text-xs text-muted-foreground mb-4 max-w-sm mx-auto">
+            <div className="rounded-[4px] border border-dashed border-[#c5c7d0] bg-[#f5f6f8] p-5 text-center">
+              <p className="text-[14px] font-medium text-[#323338] mb-1">No custom fields yet</p>
+              <p className="text-[13px] text-[#676879] mb-3 max-w-sm mx-auto">
                 Add user-defined fields for leads in Settings → CRM Fields.
               </p>
               {onOpenCustomFieldsSettings && (
-                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={onOpenCustomFieldsSettings}>
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 h-8 border-[#c5c7d0] text-[#0073ea]" onClick={onOpenCustomFieldsSettings}>
                   <Settings2 className="h-3.5 w-3.5" />
                   Open CRM field settings
                 </Button>

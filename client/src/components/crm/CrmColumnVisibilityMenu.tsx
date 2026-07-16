@@ -39,7 +39,7 @@ export function CrmColumnVisibilityMenu({
           data-testid={testId}
         >
           <Columns3 className="h-3.5 w-3.5" />
-          Hide
+          Fields
           {active && (
             <span className="h-4 min-w-4 px-1 rounded-full bg-[#0073ea] text-white text-[10px] flex items-center justify-center">
               {hiddenCount}
@@ -48,7 +48,7 @@ export function CrmColumnVisibilityMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52">
-        <DropdownMenuLabel>Show / hide columns</DropdownMenuLabel>
+        <DropdownMenuLabel>Show / hide fields</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {columns.map((col) => (
           <DropdownMenuCheckboxItem
