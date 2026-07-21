@@ -375,6 +375,30 @@ export const pmTasksRelations = relations(pmTasks, ({ one }) => ({
   }),
 }));
 
+/** Named Gantt plan snapshots (versions / save-as-copy) within a project */
+export const pmGanttVersions = pgTable("pm_gantt_versions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().references(() => tenants.id),
+  projectId: integer("project_id").notNull().references(() => pmProjects.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  versionNumber: integer("version_number").notNull().default(1),
+  isActive: boolean("is_active").notNull().default(false),
+  snapshot: jsonb("snapshot").notNull().$type<{
+    tasks: unknown[];
+    customCols?: unknown[];
+    savedAt?: string;
+  }>(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const pmGanttVersionsRelations = relations(pmGanttVersions, ({ one }) => ({
+  tenant: one(tenants, { fields: [pmGanttVersions.tenantId], references: [tenants.id] }),
+  project: one(pmProjects, { fields: [pmGanttVersions.projectId], references: [pmProjects.id] }),
+  creator: one(users, { fields: [pmGanttVersions.createdBy], references: [users.id] }),
+}));
+
 // Project Team Members
 export const pmTeamMembers = pgTable("pm_team_members", {
   id: serial("id").primaryKey(),
@@ -1022,6 +1046,7 @@ export const insertPmProjectSchema = createInsertSchema(pmProjects).omit({ id: t
 export const insertPmProjectPhaseSchema = createInsertSchema(pmProjectPhases).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPmMilestoneSchema = createInsertSchema(pmMilestones).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPmTaskSchema = createInsertSchema(pmTasks).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPmGanttVersionSchema = createInsertSchema(pmGanttVersions).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPmTeamMemberSchema = createInsertSchema(pmTeamMembers).omit({ id: true, createdAt: true });
 export const insertPmRaiddItemSchema = createInsertSchema(pmRaiddItems).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPmPhaseTemplateSchema = createInsertSchema(pmPhaseTemplates).omit({ id: true, createdAt: true });
@@ -1188,6 +1213,8 @@ export type InsertPmProject = z.infer<typeof insertPmProjectSchema>;
 export type InsertPmProjectPhase = z.infer<typeof insertPmProjectPhaseSchema>;
 export type InsertPmMilestone = z.infer<typeof insertPmMilestoneSchema>;
 export type InsertPmTask = z.infer<typeof insertPmTaskSchema>;
+export type PmGanttVersion = typeof pmGanttVersions.$inferSelect;
+export type InsertPmGanttVersion = z.infer<typeof insertPmGanttVersionSchema>;
 export type InsertPmTeamMember = z.infer<typeof insertPmTeamMemberSchema>;
 export type InsertPmRaiddItem = z.infer<typeof insertPmRaiddItemSchema>;
 export type InsertPmPhaseTemplate = z.infer<typeof insertPmPhaseTemplateSchema>;

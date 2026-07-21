@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useCallback, useState, useRef } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getSupabaseAccessToken } from "@/lib/supabase-session";
@@ -331,14 +331,14 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
 
   const toolbarHTML = `
 <div class="gtb" id="ganttToolbar">
-  <span style="font-size:10px;color:var(--g500);font-weight:600;flex-shrink:0;">ZOOM</span>
-  <div class="zoom-group">
-    <div class="zb" data-zoom="day" onclick="setZoom('day',this)">Day</div>
-    <div class="zb on" data-zoom="week" onclick="setZoom('week',this)">Week</div>
-    <div class="zb" data-zoom="month" onclick="setZoom('month',this)">Month</div>
-    <div class="zb" data-zoom="quarter" onclick="setZoom('quarter',this)">Quarter</div>
-    <div class="zb" data-zoom="year" onclick="setZoom('year',this)">Year</div>
-  </div>
+  <span class="zoom-to-label">Zoom to:</span>
+  <select class="tb-select zoom-to-select" id="zoomToSelect" onchange="setZoom(this.value)">
+    <option value="day">Day</option>
+    <option value="week" selected>Week</option>
+    <option value="month">Month</option>
+    <option value="quarter">Quarter</option>
+    <option value="year">Year</option>
+  </select>
   <div class="gtb-sep"></div>
   <span style="font-size:10px;color:var(--g500);font-weight:600;flex-shrink:0;">FILTER</span>
   <select class="tb-select" id="f-level" onchange="renderAll()">
@@ -353,27 +353,88 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
   <select class="tb-select" id="f-owner" onchange="renderAll()">
     <option value="">All owners</option>
   </select>
-  <select class="tb-select" id="f-rag" onchange="renderAll()">
-    <option value="">All RAG</option>
-    <option value="g">🟢 Green</option>
-    <option value="a">🟡 Amber</option>
-    <option value="r">🔴 Red</option>
-  </select>
+  <div class="tb-filter-wrap" id="ragFilterWrap">
+    <button type="button" class="tb-filter-btn" id="ragFilterBtn" onclick="toggleRagFilterMenu(event)" title="Filter by RAG" aria-label="Filter by RAG">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+    </button>
+    <div class="tb-filter-menu" id="ragFilterMenu" hidden>
+      <button type="button" class="tb-filter-opt on" data-rag="" onclick="setRagFilter('',this)">All RAG</button>
+      <button type="button" class="tb-filter-opt" data-rag="g" onclick="setRagFilter('g',this)">🟢 Green</button>
+      <button type="button" class="tb-filter-opt" data-rag="a" onclick="setRagFilter('a',this)">🟡 Amber</button>
+      <button type="button" class="tb-filter-opt" data-rag="r" onclick="setRagFilter('r',this)">🔴 Red</button>
+    </div>
+  </div>
+  <input type="hidden" id="f-rag" value="">
   <input class="tb-search" id="f-search" placeholder="Search tasks…" oninput="renderAll()">
+  <div class="gtb-sep"></div>
+  <div class="plan-chip" id="planChip" title="Click to manage plan versions" onclick="openVersionsModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openVersionsModal();}" role="button" tabindex="0">
+    <span class="plan-chip-lbl">Plan</span>
+    <span class="plan-chip-name" id="planChipName">Working</span>
+    <span class="plan-chip-ver" id="planChipVer"></span>
+    <svg class="plan-chip-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+  </div>
+  <div class="tb-filter-wrap" id="versionMenuWrap">
+    <button type="button" class="tb-filter-btn" id="versionMenuBtn" onclick="toggleVersionMenu(event)" title="Plan versions" aria-label="Plan versions" aria-haspopup="menu">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>
+    </button>
+    <div class="tb-filter-menu version-menu" id="versionMenu" hidden role="menu">
+      <button type="button" class="tb-filter-opt" role="menuitem" onclick="promptSaveVersion('update')">
+        <span class="vm-title">Save version</span>
+        <span class="vm-desc">Overwrite active schedule snapshot</span>
+      </button>
+      <button type="button" class="tb-filter-opt" role="menuitem" onclick="promptSaveVersion('new')">
+        <span class="vm-title">Save as new version…</span>
+        <span class="vm-desc">New active version; keep old one</span>
+      </button>
+      <button type="button" class="tb-filter-opt" role="menuitem" onclick="promptSaveVersion('copy')">
+        <span class="vm-title">Save as copy…</span>
+        <span class="vm-desc">Named backup; stay on current</span>
+      </button>
+      <div class="vm-sep" role="separator"></div>
+      <button type="button" class="tb-filter-opt" role="menuitem" onclick="openVersionsModal()">
+        <span class="vm-title">Manage versions…</span>
+        <span class="vm-desc">Activate, rename, or delete</span>
+      </button>
+    </div>
+  </div>
   <div class="gtb-sep"></div>
   <div class="cp-toggle" id="cpBtn" onclick="toggleCP()" title="Highlight critical path">Critical path</div>
   <div class="dep-draw-btn" id="depDrawBtn" onclick="toggleDepDraw()" title="Click two bars to draw a dependency">🔗 Draw Dep</div>
-  <div style="margin-left:auto;display:flex;gap:5px;align-items:center;flex-shrink:0;">
-    <button class="btn btn-ghost" onclick="jumpToToday()" title="Scroll to today">📍 Today</button>
-    <button class="btn btn-ghost" onclick="indentTask()" title="Indent selected row">→ Indent</button>
-    <button class="btn btn-ghost" onclick="outdentTask()" title="Outdent selected row">← Outdent</button>
-    <button class="btn btn-ghost" onclick="collapseAll()" title="Collapse all groups">⊟ Collapse</button>
-    <button class="btn btn-ghost" onclick="expandAll()" title="Expand all groups">⊞ Expand</button>
-    <button class="btn btn-ghost" onclick="resetPanelLayout()" title="Reset task panel width">↺ Reset layout</button>
-    <div style="width:1px;height:16px;background:var(--g200);"></div>
-    <button class="btn btn-excel" onclick="openImportExport('export')">↓ Export</button>
-    <button class="btn btn-green" onclick="openImportExport('import')">↑ Import</button>
-    <button class="btn btn-p" onclick="addNewItem()">+ Add a New Item</button>
+  <div class="dep-draw-types" id="depDrawTypes" hidden>
+    <button type="button" class="dep-opt sel" data-dep="FS" onclick="selDep(this,'FS')" title="Finish-to-Start">FS</button>
+    <button type="button" class="dep-opt" data-dep="SS" onclick="selDep(this,'SS')" title="Start-to-Start">SS</button>
+    <button type="button" class="dep-opt" data-dep="EE" onclick="selDep(this,'EE')" title="Finish-to-Finish">FF</button>
+  </div>
+  <div class="gtb-actions">
+    <button type="button" class="btn-icon" id="undoBtn" onclick="undo()" disabled title="Undo (Ctrl+Z)" aria-label="Undo">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6.7 3L3 13"/></svg>
+    </button>
+    <button type="button" class="btn-icon" id="redoBtn" onclick="redo()" disabled title="Redo (Ctrl+Y)" aria-label="Redo">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3L21 13"/></svg>
+    </button>
+    <div class="gtb-sep"></div>
+    <button type="button" class="btn-icon" onclick="jumpToToday()" title="Scroll to today" aria-label="Today">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><circle cx="12" cy="15" r="1.5" fill="currentColor" stroke="none"/></svg>
+    </button>
+    <button type="button" class="btn-icon" onclick="indentTask()" title="Indent — nest under the row above (like Excel)" aria-label="Indent">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M3 12h6M13 10l4 2-4 2M3 18h18"/></svg>
+    </button>
+    <button type="button" class="btn-icon" onclick="outdentTask()" title="Outdent — move up one level (like Excel)" aria-label="Outdent">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M11 12h10M7 10L3 12l4 2M3 18h18"/></svg>
+    </button>
+    <button type="button" class="btn-icon" onclick="collapseAll()" title="Collapse all" aria-label="Collapse all">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8"/></svg>
+    </button>
+    <button type="button" class="btn-icon" onclick="expandAll()" title="Expand all" aria-label="Expand all">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>
+    </button>
+    <div class="gtb-sep"></div>
+    <button type="button" class="btn-icon btn-icon-export" onclick="openImportExport('export')" title="Export" aria-label="Export">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+    </button>
+    <button type="button" class="btn-icon btn-icon-import" onclick="openImportExport('import')" title="Import" aria-label="Import">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9"/><path d="M7 14l5-5 5 5"/><path d="M5 3h14"/></svg>
+    </button>
     <div class="view-group">
       <button type="button" class="vb on" id="viewGanttBtn" onclick="setView('gantt',this)">📅 Gantt</button>
       <button type="button" class="vb" id="viewListBtn" onclick="setView('list',this)">≡ List</button>
@@ -431,20 +492,9 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
 </div>
 <div class="gantt-bottom-bar" id="ganttBottomBar">
   <label class="dhx-switch"><input type="checkbox" id="switchCollapse" onchange="toggleCollapseRows(true)"><span class="slider"></span>Collapse rows</label>
-  <button class="btn-icon-lbl" onclick="undo()" id="undoBtn" disabled title="Undo (Ctrl+Z)"><span class="btn-ico">↶</span> Undo</button>
-  <button class="btn-icon-lbl" onclick="redo()" id="redoBtn" disabled title="Redo (Ctrl+Y)"><span class="btn-ico">↷</span> Redo</button>
   <label class="dhx-switch"><input type="checkbox" id="switchAutoSched" onchange="toggleAutoSchedule(true)"><span class="slider"></span>Auto scheduling</label>
   <label class="dhx-switch"><input type="checkbox" id="switchCP" onchange="toggleCP(true)"><span class="slider"></span>Critical path</label>
   <label class="dhx-switch"><input type="checkbox" id="switchZoomFit" onchange="toggleZoomFit(true)"><span class="slider"></span>Zoom to fit</label>
-  <span class="zoom-to-label">Zoom to:</span>
-  <select class="tb-select zoom-to-select" onchange="if(this.value){setZoom(this.value,document.querySelector('.zb[data-zoom=&quot;'+this.value+'&quot;]'));this.value='';}">
-    <option value="">—</option>
-    <option value="day">Days</option>
-    <option value="week">Weeks</option>
-    <option value="month">Months</option>
-    <option value="quarter">Quarters</option>
-    <option value="year">Years</option>
-  </select>
   <div class="bottom-exports">
     <button class="btn btn-export-outline" onclick="exportGanttPDF(event)">Export to PDF</button>
     <button class="btn btn-export-outline" onclick="exportGanttPNG(event)">Export to PNG</button>
@@ -512,16 +562,17 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
         </div>
         <div class="fg">
           <label class="fl">Predecessor</label>
-          <select id="m-pred" class="fi"></select>
+          <select id="m-pred" class="fi" onchange="onPredChange()"></select>
         </div>
       </div>
       <div class="fg">
-        <label class="fl">Dependency Type</label>
-        <div class="dep-type-group">
-          <div class="dep-opt sel" data-dep="FS" onclick="selDep(this,'FS')">FS</div>
-          <div class="dep-opt" data-dep="SS" onclick="selDep(this,'SS')">SS</div>
-          <div class="dep-opt" data-dep="EE" onclick="selDep(this,'EE')">EE</div>
+        <label class="fl">Dependency Type <span id="depTypeHint" class="fl-hint"></span></label>
+        <div class="dep-type-group" id="depTypeGroup">
+          <button type="button" class="dep-opt sel" data-dep="FS" onclick="selDep(this,'FS')" title="Finish-to-Start: successor starts after predecessor finishes">FS</button>
+          <button type="button" class="dep-opt" data-dep="SS" onclick="selDep(this,'SS')" title="Start-to-Start: successor starts with predecessor">SS</button>
+          <button type="button" class="dep-opt" data-dep="EE" onclick="selDep(this,'EE')" title="Finish-to-Finish: successor finishes with predecessor">FF</button>
         </div>
+        <div class="dep-type-legend">FS Finish→Start · SS Start→Start · FF Finish→Finish</div>
       </div>
       <div class="fg">
         <label class="fl">Notes</label>
@@ -549,6 +600,64 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
       <button class="btn btn-ghost" onclick="closeModal('modalIE')">Close</button>
     </div>
   </div>
+</div>
+
+<div class="modal-bg" id="modalVersions">
+  <div class="modal modal-versions" style="width:580px;">
+    <div class="mh">
+      <h3>Plan versions</h3>
+      <button class="mc" onclick="closeModal('modalVersions')" aria-label="Close">✕</button>
+    </div>
+    <div class="mb">
+      <p class="versions-hint">Snapshots of this project's Gantt schedule. <strong>Activate</strong> replaces the live plan and reloads the chart.</p>
+      <div class="versions-actions">
+        <button type="button" class="btn btn-p" onclick="promptSaveVersion('update')">Save version</button>
+        <button type="button" class="btn btn-ghost" onclick="promptSaveVersion('new')">Save as new…</button>
+        <button type="button" class="btn btn-ghost" onclick="promptSaveVersion('copy')">Save as copy…</button>
+      </div>
+      <div id="versionsList" class="versions-list"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('modalVersions')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalVersionName">
+  <div class="modal" style="width:420px;">
+    <div class="mh">
+      <h3 id="vnTitle">Save version</h3>
+      <button class="mc" onclick="closeModal('modalVersionName')" aria-label="Close">✕</button>
+    </div>
+    <div class="mb">
+      <p class="versions-hint" id="vnHint"></p>
+      <div class="fg">
+        <label class="fl" for="vnName">Version name</label>
+        <input id="vnName" class="fi" type="text" maxlength="120" placeholder="e.g. Baseline v1" autocomplete="off">
+      </div>
+      <p class="vn-error" id="vnError" hidden></p>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('modalVersionName')">Cancel</button>
+      <button class="btn btn-p" id="vnConfirmBtn" onclick="confirmVersionNameModal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalVersionConfirm">
+  <div class="modal" style="width:420px;">
+    <div class="mh">
+      <h3 id="vcTitle">Confirm</h3>
+      <button class="mc" onclick="closeModal('modalVersionConfirm')" aria-label="Close">✕</button>
+    </div>
+    <div class="mb">
+      <p class="versions-hint" id="vcMessage" style="white-space:pre-line;"></p>
+    </div>
+    <div class="mf">
+      <button class="btn btn-ghost" onclick="closeModal('modalVersionConfirm')">Cancel</button>
+      <button class="btn btn-p" id="vcConfirmBtn" onclick="confirmVersionConfirmModal()">Confirm</button>
+    </div>
+  </div>
 </div>`;
 
   return `<!DOCTYPE html>
@@ -558,7 +667,7 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${projectName.replace(/</g, "&lt;")} — Gantt</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260716q">
+<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260721q">
 </head>
 <body>
 <div class="main">
@@ -567,7 +676,7 @@ ${ganttBodyHTML}
 </div>
 ${modalsHTML}
 <script>window.GANTT_INIT_DATA = ${dataJson};</script>
-<script src="/gantt-v4-engine.js?v=20260716q"></script>
+<script src="/gantt-v4-engine.js?v=20260721q"></script>
 </body>
 </html>`;
 }
@@ -580,8 +689,10 @@ interface ReactGanttChartProps {
 
 export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
   const queryClient = useQueryClient();
-  const [refreshKey, setRefreshKey] = useState(0);
   const [authToken, setAuthToken] = useState<string | undefined>(undefined);
+  const [srcDoc, setSrcDoc] = useState<string | null>(null);
+  const [versionReloadKey, setVersionReloadKey] = useState(0);
+  const bootstrappedKeyRef = useRef<string | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -594,17 +705,21 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
     };
   }, []);
 
-  const invalidateGantt = useCallback(async () => {
-    await Promise.all([
-      queryClient.refetchQueries({ queryKey: [`/api/pm/projects/${projectId}`] }),
-      queryClient.refetchQueries({ queryKey: [`/api/pm/projects/${projectId}/phases`] }),
-      queryClient.refetchQueries({ queryKey: ["/api/pm/projects", projectId, "phases"] }),
-      queryClient.refetchQueries({ queryKey: [`/api/pm/workstreams?projectId=${projectId}`] }),
-      queryClient.refetchQueries({ queryKey: [`/api/pm/projects/${projectId}/tasks`] }),
-      queryClient.refetchQueries({ queryKey: ["/api/pm/projects", projectId, "tasks"] }),
-      queryClient.refetchQueries({ queryKey: [`/api/pm/projects/${projectId}/milestones`] }),
-      queryClient.refetchQueries({ queryKey: [`/api/pm/projects/${projectId}/team`] }),
-    ]);
+  // Soft-sync React Query cache for other views — never remount the live Gantt iframe
+  const softInvalidateGantt = useCallback(() => {
+    void queryClient.invalidateQueries({
+      predicate: (q) => {
+        const key = q.queryKey;
+        if (!Array.isArray(key) || key.length === 0) return false;
+        const s = key.map(String).join("|");
+        return (
+          s.includes(`/api/pm/projects/${projectId}`) ||
+          s.includes(`/api/pm/projects|${projectId}`) ||
+          s.includes(`workstreams?projectId=${projectId}`)
+        );
+      },
+      refetchType: "none",
+    });
   }, [queryClient, projectId]);
 
   useEffect(() => {
@@ -612,8 +727,29 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
       if (e.data?.type === "gantt-saved" && e.data?.projectId === projectId) {
         if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
         refreshTimerRef.current = setTimeout(() => {
-          void invalidateGantt();
-        }, 600);
+          softInvalidateGantt();
+        }, 800);
+      }
+      if (e.data?.type === "gantt-version-activated" && e.data?.projectId === projectId) {
+        // Controlled remount only for plan version switch — refetch then rebuild iframe
+        setSrcDoc(null);
+        bootstrappedKeyRef.current = null;
+        void queryClient
+          .refetchQueries({
+            predicate: (q) => {
+              const key = q.queryKey;
+              if (!Array.isArray(key) || key.length === 0) return false;
+              const s = key.map(String).join("|");
+              return (
+                s.includes(`/api/pm/projects/${projectId}`) ||
+                s.includes(`/api/pm/projects|${projectId}`) ||
+                s.includes(`workstreams?projectId=${projectId}`)
+              );
+            },
+          })
+          .then(() => {
+            setVersionReloadKey((k) => k + 1);
+          });
       }
     };
     window.addEventListener("message", onMessage);
@@ -621,7 +757,8 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
       window.removeEventListener("message", onMessage);
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     };
-  }, [projectId, invalidateGantt]);
+  }, [projectId, softInvalidateGantt, queryClient]);
+
   const { data: project, isLoading: pjL } = useQuery<PmProject>({
     queryKey: [`/api/pm/projects/${projectId}`],
     enabled: !!projectId,
@@ -656,8 +793,20 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
   const authReady = authToken !== undefined;
   const isLoading = pjL || phL || wsL || tkL || msL || tmL || !authReady;
 
-  const srcDoc = useMemo(() => {
-    if (!project || !authReady) return null;
+  // Reset bootstrap when switching projects
+  useEffect(() => {
+    bootstrappedKeyRef.current = null;
+    setSrcDoc(null);
+    setVersionReloadKey(0);
+  }, [projectId]);
+
+  // Build iframe once per project — later query updates must NOT rebuild srcDoc.
+  // versionReloadKey forces a remount after activating a plan version.
+  useEffect(() => {
+    if (isLoading || !project || !authReady) return;
+    const bootKey = `${projectId}:${versionReloadKey}`;
+    if (bootstrappedKeyRef.current === bootKey) return;
+    bootstrappedKeyRef.current = bootKey;
     const data: GanttInitData = {
       ...buildGanttData(
         project,
@@ -669,10 +818,11 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
       ),
       authToken: authToken || undefined,
     };
-    return buildSrcDoc(data, project.name);
-  }, [project, phases, workstreams, dbTasks, milestones, team, authToken, authReady, refreshKey]);
+    setSrcDoc(buildSrcDoc(data, project.name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot bootstrap per projectId (+ version remount)
+  }, [isLoading, authReady, projectId, project, versionReloadKey]);
 
-  if (isLoading) {
+  if (isLoading || !srcDoc) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16, height: "100%" }}>
         <Skeleton className="h-10 w-full rounded-lg" />
@@ -692,11 +842,11 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
 
   return (
     <iframe
-      key={`${projectId}-${refreshKey}-v20260716q`}
+      key={`gantt-${projectId}-v20260721q-${versionReloadKey}`}
       title={`Gantt — ${project.name}`}
-      srcDoc={srcDoc ?? undefined}
+      srcDoc={srcDoc}
       style={{ width: "100%", height: "100%", minHeight: 400, border: "none", display: "block" }}
-      sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
       allow="fullscreen"
       allowFullScreen
     />

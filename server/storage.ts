@@ -91,6 +91,7 @@ import {
   pmProjectPhases,
   pmMilestones,
   pmTasks,
+  pmGanttVersions,
   pmTeamMembers,
   pmRaiddItems,
   pmPhaseTemplates,
@@ -250,6 +251,8 @@ import {
   type InsertPmMilestone,
   type PmTask,
   type InsertPmTask,
+  type PmGanttVersion,
+  type InsertPmGanttVersion,
   type PmTeamMember,
   type InsertPmTeamMember,
   type PmRaiddItem,
@@ -1152,6 +1155,16 @@ export interface IStorage {
     wbs: string; name: string; type: number; parentWbs?: string | null; predecessorWbs?: string | null;
     owner?: string; start: string; end?: string; progress?: number; rag?: string; notes?: string;
   }[]): Promise<{ imported: number }>;
+
+  // Projects Module - Gantt Versions
+  getPmGanttVersions(projectId: number): Promise<PmGanttVersion[]>;
+  getPmGanttVersion(id: number): Promise<PmGanttVersion | undefined>;
+  getActivePmGanttVersion(projectId: number): Promise<PmGanttVersion | undefined>;
+  createPmGanttVersion(data: InsertPmGanttVersion): Promise<PmGanttVersion>;
+  updatePmGanttVersion(id: number, updates: Partial<InsertPmGanttVersion>): Promise<PmGanttVersion | undefined>;
+  deletePmGanttVersion(id: number): Promise<void>;
+  copyPmGanttVersion(id: number, name: string, createdBy?: string | null): Promise<PmGanttVersion>;
+  activatePmGanttVersion(projectId: number, versionId: number, tenantId: number): Promise<PmGanttVersion>;
 
   // Projects Module - Team Members
   getPmTeamMembers(projectId: number): Promise<(PmTeamMember & { user: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]>;
@@ -6379,6 +6392,133 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { imported: sorted.length };
+  }
+
+  // Projects Module - Gantt Versions
+  async getPmGanttVersions(projectId: number): Promise<PmGanttVersion[]> {
+    return await db
+      .select()
+      .from(pmGanttVersions)
+      .where(eq(pmGanttVersions.projectId, projectId))
+      .orderBy(desc(pmGanttVersions.versionNumber));
+  }
+
+  async getPmGanttVersion(id: number): Promise<PmGanttVersion | undefined> {
+    const [result] = await db.select().from(pmGanttVersions).where(eq(pmGanttVersions.id, id));
+    return result;
+  }
+
+  async getActivePmGanttVersion(projectId: number): Promise<PmGanttVersion | undefined> {
+    const [result] = await db
+      .select()
+      .from(pmGanttVersions)
+      .where(and(eq(pmGanttVersions.projectId, projectId), eq(pmGanttVersions.isActive, true)))
+      .limit(1);
+    return result;
+  }
+
+  async createPmGanttVersion(data: InsertPmGanttVersion): Promise<PmGanttVersion> {
+    const existing = await this.getPmGanttVersions(data.projectId);
+    const nextNum = existing.length
+      ? Math.max(...existing.map((v) => v.versionNumber)) + 1
+      : 1;
+    // Respect explicit isActive — never force-activate a "Save as copy"
+    const makeActive = data.isActive === true;
+    if (makeActive) {
+      await db
+        .update(pmGanttVersions)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(pmGanttVersions.projectId, data.projectId));
+    }
+    const [result] = await db
+      .insert(pmGanttVersions)
+      .values({
+        ...data,
+        versionNumber: data.versionNumber ?? nextNum,
+        isActive: makeActive,
+      })
+      .returning();
+    return result;
+  }
+
+  async updatePmGanttVersion(id: number, updates: Partial<InsertPmGanttVersion>): Promise<PmGanttVersion | undefined> {
+    const [result] = await db
+      .update(pmGanttVersions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(pmGanttVersions.id, id))
+      .returning();
+    return result;
+  }
+
+  async deletePmGanttVersion(id: number): Promise<void> {
+    await db.delete(pmGanttVersions).where(eq(pmGanttVersions.id, id));
+  }
+
+  async copyPmGanttVersion(id: number, name: string, createdBy?: string | null): Promise<PmGanttVersion> {
+    const source = await this.getPmGanttVersion(id);
+    if (!source) throw new Error("Version not found");
+    return this.createPmGanttVersion({
+      tenantId: source.tenantId,
+      projectId: source.projectId,
+      name,
+      snapshot: source.snapshot,
+      createdBy: createdBy ?? source.createdBy,
+      isActive: false,
+    });
+  }
+
+  private snapshotTasksToImportItems(snapshot: { tasks?: unknown[] }): {
+    wbs: string; name: string; type: number; parentWbs?: string | null; predecessorWbs?: string | null;
+    owner?: string; start: string; end?: string; progress?: number; rag?: string; notes?: string;
+  }[] {
+    const raw = Array.isArray(snapshot?.tasks) ? snapshot.tasks : [];
+    const tasks = raw as {
+      id?: number; type?: number; name?: string; wbs?: string; owner?: string;
+      start?: string; end?: string; prog?: number; progress?: number; rag?: string; ragScp?: string; notes?: string;
+      predId?: number | null; parent?: number | null;
+    }[];
+    const byId = new Map(tasks.map((t) => [t.id, t]));
+    return tasks
+      .filter((t) => (t.type ?? 0) >= 2 && (t.type ?? 0) <= 6 && t.name && t.start && t.wbs)
+      .map((t) => {
+        const parent = t.parent != null ? byId.get(t.parent) : undefined;
+        const pred = t.predId != null ? byId.get(t.predId) : undefined;
+        return {
+          wbs: String(t.wbs),
+          name: String(t.name),
+          type: Number(t.type),
+          parentWbs: parent && (parent.type ?? 0) >= 2 && parent.wbs ? String(parent.wbs) : null,
+          predecessorWbs: pred?.wbs ? String(pred.wbs) : null,
+          owner: t.owner || undefined,
+          start: String(t.start),
+          end: t.end ? String(t.end) : String(t.start),
+          progress: t.prog ?? t.progress ?? 0,
+          rag: t.ragScp || t.rag || "g",
+          notes: t.notes || undefined,
+        };
+      });
+  }
+
+  async activatePmGanttVersion(projectId: number, versionId: number, tenantId: number): Promise<PmGanttVersion> {
+    const version = await this.getPmGanttVersion(versionId);
+    if (!version || version.projectId !== projectId) throw new Error("Version not found");
+    const snap = version.snapshot as { tasks?: unknown[] };
+    const rawCount = Array.isArray(snap?.tasks) ? snap.tasks.length : 0;
+    const items = this.snapshotTasksToImportItems(snap);
+    if (rawCount > 0 && items.length === 0) {
+      throw new Error("This version snapshot could not be restored (no importable rows)");
+    }
+    await this.bulkImportGanttPlan(projectId, tenantId, "overwrite", items);
+    await db
+      .update(pmGanttVersions)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(pmGanttVersions.projectId, projectId));
+    const [activated] = await db
+      .update(pmGanttVersions)
+      .set({ isActive: true, updatedAt: new Date() })
+      .where(eq(pmGanttVersions.id, versionId))
+      .returning();
+    return activated;
   }
 
   // Projects Module - Team Members

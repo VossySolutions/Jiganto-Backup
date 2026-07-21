@@ -162,9 +162,8 @@ function toggleZoomFit(fromSwitch){
       zoomFitActive=false;
       zoom=zoomBeforeFit.zoom||'week';
       colW=zoomBeforeFit.colW||28;
-      document.querySelectorAll('.zb').forEach(b=>{
-        b.classList.toggle('on', b.dataset.zoom===zoom);
-      });
+      const sel=document.getElementById('zoomToSelect');
+      if(sel) sel.value=zoom;
       renderAll();
     }
   } finally {
@@ -245,7 +244,10 @@ function pushHistory(){
   if(historyIdx>=0&&history[historyIdx]===snap) return;
   history.splice(historyIdx+1);
   history.push(snap);
-  if(history.length>MAX_HISTORY) history.shift();
+  if(history.length>MAX_HISTORY){
+    history.shift();
+    if(historyIdx>0) historyIdx--;
+  }
   historyIdx=history.length-1;
   updateUndoRedoButtons();
 }
@@ -255,12 +257,30 @@ function restoreHistory(idx){
   tasks=JSON.parse(history[historyIdx]);
   updateUndoRedoButtons();
   renderAll();
+  if(selectedTaskId!=null) selectTask(selectedTaskId);
 }
 function undo(){
-  if(historyIdx<=0) return;
+  if(historyIdx<0||!history.length) return;
   showLoading('Undoing…');
-  try{ restoreHistory(historyIdx-1); }
-  finally{ hideLoading(); }
+  try{
+    const live=snapshotTasks();
+    // Live mutated past tip (e.g. drag) — stash live for Redo, then restore tip
+    if(live!==history[historyIdx]){
+      history.splice(historyIdx+1);
+      history.push(live);
+      if(history.length>MAX_HISTORY){
+        history.shift();
+        // tip index moves left by 1 after shift
+        historyIdx=Math.max(0,historyIdx-1);
+      }
+      restoreHistory(historyIdx);
+      return;
+    }
+    if(historyIdx<=0) return;
+    restoreHistory(historyIdx-1);
+  } finally {
+    hideLoading();
+  }
 }
 function redo(){
   if(historyIdx>=history.length-1) return;
@@ -271,8 +291,10 @@ function redo(){
 function updateUndoRedoButtons(){
   const u=document.getElementById('undoBtn');
   const r=document.getElementById('redoBtn');
-  if(u) u.disabled=historyIdx<=0;
-  if(r) r.disabled=historyIdx>=history.length-1;
+  const canUndo=historyIdx>0||(historyIdx>=0&&!!history[historyIdx]&&snapshotTasks()!==history[historyIdx]);
+  const canRedo=historyIdx<history.length-1;
+  if(u) u.disabled=!canUndo;
+  if(r) r.disabled=!canRedo;
 }
 function formatPred(t){
   if(!t.predId) return '—';
@@ -397,13 +419,34 @@ function getRange(){
 }
 
 // ── VISIBLE TASKS ────────────────────────────────────────────
+function getOrderedTasks(){
+  const result=[];
+  const seen=new Set();
+  function walk(parentId){
+    tasks.filter(t=>t.parent===parentId).forEach(t=>{
+      if(seen.has(t.id)) return;
+      seen.add(t.id);
+      result.push(t);
+      walk(t.id);
+    });
+  }
+  walk(null);
+  tasks.forEach(t=>{ if(!seen.has(t.id)){ seen.add(t.id); result.push(t); } });
+  return result;
+}
 function getVisible(){
   const fl=document.getElementById('f-level')?.value||'';
   const fo=document.getElementById('f-owner')?.value||'';
   const fr=document.getElementById('f-rag')?.value||'';
   const fq=(document.getElementById('f-search')?.value||'').trim().toLowerCase();
-  return tasks.filter(t=>{
-    if(t.parent!==null&&collapsed[t.parent]) return false;
+  return getOrderedTasks().filter(t=>{
+    // Hide if any ancestor is collapsed
+    let p=t.parent;
+    while(p!==null){
+      if(collapsed[p]) return false;
+      const pt=tasks.find(x=>x.id===p);
+      p=pt?pt.parent:null;
+    }
     if(fl!==''&&String(t.type)!==fl) return false;
     if(fo&&t.owner!==fo) return false;
     if(fr&&(ragField(t,'bgt')!==fr&&ragField(t,'sch')!==fr&&ragField(t,'scp')!==fr)) return false;
@@ -412,15 +455,87 @@ function getVisible(){
   });
 }
 
+/** Place task in the array immediately after its parent (and parent's subtree) for clear hierarchy */
+function moveTaskAfterParent(task){
+  const from=tasks.findIndex(x=>x.id===task.id);
+  if(from<0) return;
+  tasks.splice(from,1);
+  if(task.parent===null){
+    tasks.push(task);
+    return;
+  }
+  // Find end of parent's subtree in current array
+  let insertAt=tasks.findIndex(x=>x.id===task.parent);
+  if(insertAt<0){ tasks.push(task); return; }
+  insertAt++;
+  while(insertAt<tasks.length){
+    const cur=tasks[insertAt];
+    let d=0,p=cur.parent;
+    let underParent=false;
+    while(p!==null){
+      if(p===task.parent){ underParent=true; break; }
+      const pt=tasks.find(x=>x.id===p);
+      p=pt?pt.parent:null;
+      if(++d>20) break;
+    }
+    if(!underParent) break;
+    insertAt++;
+  }
+  tasks.splice(insertAt,0,task);
+}
+
+function flashTaskRow(id){
+  const r=document.getElementById('tr-'+id);
+  if(!r) return;
+  r.classList.add('flash-hier');
+  setTimeout(()=>r.classList.remove('flash-hier'),900);
+}
+
+function toggleRagFilterMenu(e){
+  if(e){e.preventDefault();e.stopPropagation();}
+  const menu=document.getElementById('ragFilterMenu');
+  const btn=document.getElementById('ragFilterBtn');
+  if(!menu||!btn) return;
+  const open=menu.hasAttribute('hidden');
+  if(open){
+    if(menu.parentElement!==document.body) document.body.appendChild(menu);
+    const r=btn.getBoundingClientRect();
+    menu.style.top=(r.bottom+4)+'px';
+    menu.style.left=Math.max(8,r.left)+'px';
+    menu.removeAttribute('hidden');
+    const close=(ev)=>{
+      if(ev.target.closest&&(ev.target.closest('#ragFilterBtn')||ev.target.closest('#ragFilterMenu'))) return;
+      menu.setAttribute('hidden','');
+      document.removeEventListener('mousedown',close,true);
+    };
+    setTimeout(()=>document.addEventListener('mousedown',close,true),0);
+  } else {
+    menu.setAttribute('hidden','');
+  }
+}
+function setRagFilter(val,el){
+  const hidden=document.getElementById('f-rag');
+  if(hidden) hidden.value=val||'';
+  document.querySelectorAll('#ragFilterMenu .tb-filter-opt').forEach(b=>b.classList.toggle('on',b===el));
+  const btn=document.getElementById('ragFilterBtn');
+  if(btn) btn.classList.toggle('active',!!val);
+  const menu=document.getElementById('ragFilterMenu');
+  if(menu) menu.setAttribute('hidden','');
+  renderAll();
+}
+window.toggleRagFilterMenu=toggleRagFilterMenu;
+window.setRagFilter=setRagFilter;
+
 // ── ZOOM ─────────────────────────────────────────────────────
-function setZoom(z,el){
+function setZoom(z){
+  if(!z) return;
   zoom=z;
   colW={day:44,week:28,month:14,quarter:7,year:4}[z]||28;
   zoomFitActive=false;
   const sw=document.getElementById('switchZoomFit');
   if(sw) sw.checked=false;
-  document.querySelectorAll('.zb').forEach(b=>b.classList.remove('on'));
-  if(el) el.classList.add('on');
+  const sel=document.getElementById('zoomToSelect');
+  if(sel) sel.value=z;
   renderAll();
 }
 function zoomToFit(){
@@ -431,7 +546,6 @@ function zoomToFit(){
   const avail=Math.max(200,wrap.clientWidth-24);
   const ideal=Math.max(3,Math.min(44,Math.floor(avail/totalDays)));
   colW=ideal;
-  document.querySelectorAll('.zb').forEach(b=>b.classList.remove('on'));
   renderAll();
   wrap.scrollLeft=0;
 }
@@ -506,6 +620,7 @@ function renderAll(){
   renderCustomHeaders();
   renderTimeline(start,end,totalW);
   positionTodayLine(start);
+  if(selectedTaskId!=null) selectTask(selectedTaskId);
   if(!scrollSyncing){
     scrollSyncing=true;
     ts.scrollTop=prevScrollTop;
@@ -523,6 +638,10 @@ function renderTaskPanel(){
   const visible=getVisible();
   scroll.innerHTML=visible.map(t=>buildTaskRowHTML(t)).join('');
   bindCustomCellClicks();
+  if(selectedTaskId!=null){
+    const r=document.getElementById('tr-'+selectedTaskId);
+    if(r) r.classList.add('selected');
+  }
 }
 
 function getDepth(t){
@@ -539,7 +658,7 @@ function getDepth(t){
 // Build inline-editable task row HTML
 function buildTaskRowHTML(t){
   const depth=getDepth(t);
-  const indentPx=depth*14;
+  const indentPx=depth*18;
   const hasKids=tasks.some(c=>c.parent===t.id);
   const isCollapsed=collapsed[t.id];
   const progC=t.prog>=70?'#059669':t.prog>=40?'#d97706':'#dc2626';
@@ -585,7 +704,7 @@ function buildTaskRowHTML(t){
 }
 
 function editName(id){
-  const el=document.getElementById('tn-'+id);
+  const el=document.getElementById('tn-'+id)||document.getElementById('ln-'+id);
   if(!el||el.contentEditable==='true') return;
   el.contentEditable='true';
   el.focus();
@@ -612,10 +731,13 @@ function selectTask(id){
   selectedTaskId=id;
   document.querySelectorAll('.task-row').forEach(r=>r.classList.remove('selected'));
   document.querySelectorAll('.tl-grid-row').forEach(r=>r.classList.remove('selected'));
+  document.querySelectorAll('.list-tr').forEach(r=>r.classList.remove('selected'));
   const r=document.getElementById('tr-'+id);
   if(r) r.classList.add('selected');
   const gr=document.getElementById('gr-'+id);
   if(gr) gr.classList.add('selected');
+  const lr=document.querySelector('.list-tr[data-id="'+id+'"]');
+  if(lr) lr.classList.add('selected');
 }
 function getSelectedTask(){
   return selectedTaskId?tasks.find(t=>t.id===selectedTaskId)||null:null;
@@ -649,30 +771,57 @@ function expandAll(){
 }
 function indentTask(){
   const t=getSelectedTask();
-  if(!t||t.type===1) return;
-  const idx=tasks.findIndex(x=>x.id===t.id);
-  if(idx<=0) return;
-  const prev=tasks[idx-1];
-  if(prev.type>=6) return;
-  t.parent=prev.id;
-  if(collapsed[prev.id]) collapsed[prev.id]=false;
+  if(!t){ showToast('Select a row first, then Indent','info',2500); return; }
+  if(t.type===1){ showToast('Cannot indent the project row','info',2200); return; }
+  const visible=getVisible();
+  const vIdx=visible.findIndex(x=>x.id===t.id);
+  if(vIdx<=0){ showToast('Nothing above to nest under','info',2200); return; }
+  // Nest under the nearest preceding visible row that is not a descendant of t
+  let newParent=null;
+  for(let i=vIdx-1;i>=0;i--){
+    const cand=visible[i];
+    // skip if cand is inside t's subtree
+    let p=cand.parent,inside=false;
+    while(p!==null){
+      if(p===t.id){ inside=true; break; }
+      const pt=tasks.find(x=>x.id===p);
+      p=pt?pt.parent:null;
+    }
+    if(inside) continue;
+    newParent=cand;
+    break;
+  }
+  if(!newParent){ showToast('Nothing above to nest under','info',2200); return; }
+  if(t.parent===newParent.id){ showToast('Already nested under "'+newParent.name+'"','info',2200); return; }
+  pushHistory();
+  t.parent=newParent.id;
+  if(collapsed[newParent.id]) collapsed[newParent.id]=false;
+  moveTaskAfterParent(t);
   calcWBS();
+  pushHistory(); // after-state so Redo works
   renderAll();
+  selectTask(t.id);
+  flashTaskRow(t.id);
+  showToast('Indented under "'+newParent.name+'"','ok',2200);
   if(t.id<5000) persistSave(t);
 }
 function outdentTask(){
   const t=getSelectedTask();
-  if(!t||t.parent===null) return;
+  if(!t){ showToast('Select a row first, then Outdent','info',2500); return; }
+  if(t.parent===null){ showToast('Already at top level','info',2200); return; }
   const parent=tasks.find(x=>x.id===t.parent);
-  t.parent=parent?parent.parent:null;
+  if(!parent){ showToast('Already at top level','info',2200); return; }
+  pushHistory();
+  t.parent=parent.parent;
+  moveTaskAfterParent(t);
   calcWBS();
+  pushHistory();
   renderAll();
+  selectTask(t.id);
+  flashTaskRow(t.id);
+  const under=t.parent===null?'top level':('"'+((tasks.find(x=>x.id===t.parent)||{}).name||'parent')+'"');
+  showToast('Moved to '+under,'ok',2200);
   if(t.id<5000) persistSave(t);
-}
-function resetPanelLayout(){
-  document.documentElement.style.setProperty('--task-col','570px');
-  localStorage.removeItem('gantt-task-col-width');
-  renderAll();
 }
 function setupPanelSplitter(){
   if(splitterBound) return;
@@ -1022,7 +1171,7 @@ function renderDeps(visible,start){
     lbl.setAttribute('font-size','8');
     lbl.setAttribute('font-family','DM Mono,monospace');
     lbl.setAttribute('fill',color);lbl.setAttribute('font-weight','600');
-    lbl.textContent=depType;
+    lbl.textContent=depType==='EE'?'FF':depType;
     svg.appendChild(path);svg.appendChild(bg);svg.appendChild(lbl);
   });
 }
@@ -1039,12 +1188,16 @@ function positionTodayLine(start){
   else line.style.display='none';
 }
 function jumpToToday(){
+  const wrap=document.getElementById('tlWrap');
+  if(!wrap||mainView==='list'){
+    showToast('Switch to Gantt view to jump to today','info',2200);
+    return;
+  }
   const {start}=getRange();
   const today=new Date();today.setHours(0,0,0,0);
   const offset=daysBetween(start,today);
   const left=Math.max(0,offset*colW-220);
-  const wrap=document.getElementById('tlWrap');
-  if(wrap) wrap.scrollLeft=left;
+  wrap.scrollLeft=left;
 }
 
 // ── DRAG & DROP ──────────────────────────────────────────────
@@ -1063,6 +1216,8 @@ function setupDrag(el,task,rangeStart,rl,rr){
   function down(e,m){
     e.preventDefault();
     if(getChildren(task.id).length) return;
+    const startSnapshot=task.start;
+    const endSnapshot=task.end;
     if(!dragging){ pushHistory(); dragging=true; }
     mode=m;startX=e.clientX;
     origL=parseInt(el.style.left)||0;
@@ -1083,8 +1238,16 @@ function setupDrag(el,task,rangeStart,rl,rr){
       const newL=parseInt(el.style.left)||0;
       const newW=parseInt(el.style.width)||colW;
       applyDates(newL,newW);
+      const changed=task.start!==startSnapshot||task.end!==endSnapshot;
+      if(!changed){
+        updateUndoRedoButtons();
+        return;
+      }
       if(autoSchedule) applyAutoSchedule();
+      pushHistory(); // record after-drag state so Redo works
       renderAll();
+      selectTask(task.id);
+      updateUndoRedoButtons();
       if(task.id<5000){
         persistSave(task);
         if(autoSchedule) void persistScheduleChanges(task);
@@ -1103,21 +1266,30 @@ function renderListView(){
   calcWBS();
   const lv=document.getElementById('listView')||document.getElementById('ganttBody');
   if(!lv) return;
-  const rows=(tasks||[]).map(t=>{
+  const rows=getOrderedTasks().map(t=>{
     try{
-      return '<tr class="list-tr" onclick="openEdit('+t.id+')">'+
-        '<td class="list-td mono">'+esc(t.wbs)+'</td>'+
-        '<td class="list-td"><div class="list-name" style="padding-left:'+(getDepth(t)*14)+'px;">'+
-          '<span class="list-type">'+(TYPE_ICONS[t.type]||'☑')+'</span>'+
-          '<span class="list-title'+(t.type<=2?' bold':'')+'">'+esc(t.name)+'</span>'+
-          '<span class="list-badge" style="background:'+(LEVEL_COLORS[t.type]||'#64748b')+'22;color:'+(LEVEL_COLORS[t.type]||'#64748b')+';">'+(LEVELS[t.type]||'')+'</span>'+
-        '</div></td>'+
-        '<td class="list-td">'+esc(t.owner||'—')+'</td>'+
-        '<td class="list-td mono">'+esc(t.start)+'</td>'+
-        '<td class="list-td mono">'+esc(t.end)+'</td>'+
-        '<td class="list-td"><div class="list-prog"><div class="prog-track"><div class="prog-fill" style="width:'+(t.prog||0)+'%;"></div></div><span>'+(t.prog||0)+'%</span></div></td>'+
-        '<td class="list-td center"><span class="rag-pill rag-pill-'+(t.rag||'g')+'"><span class="rag-pill-dot"></span></span></td>'+
-        '<td class="list-td center"><button type="button" class="btn btn-ghost" onclick="event.stopPropagation();openEdit('+t.id+')">Edit</button></td>'+
+      const progC=t.prog>=70?'#059669':t.prog>=40?'#d97706':'#dc2626';
+      const rag=t.rag||'g';
+      const ragLbl=rag==='r'?'Off Track':rag==='a'?'At Risk':'On Track';
+      return '<tr class="list-tr" data-id="'+t.id+'">'+
+        '<td class="list-td mono">'+esc(t.wbs||'')+'</td>'+
+        '<td class="list-td list-td-edit" data-field="name" data-id="'+t.id+'" title="Click to edit name">'+
+          '<div class="list-name" style="padding-left:'+(getDepth(t)*18)+'px;">'+
+            '<span class="list-type">'+(TYPE_ICONS[t.type]||'☑')+'</span>'+
+            '<span class="list-title'+(t.type<=2?' bold':'')+'">'+esc(t.name)+'</span>'+
+            '<span class="list-badge" style="background:'+(LEVEL_COLORS[t.type]||'#64748b')+'22;color:'+(LEVEL_COLORS[t.type]||'#64748b')+';">'+(LEVELS[t.type]||'')+'</span>'+
+          '</div>'+
+        '</td>'+
+        '<td class="list-td list-td-edit" data-field="owner" data-id="'+t.id+'" title="Click to edit owner">'+esc(t.owner||'—')+'</td>'+
+        '<td class="list-td mono list-td-edit" data-field="start" data-id="'+t.id+'" title="Click to edit start">'+esc(t.start)+'</td>'+
+        '<td class="list-td mono list-td-edit" data-field="end" data-id="'+t.id+'" title="Click to edit end">'+esc(t.end)+'</td>'+
+        '<td class="list-td list-td-edit" data-field="prog" data-id="'+t.id+'" title="Click to edit progress">'+
+          '<div class="list-prog"><div class="prog-track"><div class="prog-fill" style="width:'+(t.prog||0)+'%;background:'+progC+';"></div></div><span>'+(t.prog||0)+'%</span></div>'+
+        '</td>'+
+        '<td class="list-td center list-td-edit" data-field="rag" data-id="'+t.id+'" title="Click to cycle RAG">'+
+          '<span class="rag-pill rag-pill-'+rag+'"><span class="rag-pill-dot"></span><span class="rag-pill-lbl">'+ragLbl+'</span></span>'+
+        '</td>'+
+        '<td class="list-td center"><button type="button" class="btn btn-ghost list-edit-btn" data-id="'+t.id+'" title="Open full edit window">Edit</button></td>'+
       '</tr>';
     }catch(e){ return ''; }
   }).join('');
@@ -1130,6 +1302,168 @@ function renderListView(){
     '</table>'+
     '<button type="button" class="add-new-item-btn" onclick="addNewItem()" style="margin-top:12px;">+ Add a New Item</button>'+
   '</div>';
+  bindListViewClicks(lv);
+}
+function bindListViewClicks(root){
+  if(!root) return;
+  if(root._listBound) return;
+  root._listBound=true;
+  root.addEventListener('click',e=>{
+    const btn=e.target.closest('.list-edit-btn');
+    if(btn){
+      e.preventDefault();
+      e.stopPropagation();
+      openEdit(Number(btn.dataset.id));
+      return;
+    }
+    const cell=e.target.closest('.list-td-edit');
+    if(!cell||!root.contains(cell)||cell.classList.contains('editing')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const id=Number(cell.dataset.id);
+    const field=cell.dataset.field;
+    if(!id||!field) return;
+    selectTask(id);
+    listBeginInlineEdit(id,field,cell);
+  });
+}
+function listBeginInlineEdit(id,field,cell){
+  const t=tasks.find(x=>x.id===id);
+  if(!t||!cell||cell.classList.contains('editing')) return;
+  cell.classList.add('editing');
+  let done=false;
+  const commitOnce=(fn)=>{
+    if(done) return;
+    done=true;
+    cell.classList.remove('editing');
+    try{ fn(); } finally { renderAll(); }
+  };
+
+  if(field==='name'){
+    const inp=document.createElement('input');
+    inp.type='text';
+    inp.className='ie-input list-ie-input';
+    inp.value=t.name||'';
+    cell.innerHTML='';
+    cell.appendChild(inp);
+    inp.focus();
+    inp.select();
+    const save=()=>{
+      const next=inp.value.trim()||t.name;
+      commitOnce(()=>{
+        if(next!==t.name){ pushHistory(); t.name=next; if(t.id<5000) persistSave(t); }
+      });
+    };
+    inp.addEventListener('keydown',e=>{
+      if(e.key==='Enter'){ e.preventDefault(); inp.blur(); }
+      if(e.key==='Escape'){ e.preventDefault(); done=true; cell.classList.remove('editing'); renderAll(); }
+    });
+    inp.addEventListener('blur',save);
+    return;
+  }
+
+  if(field==='owner'){
+    const sel=document.createElement('select');
+    sel.className='ie-select list-ie-input';
+    const choices=OWNERS.length?['',...OWNERS]:[''];
+    choices.forEach(o=>{
+      const opt=document.createElement('option');
+      opt.value=o;
+      opt.textContent=o||'— Unassigned';
+      if((t.owner||'')===o) opt.selected=true;
+      sel.appendChild(opt);
+    });
+    cell.innerHTML='';
+    cell.appendChild(sel);
+    sel.focus();
+    const save=()=>{
+      const next=sel.value;
+      commitOnce(()=>{
+        if(next!==(t.owner||'')){ pushHistory(); t.owner=next; if(t.id<5000) persistSave(t); }
+      });
+    };
+    sel.addEventListener('change',save);
+    sel.addEventListener('blur',save);
+    return;
+  }
+
+  if(field==='start'||field==='end'){
+    const inp=document.createElement('input');
+    inp.type='date';
+    inp.className='ie-input list-ie-input';
+    inp.value=t[field]||'';
+    cell.innerHTML='';
+    cell.appendChild(inp);
+    inp.focus();
+    const save=()=>{
+      const next=inp.value;
+      commitOnce(()=>{
+        if(!next||next===t[field]) return;
+        pushHistory();
+        t[field]=next;
+        if(field==='start'&&D(t.end)<D(t.start)) t.end=t.start;
+        if(field==='end'&&D(t.end)<D(t.start)) t.start=t.end;
+        if(autoSchedule) applyAutoSchedule();
+        if(t.id<5000){ persistSave(t); if(autoSchedule) void persistScheduleChanges(t); }
+      });
+    };
+    inp.addEventListener('keydown',e=>{
+      if(e.key==='Enter'){ e.preventDefault(); inp.blur(); }
+      if(e.key==='Escape'){ e.preventDefault(); done=true; cell.classList.remove('editing'); renderAll(); }
+    });
+    inp.addEventListener('change',save);
+    inp.addEventListener('blur',save);
+    return;
+  }
+
+  if(field==='prog'){
+    const wrap=document.createElement('div');
+    wrap.className='list-ie-prog';
+    const inp=document.createElement('input');
+    inp.type='number';
+    inp.className='ie-input list-ie-input';
+    inp.min='0';
+    inp.max='100';
+    inp.step='5';
+    inp.value=String(t.prog||0);
+    const suffix=document.createElement('span');
+    suffix.textContent='%';
+    wrap.appendChild(inp);
+    wrap.appendChild(suffix);
+    cell.innerHTML='';
+    cell.appendChild(wrap);
+    inp.focus();
+    inp.select();
+    const save=()=>{
+      const next=Math.max(0,Math.min(100,parseInt(inp.value,10)||0));
+      commitOnce(()=>{
+        if(next!==(t.prog||0)){ pushHistory(); t.prog=next; if(t.id<5000) persistSave(t); }
+      });
+    };
+    inp.addEventListener('keydown',e=>{
+      if(e.key==='Enter'){ e.preventDefault(); inp.blur(); }
+      if(e.key==='Escape'){ e.preventDefault(); done=true; cell.classList.remove('editing'); renderAll(); }
+    });
+    inp.addEventListener('blur',save);
+    return;
+  }
+
+  if(field==='rag'){
+    // Immediate cycle — no input widget
+    done=true;
+    cell.classList.remove('editing');
+    const cycle={g:'a',a:'r',r:'g'};
+    const next=cycle[t.rag||'g']||'g';
+    pushHistory();
+    t.rag=next;
+    t.ragScp=next;
+    if(t.id<5000) persistSave(t);
+    renderAll();
+    showToast(next==='g'?'RAG: On Track':next==='a'?'RAG: At Risk':'RAG: Off Track','ok',1600);
+    return;
+  }
+
+  cell.classList.remove('editing');
 }
 window.renderListView=renderListView;
 
@@ -1187,6 +1521,7 @@ function openEdit(id){
   populateParentDropdown(id);
   document.getElementById('m-pred').value=t.predId||'';
   document.getElementById('m-parent').value=t.parent||'';
+  syncDepTypeUI();
   document.getElementById('modalEdit').classList.add('open');
 }
 
@@ -1327,12 +1662,13 @@ function saveItem(){
       t.notes=document.getElementById('m-notes').value;
       t.parent=parentVal?parseInt(parentVal):null;
       t.predId=predVal?parseInt(predVal):null;
-      t.depType=currentDep;
+      t.depType=t.predId?(currentDep||'FS'):'FS';
       closeModal('modalEdit');
-      if(autoSchedule) applyAutoSchedule();
+      if(t.predId||autoSchedule) applyAutoSchedule();
       renderAll();
       persistSave(t);
-      if(autoSchedule) void persistScheduleChanges(t);
+      if(autoSchedule||t.predId) void persistScheduleChanges(t);
+      if(t.predId) showToast('Dependency '+(t.depType==='EE'?'FF':t.depType)+' saved','ok',2000);
     }
   } else {
     pushHistory();
@@ -1379,17 +1715,45 @@ function deleteItem(){
   renderAll();
 }
 
-function closeModal(id){const el=document.getElementById(id);if(el)el.classList.remove('open');}
+function closeModal(id){
+  const el=document.getElementById(id);
+  if(el) el.classList.remove('open');
+  if(id==='modalVersionName') versionNameModalCb=null;
+  if(id==='modalVersionConfirm') versionConfirmModalCb=null;
+}
 function selRag(el,r){
   currentRag=r;
   document.querySelectorAll('.rag-opt').forEach(o=>o.classList.remove('sel-g','sel-a','sel-r'));
   el.classList.add('sel-'+r);
 }
-function selDep(el,d){
-  currentDep=d;
-  document.querySelectorAll('.dep-opt').forEach(o=>o.classList.remove('sel'));
-  el.classList.add('sel');
+function syncDepTypeUI(){
+  const dep=currentDep||'FS';
+  document.querySelectorAll('.dep-opt').forEach(o=>{
+    o.classList.toggle('sel', o.dataset.dep===dep);
+  });
+  const pred=document.getElementById('m-pred');
+  const group=document.getElementById('depTypeGroup');
+  const hint=document.getElementById('depTypeHint');
+  const modalOpen=!!document.getElementById('modalEdit')?.classList.contains('open');
+  const hasPred=!!(pred&&pred.value);
+  if(group) group.classList.toggle('is-disabled', modalOpen && !hasPred);
+  if(hint){
+    hint.textContent=(modalOpen && !hasPred)?'— set a Predecessor first':'';
+  }
 }
+function selDep(el,d){
+  if(!d) return;
+  currentDep=d;
+  syncDepTypeUI();
+  // Keep draw-mode chips in sync even when clicking modal buttons
+  document.querySelectorAll('#depDrawTypes .dep-opt').forEach(o=>o.classList.toggle('sel',o.dataset.dep===d));
+}
+function onPredChange(){
+  syncDepTypeUI();
+}
+window.selRag=selRag;
+window.selDep=selDep;
+window.onPredChange=onPredChange;
 
 // ─── IMPORT / EXPORT ────────────────────────────────────────
 function openImportExport(mode){
@@ -2115,13 +2479,20 @@ function toggleDepDraw(){
   depSourceId=null;
   const btn=document.getElementById('depDrawBtn');
   if(btn) btn.classList.toggle('on',depDrawMode);
+  const types=document.getElementById('depDrawTypes');
+  if(types){
+    if(depDrawMode) types.removeAttribute('hidden');
+    else types.setAttribute('hidden','');
+  }
+  syncDepTypeUI();
   const body=document.querySelector('.gantt-body');
   if(body) body.classList.toggle('dep-draw-mode',depDrawMode);
   if(!depDrawMode){
     document.querySelectorAll('.gantt-bar.dep-source').forEach(b=>b.classList.remove('dep-source'));
     showDepToast(null);
   } else {
-    showDepToast('Click a bar to set as dependency source');
+    const label=currentDep==='EE'?'FF':(currentDep||'FS');
+    showDepToast('Draw Dep ('+label+'): click source bar, then target');
   }
 }
 function showDepToast(msg){
@@ -2136,7 +2507,7 @@ function showDepToast(msg){
   if(msg){
     toast.textContent=msg;
     toast.style.opacity='1';
-    toast._hideT=setTimeout(()=>{toast.style.opacity='0';},3000);
+    toast._hideT=setTimeout(()=>{toast.style.opacity='0';},4000);
   } else {
     toast.style.opacity='0';
   }
@@ -2147,27 +2518,36 @@ function handleBarClickForDep(barEl,taskId){
     depSourceId=taskId;
     document.querySelectorAll('.gantt-bar.dep-source').forEach(b=>b.classList.remove('dep-source'));
     barEl.classList.add('dep-source');
-    showDepToast('Now click the target bar to create the dependency');
-    return true;
-  } else {
-    if(taskId===depSourceId){showDepToast('Cannot link a task to itself');return true;}
-    const targetTask=tasks.find(x=>x.id===taskId);
-    if(targetTask){
-      targetTask.predId=depSourceId;
-      targetTask.depType=currentDep||'FS';
-      showDepToast('✓ Dependency created ('+targetTask.depType+')');
-      if(targetTask.id<5000) persistSave(targetTask);
-    }
-    depSourceId=null;
-    document.querySelectorAll('.gantt-bar.dep-source').forEach(b=>b.classList.remove('dep-source'));
-    depDrawMode=false;
-    const btn=document.getElementById('depDrawBtn');
-    if(btn) btn.classList.remove('on');
-    const body=document.querySelector('.gantt-body');
-    if(body) body.classList.remove('dep-draw-mode');
-    renderAll();
+    const label=currentDep==='EE'?'FF':(currentDep||'FS');
+    showDepToast('Now click the target bar ('+label+')');
     return true;
   }
+  if(taskId===depSourceId){showDepToast('Cannot link a task to itself');return true;}
+  const targetTask=tasks.find(x=>x.id===taskId);
+  if(targetTask){
+    pushHistory();
+    targetTask.predId=depSourceId;
+    targetTask.depType=currentDep||'FS';
+    if(autoSchedule) applyAutoSchedule();
+    pushHistory();
+    const label=targetTask.depType==='EE'?'FF':targetTask.depType;
+    showDepToast('✓ '+label+' dependency created');
+    if(targetTask.id<5000){
+      persistSave(targetTask);
+      if(autoSchedule) void persistScheduleChanges(targetTask);
+    }
+  }
+  depSourceId=null;
+  document.querySelectorAll('.gantt-bar.dep-source').forEach(b=>b.classList.remove('dep-source'));
+  depDrawMode=false;
+  const btn=document.getElementById('depDrawBtn');
+  if(btn) btn.classList.remove('on');
+  const types=document.getElementById('depDrawTypes');
+  if(types) types.setAttribute('hidden','');
+  const body=document.querySelector('.gantt-body');
+  if(body) body.classList.remove('dep-draw-mode');
+  renderAll();
+  return true;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2296,7 +2676,6 @@ async function persistDelete(t){
 
 async function persistSave(t){
   if(!t||t.id>=5000) return; // local-only items
-  showLoading('Saving…');
   const h=apiAuthHeaders(true);
   const put=(url,body)=>fetch(url,{method:'PUT',credentials:'include',headers:h,body:JSON.stringify(body)});
   const ownerMap=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.ownerIdMap)||{};
@@ -2309,7 +2688,7 @@ async function persistSave(t){
     return {phaseId:null,parentTaskId:null,parentPhaseId:null};
   }
   function notifyParent(){
-    try{ window.parent.postMessage({type:'gantt-saved',projectId},'*'); }catch(e){}
+    try{ window.parent.postMessage({type:'gantt-saved',projectId,soft:true},'*'); }catch(e){}
   }
   try{
     if(t.type===1&&projectId){
@@ -2350,14 +2729,564 @@ async function persistSave(t){
   } catch(e){
     console.error('Gantt persist failed:',e);
     showToast('Save failed','err',2800);
-  } finally {
-    hideLoading();
   }
 }
 
 function showSaveIndicator(){
-  showToast('✓ Saved','ok',1800);
+  showToast('✓ Saved','ok',1200);
 }
+
+// ══════════════════════════════════════════════════════════════
+// PLAN VERSIONS (named snapshots / save-as-copy)
+// ══════════════════════════════════════════════════════════════
+let activePlanVersion=null; // {id,name,versionNumber,isActive}
+let versionNameModalCb=null; // async (name)=>void
+let versionConfirmModalCb=null; // async ()=>void
+
+function escAttr(s){
+  return String(s||'')
+    .replace(/&/g,'&amp;')
+    .replace(/"/g,'&quot;')
+    .replace(/</g,'&lt;')
+    .replace(/'/g,'&#39;');
+}
+
+function serializeSnapshot(){
+  calcWBS();
+  return {
+    tasks: JSON.parse(JSON.stringify(tasks)),
+    customCols: JSON.parse(JSON.stringify(customCols||[])),
+    savedAt: new Date().toISOString(),
+    taskCount: tasks.filter(t=>(t.type||0)>=2).length,
+  };
+}
+
+function restoreSnapshot(snapshot){
+  if(!snapshot||!Array.isArray(snapshot.tasks)) return false;
+  tasks=snapshot.tasks.map(t=>normalizeTaskRags(Object.assign({},t)));
+  const ids=tasks.map(t=>Number(t.id)||0);
+  nextId=Math.max(5000,...ids)+1;
+  if(Array.isArray(snapshot.customCols)){
+    customCols=snapshot.customCols.map(c=>Object.assign({},c));
+    ccNextId=customCols.length?Math.max(1,...customCols.map(c=>Number(c.id)||0))+1:1;
+    saveCustomCols();
+    renderCustomHeaders();
+  }
+  calcWBS();
+  history.length=0;
+  historyIdx=-1;
+  pushHistory();
+  renderAll();
+  updateUndoRedoButtons();
+  return true;
+}
+
+function updatePlanChip(){
+  const nameEl=document.getElementById('planChipName');
+  const verEl=document.getElementById('planChipVer');
+  const chip=document.getElementById('planChip');
+  if(!nameEl||!verEl) return;
+  if(activePlanVersion&&activePlanVersion.id){
+    nameEl.textContent=activePlanVersion.name||'Working';
+    verEl.textContent=activePlanVersion.versionNumber!=null?('v'+activePlanVersion.versionNumber):'';
+    if(chip) chip.title='Active: '+(activePlanVersion.name||'')+' — click to manage versions';
+  } else {
+    nameEl.textContent='Working';
+    verEl.textContent='';
+    if(chip) chip.title='No saved version yet — click to manage plan versions';
+  }
+}
+
+async function loadActivePlanVersion(){
+  const {projectId}=ganttMeta();
+  if(!projectId) return;
+  try{
+    const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions/active',{credentials:'include',headers:apiAuthHeaders(false)});
+    if(!res.ok) return;
+    const data=await res.json();
+    activePlanVersion=data&&data.id?data:null;
+    updatePlanChip();
+  }catch(e){ /* ignore */ }
+}
+
+function toggleVersionMenu(e){
+  if(e){e.preventDefault();e.stopPropagation();}
+  const menu=document.getElementById('versionMenu');
+  const btn=document.getElementById('versionMenuBtn');
+  if(!menu||!btn) return;
+  const open=menu.hasAttribute('hidden');
+  if(open){
+    if(menu.parentElement!==document.body) document.body.appendChild(menu);
+    const r=btn.getBoundingClientRect();
+    menu.style.top=(r.bottom+4)+'px';
+    menu.style.left=Math.max(8,Math.min(r.left,window.innerWidth-220))+'px';
+    menu.removeAttribute('hidden');
+    btn.classList.add('active');
+    const close=(ev)=>{
+      if(ev.target.closest&&(ev.target.closest('#versionMenuBtn')||ev.target.closest('#versionMenu'))) return;
+      menu.setAttribute('hidden','');
+      btn.classList.remove('active');
+      document.removeEventListener('mousedown',close,true);
+    };
+    setTimeout(()=>document.addEventListener('mousedown',close,true),0);
+  } else {
+    menu.setAttribute('hidden','');
+    btn.classList.remove('active');
+  }
+}
+
+function closeVersionMenu(){
+  const menu=document.getElementById('versionMenu');
+  const btn=document.getElementById('versionMenuBtn');
+  if(menu) menu.setAttribute('hidden','');
+  if(btn) btn.classList.remove('active');
+}
+
+async function nextVersionDefaultName(){
+  const {projectId}=ganttMeta();
+  let n=1;
+  try{
+    const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions',{credentials:'include',headers:apiAuthHeaders(false)});
+    if(res.ok){
+      const list=await res.json();
+      if(Array.isArray(list)&&list.length){
+        n=Math.max(...list.map(v=>Number(v.versionNumber)||0))+1;
+      }
+    }
+  }catch(e){}
+  return n===1?'Baseline v1':('Version '+n);
+}
+
+function formatVersionDate(iso){
+  if(!iso) return '';
+  try{
+    const d=new Date(iso);
+    if(isNaN(d.getTime())) return '';
+    return d.toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  }catch(e){ return ''; }
+}
+
+/**
+ * mode: 'update' | 'new' | 'copy'
+ * update = overwrite active snapshot with live schedule (or create first)
+ * new    = create new active version
+ * copy   = create inactive named copy
+ */
+async function promptSaveVersion(mode){
+  closeVersionMenu();
+  const m=mode==='copy'?'copy':(mode==='new'?'new':'update');
+
+  if(m==='update'&&activePlanVersion&&activePlanVersion.id){
+    // Update = save live schedule into active version (name unchanged)
+    await confirmUpdateActiveSnapshot();
+    return;
+  }
+
+  if(m==='copy'){
+    openVersionNameModal({
+      title:'Save as copy',
+      hint:'Creates a named backup. You stay on the current active plan.',
+      defaultName:await nextVersionDefaultName(),
+      confirmLabel:'Save copy',
+      onConfirm:async(name)=>{
+        await savePlanVersion(name,{activate:false});
+      },
+    });
+    return;
+  }
+
+  // 'new' or first-time 'update'
+  openVersionNameModal({
+    title:m==='new'?'Save as new version':'Save version',
+    hint:m==='new'
+      ?'Creates a new active version from the live schedule. The previous active version is kept in the list.'
+      :'Creates the first named snapshot of this plan and marks it active.',
+    defaultName:await nextVersionDefaultName(),
+    confirmLabel:m==='new'?'Save as new':'Save version',
+    onConfirm:async(name)=>{
+      await savePlanVersion(name,{activate:true});
+    },
+  });
+}
+
+async function confirmUpdateActiveSnapshot(){
+  if(!activePlanVersion||!activePlanVersion.id){
+    // No active version in memory — create first named snapshot
+    openVersionNameModal({
+      title:'Save version',
+      hint:'Creates the first named snapshot of this plan and marks it active.',
+      defaultName:await nextVersionDefaultName(),
+      confirmLabel:'Save version',
+      onConfirm:async(name)=>{
+        await savePlanVersion(name,{activate:true});
+      },
+    });
+    return;
+  }
+  const label=activePlanVersion.name||('v'+activePlanVersion.versionNumber);
+  openVersionConfirmModal({
+    title:'Update schedule',
+    message:'Update "'+label+'" with the current live schedule?\n\nThe version name stays the same. Only the saved plan data is overwritten.',
+    confirmLabel:'Update schedule',
+    onConfirm:async()=>{
+      await updateActivePlanVersion(null);
+    },
+  });
+}
+
+function openVersionConfirmModal(opts){
+  versionConfirmModalCb=opts.onConfirm||null;
+  const title=document.getElementById('vcTitle');
+  const msg=document.getElementById('vcMessage');
+  const btn=document.getElementById('vcConfirmBtn');
+  if(title) title.textContent=opts.title||'Confirm';
+  if(msg) msg.textContent=opts.message||'';
+  if(btn){
+    btn.textContent=opts.confirmLabel||'Confirm';
+    btn.className=opts.danger?'btn btn-danger':'btn btn-p';
+  }
+  const el=document.getElementById('modalVersionConfirm');
+  if(el) el.classList.add('open');
+  setTimeout(()=>{ if(btn) btn.focus(); },40);
+}
+
+async function confirmVersionConfirmModal(){
+  const cb=versionConfirmModalCb;
+  versionConfirmModalCb=null;
+  closeModal('modalVersionConfirm');
+  if(typeof cb==='function') await cb();
+}
+
+function openVersionNameModal(opts){
+  versionNameModalCb=opts.onConfirm||null;
+  const title=document.getElementById('vnTitle');
+  const hint=document.getElementById('vnHint');
+  const input=document.getElementById('vnName');
+  const err=document.getElementById('vnError');
+  const btn=document.getElementById('vnConfirmBtn');
+  if(title) title.textContent=opts.title||'Save version';
+  if(hint) hint.innerHTML=opts.hint||'';
+  if(err){ err.hidden=true; err.textContent=''; }
+  if(btn) btn.textContent=opts.confirmLabel||'Save';
+  if(input){
+    input.value=opts.defaultName||'';
+    input.onkeydown=(e)=>{
+      if(e.key==='Enter'){e.preventDefault();confirmVersionNameModal();}
+      if(e.key==='Escape'){e.preventDefault();closeModal('modalVersionName');}
+    };
+  }
+  const el=document.getElementById('modalVersionName');
+  if(el) el.classList.add('open');
+  setTimeout(()=>{
+    if(input){ input.focus(); input.select(); }
+  },40);
+}
+
+async function confirmVersionNameModal(){
+  const input=document.getElementById('vnName');
+  const err=document.getElementById('vnError');
+  const name=(input&&input.value||'').trim();
+  if(!name){
+    if(err){ err.hidden=false; err.textContent='Please enter a version name.'; }
+    if(input) input.focus();
+    return;
+  }
+  if(name.length>120){
+    if(err){ err.hidden=false; err.textContent='Name must be 120 characters or fewer.'; }
+    return;
+  }
+  const cb=versionNameModalCb;
+  versionNameModalCb=null;
+  closeModal('modalVersionName');
+  if(typeof cb==='function') await cb(name);
+}
+
+async function updateActivePlanVersion(nameOrNull){
+  const {projectId}=ganttMeta();
+  if(!projectId||!activePlanVersion||!activePlanVersion.id){
+    const name=(nameOrNull&&String(nameOrNull).trim())||await nextVersionDefaultName();
+    await savePlanVersion(name,{activate:true});
+    return;
+  }
+  const snapshot=serializeSnapshot();
+  const body={snapshot};
+  if(nameOrNull!=null&&String(nameOrNull).trim()){
+    body.name=String(nameOrNull).trim();
+  }
+  showLoading('Updating version…');
+  try{
+    const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions/'+activePlanVersion.id,{
+      method:'PATCH',credentials:'include',headers:apiAuthHeaders(true),
+      body:JSON.stringify(body),
+    });
+    const ct=(res.headers.get('content-type')||'');
+    if(!ct.includes('application/json')){
+      hideLoading();
+      showToast('Versions API unavailable — refresh the page','err',3500);
+      return;
+    }
+    const data=await res.json().catch(()=>({}));
+    hideLoading();
+    if(!res.ok){ showToast(data.message||'Update failed','err',2800); return; }
+    activePlanVersion={...activePlanVersion,...data};
+    updatePlanChip();
+    showToast('✓ Updated schedule for v'+activePlanVersion.versionNumber,'ok');
+    await refreshVersionsList();
+    const modal=document.getElementById('modalVersions');
+    if(modal&&!modal.classList.contains('open')) modal.classList.add('open');
+  }catch(e){
+    hideLoading();
+    console.error('updateActivePlanVersion',e);
+    showToast('Update failed','err',2800);
+  }
+}
+
+async function savePlanVersion(name,opts){
+  const {projectId}=ganttMeta();
+  if(!projectId){ showToast('No project','err',2200); return; }
+  const activate=!!(opts&&opts.activate);
+  const snapshot=serializeSnapshot();
+  if(!snapshot.tasks||snapshot.tasks.length===0){
+    showToast('Nothing to save — plan is empty','err',2800);
+    return;
+  }
+  showLoading(activate?'Saving version…':'Saving copy…');
+  try{
+    const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions',{
+      method:'POST',credentials:'include',headers:apiAuthHeaders(true),
+      body:JSON.stringify({name,snapshot,activate}),
+    });
+    const ct=(res.headers.get('content-type')||'');
+    if(!ct.includes('application/json')){
+      hideLoading();
+      showToast('Versions API unavailable — refresh the page','err',3500);
+      return;
+    }
+    const data=await res.json().catch(()=>({}));
+    hideLoading();
+    if(!res.ok){ showToast(data.message||'Save failed','err',2800); return; }
+    if(activate||data.isActive){
+      activePlanVersion=data;
+      updatePlanChip();
+      showToast('✓ Saved version v'+data.versionNumber,'ok');
+    } else {
+      showToast('✓ Saved copy "'+data.name+'" (v'+data.versionNumber+')','ok');
+    }
+    await refreshVersionsList();
+    const modal=document.getElementById('modalVersions');
+    if(modal&&!modal.classList.contains('open')) modal.classList.add('open');
+  }catch(e){
+    hideLoading();
+    console.error('savePlanVersion',e);
+    showToast('Save failed','err',2800);
+  }
+}
+
+async function openVersionsModal(){
+  closeVersionMenu();
+  await refreshVersionsList();
+  const el=document.getElementById('modalVersions');
+  if(el) el.classList.add('open');
+}
+
+async function refreshVersionsList(){
+  const {projectId}=ganttMeta();
+  const el=document.getElementById('versionsList');
+  if(!el||!projectId) return;
+  el.innerHTML='<div class="versions-empty">Loading…</div>';
+  try{
+    const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions',{credentials:'include',headers:apiAuthHeaders(false)});
+    const ct=(res.headers.get('content-type')||'');
+    if(!ct.includes('application/json')){
+      el.innerHTML='<div class="versions-empty">'+
+        '<div class="versions-empty-title">Versions API unavailable</div>'+
+        '<div>Refresh the page (or restart the app server) and try again.</div>'+
+      '</div>';
+      return;
+    }
+    const list=await res.json();
+    if(!res.ok){
+      el.innerHTML='<div class="versions-empty">'+(list&&list.message?esc(list.message):'Could not load versions')+'</div>';
+      return;
+    }
+    if(!Array.isArray(list)){
+      el.innerHTML='<div class="versions-empty">Could not load versions</div>';
+      return;
+    }
+    if(!list.length){
+      el.innerHTML='<div class="versions-empty">'+
+        '<div class="versions-empty-title">No saved versions yet</div>'+
+        '<div>Save a snapshot of the current plan to compare baselines later.</div>'+
+        '<button type="button" class="btn btn-p" style="margin-top:12px;" onclick="promptSaveVersion(\'update\')">Save first version</button>'+
+      '</div>';
+      return;
+    }
+    const active=list.find(v=>v.isActive);
+    if(active){
+      activePlanVersion=active;
+      updatePlanChip();
+    }
+    el.innerHTML=list.map(v=>{
+      const date=formatVersionDate(v.date||v.createdAt);
+      const activeBadge=v.isActive?' <span class="ver-active-badge">Active</span>':'';
+      return '<div class="ver-row'+(v.isActive?' is-active':'')+'" data-vid="'+v.id+'" data-name="'+escAttr(v.name)+'">'+
+        '<div class="ver-main">'+
+          '<div class="ver-title">'+esc(v.name)+activeBadge+'</div>'+
+          '<div class="ver-meta">v'+v.versionNumber+(date?' · '+esc(date):'')+'</div>'+
+        '</div>'+
+        '<div class="ver-actions">'+
+          (v.isActive
+            ?'<button type="button" class="btn btn-ghost btn-xs" onclick="confirmUpdateActiveSnapshot()" title="Overwrite this snapshot with the live schedule (name stays the same)">Update schedule</button>'
+            :'<button type="button" class="btn btn-p btn-xs" onclick="activatePlanVersion('+v.id+')">Activate</button>')+
+          '<button type="button" class="btn btn-ghost btn-xs" onclick="copyPlanVersion('+v.id+')">Copy</button>'+
+          '<button type="button" class="btn btn-ghost btn-xs" onclick="renamePlanVersion('+v.id+')" title="Change the display name only">Rename</button>'+
+          (v.isActive?'':'<button type="button" class="btn btn-danger btn-xs" onclick="deletePlanVersion('+v.id+')">Delete</button>')+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }catch(e){
+    console.error('refreshVersionsList',e);
+    el.innerHTML='<div class="versions-empty">'+
+      '<div class="versions-empty-title">Could not load versions</div>'+
+      '<div>Check your connection and refresh the page.</div>'+
+    '</div>';
+  }
+}
+
+function versionRowName(vid){
+  const row=document.querySelector('.ver-row[data-vid="'+vid+'"]');
+  return row?row.getAttribute('data-name')||'':'';
+}
+
+async function activatePlanVersion(vid){
+  if(activePlanVersion&&Number(activePlanVersion.id)===Number(vid)){
+    showToast('Already the active version','info',2000);
+    return;
+  }
+  const name=versionRowName(vid)||'this version';
+  openVersionConfirmModal({
+    title:'Activate version',
+    message:'Activate "'+name+'"?\n\nThis replaces the live Gantt schedule with the saved snapshot and reloads the chart.',
+    confirmLabel:'Activate',
+    onConfirm:async()=>{
+      const {projectId}=ganttMeta();
+      showLoading('Restoring version…');
+      try{
+        const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions/'+vid+'/activate',{
+          method:'POST',credentials:'include',headers:apiAuthHeaders(true),body:'{}',
+        });
+        const data=await res.json().catch(()=>({}));
+        hideLoading();
+        if(!res.ok){ showToast(data.message||'Activate failed','err',3200); return; }
+        activePlanVersion=data;
+        updatePlanChip();
+        closeModal('modalVersions');
+        showToast('✓ Activated v'+data.versionNumber+' — reloading…','ok');
+        try{ window.parent.postMessage({type:'gantt-version-activated',projectId,versionId:vid},'*'); }catch(e){}
+      }catch(e){
+        hideLoading();
+        showToast('Activate failed','err',2800);
+      }
+    },
+  });
+}
+
+async function copyPlanVersion(vid){
+  const src=versionRowName(vid)||'version';
+  openVersionNameModal({
+    title:'Copy version',
+    hint:'Creates an inactive copy of <strong>'+esc(src)+'</strong>.',
+    defaultName:'Copy of '+src,
+    confirmLabel:'Create copy',
+    onConfirm:async(name)=>{
+      const {projectId}=ganttMeta();
+      showLoading('Copying…');
+      try{
+        const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions/'+vid+'/copy',{
+          method:'POST',credentials:'include',headers:apiAuthHeaders(true),
+          body:JSON.stringify({name}),
+        });
+        const data=await res.json().catch(()=>({}));
+        hideLoading();
+        if(!res.ok){ showToast(data.message||'Copy failed','err',2800); return; }
+        showToast('✓ Copied as v'+data.versionNumber,'ok');
+        await refreshVersionsList();
+      }catch(e){
+        hideLoading();
+        showToast('Copy failed','err',2800);
+      }
+    },
+  });
+}
+
+async function renamePlanVersion(vid){
+  const currentName=versionRowName(vid)||'';
+  openVersionNameModal({
+    title:'Rename version',
+    hint:'Changes the label only. The saved schedule is not modified.',
+    defaultName:currentName,
+    confirmLabel:'Rename',
+    onConfirm:async(name)=>{
+      if(name===currentName) return;
+      const {projectId}=ganttMeta();
+      try{
+        const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions/'+vid,{
+          method:'PATCH',credentials:'include',headers:apiAuthHeaders(true),
+          body:JSON.stringify({name}),
+        });
+        const data=await res.json().catch(()=>({}));
+        if(!res.ok){ showToast(data.message||'Rename failed','err',2800); return; }
+        if(activePlanVersion&&Number(activePlanVersion.id)===Number(vid)){
+          activePlanVersion.name=data.name;
+          updatePlanChip();
+        }
+        showToast('✓ Renamed','ok',1600);
+        await refreshVersionsList();
+      }catch(e){
+        showToast('Rename failed','err',2800);
+      }
+    },
+  });
+}
+
+async function deletePlanVersion(vid){
+  const name=versionRowName(vid)||'this version';
+  openVersionConfirmModal({
+    title:'Delete version',
+    message:'Delete "'+name+'"?\n\nThis cannot be undone.',
+    confirmLabel:'Delete',
+    danger:true,
+    onConfirm:async()=>{
+      const {projectId}=ganttMeta();
+      try{
+        const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions/'+vid,{
+          method:'DELETE',credentials:'include',headers:apiAuthHeaders(false),
+        });
+        if(!res.ok){
+          const data=await res.json().catch(()=>({}));
+          showToast(data.message||'Delete failed','err',2800);
+          return;
+        }
+        showToast('✓ Deleted','ok',1600);
+        await refreshVersionsList();
+      }catch(e){
+        showToast('Delete failed','err',2800);
+      }
+    },
+  });
+}
+
+// Parent may request a live snapshot (e.g. React bridge)
+window.addEventListener('message',function(e){
+  if(!e.data||e.data.type!=='gantt-request-snapshot') return;
+  try{
+    window.parent.postMessage({
+      type:'gantt-snapshot',
+      requestId:e.data.requestId||null,
+      snapshot:serializeSnapshot(),
+    },'*');
+  }catch(err){}
+});
 
 // ══════════════════════════════════════════════════════════════
 // DATA INIT — reads window.GANTT_INIT_DATA injected by React
@@ -2393,8 +3322,19 @@ setupScrollSync();
 setupPanelSplitter();
 renderAll();
 updateUndoRedoButtons();
+updatePlanChip();
+loadActivePlanVersion();
 setTimeout(()=>jumpToToday(),200);
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='z'&&!e.shiftKey){e.preventDefault();undo();}
   if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.key==='z'&&e.shiftKey))){e.preventDefault();redo();}
+  if(e.key==='Escape'){
+    const confirmModal=document.getElementById('modalVersionConfirm');
+    if(confirmModal&&confirmModal.classList.contains('open')){closeModal('modalVersionConfirm');return;}
+    const nameModal=document.getElementById('modalVersionName');
+    if(nameModal&&nameModal.classList.contains('open')){closeModal('modalVersionName');return;}
+    const verModal=document.getElementById('modalVersions');
+    if(verModal&&verModal.classList.contains('open')){closeModal('modalVersions');return;}
+    closeVersionMenu();
+  }
 });

@@ -131,11 +131,18 @@ export interface GanttDependency {
 // ─── Version snapshot ────────────────────────────────────────
 
 export interface GanttVersion {
-  id: string;
+  id: number;
   name: string;
+  versionNumber: number;
+  isActive: boolean;
   date: string;
-  /** JSON.stringify of GanttTask[] */
-  data: string;
+  createdAt?: string;
+  /** Present when fetching a single version or after save */
+  snapshot?: {
+    tasks: unknown[];
+    customCols?: unknown[];
+    savedAt?: string;
+  };
 }
 
 // ─── Column definition ───────────────────────────────────────

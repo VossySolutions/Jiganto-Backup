@@ -7637,6 +7637,190 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     }
   });
 
+  // Gantt plan versions (named snapshots / save-as-copy)
+  app.get("/api/pm/projects/:projectId/gantt/versions", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const projectId = Number(req.params.projectId);
+    const versions = await storage.getPmGanttVersions(projectId);
+    res.json(
+      versions.map((v) => ({
+        id: v.id,
+        name: v.name,
+        versionNumber: v.versionNumber,
+        isActive: v.isActive,
+        date: (v.updatedAt || v.createdAt || new Date()).toISOString?.() ?? String(v.updatedAt || v.createdAt),
+        createdAt: v.createdAt,
+        // omit heavy snapshot from list
+      })),
+    );
+  });
+
+  app.get("/api/pm/projects/:projectId/gantt/versions/active", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const projectId = Number(req.params.projectId);
+    const active = await storage.getActivePmGanttVersion(projectId);
+    if (!active) return res.json(null);
+    res.json({
+      id: active.id,
+      name: active.name,
+      versionNumber: active.versionNumber,
+      isActive: active.isActive,
+      date: (active.updatedAt || active.createdAt || new Date()).toISOString?.() ?? String(active.updatedAt || active.createdAt),
+    });
+  });
+
+  app.post("/api/pm/projects/:projectId/gantt/versions", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const projectId = Number(req.params.projectId);
+    const project = await storage.getPmProject(projectId);
+    if (!project) return res.status(404).json({ message: "Project not found" });
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
+    try {
+      const { name, snapshot, fromActive, activate } = req.body as {
+        name?: string;
+        snapshot?: { tasks: unknown[]; customCols?: unknown[]; savedAt?: string };
+        fromActive?: boolean;
+        activate?: boolean;
+      };
+      if (!name || typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ message: "name is required" });
+      }
+      let snap = snapshot;
+      if (!snap && fromActive) {
+        const active = await storage.getActivePmGanttVersion(projectId);
+        if (!active?.snapshot) return res.status(400).json({ message: "No active version snapshot to copy from" });
+        snap = active.snapshot as typeof snap;
+      }
+      if (!snap || !Array.isArray(snap.tasks)) {
+        return res.status(400).json({ message: "snapshot with tasks array is required" });
+      }
+      const version = await storage.createPmGanttVersion({
+        tenantId: project.tenantId,
+        projectId,
+        name: name.trim(),
+        snapshot: { ...snap, savedAt: snap.savedAt || new Date().toISOString() },
+        createdBy: userId,
+        isActive: activate === true,
+      });
+      res.status(201).json({
+        id: version.id,
+        name: version.name,
+        versionNumber: version.versionNumber,
+        isActive: version.isActive,
+        date: (version.createdAt || new Date()).toISOString?.() ?? String(version.createdAt),
+      });
+    } catch (err: any) {
+      console.error("POST gantt version error:", err?.message || err);
+      res.status(500).json({ message: err?.message || "Failed to create version" });
+    }
+  });
+
+  app.post("/api/pm/projects/:projectId/gantt/versions/:vid/activate", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const projectId = Number(req.params.projectId);
+    const versionId = Number(req.params.vid);
+    const project = await storage.getPmProject(projectId);
+    if (!project) return res.status(404).json({ message: "Project not found" });
+    try {
+      const activated = await storage.activatePmGanttVersion(projectId, versionId, project.tenantId);
+      res.json({
+        id: activated.id,
+        name: activated.name,
+        versionNumber: activated.versionNumber,
+        isActive: activated.isActive,
+        date: (activated.updatedAt || activated.createdAt || new Date()).toISOString?.() ?? String(activated.updatedAt),
+      });
+    } catch (err: any) {
+      console.error("POST activate gantt version error:", err?.message || err);
+      const msg = err?.message || "Failed to activate version";
+      const status =
+        msg === "Version not found" ? 404
+        : msg.includes("could not be restored") ? 400
+        : 500;
+      res.status(status).json({ message: msg });
+    }
+  });
+
+  app.post("/api/pm/projects/:projectId/gantt/versions/:vid/copy", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const versionId = Number(req.params.vid);
+    try {
+      const { name } = req.body as { name?: string };
+      if (!name || typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ message: "name is required" });
+      }
+      const source = await storage.getPmGanttVersion(versionId);
+      if (!source || source.projectId !== Number(req.params.projectId)) {
+        return res.status(404).json({ message: "Version not found" });
+      }
+      const copy = await storage.copyPmGanttVersion(versionId, name.trim(), userId);
+      res.status(201).json({
+        id: copy.id,
+        name: copy.name,
+        versionNumber: copy.versionNumber,
+        isActive: copy.isActive,
+        date: (copy.createdAt || new Date()).toISOString?.() ?? String(copy.createdAt),
+      });
+    } catch (err: any) {
+      console.error("POST copy gantt version error:", err?.message || err);
+      res.status(500).json({ message: err?.message || "Failed to copy version" });
+    }
+  });
+
+  app.patch("/api/pm/projects/:projectId/gantt/versions/:vid", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const versionId = Number(req.params.vid);
+    const version = await storage.getPmGanttVersion(versionId);
+    if (!version || version.projectId !== Number(req.params.projectId)) {
+      return res.status(404).json({ message: "Version not found" });
+    }
+    try {
+      const { name, snapshot } = req.body as {
+        name?: string;
+        snapshot?: { tasks: unknown[]; customCols?: unknown[]; savedAt?: string };
+      };
+      const updates: Record<string, unknown> = {};
+      if (name != null && typeof name === "string" && name.trim()) updates.name = name.trim();
+      if (snapshot && Array.isArray(snapshot.tasks)) {
+        updates.snapshot = { ...snapshot, savedAt: snapshot.savedAt || new Date().toISOString() };
+      }
+      if (!Object.keys(updates).length) return res.status(400).json({ message: "Nothing to update" });
+      const updated = await storage.updatePmGanttVersion(versionId, updates as any);
+      res.json({
+        id: updated!.id,
+        name: updated!.name,
+        versionNumber: updated!.versionNumber,
+        isActive: updated!.isActive,
+        date: (updated!.updatedAt || updated!.createdAt || new Date()).toISOString?.() ?? String(updated!.updatedAt),
+      });
+    } catch (err: any) {
+      console.error("PATCH gantt version error:", err?.message || err);
+      res.status(500).json({ message: err?.message || "Failed to update version" });
+    }
+  });
+
+  app.delete("/api/pm/projects/:projectId/gantt/versions/:vid", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const versionId = Number(req.params.vid);
+    const version = await storage.getPmGanttVersion(versionId);
+    if (!version || version.projectId !== Number(req.params.projectId)) {
+      return res.status(404).json({ message: "Version not found" });
+    }
+    if (version.isActive) {
+      return res.status(400).json({ message: "Cannot delete the active version" });
+    }
+    await storage.deletePmGanttVersion(versionId);
+    res.status(204).send();
+  });
+
   app.get("/api/test-mgmt/test-cases", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
