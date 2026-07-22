@@ -45,12 +45,13 @@ export function ModuleShell({
   testId,
 }: ModuleShellProps) {
   const { mainOffset, mobileTopOffset } = useShellLayout();
-  const { setCollapsed } = useSidebarState();
+  const { setCollapsed, lockCollapsed } = useSidebarState();
   const { activeClient } = useClientContext();
 
   useEffect(() => {
-    if (activeClient?.id) setCollapsed(false);
-  }, [activeClient?.id, setCollapsed]);
+    // Don't expand while project workspace locks the 52px icon rail
+    if (activeClient?.id && !lockCollapsed) setCollapsed(false);
+  }, [activeClient?.id, setCollapsed, lockCollapsed]);
 
   return (
     <div className={cn("min-h-screen bg-background", className)} data-testid={testId}>

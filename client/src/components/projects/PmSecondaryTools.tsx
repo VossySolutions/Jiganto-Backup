@@ -17,7 +17,7 @@ interface ToolProps {
 
 export function PmTeamOrgTool({ projectId }: ToolProps) {
   const { data: team = [], isLoading } = useQuery<any[]>({
-    queryKey: [`/api/pm/projects/${projectId}/team`],
+    queryKey: ["/api/pm/projects", projectId, "team"],
   });
   const { data: orgCharts = [] } = useQuery<any[]>({
     queryKey: ["/api/org-charts"],
@@ -26,7 +26,6 @@ export function PmTeamOrgTool({ projectId }: ToolProps) {
       if (!res.ok) throw new Error("Failed to load org charts");
       return res.json();
     },
-    staleTime: 30_000,
   });
   const projectChart = orgCharts.find((c: any) => c.metadata?.projectId === projectId);
 
@@ -493,7 +492,7 @@ export function PmChangeLogTool({ projectId }: ToolProps) {
 
 export function PmDocumentationTool({ projectId }: ToolProps) {
   const { data: docs = [], isLoading } = useQuery<any[]>({
-    queryKey: [`/api/pm/projects/${projectId}/documents`],
+    queryKey: ["/api/pm/projects", projectId, "documents"],
   });
 
   return (
@@ -531,7 +530,7 @@ export function PmDocumentationTool({ projectId }: ToolProps) {
 
 export function PmTestTrackerTool({ projectId }: ToolProps) {
   const { data: pmProject } = useQuery<{ id: number; name: string }>({
-    queryKey: [`/api/pm/projects/${projectId}`],
+    queryKey: ["/api/pm/projects", projectId],
     enabled: !!projectId,
   });
   const { data: tmProjects = [] } = useQuery<Array<{ id: number; name: string }>>({
@@ -646,10 +645,10 @@ export function PmSowTrackerTool({ projectId, project }: ToolProps) {
 
 export function PmWbsTool({ projectId }: ToolProps) {
   const { data: tasks = [], isLoading } = useQuery<any[]>({
-    queryKey: [`/api/pm/projects/${projectId}/tasks`],
+    queryKey: ["/api/pm/projects", projectId, "tasks"],
   });
   const { data: phases = [] } = useQuery<any[]>({
-    queryKey: [`/api/pm/projects/${projectId}/phases`],
+    queryKey: ["/api/pm/projects", projectId, "phases"],
   });
 
   const wbsItems = [

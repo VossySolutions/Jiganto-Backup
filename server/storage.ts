@@ -1144,7 +1144,7 @@ export interface IStorage {
   deletePmMilestone(id: number): Promise<void>;
 
   // Projects Module - Tasks
-  getPmTasks(projectId: number, filters?: { phaseId?: number; status?: string; assigneeId?: string }): Promise<PmTask[]>;
+  getPmTasks(projectId: number, filters?: { phaseId?: number; status?: string; assigneeId?: string; ganttType?: string }): Promise<PmTask[]>;
   getPmTask(id: number): Promise<PmTask | undefined>;
   createPmTask(task: InsertPmTask): Promise<PmTask>;
   updatePmTask(id: number, updates: Partial<InsertPmTask>): Promise<PmTask | undefined>;
@@ -1158,6 +1158,9 @@ export interface IStorage {
 
   // Projects Module - Gantt Versions
   getPmGanttVersions(projectId: number): Promise<PmGanttVersion[]>;
+  /** Lightweight list without snapshot jsonb — use for version pickers / badges. */
+  getPmGanttVersionSummaries(projectId: number): Promise<Array<Omit<PmGanttVersion, "snapshot">>>;
+  countPmGanttVersions(projectId: number): Promise<number>;
   getPmGanttVersion(id: number): Promise<PmGanttVersion | undefined>;
   getActivePmGanttVersion(projectId: number): Promise<PmGanttVersion | undefined>;
   createPmGanttVersion(data: InsertPmGanttVersion): Promise<PmGanttVersion>;
@@ -1599,6 +1602,17 @@ export interface IStorage {
   acceptClientInvitation(token: string, userId: string): Promise<ClientUser | undefined>;
   getClientInvitations(clientId: number): Promise<ClientInvitation[]>;
   userCanAccessClient(userId: string, tenantId: number, clientId: number, options?: { platformRole?: string; isJigantoStaff?: boolean }): Promise<boolean>;
+}
+
+/** Keep only known columns so stray Gantt fields (e.g. notes, wbsCode on phases) cannot break SQL. */
+function pickDefined<T extends Record<string, unknown>>(obj: T, keys: string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of keys) {
+    if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] !== undefined) {
+      out[k] = obj[k];
+    }
+  }
+  return out;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6135,7 +6149,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updatePmProject(id: number, updates: Partial<InsertPmProject>): Promise<PmProject | undefined> {
-    const [result] = await db.update(pmProjects).set({ ...updates, updatedAt: new Date() }).where(eq(pmProjects.id, id)).returning();
+    const allowed = pickDefined(updates as Record<string, unknown>, [
+      "name", "shortName", "description", "status", "ragStatus", "priority", "progress",
+      "budget", "spentBudget", "forecastBudget", "financialRag", "fundingSource",
+      "estimatedHours", "actualHours", "startDate", "endDate", "baselineEndDate",
+      "actualStartDate", "actualEndDate", "scheduleRag", "ownerId", "managerId",
+      "portfolioId", "programId", "initiativeId", "parentProjectId", "code",
+      "projectType", "methodology", "workType", "customer", "framework", "tags",
+      "metadata", "clientId",
+    ]) as Partial<InsertPmProject>;
+    const [result] = await db.update(pmProjects).set({ ...allowed, updatedAt: new Date() }).where(eq(pmProjects.id, id)).returning();
     return result;
   }
 
@@ -6169,6 +6192,9 @@ export class DatabaseStorage implements IStorage {
 
   // Projects Module - Phases
   async getPmProjectPhases(projectId: number): Promise<PmProjectPhase[]> {
+    const { getUnifiedPhases } = await import("./lib/unified-work-items");
+    const unified = await getUnifiedPhases(projectId);
+    if (unified.length > 0) return unified as unknown as PmProjectPhase[];
     return await db.select().from(pmProjectPhases).where(eq(pmProjectPhases.projectId, projectId)).orderBy(pmProjectPhases.phaseNumber);
   }
 
@@ -6178,12 +6204,62 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPmProjectPhase(phase: InsertPmProjectPhase): Promise<PmProjectPhase> {
-    const [result] = await db.insert(pmProjectPhases).values(phase).returning();
-    return result;
+    const [legacy] = await db.insert(pmProjectPhases).values(phase).returning();
+    // Also create unified work item so Gantt sees it immediately
+    try {
+      const { ensureUnifiedWorkItemColumns } = await import("./lib/unified-work-items");
+      await ensureUnifiedWorkItemColumns();
+      await db.insert(pmTasks).values({
+        tenantId: legacy.tenantId,
+        projectId: legacy.projectId,
+        name: legacy.name,
+        description: legacy.description,
+        status: legacy.status || "todo",
+        progress: legacy.progress ?? 0,
+        ragStatus: (legacy.ragStatus || "green").toLowerCase(),
+        plannedStartDate: legacy.plannedStartDate,
+        plannedEndDate: legacy.plannedEndDate,
+        isSummary: true,
+        ganttType: "phase",
+        phaseNumber: legacy.phaseNumber,
+        methodology: legacy.methodology,
+        legacySource: "phase",
+        legacySourceId: legacy.id,
+        phaseId: legacy.id,
+        order: legacy.order ?? legacy.phaseNumber ?? 0,
+      });
+    } catch (e) {
+      console.warn("unified phase mirror failed", e);
+    }
+    return legacy;
   }
 
   async updatePmProjectPhase(id: number, updates: Partial<InsertPmProjectPhase>): Promise<PmProjectPhase | undefined> {
-    const [result] = await db.update(pmProjectPhases).set({ ...updates, updatedAt: new Date() }).where(eq(pmProjectPhases.id, id)).returning();
+    const allowed = pickDefined(updates as Record<string, unknown>, [
+      "name", "description", "phaseNumber", "methodology", "status", "ragStatus", "progress",
+      "plannedStartDate", "plannedEndDate", "actualStartDate", "actualEndDate",
+      "estimatedHours", "actualHours", "order",
+    ]) as Partial<InsertPmProjectPhase>;
+    const [result] = await db.update(pmProjectPhases).set({ ...allowed, updatedAt: new Date() }).where(eq(pmProjectPhases.id, id)).returning();
+    // Mirror into unified work item if present
+    try {
+      await db
+        .update(pmTasks)
+        .set({
+          ...(allowed.name != null ? { name: allowed.name } : {}),
+          ...(allowed.description !== undefined ? { description: allowed.description } : {}),
+          ...(allowed.progress != null ? { progress: allowed.progress } : {}),
+          ...(allowed.ragStatus != null ? { ragStatus: String(allowed.ragStatus).toLowerCase() } : {}),
+          ...(allowed.plannedStartDate !== undefined ? { plannedStartDate: allowed.plannedStartDate } : {}),
+          ...(allowed.plannedEndDate !== undefined ? { plannedEndDate: allowed.plannedEndDate } : {}),
+          ...(allowed.phaseNumber != null ? { phaseNumber: allowed.phaseNumber } : {}),
+          ...(allowed.methodology != null ? { methodology: allowed.methodology } : {}),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(pmTasks.legacySource, "phase"), eq(pmTasks.legacySourceId, id)));
+    } catch (e) {
+      console.warn("unified phase mirror update failed", e);
+    }
     return result;
   }
 
@@ -6200,6 +6276,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPmMilestones(projectId: number, phaseId?: number): Promise<PmMilestone[]> {
+    const { getUnifiedMilestones } = await import("./lib/unified-work-items");
+    let unified = await getUnifiedMilestones(projectId);
+    if (phaseId) unified = unified.filter((m) => m.phaseId === phaseId);
+    if (unified.length > 0) return unified as unknown as PmMilestone[];
     if (phaseId) {
       return await db.select().from(pmMilestones).where(and(eq(pmMilestones.projectId, projectId), eq(pmMilestones.phaseId, phaseId))).orderBy(pmMilestones.order);
     }
@@ -6217,7 +6297,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updatePmMilestone(id: number, updates: Partial<InsertPmMilestone>): Promise<PmMilestone | undefined> {
-    const [result] = await db.update(pmMilestones).set({ ...updates, updatedAt: new Date() }).where(eq(pmMilestones.id, id)).returning();
+    const raw = updates as Record<string, unknown>;
+    // Gantt historically sent "notes" — map to description
+    if (raw.notes !== undefined && raw.description === undefined) {
+      raw.description = raw.notes;
+    }
+    const allowed = pickDefined(raw, [
+      "name", "description", "dueDate", "completedDate", "status", "isCritical",
+      "ownerId", "order", "projectName", "phase", "workstream", "ragStatus",
+      "commentary", "targetDate", "phaseId", "projectId", "ref",
+    ]) as Partial<InsertPmMilestone>;
+    const [result] = await db.update(pmMilestones).set({ ...allowed, updatedAt: new Date() }).where(eq(pmMilestones.id, id)).returning();
     return result;
   }
 
@@ -6226,12 +6316,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Projects Module - Tasks
-  async getPmTasks(projectId: number, filters?: { phaseId?: number; status?: string; assigneeId?: string }): Promise<PmTask[]> {
+  async getPmTasks(projectId: number, filters?: { phaseId?: number; status?: string; assigneeId?: string; ganttType?: string }): Promise<PmTask[]> {
+    const { ensureProjectUnifiedWorkItems } = await import("./lib/unified-work-items");
+    await ensureProjectUnifiedWorkItems(projectId);
+    // Heal self-parent rows (infinite hierarchy loops freeze the Gantt iframe)
+    await db.execute(sql`
+      UPDATE pm_tasks
+      SET parent_task_id = NULL, updated_at = NOW()
+      WHERE project_id = ${projectId}
+        AND parent_task_id IS NOT NULL
+        AND parent_task_id = id
+    `);
     const conditions = [eq(pmTasks.projectId, projectId)];
     if (filters?.phaseId) conditions.push(eq(pmTasks.phaseId, filters.phaseId));
     if (filters?.status) conditions.push(eq(pmTasks.status, filters.status));
     if (filters?.assigneeId) conditions.push(eq(pmTasks.assigneeId, filters.assigneeId));
-    return await db.select().from(pmTasks).where(and(...conditions)).orderBy(pmTasks.order);
+    if (filters?.ganttType) conditions.push(eq(pmTasks.ganttType, filters.ganttType));
+    return await db.select().from(pmTasks).where(and(...conditions)).orderBy(pmTasks.order, pmTasks.id);
   }
 
   async getPmTask(id: number): Promise<PmTask | undefined> {
@@ -6245,7 +6346,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updatePmTask(id: number, updates: Partial<InsertPmTask>): Promise<PmTask | undefined> {
-    const [result] = await db.update(pmTasks).set({ ...updates, updatedAt: new Date() }).where(eq(pmTasks.id, id)).returning();
+    const allowed = pickDefined(updates as Record<string, unknown>, [
+      "name", "description", "assigneeId", "status", "priority", "progress", "ragStatus",
+      "estimatedHours", "actualHours", "plannedStartDate", "plannedEndDate",
+      "actualStartDate", "actualEndDate", "predecessorIds", "successorIds",
+      "isSummary", "ganttType", "wbsCode", "order", "phaseId", "parentTaskId",
+      "milestoneId", "phaseNumber", "methodology", "legacySource", "legacySourceId",
+    ]) as Partial<InsertPmTask>;
+    if (allowed.parentTaskId === id) allowed.parentTaskId = null;
+    const [result] = await db.update(pmTasks).set({ ...allowed, updatedAt: new Date() }).where(eq(pmTasks.id, id)).returning();
     return result;
   }
 
@@ -6281,114 +6390,62 @@ export class DatabaseStorage implements IStorage {
     wbs: string; name: string; type: number; parentWbs?: string | null; predecessorWbs?: string | null;
     owner?: string; start: string; end?: string; progress?: number; rag?: string; notes?: string;
   }[]): Promise<{ imported: number }> {
+    const { ensureUnifiedWorkItemColumns, engineTypeToGanttType } = await import("./lib/unified-work-items");
+    await ensureUnifiedWorkItemColumns();
     const ragMap: Record<string, string> = { g: "green", a: "amber", r: "red", green: "green", amber: "amber", red: "red" };
     if (mode === "overwrite") {
       await this.deleteAllPmTasksByProject(projectId);
-      const milestones = await this.getPmMilestones(projectId);
-      for (const m of milestones) await this.deletePmMilestone(m.id);
-      const workstreams = await this.getPmWorkstreams(projectId);
-      for (const w of workstreams) await this.deletePmWorkstream(w.id);
-      const phases = await this.getPmProjectPhases(projectId);
-      for (const p of phases) await this.deletePmProjectPhase(p.id);
+      // Clear legacy tables so shims stay consistent
+      try {
+        const milestones = await db.select().from(pmMilestones).where(eq(pmMilestones.projectId, projectId));
+        for (const m of milestones) await this.deletePmMilestone(m.id);
+        const workstreams = await db.select().from(pmWorkstreams).where(eq(pmWorkstreams.projectId, projectId));
+        for (const w of workstreams) await this.deletePmWorkstream(w.id);
+        const phases = await db.select().from(pmProjectPhases).where(eq(pmProjectPhases.projectId, projectId));
+        for (const p of phases) await this.deletePmProjectPhase(p.id);
+      } catch (e) {
+        console.warn("legacy clear during gantt import", e);
+      }
+      // Mark project unified
+      const [project] = await db.select().from(pmProjects).where(eq(pmProjects.id, projectId));
+      if (project) {
+        const meta = { ...((project.metadata as Record<string, unknown>) || {}), unifiedWorkItems: true, unifiedWorkItemsAt: new Date().toISOString() };
+        await db.update(pmProjects).set({ metadata: meta, updatedAt: new Date() }).where(eq(pmProjects.id, projectId));
+      }
     }
 
-    type WbsRef = { kind: "phase" | "ws" | "task" | "ms"; id: number; phaseId?: number | null };
+    type WbsRef = { id: number };
     const wbsMap = new Map<string, WbsRef>();
     const sorted = [...items]
       .filter((i) => i.type >= 2 && i.type <= 6 && i.name && i.start)
-      .sort((a, b) => a.type - b.type || a.wbs.localeCompare(b.wbs, undefined, { numeric: true }));
+      .sort((a, b) => a.type - b.type || String(a.wbs || "").localeCompare(String(b.wbs || ""), undefined, { numeric: true }));
 
-    let phaseOrder = 0;
-    let wsOrder = 0;
-    let taskOrder = 0;
-    let msOrder = 0;
-
+    let order = 0;
     for (const item of sorted) {
+      order++;
       const parent = item.parentWbs ? wbsMap.get(item.parentWbs) : undefined;
       const rag = ragMap[(item.rag || "g").toLowerCase()] || "green";
       const end = item.end || item.start;
-
-      if (item.type === 2) {
-        phaseOrder++;
-        const phase = await this.createPmProjectPhase({
-          tenantId,
-          projectId,
-          name: item.name,
-          phaseNumber: phaseOrder,
-          plannedStartDate: item.start,
-          plannedEndDate: end,
-          progress: item.progress ?? 0,
-          ragStatus: rag,
-          description: item.notes || null,
-          order: phaseOrder,
-        });
-        wbsMap.set(item.wbs, { kind: "phase", id: phase.id });
-      } else if (item.type === 3) {
-        wsOrder++;
-        const phaseId = parent?.kind === "phase" ? parent.id : null;
-        const ws = await this.createPmWorkstream({
-          tenantId,
-          projectId,
-          phaseId,
-          name: item.name,
-          plannedStartDate: item.start,
-          plannedEndDate: end,
-          progress: item.progress ?? 0,
-          ragStatus: rag,
-          description: item.notes || null,
-          wbsCode: item.wbs,
-          order: wsOrder,
-        });
-        wbsMap.set(item.wbs, { kind: "ws", id: ws.id, phaseId });
-      } else if (item.type === 4 || item.type === 5) {
-        taskOrder++;
-        let phaseId: number | null = null;
-        let parentTaskId: number | null = null;
-        if (parent?.kind === "phase") phaseId = parent.id;
-        else if (parent?.kind === "ws") phaseId = parent.phaseId ?? null;
-        else if (parent?.kind === "task") {
-          parentTaskId = parent.id;
-          phaseId = parent.phaseId ?? null;
-        }
-        const predRef = item.predecessorWbs ? wbsMap.get(item.predecessorWbs) : undefined;
-        const predecessorIds = predRef?.kind === "task" ? [predRef.id] : undefined;
-        const task = await this.createPmTask({
-          tenantId,
-          projectId,
-          phaseId,
-          parentTaskId,
-          name: item.name,
-          plannedStartDate: item.start,
-          plannedEndDate: end,
-          progress: item.progress ?? 0,
-          status: "todo",
-          description: item.notes || null,
-          wbsCode: item.wbs,
-          isSummary: item.type === 4,
-          ganttType: item.type === 4 ? "summary" : "task",
-          predecessorIds,
-          order: taskOrder,
-        });
-        wbsMap.set(item.wbs, { kind: "task", id: task.id, phaseId });
-      } else if (item.type === 6) {
-        msOrder++;
-        const phaseId = parent?.kind === "phase"
-          ? parent.id
-          : parent?.kind === "ws"
-            ? parent.phaseId ?? null
-            : null;
-        const ms = await this.createPmMilestone({
-          tenantId,
-          projectId,
-          phaseId,
-          name: item.name,
-          dueDate: item.start,
-          status: (item.progress ?? 0) >= 100 ? "completed" : "pending",
-          ragStatus: rag,
-          order: msOrder,
-        });
-        wbsMap.set(item.wbs, { kind: "ms", id: ms.id, phaseId });
-      }
+      const gt = engineTypeToGanttType(item.type);
+      const predRef = item.predecessorWbs ? wbsMap.get(item.predecessorWbs) : undefined;
+      const task = await this.createPmTask({
+        tenantId,
+        projectId,
+        parentTaskId: parent?.id ?? null,
+        name: item.name,
+        plannedStartDate: item.start,
+        plannedEndDate: end,
+        progress: item.progress ?? 0,
+        status: (item.progress ?? 0) >= 100 ? "done" : "todo",
+        description: item.notes || null,
+        wbsCode: item.wbs,
+        isSummary: gt.isSummary,
+        ganttType: gt.ganttType,
+        ragStatus: rag,
+        predecessorIds: predRef ? [predRef.id] : [],
+        order,
+      });
+      if (item.wbs) wbsMap.set(item.wbs, { id: task.id });
     }
 
     return { imported: sorted.length };
@@ -6401,6 +6458,32 @@ export class DatabaseStorage implements IStorage {
       .from(pmGanttVersions)
       .where(eq(pmGanttVersions.projectId, projectId))
       .orderBy(desc(pmGanttVersions.versionNumber));
+  }
+
+  async getPmGanttVersionSummaries(projectId: number): Promise<Array<Omit<PmGanttVersion, "snapshot">>> {
+    return await db
+      .select({
+        id: pmGanttVersions.id,
+        tenantId: pmGanttVersions.tenantId,
+        projectId: pmGanttVersions.projectId,
+        name: pmGanttVersions.name,
+        versionNumber: pmGanttVersions.versionNumber,
+        isActive: pmGanttVersions.isActive,
+        createdBy: pmGanttVersions.createdBy,
+        createdAt: pmGanttVersions.createdAt,
+        updatedAt: pmGanttVersions.updatedAt,
+      })
+      .from(pmGanttVersions)
+      .where(eq(pmGanttVersions.projectId, projectId))
+      .orderBy(desc(pmGanttVersions.versionNumber));
+  }
+
+  async countPmGanttVersions(projectId: number): Promise<number> {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(pmGanttVersions)
+      .where(eq(pmGanttVersions.projectId, projectId));
+    return Number(row?.n ?? 0);
   }
 
   async getPmGanttVersion(id: number): Promise<PmGanttVersion | undefined> {
@@ -6418,10 +6501,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPmGanttVersion(data: InsertPmGanttVersion): Promise<PmGanttVersion> {
-    const existing = await this.getPmGanttVersions(data.projectId);
-    const nextNum = existing.length
-      ? Math.max(...existing.map((v) => v.versionNumber)) + 1
-      : 1;
+    const [maxRow] = await db
+      .select({ maxNum: sql<number>`coalesce(max(${pmGanttVersions.versionNumber}), 0)::int` })
+      .from(pmGanttVersions)
+      .where(eq(pmGanttVersions.projectId, data.projectId));
+    const nextNum = (Number(maxRow?.maxNum ?? 0) || 0) + 1;
     // Respect explicit isActive — never force-activate a "Save as copy"
     const makeActive = data.isActive === true;
     if (makeActive) {
@@ -6709,6 +6793,9 @@ export class DatabaseStorage implements IStorage {
 
   // Projects Module - Workstreams
   async getPmWorkstreams(projectId: number): Promise<PmWorkstream[]> {
+    const { getUnifiedWorkstreams } = await import("./lib/unified-work-items");
+    const unified = await getUnifiedWorkstreams(projectId);
+    if (unified.length > 0) return unified as unknown as PmWorkstream[];
     return await db.select().from(pmWorkstreams).where(eq(pmWorkstreams.projectId, projectId)).orderBy(pmWorkstreams.order);
   }
 
@@ -6723,7 +6810,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updatePmWorkstream(id: number, updates: Partial<InsertPmWorkstream>): Promise<PmWorkstream | undefined> {
-    const [result] = await db.update(pmWorkstreams).set({ ...updates, updatedAt: new Date() }).where(eq(pmWorkstreams.id, id)).returning();
+    const allowed = pickDefined(updates as Record<string, unknown>, [
+      "name", "description", "wbsCode", "ownerId", "status", "ragStatus", "progress",
+      "estimatedHours", "actualHours", "plannedStartDate", "plannedEndDate",
+      "actualStartDate", "actualEndDate", "order", "phaseId", "parentWorkstreamId", "type",
+    ]) as Partial<InsertPmWorkstream>;
+    const [result] = await db.update(pmWorkstreams).set({ ...allowed, updatedAt: new Date() }).where(eq(pmWorkstreams.id, id)).returning();
     return result;
   }
 

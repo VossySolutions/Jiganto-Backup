@@ -322,7 +322,17 @@ export const pmMilestonesRelations = relations(pmMilestones, ({ one }) => ({
   }),
 }));
 
-// Project Tasks - For Gantt charts and task management
+// Project Tasks — Monday-style unified work items for the Gantt schedule.
+// ganttType: phase | workstream | activity | task | milestone (legacy: summary → activity)
+export const pmGanttTypeEnum = [
+  "phase",
+  "workstream",
+  "activity",
+  "task",
+  "milestone",
+  "summary", // legacy alias for activity
+] as const;
+
 export const pmTasks = pgTable("pm_tasks", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull().references(() => tenants.id),
@@ -336,6 +346,7 @@ export const pmTasks = pgTable("pm_tasks", {
   status: text("status").default("todo"),
   priority: text("priority").default("medium"),
   progress: integer("progress").default(0),
+  ragStatus: text("rag_status").default("green"),
   estimatedHours: decimal("estimated_hours"),
   actualHours: decimal("actual_hours").default("0"),
   plannedStartDate: date("planned_start_date"),
@@ -346,6 +357,11 @@ export const pmTasks = pgTable("pm_tasks", {
   successorIds: integer("successor_ids").array(),
   isSummary: boolean("is_summary").default(false),
   ganttType: text("gantt_type").default("task"),
+  phaseNumber: integer("phase_number"),
+  methodology: text("methodology"),
+  /** When migrated from legacy tables: phase | workstream | milestone */
+  legacySource: text("legacy_source"),
+  legacySourceId: integer("legacy_source_id"),
   wbsCode: text("wbs_code"),
   order: integer("order").default(0),
   createdAt: timestamp("created_at").defaultNow(),

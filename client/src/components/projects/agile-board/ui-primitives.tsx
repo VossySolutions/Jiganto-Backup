@@ -95,9 +95,18 @@ export function BurndownChart({ data, title, width: fixedWidth, height = 200, sp
   const pad = { top: 16, right: 20, bottom: 32, left: 36 };
   const W = width - pad.left - pad.right;
   const H = height - pad.top - pad.bottom;
-  const maxY = Math.max(...data.map(d => Math.max(d.ideal, d.actual || 0)));
-  const xs = data.map((_, i) => pad.left + (i / (data.length - 1)) * W);
-  const y = (v: number) => pad.top + H - (v / maxY) * H;
+  if (!data || data.length === 0) {
+    return (
+      <div ref={containerRef} style={{ background: C.white, border: `1px solid ${C.grey200}`, borderRadius: 10, padding: "12px 16px" }} data-testid="burndown-chart">
+        <div style={{ fontWeight: 700, fontSize: 13, color: C.grey700, marginBottom: 8 }}>{title}</div>
+        <div style={{ fontSize: 12, color: C.grey400, padding: "24px 0", textAlign: "center" }}>No burndown data yet</div>
+      </div>
+    );
+  }
+  const maxY = Math.max(1, ...data.map(d => Math.max(d.ideal, d.actual || 0)));
+  const denom = Math.max(1, data.length - 1);
+  const xs = data.map((_, i) => pad.left + (i / denom) * W);
+  const y = (v: number) => pad.top + H - (Math.max(0, v) / maxY) * H;
   const idealPath = data.map((d, i) => `${i === 0 ? "M" : "L"}${xs[i]},${y(d.ideal)}`).join(" ");
   const actualPts = data.filter(d => d.actual !== null);
   const actualPath = actualPts.map((d, i) => {
@@ -168,9 +177,10 @@ export function BurnUpChart({ data, title, color = C.blue, width = 320, height =
   const pad = { top: 14, right: 16, bottom: 28, left: 32 };
   const W = width - pad.left - pad.right;
   const H = height - pad.top - pad.bottom;
-  const maxY = Math.max(...data.map(d => d.total));
-  const xs = data.map((_, i) => pad.left + (i / (data.length - 1)) * W);
-  const y = (v: number) => pad.top + H - (v / maxY) * H;
+  const maxY = Math.max(1, ...data.map(d => Math.max(d.total || 0, d.completed || 0)));
+  const denom = Math.max(1, data.length - 1);
+  const xs = data.map((_, i) => pad.left + (i / denom) * W);
+  const y = (v: number) => pad.top + H - (Math.max(0, v) / maxY) * H;
   const scopePath = data.map((d, i) => `${i === 0 ? "M" : "L"}${xs[i]},${y(d.total)}`).join(" ");
   const donePath = data.map((d, i) => `${i === 0 ? "M" : "L"}${xs[i]},${y(d.completed)}`).join(" ");
 

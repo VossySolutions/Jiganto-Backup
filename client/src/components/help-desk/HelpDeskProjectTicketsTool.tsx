@@ -47,8 +47,7 @@ export function HelpDeskProjectTicketsTool({ projectId }: { projectId: number })
     <div className="space-y-4" data-testid="hd-project-tickets">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold flex items-center gap-2">
-            <Ticket className="h-4 w-4" style={{ color: HD_ACCENT }} />
+          <h2 className="text-base font-semibold">
             Support Tickets
           </h2>
           <p className="text-xs sm:text-sm text-muted-foreground">Help Desk tickets linked to this project</p>

@@ -33,8 +33,8 @@ import {
   PmUserDefinedIcon, PmPortfolioIcon, PmSubProjectIcon, PmProgramIncrementIcon,
   PmWorkstreamIcon, PmTaskForceIcon, PmChangeRequestIcon, PmEnhancementIcon,
   PmExperimentIcon, PmPilotIcon, PmPrototypeIcon, PmSprintIcon, PmImprovementIcon,
-  PmGanttChartIcon, PmMilestonePlanIcon, PmScrumBoardIcon, PmKanbanBoardIcon,
-  PmEpicsStoriesIcon, PmWbsIcon, PmStatusReportingIcon, PmProjectDashboardIcon,
+  PmGanttChartIcon, PmMilestonePlanIcon, PmKanbanBoardIcon,
+  PmWbsIcon, PmStatusReportingIcon, PmProjectDashboardIcon,
   Pm360ReportIcon, PmRiskLogIcon, PmIssuesLogIcon, PmAssumptionsLogIcon,
   PmDependenciesLogIcon, PmDecisionsLogIcon, PmChangeLogIcon, PmRaciModelIcon,
   PmResourceTrackerIcon, PmTimesheetsIcon, PmFinanceTrackerIcon, PmSowTrackerIcon,
@@ -42,15 +42,31 @@ import {
   PmOrgChartIcon, PmStakeholderMapIcon, PmBusinessProcessModelIcon,
   PmPlanningSchedulingIcon, PmReportingDashboardsIcon, PmRaidGovernanceIcon,
   PmResourcesFinanceIcon, PmDocumentationDeliveryIcon, PmPeopleOrganisationIcon,
-  PmSprintBoardIcon, PmBacklogIcon, PmSprintsIcon, PmDefectsIcon, PmRoadmapIcon,
-  PmBestPracticeIcon, PmStoriesIcon,
+  PmSprintBoardIcon,
 } from "@/components/icons/ModuleIcons";
 
 type IconComp = ComponentType<{ className?: string }>;
 
 type WorkTypeItem = { id: string; name: string; desc: string; icon: IconComp };
-type ToolDef = { id: string; name: string; hint: string; icon: IconComp; crossModule?: string; multiInstance?: boolean };
+type ToolDef = { id: string; name: string; hint: string; icon: IconComp; crossModule?: string; multiInstance?: boolean; pickerHidden?: boolean };
 type ToolCategory = { title: string; icon: IconComp; tag?: string; tools: ToolDef[] };
+
+/** Granular Agile tools folded into the single `agile` workspace tool. */
+export const LEGACY_AGILE_TOOL_IDS = [
+  "kanban_board",
+  "sprint_board",
+  "scrum_board",
+  "backlog",
+  "epics",
+  "stories",
+  "sprints",
+  "defects",
+  "roadmap",
+  "epics_stories",
+  "best_practice",
+] as const;
+
+export const LEGACY_AGILE_TOOL_ID_SET = new Set<string>(LEGACY_AGILE_TOOL_IDS);
 
 export const WORK_TYPES: { main: WorkTypeItem[]; extended: WorkTypeItem[] } = {
   main: [
@@ -84,17 +100,13 @@ export const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
     tools: [
       { id: "gantt_chart", name: "Gantt Chart", hint: "Timeline & dependencies", icon: PmGanttChartIcon, multiInstance: true },
       { id: "milestone_plan", name: "Milestone Plan", hint: "Key deliverables & gates", icon: PmMilestonePlanIcon },
+      {
+        id: "agile",
+        name: "Agile",
+        hint: "Epic → Feature → Story → AC → Test → Sprint → Defect pipeline",
+        icon: PmSprintBoardIcon,
+      },
       { id: "tracking_board", name: "Tracking Board", hint: "Lightweight flexible tracking", icon: PmKanbanBoardIcon, multiInstance: true },
-      { id: "kanban_board", name: "Kanban Board", hint: "Visual task flow", icon: PmKanbanBoardIcon },
-      { id: "sprint_board", name: "Sprint Board", hint: "Agile sprint with drag & drop", icon: PmSprintBoardIcon },
-      { id: "scrum_board", name: "Scrum Board", hint: "Agile sprint management", icon: PmScrumBoardIcon },
-      { id: "backlog", name: "Backlog", hint: "Product backlog refinement", icon: PmBacklogIcon },
-      { id: "epics", name: "Epics", hint: "Epic tracking & burn-up", icon: PmEpicsStoriesIcon },
-      { id: "stories", name: "Stories", hint: "User story management", icon: PmStoriesIcon },
-      { id: "sprints", name: "Sprints", hint: "Sprint planning & tracking", icon: PmSprintsIcon },
-      { id: "defects", name: "Defects", hint: "Bug tracking & triage", icon: PmDefectsIcon },
-      { id: "roadmap", name: "Roadmap", hint: "Release roadmap timeline", icon: PmRoadmapIcon },
-      { id: "epics_stories", name: "Epics & Stories", hint: "Product backlog", icon: PmEpicsStoriesIcon },
       { id: "whiteboard", name: "Whiteboard", hint: "Collaborative sticky notes", icon: PmKanbanBoardIcon },
     ],
   },
@@ -105,8 +117,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
     tools: [
       { id: "status_reporting", name: "Status Reporting", hint: "Weekly/monthly reports to steering committee & board", icon: PmStatusReportingIcon },
       { id: "360_report", name: "360° Report", hint: "Full project health view for PM and Programme Manager", icon: Pm360ReportIcon },
-      { id: "project_dashboard", name: "Agile Dashboard", hint: "KPIs & health — velocity, burn-down, cycle time", icon: PmProjectDashboardIcon },
-      { id: "best_practice", name: "Best Practice", hint: "Agile delivery guides", icon: PmBestPracticeIcon },
+      { id: "project_dashboard", name: "Overview", hint: "KPIs & health — velocity, burn-down, cycle time", icon: PmProjectDashboardIcon },
     ],
   },
   raid_governance: {
@@ -157,41 +168,65 @@ export const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
 };
 
 export const MASTER_TOOL_ORDER: string[] = [
-  "gantt_chart", "milestone_plan", "project_dashboard", "tracking_board", "sprint_board", "backlog",
-  "epics", "stories", "sprints", "defects", "roadmap",
-  "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log",
+  "project_dashboard", "360_report", "gantt_chart", "milestone_plan", "agile", "tracking_board",
+  "status_reporting", "risk_log", "issues_log", "assumptions_log",
   "dependencies_log", "decisions_log", "change_log", "documentation", "org_chart",
-  "stakeholder_map", "business_process_model", "deliverables_tracker", "kanban_board",
+  "stakeholder_map", "business_process_model", "deliverables_tracker",
   "raci_model", "resource_tracker", "test_tracker", "timesheets", "finance_tracker",
-  "sow_tracker", "wbs", "whiteboard",
-  "scrum_board", "epics_stories", "support_tickets", "best_practice",
+  "sow_tracker", "wbs", "whiteboard", "support_tickets",
 ];
 
-const ALWAYS_TOOLS = ["status_reporting", "360_report"] as const;
+const ALWAYS_TOOLS = ["project_dashboard", "status_reporting", "360_report"] as const;
 
 const DEFAULT_TOOLS: Record<string, string[]> = {
-  project: ["gantt_chart", "milestone_plan", "tracking_board", "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log", "dependencies_log", "change_log", "raci_model", "resource_tracker", "timesheets", "finance_tracker", "documentation", "deliverables_tracker", "test_tracker", "wbs"],
-  programme: ["gantt_chart", "milestone_plan", "status_reporting", "360_report", "risk_log", "issues_log"],
-  initiative: ["milestone_plan", "status_reporting", "360_report", "risk_log"],
-  campaign: ["kanban_board", "milestone_plan", "status_reporting", "360_report"],
-  poc: ["sprint_board", "backlog", "kanban_board", "project_dashboard", "status_reporting", "360_report"],
+  project: ["project_dashboard", "gantt_chart", "milestone_plan", "tracking_board", "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log", "dependencies_log", "change_log", "raci_model", "resource_tracker", "timesheets", "finance_tracker", "documentation", "deliverables_tracker", "test_tracker", "wbs"],
+  programme: ["project_dashboard", "gantt_chart", "milestone_plan", "status_reporting", "360_report", "risk_log", "issues_log"],
+  initiative: ["project_dashboard", "milestone_plan", "status_reporting", "360_report", "risk_log"],
+  campaign: ["project_dashboard", "agile", "milestone_plan", "status_reporting", "360_report"],
+  poc: ["project_dashboard", "agile", "status_reporting", "360_report"],
   user_defined: [...ALWAYS_TOOLS],
   portfolio: ["project_dashboard", "status_reporting", "360_report"],
-  sub_project: ["gantt_chart", "sprint_board", "backlog", "risk_log", "issues_log", "status_reporting", "360_report"],
-  sprint: ["sprint_board", "backlog", "kanban_board", "status_reporting", "360_report"],
-  pilot: ["milestone_plan", "project_dashboard", "risk_log", "status_reporting", "360_report"],
+  sub_project: ["project_dashboard", "gantt_chart", "agile", "risk_log", "issues_log", "status_reporting", "360_report"],
+  sprint: ["project_dashboard", "agile", "status_reporting", "360_report"],
+  pilot: ["project_dashboard", "milestone_plan", "risk_log", "status_reporting", "360_report"],
 };
 
-export function findToolDefinition(toolId: string): { name: string; category: string; icon: IconComp } | null {
+export function findToolDefinition(toolId: string): { name: string; category: string; icon: IconComp; pickerHidden?: boolean } | null {
+  if (LEGACY_AGILE_TOOL_ID_SET.has(toolId)) {
+    return { name: "Agile", category: "planning_scheduling", icon: PmSprintBoardIcon, pickerHidden: true };
+  }
   for (const [catKey, cat] of Object.entries(TOOL_DEFINITIONS)) {
     const tool = cat.tools.find((t) => t.id === toolId);
-    if (tool) return { name: tool.name, category: catKey, icon: tool.icon };
+    if (tool) return { name: tool.name, category: catKey, icon: tool.icon, pickerHidden: tool.pickerHidden };
   }
   return null;
 }
 
 export function getAllToolIds(): string[] {
   return Object.values(TOOL_DEFINITIONS).flatMap((cat) => cat.tools.map((t) => t.id));
+}
+
+/** Tool IDs shown in wizard / add-tool pickers. */
+export function getPickerToolIds(): string[] {
+  return getAllToolIds().filter((id) => !findToolDefinition(id)?.pickerHidden);
+}
+
+/** Collapse legacy Agile tool rows into a single Agile nav entry. */
+export function coalesceAgileTools<T extends { toolType: string; label?: string | null }>(tools: T[]): T[] {
+  const legacy = tools.filter((t) => LEGACY_AGILE_TOOL_ID_SET.has(t.toolType));
+  const hasUnified = tools.some((t) => t.toolType === "agile");
+  const withoutLegacy = tools.filter((t) => !LEGACY_AGILE_TOOL_ID_SET.has(t.toolType));
+  if (legacy.length === 0) return withoutLegacy;
+  if (hasUnified) return withoutLegacy;
+  const seed = legacy[0];
+  return [
+    ...withoutLegacy,
+    {
+      ...seed,
+      toolType: "agile",
+      label: "Agile",
+    },
+  ];
 }
 
 type PortfolioRow = { id: number; name: string; ownerId?: string | null };
@@ -847,11 +882,21 @@ export function CreateWorkItemWizard({
     return next;
   };
 
+/** Replace legacy Agile fragments with the unified `agile` tool id. */
+function normalizeSelectedTools(ids: string[]): string[] {
+  const hasLegacy = ids.some((id) => LEGACY_AGILE_TOOL_ID_SET.has(id));
+  const next = ids.filter((id) => !LEGACY_AGILE_TOOL_ID_SET.has(id));
+  if (hasLegacy && !next.includes("agile")) next.push("agile");
+  return Array.from(new Set(next));
+}
+
   const applyMethodology = (preset: MethodologyPreset) => {
     const editable = presetToEditablePhases(preset);
     setPhases(editable);
     const base = DEFAULT_TOOLS[wizardData.workType] || [...ALWAYS_TOOLS];
-    const merged = Array.from(new Set([...ALWAYS_TOOLS, ...base.filter((t) => preset.suggestedTools.includes(t) || ALWAYS_TOOLS.includes(t as any)), ...preset.suggestedTools]));
+    const merged = normalizeSelectedTools(
+      Array.from(new Set([...ALWAYS_TOOLS, ...base.filter((t) => preset.suggestedTools.includes(t) || ALWAYS_TOOLS.includes(t as any)), ...preset.suggestedTools])),
+    );
     updateField("methodologyId", preset.id);
     updateField("selectedTools", merged);
   };
@@ -859,7 +904,9 @@ export function CreateWorkItemWizard({
   const handleTypeSelect = (typeId: string) => {
     const rec = recommendedMethodologyId(typeId);
     const preset = METHODOLOGY_PRESETS.find((p) => p.id === rec) || METHODOLOGY_PRESETS.find((p) => p.id === "hybrid")!;
-    const defaults = Array.from(new Set([...(DEFAULT_TOOLS[typeId] || []), ...ALWAYS_TOOLS, ...preset.suggestedTools.slice(0, 8)]));
+    const defaults = normalizeSelectedTools(
+      Array.from(new Set([...(DEFAULT_TOOLS[typeId] || []), ...ALWAYS_TOOLS, ...preset.suggestedTools.slice(0, 8)])),
+    );
     setWizardData((prev) => ({
       ...prev,
       workType: typeId,
@@ -896,7 +943,7 @@ export function CreateWorkItemWizard({
   };
 
   const acceptSuggested = () => {
-    const tools = Array.from(new Set([...ALWAYS_TOOLS, ...activePreset.suggestedTools]));
+    const tools = normalizeSelectedTools(Array.from(new Set([...ALWAYS_TOOLS, ...activePreset.suggestedTools])));
     setWizardData((prev) => ({
       ...prev,
       selectedTools: tools,

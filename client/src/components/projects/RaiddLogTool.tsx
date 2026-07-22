@@ -29,13 +29,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  PmRiskLogIcon,
-  PmIssuesLogIcon,
-  PmAssumptionsLogIcon,
-  PmDependenciesLogIcon,
-  PmDecisionsLogIcon,
-} from "@/components/icons/ModuleIcons";
-import {
   X,
   Search,
   ChevronDown,
@@ -131,9 +124,6 @@ const LOG_CONFIG: Record<LogType, {
   addLabel: string;
   typeValue: string;
   codePrefix: string;
-  iconColor: string;
-  iconBg: string;
-  Icon: React.ComponentType<any>;
   columns: ColumnDef[];
   categories: string[];
   statusOptions: string[];
@@ -146,9 +136,6 @@ const LOG_CONFIG: Record<LogType, {
     addLabel: "Add Risk",
     typeValue: "risk",
     codePrefix: "R",
-    iconColor: "#ef4444",
-    iconBg: "rgba(239,68,68,0.1)",
-    Icon: PmRiskLogIcon,
     columns: [
       { key: "cb", label: "", visible: true, locked: true },
       { key: "code", label: "ID", visible: true },
@@ -179,9 +166,6 @@ const LOG_CONFIG: Record<LogType, {
     addLabel: "Add Assumption",
     typeValue: "assumption",
     codePrefix: "A",
-    iconColor: "#3b82f6",
-    iconBg: "rgba(59,130,246,0.1)",
-    Icon: PmAssumptionsLogIcon,
     columns: [
       { key: "cb", label: "", visible: true, locked: true },
       { key: "code", label: "ID", visible: true },
@@ -212,9 +196,6 @@ const LOG_CONFIG: Record<LogType, {
     addLabel: "Add Issue",
     typeValue: "issue",
     codePrefix: "I",
-    iconColor: "#f59e0b",
-    iconBg: "rgba(245,158,11,0.1)",
-    Icon: PmIssuesLogIcon,
     columns: [
       { key: "cb", label: "", visible: true, locked: true },
       { key: "code", label: "ID", visible: true },
@@ -246,9 +227,6 @@ const LOG_CONFIG: Record<LogType, {
     addLabel: "Add Dependency",
     typeValue: "dependency",
     codePrefix: "D",
-    iconColor: "#8b5cf6",
-    iconBg: "rgba(139,92,246,0.1)",
-    Icon: PmDependenciesLogIcon,
     columns: [
       { key: "cb", label: "", visible: true, locked: true },
       { key: "code", label: "ID", visible: true },
@@ -279,9 +257,6 @@ const LOG_CONFIG: Record<LogType, {
     addLabel: "Add Decision",
     typeValue: "decision",
     codePrefix: "DC",
-    iconColor: "#10b981",
-    iconBg: "rgba(16,185,129,0.1)",
-    Icon: PmDecisionsLogIcon,
     columns: [
       { key: "cb", label: "", visible: true, locked: true },
       { key: "code", label: "ID", visible: true },
@@ -893,14 +868,8 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
 
   return (
     <div className="flex flex-col h-full overflow-hidden" data-testid={`raidd-log-${logType}`}>
-      {/* Log Header */}
-      <div className="bg-background border-b px-5 py-3 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: config.iconBg }}>
-            <config.Icon className="h-4 w-4" style={{ color: config.iconColor }} />
-          </div>
-          <span className="text-sm font-bold text-foreground">{config.title}</span>
-        </div>
+      {/* Actions only — tool icon + name live in workspace topbar */}
+      <div className="bg-background border-b px-5 py-3 flex items-center justify-end shrink-0">
         <div className="flex gap-2 items-center">
           <div className="relative" ref={colsMenuRef}>
             <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => setShowColsMenu(!showColsMenu)} data-testid="button-columns">

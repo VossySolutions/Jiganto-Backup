@@ -4,6 +4,9 @@ interface SidebarStateContextType {
   isCollapsed: boolean;
   toggleCollapse: () => void;
   setCollapsed: (collapsed: boolean) => void;
+  /** When true, main rail stays collapsed (e.g. project workspace 52px mock). */
+  lockCollapsed: boolean;
+  setLockCollapsed: (locked: boolean) => void;
   hiddenModules: string[];
   toggleModuleVisibility: (moduleHref: string) => void;
   isModuleHidden: (moduleHref: string) => boolean;
@@ -25,10 +28,15 @@ export function SidebarStateProvider({ children }: { children: ReactNode }) {
   });
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [lockCollapsed, setLockCollapsed] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', String(isCollapsed));
   }, [isCollapsed]);
+
+  useEffect(() => {
+    if (lockCollapsed && !isCollapsed) setIsCollapsed(true);
+  }, [lockCollapsed, isCollapsed]);
 
   useEffect(() => {
     const closeOnDesktop = () => {
@@ -42,7 +50,15 @@ export function SidebarStateProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('hidden-modules', JSON.stringify(hiddenModules));
   }, [hiddenModules]);
 
-  const toggleCollapse = () => setIsCollapsed(prev => !prev);
+  const toggleCollapse = () => {
+    if (lockCollapsed) return;
+    setIsCollapsed((prev) => !prev);
+  };
+
+  const setCollapsed = (collapsed: boolean) => {
+    if (lockCollapsed && !collapsed) return;
+    setIsCollapsed(collapsed);
+  };
   
   const toggleModuleVisibility = (moduleHref: string) => {
     setHiddenModules(prev => 
@@ -58,7 +74,9 @@ export function SidebarStateProvider({ children }: { children: ReactNode }) {
     <SidebarStateContext.Provider value={{
       isCollapsed,
       toggleCollapse,
-      setCollapsed: setIsCollapsed,
+      setCollapsed,
+      lockCollapsed,
+      setLockCollapsed,
       hiddenModules,
       toggleModuleVisibility,
       isModuleHidden,

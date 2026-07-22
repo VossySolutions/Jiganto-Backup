@@ -7081,6 +7081,26 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     res.json(enriched || project);
   });
 
+  app.get("/api/pm/projects/:projectId/tool-badges", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
+    const projectId = Number(req.params.projectId);
+    const project = await storage.getPmProject(projectId);
+    if (!project) return res.status(404).json({ message: "Project not found" });
+    if (!assertRecordInWorkspace(req, res, project.clientId)) return;
+    try {
+      const { getProjectToolBadges } = await import("./lib/pm-tool-badges");
+      const badges = await getProjectToolBadges(projectId, tenantId, project);
+      if (!badges) return res.status(404).json({ message: "Project not found" });
+      res.json(badges);
+    } catch (err: any) {
+      console.error("GET /api/pm/projects/:projectId/tool-badges error:", err?.message || err);
+      res.status(500).json({ message: err?.message || "Failed to load tool badges" });
+    }
+  });
+
   app.post("/api/pm/projects", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
@@ -7130,8 +7150,18 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.get("/api/pm/projects/:projectId/tools", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const tools = await storage.getPmProjectTools(Number(req.params.projectId));
-    res.json(tools);
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
+    const projectId = Number(req.params.projectId);
+    try {
+      const { consolidateAgileProjectTools } = await import("./lib/consolidate-agile-tools");
+      const tools = await consolidateAgileProjectTools(projectId, tenantId);
+      res.json(tools);
+    } catch (err: any) {
+      console.error("GET /api/pm/projects/:projectId/tools error:", err?.message || err);
+      const tools = await storage.getPmProjectTools(projectId);
+      res.json(tools);
+    }
   });
 
   app.post("/api/pm/projects/:projectId/tools", async (req, res) => {
@@ -7642,7 +7672,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const projectId = Number(req.params.projectId);
-    const versions = await storage.getPmGanttVersions(projectId);
+    const versions = await storage.getPmGanttVersionSummaries(projectId);
     res.json(
       versions.map((v) => ({
         id: v.id,
@@ -7651,7 +7681,6 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
         isActive: v.isActive,
         date: (v.updatedAt || v.createdAt || new Date()).toISOString?.() ?? String(v.updatedAt || v.createdAt),
         createdAt: v.createdAt,
-        // omit heavy snapshot from list
       })),
     );
   });

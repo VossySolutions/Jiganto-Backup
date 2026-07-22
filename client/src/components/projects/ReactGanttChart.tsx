@@ -4,10 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getSupabaseAccessToken } from "@/lib/supabase-session";
 import type {
   PmProject,
-  PmProjectPhase,
   PmTask,
-  PmWorkstream,
-  PmMilestone,
 } from "@shared/models/projects";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -74,10 +71,6 @@ function safeDate(d?: string | Date | null, fallback = "2025-01-01"): string {
   const day = String(dt.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
-
-// ID namespacing: keep Jiganto DB IDs out of conflict
-const PFX = { project: 1, phase: 1000, ws: 2000, task: 3000, ms: 4000 };
-
 interface V4Task {
   id: number;
   name: string;
@@ -133,19 +126,28 @@ function teamMemberDisplayName(m: TeamMember): string {
   );
 }
 
+// Project root is synthetic id 1; all other rows use real pm_tasks.id
+const PROJECT_ROW_ID = 1;
+
+function ganttTypeToEngineType(ganttType?: string | null, isSummary?: boolean | null): number {
+  const t = (ganttType || "").toLowerCase();
+  if (t === "phase") return 2;
+  if (t === "workstream") return 3;
+  if (t === "activity" || t === "summary") return 4;
+  if (t === "milestone") return 6;
+  if (isSummary) return 4;
+  return 5;
+}
+
 function buildGanttData(
   project: PmProject,
-  phases: PmProjectPhase[],
-  workstreams: PmWorkstream[],
   tasks: PmTask[],
-  milestones: PmMilestone[],
   team: TeamMember[]
 ): GanttInitData {
   const items: V4Task[] = [];
   const today = new Date().toISOString().split("T")[0];
   const oneYearLater = new Date(Date.now() + 365 * 864e5).toISOString().split("T")[0];
 
-  // Build owner name map
   const ownerMap = new Map<string, string>();
   const ownerIdMap: Record<string, string> = {};
   team.forEach((m) => {
@@ -158,12 +160,11 @@ function buildGanttData(
     }
   });
 
-  // Project (type 1)
   const projRag = mapRag(project.ragStatus);
   const projBgt = mapRag((project as { financialRag?: string | null }).financialRag);
   const projSch = mapRag((project as { scheduleRag?: string | null }).scheduleRag);
   items.push({
-    id: PFX.project,
+    id: PROJECT_ROW_ID,
     name: project.name,
     type: 1,
     owner: "",
@@ -182,93 +183,32 @@ function buildGanttData(
     wbs: "",
   });
 
-  // Phases (type 2)
-  phases.forEach((ph) => {
-    const phRags = deriveItemRags(
-      mapRag(ph.ragStatus),
-      ph.progress ?? 0,
-      ph.status,
-      ph.plannedStartDate,
-      ph.plannedEndDate
-    );
-    items.push({
-      id: PFX.phase + ph.id,
-      name: ph.name,
-      type: 2,
-      owner: "",
-      start: safeDate(ph.plannedStartDate, today),
-      end: safeDate(ph.plannedEndDate, oneYearLater),
-      prog: ph.progress ?? 0,
-      ...phRags,
-      parent: PFX.project,
-      predId: null,
-      depType: "FS",
-      notes: (ph as any).description ?? "",
-      color: "#0891b2",
-      wbs: (ph as { wbsCode?: string }).wbsCode || "",
-    });
-  });
+  const idSet = new Set(tasks.map((t) => t.id));
 
-  // Workstreams (type 3)
-  workstreams.forEach((ws) => {
-    const parentId = ws.phaseId ? PFX.phase + ws.phaseId : PFX.project;
-    const phStart = ws.phaseId
-      ? safeDate(phases.find((p) => p.id === ws.phaseId)?.plannedStartDate, today)
-      : today;
-    const phEnd = ws.phaseId
-      ? safeDate(phases.find((p) => p.id === ws.phaseId)?.plannedEndDate, oneYearLater)
-      : oneYearLater;
-    const wsRags = deriveItemRags(
-      mapRag(ws.ragStatus),
-      ws.progress ?? 0,
-      ws.status,
-      ws.plannedStartDate ?? phStart,
-      ws.plannedEndDate ?? phEnd
-    );
-    items.push({
-      id: PFX.ws + ws.id,
-      name: ws.name,
-      type: 3,
-      owner: "",
-      start: safeDate(ws.plannedStartDate, phStart),
-      end: safeDate(ws.plannedEndDate, phEnd),
-      prog: ws.progress ?? 0,
-      ...wsRags,
-      parent: parentId,
-      predId: null,
-      depType: "FS",
-      notes: (ws as any).description ?? "",
-      color: "#059669",
-      wbs: ws.wbsCode || "",
-    });
-  });
-
-  // Tasks & sub-tasks (type 4 = summary, 5 = task) — skip milestone-type rows (milestones table below)
-  tasks.filter((t) => t.ganttType !== "milestone").forEach((t) => {
-    const type = t.isSummary ? 4 : 5;
-
-    let parentId: number;
-    if (t.parentTaskId) {
-      parentId = PFX.task + t.parentTaskId;
-    } else if (t.phaseId) {
-      parentId = PFX.phase + t.phaseId;
-    } else {
-      parentId = PFX.project;
+  tasks.forEach((t) => {
+    const type = ganttTypeToEngineType(t.ganttType, t.isSummary);
+    let parentId: number | null = PROJECT_ROW_ID;
+    if (t.parentTaskId && t.parentTaskId !== t.id && idSet.has(t.parentTaskId)) {
+      parentId = t.parentTaskId;
     }
-
     const ownerName = t.assigneeId ? ownerMap.get(t.assigneeId) ?? "" : "";
-    const predId =
-      t.predecessorIds && t.predecessorIds.length > 0
-        ? PFX.task + t.predecessorIds[0]
-        : null;
-
+    const predRaw = t.predecessorIds && t.predecessorIds.length > 0 ? t.predecessorIds[0] : null;
+    const predId = predRaw && idSet.has(predRaw) ? predRaw : null;
     const start = safeDate(t.plannedStartDate, today);
-    const end = safeDate(t.plannedEndDate, start);
-
-    const scopeRag = mapRag((t as { ragStatus?: string | null }).ragStatus) || mapTaskVisualRag(t.status, t.progress ?? 0);
+    const end = type === 6 ? start : safeDate(t.plannedEndDate, start);
+    const scopeRag =
+      mapRag((t as { ragStatus?: string | null }).ragStatus) ||
+      mapTaskVisualRag(t.status, t.progress ?? 0);
     const taskRags = deriveItemRags(scopeRag, t.progress ?? 0, t.status, start, end);
+    const colors: Record<number, string> = {
+      2: "#0891b2",
+      3: "#059669",
+      4: "#64748b",
+      5: "#64748b",
+      6: "#f59e0b",
+    };
     items.push({
-      id: PFX.task + t.id,
+      id: t.id,
       name: t.name,
       type,
       owner: ownerName,
@@ -280,58 +220,33 @@ function buildGanttData(
       predId,
       depType: "FS",
       notes: t.description ?? "",
-      color: "#64748b",
+      color: colors[type] || "#64748b",
       wbs: t.wbsCode || "",
     });
   });
 
-  // Milestones from the milestones table (type 6)
-  milestones.forEach((ms) => {
-    const parentId = ms.phaseId ? PFX.phase + ms.phaseId : PFX.project;
-    const d = safeDate(ms.dueDate, today);
-    const msScope = mapRag(ms.ragStatus);
-    const msProg = ms.status === "completed" ? 100 : 0;
-    const msRags = deriveItemRags(msScope, msProg, ms.status, d, d);
-    items.push({
-      id: PFX.ms + ms.id,
-      name: ms.name,
-      type: 6,
-      owner: "",
-      start: d,
-      end: d,
-      prog: msProg,
-      ...msRags,
-      parent: parentId,
-      predId: null,
-      depType: "FS",
-      notes: (ms as any).notes ?? "",
-      color: "#f59e0b",
-      wbs: (ms as any).wbsCode || "",
-    });
-  });
-
-  const ownerNamesFromTeam = team
-    .map((m) => teamMemberDisplayName(m))
-    .filter(Boolean);
-  const owners = Array.from(new Set([...ownerNamesFromTeam, ...items.map((t) => t.owner).filter(Boolean)]));
+  const ownerNamesFromTeam = team.map((m) => teamMemberDisplayName(m)).filter(Boolean);
+  const owners = Array.from(
+    new Set([...ownerNamesFromTeam, ...items.map((t) => t.owner).filter(Boolean)])
+  );
+  const maxId = tasks.reduce((m, t) => Math.max(m, t.id), PROJECT_ROW_ID);
   return {
     tasks: items,
     owners,
     ownerIdMap,
-    nextId: 5000,
+    nextId: Math.max(maxId + 1, 100000),
     projectId: project.id,
     tenantId: project.tenantId,
     projectName: project.name,
   };
 }
 
-// ── Build the srcdoc HTML (links to public/ files, injects data JSON) ─────────
 function buildSrcDoc(data: GanttInitData, projectName: string): string {
   const dataJson = JSON.stringify(data);
 
   const toolbarHTML = `
 <div class="gtb" id="ganttToolbar">
-  <span class="zoom-to-label">Zoom to:</span>
+  <span class="zoom-to-label">Zoom:</span>
   <select class="tb-select zoom-to-select" id="zoomToSelect" onchange="setZoom(this.value)">
     <option value="day">Day</option>
     <option value="week" selected>Week</option>
@@ -343,7 +258,9 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
   <span style="font-size:10px;color:var(--g500);font-weight:600;flex-shrink:0;">FILTER</span>
   <select class="tb-select" id="f-level" onchange="renderAll()">
     <option value="">All types</option>
+    <option value="0">Program</option>
     <option value="1">Project</option>
+    <option value="7">Release</option>
     <option value="2">Phase</option>
     <option value="3">Workstream</option>
     <option value="4">Activity</option>
@@ -354,16 +271,26 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
     <option value="">All owners</option>
   </select>
   <div class="tb-filter-wrap" id="ragFilterWrap">
-    <button type="button" class="tb-filter-btn" id="ragFilterBtn" onclick="toggleRagFilterMenu(event)" title="Filter by RAG" aria-label="Filter by RAG">
+    <button type="button" class="tb-filter-btn" id="ragFilterBtn" onclick="toggleRagFilterMenu(event)" title="Filter by Budget / Schedule / Scope RAG" aria-label="Filter by RAG">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
     </button>
-    <div class="tb-filter-menu" id="ragFilterMenu" hidden>
-      <button type="button" class="tb-filter-opt on" data-rag="" onclick="setRagFilter('',this)">All RAG</button>
-      <button type="button" class="tb-filter-opt" data-rag="g" onclick="setRagFilter('g',this)">🟢 Green</button>
-      <button type="button" class="tb-filter-opt" data-rag="a" onclick="setRagFilter('a',this)">🟡 Amber</button>
-      <button type="button" class="tb-filter-opt" data-rag="r" onclick="setRagFilter('r',this)">🔴 Red</button>
+    <div class="tb-filter-menu rag-filter-menu" id="ragFilterMenu" hidden>
+      <button type="button" class="tb-filter-opt on" data-rag-key="" onclick="setRagFilter('','',this)">All RAG</button>
+      <div class="rag-filter-sec">Budget</div>
+      <button type="button" class="tb-filter-opt" data-rag-key="bgt:g" onclick="setRagFilter('bgt','g',this)">🟢 Budget · Green</button>
+      <button type="button" class="tb-filter-opt" data-rag-key="bgt:a" onclick="setRagFilter('bgt','a',this)">🟡 Budget · Amber</button>
+      <button type="button" class="tb-filter-opt" data-rag-key="bgt:r" onclick="setRagFilter('bgt','r',this)">🔴 Budget · Red</button>
+      <div class="rag-filter-sec">Schedule</div>
+      <button type="button" class="tb-filter-opt" data-rag-key="sch:g" onclick="setRagFilter('sch','g',this)">🟢 Schedule · Green</button>
+      <button type="button" class="tb-filter-opt" data-rag-key="sch:a" onclick="setRagFilter('sch','a',this)">🟡 Schedule · Amber</button>
+      <button type="button" class="tb-filter-opt" data-rag-key="sch:r" onclick="setRagFilter('sch','r',this)">🔴 Schedule · Red</button>
+      <div class="rag-filter-sec">Scope</div>
+      <button type="button" class="tb-filter-opt" data-rag-key="scp:g" onclick="setRagFilter('scp','g',this)">🟢 Scope · Green</button>
+      <button type="button" class="tb-filter-opt" data-rag-key="scp:a" onclick="setRagFilter('scp','a',this)">🟡 Scope · Amber</button>
+      <button type="button" class="tb-filter-opt" data-rag-key="scp:r" onclick="setRagFilter('scp','r',this)">🔴 Scope · Red</button>
     </div>
   </div>
+  <input type="hidden" id="f-rag-dim" value="">
   <input type="hidden" id="f-rag" value="">
   <input class="tb-search" id="f-search" placeholder="Search tasks…" oninput="renderAll()">
   <div class="gtb-sep"></div>
@@ -398,18 +325,12 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
     </div>
   </div>
   <div class="gtb-sep"></div>
-  <div class="cp-toggle" id="cpBtn" onclick="toggleCP()" title="Highlight critical path">Critical path</div>
-  <div class="dep-draw-btn" id="depDrawBtn" onclick="toggleDepDraw()" title="Click two bars to draw a dependency">🔗 Draw Dep</div>
-  <div class="dep-draw-types" id="depDrawTypes" hidden>
-    <button type="button" class="dep-opt sel" data-dep="FS" onclick="selDep(this,'FS')" title="Finish-to-Start">FS</button>
-    <button type="button" class="dep-opt" data-dep="SS" onclick="selDep(this,'SS')" title="Start-to-Start">SS</button>
-    <button type="button" class="dep-opt" data-dep="EE" onclick="selDep(this,'EE')" title="Finish-to-Finish">FF</button>
-  </div>
+  <div class="cp-toggle" id="cpBtn" onclick="toggleCP()" title="Highlight the longest zero-slack chain. Requires predecessor links (Pred column or Edit).">Critical path</div>
   <div class="gtb-actions">
-    <button type="button" class="btn-icon" id="undoBtn" onclick="undo()" disabled title="Undo (Ctrl+Z)" aria-label="Undo">
+    <button type="button" class="btn-icon" id="undoBtn" onclick="undo()" disabled title="Undo last change in this session (does not reverse a saved server write)" aria-label="Undo">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6.7 3L3 13"/></svg>
     </button>
-    <button type="button" class="btn-icon" id="redoBtn" onclick="redo()" disabled title="Redo (Ctrl+Y)" aria-label="Redo">
+    <button type="button" class="btn-icon" id="redoBtn" onclick="redo()" disabled title="Redo (this session)" aria-label="Redo">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3L21 13"/></svg>
     </button>
     <div class="gtb-sep"></div>
@@ -422,10 +343,10 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
     <button type="button" class="btn-icon" onclick="outdentTask()" title="Outdent — move up one level (like Excel)" aria-label="Outdent">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M11 12h10M7 10L3 12l4 2M3 18h18"/></svg>
     </button>
-    <button type="button" class="btn-icon" onclick="collapseAll()" title="Collapse all" aria-label="Collapse all">
+    <button type="button" class="btn-icon" onclick="collapseAll()" title="Collapse selected folder (and subfolders), or all if none selected" aria-label="Collapse">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 12h8"/></svg>
     </button>
-    <button type="button" class="btn-icon" onclick="expandAll()" title="Expand all" aria-label="Expand all">
+    <button type="button" class="btn-icon" onclick="expandAll()" title="Expand selected folder (and subfolders), or all if none selected" aria-label="Expand">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>
     </button>
     <div class="gtb-sep"></div>
@@ -436,9 +357,13 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9"/><path d="M7 14l5-5 5 5"/><path d="M5 3h14"/></svg>
     </button>
     <div class="view-group">
-      <button type="button" class="vb on" id="viewGanttBtn" onclick="setView('gantt',this)">📅 Gantt</button>
-      <button type="button" class="vb" id="viewListBtn" onclick="setView('list',this)">≡ List</button>
+      <button type="button" class="vb on" id="viewGanttBtn" onclick="setView('gantt',this)">Gantt</button>
+      <button type="button" class="vb" id="viewListBtn" onclick="setView('list',this)">List</button>
     </div>
+    <div class="gtb-sep"></div>
+    <button type="button" class="btn-icon" id="fullscreenBtn" onclick="toggleFullscreen()" title="Fullscreen" aria-label="Fullscreen">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+    </button>
   </div>
 </div>`;
 
@@ -451,25 +376,21 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
           <div class="th-cell th-wbs">#</div>
           <div class="th-cell th-name">Task name</div>
           <div class="th-cell th-owner">Owner</div>
-          <div class="th-cell th-date">Start time</div>
+          <div class="th-cell th-date">Start</div>
           <div class="th-cell th-date">End</div>
           <div class="th-cell th-dur">Duration</div>
-          <div class="th-cell th-pred">Predecessors</div>
+          <div class="th-cell th-pred" title="Predecessor links drive Critical path — click a cell to set">Pred</div>
           <div class="th-cell th-prog">%</div>
           <div class="th-cell th-rag-col">Budget</div>
           <div class="th-cell th-rag-col">Sched</div>
           <div class="th-cell th-rag-col">Scope</div>
           <div id="tpCustomHeaders" class="tp-custom-headers"></div>
-          <div class="th-cell th-add-col" onclick="promptAddColumn()" title="Add a Column">Add a Column</div>
+          <div class="th-cell th-add-col" onclick="promptAddColumn()" title="Add a column" aria-label="Add column"><span class="th-add-plus">+</span></div>
           <div class="grid-filler"></div>
         </div>
         <div class="tp-scroll" id="taskScroll"></div>
       </div>
-      <div class="add-row">
-        <button class="add-new-item-btn" onclick="addNewItem()" title="Add a new work item">+ Add a New Item</button>
-        <button class="add-btn-mini" onclick="addItemOfTypeAfterSelected('phase')">＋ Phase</button>
-        <button class="add-btn-mini" onclick="addItemOfTypeAfterSelected('milestone')">◆ Milestone</button>
-      </div>
+      <div class="panel-hscroll-pad" aria-hidden="true"></div>
     </div>
     <div class="panel-splitter" id="panelSplitter" title="Drag to resize columns"></div>
     <div class="timeline-panel">
@@ -485,23 +406,9 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
           <svg class="dep-svg" id="depSvg"></svg>
         </div>
       </div>
-      <div class="tl-panel-footer" aria-hidden="true"></div>
     </div>
   </div>
   <div class="list-view" id="listView" hidden></div>
-</div>
-<div class="gantt-bottom-bar" id="ganttBottomBar">
-  <label class="dhx-switch"><input type="checkbox" id="switchCollapse" onchange="toggleCollapseRows(true)"><span class="slider"></span>Collapse rows</label>
-  <label class="dhx-switch"><input type="checkbox" id="switchAutoSched" onchange="toggleAutoSchedule(true)"><span class="slider"></span>Auto scheduling</label>
-  <label class="dhx-switch"><input type="checkbox" id="switchCP" onchange="toggleCP(true)"><span class="slider"></span>Critical path</label>
-  <label class="dhx-switch"><input type="checkbox" id="switchZoomFit" onchange="toggleZoomFit(true)"><span class="slider"></span>Zoom to fit</label>
-  <div class="bottom-exports">
-    <button class="btn btn-export-outline" onclick="exportGanttPDF(event)">Export to PDF</button>
-    <button class="btn btn-export-outline" onclick="exportGanttPNG(event)">Export to PNG</button>
-    <button class="btn btn-export-outline" onclick="downloadCurrentPlan(event)">Export to Excel</button>
-    <button class="btn btn-export-outline" onclick="downloadMSProject(event)">Export to MS Project</button>
-  </div>
-  <button class="btn btn-p btn-fullscreen" onclick="toggleFullscreen()" title="Fullscreen">FULLSCREEN</button>
 </div>`;
 
   const modalsHTML = `
@@ -518,9 +425,8 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
       </div>
       <div class="fr">
         <div class="fg">
-          <label class="fl">Type</label>
-          <select id="m-type" class="fi">
-            <option value="1">Project</option>
+          <label class="fl">Type <span class="fl-hint">change anytime (same item)</span></label>
+          <select id="m-type" class="fi" title="Type changes how this row behaves; it stays the same work item">
             <option value="2">Phase</option>
             <option value="3">Workstream</option>
             <option value="4">Activity</option>
@@ -561,7 +467,7 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
           <select id="m-parent" class="fi"></select>
         </div>
         <div class="fg">
-          <label class="fl">Predecessor</label>
+          <label class="fl">Predecessor <span class="fl-hint">links Critical path</span></label>
           <select id="m-pred" class="fi" onchange="onPredChange()"></select>
         </div>
       </div>
@@ -666,8 +572,7 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${projectName.replace(/</g, "&lt;")} — Gantt</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260721q">
+<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260722q">
 </head>
 <body>
 <div class="main">
@@ -676,7 +581,7 @@ ${ganttBodyHTML}
 </div>
 ${modalsHTML}
 <script>window.GANTT_INIT_DATA = ${dataJson};</script>
-<script src="/gantt-v4-engine.js?v=20260721q"></script>
+<script src="/gantt-v4-engine.js?v=20260722q"></script>
 </body>
 </html>`;
 }
@@ -715,7 +620,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
         return (
           s.includes(`/api/pm/projects/${projectId}`) ||
           s.includes(`/api/pm/projects|${projectId}`) ||
-          s.includes(`workstreams?projectId=${projectId}`)
+          s.includes(`/api/pm/projects/${projectId}/tasks`)
         );
       },
       refetchType: "none",
@@ -743,7 +648,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
               return (
                 s.includes(`/api/pm/projects/${projectId}`) ||
                 s.includes(`/api/pm/projects|${projectId}`) ||
-                s.includes(`workstreams?projectId=${projectId}`)
+                s.includes(`/api/pm/projects/${projectId}/tasks`)
               );
             },
           })
@@ -760,38 +665,20 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
   }, [projectId, softInvalidateGantt, queryClient]);
 
   const { data: project, isLoading: pjL } = useQuery<PmProject>({
-    queryKey: [`/api/pm/projects/${projectId}`],
+    queryKey: ["/api/pm/projects", projectId],
     enabled: !!projectId,
-    staleTime: 30_000,
-  });
-  const { data: phases = [], isLoading: phL } = useQuery<PmProjectPhase[]>({
-    queryKey: [`/api/pm/projects/${projectId}/phases`],
-    enabled: !!projectId,
-    staleTime: 30_000,
-  });
-  const { data: workstreams = [], isLoading: wsL } = useQuery<PmWorkstream[]>({
-    queryKey: [`/api/pm/workstreams?projectId=${projectId}`],
-    enabled: !!projectId,
-    staleTime: 30_000,
   });
   const { data: dbTasks = [], isLoading: tkL } = useQuery<PmTask[]>({
-    queryKey: [`/api/pm/projects/${projectId}/tasks`],
+    queryKey: ["/api/pm/projects", projectId, "tasks"],
     enabled: !!projectId,
-    staleTime: 30_000,
-  });
-  const { data: milestones = [], isLoading: msL } = useQuery<PmMilestone[]>({
-    queryKey: [`/api/pm/projects/${projectId}/milestones`],
-    enabled: !!projectId,
-    staleTime: 30_000,
   });
   const { data: team = [], isLoading: tmL } = useQuery<TeamMember[]>({
-    queryKey: [`/api/pm/projects/${projectId}/team`],
+    queryKey: ["/api/pm/projects", projectId, "team"],
     enabled: !!projectId,
-    staleTime: 30_000,
   });
 
   const authReady = authToken !== undefined;
-  const isLoading = pjL || phL || wsL || tkL || msL || tmL || !authReady;
+  const isLoading = pjL || tkL || tmL || !authReady;
 
   // Reset bootstrap when switching projects
   useEffect(() => {
@@ -808,14 +695,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
     if (bootstrappedKeyRef.current === bootKey) return;
     bootstrappedKeyRef.current = bootKey;
     const data: GanttInitData = {
-      ...buildGanttData(
-        project,
-        phases as PmProjectPhase[],
-        workstreams as PmWorkstream[],
-        dbTasks as PmTask[],
-        milestones as PmMilestone[],
-        team as TeamMember[]
-      ),
+      ...buildGanttData(project, dbTasks as PmTask[], team as TeamMember[]),
       authToken: authToken || undefined,
     };
     setSrcDoc(buildSrcDoc(data, project.name));
@@ -824,7 +704,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
 
   if (isLoading || !srcDoc) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16, height: "100%" }}>
+      <div className="flex h-full flex-col gap-3 p-4">
         <Skeleton className="h-10 w-full rounded-lg" />
         <Skeleton className="h-12 w-full rounded-lg" />
         <Skeleton className="flex-1 w-full rounded-lg" />
@@ -834,7 +714,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
 
   if (!project) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: 14, color: "#64748b" }}>
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
         Project not found.
       </div>
     );
@@ -842,10 +722,10 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
 
   return (
     <iframe
-      key={`gantt-${projectId}-v20260721q-${versionReloadKey}`}
+      key={`gantt-${projectId}-v20260722r-${versionReloadKey}`}
       title={`Gantt — ${project.name}`}
       srcDoc={srcDoc}
-      style={{ width: "100%", height: "100%", minHeight: 400, border: "none", display: "block" }}
+      className="block h-full w-full border-0"
       sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
       allow="fullscreen"
       allowFullScreen

@@ -53,6 +53,7 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
+import { AppKanbanBoard } from "@/components/kanban";
 import {
   PmProjectIcon,
   PmStatActiveIcon,
@@ -544,7 +545,7 @@ function ProjectTable({
                     "border-b border-border/40 cursor-pointer hover:bg-muted/30",
                     p.attention && "bg-red-50/40 dark:bg-red-950/10",
                   )}
-                  onClick={() => onOpen(p)}
+                  onClick={() => onOpenWorkspace(p.id)}
                   data-testid={`table-row-${p.id}`}
                 >
                   <td className="px-3 py-2.5 align-middle">
@@ -627,7 +628,8 @@ function ProjectTable({
                         size="icon"
                         className="h-8 w-8 text-muted-foreground"
                         onClick={() => onOpen(p)}
-                        title="Quick view"
+                        title="Preview project"
+                        data-testid={`button-preview-${p.id}`}
                       >
                         <ExternalLink className="h-4 w-4" />
                       </Button>
@@ -682,7 +684,7 @@ function ProjectCards({
               "hover:border-[#818CF8] hover:shadow-[0_4px_16px_rgba(67,56,202,0.1)] hover:-translate-y-px",
               edge,
             )}
-            onClick={() => onOpen(p)}
+            onClick={() => onOpenWorkspace(p.id)}
             data-testid={`card-project-${p.id}`}
           >
             <div className="px-4 py-3.5 border-b border-[#F1F5F9]">
@@ -730,10 +732,20 @@ function ProjectCards({
               <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                 <Button
                   size="sm"
+                  variant="outline"
+                  className="h-7 px-2.5 text-[11px] font-semibold"
+                  onClick={() => onOpen(p)}
+                  data-testid={`button-preview-card-${p.id}`}
+                >
+                  Preview
+                </Button>
+                <Button
+                  size="sm"
                   className="h-7 px-2.5 text-[11px] font-bold bg-[#4338CA] hover:bg-[#3730A3] text-white"
                   onClick={() => onOpenWorkspace(p.id)}
+                  data-testid={`button-open-card-${p.id}`}
                 >
-                  Open →
+                  Open workspace →
                 </Button>
               </div>
             </div>
@@ -1045,7 +1057,7 @@ export function ProjectsLandingView({
         <ModuleHeader
           icon={PmProjectIcon}
           title="Projects"
-          subtitle="Manage your project portfolio"
+          subtitle="Click a project to open its workspace"
           searchPlaceholder="Search projects..."
           searchValue={searchQuery}
           onSearchChange={(v) => { setSearchQuery(v); }}
@@ -1289,7 +1301,12 @@ export function ProjectsLandingView({
                 />
               </>
             )}
-            {viewMode === "kanban" && <ProjectKanban projects={filtered} onOpen={openPreview} />}
+            {viewMode === "kanban" && (
+              <ProjectKanban
+                projects={filtered}
+                onOpen={(p) => onOpenProject(p.id)}
+              />
+            )}
           </>
         )}
       </div>
@@ -1439,6 +1456,17 @@ function ProjectDetailPanel({
 
         <div className="p-3.5 px-5 border-t flex flex-col gap-2">
           <Button
+            className="w-full bg-[#4338CA] hover:bg-[#3730A3]"
+            onClick={() => {
+              onOpenChange(false);
+              onOpenWorkspace(project.id);
+            }}
+            data-testid="button-open-workspace"
+          >
+            Open project workspace <ArrowRight className="h-3.5 w-3.5 ml-1" />
+          </Button>
+          <Button
+            variant="outline"
             className="w-full"
             onClick={() => {
               onOpenChange(false);
@@ -1447,17 +1475,6 @@ function ProjectDetailPanel({
             data-testid="button-edit-project"
           >
             Edit project
-          </Button>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => {
-              onOpenChange(false);
-              onOpenWorkspace(project.id);
-            }}
-            data-testid="button-open-workspace"
-          >
-            Open project workspace <ArrowRight className="h-3.5 w-3.5 ml-1" />
           </Button>
         </div>
       </SheetContent>

@@ -1,10 +1,9 @@
-﻿import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
+﻿import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ModuleShell } from "@/components/ModuleShell";
 import {
@@ -14,15 +13,23 @@ import {
 import { cn } from "@/lib/utils";
 import { ProjectsLandingView } from "@/components/projects/ProjectsLanding";
 import {
+  ProjectWorkspaceSidebar,
+  type ProjectToolBadges,
+} from "@/components/projects/ProjectWorkspaceSidebar";
+import {
   CreateWorkItemWizard,
   WORK_TYPES,
   MASTER_TOOL_ORDER,
   findToolDefinition,
-  getAllToolIds,
+  coalesceAgileTools,
+  LEGACY_AGILE_TOOL_ID_SET,
 } from "@/components/projects/CreateWorkItemWizard";
+import { useSidebarState } from "@/hooks/use-sidebar-state";
+import type { AgilePipelineStageId } from "@/components/projects/AgileWorkspace";
+import { LEGACY_AGILE_TO_STAGE } from "@/components/projects/AgileWorkspace";
 
-const AgileBoard = lazy(() => import("@/components/projects/AgileBoard"));
-const AgileDashboard = lazy(() => import("@/components/projects/AgileDashboard"));
+const AgileWorkspace = lazy(() => import("@/components/projects/AgileWorkspace"));
+const ProjectOverview = lazy(() => import("@/components/projects/ProjectOverview"));
 const RaiddLogTool = lazy(() => import("@/components/projects/RaiddLogTool"));
 const DeliverablesTracker = lazy(() => import("@/components/projects/DeliverablesTracker"));
 const ProjectWhiteboardTool = lazy(() =>
@@ -56,13 +63,12 @@ const PmSowTrackerTool = lazy(() => import("@/components/projects/PmSecondaryToo
 const PmWbsTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmWbsTool })));
 
 import {
-  Plus,
-  ChevronRight,
   Loader2,
-  X,
+  ChevronLeft,
   Maximize2,
   Minimize2,
-  ChevronLeft,
+  Plus,
+  X,
   MoreHorizontal,
   LayoutTemplate,
 } from "lucide-react";
@@ -82,82 +88,33 @@ import {
 
 type ViewMode = "dashboard" | "new" | "project";
 
-const TYPE_COLORS: Record<string, string> = {
-  programme: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  project: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
-  poc: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
-  campaign: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
-  pilot: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  initiative: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300",
-  sprint: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  change_request: "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300",
-  portfolio: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
-  sub_project: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300",
-  user_defined: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-};
-
-const LEGACY_TYPE_MAP: Record<string, string> = {
-  simple_board: "project",
-  business_initiative: "initiative",
-  small_project: "project",
-  large_project: "programme",
-};
-
-function getWorkTypeLabel(type: string): string {
-  const allTypes = [...WORK_TYPES.main, ...WORK_TYPES.extended];
-  const found = allTypes.find((t) => t.id === type);
-  return found?.name || type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-const STATUS_COLORS: Record<string, { bg: string; dot: string }> = {
-  active: { bg: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300", dot: "bg-green-500" },
-  planning: { bg: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300", dot: "bg-yellow-500" },
-  draft: { bg: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400", dot: "bg-gray-400" },
-  on_hold: { bg: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300", dot: "bg-orange-500" },
-  completed: { bg: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300", dot: "bg-green-600" },
-  cancelled: { bg: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300", dot: "bg-red-500" },
-};
-
-const HEALTH_CONFIG: Record<string, { bg: string; text: string; label: string; dot: string }> = {
-  green: { bg: "bg-green-100 dark:bg-green-900/30", text: "text-green-700 dark:text-green-300", label: "On Track", dot: "bg-green-500" },
-  amber: { bg: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300", label: "At Risk", dot: "bg-amber-500" },
-  red: { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-300", label: "Off Track", dot: "bg-red-500" },
-  blue: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-300", label: "Not Started", dot: "bg-blue-500" },
-};
-
-function TypeBadge({ type }: { type: string | null | undefined }) {
-  const raw = type || "project";
-  const t = LEGACY_TYPE_MAP[raw] || raw;
-  const colors = TYPE_COLORS[t] || TYPE_COLORS.project;
-  const label = getWorkTypeLabel(t);
-  return (
-    <Badge variant="outline" className={cn("text-xs font-semibold border-0 rounded-full", colors)} data-testid={`badge-type-${t}`}>
-      {label}
-    </Badge>
-  );
-}
-
-function StatusBadge({ status }: { status: string | null | undefined }) {
-  const s = status || "draft";
-  const config = STATUS_COLORS[s] || STATUS_COLORS.draft;
-  const label = s.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-  return (
-    <Badge variant="outline" className={cn("text-xs font-semibold border-0 rounded-full gap-1.5", config.bg)} data-testid={`badge-status-${s}`}>
-      <span className={cn("h-1.5 w-1.5 rounded-full", config.dot)} />
-      {label}
-    </Badge>
-  );
-}
-
-function HealthPill({ health }: { health: string | null | undefined }) {
-  const h = health || "green";
-  const config = HEALTH_CONFIG[h] || HEALTH_CONFIG.green;
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap", config.bg, config.text)} data-testid={`health-${h}`}>
-      <span className={cn("h-1.5 w-1.5 rounded-full", config.dot)} />
-      {config.label}
-    </span>
-  );
+function buildToolSubtitle(
+  toolId: string,
+  project: any,
+  badges?: ProjectToolBadges | null,
+): string {
+  const code = project.code ? ` · ${project.code}` : "";
+  const b = badges?.badges?.[toolId];
+  switch (toolId) {
+    case "agile":
+      return "Epic → Feature → Story → AC → Test → Sprint → Defect";
+    case "project_dashboard":
+      return `Project summary, health & activity${code}`;
+    case "360_report":
+      return `Full project health — for PM & Programme Manager${code}`;
+    case "gantt_chart":
+      return b?.count != null
+        ? `${b.count} timeline instance${b.count === 1 ? "" : "s"}`
+        : "Timeline & dependencies";
+    case "tracking_board":
+      return b?.count != null
+        ? `${b.count} board${b.count === 1 ? "" : "s"}`
+        : "Lightweight flexible tracking";
+    default: {
+      const def = findToolDefinition(toolId);
+      return def?.name ? `${def.name}${code}` : "Project tool";
+    }
+  }
 }
 
 function ProjectDetailView({
@@ -168,19 +125,16 @@ function ProjectDetailView({
   onBack: () => void;
 }) {
   const [activeTool, setActiveTool] = useState<string>("");
-  const [showMoreTools, setShowMoreTools] = useState(false);
-  const [dragTabIdx, setDragTabIdx] = useState<number | null>(null);
-  const [dragOverTabIdx, setDragOverTabIdx] = useState<number | null>(null);
-  const [editingName, setEditingName] = useState(false);
-  const [editNameValue, setEditNameValue] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
-  const nameInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { setCollapsed, setLockCollapsed } = useSidebarState();
 
-  const tabsScrollRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
+  useEffect(() => {
+    setLockCollapsed(true);
+    setCollapsed(true);
+    return () => setLockCollapsed(false);
+  }, [projectId, setCollapsed, setLockCollapsed]);
 
   const { data: project, isLoading: projectLoading } = useQuery<any>({
     queryKey: ["/api/pm/projects", projectId],
@@ -190,50 +144,41 @@ function ProjectDetailView({
     queryKey: ["/api/pm/projects", projectId, "tools"],
   });
 
+  // Prefetch badges + warm heavy tool data in background
+  useEffect(() => {
+    if (!projectId) return;
+    void queryClient.prefetchQuery({ queryKey: ["/api/pm/projects", projectId, "tool-badges"] });
+    void queryClient.prefetchQuery({ queryKey: ["/api/pm/projects", projectId, "team"] });
+    void queryClient.prefetchQuery({ queryKey: ["/api/pm/projects", projectId, "tasks"] });
+  }, [projectId]);
+
+  const { data: badgeData } = useQuery<ProjectToolBadges>({
+    queryKey: ["/api/pm/projects", projectId, "tool-badges"],
+    enabled: !!projectId,
+  });
+
   const updateProjectMutation = useMutation({
     mutationFn: (updates: Record<string, any>) =>
       apiRequest("PUT", `/api/pm/projects/${projectId}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId] });
       queryClient.invalidateQueries({ queryKey: ["/api/pm/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "tool-badges"] });
     },
   });
 
-  const handleRenameSubmit = () => {
-    const trimmed = editNameValue.trim();
-    if (!trimmed || trimmed === project?.name) {
-      setEditingName(false);
-      return;
-    }
-    updateProjectMutation.mutate({ name: trimmed }, {
-      onSuccess: () => {
-        toast({ title: "Project renamed" });
-        setEditingName(false);
-      },
-      onError: () => {
-        toast({ title: "Failed to rename project", variant: "destructive" });
-        setEditingName(false);
-      },
-    });
-  };
-
-  const startEditing = () => {
-    setEditNameValue(project?.name || "");
-    setEditingName(true);
-    setTimeout(() => nameInputRef.current?.focus(), 50);
-  };
-
   const enabledToolsRaw = projectTools.filter((t: any) => t.isEnabled !== false);
 
-  const getLocalOrder = (): string[] | null => {
+  const localOrder = useMemo((): string[] | null => {
     try {
       const stored = localStorage.getItem(`pm-tool-order-${projectId}`);
       return stored ? JSON.parse(stored) : null;
-    } catch { return null; }
-  };
+    } catch {
+      return null;
+    }
+  }, [projectId]);
 
-  const localOrder = getLocalOrder();
-  const enabledTools = localOrder
+  const enabledToolsSorted = localOrder
     ? [...enabledToolsRaw].sort((a: any, b: any) => {
         const ai = localOrder.indexOf(a.toolType);
         const bi = localOrder.indexOf(b.toolType);
@@ -247,80 +192,73 @@ function ProjectDetailView({
         return ai - bi;
       })
     : enabledToolsRaw;
-
-  const allToolIds = getAllToolIds();
-  const enabledToolIds = enabledTools.map((t: any) => t.toolType);
-  const unennabledToolIds = allToolIds.filter((id) => !enabledToolIds.includes(id));
-
-  const currentActiveTool = activeTool || enabledTools[0]?.toolType || "";
-
-  const updateScrollArrows = useCallback(() => {
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 2);
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
-  }, []);
-
-  useEffect(() => {
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    const check = () => updateScrollArrows();
-    check();
-    const raf = requestAnimationFrame(check);
-    const t = setTimeout(check, 100);
-    el.addEventListener("scroll", check, { passive: true });
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    for (const child of Array.from(el.children)) ro.observe(child as Element);
-    return () => { cancelAnimationFrame(raf); clearTimeout(t); el.removeEventListener("scroll", check); ro.disconnect(); };
-  }, [updateScrollArrows, enabledTools.length]);
-
-  const scrollTabs = useCallback((dir: "left" | "right") => {
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    el.scrollBy({ left: dir === "right" ? 200 : -200, behavior: "smooth" });
-  }, []);
-
-  const reorderMutation = useMutation({
-    mutationFn: async (newOrder: any[]) => {
-      await apiRequest("PUT", `/api/pm/projects/${projectId}/tools/reorder`, {
-        order: newOrder.map((t: any, i: number) => ({ id: t.id, sortOrder: i })),
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "tools"] });
-    },
-  });
-
-  const handleTabDragStart = (idx: number) => {
-    setDragTabIdx(idx);
-  };
-
-  const handleTabDragOver = (e: React.DragEvent, idx: number) => {
-    e.preventDefault();
-    setDragOverTabIdx(idx);
-  };
-
-  const handleTabDrop = (idx: number) => {
-    if (dragTabIdx === null || dragTabIdx === idx) {
-      setDragTabIdx(null);
-      setDragOverTabIdx(null);
-      return;
+  const enabledTools = useMemo(() => {
+    const coalesced = coalesceAgileTools(enabledToolsSorted);
+    const withAlways = [...coalesced];
+    // Mock always-on tools: Overview + 360° even if missing from DB for older projects
+    for (const id of ["360_report", "project_dashboard"] as const) {
+      if (!withAlways.some((t: any) => t.toolType === id)) {
+        withAlways.unshift({
+          id: -Math.abs(id.split("").reduce((a, c) => a + c.charCodeAt(0), 0)),
+          toolType: id,
+          isEnabled: true,
+          label: null,
+          toolCategory: "reporting_dashboards",
+        });
+      }
     }
-    const reordered = [...enabledTools];
-    const [moved] = reordered.splice(dragTabIdx, 1);
-    reordered.splice(idx, 0, moved);
-    const newOrder = reordered.map((t: any) => t.toolType);
-    localStorage.setItem(`pm-tool-order-${projectId}`, JSON.stringify(newOrder));
-    reorderMutation.mutate(reordered);
-    setDragTabIdx(null);
-    setDragOverTabIdx(null);
-  };
+    return withAlways;
+  }, [enabledToolsSorted]);
 
-  const handleTabDragEnd = () => {
-    setDragTabIdx(null);
-    setDragOverTabIdx(null);
-  };
+  const lastUsedTool = useMemo(() => {
+    try {
+      return localStorage.getItem(`pm-last-tool-${projectId}`) || "";
+    } catch {
+      return "";
+    }
+  }, [projectId]);
+
+  // Prefer last-used / Overview over Gantt so workspace open stays snappy
+  const preferredDefault =
+    (lastUsedTool && enabledTools.find((t: any) => t.toolType === lastUsedTool)?.toolType) ||
+    enabledTools.find((t: any) => t.toolType === "project_dashboard")?.toolType ||
+    enabledTools.find((t: any) => t.toolType === "360_report")?.toolType ||
+    enabledTools.find((t: any) => t.toolType === "gantt_chart")?.toolType ||
+    enabledTools.find((t: any) => t.toolType === "agile")?.toolType ||
+    enabledTools[0]?.toolType ||
+    "";
+  const currentActiveTool = activeTool || (!toolsLoading ? preferredDefault : "");
+  const activeToolDef = currentActiveTool ? findToolDefinition(currentActiveTool) : null;
+  const activeToolTitle =
+    currentActiveTool === "project_dashboard"
+      ? "Overview"
+      : currentActiveTool === "agile" || LEGACY_AGILE_TOOL_ID_SET.has(currentActiveTool)
+        ? "Agile"
+        : activeToolDef?.name || currentActiveTool;
+  const activeSubtitle = currentActiveTool
+    ? buildToolSubtitle(currentActiveTool, project || {}, badgeData)
+    : "";
+
+  const selectTool = useCallback(
+    (toolType: string) => {
+      setActiveTool(toolType);
+      if (!toolType) return;
+      try {
+        localStorage.setItem(`pm-last-tool-${projectId}`, toolType);
+      } catch {
+        /* ignore */
+      }
+    },
+    [projectId],
+  );
+
+  // Keep heavy tools mounted after first visit so switching back is instant
+  const KEEP_ALIVE = useMemo(() => new Set(["gantt_chart", "agile"]), []);
+  const [keptAlive, setKeptAlive] = useState<string[]>([]);
+  useEffect(() => {
+    if (!currentActiveTool || !KEEP_ALIVE.has(currentActiveTool)) return;
+    setKeptAlive((prev) => (prev.includes(currentActiveTool) ? prev : [...prev, currentActiveTool]));
+  }, [currentActiveTool, KEEP_ALIVE]);
 
   const addToolMutation = useMutation({
     mutationFn: async (toolId: string) => {
@@ -334,17 +272,35 @@ function ProjectDetailView({
         }],
       });
     },
-    onSuccess: () => {
+    onSuccess: (_data, toolId) => {
       queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "tools"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "tool-badges"] });
+      selectTool(toolId);
+      toast({ title: "Tool added" });
     },
   });
 
   const removeToolMutation = useMutation({
     mutationFn: async (toolRecord: any) => {
+      if (!toolRecord?.id || toolRecord.id < 0) {
+        throw new Error("Cannot remove built-in tool");
+      }
+      if (toolRecord.toolType === "agile") {
+        const toRemove = enabledToolsRaw.filter(
+          (t: any) => t.toolType === "agile" || LEGACY_AGILE_TOOL_ID_SET.has(t.toolType),
+        );
+        await Promise.all(toRemove.map((t: any) => apiRequest("DELETE", `/api/pm/project-tools/${t.id}`)));
+        return toolRecord;
+      }
       await apiRequest("DELETE", `/api/pm/project-tools/${toolRecord.id}`);
+      return toolRecord;
     },
-    onSuccess: () => {
+    onSuccess: (_data, toolRecord) => {
       queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "tools"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "tool-badges"] });
+      if (currentActiveTool === toolRecord.toolType || (toolRecord.toolType === "agile" && LEGACY_AGILE_TOOL_ID_SET.has(currentActiveTool))) {
+        selectTool("");
+      }
       toast({ title: "Tool removed" });
     },
   });
@@ -368,40 +324,53 @@ function ProjectDetailView({
     );
   }
 
+  const ActiveIcon = activeToolDef?.icon;
+
   return (
-    <div className="flex flex-col h-full overflow-hidden w-full max-w-full" style={{ minWidth: 0 }} data-testid="project-detail-view">
-      <div className="flex-shrink-0 border-b border-border bg-card px-4 py-2">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={onBack} data-testid="button-back-from-detail">
-            <ChevronLeft className="h-3.5 w-3.5 mr-0.5" /> Back
-          </Button>
-          {editingName ? (
-            <input
-              ref={nameInputRef}
-              className="text-sm font-bold text-foreground bg-muted border border-primary rounded px-2 py-0.5 outline-none min-w-[180px]"
-              value={editNameValue}
-              onChange={(e) => setEditNameValue(e.target.value)}
-              onBlur={handleRenameSubmit}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleRenameSubmit();
-                if (e.key === "Escape") setEditingName(false);
-              }}
-              data-testid="input-rename-project"
-            />
-          ) : (
-            <h2
-              className="text-sm font-bold text-foreground cursor-pointer hover:bg-muted/50 rounded px-1.5 py-0.5 transition-colors"
-              onDoubleClick={startEditing}
-              title="Double-click to rename"
-              data-testid="text-project-name"
+    <div className="flex h-full w-full max-w-full overflow-hidden" style={{ minWidth: 0 }} data-testid="project-detail-view">
+      <ProjectWorkspaceSidebar
+        project={project}
+        enabledTools={enabledTools}
+        activeTool={currentActiveTool}
+        onSelectTool={selectTool}
+        onBack={() => {
+          setLockCollapsed(false);
+          setCollapsed(false);
+          onBack();
+        }}
+        onOpenSettings={() => setShowSettings(true)}
+        onSaveAsTemplate={() => setShowSaveTemplate(true)}
+        onAddTool={(toolId) => addToolMutation.mutate(toolId)}
+        onRemoveTool={(tool) => removeToolMutation.mutate(tool)}
+        addingTool={addToolMutation.isPending}
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden min-h-0 bg-[#F0F2FF]/40 dark:bg-background">
+        <div
+          className="flex h-11 flex-shrink-0 items-center gap-2 border-b border-border bg-card px-4"
+          data-testid="project-content-topbar"
+        >
+          {ActiveIcon && <ActiveIcon className="h-4 w-4 flex-shrink-0 text-indigo-600" />}
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-extrabold text-foreground">
+              {toolsLoading ? "Loading…" : activeToolTitle || "Select a tool"}
+            </div>
+            {activeSubtitle && (
+              <div className="truncate text-[11px] font-medium text-muted-foreground">
+                {activeSubtitle}
+              </div>
+            )}
+          </div>
+          <div className="ml-auto flex flex-shrink-0 items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2.5 text-[11px] font-semibold"
+              onClick={() => setShowSettings(true)}
+              data-testid="button-topbar-settings"
             >
-              {project.name}
-            </h2>
-          )}
-          <TypeBadge type={project.workType || project.projectType} />
-          <HealthPill health={project.ragStatus} />
-          <StatusBadge status={project.status} />
-          <div className="ml-auto flex items-center gap-1">
+              Settings
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0" data-testid="button-project-more">
@@ -412,170 +381,93 @@ function ProjectDetailView({
                 <DropdownMenuItem onClick={() => setShowSaveTemplate(true)} data-testid="menu-save-project-template">
                   <LayoutTemplate className="h-4 w-4 mr-2" /> Save as Template
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowSettings(true)} data-testid="menu-project-settings">
+                  <SettingsGearIcon className="h-4 w-4 mr-2" /> Project settings
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowSettings(!showSettings)} data-testid="button-project-settings"><SettingsGearIcon className="h-4 w-4" /></Button>
           </div>
         </div>
-      </div>
-      <SaveAsPlatformTemplateDialog
-        open={showSaveTemplate}
-        onOpenChange={setShowSaveTemplate}
-        endpoint={`/api/pm/projects/${projectId}/save-as-template`}
-        defaultName={project.name}
-        defaultDescription={project.description ?? ""}
-      />
 
-      <div className="flex-shrink-0 flex items-center border-b border-border bg-card sticky top-0 z-40 overflow-hidden" data-testid="tool-tabs-bar">
-        {canScrollLeft && (
-          <button
-            onClick={() => scrollTabs("left")}
-            className="flex-shrink-0 flex items-center justify-center w-7 h-full border-0 cursor-pointer bg-card hover:bg-muted transition-colors"
-            data-testid="button-scroll-tabs-left"
-          >
-            <ChevronLeft className="h-4 w-4 text-muted-foreground" />
-          </button>
-        )}
-        <div
-          ref={tabsScrollRef}
-          className="flex items-center overflow-x-auto flex-1 px-4"
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none", minWidth: 0, width: 0 } as React.CSSProperties}
-        >
-          {toolsLoading ? (
-            <div className="flex items-center gap-2 py-2 px-2">
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Loading toolsâ€¦</span>
-            </div>
-          ) : enabledTools.map((tool: any, idx: number) => {
-            const def = findToolDefinition(tool.toolType);
-            const Icon = def?.icon || PmDocumentationIcon;
-            const isActive = currentActiveTool === tool.toolType;
-            const isDragging = dragTabIdx === idx;
-            const isDragOver = dragOverTabIdx === idx && dragTabIdx !== idx;
-            return (
-              <div key={tool.toolType} className="relative flex-shrink-0 group">
-                <button
-                  draggable
-                  onDragStart={() => handleTabDragStart(idx)}
-                  onDragOver={(e) => handleTabDragOver(e, idx)}
-                  onDrop={() => handleTabDrop(idx)}
-                  onDragEnd={handleTabDragEnd}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium whitespace-nowrap border-b-2 transition-colors bg-transparent border-0 cursor-grab -mb-px select-none",
-                    isActive
-                      ? "border-b-[#2563eb] text-[#2563eb] font-semibold"
-                      : "border-b-transparent text-muted-foreground hover:text-foreground",
-                    isDragging && "opacity-40",
-                    isDragOver && "border-b-[#2563eb]/50"
-                  )}
-                  style={isDragOver ? { borderLeftWidth: 2, borderLeftColor: "#2563eb", borderLeftStyle: "solid" } : undefined}
-                  onClick={() => setActiveTool(tool.toolType)}
-                  data-testid={`tool-tab-${tool.toolType}`}
-                >
-                  <Icon className="h-3.5 w-3.5 flex-shrink-0" />
-                  {def?.name || tool.label || tool.toolType}
-                </button>
-                <button
-                  className="absolute -top-1 -right-1 hidden group-hover:flex items-center justify-center w-4 h-4 rounded-full bg-muted text-muted-foreground hover:bg-destructive hover:text-destructive-foreground text-[10px] border-0 cursor-pointer"
-                  title="Remove tool"
-                  onClick={(e) => { e.stopPropagation(); removeToolMutation.mutate(tool); }}
-                  data-testid={`button-remove-tool-${tool.toolType}`}
-                >
-                  Ã—
-                </button>
-              </div>
-            );
-          })}
-          {enabledTools.length === 0 && !toolsLoading && (
-            <span className="text-xs text-muted-foreground py-2">No tools enabled. Add tools to get started.</span>
-          )}
-        </div>
-        {canScrollRight && (
-          <button
-            onClick={() => scrollTabs("right")}
-            className="flex-shrink-0 flex items-center justify-center w-7 h-full border-0 cursor-pointer bg-card hover:bg-muted transition-colors"
-            data-testid="button-scroll-tabs-right"
-          >
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          </button>
-        )}
-        <div className="flex items-center gap-2 flex-shrink-0 pl-3 pr-4 border-l border-border">
-          <button
-            className="text-xs font-medium text-muted-foreground hover:text-foreground bg-transparent border-0 cursor-pointer whitespace-nowrap py-2"
-            onClick={() => setShowMoreTools(!showMoreTools)}
-            data-testid="button-more-tools"
-          >
-            More tools {showMoreTools ? "\u25B4" : "\u25BE"}
-          </button>
-          <button
-            className="flex items-center gap-1 text-xs font-semibold text-[#2563eb] hover:text-[#1d4ed8] bg-transparent border-0 cursor-pointer whitespace-nowrap py-2"
-            onClick={() => setShowMoreTools(true)}
-            data-testid="button-add-tool"
-          >
-            <Plus className="h-3 w-3" /> Add
-          </button>
-        </div>
-      </div>
-
-      {showMoreTools && (
-        <div className="border-b border-border bg-muted/30 p-4 overflow-x-hidden max-w-full" data-testid="more-tools-drawer">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Available Tools</h4>
-            <button className="text-xs text-muted-foreground hover:text-foreground cursor-pointer bg-transparent border-0" onClick={() => setShowMoreTools(false)} data-testid="button-close-more-tools">âœ• Close</button>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-            {unennabledToolIds.map((toolId) => {
-              const def = findToolDefinition(toolId);
-              if (!def) return null;
-              const Icon = def.icon;
-              return (
-                <div key={toolId} className="flex items-center gap-2 p-2 rounded-md bg-card border border-border/50">
-                  <Icon className="h-3.5 w-3.5" />
-                  <span className="text-xs text-foreground flex-1">{def.name}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-[#2563eb] text-xs"
-                    onClick={() => addToolMutation.mutate(toolId)}
-                    data-testid={`button-add-tool-${toolId}`}
-                  >
-                    <Plus className="h-3 w-3 mr-0.5" /> Add
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {showSettings ? (
-        <ProjectSettingsPanel
-          project={project}
-          updateProjectMutation={updateProjectMutation}
-          toast={toast}
-          onClose={() => setShowSettings(false)}
+        <SaveAsPlatformTemplateDialog
+          open={showSaveTemplate}
+          onOpenChange={setShowSaveTemplate}
+          endpoint={`/api/pm/projects/${projectId}/save-as-template`}
+          defaultName={project.name}
+          defaultDescription={project.description ?? ""}
         />
-      ) : (
-        <div
-          className={cn(
-            "flex-1",
-            currentActiveTool === "gantt_chart"
-              ? "overflow-hidden flex flex-col p-0"
-              : "overflow-y-auto overflow-x-hidden p-4"
-          )}
-          style={{ minWidth: 0 }}
-          data-testid="tool-content-area"
-        >
-          {currentActiveTool ? (
-            <ToolPlaceholder toolId={currentActiveTool} project={project} />
-          ) : (
-            <div className="text-center text-muted-foreground py-16">
-              <PmProjectIcon className="h-12 w-12 mx-auto mb-4 opacity-30" />
-              <p className="text-sm">Select or add a tool to get started</p>
-            </div>
-          )}
-        </div>
-      )}
+
+        {showSettings ? (
+          <ProjectSettingsPanel
+            project={project}
+            updateProjectMutation={updateProjectMutation}
+            toast={toast}
+            onClose={() => setShowSettings(false)}
+          />
+        ) : (
+          <div
+            className={cn(
+              "flex-1 min-h-0",
+              currentActiveTool === "gantt_chart" ||
+              currentActiveTool === "agile" ||
+              currentActiveTool === "tracking_board" ||
+              LEGACY_AGILE_TOOL_ID_SET.has(currentActiveTool)
+                ? "overflow-hidden flex flex-col p-4"
+                : "overflow-y-auto overflow-x-hidden p-4"
+            )}
+            style={{ minWidth: 0 }}
+            data-testid="tool-content-area"
+          >
+            {currentActiveTool ? (
+              <>
+                {[
+                  ...new Set([
+                    ...keptAlive,
+                    ...(KEEP_ALIVE.has(currentActiveTool) ? [currentActiveTool] : []),
+                  ]),
+                ].map((toolId) => (
+                  <div
+                    key={`keep-${toolId}`}
+                    className={cn(
+                      toolId === currentActiveTool
+                        ? currentActiveTool === "gantt_chart" ||
+                          currentActiveTool === "agile" ||
+                          currentActiveTool === "tracking_board" ||
+                          LEGACY_AGILE_TOOL_ID_SET.has(currentActiveTool)
+                          ? "relative flex-1 min-h-0 flex flex-col overflow-hidden"
+                          : undefined
+                        : "hidden"
+                    )}
+                    aria-hidden={toolId !== currentActiveTool}
+                  >
+                    <ToolPlaceholder
+                      toolId={toolId}
+                      project={project}
+                      onNavigateTool={selectTool}
+                    />
+                  </div>
+                ))}
+                {!KEEP_ALIVE.has(currentActiveTool) && (
+                  <ToolPlaceholder
+                    toolId={currentActiveTool}
+                    project={project}
+                    onNavigateTool={selectTool}
+                  />
+                )}
+              </>
+            ) : (
+              <div className="text-center text-muted-foreground py-16">
+                {toolsLoading ? (
+                  <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin opacity-50" />
+                ) : (
+                  <PmProjectIcon className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                )}
+                <p className="text-sm">{toolsLoading ? "Loading tools…" : "Select or add a tool to get started"}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -950,32 +842,22 @@ function ProjectSettingsPanel({ project, updateProjectMutation, toast, onClose }
 }
 
 function ProjectGanttWrapper({ project }: { project: any }) {
-  // CSS height:100% cascading is broken inside Radix ScrollArea (which renders
-  // a display:table wrapper internally). JS-calculated height bypasses this
-  // entirely â€” window.innerHeight minus the fixed pixel overhead above the Gantt:
-  //   Project header  (py-2 + h-7 content + border) â‰ˆ 45 px
-  //   Tool tabs bar   (py-1.5 tabs + border)         â‰ˆ 37 px
-  //   Tool panel hdr  (py-1.5 + h-5 icon + border)  â‰ˆ 33 px
-  //   Total                                          â‰ˆ 115 px  (+15 px safety)
-  const OFFSET = 130;
-  const [ganttHeight, setGanttHeight] = useState<number>(() =>
-    typeof window !== "undefined" ? Math.max(400, window.innerHeight - OFFSET) : 600
-  );
-
-  useEffect(() => {
-    const onResize = () => setGanttHeight(Math.max(400, window.innerHeight - OFFSET));
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
   return (
-    <div style={{ height: ganttHeight, width: "100%", overflow: "hidden", minWidth: 0 }} data-testid="gantt-chart-container">
+    <div className="absolute inset-0 overflow-hidden" data-testid="gantt-chart-container">
       <ReactGanttChart projectId={project.id} />
     </div>
   );
 }
 
-function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) {
+function ToolPlaceholder({
+  toolId,
+  project,
+  onNavigateTool,
+}: {
+  toolId: string;
+  project: any;
+  onNavigateTool?: (toolId: string) => void;
+}) {
   const def = findToolDefinition(toolId);
   const Icon = def?.icon || PmDocumentationIcon;
   const name = def?.name || toolId;
@@ -1001,35 +883,19 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
   }, []);
 
   const renderPlaceholder = () => {
+    if (toolId === "agile" || LEGACY_AGILE_TOOL_ID_SET.has(toolId)) {
+      const stage: AgilePipelineStageId =
+        toolId === "agile" ? "epic" : (LEGACY_AGILE_TO_STAGE[toolId] || "epic");
+      return <AgileWorkspace projectId={project.id} initialStage={stage} />;
+    }
+
     switch (toolId) {
       case "project_dashboard":
-        return <AgileDashboard projectId={project.id} />;
+        return <ProjectOverview project={project} onNavigateTool={onNavigateTool} />;
       case "gantt_chart":
         return <ProjectGanttWrapper project={project} />;
-      case "sprint_board":
-        return <AgileBoard view="board" boardMode="sprint" projectId={project.id} />;
-      case "scrum_board":
-        return <AgileBoard view="board" boardMode="scrum" projectId={project.id} />;
-      case "kanban_board":
-        return <AgileBoard view="board" boardMode="kanban" projectId={project.id} />;
       case "tracking_board":
         return <ProjectTrackingBoard projectId={project.id} />;
-      case "backlog":
-        return <AgileBoard view="backlog" projectId={project.id} />;
-      case "epics":
-        return <AgileBoard view="epics" projectId={project.id} />;
-      case "stories":
-        return <AgileBoard view="stories" projectId={project.id} />;
-      case "sprints":
-        return <AgileBoard view="sprints" projectId={project.id} />;
-      case "defects":
-        return <AgileBoard view="defects" projectId={project.id} />;
-      case "roadmap":
-        return <AgileBoard view="roadmap" projectId={project.id} />;
-      case "best_practice":
-        return <AgileBoard view="bestpractice" projectId={project.id} />;
-      case "epics_stories":
-        return <AgileBoard view="epics" projectId={project.id} />;
       case "risk_log":
         return <RaiddLogTool logType="risk" projectId={project.id} />;
       case "issues_log":
@@ -1090,6 +956,11 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
   };
 
   const isGantt = toolId === "gantt_chart";
+  const isAgile = toolId === "agile" || LEGACY_AGILE_TOOL_ID_SET.has(toolId);
+  const isTracking = toolId === "tracking_board";
+  // Content topbar owns the title — skip duplicate ToolPlaceholder chrome on all tools
+  const hideToolChrome = true;
+  const fillHeight = isGantt || isAgile || isTracking;
 
   return (
     <div
@@ -1098,14 +969,12 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
       className={
         isMaximized
           ? "bg-background p-4 overflow-auto"
-          : isGantt
-          ? "h-full flex flex-col overflow-hidden"
+          : fillHeight
+          ? "flex-1 min-h-0 flex flex-col overflow-hidden"
           : ""
       }
     >
-      {/* Tool header row â€” hidden for Gantt because SVARGanttChart has its own
-          compact control bar (zoom + level filter + maximize + edit). */}
-      {!isGantt && (
+      {!hideToolChrome && (
         <div className="flex items-center justify-between gap-4 flex-wrap flex-shrink-0 mb-4">
           <div className="flex items-center gap-2">
             <Icon className="h-5 w-5" />
@@ -1121,9 +990,8 @@ function ToolPlaceholder({ toolId, project }: { toolId: string; project: any }) 
           </div>
         </div>
       )}
-      {/* Content — for Gantt, flex-1 min-h-0 so it fills the remaining height */}
-      <div className={isGantt ? "flex-1 min-h-0 overflow-hidden" : ""}>
-        <Suspense fallback={<div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
+      <div className={fillHeight ? "relative flex-1 min-h-0 overflow-hidden" : ""}>
+        <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
           {renderPlaceholder()}
         </Suspense>
       </div>
@@ -1161,6 +1029,12 @@ export default function ProjectsManagementPage() {
   });
 
   const handleOpenProject = (id: number) => {
+    const fromList = projects.find((p: any) => p.id === id);
+    if (fromList) {
+      queryClient.setQueryData(["/api/pm/projects", id], fromList);
+    }
+    void queryClient.prefetchQuery({ queryKey: ["/api/pm/projects", id, "tools"] });
+    void queryClient.prefetchQuery({ queryKey: ["/api/pm/projects", id, "tool-badges"] });
     setSelectedProjectId(id);
     setCurrentView("project");
     setLocation(`/modules/projects/${id}`);

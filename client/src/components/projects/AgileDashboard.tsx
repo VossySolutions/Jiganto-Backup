@@ -97,8 +97,9 @@ function VelocityChart({ data, width=460, height=200 }: { data: VelocityPoint[];
   const pad = { top:16, right:16, bottom:32, left:36 };
   const W = width-pad.left-pad.right;
   const H = height-pad.top-pad.bottom;
-  const maxY = Math.max(...data.flatMap(d=>[d.planned,d.delivered]))+5;
-  const barW = W/(data.length*3+1);
+  const series = data?.length ? data : [{ sprint: "—", planned: 0, delivered: 0 }];
+  const maxY = Math.max(1, ...series.flatMap(d => [d.planned || 0, d.delivered || 0])) + 5;
+  const barW = W / (series.length * 3 + 1);
   const gap = barW;
 
   return (
@@ -115,14 +116,14 @@ function VelocityChart({ data, width=460, height=200 }: { data: VelocityPoint[];
             </g>
           );
         })}
-        {data.map((d,i)=>{
+        {series.map((d,i)=>{
           const x = pad.left + gap + i*(barW*3+gap);
           const ph = (d.planned/maxY)*H;
           const dh = (d.delivered/maxY)*H;
           return (
             <g key={d.sprint}>
-              <rect x={x} y={pad.top+H-ph} width={barW} height={ph} rx={3} fill={`${C.blue}40`}/>
-              <rect x={x+barW+2} y={pad.top+H-dh} width={barW} height={dh} rx={3} fill={C.blue}/>
+              <rect x={x} y={pad.top+H-ph} width={barW} height={Math.max(0, ph)} rx={3} fill={`${C.blue}40`}/>
+              <rect x={x+barW+2} y={pad.top+H-dh} width={barW} height={Math.max(0, dh)} rx={3} fill={C.blue}/>
               <text x={x+barW} y={pad.top+H+18} textAnchor="middle" fontSize={10} fill={C.grey500}>{d.sprint}</text>
             </g>
           );
@@ -143,16 +144,18 @@ function DashBurndownChart({ data, width=460, height=200 }: { data: BurndownPoin
   const pad = { top:16, right:16, bottom:32, left:36 };
   const W = width-pad.left-pad.right;
   const H = height-pad.top-pad.bottom;
-  const maxY = Math.max(...data.map(d=>Math.max(d.ideal, d.actual||0)));
-  const xs = data.map((_,i)=>pad.left+(i/(data.length-1))*W);
-  const y = (v: number) => pad.top+H-(v/maxY)*H;
-  const idealPath = data.map((d,i)=>`${i===0?"M":"L"}${xs[i]},${y(d.ideal)}`).join(" ");
-  const actualPts = data.filter(d=>d.actual!==null);
+  const series = data?.length ? data : [{ day: "D1", ideal: 0, actual: 0 }];
+  const maxY = Math.max(1, ...series.map(d=>Math.max(d.ideal || 0, d.actual || 0)));
+  const denom = Math.max(1, series.length - 1);
+  const xs = series.map((_,i)=>pad.left+(i/denom)*W);
+  const y = (v: number) => pad.top+H-(Math.max(0, v)/maxY)*H;
+  const idealPath = series.map((d,i)=>`${i===0?"M":"L"}${xs[i]},${y(d.ideal)}`).join(" ");
+  const actualPts = series.filter(d=>d.actual!==null);
   const actualPath = actualPts.map((d,i)=>{
-    const xi = data.indexOf(d);
+    const xi = series.indexOf(d);
     return `${i===0?"M":"L"}${xs[xi]},${y(d.actual!)}`;
   }).join(" ");
-  const lastIdx = data.reduce((a,d,i)=>d.actual!==null?i:a,-1);
+  const lastIdx = series.reduce((a,d,i)=>d.actual!==null?i:a,-1);
 
   return (
     <div style={{ background:C.white, border:`1px solid ${C.grey200}`, borderRadius:10, padding:"12px 16px" }}>
@@ -168,8 +171,8 @@ function DashBurndownChart({ data, width=460, height=200 }: { data: BurndownPoin
             </g>
           );
         })}
-        {data.filter((_,i)=>i%2===0).map(d=>{
-          const idx=data.indexOf(d);
+        {series.filter((_,i)=>i%2===0).map(d=>{
+          const idx=series.indexOf(d);
           return <text key={d.day} x={xs[idx]} y={pad.top+H+18} textAnchor="middle" fontSize={9} fill={C.grey400}>{d.day}</text>;
         })}
         {lastIdx>=0 && <line x1={xs[lastIdx]} y1={pad.top} x2={xs[lastIdx]} y2={pad.top+H} stroke={C.amber} strokeWidth={1.5} strokeDasharray="4 3"/>}
@@ -177,7 +180,7 @@ function DashBurndownChart({ data, width=460, height=200 }: { data: BurndownPoin
         {actualPts.length>0 && <path d={actualPath+` L${xs[lastIdx]},${pad.top+H} L${xs[0]},${pad.top+H} Z`} fill={`${C.blue}18`}/>}
         {actualPts.length>0 && <path d={actualPath} fill="none" stroke={C.blue} strokeWidth={2.5}/>}
         {actualPts.map((d,i)=>{
-          const xi=data.indexOf(d);
+          const xi=series.indexOf(d);
           return <circle key={i} cx={xs[xi]} cy={y(d.actual!)} r={3.5} fill={C.white} stroke={C.blue} strokeWidth={2}/>;
         })}
       </svg>
@@ -384,7 +387,6 @@ export default function AgileDashboard({ projectId }: { projectId?: number }) {
       <div style={{ padding:20 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
           <div>
-            <div style={{ fontWeight:800, fontSize:20, color:C.grey800 }}>Agile Dashboard</div>
             <div style={{ fontSize:13, color:C.grey500 }}>Multi-workstream overview \u2022 Sprint health \u2022 Delivery metrics</div>
           </div>
         </div>

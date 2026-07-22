@@ -516,6 +516,9 @@ function BulkActionsBar({
   );
 }
 
+const EMPTY_COLUMNS: WorkspaceDatabaseColumn[] = [];
+const EMPTY_ROWS: WorkspaceDatabaseRow[] = [];
+
 export function WorkspaceTableView({
   databaseId,
   isExpanded,
@@ -537,7 +540,6 @@ export function WorkspaceTableView({
   const [editValue, setEditValue] = useState("");
   const [activeView, setActiveView] = useState<string>("table");
   const [detailRowId, setDetailRowId] = useState<number | null>(null);
-  const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<number>>(new Set());
   const [addingColumnInline, setAddingColumnInline] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [newColumnType, setNewColumnType] = useState("text");
@@ -572,8 +574,8 @@ export function WorkspaceTableView({
     },
     staleTime: 60_000,
   });
-  const columns = columnsQuery.data ?? [];
-  const rows = rowsQuery.data ?? [];
+  const columns = columnsQuery.data ?? EMPTY_COLUMNS;
+  const rows = rowsQuery.data ?? EMPTY_ROWS;
   const tableDataQuery = combineWorkspaceQueries(columnsQuery, rowsQuery);
 
   const { data: databaseMeta } = useQuery<{ id: number; activeView?: string } | null>({
@@ -771,9 +773,13 @@ export function WorkspaceTableView({
   };
 
   useEffect(() => {
-    if (!databaseMeta?.activeView) return;
-    setActiveView(databaseMeta.activeView);
-    lastPersistedViewRef.current = databaseMeta.activeView;
+    const next = databaseMeta?.activeView;
+    if (!next) return;
+    setActiveView((prev) => {
+      if (prev === next) return prev;
+      lastPersistedViewRef.current = next;
+      return next;
+    });
   }, [databaseMeta?.activeView]);
 
   useEffect(() => {
@@ -782,15 +788,16 @@ export function WorkspaceTableView({
       lastPersistedViewRef.current = activeView;
       return;
     }
-    if (lastPersistedViewRef.current !== activeView) {
-      lastPersistedViewRef.current = activeView;
-      updateDatabaseMutation.mutate({ activeView });
-    }
+    if (lastPersistedViewRef.current === activeView) return;
+    lastPersistedViewRef.current = activeView;
+    updateDatabaseMutation.mutate({ activeView });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- persist only when activeView changes
   }, [activeView]);
 
-  useEffect(() => {
-    setHiddenColumnIds(new Set(columns.filter((c) => c.isVisible === false).map((c) => c.id)));
-  }, [columns]);
+  const hiddenColumnIds = useMemo(
+    () => new Set(columns.filter((c) => c.isVisible === false).map((c) => c.id)),
+    [columns],
+  );
 
   const visibleColumns = useMemo(
     () => columns.filter((col) => col.isVisible !== false),

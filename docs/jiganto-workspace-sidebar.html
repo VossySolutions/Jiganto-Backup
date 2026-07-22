@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Jiganto — Project Workspace</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --brand:#4338CA;--brand-d:#1E1B4B;--brand-l:#EEF2FF;--brand-m:#818CF8;
+  --teal:#0D9488;--teal-l:#CCFBF1;--teal-d:#0F766E;
+  --green:#059669;--green-l:#D1FAE5;--green-d:#065F46;
+  --amber:#D97706;--amber-l:#FEF3C7;--amber-d:#92400E;
+  --red:#DC2626;--red-l:#FEE2E2;--red-d:#991B1B;
+  --violet:#7C3AED;--violet-l:#EDE9FE;--violet-d:#5B21B6;
+  --pink:#DB2777;--pink-l:#FCE7F3;--pink-d:#9D174D;
+  --text:#0F172A;--text2:#334155;--text3:#64748B;--text4:#94A3B8;
+  --border:#E2E8F0;--border2:#F1F5F9;--surface:#FFFFFF;--bg:#F0F2FF;
+  --sbg:#0F0F1A;--inner-sbg:#1A1A2E;
+  --font:'Plus Jakarta Sans',sans-serif;--mono:'DM Mono',monospace;
+  --r:8px;--rl:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:13px;-webkit-font-smoothing:antialiased;height:100%;}
+.app{display:flex;height:100vh;overflow:hidden;}
+
+/* ── MAIN SIDEBAR ── */
+.sb{width:52px;flex-shrink:0;background:var(--sbg);display:flex;flex-direction:column;align-items:center;padding:8px 0;overflow:hidden;transition:width .2s;}
+.sb.expanded{width:200px;align-items:flex-start;}
+.sb-brand{width:36px;height:36px;background:linear-gradient(135deg,var(--brand),var(--teal));border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0;margin:0 8px 8px;}
+.sb-icon-btn{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;color:rgba(255,255,255,.4);flex-shrink:0;transition:.12s;margin:1px 8px;}
+.sb-icon-btn:hover{background:rgba(255,255,255,.08);color:rgba(255,255,255,.8);}
+.sb-icon-btn.on{background:rgba(67,56,202,.3);color:#fff;}
+.sb-icon-btn.on .sb-tooltip{display:none;}
+.sb-tooltip{position:absolute;left:58px;background:var(--text);color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:100;}
+.sb-icon-btn:hover .sb-tooltip{opacity:1;}
+.sb-divider{width:28px;height:1px;background:rgba(255,255,255,.08);margin:6px 12px;}
+.sb-foot{margin-top:auto;padding-bottom:4px;}
+.sb-av-btn{width:32px;height:32px;border-radius:50%;background:var(--brand);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;cursor:pointer;margin:0 10px;}
+
+/* ── INNER PROJECT SIDEBAR ── */
+.inner-sb{width:228px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+
+/* Project header card within inner sb */
+.psb-proj-hdr{background:linear-gradient(160deg,var(--brand-d) 0%,#1e1458 100%);padding:14px 14px 12px;flex-shrink:0;}
+.psb-back{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:rgba(255,255,255,.5);cursor:pointer;margin-bottom:10px;}
+.psb-back:hover{color:rgba(255,255,255,.85);}
+.psb-proj-name{font-size:13px;font-weight:800;color:#fff;line-height:1.3;margin-bottom:6px;}
+.psb-badges{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;}
+.psb-badge{font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;}
+.psb-badge-type{background:rgba(255,255,255,.12);color:rgba(255,255,255,.8);}
+.psb-badge-status{background:rgba(5,150,105,.25);color:#6EE7B7;}
+.psb-badge-alert{background:rgba(220,38,38,.25);color:#FCA5A5;}
+.psb-health-row{display:flex;align-items:center;gap:8px;}
+.psb-health-circle{width:36px;height:36px;border-radius:50%;border:3px solid var(--amber);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:var(--amber);background:rgba(217,119,6,.15);flex-shrink:0;}
+.psb-rag-mini{display:flex;flex-direction:column;gap:2px;flex:1;}
+.psb-rag-item{display:flex;align-items:center;gap:4px;font-size:9px;font-weight:700;}
+.psb-rag-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.psb-rag-label{color:rgba(255,255,255,.45);min-width:24px;}
+.psb-rag-val-g{color:#6EE7B7;}
+.psb-rag-val-a{color:#FCD34D;}
+.psb-rag-val-r{color:#FCA5A5;}
+.psb-prog-row{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08);}
+.psb-prog-label{display:flex;justify-content:space-between;font-size:9px;font-weight:700;color:rgba(255,255,255,.4);margin-bottom:5px;}
+.psb-prog-track{height:5px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;}
+.psb-prog-fill{height:100%;border-radius:3px;background:var(--brand-m);}
+
+/* Tool navigation */
+.psb-nav{flex:1;overflow-y:auto;padding:8px 0;scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
+.psb-nav::-webkit-scrollbar{width:4px;}
+.psb-nav::-webkit-scrollbar-track{background:transparent;}
+.psb-nav::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
+.psb-section{margin-bottom:2px;}
+.psb-section-label{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text4);padding:8px 14px 3px;display:flex;align-items:center;justify-content:space-between;}
+.psb-section-label span{cursor:pointer;color:var(--text4);font-size:10px;}
+.psb-section-label span:hover{color:var(--brand);}
+
+.psb-tool{display:flex;align-items:center;gap:9px;padding:7px 12px 7px 14px;cursor:pointer;border-left:2px solid transparent;border-radius:0;transition:.1s;position:relative;}
+.psb-tool:hover{background:var(--border2);}
+.psb-tool.on{background:var(--brand-l);border-left-color:var(--brand);color:var(--brand-d);}
+.psb-tool-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.psb-tool.on .psb-tool-icon{background:var(--brand-l);}
+.psb-tool:not(.on):hover .psb-tool-icon{background:var(--border2);}
+.psb-tool-name{font-size:12px;font-weight:600;color:var(--text2);flex:1;line-height:1.2;}
+.psb-tool.on .psb-tool-name{font-weight:700;color:var(--brand-d);}
+.psb-tool-badge{font-size:9px;font-weight:800;padding:1px 6px;border-radius:8px;flex-shrink:0;}
+.psb-tool-badge-red{background:var(--red-l);color:var(--red-d);}
+.psb-tool-badge-amber{background:var(--amber-l);color:var(--amber-d);}
+.psb-tool-badge-green{background:var(--green-l);color:var(--green-d);}
+.psb-tool-badge-gray{background:var(--border2);color:var(--text3);}
+.psb-tool-badge-blue{background:var(--brand-l);color:var(--brand-d);}
+
+/* Always-on indicator */
+.psb-tool-always{width:4px;height:4px;border-radius:50%;background:var(--green);flex-shrink:0;}
+
+/* Add tool button at bottom of nav */
+.psb-add-tool{display:flex;align-items:center;gap:8px;padding:9px 14px;cursor:pointer;border-top:1px solid var(--border2);color:var(--brand);font-size:12px;font-weight:700;flex-shrink:0;}
+.psb-add-tool:hover{background:var(--brand-l);}
+
+/* Collapse toggle */
+.psb-collapse-btn{position:absolute;right:-10px;top:50%;transform:translateY(-50%);width:20px;height:20px;background:var(--surface);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,.08);}
+.psb-collapse-btn:hover{background:var(--brand-l);border-color:var(--brand);}
+
+/* ── CONTENT AREA ── */
+.content-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+
+/* Content topbar */
+.content-topbar{height:44px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:8px;flex-shrink:0;}
+.content-topbar-title{font-size:14px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:7px;}
+.content-topbar-sub{font-size:11px;color:var(--text3);font-weight:500;}
+.sp{flex:1;}
+.tb-btn{height:30px;padding:0 12px;border-radius:var(--r);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;}
+.tb-ghost{background:transparent;border:1px solid var(--border);color:var(--text2);}
+.tb-ghost:hover{background:var(--border2);}
+.tb-primary{background:var(--brand);border:none;color:#fff;}
+.tb-primary:hover{background:var(--brand-d);}
+.tb-amber{background:var(--amber);border:none;color:#fff;}
+.tb-green{background:var(--green);border:none;color:#fff;}
+.tb-ai{background:linear-gradient(135deg,var(--brand),var(--violet));border:none;color:#fff;}
+.tb-red{background:var(--red);border:none;color:#fff;}
+
+/* Workspace scroll */
+.workspace{flex:1;overflow-y:auto;background:var(--bg);}
+.tab-content{display:none;padding:18px 20px 52px;}
+.tab-content.active{display:block;}
+
+/* ── SHARED COMPONENTS ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border2);}
+.card-title{font-size:13px;font-weight:800;}
+.card-sub{font-size:11px;color:var(--text3);margin-top:2px;}
+.card-body{padding:14px 16px;}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+.four-col{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+
+/* Stat card */
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 16px;position:relative;overflow:hidden;}
+.stat-card::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;}
+.stat-card.green::after{background:var(--green);}
+.stat-card.amber::after{background:var(--amber);}
+.stat-card.red::after{background:var(--red);}
+.stat-card.blue::after{background:var(--brand);}
+.sc-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:5px;}
+.sc-val{font-size:24px;font-weight:900;font-family:var(--mono);letter-spacing:-.02em;line-height:1;}
+.sc-sub{font-size:11px;color:var(--text3);margin-top:4px;}
+.sc-delta{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;margin-top:6px;}
+.sc-delta-r{background:var(--red-l);color:var(--red-d);}
+.sc-delta-g{background:var(--green-l);color:var(--green-d);}
+.sc-delta-a{background:var(--amber-l);color:var(--amber-d);}
+
+/* RAG badge */
+.rag{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;}
+.rag-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
+.rag-g{background:var(--green-l);color:var(--green-d);} .rag-g .rag-dot{background:var(--green);}
+.rag-a{background:var(--amber-l);color:var(--amber-d);} .rag-a .rag-dot{background:var(--amber);}
+.rag-r{background:var(--red-l);color:var(--red-d);} .rag-r .rag-dot{background:var(--red);}
+.rag-n{background:var(--border2);color:var(--text4);} .rag-n .rag-dot{background:var(--text4);}
+
+/* Progress */
+.prog-track{height:5px;background:var(--border2);border-radius:3px;overflow:hidden;}
+.prog-fill{height:100%;border-radius:3px;}
+
+/* Avatar */
+.av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;}
+.av-sm{width:22px;height:22px;font-size:8px;}
+
+/* Table */
+.data-table{width:100%;border-collapse:collapse;}
+.data-table thead tr{background:var(--border2);}
+.data-table thead th{padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);text-align:left;white-space:nowrap;}
+.data-table tbody tr{border-bottom:1px solid var(--border2);}
+.data-table tbody tr:last-child{border-bottom:none;}
+.data-table tbody tr:hover td{background:rgba(67,56,202,.025);cursor:pointer;}
+.data-table tbody td{padding:9px 12px;font-size:12px;vertical-align:middle;}
+
+/* Activity */
+.act-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border2);}
+.act-item:last-child{border-bottom:none;}
+.act-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.act-text{font-size:12px;color:var(--text2);line-height:1.5;flex:1;}
+.act-time{font-size:10px;color:var(--text4);flex-shrink:0;margin-top:2px;white-space:nowrap;}
+
+/* Chip */
+.chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;}
+
+/* RAID type chips */
+.chip-risk{background:var(--red-l);color:var(--red-d);}
+.chip-issue{background:var(--amber-l);color:var(--amber-d);}
+.chip-assump{background:var(--teal-l);color:var(--teal-d);}
+.chip-dep{background:var(--violet-l);color:var(--violet-d);}
+.chip-decision{background:var(--brand-l);color:var(--brand-d);}
+.chip-change{background:var(--pink-l);color:var(--pink-d);}
+
+/* Priority */
+.prio{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;}
+.prio-dot{width:7px;height:7px;border-radius:50%;}
+
+/* Gantt phase bar */
+.phase-bar{display:flex;height:28px;border-radius:6px;overflow:hidden;gap:1px;}
+.phase-seg{display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;padding:0 6px;white-space:nowrap;}
+
+/* Add tool modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;display:none;align-items:flex-end;justify-content:flex-start;}
+.modal-overlay.show{display:flex;}
+.tool-modal{background:var(--surface);border-radius:var(--rl) var(--rl) 0 0;width:280px;max-height:80vh;display:flex;flex-direction:column;box-shadow:4px 0 24px rgba(0,0,0,.2);margin-left:52px;border:1px solid var(--border);}
+.tool-modal-hdr{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.tool-modal-title{font-size:13px;font-weight:800;}
+.tool-modal-close{width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;color:var(--text3);}
+.tool-modal-search{padding:10px 14px;border-bottom:1px solid var(--border2);flex-shrink:0;}
+.tool-modal-search input{width:100%;border:1px solid var(--border);border-radius:var(--r);padding:7px 12px;font-family:var(--font);font-size:12px;outline:none;}
+.tool-modal-search input:focus{border-color:var(--brand);}
+.tool-modal-list{flex:1;overflow-y:auto;padding:6px 0;}
+.tool-modal-section{padding:6px 14px 2px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text4);}
+.tool-modal-item{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;}
+.tool-modal-item:hover{background:var(--border2);}
+.tmi-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;background:var(--border2);}
+.tmi-name{font-size:12px;font-weight:600;color:var(--text2);flex:1;}
+.tmi-add{height:24px;padding:0 10px;border-radius:6px;border:1px solid var(--brand);background:transparent;font-family:var(--font);font-size:10px;font-weight:700;color:var(--brand);cursor:pointer;}
+.tmi-add:hover{background:var(--brand-l);}
+.tmi-added{height:24px;padding:0 10px;border-radius:6px;background:var(--green-l);border:1px solid var(--green);font-family:var(--font);font-size:10px;font-weight:700;color:var(--green-d);}
+
+/* Section heading in content */
+.sec-hdr{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.sec-hdr-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);}
+.sec-hdr-line{flex:1;height:1px;background:var(--border);}
+
+/* Status badge */
+.status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;}
+.sb-active{background:var(--green-l);color:var(--green-d);}
+.sb-draft{background:var(--border2);color:var(--text3);}
+.sb-review{background:var(--amber-l);color:var(--amber-d);}
+.sb-done{background:var(--teal-l);color:var(--teal-d);}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ══ MAIN SIDEBAR (icon-only, collapsed) ══ -->
+<aside class="sb" id="mainSb">
+  <div class="sb-brand" title="Jiganto">Ji</div>
+
+  <div class="sb-icon-btn" title="Dashboard" onclick="alert('Dashboard')">
+    <span>📊</span>
+    <div class="sb-tooltip">Dashboard</div>
+  </div>
+  <div class="sb-divider"></div>
+  <div class="sb-icon-btn" title="Portfolio" onclick="alert('Portfolio')">
+    <span>🗂</span>
+    <div class="sb-tooltip">Portfolio</div>
+  </div>
+  <div class="sb-icon-btn on" title="Projects">
+    <span>📁</span>
+    <div class="sb-tooltip">Projects</div>
+  </div>
+  <div class="sb-icon-btn" title="Tasks" onclick="alert('Tasks')">
+    <span>✅</span>
+    <div class="sb-tooltip">Tasks</div>
+  </div>
+  <div class="sb-divider"></div>
+  <div class="sb-icon-btn" title="Finance" onclick="alert('Finance')">
+    <span>💵</span>
+    <div class="sb-tooltip">Finance</div>
+  </div>
+  <div class="sb-icon-btn" title="Resources" onclick="alert('Resources')">
+    <span>👤</span>
+    <div class="sb-tooltip">Resources</div>
+  </div>
+  <div class="sb-icon-btn" title="Resource Planning" onclick="alert('Resource Planning')">
+    <span>📅</span>
+    <div class="sb-tooltip">Resource Planning</div>
+  </div>
+  <div class="sb-icon-btn" title="Timesheets" onclick="alert('Timesheets')">
+    <span>⏱</span>
+    <div class="sb-tooltip">Timesheets</div>
+  </div>
+  <div class="sb-divider"></div>
+  <div class="sb-icon-btn" title="Documents" onclick="alert('Documents')">
+    <span>📄</span>
+    <div class="sb-tooltip">Documents</div>
+  </div>
+  <div class="sb-icon-btn" title="Chat" onclick="alert('Chat')">
+    <span>💬</span>
+    <div class="sb-tooltip">Chat</div>
+  </div>
+  <div class="sb-divider"></div>
+  <div class="sb-icon-btn" title="Service Desk" onclick="alert('Service Desk')">
+    <span>🎫</span>
+    <div class="sb-tooltip">Service Desk</div>
+  </div>
+
+  <div class="sb-foot">
+    <div class="sb-icon-btn" title="Settings" onclick="alert('Settings')">
+      <span>⚙</span>
+      <div class="sb-tooltip">Settings</div>
+    </div>
+    <div class="sb-av-btn" title="Aisha Khan — Programme Manager">AK</div>
+  </div>
+</aside>
+
+<!-- ══ INNER PROJECT SIDEBAR ══ -->
+<div class="inner-sb" id="innerSb" style="position:relative;">
+
+  <!-- Collapse toggle -->
+  <div class="psb-collapse-btn" id="collapseBtn" onclick="toggleInnerSb()" title="Collapse sidebar">‹</div>
+
+  <!-- Project header card -->
+  <div class="psb-proj-hdr">
+    <div class="psb-back" onclick="alert('Back to all projects')">
+      ‹ All projects
+    </div>
+    <div class="psb-proj-name">HSBC — Digital Transformation Programme</div>
+    <div class="psb-badges">
+      <span class="psb-badge psb-badge-type">📁 Project</span>
+      <span class="psb-badge psb-badge-status">● Active</span>
+      <span class="psb-badge psb-badge-alert">⚠ 2 alerts</span>
+    </div>
+    <!-- Health + RAG mini -->
+    <div class="psb-health-row">
+      <div class="psb-health-circle">74</div>
+      <div class="psb-rag-mini">
+        <div class="psb-rag-item">
+          <div class="psb-rag-dot" style="background:var(--amber);"></div>
+          <span class="psb-rag-label">Bgt</span>
+          <span class="psb-rag-val-a">Monitor</span>
+        </div>
+        <div class="psb-rag-item">
+          <div class="psb-rag-dot" style="background:var(--green);"></div>
+          <span class="psb-rag-label">Sch</span>
+          <span class="psb-rag-val-g">On track</span>
+        </div>
+        <div class="psb-rag-item">
+          <div class="psb-rag-dot" style="background:var(--green);"></div>
+          <span class="psb-rag-label">Scp</span>
+          <span class="psb-rag-val-g">On track</span>
+        </div>
+      </div>
+    </div>
+    <!-- Progress bar -->
+    <div class="psb-prog-row">
+      <div class="psb-prog-label"><span>Progress</span><span>42% complete</span></div>
+      <div class="psb-prog-track"><div class="psb-prog-fill" style="width:42%;"></div></div>
+    </div>
+  </div>
+
+  <!-- Tool navigation list -->
+  <div class="psb-nav" id="toolNav">
+
+    <!-- OVERVIEW (always first) -->
+    <div class="psb-section">
+      <div class="psb-tool on" id="tool-overview" onclick="switchTool('overview')">
+        <div class="psb-tool-icon">📊</div>
+        <div class="psb-tool-name">Overview</div>
+        <div class="psb-tool-always" title="Always available"></div>
+      </div>
+      <div class="psb-tool" id="tool-360" onclick="switchTool('360')">
+        <div class="psb-tool-icon">🔄</div>
+        <div class="psb-tool-name">360° Report</div>
+        <div class="psb-tool-always" title="Always available"></div>
+      </div>
+    </div>
+
+    <!-- GOVERNANCE -->
+    <div class="psb-section">
+      <div class="psb-section-label">Governance</div>
+      <div class="psb-tool" id="tool-raid" onclick="switchTool('raid')">
+        <div class="psb-tool-icon">⚠</div>
+        <div class="psb-tool-name">RAID Log</div>
+        <div class="psb-tool-badge psb-tool-badge-red">14</div>
+      </div>
+      <div class="psb-tool" id="tool-risk" onclick="switchTool('risk')">
+        <div class="psb-tool-icon">🔴</div>
+        <div class="psb-tool-name">Risk Log</div>
+        <div class="psb-tool-badge psb-tool-badge-red">6</div>
+      </div>
+      <div class="psb-tool" id="tool-issues" onclick="switchTool('issues')">
+        <div class="psb-tool-icon">🟠</div>
+        <div class="psb-tool-name">Issues Log</div>
+        <div class="psb-tool-badge psb-tool-badge-amber">4</div>
+      </div>
+      <div class="psb-tool" id="tool-assumptions" onclick="switchTool('assumptions')">
+        <div class="psb-tool-icon">💭</div>
+        <div class="psb-tool-name">Assumptions Log</div>
+        <div class="psb-tool-badge psb-tool-badge-gray">3</div>
+      </div>
+      <div class="psb-tool" id="tool-dependencies" onclick="switchTool('dependencies')">
+        <div class="psb-tool-icon">🔗</div>
+        <div class="psb-tool-name">Dependencies</div>
+        <div class="psb-tool-badge psb-tool-badge-gray">1</div>
+      </div>
+      <div class="psb-tool" id="tool-decisions" onclick="switchTool('decisions')">
+        <div class="psb-tool-icon">✅</div>
+        <div class="psb-tool-name">Decisions Log</div>
+        <div class="psb-tool-badge psb-tool-badge-gray">8</div>
+      </div>
+      <div class="psb-tool" id="tool-changes" onclick="switchTool('changes')">
+        <div class="psb-tool-icon">📝</div>
+        <div class="psb-tool-name">Change Log</div>
+        <div class="psb-tool-badge psb-tool-badge-amber">2</div>
+      </div>
+    </div>
+
+    <!-- REPORTING -->
+    <div class="psb-section">
+      <div class="psb-section-label">Reporting</div>
+      <div class="psb-tool" id="tool-status" onclick="switchTool('status')">
+        <div class="psb-tool-icon">📋</div>
+        <div class="psb-tool-name">Status Reports</div>
+        <div class="psb-tool-badge psb-tool-badge-amber">Due Jul</div>
+      </div>
+      <div class="psb-tool" id="tool-raci" onclick="switchTool('raci')">
+        <div class="psb-tool-icon">👥</div>
+        <div class="psb-tool-name">RACI Model</div>
+      </div>
+    </div>
+
+    <!-- PLANNING -->
+    <div class="psb-section">
+      <div class="psb-section-label">Planning</div>
+      <div class="psb-tool" id="tool-gantt" onclick="switchTool('gantt')">
+        <div class="psb-tool-icon">📊</div>
+        <div class="psb-tool-name">Gantt Chart</div>
+        <div class="psb-tool-badge psb-tool-badge-blue">3</div>
+      </div>
+      <div class="psb-tool" id="tool-milestones" onclick="switchTool('milestones')">
+        <div class="psb-tool-icon">🏁</div>
+        <div class="psb-tool-name">Milestone Plan</div>
+        <div class="psb-tool-badge psb-tool-badge-amber">1 due</div>
+      </div>
+      <div class="psb-tool" id="tool-tracking" onclick="switchTool('tracking')">
+        <div class="psb-tool-icon">📌</div>
+        <div class="psb-tool-name">Tracking Boards</div>
+        <div class="psb-tool-badge psb-tool-badge-blue">2</div>
+      </div>
+      <div class="psb-tool" id="tool-wbs" onclick="switchTool('wbs')">
+        <div class="psb-tool-icon">🌳</div>
+        <div class="psb-tool-name">WBS</div>
+      </div>
+    </div>
+
+    <!-- DELIVERY -->
+    <div class="psb-section">
+      <div class="psb-section-label">Delivery</div>
+      <div class="psb-tool" id="tool-deliverables" onclick="switchTool('deliverables')">
+        <div class="psb-tool-icon">📦</div>
+        <div class="psb-tool-name">Deliverables</div>
+        <div class="psb-tool-badge psb-tool-badge-amber">2 open</div>
+      </div>
+      <div class="psb-tool" id="tool-docs" onclick="switchTool('docs')">
+        <div class="psb-tool-icon">📄</div>
+        <div class="psb-tool-name">Documentation</div>
+        <div class="psb-tool-badge psb-tool-badge-gray">12 docs</div>
+      </div>
+      <div class="psb-tool" id="tool-tests" onclick="switchTool('tests')">
+        <div class="psb-tool-icon">🧪</div>
+        <div class="psb-tool-name">Test Tracker</div>
+        <div class="psb-tool-badge psb-tool-badge-gray">Not started</div>
+      </div>
+    </div>
+
+    <!-- RESOURCES & FINANCE -->
+    <div class="psb-section">
+      <div class="psb-section-label">Resources & Finance</div>
+      <div class="psb-tool" id="tool-team" onclick="switchTool('team')">
+        <div class="psb-tool-icon">👥</div>
+        <div class="psb-tool-name">Team</div>
+        <div class="psb-tool-badge psb-tool-badge-red">1 overdue TS</div>
+      </div>
+      <div class="psb-tool" id="tool-finance" onclick="switchTool('finance')">
+        <div class="psb-tool-icon">💵</div>
+        <div class="psb-tool-name">Finance Tracker</div>
+        <div class="psb-tool-badge psb-tool-badge-amber">Monitor</div>
+      </div>
+      <div class="psb-tool" id="tool-timesheets" onclick="switchTool('timesheets')">
+        <div class="psb-tool-icon">⏱</div>
+        <div class="psb-tool-name">Timesheets</div>
+        <div class="psb-tool-badge psb-tool-badge-red">1 overdue</div>
+      </div>
+      <div class="psb-tool" id="tool-resources" onclick="switchTool('resources')">
+        <div class="psb-tool-icon">👤</div>
+        <div class="psb-tool-name">Resource Tracker</div>
+      </div>
+    </div>
+
+    <!-- PEOPLE -->
+    <div class="psb-section">
+      <div class="psb-section-label">People & Organisation</div>
+      <div class="psb-tool" id="tool-stakeholders" onclick="switchTool('stakeholders')">
+        <div class="psb-tool-icon">🗺</div>
+        <div class="psb-tool-name">Stakeholder Map</div>
+      </div>
+      <div class="psb-tool" id="tool-orgchart" onclick="switchTool('orgchart')">
+        <div class="psb-tool-icon">🏢</div>
+        <div class="psb-tool-name">Org Chart</div>
+      </div>
+    </div>
+
+  </div><!-- /psb-nav -->
+
+  <!-- Add tool -->
+  <div class="psb-add-tool" onclick="openToolModal()">
+    <span style="font-size:16px;font-weight:900;">+</span>
+    <span>Add tool</span>
+  </div>
+
+</div><!-- /inner-sb -->
+
+<!-- ══ CONTENT AREA ══ -->
+<div class="content-area">
+
+  <!-- Content topbar — updates with active tool -->
+  <div class="content-topbar">
+    <div class="content-topbar-title">
+      <span id="topbarIcon">📊</span>
+      <span id="topbarTitle">Overview</span>
+    </div>
+    <span class="content-topbar-sub" id="topbarSub">HSBC Digital Transformation · PRJ-2026-001</span>
+    <div class="sp"></div>
+    <div id="topbarActions" style="display:flex;gap:6px;">
+      <!-- Updated per tool by JS -->
+      <button class="tb-btn tb-ghost" onclick="alert('Share')">🔗 Share</button>
+      <button class="tb-btn tb-ghost" onclick="alert('Settings')">⚙ Settings</button>
+      <button class="tb-btn tb-ai" onclick="alert('AI Insights')">✦ AI</button>
+    </div>
+  </div>
+
+  <!-- WORKSPACE -->
+  <div class="workspace">
+
+    <!-- ══════════════ OVERVIEW ══════════════ -->
+    <div class="tab-content active" id="content-overview">
+
+      <!-- Scope banner -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 18px;margin-bottom:14px;display:flex;gap:20px;align-items:flex-start;">
+        <div style="flex:1;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:5px;">Objective / Scope</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.6;">To modernise HSBC UK's core finance and logistics processes via SAP S/4HANA, replacing 3 legacy systems, reducing manual processing by 60%, and achieving a single source of truth for all financial reporting by Q4 2026.</div>
+        </div>
+        <div style="border-left:1px solid var(--border);padding-left:18px;min-width:180px;flex-shrink:0;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:8px;">Project info</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text3);">Lead</span><span style="font-weight:700;">Aisha Khan</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text3);">PMO</span><span style="font-weight:700;">Victoria Reed</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text3);">Customer</span><span style="font-weight:700;">HSBC Bank plc</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text3);">Methodology</span><span style="font-weight:700;">SAP Activate</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text3);">Phase</span><span style="font-weight:700;color:var(--brand-d);">Explore (3/6)</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--text3);">End date</span><span style="font-weight:700;">31 Dec 2026</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stat cards -->
+      <div class="four-col" style="margin-bottom:14px;">
+        <div class="stat-card amber">
+          <div class="sc-label">Budget consumed</div>
+          <div class="sc-val" style="color:var(--amber-d);">£1.01M</div>
+          <div class="sc-sub">of £2.4M · 42%</div>
+          <div class="sc-delta sc-delta-a">⚠ Monitor — variance +£8K</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="sc-label">Progress</div>
+          <div class="sc-val" style="color:var(--brand-d);">42%</div>
+          <div style="margin-top:8px;"><div class="prog-track"><div class="prog-fill" style="width:42%;background:var(--brand-m);"></div></div></div>
+          <div class="sc-delta sc-delta-g">✓ On track for schedule</div>
+        </div>
+        <div class="stat-card red">
+          <div class="sc-label">Open RAID items</div>
+          <div class="sc-val" style="color:var(--red-d);">14</div>
+          <div class="sc-sub">3 need immediate action</div>
+          <div class="sc-delta sc-delta-r">2 overdue actions</div>
+        </div>
+        <div class="stat-card green">
+          <div class="sc-label">Timesheets this week</div>
+          <div class="sc-val" style="color:var(--green-d);">94%</div>
+          <div class="sc-sub">11 of 12 submitted</div>
+          <div class="sc-delta sc-delta-r">1 overdue: R. Burns</div>
+        </div>
+      </div>
+
+      <div class="two-col" style="margin-bottom:14px;">
+        <!-- Milestone snapshot -->
+        <div class="card">
+          <div class="card-hdr">
+            <div><div class="card-title">🏁 Upcoming milestones</div><div class="card-sub">SAP Activate · Phase 3 — Explore</div></div>
+            <button class="tb-btn tb-ghost" style="height:26px;font-size:10px;" onclick="switchTool('milestones')">View all →</button>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <table class="data-table">
+              <thead><tr><th>Milestone</th><th>Due</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td style="font-weight:600;">Business Blueprint approved</td><td style="font-family:var(--mono);font-size:11px;">30 Jun</td><td><span class="rag rag-g"><span class="rag-dot"></span>Done</span></td></tr>
+                <tr style="background:rgba(67,56,202,.03);"><td style="font-weight:700;color:var(--brand-d);">▶ Gap Analysis sign-off</td><td style="font-family:var(--mono);font-size:11px;font-weight:700;">25 Jul</td><td><span class="rag rag-a"><span class="rag-dot"></span>In review</span></td></tr>
+                <tr><td style="font-weight:600;">Config Workbook v1</td><td style="font-family:var(--mono);font-size:11px;">15 Aug</td><td><span class="rag rag-n"><span class="rag-dot"></span>Upcoming</span></td></tr>
+                <tr><td style="font-weight:600;">Realise phase kickoff</td><td style="font-family:var(--mono);font-size:11px;">01 Sep</td><td><span class="rag rag-n"><span class="rag-dot"></span>Upcoming</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Phase progress bar -->
+          <div style="padding:12px 16px;border-top:1px solid var(--border2);">
+            <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Phase progress</div>
+            <div class="phase-bar">
+              <div class="phase-seg" style="background:var(--green);flex:1;">✓ Discover</div>
+              <div class="phase-seg" style="background:var(--green);flex:1;">✓ Prepare</div>
+              <div class="phase-seg" style="background:var(--brand);flex:2;">▶ Explore</div>
+              <div class="phase-seg" style="background:var(--border);color:var(--text3);flex:2;">Realise</div>
+              <div class="phase-seg" style="background:var(--border);color:var(--text3);flex:1;">Deploy</div>
+              <div class="phase-seg" style="background:var(--border);color:var(--text3);flex:1;">Run</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RAID snapshot -->
+        <div class="card">
+          <div class="card-hdr">
+            <div><div class="card-title">⚠ Critical RAID items</div><div class="card-sub">3 items require immediate action</div></div>
+            <button class="tb-btn tb-ghost" style="height:26px;font-size:10px;" onclick="switchTool('raid')">RAID log →</button>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <table class="data-table">
+              <thead><tr><th>Type</th><th>Summary</th><th>Priority</th><th>Owner</th></tr></thead>
+              <tbody>
+                <tr><td><span class="chip chip-risk">Risk</span></td><td style="font-size:11px;font-weight:600;max-width:160px;">Budget overrun if CR-007 scope accepted</td><td><span class="prio"><span class="prio-dot" style="background:var(--red);"></span>Critical</span></td><td style="font-size:11px;font-weight:600;">AK</td></tr>
+                <tr><td><span class="chip chip-issue">Issue</span></td><td style="font-size:11px;font-weight:600;max-width:160px;">Data migration 3 weeks behind</td><td><span class="prio"><span class="prio-dot" style="background:var(--red);"></span>High</span></td><td style="font-size:11px;font-weight:600;">JC</td></tr>
+                <tr><td><span class="chip chip-risk">Risk</span></td><td style="font-size:11px;font-weight:600;max-width:160px;">HSBC IT freeze Nov–Dec blocks go-live</td><td><span class="prio"><span class="prio-dot" style="background:var(--amber);"></span>High</span></td><td style="font-size:11px;font-weight:600;">VR</td></tr>
+                <tr><td><span class="chip chip-dep">Dep</span></td><td style="font-size:11px;font-weight:600;max-width:160px;">SAP basis blocked by HSBC security</td><td><span class="prio"><span class="prio-dot" style="background:var(--amber);"></span>High</span></td><td style="font-size:11px;font-weight:600;">HK</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity + team -->
+      <div class="two-col">
+        <div class="card">
+          <div class="card-hdr"><div class="card-title">📰 Recent activity</div><div class="card-sub">Last 7 days</div></div>
+          <div class="card-body" style="padding:8px 14px;">
+            <div class="act-item"><div class="act-dot" style="background:var(--amber);"></div><div class="act-text"><strong>Budget alert</strong> — M3 contractor overrun £33K. Reforecast triggered.</div><div class="act-time">2h ago</div></div>
+            <div class="act-item"><div class="act-dot" style="background:var(--green);"></div><div class="act-text"><strong>Business Blueprint approved</strong> by Marcus Chen (HSBC CDO).</div><div class="act-time">1d ago</div></div>
+            <div class="act-item"><div class="act-dot" style="background:var(--brand);"></div><div class="act-text"><strong>July status report submitted</strong> to Steering Committee (8 recipients).</div><div class="act-time">2d ago</div></div>
+            <div class="act-item"><div class="act-dot" style="background:var(--red);"></div><div class="act-text"><strong>New issue logged</strong> — data migration behind. Owner: James Chen.</div><div class="act-time">3d ago</div></div>
+            <div class="act-item"><div class="act-dot" style="background:var(--green);"></div><div class="act-text"><strong>3 team members onboarded</strong> — Patel, Adeyemi, Nguyen added.</div><div class="act-time">5d ago</div></div>
+            <div class="act-item"><div class="act-dot" style="background:var(--teal);"></div><div class="act-text"><strong>Week 28 timesheets approved</strong> — £94,200 posted to actuals. WIP: £84K.</div><div class="act-time">7d ago</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hdr"><div class="card-title">👥 Team snapshot</div><div class="card-sub">12 people · avg 83% utilisation</div></div>
+          <div class="card-body" style="padding:0;">
+            <table class="data-table">
+              <thead><tr><th>Person</th><th>Role</th><th>Util</th><th>TS</th></tr></thead>
+              <tbody>
+                <tr><td><div style="display:flex;align-items:center;gap:6px;"><div class="av av-sm" style="background:#4338CA;">AK</div><span style="font-weight:600;font-size:11px;">Aisha Khan</span></div></td><td style="font-size:10px;color:var(--text3);">Prog. Mgr</td><td><span style="font-size:11px;font-family:var(--mono);font-weight:700;color:var(--green-d);">85%</span></td><td><span class="rag rag-g" style="font-size:9px;"><span class="rag-dot"></span>Done</span></td></tr>
+                <tr><td><div style="display:flex;align-items:center;gap:6px;"><div class="av av-sm" style="background:#059669;">JC</div><span style="font-weight:600;font-size:11px;">James Chen</span></div></td><td style="font-size:10px;color:var(--text3);">Consultant</td><td><span style="font-size:11px;font-family:var(--mono);font-weight:700;color:var(--amber-d);">100%</span></td><td><span class="rag rag-g" style="font-size:9px;"><span class="rag-dot"></span>Done</span></td></tr>
+                <tr><td><div style="display:flex;align-items:center;gap:6px;"><div class="av av-sm" style="background:#D97706;">HK</div><span style="font-weight:600;font-size:11px;">Hana Kovačević</span></div></td><td style="font-size:10px;color:var(--text3);">SAP FICO</td><td><span style="font-size:11px;font-family:var(--mono);font-weight:700;color:var(--green-d);">90%</span></td><td><span class="rag rag-g" style="font-size:9px;"><span class="rag-dot"></span>Done</span></td></tr>
+                <tr style="background:rgba(220,38,38,.025);"><td><div style="display:flex;align-items:center;gap:6px;"><div class="av av-sm" style="background:#0D9488;">RB</div><span style="font-weight:600;font-size:11px;">Robert Burns</span></div></td><td style="font-size:10px;color:var(--text3);">Test Mgr</td><td><span style="font-size:11px;font-family:var(--mono);font-weight:700;color:var(--brand-d);">60%</span></td><td><span class="rag rag-r" style="font-size:9px;"><span class="rag-dot"></span>Overdue</span></td></tr>
+                <tr><td><div style="display:flex;align-items:center;gap:6px;"><div class="av av-sm" style="background:#7C3AED;">PM</div><span style="font-weight:600;font-size:11px;">Priya Mehta</span></div></td><td style="font-size:10px;color:var(--text3);">BA</td><td><span style="font-size:11px;font-family:var(--mono);font-weight:700;color:var(--green-d);">75%</span></td><td><span class="rag rag-g" style="font-size:9px;"><span class="rag-dot"></span>Done</span></td></tr>
+              </tbody>
+            </table>
+            <div style="padding:8px 12px;border-top:1px solid var(--border2);"><button class="tb-btn tb-ghost" style="width:100%;justify-content:center;height:28px;font-size:11px;" onclick="switchTool('team')">View full team →</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ 360° REPORT ══════════════ -->
+    <div class="tab-content" id="content-360">
+      <div style="background:linear-gradient(135deg,var(--brand-d),#2d1b69);border-radius:var(--rl);padding:18px 22px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
+        <div><div style="font-size:18px;font-weight:900;color:#fff;margin-bottom:3px;">360° Project Health Report</div><div style="font-size:11px;color:rgba(255,255,255,.5);">HSBC Digital Transformation · 15 Jul 2026 · For PM & Programme Manager</div></div>
+        <div style="display:flex;gap:6px;"><button class="tb-btn" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;">🖨 Print</button><button class="tb-btn" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;">⬇ PDF</button></div>
+      </div>
+      <div class="four-col" style="margin-bottom:14px;">
+        <div class="stat-card amber"><div class="sc-label">Health score</div><div class="sc-val" style="color:var(--amber-d);">74</div><div class="sc-sub">Monitor — 2 items need attention</div></div>
+        <div class="stat-card amber"><div class="sc-label">Budget RAG</div><div class="sc-val" style="font-size:18px;color:var(--amber-d);">Monitor</div><div class="sc-sub">CPI: 0.98 · EAC £2.41M · +£10K</div></div>
+        <div class="stat-card green"><div class="sc-label">Schedule RAG</div><div class="sc-val" style="font-size:18px;color:var(--green-d);">On Track</div><div class="sc-sub">SPI: 1.02 · 170 days remaining</div></div>
+        <div class="stat-card green"><div class="sc-label">Scope RAG</div><div class="sc-val" style="font-size:18px;color:var(--green-d);">On Track</div><div class="sc-sub">1 CR pending · low impact</div></div>
+      </div>
+      <div class="two-col" style="margin-bottom:14px;">
+        <div class="card">
+          <div class="card-hdr" style="background:var(--amber-l);"><div><div class="card-title" style="color:var(--amber-d);">💰 Budget & Finance</div></div><span class="rag rag-a"><span class="rag-dot"></span>Monitor</span></div>
+          <div class="card-body">
+            <div class="three-col" style="margin-bottom:10px;text-align:center;">
+              <div><div style="font-size:10px;color:var(--text3);">Budget</div><div style="font-size:18px;font-weight:900;font-family:var(--mono);">£2.4M</div></div>
+              <div><div style="font-size:10px;color:var(--text3);">Spent</div><div style="font-size:18px;font-weight:900;font-family:var(--mono);color:var(--amber-d);">£1.01M</div></div>
+              <div><div style="font-size:10px;color:var(--text3);">Forecast</div><div style="font-size:18px;font-weight:900;font-family:var(--mono);">£2.41M</div></div>
+            </div>
+            <div style="background:var(--amber-l);border-radius:6px;padding:8px 10px;font-size:11px;color:var(--amber-d);font-weight:600;">⚠ M3 contractor overrun £33K. Reforecast in progress.</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hdr" style="background:var(--red-l);"><div><div class="card-title" style="color:var(--red-d);">⚠ RAID Summary</div></div><span class="rag rag-r"><span class="rag-dot"></span>Action needed</span></div>
+          <div class="card-body">
+            <div class="four-col" style="margin-bottom:10px;">
+              <div style="text-align:center;background:var(--red-l);border-radius:6px;padding:8px;"><div style="font-size:10px;color:var(--red-d);font-weight:700;">Risks</div><div style="font-size:20px;font-weight:900;color:var(--red-d);">6</div></div>
+              <div style="text-align:center;background:var(--amber-l);border-radius:6px;padding:8px;"><div style="font-size:10px;color:var(--amber-d);font-weight:700;">Issues</div><div style="font-size:20px;font-weight:900;color:var(--amber-d);">4</div></div>
+              <div style="text-align:center;background:var(--teal-l);border-radius:6px;padding:8px;"><div style="font-size:10px;color:var(--teal-d);font-weight:700;">Assump</div><div style="font-size:20px;font-weight:900;color:var(--teal-d);">3</div></div>
+              <div style="text-align:center;background:var(--violet-l);border-radius:6px;padding:8px;"><div style="font-size:10px;color:var(--violet-d);font-weight:700;">Deps</div><div style="font-size:20px;font-weight:900;color:var(--violet-d);">1</div></div>
+            </div>
+            <div style="background:var(--red-l);border-radius:6px;padding:8px 10px;font-size:11px;color:var(--red-d);font-weight:600;">🔴 2 actions overdue · 1 critical risk open</div>
+          </div>
+        </div>
+      </div>
+      <!-- Actions required -->
+      <div class="card">
+        <div class="card-hdr" style="background:var(--red-l);"><div><div class="card-title" style="color:var(--red-d);">🔴 Actions required before next steering committee</div></div></div>
+        <div class="card-body" style="padding:0;">
+          <table class="data-table">
+            <thead><tr><th>#</th><th>Action</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td style="font-family:var(--mono);font-size:10px;">A-001</td><td style="font-weight:600;">Approve or reject scope change CR-007 (M7 module — £120K impact)</td><td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:#4338CA;">AK</div><span style="font-size:11px;">Aisha Khan</span></div></td><td style="font-family:var(--mono);font-size:11px;color:var(--red-d);font-weight:700;">18 Jul</td><td><span class="rag rag-r"><span class="rag-dot"></span>Overdue</span></td></tr>
+              <tr><td style="font-family:var(--mono);font-size:10px;">A-002</td><td style="font-weight:600;">Raise recruitment request for SAP SD Consultant (skills gap)</td><td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:#7C3AED;">VR</div><span style="font-size:11px;">V. Reed</span></div></td><td style="font-family:var(--mono);font-size:11px;color:var(--red-d);font-weight:700;">20 Jul</td><td><span class="rag rag-r"><span class="rag-dot"></span>Overdue</span></td></tr>
+              <tr><td style="font-family:var(--mono);font-size:10px;">A-003</td><td style="font-weight:600;">Submit July reforecast with M3 variance commentary</td><td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:#4338CA;">AK</div><span style="font-size:11px;">Aisha Khan</span></div></td><td style="font-family:var(--mono);font-size:11px;">25 Jul</td><td><span class="rag rag-a"><span class="rag-dot"></span>In progress</span></td></tr>
+              <tr><td style="font-family:var(--mono);font-size:10px;">A-004</td><td style="font-weight:600;">Obtain HSBC security sign-off for SAP basis environment</td><td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:#D97706;">HK</div><span style="font-size:11px;">H. Kovačević</span></div></td><td style="font-family:var(--mono);font-size:11px;">31 Jul</td><td><span class="rag rag-a"><span class="rag-dot"></span>In progress</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ RAID LOG ══════════════ -->
+    <div class="tab-content" id="content-raid">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;">
+        <div style="display:flex;background:var(--border2);border-radius:var(--r);padding:3px;">
+          <div id="raid-filter-all" style="padding:5px 12px;border-radius:6px;background:var(--surface);font-size:12px;font-weight:700;color:var(--brand);box-shadow:0 1px 3px rgba(0,0,0,.07);cursor:pointer;" onclick="filterRaid('all')">All (14)</div>
+          <div id="raid-filter-risk" style="padding:5px 12px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;" onclick="filterRaid('risk')">Risks (6)</div>
+          <div id="raid-filter-issue" style="padding:5px 12px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;" onclick="filterRaid('issue')">Issues (4)</div>
+          <div id="raid-filter-assump" style="padding:5px 12px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;" onclick="filterRaid('assump')">Assumptions (3)</div>
+          <div id="raid-filter-dep" style="padding:5px 12px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;" onclick="filterRaid('dep')">Dependencies (1)</div>
+        </div>
+        <div style="flex:1;"></div>
+        <select style="height:30px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r);font-family:var(--font);font-size:11px;background:var(--surface);"><option>All priorities</option><option>Critical</option><option>High</option><option>Medium</option></select>
+        <select style="height:30px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r);font-family:var(--font);font-size:11px;background:var(--surface);"><option>All statuses</option><option>Open</option><option>In progress</option><option>Closed</option></select>
+        <button class="tb-btn tb-primary" onclick="alert('Add RAID item')">+ Add item</button>
+      </div>
+      <div class="card">
+        <div class="card-body" style="padding:0;">
+          <table class="data-table" id="raidTable">
+            <thead><tr><th>ID</th><th>Type</th><th>Summary</th><th>Impact</th><th>Priority</th><th>Owner</th><th>Due</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <tr data-type="risk"><td style="font-family:var(--mono);font-size:10px;color:var(--text4);">R-001</td><td><span class="chip chip-risk">Risk</span></td><td style="font-weight:600;max-width:200px;">Budget overrun if scope change CR-007 accepted — M7 module +£120K</td><td><span class="rag rag-r" style="font-size:9px;"><span class="rag-dot"></span>Critical</span></td><td><span class="prio"><span class="prio-dot" style="background:var(--red);"></span>Critical</span></td><td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:#4338CA;">AK</div><span style="font-size:11px;">Aisha Khan</span></div></td><td style="font-family:var(--mono);font-size:11px;color:var(--red-d);font-weight:700;">18 Jul</td><td><span class="rag rag-r"><span class="rag-dot"></span>Open</span></td><td><button class="tb-btn tb-ghost" style="height:24px;font-size:10px;" onclick="alert('Edit R-001')">Edit</button></td></tr>
+              <tr data-type="issue"><td style="font-family:var(--mono);font-size:10px;color:var(--text4);">I-001</td><td><span class="chip chip-issue">Issue</span></td><td style="font-weight:600;max-width:200px;">Legacy data migration 3 weeks behind planned schedule</td><td><span class="rag rag-r" style="font-size:9px;"><span class="rag-dot"></span>High</span></td><td><span class="prio"><span class="prio-dot" style="background:var(--red);"></span>High</span></td><td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:#059669;">JC</div><span style="font-size:11px;">James Chen</span></div></td><td style="font-family:var(--mono);font-size:11px;">25 Jul</td><td><span class="rag rag-a"><span class="rag-dot"></span>In progress</span></td><td><button class="tb-btn tb-ghost" style="height:24px;font-size:10px;" onclick="alert('Edit I-001')">Edit</button></td></tr>
+              <tr data-type="risk"><td style="font-family:var(--mono);font-size:10px;color:var(--text4);">R-002</td><td><span class="chip chip-risk">Risk</span></td><td style="font-weight:600;max-width:200px;">HSBC IT freeze Nov–Dec may block go-live cutover date</td><td><span class="rag rag-a" style="font-size:9px;"><span class="rag-dot"></span>High</span></td><td><span class="prio"><span class="prio-dot" style="background:var(--amber);"></span>High</span></td><td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:#7C3AED;">VR</div><span style="font-size:11px;">V. Reed</span></div></td><td style="font-family:var(--mono);font-size:11px;">01 Aug</td><td><span class="rag rag-a"><span class="rag-dot"></span>Escalated</span></td><td><button class="tb-btn tb-ghost" style="height:24px;font-size:10px;" onclick="alert('Edit R-002')">Edit</button></td></tr>
+              <tr data-type="dep"><td style="font-family:var(--mono);font-size:10px;color:var(--text4);">D-001</td><td><span class="chip chip-dep">Dep</span></td><td style="font-weight:600;max-width:200px;">SAP basis environment blocked by HSBC security approval</td><td><span class="rag rag-r" style="font-size:9px;"><span class="rag-dot"></span>High</span></td><td><span class="prio"><span class="prio-dot" style="background:var(--amber);"></span>High</span></td><td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:#D97706;">HK</div><span style="font-size:11px;">H. Kovačević</span></div></td><td style="font-family:var(--mono);font-size:11px;">31 Jul</td><td><span class="rag rag-a"><span class="rag-dot"></span>In progress</span></td><td><button class="tb-btn tb-ghost" style="height:24px;font-size:10px;" onclick="alert('Edit D-001')">Edit</button></td></tr>
+              <tr data-type="assump"><td style="font-family:var(--mono);font-size:10px;color:var(--text4);">A-001</td><td><span class="chip chip-assump">Assump</span></td><td style="font-weight:600;max-width:200px;">HSBC will provide 3 FTE business users for UAT (Sep–Oct)</td><td><span class="rag rag-a" style="font-size:9px;"><span class="rag-dot"></span>Medium</span></td><td><span class="prio"><span class="prio-dot" style="background:var(--brand);"></span>Medium</span></td><td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:#4338CA;">AK</div><span style="font-size:11px;">Aisha Khan</span></div></td><td style="font-family:var(--mono);font-size:11px;">15 Aug</td><td><span class="rag rag-n"><span class="rag-dot"></span>Open</span></td><td><button class="tb-btn tb-ghost" style="height:24px;font-size:10px;" onclick="alert('Edit A-001')">Edit</button></td></tr>
+              <tr data-type="issue"><td style="font-family:var(--mono);font-size:10px;color:var(--text4);">I-002</td><td><span class="chip chip-issue">Issue</span></td><td style="font-weight:600;max-width:200px;">M3 contractor billing above agreed rate card — £33K variance</td><td><span class="rag rag-a" style="font-size:9px;"><span class="rag-dot"></span>Medium</span></td><td><span class="prio"><span class="prio-dot" style="background:var(--amber);"></span>High</span></td><td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:#4338CA;">AK</div><span style="font-size:11px;">Aisha Khan</span></div></td><td style="font-family:var(--mono);font-size:11px;">25 Jul</td><td><span class="rag rag-a"><span class="rag-dot"></span>In progress</span></td><td><button class="tb-btn tb-ghost" style="height:24px;font-size:10px;" onclick="alert('Edit I-002')">Edit</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ STATUS REPORTS ══════════════ -->
+    <div class="tab-content" id="content-status">
+      <div style="background:var(--amber-l);border:1px solid #FDE68A;border-radius:var(--rl);padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">
+        <div style="font-size:20px;">📋</div>
+        <div style="flex:1;"><div style="font-size:13px;font-weight:700;color:var(--amber-d);">July status report due in 16 days</div><div style="font-size:11px;color:var(--amber-d);margin-top:2px;">Monthly · Steering Committee · Auto-populated from RAID, milestones and budget data</div></div>
+        <button class="tb-btn tb-amber" onclick="alert('Start July status report — fields pre-populated from project data')">Start report →</button>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Status report history</div><button class="tb-btn tb-primary" style="height:28px;font-size:11px;" onclick="alert('Create report')">+ Create report</button></div>
+        <div class="card-body" style="padding:0;">
+          <table class="data-table">
+            <thead><tr><th>Period</th><th>Title</th><th>Submitted by</th><th>Date</th><th>Audience</th><th>RAG at submission</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <tr><td style="font-family:var(--mono);font-size:11px;">Jun 2026</td><td style="font-weight:600;">June Status Report</td><td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:#4338CA;">AK</div><span style="font-size:11px;">Aisha Khan</span></div></td><td style="font-family:var(--mono);font-size:11px;">30 Jun</td><td style="font-size:11px;">Steering Committee</td><td><span class="rag rag-a" style="font-size:9px;"><span class="rag-dot"></span>Bgt: Monitor</span></td><td><span class="rag rag-g"><span class="rag-dot"></span>Submitted</span></td><td><button class="tb-btn tb-ghost" style="height:24px;font-size:10px;">View</button></td></tr>
+              <tr><td style="font-family:var(--mono);font-size:11px;">May 2026</td><td style="font-weight:600;">May Status Report</td><td><div style="display:flex;align-items:center;gap:5px;"><div class="av av-sm" style="background:#4338CA;">AK</div><span style="font-size:11px;">Aisha Khan</span></div></td><td style="font-family:var(--mono);font-size:11px;">31 May</td><td style="font-size:11px;">Steering Committee</td><td><span class="rag rag-g" style="font-size:9px;"><span class="rag-dot"></span>All green</span></td><td><span class="rag rag-g"><span class="rag-dot"></span>Submitted</span></td><td><button class="tb-btn tb-ghost" style="height:24px;font-size:10px;">View</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ TEAM ══════════════ -->
+    <div class="tab-content" id="content-team">
+      <div class="card">
+        <div class="card-hdr"><div><div class="card-title">👥 Project team</div><div class="card-sub">12 people · 9 employees · 2 contractors · 1 customer staff</div></div><button class="tb-btn tb-primary" style="height:28px;" onclick="alert('Add member')">+ Add member</button></div>
+        <div class="card-body" style="padding:0;">
+          <table class="data-table">
+            <thead><tr><th>Name</th><th>Type</th><th>Role</th><th>Allocation</th><th>Utilisation</th><th>Rate</th><th>TS status</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="av" style="background:#4338CA;">AK</div><div><div style="font-size:12px;font-weight:700;">Aisha Khan</div><div style="font-size:10px;color:var(--text3);">Lead · Programme Manager</div></div></div></td><td><span class="chip" style="background:var(--brand-l);color:var(--brand-d);font-size:9px;">Employee</span></td><td style="font-size:11px;">Prog. Manager</td><td style="font-family:var(--mono);font-size:11px;">100%</td><td><div style="display:flex;align-items:center;gap:5px;"><div style="width:52px;"><div class="prog-track"><div class="prog-fill" style="width:85%;background:var(--green);"></div></div></div><span style="font-size:10px;">85%</span></div></td><td style="font-family:var(--mono);font-size:11px;">£1,100/d</td><td><span class="rag rag-g" style="font-size:9px;"><span class="rag-dot"></span>Done</span></td><td><button class="tb-btn tb-ghost" style="height:24px;font-size:10px;">View</button></td></tr>
+              <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="av" style="background:#059669;">JC</div><div><div style="font-size:12px;font-weight:700;">James Chen</div><div style="font-size:10px;color:var(--text3);">Senior Consultant</div></div></div></td><td><span class="chip" style="background:var(--brand-l);color:var(--brand-d);font-size:9px;">Employee</span></td><td style="font-size:11px;">SAP Consultant</td><td style="font-family:var(--mono);font-size:11px;">100%</td><td><div style="display:flex;align-items:center;gap:5px;"><div style="width:52px;"><div class="prog-track"><div class="prog-fill" style="width:100%;background:var(--amber);"></div></div></div><span style="font-size:10px;">100%</span></div></td><td style="font-family:var(--mono);font-size:11px;">£950/d</td><td><span class="rag rag-g" style="font-size:9px;"><span class="rag-dot"></span>Done</span></td><td><button class="tb-btn tb-ghost" style="height:24px;font-size:10px;">View</button></td></tr>
+              <tr><td><div style="display:flex;align-items:center;gap:8px;"><div class="av" style="background:#D97706;">HK</div><div><div style="font-size:12px;font-weight:700;">Hana Kovačević</div><div style="font-size:10px;color:var(--text3);">SAP FICO Lead · Contractor</div></div></div></td><td><span class="chip" style="background:var(--amber-l);color:var(--amber-d);font-size:9px;">Contractor</span></td><td style="font-size:11px;">SAP FICO</td><td style="font-family:var(--mono);font-size:11px;">100%</td><td><div style="display:flex;align-items:center;gap:5px;"><div style="width:52px;"><div class="prog-track"><div class="prog-fill" style="width:90%;background:var(--green);"></div></div></div><span style="font-size:10px;">90%</span></div></td><td style="font-family:var(--mono);font-size:11px;">£1,250/d</td><td><span class="rag rag-g" style="font-size:9px;"><span class="rag-dot"></span>Done</span></td><td><button class="tb-btn tb-ghost" style="height:24px;font-size:10px;">View</button></td></tr>
+              <tr style="background:rgba(220,38,38,.02);"><td><div style="display:flex;align-items:center;gap:8px;"><div class="av" style="background:#0D9488;">RB</div><div><div style="font-size:12px;font-weight:700;">Robert Burns</div><div style="font-size:10px;color:var(--red-d);font-weight:700;">⚠ Timesheet overdue</div></div></div></td><td><span class="chip" style="background:var(--brand-l);color:var(--brand-d);font-size:9px;">Employee</span></td><td style="font-size:11px;">Test Manager</td><td style="font-family:var(--mono);font-size:11px;">80%</td><td><div style="display:flex;align-items:center;gap:5px;"><div style="width:52px;"><div class="prog-track"><div class="prog-fill" style="width:60%;background:var(--brand);"></div></div></div><span style="font-size:10px;">60%</span></div></td><td style="font-family:var(--mono);font-size:11px;">£780/d</td><td><span class="rag rag-r" style="font-size:9px;"><span class="rag-dot"></span>Overdue</span></td><td><button class="tb-btn tb-amber" style="height:24px;font-size:10px;">Chase</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ FINANCE ══════════════ -->
+    <div class="tab-content" id="content-finance">
+      <div class="three-col" style="margin-bottom:14px;">
+        <div class="stat-card blue"><div class="sc-label">Total budget</div><div class="sc-val">£2.4M</div><div class="sc-sub">Approved baseline · no variations</div></div>
+        <div class="stat-card amber"><div class="sc-label">Actual spend</div><div class="sc-val" style="color:var(--amber-d);">£1.01M</div><div class="sc-sub">42% of budget consumed</div><div class="sc-delta sc-delta-a" style="margin-top:6px;">⚠ M3 overrun £33K</div></div>
+        <div class="stat-card blue"><div class="sc-label">Forecast outturn (EAC)</div><div class="sc-val">£2.41M</div><div class="sc-sub">+£10K vs baseline · CPI 0.98</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">💵 Budget vs Actuals by month</div><div style="display:flex;gap:6px;"><button class="tb-btn tb-ghost" style="height:28px;font-size:11px;">Reforecast</button><button class="tb-btn tb-ghost" style="height:28px;font-size:11px;">Export</button></div></div>
+        <div class="card-body" style="padding:0;">
+          <table class="data-table">
+            <thead><tr><th>Month</th><th>Budget</th><th>Actuals</th><th>Variance £</th><th>Variance %</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td style="font-family:var(--mono);font-size:11px;">Jan 2026</td><td style="font-family:var(--mono);">£168,000</td><td style="font-family:var(--mono);">£164,200</td><td style="font-family:var(--mono);color:var(--green-d);">-£3,800</td><td style="color:var(--green-d);">-2.3%</td><td><span class="rag rag-g"><span class="rag-dot"></span>Under</span></td></tr>
+              <tr><td style="font-family:var(--mono);font-size:11px;">Feb 2026</td><td style="font-family:var(--mono);">£184,000</td><td style="font-family:var(--mono);">£181,500</td><td style="font-family:var(--mono);color:var(--green-d);">-£2,500</td><td style="color:var(--green-d);">-1.4%</td><td><span class="rag rag-g"><span class="rag-dot"></span>Under</span></td></tr>
+              <tr style="background:rgba(220,38,38,.02);"><td style="font-family:var(--mono);font-size:11px;">Mar 2026</td><td style="font-family:var(--mono);">£196,000</td><td style="font-family:var(--mono);font-weight:700;">£229,000</td><td style="font-family:var(--mono);color:var(--red-d);font-weight:700;">+£33,000</td><td style="color:var(--red-d);font-weight:700;">+16.8%</td><td><span class="rag rag-r"><span class="rag-dot"></span>Over</span></td></tr>
+              <tr><td style="font-family:var(--mono);font-size:11px;">Apr 2026</td><td style="font-family:var(--mono);">£210,000</td><td style="font-family:var(--mono);">£207,400</td><td style="font-family:var(--mono);color:var(--green-d);">-£2,600</td><td style="color:var(--green-d);">-1.2%</td><td><span class="rag rag-g"><span class="rag-dot"></span>Under</span></td></tr>
+              <tr><td style="font-family:var(--mono);font-size:11px;">May 2026</td><td style="font-family:var(--mono);">£224,000</td><td style="font-family:var(--mono);">£218,900</td><td style="font-family:var(--mono);color:var(--green-d);">-£5,100</td><td style="color:var(--green-d);">-2.3%</td><td><span class="rag rag-g"><span class="rag-dot"></span>Under</span></td></tr>
+              <tr style="background:var(--border2);"><td style="font-family:var(--mono);font-size:11px;font-weight:700;">Jun 2026</td><td style="font-family:var(--mono);font-weight:700;">£224,000</td><td style="font-family:var(--mono);font-weight:700;">£223,100</td><td style="font-family:var(--mono);color:var(--green-d);font-weight:700;">-£900</td><td style="color:var(--green-d);font-weight:700;">-0.4%</td><td><span class="rag rag-g"><span class="rag-dot"></span>Under</span></td></tr>
+              <tr style="opacity:.5;"><td style="font-family:var(--mono);font-size:11px;">Jul–Dec 2026</td><td style="font-family:var(--mono);">£1,194,000</td><td style="color:var(--text4);">Forecast only</td><td style="color:var(--text4);">—</td><td style="color:var(--text4);">—</td><td><span class="rag rag-n"><span class="rag-dot"></span>Forecast</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ GANTT (placeholder for full tool) ══════════════ -->
+    <div class="tab-content" id="content-gantt">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:32px;text-align:center;margin-bottom:14px;">
+        <div style="font-size:28px;margin-bottom:10px;">📊</div>
+        <div style="font-size:15px;font-weight:800;margin-bottom:4px;">Gantt Chart — 3 instances active</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:18px;">Overall Programme · Finance Workstream · Logistics Workstream</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px;">
+          <button class="tb-btn tb-primary" onclick="alert('Opening Programme Gantt…')">Programme Gantt</button>
+          <button class="tb-btn tb-ghost" onclick="alert('Finance Workstream…')">Finance Workstream</button>
+          <button class="tb-btn tb-ghost" onclick="alert('Logistics Workstream…')">Logistics Workstream</button>
+          <button class="tb-btn tb-ghost" onclick="alert('Add new Gantt instance…')">+ Add instance</button>
+        </div>
+        <div style="background:var(--border2);border-radius:var(--rl);padding:14px;">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">SAP Activate — phase overview</div>
+          <div class="phase-bar">
+            <div class="phase-seg" style="background:var(--green);flex:1;">✓ Discover</div>
+            <div class="phase-seg" style="background:var(--green);flex:1;">✓ Prepare</div>
+            <div class="phase-seg" style="background:var(--brand);flex:2;">▶ Explore (now)</div>
+            <div class="phase-seg" style="background:var(--border);color:var(--text3);flex:2;">Realise</div>
+            <div class="phase-seg" style="background:var(--border);color:var(--text3);flex:1;">Deploy</div>
+            <div class="phase-seg" style="background:var(--border);color:var(--text3);flex:1;">Run</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ MILESTONES ══════════════ -->
+    <div class="tab-content" id="content-milestones">
+      <div class="card">
+        <div class="card-hdr"><div><div class="card-title">🏁 All milestones</div><div class="card-sub">SAP Activate · 18 milestones across 6 phases</div></div><button class="tb-btn tb-primary" style="height:28px;" onclick="alert('Add milestone')">+ Add milestone</button></div>
+        <div class="card-body" style="padding:0;">
+          <table class="data-table">
+            <thead><tr><th>Phase</th><th>Milestone</th><th>Due date</th><th>Owner</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td><span class="chip" style="background:var(--green-l);color:var(--green-d);font-size:9px;">Discover</span></td><td style="font-weight:600;">Fit-to-Standard workshop completed</td><td style="font-family:var(--mono);font-size:11px;">14 Feb 2026</td><td style="font-size:11px;">AK</td><td><span class="rag rag-g"><span class="rag-dot"></span>Complete</span></td></tr>
+              <tr><td><span class="chip" style="background:var(--green-l);color:var(--green-d);font-size:9px;">Prepare</span></td><td style="font-weight:600;">Project Charter signed by sponsor</td><td style="font-family:var(--mono);font-size:11px;">15 Mar 2026</td><td style="font-size:11px;">AK</td><td><span class="rag rag-g"><span class="rag-dot"></span>Complete</span></td></tr>
+              <tr><td><span class="chip" style="background:var(--green-l);color:var(--green-d);font-size:9px;">Explore</span></td><td style="font-weight:600;">Business Blueprint approved by HSBC CDO</td><td style="font-family:var(--mono);font-size:11px;">30 Jun 2026</td><td style="font-size:11px;">AK</td><td><span class="rag rag-g"><span class="rag-dot"></span>Complete</span></td></tr>
+              <tr style="background:rgba(67,56,202,.03);"><td><span class="chip" style="background:var(--brand-l);color:var(--brand-d);font-size:9px;">▶ Explore</span></td><td style="font-weight:700;color:var(--brand-d);">Gap Analysis sign-off</td><td style="font-family:var(--mono);font-size:11px;font-weight:700;">25 Jul 2026</td><td style="font-size:11px;">JC</td><td><span class="rag rag-a"><span class="rag-dot"></span>In review</span></td></tr>
+              <tr><td><span class="chip" style="background:var(--border2);color:var(--text3);font-size:9px;">Explore</span></td><td style="font-weight:600;">Configuration Workbook v1 complete</td><td style="font-family:var(--mono);font-size:11px;">15 Aug 2026</td><td style="font-size:11px;">HK</td><td><span class="rag rag-n"><span class="rag-dot"></span>Upcoming</span></td></tr>
+              <tr><td><span class="chip" style="background:var(--border2);color:var(--text3);font-size:9px;">Realise</span></td><td style="font-weight:600;">Realise phase kickoff</td><td style="font-family:var(--mono);font-size:11px;">01 Sep 2026</td><td style="font-size:11px;">AK</td><td><span class="rag rag-n"><span class="rag-dot"></span>Upcoming</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ DELIVERABLES ══════════════ -->
+    <div class="tab-content" id="content-deliverables">
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">📦 Deliverables tracker</div><button class="tb-btn tb-primary" style="height:28px;" onclick="alert('Add deliverable')">+ Add deliverable</button></div>
+        <div class="card-body" style="padding:0;">
+          <table class="data-table">
+            <thead><tr><th>Deliverable</th><th>Phase</th><th>Type</th><th>Due</th><th>Owner</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td style="font-weight:600;">Business Blueprint</td><td style="font-size:10px;color:var(--text3);">Explore</td><td style="font-size:10px;">Document</td><td style="font-family:var(--mono);font-size:11px;">30 Jun</td><td style="font-size:11px;">AK</td><td><span class="status-badge sb-done">Approved</span></td></tr>
+              <tr><td style="font-weight:600;">Gap Analysis Report</td><td style="font-size:10px;color:var(--text3);">Explore</td><td style="font-size:10px;">Report</td><td style="font-family:var(--mono);font-size:11px;">25 Jul</td><td style="font-size:11px;">JC</td><td><span class="status-badge sb-review">In review</span></td></tr>
+              <tr><td style="font-weight:600;">Configuration Workbook v1</td><td style="font-size:10px;color:var(--text3);">Explore</td><td style="font-size:10px;">Workbook</td><td style="font-family:var(--mono);font-size:11px;">15 Aug</td><td style="font-size:11px;">HK</td><td><span class="status-badge sb-active">In progress</span></td></tr>
+              <tr><td style="font-weight:600;">Test Strategy Document</td><td style="font-size:10px;color:var(--text3);">Explore</td><td style="font-size:10px;">Document</td><td style="font-family:var(--mono);font-size:11px;">01 Sep</td><td style="font-size:11px;">RB</td><td><span class="status-badge sb-draft">Not started</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ TRACKING BOARDS ══════════════ -->
+    <div class="tab-content" id="content-tracking">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:28px;text-align:center;">
+        <div style="font-size:28px;margin-bottom:10px;">📌</div>
+        <div style="font-size:15px;font-weight:800;margin-bottom:4px;">Tracking Boards — 2 instances active</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:18px;">Order-to-Cash Team · Finance &amp; Controlling Team</div>
+        <div style="display:flex;gap:8px;justify-content:center;">
+          <button class="tb-btn tb-primary" onclick="alert('Order-to-Cash Board')">Order-to-Cash Board</button>
+          <button class="tb-btn tb-ghost" onclick="alert('Finance Board')">Finance &amp; Controlling</button>
+          <button class="tb-btn tb-ghost" onclick="alert('Add board instance')">+ Add board</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generic placeholder for less-built tabs -->
+    <div class="tab-content" id="content-risk"><div class="card"><div class="card-hdr"><div class="card-title">🔴 Risk Log</div><button class="tb-btn tb-primary" style="height:28px;" onclick="alert('Add risk')">+ Add risk</button></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">Risk log — filters to Risks only from the RAID log. 6 open risks.</div></div></div>
+    <div class="tab-content" id="content-issues"><div class="card"><div class="card-hdr"><div class="card-title">🟠 Issues Log</div><button class="tb-btn tb-primary" style="height:28px;" onclick="alert('Add issue')">+ Add issue</button></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">Issues log — filters to Issues from the RAID log. 4 open issues.</div></div></div>
+    <div class="tab-content" id="content-assumptions"><div class="card"><div class="card-hdr"><div class="card-title">💭 Assumptions Log</div><button class="tb-btn tb-primary" style="height:28px;" onclick="alert('Add assumption')">+ Add</button></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">3 assumptions logged. 1 unvalidated — follow up with HSBC sponsor before Sep.</div></div></div>
+    <div class="tab-content" id="content-dependencies"><div class="card"><div class="card-hdr"><div class="card-title">🔗 Dependencies Log</div><button class="tb-btn tb-primary" style="height:28px;" onclick="alert('Add dependency')">+ Add</button></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">1 dependency: SAP basis environment sign-off (HSBC security). Blocking.</div></div></div>
+    <div class="tab-content" id="content-decisions"><div class="card"><div class="card-hdr"><div class="card-title">✅ Decisions Log</div><button class="tb-btn tb-primary" style="height:28px;" onclick="alert('Log decision')">+ Log decision</button></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">8 decisions logged. Most recent: Go-live date confirmed as 15 Dec 2026.</div></div></div>
+    <div class="tab-content" id="content-changes"><div class="card"><div class="card-hdr"><div class="card-title">📝 Change Log</div><button class="tb-btn tb-primary" style="height:28px;" onclick="alert('Raise change request')">+ Raise CR</button></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">2 change requests active. CR-007 pending approval — £120K budget impact.</div></div></div>
+    <div class="tab-content" id="content-raci"><div class="card"><div class="card-hdr"><div class="card-title">👥 RACI Model</div></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">Responsibility assignment matrix for all project workstreams and team members.</div></div></div>
+    <div class="tab-content" id="content-wbs"><div class="card"><div class="card-hdr"><div class="card-title">🌳 Work Breakdown Structure</div></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">Hierarchical WBS covering 6 phases, 24 work packages, 148 tasks.</div></div></div>
+    <div class="tab-content" id="content-docs"><div class="card"><div class="card-hdr"><div class="card-title">📄 Documentation</div><button class="tb-btn tb-primary" style="height:28px;" onclick="alert('Add document')">+ Add doc</button></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">12 documents across 3 phases. Business Blueprint, Project Charter, RAID Log and 9 more.</div></div></div>
+    <div class="tab-content" id="content-tests"><div class="card"><div class="card-hdr"><div class="card-title">🧪 Test Tracker</div></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">Test strategy not yet created. Test phase begins Sep 2026.</div></div></div>
+    <div class="tab-content" id="content-timesheets"><div class="card"><div class="card-hdr"><div class="card-title">⏱ Timesheets</div></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">1 timesheet overdue: Robert Burns — Week 28. All others submitted. 94% completion.</div></div></div>
+    <div class="tab-content" id="content-resources"><div class="card"><div class="card-hdr"><div class="card-title">👤 Resource Tracker</div></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">12 resources allocated. 1 open recruitment request for SAP SD Consultant.</div></div></div>
+    <div class="tab-content" id="content-stakeholders"><div class="card"><div class="card-hdr"><div class="card-title">🗺 Stakeholder Map</div></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">14 stakeholders mapped. Marcus Chen (CDO) and Steering Committee as key influencers.</div></div></div>
+    <div class="tab-content" id="content-orgchart"><div class="card"><div class="card-hdr"><div class="card-title">🏢 Org Chart</div></div><div class="card-body" style="color:var(--text3);text-align:center;padding:32px;">Project organisation chart — Programme Manager → workstream leads → team members.</div></div></div>
+
+  </div><!-- /workspace -->
+</div><!-- /content-area -->
+
+<!-- ADD TOOL MODAL -->
+<div class="modal-overlay" id="toolModalOverlay" onclick="closeToolModal()">
+  <div class="tool-modal" onclick="event.stopPropagation()">
+    <div class="tool-modal-hdr">
+      <div class="tool-modal-title">+ Add tool to this project</div>
+      <button class="tool-modal-close" onclick="closeToolModal()">✕</button>
+    </div>
+    <div class="tool-modal-search">
+      <input id="toolSearch" placeholder="🔍 Search tools…" oninput="filterToolModal(this.value)">
+    </div>
+    <div class="tool-modal-list" id="toolModalList">
+      <div class="tool-modal-section">Agile</div>
+      <div class="tool-modal-item"><div class="tmi-icon">🏃</div><div class="tmi-name">Scrum Board</div><button class="tmi-add" onclick="addTool('Scrum Board')">+ Add</button></div>
+      <div class="tool-modal-item"><div class="tmi-icon">📥</div><div class="tmi-name">Backlog</div><button class="tmi-add" onclick="addTool('Backlog')">+ Add</button></div>
+      <div class="tool-modal-item"><div class="tmi-icon">🗂</div><div class="tmi-name">Epics</div><button class="tmi-add" onclick="addTool('Epics')">+ Add</button></div>
+      <div class="tool-modal-item"><div class="tmi-icon">📖</div><div class="tmi-name">Stories</div><button class="tmi-add" onclick="addTool('Stories')">+ Add</button></div>
+      <div class="tool-modal-item"><div class="tmi-icon">⚡</div><div class="tmi-name">Sprints</div><button class="tmi-add" onclick="addTool('Sprints')">+ Add</button></div>
+      <div class="tool-modal-item"><div class="tmi-icon">🐛</div><div class="tmi-name">Defects</div><button class="tmi-add" onclick="addTool('Defects')">+ Add</button></div>
+      <div class="tool-modal-section">Planning</div>
+      <div class="tool-modal-item"><div class="tmi-icon">🗺</div><div class="tmi-name">Roadmap</div><button class="tmi-add" onclick="addTool('Roadmap')">+ Add</button></div>
+      <div class="tool-modal-item"><div class="tmi-icon">✏</div><div class="tmi-name">Whiteboard</div><button class="tmi-add" onclick="addTool('Whiteboard')">+ Add</button></div>
+      <div class="tool-modal-section">Governance</div>
+      <div class="tool-modal-item"><div class="tmi-icon">🎫</div><div class="tmi-name">Support Tickets</div><button class="tmi-add" onclick="addTool('Support Tickets')">+ Add</button></div>
+      <div class="tool-modal-section">Reporting</div>
+      <div class="tool-modal-item"><div class="tmi-icon">📈</div><div class="tmi-name">Agile Dashboard</div><button class="tmi-add" onclick="addTool('Agile Dashboard')">+ Add</button></div>
+      <div class="tool-modal-item"><div class="tmi-icon">⭐</div><div class="tmi-name">Best Practice</div><button class="tmi-add" onclick="addTool('Best Practice')">+ Add</button></div>
+      <div class="tool-modal-section">Already active</div>
+      <div class="tool-modal-item"><div class="tmi-icon">📊</div><div class="tmi-name">Gantt Chart (3 instances)</div><span class="tmi-added">✓ Active</span></div>
+      <div class="tool-modal-item"><div class="tmi-icon">🏁</div><div class="tmi-name">Milestone Plan</div><span class="tmi-added">✓ Active</span></div>
+      <div class="tool-modal-item"><div class="tmi-icon">⚠</div><div class="tmi-name">RAID Log</div><span class="tmi-added">✓ Active</span></div>
+      <div class="tool-modal-item"><div class="tmi-icon">📋</div><div class="tmi-name">Status Reports</div><span class="tmi-added">✓ Active</span></div>
+      <div class="tool-modal-item"><div class="tmi-icon">🔄</div><div class="tmi-name">360° Report</div><span class="tmi-added">✓ Active</span></div>
+    </div>
+  </div>
+</div>
+<script>
+// ── TOOL METADATA ────────────────────────────────
+var TOOL_META = {
+  'overview':      {icon:'📊', title:'Overview',        sub:'Project summary, health & activity', actions:'ghost:🔗 Share|ghost:⚙ Settings|ai:✦ AI Insights'},
+  '360':           {icon:'🔄', title:'360° Report',     sub:'Full project health — for PM & Programme Manager', actions:'ghost:🖨 Print|ghost:⬇ Export PDF|ai:✦ AI Insights'},
+  'raid':          {icon:'⚠',  title:'RAID Log',        sub:'Risks · Assumptions · Issues · Dependencies — 14 open', actions:'primary:+ Add item|ghost:🔍 Filter|ghost:⬇ Export'},
+  'risk':          {icon:'🔴', title:'Risk Log',         sub:'6 open risks · 1 critical', actions:'primary:+ Add risk|ghost:⬇ Export'},
+  'issues':        {icon:'🟠', title:'Issues Log',       sub:'4 open issues · 1 high priority', actions:'primary:+ Add issue|ghost:⬇ Export'},
+  'assumptions':   {icon:'💭', title:'Assumptions Log',  sub:'3 assumptions · 1 unvalidated', actions:'primary:+ Add|ghost:⬇ Export'},
+  'dependencies':  {icon:'🔗', title:'Dependencies',     sub:'1 open dependency — blocking', actions:'primary:+ Add|ghost:⬇ Export'},
+  'decisions':     {icon:'✅', title:'Decisions Log',    sub:'8 decisions logged', actions:'primary:+ Log decision|ghost:⬇ Export'},
+  'changes':       {icon:'📝', title:'Change Log',       sub:'2 CRs active · CR-007 pending approval', actions:'primary:+ Raise CR|ghost:⬇ Export'},
+  'status':        {icon:'📋', title:'Status Reports',   sub:'Monthly cadence · Steering Committee · Due 31 Jul', actions:'primary:+ Create report|ghost:⬇ Export'},
+  'raci':          {icon:'👥', title:'RACI Model',       sub:'Responsibility assignment matrix', actions:'ghost:Edit|ghost:⬇ Export'},
+  'gantt':         {icon:'📊', title:'Gantt Chart',      sub:'3 instances · Overall · Finance · Logistics workstreams', actions:'primary:+ Add instance|ghost:⬇ Export|ghost:Fullscreen'},
+  'milestones':    {icon:'🏁', title:'Milestone Plan',   sub:'18 milestones · Phase 3 — Explore active', actions:'primary:+ Add milestone|ghost:⬇ Export'},
+  'tracking':      {icon:'📌', title:'Tracking Boards',  sub:'2 instances · Order-to-Cash · Finance & Controlling', actions:'primary:+ Add board|ghost:⬇ Export'},
+  'wbs':           {icon:'🌳', title:'WBS',              sub:'6 phases · 24 work packages · 148 tasks', actions:'ghost:Edit|ghost:⬇ Export'},
+  'deliverables':  {icon:'📦', title:'Deliverables',     sub:'4 deliverables · 2 in progress · 1 awaiting approval', actions:'primary:+ Add deliverable|ghost:⬇ Export'},
+  'docs':          {icon:'📄', title:'Documentation',    sub:'12 documents across 3 phases', actions:'primary:+ Add doc|ghost:⬇ Export'},
+  'tests':         {icon:'🧪', title:'Test Tracker',     sub:'Not yet started · Begins Sep 2026', actions:'primary:+ Create test plan'},
+  'team':          {icon:'👥', title:'Team',             sub:'12 people · avg 83% utilisation · 1 TS overdue', actions:'primary:+ Add member|ghost:⬇ Export'},
+  'finance':       {icon:'💵', title:'Finance Tracker',  sub:'Budget £2.4M · Spent £1.01M · CPI 0.98', actions:'primary:Reforecast|ghost:⬇ Export'},
+  'timesheets':    {icon:'⏱', title:'Timesheets',       sub:'1 overdue: Robert Burns — Week 28', actions:'ghost:Chase overdue|ghost:⬇ Export'},
+  'resources':     {icon:'👤', title:'Resource Tracker', sub:'12 allocated · 1 open recruitment request', actions:'ghost:View all resources'},
+  'stakeholders':  {icon:'🗺', title:'Stakeholder Map',  sub:'14 stakeholders mapped', actions:'ghost:Edit map'},
+  'orgchart':      {icon:'🏢', title:'Org Chart',        sub:'Project organisation structure', actions:'ghost:Edit|ghost:⬇ Export'},
+};
+
+var currentTool = 'overview';
+
+function switchTool(id) {
+  // Deactivate all nav items
+  document.querySelectorAll('.psb-tool').forEach(function(t) {
+    t.classList.remove('on');
+  });
+  // Activate clicked
+  var navEl = document.getElementById('tool-' + id);
+  if (navEl) navEl.classList.add('on');
+
+  // Hide all content
+  document.querySelectorAll('.tab-content').forEach(function(c) {
+    c.classList.remove('active');
+  });
+  // Show target content
+  var content = document.getElementById('content-' + id);
+  if (content) content.classList.add('active');
+
+  // Update topbar
+  var meta = TOOL_META[id] || {icon:'🔧', title:id, sub:'', actions:''};
+  document.getElementById('topbarIcon').textContent = meta.icon;
+  document.getElementById('topbarTitle').textContent = meta.title;
+  document.getElementById('topbarSub').textContent = meta.sub;
+
+  // Rebuild action buttons
+  var actDiv = document.getElementById('topbarActions');
+  actDiv.innerHTML = '';
+  if (meta.actions) {
+    meta.actions.split('|').forEach(function(a) {
+      var parts = a.split(':');
+      var type = parts[0];
+      var label = parts[1];
+      var btn = document.createElement('button');
+      btn.className = 'tb-btn ';
+      if (type === 'primary') btn.className += 'tb-primary';
+      else if (type === 'ai') btn.className += 'tb-ai';
+      else if (type === 'amber') btn.className += 'tb-amber';
+      else btn.className += 'tb-ghost';
+      btn.textContent = label;
+      btn.onclick = function() { alert(label + ' — ' + meta.title); };
+      actDiv.appendChild(btn);
+    });
+  }
+
+  // Scroll workspace to top
+  var ws = document.querySelector('.workspace');
+  if (ws) ws.scrollTop = 0;
+
+  currentTool = id;
+  closeToolModal();
+}
+
+// ── INNER SIDEBAR COLLAPSE ────────────────────────
+var innerExpanded = true;
+function toggleInnerSb() {
+  var sb = document.getElementById('innerSb');
+  var btn = document.getElementById('collapseBtn');
+  innerExpanded = !innerExpanded;
+  if (innerExpanded) {
+    sb.style.width = '228px';
+    btn.textContent = '‹';
+    btn.title = 'Collapse sidebar';
+  } else {
+    sb.style.width = '0px';
+    sb.style.overflow = 'hidden';
+    btn.textContent = '›';
+    btn.title = 'Expand sidebar';
+    // Move collapse button to edge
+    btn.style.right = '-24px';
+  }
+}
+
+// ── RAID TYPE FILTER ──────────────────────────────
+function filterRaid(type) {
+  // Update filter tab styles
+  ['all','risk','issue','assump','dep'].forEach(function(t) {
+    var el = document.getElementById('raid-filter-' + t);
+    if (!el) return;
+    if (t === type) {
+      el.style.background = 'var(--surface)';
+      el.style.color = 'var(--brand)';
+      el.style.fontWeight = '700';
+      el.style.boxShadow = '0 1px 3px rgba(0,0,0,.07)';
+      el.style.borderRadius = '6px';
+    } else {
+      el.style.background = 'transparent';
+      el.style.color = 'var(--text3)';
+      el.style.fontWeight = '600';
+      el.style.boxShadow = 'none';
+    }
+  });
+
+  // Filter rows
+  var rows = document.querySelectorAll('#raidTable tbody tr');
+  rows.forEach(function(row) {
+    var rowType = row.getAttribute('data-type') || '';
+    if (type === 'all') {
+      row.style.display = '';
+    } else {
+      row.style.display = (rowType === type) ? '' : 'none';
+    }
+  });
+}
+
+// ── ADD TOOL MODAL ────────────────────────────────
+function openToolModal() {
+  document.getElementById('toolModalOverlay').classList.add('show');
+  document.getElementById('toolSearch').focus();
+}
+
+function closeToolModal() {
+  document.getElementById('toolModalOverlay').classList.remove('show');
+}
+
+function addTool(name) {
+  alert('Adding "' + name + '" to this project…\n\nIn the live application this would:\n• Add the tool to the project sidebar\n• Create the tool workspace\n• Notify the project team');
+  closeToolModal();
+}
+
+function filterToolModal(query) {
+  var items = document.querySelectorAll('.tool-modal-item');
+  items.forEach(function(item) {
+    var name = item.querySelector('.tmi-name');
+    if (!name) return;
+    var match = !query || name.textContent.toLowerCase().includes(query.toLowerCase());
+    item.style.display = match ? '' : 'none';
+  });
+  // Hide section headers if no visible items follow
+  var sections = document.querySelectorAll('.tool-modal-section');
+  sections.forEach(function(sec) {
+    var next = sec.nextElementSibling;
+    var hasVisible = false;
+    while (next && !next.classList.contains('tool-modal-section')) {
+      if (next.style.display !== 'none') { hasVisible = true; break; }
+      next = next.nextElementSibling;
+    }
+    sec.style.display = hasVisible ? '' : 'none';
+  });
+}
+
+// ── KEYBOARD NAVIGATION ───────────────────────────
+document.addEventListener('keydown', function(e) {
+  // Escape closes modal
+  if (e.key === 'Escape') closeToolModal();
+  // Ctrl/Cmd+K opens tool search
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    openToolModal();
+  }
+});
+
+// ── INIT ─────────────────────────────────────────
+switchTool('overview');
+</script>
+</div><!-- /app -->
+</body>
+</html>

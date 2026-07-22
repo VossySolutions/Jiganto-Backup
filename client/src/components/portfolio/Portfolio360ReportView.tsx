@@ -80,7 +80,9 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <p><strong>Client:</strong> {ex.client || "—"}</p>
             <p><strong>PM:</strong> {ex.pm || "—"}</p>
-            <p><strong>Overall RAG:</strong> <Badge>{ex.overallRag}</Badge></p>
+            <div className="flex flex-wrap items-center gap-2">
+              <strong>Overall RAG:</strong> <Badge>{ex.overallRag}</Badge>
+            </div>
             <p><strong>Dates:</strong> {ex.startDate} → {ex.plannedEnd} (revised: {ex.revisedEnd})</p>
           </div>
           <div className="space-y-2">

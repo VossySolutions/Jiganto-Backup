@@ -54,7 +54,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
     name: "Agile / Scrum",
     desc: "Iterative delivery in sprints",
     icon: "🔄",
-    suggestedTools: ["sprint_board", "scrum_board", "backlog", "epics", "stories", "sprints", "kanban_board", "project_dashboard", "status_reporting", "360_report", "defects"],
+    suggestedTools: ["agile", "project_dashboard", "status_reporting", "360_report", "test_tracker"],
     phases: [
       { name: "Discover", duration: "2 weeks", docs: [{ name: "Product Vision" }, { name: "Backlog Seed" }] },
       { name: "Build", duration: "Ongoing sprints", docs: [{ name: "Sprint Goals" }, { name: "Definition of Done" }] },
@@ -66,7 +66,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
     name: "SAFe",
     desc: "Scaled Agile Framework",
     icon: "🏗️",
-    suggestedTools: ["roadmap", "milestone_plan", "sprint_board", "backlog", "epics", "status_reporting", "360_report", "risk_log", "dependencies_log"],
+    suggestedTools: ["agile", "milestone_plan", "status_reporting", "360_report", "risk_log", "dependencies_log"],
     phases: [
       { name: "PI Planning", duration: "2 weeks", docs: [{ name: "PI Objectives" }, { name: "Program Board" }] },
       { name: "Execution", duration: "8–12 weeks", docs: [{ name: "Iteration Plans" }, { name: "System Demo Notes" }] },
@@ -76,7 +76,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
   {
     id: "waterfall",
     name: "Waterfall",
-    desc: "Sequential phases with sign-off gates",
+    desc: "Sequential phases with sign-off gates — Gantt only for schedule",
     icon: "💧",
     suggestedTools: ["gantt_chart", "milestone_plan", "wbs", "status_reporting", "360_report", "risk_log", "issues_log", "change_log", "documentation", "deliverables_tracker"],
     phases: [
@@ -101,13 +101,13 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
   },
   {
     id: "hybrid",
-    name: "Hybrid",
-    desc: "Waterfall governance + agile delivery",
+    name: "Hybrid / WAGILE",
+    desc: "Waterfall governance + agile delivery — Gantt and Agile together",
     icon: "⚡",
     suggestedTools: [
-      "gantt_chart", "milestone_plan", "tracking_board", "sprint_board", "kanban_board",
+      "gantt_chart", "agile", "milestone_plan", "tracking_board",
       "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log",
-      "dependencies_log", "change_log", "raci_model", "deliverables_tracker", "wbs",
+      "dependencies_log", "change_log", "raci_model", "deliverables_tracker", "wbs", "test_tracker",
     ],
     phases: [
       { name: "Initiate", duration: "2 weeks", docs: [{ name: "Charter" }, { name: "Governance Model" }] },
@@ -135,7 +135,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
     name: "Kanban",
     desc: "Continuous flow · no fixed sprints",
     icon: "📋",
-    suggestedTools: ["kanban_board", "tracking_board", "project_dashboard", "status_reporting", "360_report", "defects"],
+    suggestedTools: ["agile", "tracking_board", "project_dashboard", "status_reporting", "360_report"],
     phases: [
       { name: "Flow Setup", duration: "1 week", docs: [{ name: "Board Policies" }, { name: "WIP Limits" }] },
       { name: "Delivery", duration: "Ongoing", docs: [{ name: "Flow Metrics", optional: true }] },

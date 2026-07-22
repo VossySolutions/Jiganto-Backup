@@ -5,3 +5,12 @@ server/public
 vite.config.ts.*
 *.tar.gz
 .env
+# Windows reserved device names that break `git add` if created accidentally
+/nul
+/nul.*
+/con
+/con.*
+/aux
+/aux.*
+/prn
+/prn.*

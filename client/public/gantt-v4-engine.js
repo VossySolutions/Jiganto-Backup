@@ -11,9 +11,9 @@ function registerBar(id, left, top, width, height){
 }
 
 // ── TYPES & COLOURS ──────────────────────────────────────────
-const LEVELS={0:'Programme',1:'Project',2:'Phase',3:'Workstream',4:'Activity',5:'Task',6:'Milestone'};
-const LEVEL_COLORS=['#3730a3','#4f46e5','#0891b2','#059669','#d97706','#64748b','#db2777'];
-const LEVEL_BG=['rgba(55,48,163,.12)','rgba(79,70,229,.10)','rgba(8,145,178,.08)','rgba(5,150,105,.07)','rgba(217,119,6,.07)','rgba(100,116,139,.06)','rgba(219,39,119,.08)'];
+const LEVELS={0:'Program',1:'Project',2:'Phase',3:'Workstream',4:'Activity',5:'Task',6:'Milestone',7:'Release'};
+const LEVEL_COLORS=['#3730a3','#4f46e5','#0891b2','#059669','#d97706','#64748b','#db2777','#7c3aed'];
+const LEVEL_BG=['rgba(55,48,163,.12)','rgba(79,70,229,.10)','rgba(8,145,178,.08)','rgba(5,150,105,.07)','rgba(217,119,6,.07)','rgba(100,116,139,.06)','rgba(219,39,119,.08)','rgba(124,58,237,.08)'];
 const RAG_COL={g:'#059669',a:'#d97706',r:'#dc2626'};
 const RAG_PILL_LABELS={
   bgt:{g:'On Track',a:'At Risk',r:'Over Budget'},
@@ -39,14 +39,14 @@ function buildRagPillCell(t,id,dim){
   return '<div class="task-rag-pill-col" onclick="event.stopPropagation();cycleRagDim('+id+',\''+dim+'\')" title="Click to cycle '+dim+' RAG">'+
     '<span class="rag-pill rag-pill-'+v+'"><span class="rag-pill-dot"></span><span class="rag-pill-lbl">'+lbl+'</span></span></div>';
 }
-const TYPE_ICONS={0:'🔷',1:'📁',2:'📋',3:'🔀',4:'⚡',5:'☑',6:'◆'};
+const TYPE_ICONS={0:'🔷',1:'📁',2:'📋',3:'🔀',4:'⚡',5:'☑',6:'◆',7:'🚀'};
 
 // ── OWNERS (populated from init data) ────────────────────────
 const OWNERS = [];
 
 // ── STATE ────────────────────────────────────────────────────
 let tasks=[];
-let nextId=5000;
+let nextId=100000;
 let collapsed={};
 let editingId=null;
 let currentRag='g';
@@ -115,8 +115,73 @@ function toggleCP(fromSwitch){
   const btn=document.getElementById('cpBtn');
   if(btn) btn.classList.toggle('on',showCP);
   showLoading(showCP?'Computing critical path…':'Updating view…');
-  try{ renderAll(); }
-  finally{ hideLoading(); }
+  try{
+    renderAll();
+    updateCpBanner();
+    if(showCP){
+      if(!tasks.some(t=>t.predId)){
+        showToast('Add links in the Pred column (or Edit → Predecessor)','info',4200);
+        pulsePredColumn();
+      } else if(!criticalIds.size){
+        showToast('No critical path found for current dependencies','info',3000);
+      } else {
+        showToast('Critical path: '+criticalIds.size+' item'+(criticalIds.size===1?'':'s')+' highlighted','ok',2200);
+        focusFirstCritical();
+      }
+    }
+  } finally {
+    hideLoading();
+  }
+}
+function updateCpBanner(){
+  let el=document.getElementById('cpBanner');
+  if(!showCP){
+    if(el) el.remove();
+    return;
+  }
+  const toolbar=document.getElementById('ganttToolbar');
+  if(!el){
+    el=document.createElement('div');
+    el.id='cpBanner';
+    el.setAttribute('role','status');
+    if(toolbar&&toolbar.parentNode) toolbar.parentNode.insertBefore(el, toolbar.nextSibling);
+    else document.body.prepend(el);
+  }
+  const hasDeps=tasks.some(t=>t.predId);
+  if(!hasDeps){
+    el.className='cp-banner cp-banner-hint';
+    el.innerHTML='<span><strong>Critical path on</strong> — click a cell in the <em>Pred</em> column (or open Edit → Predecessor) to link tasks. The longest zero-slack chain will highlight in red.</span>';
+  } else if(!criticalIds.size){
+    el.className='cp-banner cp-banner-warn';
+    el.innerHTML='<span><strong>Critical path on</strong> — no zero-slack chain for the current links. Check predecessor and dependency type (FS / SS / FF).</span>'+
+      '<button type="button" class="cp-banner-x" onclick="toggleCP()">Turn off</button>';
+  } else {
+    el.className='cp-banner cp-banner-on';
+    el.innerHTML='<span><strong>Critical path on</strong> — '+criticalIds.size+' item'+(criticalIds.size===1?'':'s')+' in red.</span>'+
+      '<button type="button" class="cp-banner-x" onclick="toggleCP()">Turn off</button>';
+  }
+}
+function focusFirstCritical(){
+  if(!criticalIds.size) return;
+  const id=[...criticalIds][0];
+  const row=document.getElementById('tr-'+id)||document.querySelector('.list-tr[data-id="'+id+'"]');
+  const bar=document.getElementById('bar-'+id)||document.querySelector('.milestone-diamond.critical[data-id="'+id+'"]');
+  const target=bar||row;
+  if(target&&target.scrollIntoView) target.scrollIntoView({block:'nearest',inline:'nearest'});
+  if(row){
+    row.classList.add('cp-flash');
+    setTimeout(()=>row.classList.remove('cp-flash'),1400);
+  }
+}
+function pulsePredColumn(){
+  const th=document.querySelector('.th-pred');
+  if(!th) return;
+  th.classList.add('th-pred-pulse');
+  setTimeout(()=>th.classList.remove('th-pred-pulse'),2400);
+  document.querySelectorAll('.task-pred-col').forEach(c=>{
+    c.classList.add('pred-col-hint');
+    setTimeout(()=>c.classList.remove('pred-col-hint'),2400);
+  });
 }
 function toggleAutoSchedule(fromSwitch){
   if(fromSwitch===true){
@@ -144,8 +209,9 @@ function toggleAutoSchedule(fromSwitch){
 function toggleCollapseRows(fromSwitch){
   const sw=document.getElementById('switchCollapse');
   if(fromSwitch===true){
-    if(sw&&sw.checked) collapseAll();
-    else expandAll();
+    // Bottom switch always collapses/expands the whole plan
+    if(sw&&sw.checked) collapseAll(true);
+    else expandAll(true);
   }
 }
 function toggleZoomFit(fromSwitch){
@@ -208,16 +274,16 @@ function rollupParentDates(){
 function afterTaskDateChange(task){
   if(autoSchedule) applyAutoSchedule();
   renderAll();
-  if(task&&task.id<5000){
+  if(task&&!isUnsavedLocal(task)){
     persistSave(task);
     if(autoSchedule) void persistScheduleChanges(task);
   }
 }
 async function persistScheduleChanges(primary){
   const touched=new Set();
-  if(primary&&primary.id<5000) touched.add(primary.id);
+  if(primary&&!isUnsavedLocal(primary)) touched.add(primary.id);
   if(autoSchedule){
-    tasks.filter(t=>t.id<5000&&(t.predId||tasks.some(x=>x.predId===t.id))).forEach(t=>touched.add(t.id));
+    tasks.filter(t=>!isUnsavedLocal(t)&&(t.predId||tasks.some(x=>x.predId===t.id))).forEach(t=>touched.add(t.id));
   }
   for(const id of touched){
     const t=tasks.find(x=>x.id===id);
@@ -300,7 +366,9 @@ function formatPred(t){
   if(!t.predId) return '—';
   const p=tasks.find(x=>x.id===t.predId);
   if(!p) return '—';
-  return p.wbs||p.name.substring(0,14);
+  const w=p.wbs||p.name.substring(0,12);
+  const d=t.depType==='EE'?'FF':(t.depType||'FS');
+  return w+' · '+d;
 }
 function getSummaryLevel(t){
   return Math.min(2, getDepth(t));
@@ -377,35 +445,121 @@ function esc(s){const d=document.createElement('div');d.textContent=String(s||''
 // ── WBS CALCULATION ──────────────────────────────────────────
 function calcWBS(){
   tasks.forEach(t=>{ t.wbs=''; });
+  // Break self-parent / cycles so hierarchy walks cannot hang the iframe
+  tasks.forEach(t=>{
+    if(t.parent===t.id) t.parent=null;
+  });
   const rootTasks=tasks.filter(t=>t.parent===null);
+  const visiting=new Set();
   function assign(list,prefix){
     let c=0;
     list.forEach(t=>{
+      if(visiting.has(t.id)) return;
+      visiting.add(t.id);
       c++;
       const wbs=prefix?(prefix+'.'+c):String(c);
       t.wbs=wbs;
-      const children=tasks.filter(ch=>ch.parent===t.id);
+      const children=tasks.filter(ch=>ch.parent===t.id&&ch.id!==t.id);
       if(children.length) assign(children,wbs);
+      visiting.delete(t.id);
     });
   }
   assign(rootTasks,'');
+  // Orphans (broken parent refs) get top-level WBS
+  tasks.filter(t=>!t.wbs).forEach((t,i)=>{
+    t.parent=null;
+    t.wbs=String(rootTasks.length+i+1);
+  });
 }
 
 // ── CRITICAL PATH ────────────────────────────────────────────
+/** Classic ES/EF + LS/LF slack on the dependency network only (predId links). */
 function computeCriticalPath(){
   criticalIds=new Set();
   if(!showCP) return;
-  const hasSuccessor=new Set(tasks.filter(t=>t.predId).map(t=>t.predId));
-  const endNodes=tasks.filter(t=>!hasSuccessor.has(t.id)&&t.type<6);
-  if(!endNodes.length) return;
-  const latestEnd=Math.max(...endNodes.map(t=>D(t.end).getTime()));
-  function markCritical(id){
-    criticalIds.add(id);
-    const t=tasks.find(x=>x.id===id);
-    if(!t||!t.predId) return;
-    markCritical(t.predId);
+  if(!tasks.some(t=>t.predId)) return;
+
+  const byId=new Map(tasks.map(t=>[t.id,t]));
+  const successors=new Map();
+  tasks.forEach(t=>{
+    if(!t.predId||!byId.has(t.predId)) return;
+    if(!successors.has(t.predId)) successors.set(t.predId,[]);
+    successors.get(t.predId).push(t.id);
+  });
+  const inNetwork=new Set();
+  tasks.forEach(t=>{
+    if(t.predId&&byId.has(t.predId)){
+      inNetwork.add(t.id);
+      inNetwork.add(t.predId);
+    }
+  });
+  if(!inNetwork.size) return;
+
+  const durDays=(t)=>{
+    if(t.type===6) return 0;
+    return Math.max(1,taskDurationDays(t.start,t.end)+1);
+  };
+
+  // Forward: earliest start / finish (in day units from an arbitrary epoch)
+  const es=new Map(), ef=new Map();
+  function calcForward(id,visiting){
+    if(es.has(id)) return;
+    if(visiting.has(id)) return;
+    visiting.add(id);
+    const t=byId.get(id);
+    if(!t){ visiting.delete(id); return; }
+    let start=0;
+    if(t.predId&&byId.has(t.predId)){
+      calcForward(t.predId,visiting);
+      const pred=byId.get(t.predId);
+      const dep=t.depType||'FS';
+      const pEs=es.get(t.predId)||0;
+      const pEf=ef.get(t.predId)||0;
+      if(dep==='FS') start=pEf;
+      else if(dep==='SS') start=pEs;
+      else start=Math.max(0,pEf-durDays(t)); // FF
+    }
+    es.set(id,start);
+    ef.set(id,start+durDays(t));
+    visiting.delete(id);
   }
-  endNodes.filter(t=>D(t.end).getTime()===latestEnd).forEach(t=>markCritical(t.id));
+  inNetwork.forEach(id=>calcForward(id,new Set()));
+
+  const projectEnd=Math.max(0,...[...inNetwork].map(id=>ef.get(id)||0));
+
+  // Backward: latest finish / start
+  const ls=new Map(), lf=new Map();
+  function calcBackward(id,visiting){
+    if(lf.has(id)) return;
+    if(visiting.has(id)) return;
+    visiting.add(id);
+    const t=byId.get(id);
+    if(!t){ visiting.delete(id); return; }
+    const succs=(successors.get(id)||[]).filter(sid=>inNetwork.has(sid));
+    let finish=projectEnd;
+    if(succs.length){
+      finish=Math.min(...succs.map(sid=>{
+        calcBackward(sid,visiting);
+        const s=byId.get(sid);
+        const dep=(s&&s.depType)||'FS';
+        const sLs=ls.get(sid)||0;
+        const sLf=lf.get(sid)||0;
+        if(dep==='FS') return sLs;          // pred must finish before succ starts
+        if(dep==='SS') return sLs;          // pred start aligned → treat LF as succ LS + pred dur later
+        return sLf;                        // FF
+      }));
+    }
+    lf.set(id,finish);
+    ls.set(id,finish-durDays(t));
+    visiting.delete(id);
+  }
+  inNetwork.forEach(id=>calcBackward(id,new Set()));
+
+  const TOL=0.01;
+  inNetwork.forEach(id=>{
+    const slack=(ls.get(id)||0)-(es.get(id)||0);
+    if(Math.abs(slack)<=TOL) criticalIds.add(id);
+  });
 }
 
 // ── DATE RANGE ───────────────────────────────────────────────
@@ -437,19 +591,30 @@ function getOrderedTasks(){
 function getVisible(){
   const fl=document.getElementById('f-level')?.value||'';
   const fo=document.getElementById('f-owner')?.value||'';
+  const frDim=document.getElementById('f-rag-dim')?.value||'';
   const fr=document.getElementById('f-rag')?.value||'';
   const fq=(document.getElementById('f-search')?.value||'').trim().toLowerCase();
   return getOrderedTasks().filter(t=>{
     // Hide if any ancestor is collapsed
     let p=t.parent;
+    const seen=new Set();
     while(p!==null){
+      if(seen.has(p)||p===t.id) break;
+      seen.add(p);
       if(collapsed[p]) return false;
       const pt=tasks.find(x=>x.id===p);
-      p=pt?pt.parent:null;
+      if(!pt||pt.parent===pt.id) break;
+      p=pt.parent;
     }
     if(fl!==''&&String(t.type)!==fl) return false;
     if(fo&&t.owner!==fo) return false;
-    if(fr&&(ragField(t,'bgt')!==fr&&ragField(t,'sch')!==fr&&ragField(t,'scp')!==fr)) return false;
+    if(fr){
+      if(frDim){
+        if(ragField(t,frDim)!==fr) return false;
+      } else if(ragField(t,'bgt')!==fr&&ragField(t,'sch')!==fr&&ragField(t,'scp')!==fr){
+        return false;
+      }
+    }
     if(fq&&!(t.name||'').toLowerCase().includes(fq)&&!(t.wbs||'').toLowerCase().includes(fq)) return false;
     return true;
   });
@@ -513,10 +678,15 @@ function toggleRagFilterMenu(e){
     menu.setAttribute('hidden','');
   }
 }
-function setRagFilter(val,el){
+function setRagFilter(dim,val,el){
+  const dimEl=document.getElementById('f-rag-dim');
   const hidden=document.getElementById('f-rag');
+  if(dimEl) dimEl.value=dim||'';
   if(hidden) hidden.value=val||'';
-  document.querySelectorAll('#ragFilterMenu .tb-filter-opt').forEach(b=>b.classList.toggle('on',b===el));
+  const key=(dim&&val)?(dim+':'+val):'';
+  document.querySelectorAll('#ragFilterMenu .tb-filter-opt').forEach(b=>{
+    b.classList.toggle('on',(b.getAttribute('data-rag-key')||'')===key);
+  });
   const btn=document.getElementById('ragFilterBtn');
   if(btn) btn.classList.toggle('active',!!val);
   const menu=document.getElementById('ragFilterMenu');
@@ -550,16 +720,24 @@ function zoomToFit(){
   wrap.scrollLeft=0;
 }
 function toggleFullscreen(){
-  const root=document.querySelector('.main');
+  const root=document.querySelector('.main')||document.documentElement;
   if(!root) return;
+  const btn=document.getElementById('fullscreenBtn');
   showLoading(document.fullscreenElement?'Exiting fullscreen…':'Entering fullscreen…');
-  const done=()=>hideLoading();
+  const done=()=>{
+    hideLoading();
+    if(btn) btn.classList.toggle('on',!!document.fullscreenElement);
+  };
   if(!document.fullscreenElement){
     root.requestFullscreen?.().then(done).catch(()=>{done();showToast('Fullscreen not available','err',2500);});
   } else {
     document.exitFullscreen?.().then(done).catch(()=>{done();});
   }
 }
+document.addEventListener('fullscreenchange',()=>{
+  const btn=document.getElementById('fullscreenBtn');
+  if(btn) btn.classList.toggle('on',!!document.fullscreenElement);
+});
 
 // ── VIEW ─────────────────────────────────────────────────────
 function setView(v,el){
@@ -576,19 +754,16 @@ function setView(v,el){
 
     const gv=document.getElementById('ganttView');
     const lv=document.getElementById('listView');
-    const bottom=document.getElementById('ganttBottomBar');
 
     if(v==='list'){
       if(gv){ gv.hidden=true; gv.style.display='none'; }
       if(lv){ lv.hidden=false; lv.style.display='block'; }
-      if(bottom) bottom.style.display='none';
       renderListView();
       return;
     }
 
     if(lv){ lv.hidden=true; lv.style.display='none'; }
     if(gv){ gv.hidden=false; gv.style.display='flex'; }
-    if(bottom) bottom.style.display='flex';
     renderAll();
   }catch(err){
     console.error('setView failed',err);
@@ -602,17 +777,21 @@ window.setView=setView;
 // MAIN RENDER
 // ═══════════════════════════════════════════════════════════════
 function renderAll(){
-  if(mainView==='list'){ renderListView(); return; }
+  calcWBS();
+  computeCriticalPath();
+  if(mainView==='list'){
+    renderListView();
+    updateCpBanner();
+    return;
+  }
   const gv=document.getElementById('ganttView');
   const lv=document.getElementById('listView');
   if(gv){ gv.hidden=false; gv.style.display='flex'; }
   if(lv){ lv.hidden=true; lv.style.display='none'; }
   const ts=document.getElementById('taskScroll');
   const tw=document.getElementById('tlWrap');
-  if(!ts||!tw) return;
+  if(!ts||!tw){ updateCpBanner(); return; }
   const prevScrollTop=ts.scrollTop||0;
-  calcWBS();
-  computeCriticalPath();
   const {start,end}=getRange();
   const totalDays=daysBetween(start,end);
   const totalW=totalDays*colW;
@@ -629,6 +808,7 @@ function renderAll(){
     if(th) th.style.transform='translateX('+(-tw.scrollLeft)+'px)';
     requestAnimationFrame(()=>{scrollSyncing=false;});
   }
+  updateCpBanner();
 }
 
 // ── TASK PANEL ───────────────────────────────────────────────
@@ -636,8 +816,24 @@ function renderTaskPanel(){
   const scroll=document.getElementById('taskScroll');
   if(!scroll) return;
   const visible=getVisible();
-  scroll.innerHTML=visible.map(t=>buildTaskRowHTML(t)).join('');
-  bindCustomCellClicks();
+  if(!visible.length){
+    const hasFilters=!!(
+      (document.getElementById('f-level')?.value)||
+      (document.getElementById('f-owner')?.value)||
+      (document.getElementById('f-rag')?.value)||
+      ((document.getElementById('f-search')?.value||'').trim())
+    );
+    const msg=tasks.length
+      ?(hasFilters
+        ?'No rows match the current filters. Clear type / owner / RAG / search to see items.'
+        :'All rows are collapsed. Expand folders or turn off “Collapse all rows”.')
+      :'No work items yet. Hover the + below to add a row.';
+    scroll.innerHTML='<div class="gantt-empty">'+esc(msg)+'</div>'+
+      '<div class="row-insert-gap is-empty"><button type="button" class="row-insert-btn" onclick="event.stopPropagation();addNewItem()" title="Add a new item" aria-label="Add row">+</button></div>';
+  } else {
+    scroll.innerHTML=visible.map(t=>buildTaskRowHTML(t)).join('');
+    bindCustomCellClicks();
+  }
   if(selectedTaskId!=null){
     const r=document.getElementById('tr-'+selectedTaskId);
     if(r) r.classList.add('selected');
@@ -646,11 +842,14 @@ function renderTaskPanel(){
 
 function getDepth(t){
   let d=0,cur=t;
+  const seen=new Set();
   while(cur.parent!==null){
+    if(seen.has(cur.id)) break;
+    seen.add(cur.id);
     const p=tasks.find(x=>x.id===cur.parent);
-    if(!p) break;
+    if(!p||p.id===cur.id) break;
     cur=p; d++;
-    if(d>10) break;
+    if(d>20) break;
   }
   return d;
 }
@@ -687,7 +886,7 @@ function buildTaskRowHTML(t){
     '<div class="task-dur-col ie-cell" onclick="event.stopPropagation();inlineEditDuration('+t.id+',this)" title="Click to edit duration (days)">'+
       '<span class="dur-val">'+formatDuration(t)+'</span>'+
     '</div>'+
-    '<div class="task-pred-col ie-cell" onclick="event.stopPropagation();inlineEditPred('+t.id+',this)" title="Click to set predecessor">'+
+    '<div class="task-pred-col ie-cell" onclick="event.stopPropagation();inlineEditPred('+t.id+',this)" title="Click to set predecessor (used by Critical path)">'+
       '<span class="pred-val">'+esc(formatPred(t))+'</span>'+
     '</div>'+
     '<div class="task-prog-col ie-cell ie-prog-cell" onclick="event.stopPropagation();inlineEditProg('+t.id+',this)" title="Click to update progress">'+
@@ -698,9 +897,19 @@ function buildTaskRowHTML(t){
     buildRagPillCell(t,t.id,'sch')+
     buildRagPillCell(t,t.id,'scp')+
     customCells+
-    '<div class="task-row-add-col" onclick="event.stopPropagation();quickAddChild('+t.id+')" title="Add child item"></div>'+
+    '<div class="task-row-add-col" aria-hidden="true"></div>'+
     '<div class="grid-filler"></div>'+
+    '<div class="row-insert-hit" onclick="event.stopPropagation()">'+
+      '<button type="button" class="row-insert-btn" onclick="event.stopPropagation();insertRowAfter('+t.id+')" title="Insert row below" aria-label="Insert row">+</button>'+
+    '</div>'+
   '</div>';
+}
+
+/** Insert a new sibling row after the given task (same parent). */
+function insertRowAfter(afterId){
+  const after=tasks.find(x=>x.id===afterId);
+  if(!after){ addNewItem(); return; }
+  quickAddTask(after.parent, after.id);
 }
 
 function editName(id){
@@ -747,23 +956,72 @@ function toggleCollapse(id){
   else collapsed[id]=true;
   renderAll();
 }
-function collapseAll(){
-  showLoading('Collapsing rows…');
+function collapseSubtree(id){
+  const kids=tasks.filter(c=>c.parent===id);
+  if(!kids.length) return false;
+  // Collapse this folder — hides all descendants via ancestor check in getVisible()
+  collapsed[id]=true;
+  // Also collapse every nested folder so re-expanding this node keeps subfolders collapsed
+  kids.forEach(c=>{
+    if(tasks.some(x=>x.parent===c.id)) collapseSubtree(c.id);
+  });
+  return true;
+}
+function expandSubtree(id){
+  delete collapsed[id];
+  tasks.filter(c=>c.parent===id).forEach(c=>expandSubtree(c.id));
+}
+/**
+ * Toolbar Collapse:
+ * - Selected folder (row with children) → collapse that folder + all nested folders
+ * - No selection → collapse entire structure
+ * @param {boolean} [forceAll] when true (bottom switch), always collapse everything
+ */
+function collapseAll(forceAll){
+  showLoading('Collapsing…');
   try{
-    tasks.forEach(t=>{if(tasks.some(c=>c.parent===t.id))collapsed[t.id]=true;});
-    const sw=document.getElementById('switchCollapse');
-    if(sw) sw.checked=true;
+    const selected=!forceAll?getSelectedTask():null;
+    if(selected){
+      const hasKids=tasks.some(c=>c.parent===selected.id);
+      if(!hasKids){
+        showToast('Select a folder (row with children), or clear selection to collapse all','info',2800);
+        return;
+      }
+      collapseSubtree(selected.id);
+      // Keep selection so user can expand the same folder again
+      selectTask(selected.id);
+      showToast('Collapsed "'+selected.name+'" and subfolders','ok',2000);
+    } else {
+      collapsed={};
+      tasks.forEach(t=>{ if(tasks.some(c=>c.parent===t.id)) collapsed[t.id]=true; });
+      const sw=document.getElementById('switchCollapse');
+      if(sw) sw.checked=true;
+      showToast('Collapsed all folders','ok',1800);
+    }
     renderAll();
   } finally {
     hideLoading();
   }
 }
-function expandAll(){
-  showLoading('Expanding rows…');
+/**
+ * Toolbar Expand:
+ * - Selected folder → expand that folder + all nested folders
+ * - No selection → expand entire structure
+ */
+function expandAll(forceAll){
+  showLoading('Expanding…');
   try{
-    collapsed={};
-    const sw=document.getElementById('switchCollapse');
-    if(sw) sw.checked=false;
+    const selected=!forceAll?getSelectedTask():null;
+    if(selected){
+      expandSubtree(selected.id);
+      selectTask(selected.id);
+      showToast('Expanded "'+selected.name+'" and subfolders','ok',1800);
+    } else {
+      collapsed={};
+      const sw=document.getElementById('switchCollapse');
+      if(sw) sw.checked=false;
+      showToast('Expanded all','ok',1600);
+    }
     renderAll();
   } finally {
     hideLoading();
@@ -803,7 +1061,7 @@ function indentTask(){
   selectTask(t.id);
   flashTaskRow(t.id);
   showToast('Indented under "'+newParent.name+'"','ok',2200);
-  if(t.id<5000) persistSave(t);
+  void persistSave(t);
 }
 function outdentTask(){
   const t=getSelectedTask();
@@ -821,7 +1079,7 @@ function outdentTask(){
   flashTaskRow(t.id);
   const under=t.parent===null?'top level':('"'+((tasks.find(x=>x.id===t.parent)||{}).name||'parent')+'"');
   showToast('Moved to '+under,'ok',2200);
-  if(t.id<5000) persistSave(t);
+  void persistSave(t);
 }
 function setupPanelSplitter(){
   if(splitterBound) return;
@@ -1029,9 +1287,10 @@ function drawTaskBar(t,rangeStart,rows){
     const offsetDays=daysBetween(rangeStart,D(eff.start));
     const left=offsetDays*colW;
     const el=document.createElement('div');
-    el.className='milestone-diamond';
+    el.className='milestone-diamond'+(isCrit?' critical':'');
+    el.dataset.id=String(t.id);
     el.style.cssText='left:'+(left-6)+'px;top:'+(rowTop+(ROW_H-12)/2)+'px;width:12px;height:12px;';
-    el.title=t.name+' · '+fmtDisp(D(eff.start));
+    el.title=t.name+' · '+fmtDisp(D(eff.start))+(isCrit?' · Critical':'');
     el.onclick=()=>openEdit(t.id);
     rows.appendChild(el);
     const msLbl=document.createElement('div');
@@ -1118,13 +1377,34 @@ function addTaskOnTimeline(dateStr,rowTask){
 }
 
 // ── DEPENDENCY ARROWS ────────────────────────────────────────
+/** Draw a clear ◀ / ▶ arrowhead (not a marker — markers fail in srcdoc iframes) */
+function appendDepArrow(svg,xFrom,yFrom,x2,y2,color,size){
+  const dx=x2-xFrom, dy=y2-yFrom;
+  const len=Math.hypot(dx,dy)||1;
+  const ux=dx/len, uy=dy/len;
+  const s=Math.max(size||10, 10);
+  // Tip at (x2,y2); base centered behind tip along the segment
+  const bx=x2-ux*s, by=y2-uy*s;
+  const px=-uy, py=ux;
+  const w=s*0.62;
+  const poly=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+  poly.setAttribute('points',
+    x2.toFixed(1)+','+y2.toFixed(1)+' '+
+    (bx+px*w).toFixed(1)+','+(by+py*w).toFixed(1)+' '+
+    (bx-px*w).toFixed(1)+','+(by-py*w).toFixed(1)
+  );
+  poly.setAttribute('fill',color);
+  poly.setAttribute('stroke',color);
+  poly.setAttribute('stroke-width','1');
+  poly.setAttribute('stroke-linejoin','round');
+  poly.style.pointerEvents='none';
+  svg.appendChild(poly);
+}
 function renderDeps(visible,start){
   const svg=document.getElementById('depSvg');
   if(!svg) return;
-  svg.innerHTML='<defs>'+
-    '<marker id="ah" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#94a3b8"/></marker>'+
-    '<marker id="ah-crit" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#dc2626"/></marker>'+
-  '</defs>';
+  svg.innerHTML='';
+  const tipGap=8; // keep tip clearly outside the bar so arrow isn't covered
   visible.forEach(t=>{
     if(!t.predId) return;
     const fromT=tasks.find(x=>x.id===t.predId);
@@ -1134,45 +1414,68 @@ function renderDeps(visible,start){
     if(!fp||!tp) return;
     const depType=t.depType||'FS';
     let x1,y1,x2,y2;
-    if(depType==='FS'){x1=fp.left+fp.width;y1=fp.midY;x2=tp.left;y2=tp.midY;}
-    else if(depType==='SS'){x1=fp.left;y1=fp.midY;x2=tp.left;y2=tp.midY;}
-    else{x1=fp.left+fp.width;y1=fp.midY;x2=tp.left+tp.width;y2=tp.midY;}
+    if(depType==='FS'){x1=fp.left+fp.width;y1=fp.midY;x2=tp.left-tipGap;y2=tp.midY;}
+    else if(depType==='SS'){x1=fp.left;y1=fp.midY;x2=tp.left-tipGap;y2=tp.midY;}
+    else{x1=fp.left+fp.width;y1=fp.midY;x2=tp.left+tp.width+tipGap;y2=tp.midY;}
     const isCrit=showCP&&criticalIds.has(t.id)&&criticalIds.has(fromT.id);
-    const color=isCrit?'#e74c3c':'#9e9e9e';
-    const markerId=isCrit?'ah-crit':'ah';
-    let d;
-    const dx=x2-x1,dy=y2-y1;
-    if(Math.abs(dy)<4){
-      const cx=x1+dx*0.5;
-      d='M'+x1+','+y1+' C'+cx+','+y1+' '+cx+','+y2+' '+x2+','+y2;
+    const color=isCrit?'#c62828':'#546e7a';
+
+    const stub=14;
+    let elbowX,d,labelX,labelY,ax,ay;
+    if(Math.abs(y2-y1)<3){
+      // Keep a horizontal approach long enough for a visible arrow
+      const mid=x1+(x2-x1)*0.5;
+      d='M'+x1+','+y1+' H'+x2;
+      labelX=mid; labelY=y1-10;
+      ax=x2-Math.sign(x2-x1||1)*24; ay=y1;
+      if(Math.abs(x2-x1)<20){ ax=x1; }
+    } else if(depType==='FS'||depType==='SS'){
+      if(x2>=x1+stub){
+        elbowX=x1+stub;
+      } else {
+        elbowX=Math.max(x1, tp.left+tp.width)+stub;
+      }
+      d='M'+x1+','+y1+' H'+elbowX+' V'+y2+' H'+x2;
+      labelX=elbowX; labelY=(y1+y2)/2;
+      ax=elbowX; ay=y2;
     } else {
-      const ex=Math.max(x1+18,x2-18);
-      d='M'+x1+','+y1+' L'+ex+','+y1+' L'+ex+','+y2+' L'+x2+','+y2;
+      elbowX=Math.max(x1,x2)+stub;
+      d='M'+x1+','+y1+' H'+elbowX+' V'+y2+' H'+x2;
+      labelX=elbowX; labelY=(y1+y2)/2;
+      ax=elbowX; ay=y2;
     }
+
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d',d);
     path.setAttribute('fill','none');
     path.setAttribute('stroke',color);
-    path.setAttribute('stroke-width',isCrit?'2':'1.5');
-    if(!isCrit) path.setAttribute('stroke-dasharray','5 3');
-    path.setAttribute('marker-end','url(#'+markerId+')');
+    path.setAttribute('stroke-width',isCrit?'2.25':'1.5');
+    path.setAttribute('stroke-linejoin','round');
+    path.setAttribute('stroke-linecap','butt');
+    if(!isCrit) path.setAttribute('stroke-dasharray','4 3');
+    path.style.pointerEvents='stroke';
     path.style.cursor='pointer';
     path.onclick=()=>openEdit(t.id);
-    const midX=(x1+x2)/2,midY=(y1+y2)/2;
-    const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
-    bg.setAttribute('x',midX-9);bg.setAttribute('y',midY-7);
-    bg.setAttribute('width',18);bg.setAttribute('height',13);
-    bg.setAttribute('rx',3);bg.setAttribute('fill','#fff');
-    bg.setAttribute('stroke',color);bg.setAttribute('stroke-width','0.8');
-    const lbl=document.createElementNS('http://www.w3.org/2000/svg','text');
-    lbl.setAttribute('x',midX);lbl.setAttribute('y',midY+1);
-    lbl.setAttribute('text-anchor','middle');
-    lbl.setAttribute('dominant-baseline','middle');
-    lbl.setAttribute('font-size','8');
-    lbl.setAttribute('font-family','DM Mono,monospace');
-    lbl.setAttribute('fill',color);lbl.setAttribute('font-weight','600');
-    lbl.textContent=depType==='EE'?'FF':depType;
-    svg.appendChild(path);svg.appendChild(bg);svg.appendChild(lbl);
+    svg.appendChild(path);
+    appendDepArrow(svg,ax,ay,x2,y2,color,isCrit?12:11);
+
+    if(depType!=='FS'){
+      const tag=depType==='EE'?'FF':depType;
+      const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      bg.setAttribute('x',labelX-10); bg.setAttribute('y',labelY-7);
+      bg.setAttribute('width',20); bg.setAttribute('height',14);
+      bg.setAttribute('rx',3); bg.setAttribute('fill','#fff');
+      bg.setAttribute('stroke',color); bg.setAttribute('stroke-width','0.8');
+      const lbl=document.createElementNS('http://www.w3.org/2000/svg','text');
+      lbl.setAttribute('x',labelX); lbl.setAttribute('y',labelY+1);
+      lbl.setAttribute('text-anchor','middle');
+      lbl.setAttribute('dominant-baseline','middle');
+      lbl.setAttribute('font-size','8');
+      lbl.setAttribute('font-family','Inter,sans-serif');
+      lbl.setAttribute('fill',color); lbl.setAttribute('font-weight','600');
+      lbl.textContent=tag;
+      svg.appendChild(bg); svg.appendChild(lbl);
+    }
   });
 }
 
@@ -1248,7 +1551,7 @@ function setupDrag(el,task,rangeStart,rl,rr){
       renderAll();
       selectTask(task.id);
       updateUndoRedoButtons();
-      if(task.id<5000){
+      if(!isUnsavedLocal(task)){
         persistSave(task);
         if(autoSchedule) void persistScheduleChanges(task);
       }
@@ -1264,14 +1567,16 @@ function setupDrag(el,task,rangeStart,rl,rr){
 // ── LIST VIEW ────────────────────────────────────────────────
 function renderListView(){
   calcWBS();
+  computeCriticalPath();
   const lv=document.getElementById('listView')||document.getElementById('ganttBody');
   if(!lv) return;
-  const rows=getOrderedTasks().map(t=>{
+  const rows=getVisible().map(t=>{
     try{
       const progC=t.prog>=70?'#059669':t.prog>=40?'#d97706':'#dc2626';
       const rag=t.rag||'g';
       const ragLbl=rag==='r'?'Off Track':rag==='a'?'At Risk':'On Track';
-      return '<tr class="list-tr" data-id="'+t.id+'">'+
+      const isCrit=showCP&&criticalIds.has(t.id);
+      return '<tr class="list-tr'+(isCrit?' critical':'')+'" data-id="'+t.id+'" onclick="selectTask('+t.id+')">'+
         '<td class="list-td mono">'+esc(t.wbs||'')+'</td>'+
         '<td class="list-td list-td-edit" data-field="name" data-id="'+t.id+'" title="Click to edit name">'+
           '<div class="list-name" style="padding-left:'+(getDepth(t)*18)+'px;">'+
@@ -1293,14 +1598,16 @@ function renderListView(){
       '</tr>';
     }catch(e){ return ''; }
   }).join('');
+  const emptyMsg=tasks.length
+    ? 'No rows match the current filters. Clear type / owner / RAG / search to see items.'
+    : 'No tasks';
   lv.innerHTML='<div class="list-wrap">'+
     '<table class="list-table">'+
       '<thead><tr>'+
         '<th>WBS</th><th>Name</th><th>Owner</th><th>Start</th><th>End</th><th>Progress</th><th>RAG</th><th></th>'+
       '</tr></thead>'+
-      '<tbody>'+(rows||'<tr><td colspan="8" class="list-empty">No tasks</td></tr>')+'</tbody>'+
+      '<tbody>'+(rows||'<tr><td colspan="8" class="list-empty">'+emptyMsg+'</td></tr>')+'</tbody>'+
     '</table>'+
-    '<button type="button" class="add-new-item-btn" onclick="addNewItem()" style="margin-top:12px;">+ Add a New Item</button>'+
   '</div>';
   bindListViewClicks(lv);
 }
@@ -1351,7 +1658,7 @@ function listBeginInlineEdit(id,field,cell){
     const save=()=>{
       const next=inp.value.trim()||t.name;
       commitOnce(()=>{
-        if(next!==t.name){ pushHistory(); t.name=next; if(t.id<5000) persistSave(t); }
+        if(next!==t.name){ pushHistory(); t.name=next; void persistSave(t); }
       });
     };
     inp.addEventListener('keydown',e=>{
@@ -1379,7 +1686,7 @@ function listBeginInlineEdit(id,field,cell){
     const save=()=>{
       const next=sel.value;
       commitOnce(()=>{
-        if(next!==(t.owner||'')){ pushHistory(); t.owner=next; if(t.id<5000) persistSave(t); }
+        if(next!==(t.owner||'')){ pushHistory(); t.owner=next; void persistSave(t); }
       });
     };
     sel.addEventListener('change',save);
@@ -1404,7 +1711,7 @@ function listBeginInlineEdit(id,field,cell){
         if(field==='start'&&D(t.end)<D(t.start)) t.end=t.start;
         if(field==='end'&&D(t.end)<D(t.start)) t.start=t.end;
         if(autoSchedule) applyAutoSchedule();
-        if(t.id<5000){ persistSave(t); if(autoSchedule) void persistScheduleChanges(t); }
+        void persistSave(t); if(autoSchedule) void persistScheduleChanges(t);
       });
     };
     inp.addEventListener('keydown',e=>{
@@ -1437,7 +1744,7 @@ function listBeginInlineEdit(id,field,cell){
     const save=()=>{
       const next=Math.max(0,Math.min(100,parseInt(inp.value,10)||0));
       commitOnce(()=>{
-        if(next!==(t.prog||0)){ pushHistory(); t.prog=next; if(t.id<5000) persistSave(t); }
+        if(next!==(t.prog||0)){ pushHistory(); t.prog=next; void persistSave(t); }
       });
     };
     inp.addEventListener('keydown',e=>{
@@ -1457,7 +1764,7 @@ function listBeginInlineEdit(id,field,cell){
     pushHistory();
     t.rag=next;
     t.ragScp=next;
-    if(t.id<5000) persistSave(t);
+    void persistSave(t);
     renderAll();
     showToast(next==='g'?'RAG: On Track':next==='a'?'RAG: At Risk':'RAG: Off Track','ok',1600);
     return;
@@ -1472,7 +1779,8 @@ function populatePredDropdown(excludeId){
   const sel=document.getElementById('m-pred');
   if(!sel) return;
   sel.innerHTML='<option value="">None</option>';
-  tasks.filter(t=>t.id!==excludeId).forEach(t=>{
+  sel.disabled=false;
+  persistablePredOptions(excludeId).forEach(t=>{
     const o=document.createElement('option');
     o.value=t.id;
     o.textContent=(t.wbs||t.id)+' — '+(t.name||'').substring(0,30);
@@ -1498,7 +1806,11 @@ function openEdit(id){
   calcWBS();
   document.getElementById('editTitle').textContent='Edit — '+(t.name||'').substring(0,28);
   document.getElementById('m-name').value=t.name;
-  document.getElementById('m-type').value=t.type;
+  const typeSel=document.getElementById('m-type');
+  if(typeSel){
+    [...typeSel.options].forEach(o=>{ o.hidden=false; o.disabled=false; });
+    typeSel.value=String(t.type);
+  }
   document.getElementById('m-start').value=t.start;
   document.getElementById('m-end').value=t.end;
   const mo=document.getElementById('m-owner');
@@ -1534,7 +1846,11 @@ function addItem(parentId,afterId){
   const today=fmt(new Date());
   document.getElementById('m-start').value=today;
   document.getElementById('m-end').value=fmt(addDays(new Date(),7));
-  document.getElementById('m-type').value='5';
+  const typeSel=document.getElementById('m-type');
+  if(typeSel){
+    [...typeSel.options].forEach(o=>{ o.hidden=false; o.disabled=false; });
+    typeSel.value='5';
+  }
   const mo=document.getElementById('m-owner');
   if(mo && OWNERS.length) mo.value=OWNERS[0];
   document.getElementById('m-prog').value=0;
@@ -1655,20 +1971,23 @@ function saveItem(){
     if(t){
       pushHistory();
       t.name=name;t.start=start;t.end=(typeVal===6?start:end);
-      t.type=typeVal;t.owner=document.getElementById('m-owner').value||'';
+      t.type=typeVal;
+      t.owner=document.getElementById('m-owner').value||'';
       t.prog=parseInt(document.getElementById('m-prog').value)||0;
       t.rag=currentRag;t.ragScp=currentRag;
       if(t.type===1){ t.ragBgt=currentRag; t.ragSch=currentRag; }
       t.notes=document.getElementById('m-notes').value;
       t.parent=parentVal?parseInt(parentVal):null;
       t.predId=predVal?parseInt(predVal):null;
+      if(t.predId&&predecessorIdsForSave(t.predId)===null){ showToast('Invalid predecessor','err',3000); t.predId=null; }
       t.depType=t.predId?(currentDep||'FS'):'FS';
       closeModal('modalEdit');
       if(t.predId||autoSchedule) applyAutoSchedule();
       renderAll();
-      persistSave(t);
+      void persistSave(t).then(ok=>{
+        if(ok&&t.predId) showToast('Dependency '+(t.depType==='EE'?'FF':t.depType)+' saved','ok',2000);
+      });
       if(autoSchedule||t.predId) void persistScheduleChanges(t);
-      if(t.predId) showToast('Dependency '+(t.depType==='EE'?'FF':t.depType)+' saved','ok',2000);
     }
   } else {
     pushHistory();
@@ -1772,7 +2091,7 @@ function openImportExport(mode){
       '</div></div>'+
       '<div class="ie-section" style="margin-bottom:0;"><div class="ie-section-title">📋 Column reference</div>'+
       '<table style="width:100%;font-size:11px;border-collapse:collapse;">'+
-        [['WBS','Auto-generated'],['Name*','Work item name'],['Type*','0=Programme,1=Project,2=Phase,3=Workstream,4=Activity,5=Task,6=Milestone'],
+        [['WBS','Auto-generated'],['Name*','Work item name'],['Type*','0=Program,1=Project,2=Phase,3=Workstream,4=Activity,5=Task,6=Milestone,7=Release'],
          ['Parent_WBS','WBS of parent'],['Owner*','Owner name'],['Start*','YYYY-MM-DD'],['End*','YYYY-MM-DD'],['Duration','Days (inclusive)'],
          ['Progress','0–100'],['RAG*','g, a, or r'],['Predecessor_WBS','WBS of dependency'],['Dep_Type','FS, SS, or EE'],['Notes','Free text']
         ].map(([col,desc])=>'<tr style="border-bottom:1px solid var(--g100);"><td style="padding:5px 8px;font-family:var(--mono);font-weight:600;color:var(--p);">'+col+'</td><td style="padding:5px 8px;color:var(--g500);">'+desc+'</td></tr>').join('')+
@@ -1812,7 +2131,7 @@ function downloadTemplate(ev){
 }
 function downloadCurrentPlan(ev){
   const btn=ev&&ev.currentTarget?ev.currentTarget:null;
-  showLoading('Exporting to Excel…',btn);
+  showLoading('Exporting CSV…',btn);
   try{
     calcWBS();
     const wbsMap={};
@@ -1820,10 +2139,10 @@ function downloadCurrentPlan(ev){
     const header='WBS,Name,Type,Parent_WBS,Owner,Start,End,Duration,Progress,RAG,Predecessor_WBS,Dep_Type,Notes\n';
     const rows=tasks.map(t=>[t.wbs,'"'+t.name.replace(/"/g,'""')+'"',t.type,t.parent?wbsMap[t.parent]:'','"'+(t.owner||'')+'"',t.start,t.end,taskDuration(t),t.prog,t.rag,t.predId?wbsMap[t.predId]:'',t.depType||'FS','"'+(t.notes||'').replace(/"/g,'""')+'"'].join(',')).join('\n');
     downloadCSV('jiganto_gantt_export.csv',header+rows);
-    showToast('✓ Excel downloaded','ok');
+    showToast('✓ CSV downloaded','ok');
   }catch(e){
     console.error(e);
-    showToast('Excel export failed','err',2800);
+    showToast('CSV export failed','err',2800);
   } finally {
     hideLoading();
   }
@@ -1950,6 +2269,9 @@ function showToast(msg,type,ms){
   toast.textContent=msg||'';
   toast.classList.add('on');
   toast._hideT=setTimeout(()=>toast.classList.remove('on'),ms||2200);
+}
+function showSaveIndicator(){
+  showToast('✓ Saved','ok',1800);
 }
 async function withLoading(msg,fn,btnEl){
   showLoading(msg,btnEl);
@@ -2240,7 +2562,8 @@ async function persistBulkImport(rows,mode){
 }
 function notifyGanttRefresh(){
   const {projectId}=ganttMeta();
-  try{window.parent.postMessage({type:'gantt-saved',projectId},'*');}catch(e){}
+  // Hard remount so iframe reloads real DB ids after bulk import
+  try{window.parent.postMessage({type:'gantt-version-activated',projectId,reason:'import'},'*');}catch(e){}
 }
 function parseCSV(file){
   showLoading('Reading CSV…');
@@ -2332,7 +2655,7 @@ function makeEditable(td, task, field, options=null){
       task[field]=val;
       td.classList.remove('editing');
       renderAll();
-      if(task.id<5000) persistSave(task);
+      if(!isUnsavedLocal(task)) persistSave(task);
       if(options?.onCommit) options.onCommit();
     };
     sel.onchange=commit;sel.onblur=commit;
@@ -2346,7 +2669,7 @@ function makeEditable(td, task, field, options=null){
     lbl.style.cssText='font-size:9px;font-family:var(--mono);color:var(--g600);min-width:24px;';
     lbl.textContent=task[field]+'%';
     inp.oninput=()=>{lbl.textContent=inp.value+'%';};
-    inp.onchange=()=>{if(Number(inp.value)!==Number(original)) pushHistory();task[field]=Number(inp.value);renderAll();if(task.id<5000) persistSave(task);};
+    inp.onchange=()=>{if(Number(inp.value)!==Number(original)) pushHistory();task[field]=Number(inp.value);renderAll();if(!isUnsavedLocal(task)) persistSave(task);};
     inp.onblur=()=>{task[field]=Number(inp.value);td.classList.remove('editing');renderAll();};
     wrap.appendChild(inp);wrap.appendChild(lbl);
     td.innerHTML='';td.appendChild(wrap);inp.focus();
@@ -2362,7 +2685,7 @@ function makeEditable(td, task, field, options=null){
       if(v) task[field]=v;
       td.classList.remove('editing');
       renderAll();
-      if(task.id<5000) persistSave(task);
+      if(!isUnsavedLocal(task)) persistSave(task);
       if(options?.onCommit) options.onCommit();
     };
     inp.onblur=commit;
@@ -2375,14 +2698,26 @@ function makeEditable(td, task, field, options=null){
 
 function inlineEditPred(id,cell){
   const t=tasks.find(x=>x.id===id);
-  if(!t||getChildren(t.id).length||t.type===6) return;
+  if(!t) return;
+  if(getChildren(t.id).length){
+    showToast('Folder rows can’t have predecessors — pick a Task or Activity','info',3200);
+    return;
+  }
+  if(t.type===1||t.id===1){ showToast('Project row cannot have a predecessor','info',2800); return; }
   if(cell.classList.contains('editing')) return;
   cell.classList.add('editing');
   const sel=document.createElement('select');
   sel.className='ie-select';
   const none=document.createElement('option');
-  none.value=''; none.textContent='—'; sel.appendChild(none);
-  tasks.filter(x=>x.id!==id&&getChildren(x.id).length===0).forEach(x=>{
+  none.value=''; none.textContent='— None'; sel.appendChild(none);
+  const opts=persistablePredOptions(id);
+  if(!opts.length){
+    const o=document.createElement('option');
+    o.disabled=true;
+    o.textContent='(No other tasks to link)';
+    sel.appendChild(o);
+  }
+  opts.forEach(x=>{
     const o=document.createElement('option');
     o.value=String(x.id);
     o.textContent=(x.wbs?x.wbs+' · ':'')+x.name;
@@ -2392,9 +2727,27 @@ function inlineEditPred(id,cell){
   cell.innerHTML=''; cell.appendChild(sel); sel.focus();
   const commit=()=>{
     const v=sel.value?parseInt(sel.value,10):null;
-    if(v!==t.predId){ pushHistory(); t.predId=v; if(autoSchedule) applyAutoSchedule(); if(t.id<5000) persistSave(t); if(autoSchedule) void persistScheduleChanges(t); }
+    const changed=v!==t.predId;
+    if(changed){
+      pushHistory();
+      t.predId=v;
+      if(v&&!t.depType) t.depType='FS';
+      if(!v) t.depType='FS';
+      if(autoSchedule) applyAutoSchedule();
+      void persistSave(t);
+      if(autoSchedule) void persistScheduleChanges(t);
+    }
     cell.classList.remove('editing');
     renderAll();
+    if(changed&&showCP){
+      if(v&&criticalIds.size) showToast('Critical path updated ('+criticalIds.size+')','ok',2000);
+      else if(v) showToast('Predecessor saved','ok',1800);
+      else showToast('Predecessor cleared','info',1800);
+    } else if(changed&&v){
+      showToast('Predecessor saved · '+(t.depType==='EE'?'FF':(t.depType||'FS')),'ok',1800);
+    } else if(changed&&!v){
+      showToast('Predecessor cleared','info',1800);
+    }
   };
   sel.onchange=commit;
   sel.onblur=commit;
@@ -2409,7 +2762,7 @@ function inlineEditDate(id,field,cell){
   if(getChildren(t.id).length) return;
   makeEditable(cell,t,field,{type:'date',onCommit:()=>{
     if(autoSchedule) applyAutoSchedule();
-    if(t.id<5000){ persistSave(t); if(autoSchedule) persistScheduleChanges(t); }
+    void persistSave(t); if(autoSchedule) persistScheduleChanges(t);
   }});
 }
 function inlineEditDuration(id,cell){
@@ -2446,7 +2799,7 @@ function cycleRagDim(id,dim){
   t[field]=cycle[ragField(t,dim)]||'g';
   if(field==='ragScp') t.rag=t.ragScp;
   renderAll();
-  if(t.id<5000) persistSave(t);
+  void persistSave(t);
 }
 function cycleRag(id){ cycleRagDim(id,'scp'); }
 
@@ -2532,7 +2885,7 @@ function handleBarClickForDep(barEl,taskId){
     pushHistory();
     const label=targetTask.depType==='EE'?'FF':targetTask.depType;
     showDepToast('✓ '+label+' dependency created');
-    if(targetTask.id<5000){
+    if(!isUnsavedLocal(targetTask)){
       persistSave(targetTask);
       if(autoSchedule) void persistScheduleChanges(targetTask);
     }
@@ -2551,11 +2904,11 @@ function handleBarClickForDep(barEl,taskId){
 }
 
 // ══════════════════════════════════════════════════════════════
-// API PERSISTENCE (saves back to Jiganto backend)
-// ID ranges: phases=1000+id, workstreams=2000+id, tasks=3000+id, milestones=4000+id
-// Items with id>=5000 are locally added and not yet in the DB (Phase 2)
+// API PERSISTENCE — all schedule rows are pm_tasks (unified)
+// Project root is synthetic id 1; local unsaved rows use id >= 100000
 // ══════════════════════════════════════════════════════════════
 const RAG_TO_RAGSTATUS={g:'green',a:'amber',r:'red'};
+const LOCAL_ID_BASE=100000;
 function taskStatusFromGantt(t){
   if((t.prog||0)>=100) return 'done';
   if((t.prog||0)>0) return 'in_progress';
@@ -2565,7 +2918,6 @@ function notifyGanttParent(){
   const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
   try{ window.parent.postMessage({type:'gantt-saved',projectId},'*'); }catch(e){}
 }
-const ID_PFX={project:1,phase:1000,ws:2000,task:3000,ms:4000};
 
 function ganttMeta(){
   const d=window.GANTT_INIT_DATA||{};
@@ -2579,20 +2931,33 @@ function apiAuthHeaders(json){
   return h;
 }
 
-function resolvePhaseId(parentId){
-  if(!parentId||parentId===ID_PFX.project) return null;
-  if(parentId>ID_PFX.phase&&parentId<ID_PFX.ws) return parentId-ID_PFX.phase;
-  const p=tasks.find(t=>t.id===parentId);
-  return p?resolvePhaseId(p.parent):null;
+function isUnsavedLocal(t){
+  return !t || t.id>=LOCAL_ID_BASE;
 }
-
-function resolveParentTaskId(parentId){
-  if(parentId>ID_PFX.task&&parentId<ID_PFX.ms) return parentId-ID_PFX.task;
-  return null;
+function isLocalOnly(t){
+  if(!t) return true;
+  return t.id>=LOCAL_ID_BASE || t.id===1;
 }
-
-function countPhases(){
-  return tasks.filter(t=>t.type===2&&t.id<ID_PFX.ws).length;
+function engineTypeToGanttFields(type){
+  if(type===2) return {ganttType:'phase',isSummary:true};
+  if(type===3) return {ganttType:'workstream',isSummary:true};
+  if(type===4) return {ganttType:'activity',isSummary:true};
+  if(type===6) return {ganttType:'milestone',isSummary:false};
+  return {ganttType:'task',isSummary:false};
+}
+function ganttIdToDbTaskId(ganttId){
+  if(ganttId==null||ganttId===''||Number.isNaN(Number(ganttId))) return null;
+  const id=Number(ganttId);
+  if(id===1||id>=LOCAL_ID_BASE) return null;
+  return id;
+}
+function predecessorIdsForSave(predId){
+  if(!predId) return [];
+  const dbId=ganttIdToDbTaskId(predId);
+  return dbId!=null ? [dbId] : null;
+}
+function persistablePredOptions(excludeId){
+  return tasks.filter(x=>x.id!==excludeId&&x.type!==1&&x.id!==1&&getChildren(x.id).length===0&&!isLocalOnly(x));
 }
 
 async function persistCreate(t){
@@ -2600,47 +2965,43 @@ async function persistCreate(t){
   if(!projectId||!tenantId) return;
   showLoading('Saving new item…');
   const h=apiAuthHeaders(true);
-  const post=(url,body)=>fetch(url,{method:'POST',credentials:'include',headers:h,body:JSON.stringify(body)});
-  const rag=RAG_TO_RAGSTATUS[t.rag]||'green';
-  const phaseId=resolvePhaseId(t.parent);
-  const parentTaskId=resolveParentTaskId(t.parent);
+  const post=async (url,body)=>{
+    const res=await fetch(url,{method:'POST',credentials:'include',headers:h,body:JSON.stringify(body)});
+    if(!res.ok) throw new Error((await res.text().catch(()=>''))||('HTTP '+res.status));
+    return res.json();
+  };
   const ownerMap=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.ownerIdMap)||{};
   const assigneeId=t.owner?ownerMap[t.owner]||null:null;
+  const gt=engineTypeToGanttFields(t.type);
   try{
-    if(t.type===2){
-      const created=await post('/api/pm/phases',{tenantId,projectId,name:t.name,phaseNumber:countPhases()+1,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:rag,order:countPhases()}).then(r=>r.json());
-      if(created?.id){
-        const oldId=t.id;
-        t.id=ID_PFX.phase+created.id;
-        tasks.filter(x=>x.parent===oldId).forEach(c=>{c.parent=t.id;});
-        if(selectedTaskId===oldId) selectedTaskId=t.id;
-      }
-    } else if(t.type===3){
-      const created=await post('/api/pm/workstreams',{tenantId,projectId,phaseId,name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:rag,order:tasks.filter(x=>x.type===3).length}).then(r=>r.json());
-      if(created?.id){
-        const oldId=t.id;
-        t.id=ID_PFX.ws+created.id;
-        tasks.filter(x=>x.parent===oldId).forEach(c=>{c.parent=t.id;});
-        if(selectedTaskId===oldId) selectedTaskId=t.id;
-      }
-    } else if(t.type===4||t.type===5){
-      const created=await post('/api/pm/tasks',{tenantId,projectId,phaseId,parentTaskId,name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,status:taskStatusFromGantt(t),isSummary:t.type===4,ganttType:t.type===4?'summary':'task',order:tasks.filter(x=>x.type===4||x.type===5).length,assigneeId:assigneeId||undefined}).then(r=>r.json());
-      if(created?.id){
-        const oldId=t.id;
-        t.id=ID_PFX.task+created.id;
-        tasks.filter(x=>x.parent===oldId||x.predId===oldId).forEach(c=>{
-          if(c.parent===oldId) c.parent=t.id;
-          if(c.predId===oldId) c.predId=t.id;
-        });
-        if(selectedTaskId===oldId) selectedTaskId=t.id;
-      }
-    } else if(t.type===6){
-      const created=await post('/api/pm/milestones',{tenantId,projectId,phaseId,name:t.name,dueDate:t.start,status:t.prog>=100?'completed':'pending',ragStatus:rag,order:tasks.filter(x=>x.type===6).length}).then(r=>r.json());
-      if(created?.id){
-        const oldId=t.id;
-        t.id=ID_PFX.ms+created.id;
-        if(selectedTaskId===oldId) selectedTaskId=t.id;
-      }
+    const parentTaskId=(t.parent&&t.parent!==1)?ganttIdToDbTaskId(t.parent):null;
+    const predIds=predecessorIdsForSave(t.predId)||[];
+    const created=await post('/api/pm/tasks',{
+      tenantId,projectId,
+      name:t.name,
+      plannedStartDate:t.start,
+      plannedEndDate:t.type===6?t.start:t.end,
+      progress:t.prog||0,
+      status:taskStatusFromGantt(t),
+      isSummary:gt.isSummary,
+      ganttType:gt.ganttType,
+      ragStatus:RAG_TO_RAGSTATUS[t.ragScp||t.rag]||'green',
+      description:t.notes||null,
+      parentTaskId,
+      predecessorIds:predIds,
+      assigneeId:assigneeId||null,
+      order:tasks.filter(x=>x.type!==1).length,
+    });
+    if(created?.id){
+      const oldId=t.id;
+      t.id=created.id;
+      // Remap children/preds that pointed at the temp local id — never rewrite this row onto itself
+      tasks.filter(x=>x.id!==t.id&&(x.parent===oldId||x.predId===oldId)).forEach(c=>{
+        if(c.parent===oldId) c.parent=t.id;
+        if(c.predId===oldId) c.predId=t.id;
+      });
+      if(t.parent===oldId||t.parent===t.id) t.parent=null;
+      if(selectedTaskId===oldId) selectedTaskId=t.id;
     }
     calcWBS();
     renderAll();
@@ -2648,22 +3009,20 @@ async function persistCreate(t){
     notifyGanttParent();
   } catch(e){
     console.error('Gantt create failed:',e);
-    showToast('Save failed','err',2800);
+    showToast('Save failed: '+(e&&e.message?String(e.message).slice(0,100):'error'),'err',4000);
   } finally {
     hideLoading();
   }
 }
 
 async function persistDelete(t){
-  if(!t||t.id>=5000) return;
+  if(!t||t.type===1||t.id===1) return;
+  if(isLocalOnly(t)) return;
   showLoading('Deleting…');
   const h=apiAuthHeaders();
-  const del=(url)=>fetch(url,{method:'DELETE',credentials:'include',headers:h});
   try{
-    if(t.type===2&&t.id>ID_PFX.phase&&t.id<ID_PFX.ws) await del('/api/pm/phases/'+(t.id-ID_PFX.phase));
-    else if(t.type===3&&t.id>ID_PFX.ws&&t.id<ID_PFX.task) await del('/api/pm/workstreams/'+(t.id-ID_PFX.ws));
-    else if((t.type===4||t.type===5)&&t.id>ID_PFX.task&&t.id<ID_PFX.ms) await del('/api/pm/tasks/'+(t.id-ID_PFX.task));
-    else if(t.type===6&&t.id>ID_PFX.ms&&t.id<5000) await del('/api/pm/milestones/'+(t.id-ID_PFX.ms));
+    const res=await fetch('/api/pm/tasks/'+t.id,{method:'DELETE',credentials:'include',headers:h});
+    if(!res.ok) throw new Error('HTTP '+res.status);
     showToast('✓ Deleted','ok');
     notifyGanttParent();
   } catch(e){
@@ -2675,66 +3034,78 @@ async function persistDelete(t){
 }
 
 async function persistSave(t){
-  if(!t||t.id>=5000) return; // local-only items
+  if(!t||t.type===1||t.id===1){
+    const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
+    if(!projectId) return false;
+    const h=apiAuthHeaders(true);
+    try{
+      const res=await fetch('/api/pm/projects/'+projectId,{
+        method:'PUT',credentials:'include',headers:h,
+        body:JSON.stringify({
+          startDate:t.start||null,endDate:t.end||null,progress:t.prog||0,
+          ragStatus:RAG_TO_RAGSTATUS[t.ragScp||t.rag]||'green',
+          financialRag:RAG_TO_RAGSTATUS[t.ragBgt||t.rag]||'green',
+          scheduleRag:RAG_TO_RAGSTATUS[t.ragSch||t.rag]||'green',
+          description:t.notes||null,
+        }),
+      });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      showSaveIndicator();
+      try{ window.parent.postMessage({type:'gantt-saved',projectId,soft:true},'*'); }catch(e){}
+      return true;
+    }catch(e){
+      showToast('Save failed','err',3500);
+      return false;
+    }
+  }
+  if(isLocalOnly(t)){
+    await persistCreate(t);
+    return true;
+  }
   const h=apiAuthHeaders(true);
-  const put=(url,body)=>fetch(url,{method:'PUT',credentials:'include',headers:h,body:JSON.stringify(body)});
+  const put=async (url,body)=>{
+    const res=await fetch(url,{method:'PUT',credentials:'include',headers:h,body:JSON.stringify(body)});
+    if(!res.ok){
+      const text=await res.text().catch(()=>'');
+      let msg=text;
+      try{ const j=JSON.parse(text); msg=j.message||j.error||text; }catch(e){}
+      throw new Error(msg||('HTTP '+res.status));
+    }
+    return res;
+  };
   const ownerMap=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.ownerIdMap)||{};
   const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
-  function mapParent(parent){
-    if(!parent||parent===1) return {phaseId:null,parentTaskId:null,parentPhaseId:null};
-    if(parent>=3000&&parent<4000) return {phaseId:null,parentTaskId:parent-3000,parentPhaseId:null};
-    if(parent>=2000&&parent<3000) return {phaseId:null,parentTaskId:null,parentPhaseId:null,workstreamPhase:null};
-    if(parent>=1000&&parent<2000) return {phaseId:parent-1000,parentTaskId:null,parentPhaseId:parent-1000};
-    return {phaseId:null,parentTaskId:null,parentPhaseId:null};
-  }
-  function notifyParent(){
-    try{ window.parent.postMessage({type:'gantt-saved',projectId,soft:true},'*'); }catch(e){}
-  }
+  const gt=engineTypeToGanttFields(t.type);
   try{
-    if(t.type===1&&projectId){
-      await put('/api/pm/projects/'+projectId,{
-        startDate:t.start,endDate:t.end,progress:t.prog,
-        ragStatus:RAG_TO_RAGSTATUS[t.ragScp||t.rag]||'green',
-        financialRag:RAG_TO_RAGSTATUS[t.ragBgt||t.rag]||'green',
-        scheduleRag:RAG_TO_RAGSTATUS[t.ragSch||t.rag]||'green',
-        description:t.notes||undefined,
-      });
-    } else if(t.type===2&&t.id>1000&&t.id<2000){
-      const id=t.id-1000;
-      await put('/api/pm/phases/'+id,{name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:RAG_TO_RAGSTATUS[t.ragScp||t.rag]||'green',description:t.notes||undefined,wbsCode:t.wbs||undefined});
-    } else if(t.type===3&&t.id>2000&&t.id<3000){
-      const id=t.id-2000;
-      const parent=mapParent(t.parent);
-      await put('/api/pm/workstreams/'+id,{name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,ragStatus:RAG_TO_RAGSTATUS[t.ragScp||t.rag]||'green',description:t.notes||undefined,wbsCode:t.wbs||undefined,...(parent.phaseId?{phaseId:parent.phaseId}:{})});
-    } else if((t.type===4||t.type===5)&&t.id>3000&&t.id<4000){
-      const id=t.id-3000;
-      const parent=mapParent(t.parent);
-      const predIds=t.predId&&t.predId>=3000&&t.predId<4000?[t.predId-3000]:null;
-      const assigneeId=t.owner?ownerMap[t.owner]||null:null;
-      await put('/api/pm/tasks/'+id,{
-        name:t.name,plannedStartDate:t.start,plannedEndDate:t.end,progress:t.prog,
-        status:taskStatusFromGantt(t),description:t.notes||undefined,
-        wbsCode:t.wbs||undefined,phaseId:parent.phaseId||undefined,
-        parentTaskId:parent.parentTaskId||undefined,
-        predecessorIds:predIds||undefined,assigneeId:assigneeId||undefined,
-        isSummary:t.type===4,
-      });
-    } else if(t.type===6&&t.id>4000&&t.id<5000){
-      const id=t.id-4000;
-      const parent=mapParent(t.parent);
-      await put('/api/pm/milestones/'+id,{name:t.name,dueDate:t.start,status:t.prog>=100?'completed':'pending',notes:t.notes||undefined,...(parent.phaseId?{phaseId:parent.phaseId}:{})});
-    }
+    const parentTaskId=(t.parent&&t.parent!==1)?ganttIdToDbTaskId(t.parent):null;
+    let predIds=predecessorIdsForSave(t.predId);
+    if(t.predId&&predIds===null){ t.predId=null; predIds=[]; }
+    const assigneeId=t.owner?ownerMap[t.owner]||null:null;
+    await put('/api/pm/tasks/'+t.id,{
+      name:t.name,
+      plannedStartDate:t.start||null,
+      plannedEndDate:(t.type===6?t.start:t.end)||null,
+      progress:t.prog||0,
+      status:taskStatusFromGantt(t),
+      description:t.notes||null,
+      wbsCode:t.wbs||null,
+      parentTaskId,
+      predecessorIds:predIds||[],
+      assigneeId,
+      isSummary:gt.isSummary,
+      ganttType:gt.ganttType,
+      ragStatus:RAG_TO_RAGSTATUS[t.ragScp||t.rag]||'green',
+    });
     showSaveIndicator();
-    notifyParent();
+    try{ window.parent.postMessage({type:'gantt-saved',projectId,soft:true},'*'); }catch(e){}
+    return true;
   } catch(e){
     console.error('Gantt persist failed:',e);
-    showToast('Save failed','err',2800);
+    showToast('Save failed: '+(e&&e.message?String(e.message).slice(0,120):'server error'),'err',4500);
+    return false;
   }
 }
 
-function showSaveIndicator(){
-  showToast('✓ Saved','ok',1200);
-}
 
 // ══════════════════════════════════════════════════════════════
 // PLAN VERSIONS (named snapshots / save-as-copy)
@@ -2765,7 +3136,7 @@ function restoreSnapshot(snapshot){
   if(!snapshot||!Array.isArray(snapshot.tasks)) return false;
   tasks=snapshot.tasks.map(t=>normalizeTaskRags(Object.assign({},t)));
   const ids=tasks.map(t=>Number(t.id)||0);
-  nextId=Math.max(5000,...ids)+1;
+  nextId=Math.max(100000,...ids)+1;
   if(Array.isArray(snapshot.customCols)){
     customCols=snapshot.customCols.map(c=>Object.assign({},c));
     ccNextId=customCols.length?Math.max(1,...customCols.map(c=>Number(c.id)||0))+1:1;
@@ -3293,9 +3664,9 @@ window.addEventListener('message',function(e){
 // ══════════════════════════════════════════════════════════════
 function loadFromInitData(){
   const d=window.GANTT_INIT_DATA;
-  if(!d||!Array.isArray(d.tasks)){tasks=[];nextId=5000;return;}
+  if(!d||!Array.isArray(d.tasks)){tasks=[];nextId=100000;return;}
   tasks=d.tasks.map(t=>normalizeTaskRags(Object.assign({},t)));
-  nextId=d.nextId||5000;
+  nextId=d.nextId||100000;
   // Populate OWNERS
   OWNERS.length=0;
   (d.owners||[]).forEach(o=>OWNERS.push(o));
