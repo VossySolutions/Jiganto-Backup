@@ -323,8 +323,12 @@ export const pmMilestonesRelations = relations(pmMilestones, ({ one }) => ({
 }));
 
 // Project Tasks — Monday-style unified work items for the Gantt schedule.
-// ganttType: phase | workstream | activity | task | milestone (legacy: summary → activity)
+// ganttType: program | project | release | phase | workstream | activity | task | milestone
+// (legacy: summary → activity)
 export const pmGanttTypeEnum = [
+  "program",
+  "project",
+  "release",
   "phase",
   "workstream",
   "activity",

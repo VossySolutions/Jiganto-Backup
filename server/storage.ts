@@ -6416,25 +6416,46 @@ export class DatabaseStorage implements IStorage {
 
     type WbsRef = { id: number };
     const wbsMap = new Map<string, WbsRef>();
+    const wbsDepth = (wbs: string) => String(wbs || "").split(".").filter(Boolean).length;
     const sorted = [...items]
-      .filter((i) => i.type >= 2 && i.type <= 6 && i.name && i.start)
-      .sort((a, b) => a.type - b.type || String(a.wbs || "").localeCompare(String(b.wbs || ""), undefined, { numeric: true }));
+      .filter((i) => {
+        const type = Number(i.type);
+        return Number.isFinite(type) && type >= 0 && type <= 7 && !!i.name && !!i.start;
+      })
+      // Parents before children: WBS depth, then natural WBS order (not type order)
+      .sort((a, b) => {
+        const da = wbsDepth(a.wbs);
+        const db = wbsDepth(b.wbs);
+        if (da !== db) return da - db;
+        return String(a.wbs || "").localeCompare(String(b.wbs || ""), undefined, { numeric: true });
+      });
 
     let order = 0;
     for (const item of sorted) {
       order++;
-      const parent = item.parentWbs ? wbsMap.get(item.parentWbs) : undefined;
-      const rag = ragMap[(item.rag || "g").toLowerCase()] || "green";
+      let parent = item.parentWbs ? wbsMap.get(String(item.parentWbs)) : undefined;
+      // Infer parent from WBS when Parent_WBS omitted (client Excel template)
+      if (!parent && item.wbs) {
+        const parts = String(item.wbs).split(".").filter(Boolean);
+        while (parts.length > 1 && !parent) {
+          parts.pop();
+          parent = wbsMap.get(parts.join("."));
+        }
+      }
+      const ragKey = String(item.rag || "g").trim().toLowerCase();
+      const rag =
+        ragMap[ragKey] ||
+        (ragKey.startsWith("g") ? "green" : ragKey.startsWith("a") || ragKey.startsWith("y") ? "amber" : ragKey.startsWith("r") ? "red" : "green");
       const end = item.end || item.start;
-      const gt = engineTypeToGanttType(item.type);
-      const predRef = item.predecessorWbs ? wbsMap.get(item.predecessorWbs) : undefined;
+      const gt = engineTypeToGanttType(Number(item.type));
+      const predRef = item.predecessorWbs ? wbsMap.get(String(item.predecessorWbs)) : undefined;
       const task = await this.createPmTask({
         tenantId,
         projectId,
         parentTaskId: parent?.id ?? null,
         name: item.name,
         plannedStartDate: item.start,
-        plannedEndDate: end,
+        plannedEndDate: Number(item.type) === 6 ? item.start : end,
         progress: item.progress ?? 0,
         status: (item.progress ?? 0) >= 100 ? "done" : "todo",
         description: item.notes || null,
@@ -6445,7 +6466,7 @@ export class DatabaseStorage implements IStorage {
         predecessorIds: predRef ? [predRef.id] : [],
         order,
       });
-      if (item.wbs) wbsMap.set(item.wbs, { id: task.id });
+      if (item.wbs) wbsMap.set(String(item.wbs), { id: task.id });
     }
 
     return { imported: sorted.length };
@@ -6563,15 +6584,21 @@ export class DatabaseStorage implements IStorage {
     }[];
     const byId = new Map(tasks.map((t) => [t.id, t]));
     return tasks
-      .filter((t) => (t.type ?? 0) >= 2 && (t.type ?? 0) <= 6 && t.name && t.start && t.wbs)
+      .filter((t) => {
+        const type = Number(t.type ?? 5);
+        // Skip synthetic project root (id 1) and invalid rows; allow Program…Release (0–7)
+        if (t.id === 1) return false;
+        return type >= 0 && type <= 7 && !!t.name && !!t.start && !!t.wbs;
+      })
       .map((t) => {
         const parent = t.parent != null ? byId.get(t.parent) : undefined;
         const pred = t.predId != null ? byId.get(t.predId) : undefined;
+        const parentOk = parent && parent.id !== 1 && parent.wbs;
         return {
           wbs: String(t.wbs),
           name: String(t.name),
           type: Number(t.type),
-          parentWbs: parent && (parent.type ?? 0) >= 2 && parent.wbs ? String(parent.wbs) : null,
+          parentWbs: parentOk ? String(parent.wbs) : null,
           predecessorWbs: pred?.wbs ? String(pred.wbs) : null,
           owner: t.owner || undefined,
           start: String(t.start),

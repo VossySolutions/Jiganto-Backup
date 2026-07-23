@@ -65,9 +65,8 @@ const PmWbsTool = lazy(() => import("@/components/projects/PmSecondaryTools").th
 import {
   Loader2,
   ChevronLeft,
-  Maximize2,
-  Minimize2,
-  Plus,
+  Maximize,
+  Minimize,
   X,
   MoreHorizontal,
   LayoutTemplate,
@@ -130,6 +129,8 @@ function ProjectDetailView({
   const { toast } = useToast();
   const { setCollapsed, setLockCollapsed } = useSidebarState();
 
+  // Prefer icon-rail layout on project pages (stops ModuleShell from auto-expanding).
+  // User can still expand/collapse via the sidebar chevron — toggle clears the lock.
   useEffect(() => {
     setLockCollapsed(true);
     setCollapsed(true);
@@ -252,6 +253,28 @@ function ProjectDetailView({
     [projectId],
   );
 
+  const workspaceContentRef = useRef<HTMLDivElement>(null);
+  const [isWorkspaceFullscreen, setIsWorkspaceFullscreen] = useState(false);
+
+  const toggleWorkspaceFullscreen = useCallback(() => {
+    const el = workspaceContentRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const onFSChange = () => {
+      const el = workspaceContentRef.current;
+      setIsWorkspaceFullscreen(!!document.fullscreenElement && document.fullscreenElement === el);
+    };
+    document.addEventListener("fullscreenchange", onFSChange);
+    return () => document.removeEventListener("fullscreenchange", onFSChange);
+  }, []);
+
   // Keep heavy tools mounted after first visit so switching back is instant
   const KEEP_ALIVE = useMemo(() => new Set(["gantt_chart", "agile"]), []);
   const [keptAlive, setKeptAlive] = useState<string[]>([]);
@@ -345,7 +368,13 @@ function ProjectDetailView({
         addingTool={addToolMutation.isPending}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden min-h-0 bg-[#F0F2FF]/40 dark:bg-background">
+      <div
+        ref={workspaceContentRef}
+        className={cn(
+          "flex min-w-0 flex-1 flex-col overflow-hidden min-h-0 bg-[#F0F2FF]/40 dark:bg-background",
+          isWorkspaceFullscreen && "bg-background",
+        )}
+      >
         <div
           className="flex h-11 flex-shrink-0 items-center gap-2 border-b border-border bg-card px-4"
           data-testid="project-content-topbar"
@@ -362,6 +391,21 @@ function ProjectDetailView({
             )}
           </div>
           <div className="ml-auto flex flex-shrink-0 items-center gap-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={toggleWorkspaceFullscreen}
+              title={isWorkspaceFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              aria-label={isWorkspaceFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              data-testid="button-project-tool-fullscreen"
+            >
+              {isWorkspaceFullscreen ? (
+                <Minimize className="h-4 w-4" />
+              ) : (
+                <Maximize className="h-4 w-4" />
+              )}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -861,26 +905,6 @@ function ToolPlaceholder({
   const def = findToolDefinition(toolId);
   const Icon = def?.icon || PmDocumentationIcon;
   const name = def?.name || toolId;
-  const toolPanelRef = useRef<HTMLDivElement>(null);
-  const [isMaximized, setIsMaximized] = useState(false);
-
-  const toggleMaximize = useCallback(() => {
-    if (!document.fullscreenElement && toolPanelRef.current) {
-      toolPanelRef.current.requestFullscreen().catch(() => {});
-      setIsMaximized(true);
-    } else if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-      setIsMaximized(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const onFSChange = () => {
-      if (!document.fullscreenElement) setIsMaximized(false);
-    };
-    document.addEventListener('fullscreenchange', onFSChange);
-    return () => document.removeEventListener('fullscreenchange', onFSChange);
-  }, []);
 
   const renderPlaceholder = () => {
     if (toolId === "agile" || LEGACY_AGILE_TOOL_ID_SET.has(toolId)) {
@@ -958,38 +982,13 @@ function ToolPlaceholder({
   const isGantt = toolId === "gantt_chart";
   const isAgile = toolId === "agile" || LEGACY_AGILE_TOOL_ID_SET.has(toolId);
   const isTracking = toolId === "tracking_board";
-  // Content topbar owns the title — skip duplicate ToolPlaceholder chrome on all tools
-  const hideToolChrome = true;
   const fillHeight = isGantt || isAgile || isTracking;
 
   return (
     <div
-      ref={toolPanelRef}
       data-testid={`tool-panel-${toolId}`}
-      className={
-        isMaximized
-          ? "bg-background p-4 overflow-auto"
-          : fillHeight
-          ? "flex-1 min-h-0 flex flex-col overflow-hidden"
-          : ""
-      }
+      className={fillHeight ? "flex-1 min-h-0 flex flex-col overflow-hidden" : ""}
     >
-      {!hideToolChrome && (
-        <div className="flex items-center justify-between gap-4 flex-wrap flex-shrink-0 mb-4">
-          <div className="flex items-center gap-2">
-            <Icon className="h-5 w-5" />
-            <h3 className="text-sm font-bold text-foreground">{name}</h3>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={toggleMaximize} data-testid={`button-tool-fullscreen-${toolId}`}>
-              {isMaximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-            </Button>
-            <Button variant="outline" size="sm" disabled title="Use in-tool controls to add items" data-testid={`button-tool-add-${toolId}`}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Add
-            </Button>
-          </div>
-        </div>
-      )}
       <div className={fillHeight ? "relative flex-1 min-h-0 overflow-hidden" : ""}>
         <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center"><Loader2 className="h-8 w-8 text-primary animate-spin" /></div>}>
           {renderPlaceholder()}

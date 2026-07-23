@@ -130,11 +130,14 @@ function teamMemberDisplayName(m: TeamMember): string {
 const PROJECT_ROW_ID = 1;
 
 function ganttTypeToEngineType(ganttType?: string | null, isSummary?: boolean | null): number {
-  const t = (ganttType || "").toLowerCase();
+  const t = (ganttType || "").toLowerCase().trim();
+  if (t === "program") return 0;
+  if (t === "project") return 1;
   if (t === "phase") return 2;
   if (t === "workstream") return 3;
   if (t === "activity" || t === "summary") return 4;
   if (t === "milestone") return 6;
+  if (t === "release") return 7;
   if (isSummary) return 4;
   return 5;
 }
@@ -201,11 +204,14 @@ function buildGanttData(
       mapTaskVisualRag(t.status, t.progress ?? 0);
     const taskRags = deriveItemRags(scopeRag, t.progress ?? 0, t.status, start, end);
     const colors: Record<number, string> = {
+      0: "#4338ca",
+      1: "#4f46e5",
       2: "#0891b2",
       3: "#059669",
       4: "#64748b",
       5: "#64748b",
       6: "#f59e0b",
+      7: "#7c3aed",
     };
     items.push({
       id: t.id,
@@ -256,17 +262,13 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
   </select>
   <div class="gtb-sep"></div>
   <span style="font-size:10px;color:var(--g500);font-weight:600;flex-shrink:0;">FILTER</span>
-  <select class="tb-select" id="f-level" onchange="renderAll()">
-    <option value="">All types</option>
-    <option value="0">Program</option>
-    <option value="1">Project</option>
-    <option value="7">Release</option>
-    <option value="2">Phase</option>
-    <option value="3">Workstream</option>
-    <option value="4">Activity</option>
-    <option value="5">Task</option>
-    <option value="6">Milestone</option>
-  </select>
+  <div class="tb-filter-wrap" id="typeFilterWrap">
+    <button type="button" class="tb-select type-filter-btn" id="typeFilterBtn" onclick="toggleTypeFilterMenu(event)" title="Filter by type — tick one or more to show only those" aria-label="Filter by type" aria-haspopup="menu" aria-expanded="false">
+      All types <span class="type-filter-caret" aria-hidden="true">▾</span>
+    </button>
+    <div class="tb-filter-menu type-filter-menu" id="typeFilterMenu" hidden role="menu"></div>
+  </div>
+  <input type="hidden" id="f-level" value="">
   <select class="tb-select" id="f-owner" onchange="renderAll()">
     <option value="">All owners</option>
   </select>
@@ -293,6 +295,12 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
   <input type="hidden" id="f-rag-dim" value="">
   <input type="hidden" id="f-rag" value="">
   <input class="tb-search" id="f-search" placeholder="Search tasks…" oninput="renderAll()">
+  <div class="tb-filter-wrap" id="fieldsMenuWrap">
+    <button type="button" class="tb-filter-btn" id="fieldsMenuBtn" onclick="toggleFieldsMenu(event)" title="Show or hide table fields" aria-label="Fields" aria-haspopup="menu">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h14"/><rect x="16" y="10" width="4" height="4" rx="0.5"/></svg>
+    </button>
+    <div class="tb-filter-menu fields-menu" id="fieldsMenu" hidden role="menu"></div>
+  </div>
   <div class="gtb-sep"></div>
   <div class="plan-chip" id="planChip" title="Click to manage plan versions" onclick="openVersionsModal()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openVersionsModal();}" role="button" tabindex="0">
     <span class="plan-chip-lbl">Plan</span>
@@ -325,7 +333,7 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
     </div>
   </div>
   <div class="gtb-sep"></div>
-  <div class="cp-toggle" id="cpBtn" onclick="toggleCP()" title="Highlight the longest zero-slack chain. Requires predecessor links (Pred column or Edit).">Critical path</div>
+  <div class="cp-toggle" id="cpBtn" onclick="toggleCP()" title="Highlight the longest zero-slack chain. Hover a bar and drag the end dots to link tasks.">Critical path</div>
   <div class="gtb-actions">
     <button type="button" class="btn-icon" id="undoBtn" onclick="undo()" disabled title="Undo last change in this session (does not reverse a saved server write)" aria-label="Undo">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6.7 3L3 13"/></svg>
@@ -360,10 +368,6 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
       <button type="button" class="vb on" id="viewGanttBtn" onclick="setView('gantt',this)">Gantt</button>
       <button type="button" class="vb" id="viewListBtn" onclick="setView('list',this)">List</button>
     </div>
-    <div class="gtb-sep"></div>
-    <button type="button" class="btn-icon" id="fullscreenBtn" onclick="toggleFullscreen()" title="Fullscreen" aria-label="Fullscreen">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
-    </button>
   </div>
 </div>`;
 
@@ -373,17 +377,18 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
     <div class="task-panel" id="taskPanel">
       <div class="tp-grid-x" id="tpGridX">
         <div class="tp-header" id="tpHeader">
-          <div class="th-cell th-wbs">#</div>
-          <div class="th-cell th-name">Task name</div>
-          <div class="th-cell th-owner">Owner</div>
-          <div class="th-cell th-date">Start</div>
-          <div class="th-cell th-date">End</div>
-          <div class="th-cell th-dur">Duration</div>
-          <div class="th-cell th-pred" title="Predecessor links drive Critical path — click a cell to set">Pred</div>
-          <div class="th-cell th-prog">%</div>
-          <div class="th-cell th-rag-col">Budget</div>
-          <div class="th-cell th-rag-col">Sched</div>
-          <div class="th-cell th-rag-col">Scope</div>
+          <div class="th-cell th-wbs" data-field="wbs">#</div>
+          <div class="th-cell th-name" data-field="name">Task name</div>
+          <div class="th-cell th-type" data-field="type" title="Line / field type (Phase, Task, Milestone…)">Type</div>
+          <div class="th-cell th-owner" data-field="owner">Owner</div>
+          <div class="th-cell th-date" data-field="start">Start</div>
+          <div class="th-cell th-date" data-field="end">End</div>
+          <div class="th-cell th-dur" data-field="duration">Duration</div>
+          <div class="th-cell th-pred" data-field="pred" title="Predecessor links drive Critical path — click a cell to set">Pred</div>
+          <div class="th-cell th-prog" data-field="prog">%</div>
+          <div class="th-cell th-rag-col" data-field="budget">Budget</div>
+          <div class="th-cell th-rag-col" data-field="sched">Sched</div>
+          <div class="th-cell th-rag-col" data-field="scope">Scope</div>
           <div id="tpCustomHeaders" class="tp-custom-headers"></div>
           <div class="th-cell th-add-col" onclick="promptAddColumn()" title="Add a column" aria-label="Add column"><span class="th-add-plus">+</span></div>
           <div class="grid-filler"></div>
@@ -427,6 +432,9 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
         <div class="fg">
           <label class="fl">Type <span class="fl-hint">change anytime (same item)</span></label>
           <select id="m-type" class="fi" title="Type changes how this row behaves; it stays the same work item">
+            <option value="0">Program</option>
+            <option value="1">Project</option>
+            <option value="7">Release</option>
             <option value="2">Phase</option>
             <option value="3">Workstream</option>
             <option value="4">Activity</option>
@@ -564,6 +572,42 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
       <button class="btn btn-p" id="vcConfirmBtn" onclick="confirmVersionConfirmModal()">Confirm</button>
     </div>
   </div>
+</div>
+
+<div class="modal-bg" id="modalAddColumn">
+  <div class="modal" style="width:460px;" role="dialog" aria-labelledby="acTitle">
+    <div class="mh">
+      <h3 id="acTitle">Add column</h3>
+      <button type="button" class="mc" id="acCloseBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="mb">
+      <div class="fg">
+        <label class="fl" for="acName">Column name</label>
+        <input id="acName" class="fi" type="text" maxlength="80" placeholder="e.g. Priority, Due date, Status" autocomplete="off">
+      </div>
+      <div class="fg">
+        <span class="fl">Column type</span>
+        <div class="ac-type-grid" id="acTypeGrid" role="radiogroup" aria-label="Column type">
+          <button type="button" class="ac-type-btn sel" data-type="text">Text</button>
+          <button type="button" class="ac-type-btn" data-type="number">Number</button>
+          <button type="button" class="ac-type-btn" data-type="date">Date</button>
+          <button type="button" class="ac-type-btn" data-type="select">Dropdown</button>
+          <button type="button" class="ac-type-btn" data-type="checkbox">Checkbox</button>
+        </div>
+        <input type="hidden" id="acType" value="text">
+      </div>
+      <div class="fg" id="acOptsWrap">
+        <label class="fl" for="acOpts">Dropdown options</label>
+        <textarea id="acOpts" class="fi" rows="4" placeholder="One option per line&#10;Low&#10;Medium&#10;High"></textarea>
+        <p class="versions-hint" style="margin:0;">Enter each choice on its own line (at least 2).</p>
+      </div>
+      <p class="vn-error" id="acError" hidden></p>
+    </div>
+    <div class="mf">
+      <button type="button" class="btn btn-ghost" id="acCancelBtn">Cancel</button>
+      <button type="button" class="btn btn-p" id="acConfirmBtn">Add column</button>
+    </div>
+  </div>
 </div>`;
 
   return `<!DOCTYPE html>
@@ -572,7 +616,7 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${projectName.replace(/</g, "&lt;")} — Gantt</title>
-<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260722q">
+<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260723y">
 </head>
 <body>
 <div class="main">
@@ -581,7 +625,7 @@ ${ganttBodyHTML}
 </div>
 ${modalsHTML}
 <script>window.GANTT_INIT_DATA = ${dataJson};</script>
-<script src="/gantt-v4-engine.js?v=20260722q"></script>
+<script src="/gantt-v4-engine.js?v=20260723y"></script>
 </body>
 </html>`;
 }
@@ -722,7 +766,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
 
   return (
     <iframe
-      key={`gantt-${projectId}-v20260722r-${versionReloadKey}`}
+      key={`gantt-${projectId}-v20260723y-${versionReloadKey}`}
       title={`Gantt — ${project.name}`}
       srcDoc={srcDoc}
       className="block h-full w-full border-0"

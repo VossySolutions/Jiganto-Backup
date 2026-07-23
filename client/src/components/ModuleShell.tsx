@@ -49,7 +49,7 @@ export function ModuleShell({
   const { activeClient } = useClientContext();
 
   useEffect(() => {
-    // Don't expand while project workspace locks the 52px icon rail
+    // Don't auto-expand while project workspace prefers the 52px icon rail
     if (activeClient?.id && !lockCollapsed) setCollapsed(false);
   }, [activeClient?.id, setCollapsed, lockCollapsed]);
 

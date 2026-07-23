@@ -27,30 +27,44 @@ export async function ensureUnifiedWorkItemColumns(): Promise<void> {
 }
 
 function normalizeGanttType(raw?: string | null, isSummary?: boolean | null): string {
-  const t = (raw || "").toLowerCase();
+  const t = (raw || "").toLowerCase().trim();
   if (t === "summary") return "activity";
-  if (t === "phase" || t === "workstream" || t === "activity" || t === "task" || t === "milestone") return t;
+  if (
+    t === "program" ||
+    t === "project" ||
+    t === "release" ||
+    t === "phase" ||
+    t === "workstream" ||
+    t === "activity" ||
+    t === "task" ||
+    t === "milestone"
+  ) {
+    return t;
+  }
   if (isSummary) return "activity";
   return "task";
 }
 
 export function ganttTypeToEngineType(ganttType?: string | null, isSummary?: boolean | null): number {
   const t = normalizeGanttType(ganttType, isSummary);
+  if (t === "program") return 0;
+  if (t === "project") return 1;
   if (t === "phase") return 2;
   if (t === "workstream") return 3;
   if (t === "activity") return 4;
   if (t === "milestone") return 6;
+  if (t === "release") return 7;
   return 5;
 }
 
 export function engineTypeToGanttType(type: number): { ganttType: string; isSummary: boolean } {
+  if (type === 0) return { ganttType: "program", isSummary: true };
+  if (type === 1) return { ganttType: "project", isSummary: true };
   if (type === 2) return { ganttType: "phase", isSummary: true };
   if (type === 3) return { ganttType: "workstream", isSummary: true };
   if (type === 4) return { ganttType: "activity", isSummary: true };
   if (type === 6) return { ganttType: "milestone", isSummary: false };
-  if (type === 0) return { ganttType: "phase", isSummary: true };
-  if (type === 1) return { ganttType: "phase", isSummary: true };
-  if (type === 7) return { ganttType: "phase", isSummary: true };
+  if (type === 7) return { ganttType: "release", isSummary: true };
   return { ganttType: "task", isSummary: false };
 }
 

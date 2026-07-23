@@ -51,11 +51,17 @@ export function SidebarStateProvider({ children }: { children: ReactNode }) {
   }, [hiddenModules]);
 
   const toggleCollapse = () => {
-    if (lockCollapsed) return;
+    // Project workspace locks the rail by default for layout, but the chevron
+    // must always respond — unlock on explicit user toggle.
+    if (lockCollapsed) {
+      setLockCollapsed(false);
+    }
     setIsCollapsed((prev) => !prev);
   };
 
   const setCollapsed = (collapsed: boolean) => {
+    // Programmatic expand (e.g. ModuleShell) stays blocked while locked.
+    // User-driven toggleCollapse above clears the lock first.
     if (lockCollapsed && !collapsed) return;
     setIsCollapsed(collapsed);
   };
