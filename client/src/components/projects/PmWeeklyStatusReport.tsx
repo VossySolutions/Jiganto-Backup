@@ -4,9 +4,15 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Loader2, Plus, Printer, Save, Send } from "lucide-react";
+import {
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+} from "@/components/ModulePageChrome";
 
 type Rag = "green" | "amber" | "red" | "blue";
 type VariantId = "standard" | "expanded" | "exec" | "financial" | "agile";
@@ -49,6 +55,11 @@ const VARIANTS: { id: VariantId; label: string; desc: string }[] = [
   { id: "financial", label: "Financial", desc: "Finance-forward layout" },
   { id: "agile", label: "Agile / Sprint", desc: "Sprint-oriented sections" },
 ];
+
+const variantTabClass = cn(
+  modulePageTabTriggerClass,
+  "data-[state=active]:bg-primary/10 data-[state=active]:text-primary",
+);
 
 const RAG_CYCLE: Rag[] = ["green", "amber", "red", "blue"];
 
@@ -324,70 +335,9 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
   const patch = (partial: Partial<WeeklyStatusReport>) => setDraft((d) => (d ? { ...d, ...partial } : d));
 
   return (
-    <div className="flex h-full min-h-[640px] rounded-xl border border-border overflow-hidden bg-background">
-      {/* Left week / variant panel */}
-      <aside className="w-[240px] shrink-0 bg-[#0D0F2B] text-white flex flex-col print:hidden">
-        <div className="px-4 py-3.5 border-b border-white/10">
-          <div className="text-[15px] font-extrabold">Status Reporting</div>
-          <div className="text-[10px] uppercase tracking-wide text-white/35 mt-0.5">Weekly pack</div>
-        </div>
-
-        <div className="px-4 pt-3">
-          <div className="text-[9px] font-bold uppercase tracking-widest text-white/25 mb-2">Report history</div>
-          <div className="space-y-1 max-h-40 overflow-y-auto">
-            {reports.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => { setActiveId(r.id); setDraft({ ...r }); }}
-                className={cn(
-                  "w-full text-left rounded-md px-2.5 py-1.5 text-[11px] border-l-2",
-                  activeId === r.id
-                    ? "bg-indigo-500/25 border-indigo-400 text-white"
-                    : "border-transparent text-white/55 hover:bg-white/5",
-                )}
-              >
-                <div className="font-semibold truncate">{r.title || fmtWeek(r.weekCommencing)}</div>
-                <div className="text-[9px] text-white/40 capitalize">{r.status}</div>
-              </button>
-            ))}
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="mt-2 w-full h-7 text-[11px] border-white/20 bg-transparent text-white hover:bg-white/10"
-            onClick={startNew}
-          >
-            <Plus className="h-3 w-3 mr-1" /> New week
-          </Button>
-        </div>
-
-        <div className="px-4 py-3 mt-2 flex-1">
-          <div className="text-[9px] font-bold uppercase tracking-widest text-white/25 mb-2">Variants</div>
-          <div className="space-y-1.5">
-            {VARIANTS.map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                onClick={() => setVariant(v.id)}
-                className={cn(
-                  "w-full text-left rounded-md px-3 py-2 border",
-                  variant === v.id
-                    ? "bg-indigo-500/25 border-indigo-400"
-                    : "bg-white/5 border-white/10 hover:bg-white/10",
-                )}
-              >
-                <div className="text-[11px] font-semibold text-white/90">{v.label}</div>
-                <div className="text-[9.5px] text-white/35">{v.desc}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </aside>
-
-      {/* Main report */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div className="shrink-0 border-b border-border bg-card px-4 py-2.5 flex items-center gap-2 print:hidden">
+    <div className="flex h-full min-h-[640px] flex-col rounded-xl border border-border overflow-hidden bg-background">
+      <div className="shrink-0 border-b border-border/30 bg-card print:hidden">
+        <div className="px-3 sm:px-4 py-2.5 flex flex-wrap items-center gap-2">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold truncate">
               {VARIANTS.find((v) => v.id === variant)?.label} Weekly Status Report
@@ -396,6 +346,64 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
               {project?.name || "Project"} · W/C {fmtWeek(draft.weekCommencing)}
             </div>
           </div>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Select
+              value={activeId || draft?.id || undefined}
+              onValueChange={(id) => {
+                const found = reports.find((r) => r.id === id);
+                if (found) {
+                  setActiveId(found.id);
+                  setDraft({ ...found });
+                  return;
+                }
+                if (draft && draft.id === id) {
+                  setActiveId(draft.id);
+                }
+              }}
+            >
+              <SelectTrigger
+                className="h-8 w-[200px] sm:w-[220px] text-xs gap-2 shrink-0 [&>span]:min-w-0 [&>span]:flex-1 [&>span]:truncate [&>span]:text-left"
+                data-testid="status-report-week-select"
+              >
+                <SelectValue placeholder="Select week">
+                  {draft
+                    ? (draft.title || `Week of ${fmtWeek(draft.weekCommencing)}`)
+                    : "Select week"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {reports.map((r) => (
+                  <SelectItem key={r.id} value={r.id} className="text-xs">
+                    <span className="truncate">{r.title || `Week of ${fmtWeek(r.weekCommencing)}`}</span>
+                    <span className="ml-1.5 text-muted-foreground capitalize">· {r.status}</span>
+                  </SelectItem>
+                ))}
+                {draft && !reports.some((r) => r.id === draft.id) && (
+                  <SelectItem value={draft.id} className="text-xs">
+                    <span className="truncate">{draft.title || `Week of ${fmtWeek(draft.weekCommencing)}`}</span>
+                    <span className="ml-1.5 text-muted-foreground">· unsaved</span>
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            {draft && (
+              <span
+                className={cn(
+                  "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                  draft.status === "submitted"
+                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    : reports.some((r) => r.id === draft.id)
+                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                      : "bg-muted text-muted-foreground",
+                )}
+              >
+                {reports.some((r) => r.id === draft.id) ? draft.status : "unsaved"}
+              </span>
+            )}
+          </div>
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={startNew}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> New week
+          </Button>
           <Input
             type="date"
             value={draft.weekCommencing}
@@ -414,8 +422,29 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 bg-muted/20">
-          <div className="mx-auto max-w-5xl rounded-xl border border-border overflow-hidden bg-card shadow-sm">
+        <div className={modulePageTabsWrapClass}>
+          <div className={modulePageTabsListClass} role="tablist">
+            {VARIANTS.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                role="tab"
+                title={v.desc}
+                aria-selected={variant === v.id}
+                data-state={variant === v.id ? "active" : "inactive"}
+                onClick={() => setVariant(v.id)}
+                className={variantTabClass}
+                data-testid={`status-variant-${v.id}`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-muted/20">
+          <div className="w-full rounded-xl border border-border overflow-hidden bg-card shadow-sm">
             {/* Dark header */}
             <div className="bg-[#1E1B4B] text-white">
               <div className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-2.5 border-b border-white/10">
@@ -776,7 +805,6 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
             )}
           </div>
         </div>
-      </div>
     </div>
   );
 }

@@ -12,6 +12,11 @@ import { useToast } from "@/hooks/use-toast";
 import type { Report360Data, RagLevel } from "./types";
 import { formatBudget, RAG_DOT } from "./rag-utils";
 import { cn } from "@/lib/utils";
+import {
+  modulePageTabsListClass,
+  modulePageTabsWrapClass,
+  modulePageTabTriggerClass,
+} from "@/components/ModulePageChrome";
 
 type SectionId =
   | "rag" | "plan" | "exec" | "risks" | "issues" | "phases"
@@ -34,6 +39,11 @@ const SECTIONS: { id: SectionId; label: string }[] = [
 ];
 
 const SECTION_IDS = new Set<string>(SECTIONS.map((s) => s.id));
+
+const sectionTabClass = cn(
+  modulePageTabTriggerClass,
+  "data-[state=active]:bg-primary/10 data-[state=active]:text-primary",
+);
 
 function normRag(v?: string | null): RagLevel {
   const s = (v || "").toLowerCase();
@@ -285,38 +295,9 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
   ].sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
   return (
-    <div className="flex h-full min-h-[560px] rounded-xl border border-border overflow-hidden bg-background">
-      <aside className="w-[200px] shrink-0 bg-[#0F0F1A] text-white flex flex-col print:hidden">
-        <div className="px-3.5 py-3 border-b border-white/10">
-          <div className="text-[13px] font-extrabold">360° Report</div>
-          <div className="text-[9px] uppercase tracking-wide text-white/40 mt-0.5">Report sections</div>
-        </div>
-        <nav className="flex-1 overflow-y-auto py-2">
-          {SECTIONS.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => go(s.id)}
-              className={cn(
-                "w-full text-left px-3.5 py-2 text-[11.5px] border-l-2 transition-colors",
-                activeSection === s.id
-                  ? "bg-indigo-500/20 border-indigo-400 text-white font-semibold"
-                  : "border-transparent text-white/55 hover:bg-white/5 hover:text-white/85",
-              )}
-              data-testid={`360-nav-${s.id}`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </nav>
-        <div className="px-3.5 py-3 border-t border-white/10">
-          <div className="text-[9px] uppercase text-white/35">Active project</div>
-          <div className="text-[11px] font-bold text-white/90 mt-0.5 truncate">{ex.projectName}</div>
-        </div>
-      </aside>
-
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <div className="h-12 shrink-0 border-b border-border bg-card px-4 flex items-center gap-3 print:border-0">
+    <div className="flex h-full min-h-[560px] flex-col rounded-xl border border-border overflow-hidden bg-background">
+      <div className="shrink-0 border-b border-border/30 bg-card print:border-0">
+        <div className="h-12 px-3 sm:px-4 flex items-center gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold truncate">{ex.projectName} — 360° Project Report</div>
             <div className="text-[11px] text-muted-foreground">
@@ -344,26 +325,27 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
           </div>
         </div>
 
-        <div className="shrink-0 border-b border-border bg-card px-2 overflow-x-auto flex print:hidden">
-          {SECTIONS.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => go(s.id)}
-              className={cn(
-                "px-2.5 py-2.5 text-[11px] font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors",
-                activeSection === s.id
-                  ? "border-indigo-600 text-indigo-700 dark:text-indigo-300"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-              data-testid={`360-tab-${s.id}`}
-            >
-              {s.label}
-            </button>
-          ))}
+        <div className={cn(modulePageTabsWrapClass, "print:hidden")}>
+          <div className={modulePageTabsListClass} role="tablist">
+            {SECTIONS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                role="tab"
+                aria-selected={activeSection === s.id}
+                data-state={activeSection === s.id ? "active" : "inactive"}
+                onClick={() => go(s.id)}
+                className={sectionTabClass}
+                data-testid={`360-tab-${s.id}`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
+      </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-muted/20 print:bg-white print:overflow-visible">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3.5 bg-muted/20 print:bg-white print:overflow-visible">
           {activeSection === "rag" && (
             <>
               <div>
@@ -901,7 +883,6 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
               )}
             </CardShell>
           )}
-        </div>
       </div>
     </div>
   );
