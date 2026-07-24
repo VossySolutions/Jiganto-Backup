@@ -457,6 +457,8 @@ function ProjectDetailView({
               currentActiveTool === "gantt_chart" ||
               currentActiveTool === "agile" ||
               currentActiveTool === "tracking_board" ||
+              currentActiveTool === "360_report" ||
+              currentActiveTool === "status_reporting" ||
               LEGACY_AGILE_TOOL_ID_SET.has(currentActiveTool)
                 ? "overflow-hidden flex flex-col p-4"
               : "overflow-y-auto overflow-x-hidden p-4"
@@ -479,6 +481,8 @@ function ProjectDetailView({
                         ? currentActiveTool === "gantt_chart" ||
                           currentActiveTool === "agile" ||
                           currentActiveTool === "tracking_board" ||
+                          currentActiveTool === "360_report" ||
+                          currentActiveTool === "status_reporting" ||
                           LEGACY_AGILE_TOOL_ID_SET.has(currentActiveTool)
                           ? "relative flex-1 min-h-0 flex flex-col overflow-hidden"
                           : undefined
@@ -984,7 +988,8 @@ function ToolPlaceholder({
   const isGantt = toolId === "gantt_chart";
   const isAgile = toolId === "agile" || LEGACY_AGILE_TOOL_ID_SET.has(toolId);
   const isTracking = toolId === "tracking_board";
-  const fillHeight = isGantt || isAgile || isTracking;
+  const isReportShell = toolId === "360_report" || toolId === "status_reporting";
+  const fillHeight = isGantt || isAgile || isTracking || isReportShell;
 
   return (
     <div

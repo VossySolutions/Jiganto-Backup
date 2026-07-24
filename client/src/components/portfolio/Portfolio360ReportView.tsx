@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { Report360Data, RagLevel } from "./types";
 import { formatBudget, RAG_DOT } from "./rag-utils";
 import { cn } from "@/lib/utils";
+import { print360Report } from "@/lib/print-360-report";
 import {
   modulePageTabsListClass,
   modulePageTabsWrapClass,
@@ -220,8 +221,12 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
         },
       });
       toast({ title: publish ? "Report published" : "Report snapshot saved" });
-    } catch {
-      toast({ title: publish ? "Publish failed" : "Failed to save report", variant: "destructive" });
+    } catch (err) {
+      toast({
+        title: publish ? "Publish failed" : "Failed to save report",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
     } finally {
       setPublishing(false);
     }
@@ -232,18 +237,37 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
       const params = new URLSearchParams();
       if (narrative || ragCommentary) params.set("narrative", narrative || ragCommentary);
       const res = await fetchWithAuth(`/api/portfolio/reports/360/${projectId}/pptx?${params}`);
-      if (!res.ok) throw new Error("export failed");
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
       const blob = await res.blob();
       const safeName = (data?.executiveSummary.projectName || "report").replace(/[^a-z0-9]/gi, "_");
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
+      a.href = url;
       a.download = `${safeName}_360_report.pptx`;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(a.href);
+      a.remove();
+      URL.revokeObjectURL(url);
       toast({ title: "PowerPoint exported" });
-    } catch {
-      toast({ title: "PowerPoint export failed", variant: "destructive" });
+    } catch (err) {
+      toast({
+        title: "PowerPoint export failed",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
     }
+  };
+
+  const handlePrint = () => {
+    if (!data) return;
+    print360Report({
+      data,
+      narrative,
+      ragCommentary,
+      indicators,
+      decisions,
+      actions,
+    });
   };
 
   if (isLoading) {
@@ -295,8 +319,8 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
   ].sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
   return (
-    <div className="flex h-full min-h-[560px] flex-col rounded-xl border border-border overflow-hidden bg-background">
-      <div className="shrink-0 border-b border-border/30 bg-card print:border-0">
+    <div className="flex h-full min-h-0 flex-col rounded-xl border border-border overflow-hidden bg-background">
+      <div className="shrink-0 border-b border-border/30 bg-card">
         <div className="h-12 px-3 sm:px-4 flex items-center gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold truncate">{ex.projectName} — 360° Project Report</div>
@@ -305,27 +329,27 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
               {period.total > 0 && <> · {period.elapsed} of {period.total} days elapsed</>}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5 print:hidden">
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => window.print()}>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={handlePrint}>
               <Printer className="h-3.5 w-3.5 mr-1" /> Export PDF
             </Button>
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={exportPptx}>
+            <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => void exportPptx()}>
               <FileDown className="h-3.5 w-3.5 mr-1" /> PPTX
             </Button>
-            <Button variant="outline" size="sm" className="h-8 text-xs" disabled={publishing} onClick={() => saveSnapshot(false)}>
+            <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={publishing} onClick={() => void saveSnapshot(false)}>
               <Save className="h-3.5 w-3.5 mr-1" /> Save snapshot
             </Button>
-            <Button size="sm" className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700" disabled={publishing} onClick={() => saveSnapshot(true)}>
+            <Button type="button" size="sm" className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700" disabled={publishing} onClick={() => void saveSnapshot(true)}>
               {publishing ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1" />}
               Publish report
             </Button>
             {onClose && (
-              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onClose}>Close</Button>
+              <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={onClose}>Close</Button>
             )}
           </div>
         </div>
 
-        <div className={cn(modulePageTabsWrapClass, "print:hidden")}>
+        <div className={cn(modulePageTabsWrapClass)}>
           <div className={modulePageTabsListClass} role="tablist">
             {SECTIONS.map((s) => (
               <button
@@ -345,7 +369,7 @@ export function Portfolio360ReportView({ projectId, onClose }: { projectId: numb
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3.5 bg-muted/20 print:bg-white print:overflow-visible">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 space-y-3.5 bg-muted/20">
           {activeSection === "rag" && (
             <>
               <div>

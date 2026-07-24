@@ -13,6 +13,7 @@ import {
   modulePageTabsWrapClass,
   modulePageTabTriggerClass,
 } from "@/components/ModulePageChrome";
+import { printWeeklyStatusReport } from "@/lib/print-weekly-status";
 
 type Rag = "green" | "amber" | "red" | "blue";
 type VariantId = "standard" | "expanded" | "exec" | "financial" | "agile";
@@ -170,11 +171,19 @@ function emptyReport(project: any, raidd: any[], milestones: any[]): WeeklyStatu
       : ["Discover", "Prepare", "Explore", "Realise", "Deploy", "Run", "Service Transition", "Close"].map((name) => ({
           name, forecast: "TBC", actual: "Draft",
         })),
-    lastGatesPassed: (gatesFromMs.length ? gatesFromMs.slice(0, 5) : []).map((g) => ({
-      name: g.name, date: "n/a",
+    lastGatesPassed: (gatesFromMs.length ? gatesFromMs.slice(0, 3) : [
+      { name: "", forecast: "", actual: "" },
+      { name: "", forecast: "", actual: "" },
+      { name: "", forecast: "", actual: "" },
+    ]).map((g) => ({
+      name: g.name, date: g.actual && g.actual !== "Draft" ? g.actual : "",
     })),
-    nextGates: (gatesFromMs.length ? gatesFromMs.slice(0, 5) : []).map((g, i) => ({
-      name: g.name, date: i === 0 ? g.forecast : "TBC",
+    nextGates: (gatesFromMs.length ? gatesFromMs.slice(0, 3) : [
+      { name: "", forecast: "TBC", actual: "" },
+      { name: "", forecast: "TBC", actual: "" },
+      { name: "", forecast: "TBC", actual: "" },
+    ]).map((g, i) => ({
+      name: g.name, date: i === 0 ? (g.forecast === "TBC" ? "" : g.forecast) : "",
     })),
     riskIssues: riskIssues.length
       ? riskIssues
@@ -199,26 +208,27 @@ function BulletEditor({
 }: {
   items: string[]; onChange: (next: string[]) => void; placeholder?: string;
 }) {
+  const rows = items.length ? items : [""];
   return (
-    <div className="space-y-1">
-      {items.map((item, idx) => (
-        <div key={idx} className="flex items-start gap-1.5">
-          <span className="text-indigo-600 font-bold mt-1.5 text-xs">•</span>
-          <Textarea
+    <div className="space-y-1.5">
+      {rows.map((item, idx) => (
+        <div key={idx} className="group flex items-center gap-1.5">
+          <span className="text-indigo-600 font-bold text-xs w-3 shrink-0">•</span>
+          <Input
             value={item}
-            rows={1}
-            placeholder={placeholder || `${idx + 1}.`}
-            className="min-h-[28px] text-[11px] border-0 shadow-none focus-visible:ring-1 bg-transparent p-1 resize-none"
+            placeholder={placeholder || `Item ${idx + 1}`}
+            className="h-8 text-[12px] bg-muted/30 border-border/60 focus-visible:bg-background"
             onChange={(e) => {
-              const next = [...items];
+              const next = [...rows];
               next[idx] = e.target.value;
               onChange(next);
             }}
           />
           <button
             type="button"
-            className="text-muted-foreground text-xs opacity-0 hover:opacity-100 px-1"
-            onClick={() => onChange(items.filter((_, i) => i !== idx))}
+            className="shrink-0 h-7 w-7 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted hover:text-foreground"
+            title="Remove"
+            onClick={() => onChange(rows.filter((_, i) => i !== idx))}
           >
             ×
           </button>
@@ -226,12 +236,41 @@ function BulletEditor({
       ))}
       <button
         type="button"
-        className="text-[10px] text-muted-foreground hover:text-indigo-600"
-        onClick={() => onChange([...items, ""])}
+        className="text-[11px] text-primary hover:underline px-1"
+        onClick={() => onChange([...rows, ""])}
       >
         + Add line
       </button>
     </div>
+  );
+}
+
+const cellInputClass =
+  "h-8 text-[12px] bg-muted/25 border-border/50 shadow-none focus-visible:bg-background focus-visible:ring-1";
+
+function CellInput({
+  value, onChange, className, type = "text", placeholder, readOnly,
+}: {
+  value: string | number;
+  onChange: (v: string) => void;
+  className?: string;
+  type?: string;
+  placeholder?: string;
+  readOnly?: boolean;
+}) {
+  return (
+    <Input
+      type={type}
+      value={value}
+      readOnly={readOnly}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      className={cn(
+        cellInputClass,
+        type === "number" && "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+        className,
+      )}
+    />
   );
 }
 
@@ -286,26 +325,50 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
 
   const persist = useMutation({
     mutationFn: async (nextList: WeeklyStatusReport[]) => {
-      return apiRequest("PUT", `/api/pm/projects/${projectId}`, {
+      const res = await apiRequest("PUT", `/api/pm/projects/${projectId}`, {
         metadata: { ...meta, statusReports: nextList },
       });
+      return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId] });
       toast({ title: "Status report saved" });
     },
-    onError: () => toast({ title: "Failed to save report", variant: "destructive" }),
+    onError: (err) =>
+      toast({
+        title: "Failed to save report",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      }),
   });
 
   const startNew = () => {
+    if (draft && !reports.some((r) => r.id === draft.id)) {
+      const ok = window.confirm("Discard the unsaved week and start a new one?");
+      if (!ok) return;
+    }
     const r = emptyReport(project, raidd, milestones);
     setDraft(r);
     setActiveId(r.id);
   };
 
+  const selectWeek = (id: string) => {
+    const found = reports.find((r) => r.id === id);
+    if (found) {
+      if (draft && !reports.some((r) => r.id === draft.id) && draft.id !== id) {
+        const ok = window.confirm("You have an unsaved week. Switch anyway?");
+        if (!ok) return;
+      }
+      setActiveId(found.id);
+      setDraft({ ...found });
+      return;
+    }
+    if (draft && draft.id === id) setActiveId(draft.id);
+  };
+
   const saveDraft = (status: "draft" | "submitted" = "draft") => {
     if (!draft) return;
-    const nextReport = {
+    const nextReport: WeeklyStatusReport = {
       ...draft,
       status,
       title: draft.title || `Week of ${fmtWeek(draft.weekCommencing)}`,
@@ -313,9 +376,9 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
       date: draft.weekCommencing,
     };
     const others = reports.filter((r) => r.id !== nextReport.id);
-    persist.mutate([nextReport, ...others]);
     setDraft(nextReport);
     setActiveId(nextReport.id);
+    persist.mutate([nextReport, ...others]);
   };
 
   if (!draft) {
@@ -335,8 +398,8 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
   const patch = (partial: Partial<WeeklyStatusReport>) => setDraft((d) => (d ? { ...d, ...partial } : d));
 
   return (
-    <div className="flex h-full min-h-[640px] flex-col rounded-xl border border-border overflow-hidden bg-background">
-      <div className="shrink-0 border-b border-border/30 bg-card print:hidden">
+    <div className="flex h-full min-h-0 flex-col rounded-xl border border-border overflow-hidden bg-background">
+      <div className="shrink-0 border-b border-border/30 bg-card">
         <div className="px-3 sm:px-4 py-2.5 flex flex-wrap items-center gap-2">
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold truncate">
@@ -349,17 +412,7 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
           <div className="flex items-center gap-1.5 min-w-0">
             <Select
               value={activeId || draft?.id || undefined}
-              onValueChange={(id) => {
-                const found = reports.find((r) => r.id === id);
-                if (found) {
-                  setActiveId(found.id);
-                  setDraft({ ...found });
-                  return;
-                }
-                if (draft && draft.id === id) {
-                  setActiveId(draft.id);
-                }
-              }}
+              onValueChange={selectWeek}
             >
               <SelectTrigger
                 className="h-8 w-[200px] sm:w-[220px] text-xs gap-2 shrink-0 [&>span]:min-w-0 [&>span]:flex-1 [&>span]:truncate [&>span]:text-left"
@@ -401,23 +454,55 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
               </span>
             )}
           </div>
-          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={startNew}>
+          <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={startNew}>
             <Plus className="h-3.5 w-3.5 mr-1" /> New week
           </Button>
           <Input
             type="date"
             value={draft.weekCommencing}
-            onChange={(e) => patch({ weekCommencing: e.target.value, title: `Week of ${fmtWeek(e.target.value)}` })}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) return;
+              patch({ weekCommencing: v, title: `Week of ${fmtWeek(v)}` });
+            }}
             className="h-8 w-[150px] text-xs"
           />
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => window.print()}>
-            <Printer className="h-3.5 w-3.5 mr-1" /> Print
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() =>
+              printWeeklyStatusReport({
+                projectName: project?.name || "Project",
+                projectCode: project?.code || `PRJ-${projectId}`,
+                manager: project?.managerName || project?.ownerName || "",
+                portfolio: project?.portfolioName || project?.customer || "",
+                variantLabel: VARIANTS.find((v) => v.id === variant)?.label || "Standard",
+                draft,
+              })
+            }
+          >
+            <Printer className="h-3.5 w-3.5 mr-1" /> Print / PDF
           </Button>
-          <Button variant="outline" size="sm" className="h-8 text-xs" disabled={persist.isPending} onClick={() => saveDraft("draft")}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            disabled={persist.isPending}
+            onClick={() => saveDraft("draft")}
+          >
             {persist.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
             Save draft
           </Button>
-          <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700" disabled={persist.isPending} onClick={() => saveDraft("submitted")}>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+            disabled={persist.isPending}
+            onClick={() => saveDraft("submitted")}
+          >
             <Send className="h-3.5 w-3.5 mr-1" /> Submit
           </Button>
         </div>
@@ -443,7 +528,7 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-muted/20">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 bg-muted/20">
           <div className="w-full rounded-xl border border-border overflow-hidden bg-card shadow-sm">
             {/* Dark header */}
             <div className="bg-[#1E1B4B] text-white">
@@ -495,14 +580,15 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                       <td className="p-2 font-semibold">Forecast</td>
                       {draft.gates.map((g, i) => (
                         <td key={`gate-f-${i}`} className="p-1">
-                          <Input
+                          <CellInput
                             value={g.forecast}
-                            onChange={(e) => {
+                            placeholder="TBC"
+                            onChange={(v) => {
                               const gates = [...draft.gates];
-                              gates[i] = { ...gates[i], forecast: e.target.value };
+                              gates[i] = { ...gates[i], forecast: v };
                               patch({ gates });
                             }}
-                            className="h-7 text-[10px] text-center border-0 bg-transparent shadow-none"
+                            className="text-center"
                           />
                         </td>
                       ))}
@@ -511,14 +597,15 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                       <td className="p-2 font-semibold">Actual</td>
                       {draft.gates.map((g, i) => (
                         <td key={`gate-a-${i}`} className="p-1">
-                          <Input
+                          <CellInput
                             value={g.actual}
-                            onChange={(e) => {
+                            placeholder="Draft"
+                            onChange={(v) => {
                               const gates = [...draft.gates];
-                              gates[i] = { ...gates[i], actual: e.target.value };
+                              gates[i] = { ...gates[i], actual: v };
                               patch({ gates });
                             }}
-                            className="h-7 text-[10px] text-center border-0 bg-transparent shadow-none text-red-600 italic"
+                            className="text-center text-red-600 dark:text-red-400"
                           />
                         </td>
                       ))}
@@ -574,15 +661,25 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                         <span>Overall project completion</span>
                         <span className="font-bold text-emerald-600">{draft.progressPct}%</span>
                       </div>
-                      <div className="h-2 rounded-full bg-muted overflow-hidden">
-                        <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, draft.progressPct)}%` }} />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={Math.min(100, Math.max(0, draft.progressPct))}
+                          onChange={(e) => patch({ progressPct: Number(e.target.value) })}
+                          className="flex-1 accent-emerald-600"
+                        />
+                        <div className="relative w-16 shrink-0">
+                          <CellInput
+                            type="number"
+                            value={draft.progressPct}
+                            onChange={(v) => patch({ progressPct: Math.min(100, Math.max(0, Number(v) || 0)) })}
+                            className="pr-5 text-right"
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
+                        </div>
                       </div>
-                      <Input
-                        type="number"
-                        value={draft.progressPct}
-                        onChange={(e) => patch({ progressPct: Number(e.target.value) || 0 })}
-                        className="h-7 mt-1.5 text-[11px] w-24"
-                      />
                     </div>
                   </div>
                 </section>
@@ -594,8 +691,8 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                       <Textarea
                         value={draft.commentary}
                         onChange={(e) => patch({ commentary: e.target.value })}
-                        className="min-h-[110px] text-[11px] leading-relaxed"
-                        placeholder="Scope / Budget / Resources / Schedule / Quality…"
+                        className="min-h-[110px] text-[12px] leading-relaxed bg-muted/25 border-border/50 focus-visible:bg-background"
+                        placeholder={"Scope:\nBudget:\nResources:\nSchedule:\nQuality:"}
                       />
                     </div>
                   </section>
@@ -637,39 +734,73 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                   <section className="border-b border-border">
                     <div className="bg-muted/40 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wide">Gate tracking</div>
                     <div className="grid grid-cols-2 text-[11px]">
-                      <div className="border-r border-border p-2">
-                        <div className="text-[9px] font-bold text-muted-foreground mb-1">Last gate passed / date</div>
-                        {draft.lastGatesPassed.map((g, i) => (
-                          <div key={i} className="flex gap-1 mb-1">
-                            <Input value={g.name} className="h-7 text-[10px]" onChange={(e) => {
-                              const lastGatesPassed = [...draft.lastGatesPassed];
-                              lastGatesPassed[i] = { ...lastGatesPassed[i], name: e.target.value };
-                              patch({ lastGatesPassed });
-                            }} />
-                            <Input value={g.date} className="h-7 text-[10px] w-20" onChange={(e) => {
-                              const lastGatesPassed = [...draft.lastGatesPassed];
-                              lastGatesPassed[i] = { ...lastGatesPassed[i], date: e.target.value };
-                              patch({ lastGatesPassed });
-                            }} />
+                      <div className="border-r border-border p-2 space-y-1.5">
+                        <div className="text-[9px] font-bold text-muted-foreground">Last gate passed / date</div>
+                        {(draft.lastGatesPassed.length ? draft.lastGatesPassed : [{ name: "", date: "" }]).map((g, i) => (
+                          <div key={i} className="flex gap-1.5">
+                            <CellInput
+                              value={g.name}
+                              placeholder="Gate name"
+                              className="flex-1"
+                              onChange={(v) => {
+                                const lastGatesPassed = [...(draft.lastGatesPassed.length ? draft.lastGatesPassed : [{ name: "", date: "" }])];
+                                lastGatesPassed[i] = { ...lastGatesPassed[i], name: v };
+                                patch({ lastGatesPassed });
+                              }}
+                            />
+                            <CellInput
+                              value={g.date}
+                              placeholder="Date"
+                              className="w-[110px]"
+                              onChange={(v) => {
+                                const lastGatesPassed = [...(draft.lastGatesPassed.length ? draft.lastGatesPassed : [{ name: "", date: "" }])];
+                                lastGatesPassed[i] = { ...lastGatesPassed[i], date: v };
+                                patch({ lastGatesPassed });
+                              }}
+                            />
                           </div>
                         ))}
+                        <button
+                          type="button"
+                          className="text-[11px] text-primary hover:underline"
+                          onClick={() => patch({ lastGatesPassed: [...draft.lastGatesPassed, { name: "", date: "" }] })}
+                        >
+                          + Add gate
+                        </button>
                       </div>
-                      <div className="p-2">
-                        <div className="text-[9px] font-bold text-muted-foreground mb-1">Next gate(s) / date</div>
-                        {draft.nextGates.map((g, i) => (
-                          <div key={i} className="flex gap-1 mb-1">
-                            <Input value={g.name} className="h-7 text-[10px]" onChange={(e) => {
-                              const nextGates = [...draft.nextGates];
-                              nextGates[i] = { ...nextGates[i], name: e.target.value };
-                              patch({ nextGates });
-                            }} />
-                            <Input value={g.date} className="h-7 text-[10px] w-20" onChange={(e) => {
-                              const nextGates = [...draft.nextGates];
-                              nextGates[i] = { ...nextGates[i], date: e.target.value };
-                              patch({ nextGates });
-                            }} />
+                      <div className="p-2 space-y-1.5">
+                        <div className="text-[9px] font-bold text-muted-foreground">Next gate(s) / date</div>
+                        {(draft.nextGates.length ? draft.nextGates : [{ name: "", date: "" }]).map((g, i) => (
+                          <div key={i} className="flex gap-1.5">
+                            <CellInput
+                              value={g.name}
+                              placeholder="Gate name"
+                              className="flex-1"
+                              onChange={(v) => {
+                                const nextGates = [...(draft.nextGates.length ? draft.nextGates : [{ name: "", date: "" }])];
+                                nextGates[i] = { ...nextGates[i], name: v };
+                                patch({ nextGates });
+                              }}
+                            />
+                            <CellInput
+                              value={g.date}
+                              placeholder="Date"
+                              className="w-[110px]"
+                              onChange={(v) => {
+                                const nextGates = [...(draft.nextGates.length ? draft.nextGates : [{ name: "", date: "" }])];
+                                nextGates[i] = { ...nextGates[i], date: v };
+                                patch({ nextGates });
+                              }}
+                            />
                           </div>
                         ))}
+                        <button
+                          type="button"
+                          className="text-[11px] text-primary hover:underline"
+                          onClick={() => patch({ nextGates: [...draft.nextGates, { name: "", date: "" }] })}
+                        >
+                          + Add gate
+                        </button>
                       </div>
                     </div>
                   </section>
@@ -695,32 +826,50 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                         .map(({ row, i }) => (
                         <tr key={`ri-${i}`} className="border-t border-border/50">
                           <td className="p-1">
-                            <Input value={row.id} className="h-7 text-[10px] font-mono border-0 shadow-none" onChange={(e) => {
-                              const riskIssues = [...draft.riskIssues];
-                              riskIssues[i] = { ...riskIssues[i], id: e.target.value };
-                              patch({ riskIssues });
-                            }} />
+                            <CellInput
+                              value={row.id}
+                              className="font-mono w-14"
+                              onChange={(v) => {
+                                const riskIssues = [...draft.riskIssues];
+                                riskIssues[i] = { ...riskIssues[i], id: v };
+                                patch({ riskIssues });
+                              }}
+                            />
                           </td>
                           <td className="p-1">
-                            <Input value={row.text} className="h-7 text-[11px] border-0 shadow-none" onChange={(e) => {
-                              const riskIssues = [...draft.riskIssues];
-                              riskIssues[i] = { ...riskIssues[i], text: e.target.value };
-                              patch({ riskIssues });
-                            }} />
+                            <CellInput
+                              value={row.text}
+                              placeholder="Describe risk or issue…"
+                              onChange={(v) => {
+                                const riskIssues = [...draft.riskIssues];
+                                riskIssues[i] = { ...riskIssues[i], text: v };
+                                patch({ riskIssues });
+                              }}
+                            />
                           </td>
                           <td className="p-1">
-                            <Input value={row.owner} className="h-7 text-[10px] border-0 shadow-none" onChange={(e) => {
-                              const riskIssues = [...draft.riskIssues];
-                              riskIssues[i] = { ...riskIssues[i], owner: e.target.value };
-                              patch({ riskIssues });
-                            }} />
+                            <CellInput
+                              value={row.owner}
+                              placeholder="Owner"
+                              className="w-24"
+                              onChange={(v) => {
+                                const riskIssues = [...draft.riskIssues];
+                                riskIssues[i] = { ...riskIssues[i], owner: v };
+                                patch({ riskIssues });
+                              }}
+                            />
                           </td>
                           <td className="p-1 text-center">
-                            <button type="button" className={ragBox(row.rag)} onClick={() => {
-                              const riskIssues = [...draft.riskIssues];
-                              riskIssues[i] = { ...riskIssues[i], rag: nextRag(row.rag) };
-                              patch({ riskIssues });
-                            }}>
+                            <button
+                              type="button"
+                              title="Click to cycle RAG"
+                              className={ragBox(row.rag)}
+                              onClick={() => {
+                                const riskIssues = [...draft.riskIssues];
+                                riskIssues[i] = { ...riskIssues[i], rag: nextRag(row.rag) };
+                                patch({ riskIssues });
+                              }}
+                            >
                               {ragLetter(row.rag)}
                             </button>
                           </td>
@@ -730,7 +879,7 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                   </table>
                   <button
                     type="button"
-                    className="w-full text-center text-[11px] text-muted-foreground py-1.5 border-t border-dashed border-border hover:text-indigo-600"
+                    className="w-full text-center text-[11px] text-primary py-1.5 border-t border-dashed border-border hover:underline"
                     onClick={() =>
                       patch({
                         riskIssues: [
@@ -747,7 +896,7 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                 {showFinanceEmphasis && (
                   <section className="border-b border-border">
                     <div className="bg-muted/40 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wide">Financial summary</div>
-                    <div className="grid grid-cols-5 text-center text-[11px]">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 text-center text-[11px]">
                       {([
                         ["Baseline Budget (A)", "baseline"],
                         ["Cost To Date (B)", "costToDate"],
@@ -756,20 +905,22 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                         ["Variance to Baseline", "variance"],
                       ] as const).map(([label, key]) => (
                         <div key={key} className="p-2 border-r border-border last:border-0">
-                          <div className="text-[9px] font-semibold uppercase text-muted-foreground mb-1 leading-tight">{label}</div>
-                          <Input
+                          <div className="text-[9px] font-semibold uppercase text-muted-foreground mb-1.5 leading-tight">{label}</div>
+                          <CellInput
                             type="number"
                             value={draft.financials[key]}
-                            onChange={(e) => {
-                              const financials = { ...draft.financials, [key]: Number(e.target.value) || 0 };
-                              if (key !== "variance") {
-                                financials.variance = financials.baseline - financials.forecast;
-                              }
+                            readOnly={key === "variance"}
+                            onChange={(v) => {
+                              if (key === "variance") return;
+                              const financials = { ...draft.financials, [key]: Number(v) || 0 };
+                              financials.variance = financials.baseline - financials.forecast;
                               patch({ financials });
                             }}
                             className={cn(
-                              "h-8 text-center text-sm font-bold border-0 shadow-none",
+                              "text-center text-sm font-bold",
+                              key === "variance" && "cursor-default",
                               key === "variance" && draft.financials.variance < 0 && "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300",
+                              key === "variance" && draft.financials.variance > 0 && "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
                             )}
                           />
                         </div>
