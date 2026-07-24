@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { TmRequirement, TmTestCase, TmTestResult } from "@shared/schema";
@@ -8,8 +8,13 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Link, CheckCircle2, XCircle, MinusCircle, Clock, Loader2, Pencil, Save, X, Bug } from "lucide-react";
 import { useTmProject } from "@/contexts/TmProjectContext";
-import { useTablePagination } from "@/hooks/use-table-pagination";
-import { TablePagination } from "@/components/TablePagination";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import {
+  MondayBoardProvider,
+  MondayBoardTable,
+  MondayBoardChromeControls,
+} from "@/components/MondayBoardTable";
+import { useDebouncedValue } from "@/lib/crm-monday-chrome";
 import { useTmFetch } from "@/hooks/use-tm-fetch";
 import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 
@@ -60,6 +65,7 @@ export function TraceabilityScreen() {
   const [filterArea, setFilterArea] = useState("all");
   const [filterImpl, setFilterImpl] = useState("all");
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
 
   const { activeProjectId } = useTmProject();
   const reqsQuery = useTmFetch<TmRequirement[]>(["/api/tm/requirements"], "/api/tm/requirements");
@@ -157,13 +163,17 @@ export function TraceabilityScreen() {
   const filtered = reqs.filter(r => {
     if (filterArea !== "all" && r.functionalArea !== filterArea) return false;
     if (filterImpl !== "all" && (r as any).implementationStatus !== filterImpl) return false;
-    if (search && !r.title.toLowerCase().includes(search.toLowerCase()) && !r.reqId.toLowerCase().includes(search.toLowerCase())) return false;
+    if (debouncedSearch && !r.title.toLowerCase().includes(debouncedSearch.toLowerCase()) && !r.reqId.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
   });
 
-  const reqPagination = useTablePagination(filtered, {
-    resetKey: `${filterArea}-${filterImpl}-${search}`,
-  });
+  const reqColumns: MondayColumnDef<TmRequirement>[] = useMemo(() => [
+    { id: "reqId", header: "ID", type: "text", accessor: "reqId", width: "90px", editable: false, render: (r) => <span className="font-mono text-xs text-primary font-semibold">{r.reqId}</span> },
+    { id: "title", header: "Title", type: "text", accessor: "title", width: "160px", sticky: true, editable: false, render: (r) => <span className="text-xs font-medium truncate">{r.title}</span> },
+    { id: "priority", header: "Pri", type: "text", accessor: "priority", width: "70px", editable: false, render: (r) => <span className={cn("text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold", PRI_BADGE[r.priority ?? "medium"])}>{r.priority}</span> },
+    { id: "impl", header: "Impl", type: "text", accessor: (r) => (r as any).implementationStatus, width: "90px", editable: false, render: (r) => { const implSt = (r as any).implementationStatus ?? "draft"; return <span className={cn("text-[9px] font-mono px-1.5 py-0.5 rounded capitalize", IMPL_BADGE[implSt])}>{implSt.replace("_", " ")}</span>; } },
+    { id: "cases", header: "Cases", type: "number", accessor: (r) => r.linkedCaseIds?.length ?? 0, width: "60px", editable: false },
+  ], []);
 
   return (
     <TmScreenShell
@@ -180,11 +190,21 @@ export function TraceabilityScreen() {
       <div className="flex h-full overflow-hidden">
       {/* Requirements List */}
       <div className="w-[340px] min-w-[280px] border-r border-border flex flex-col overflow-hidden">
+        <MondayBoardProvider storageKey="jiganto-tm-traceability">
         {/* Header + Stats */}
         <div className="px-4 py-3 border-b border-border flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Requirements (RTM)</div>
-            <Button size="sm" variant="ghost" className="h-6 text-xs gap-1" onClick={() => { setCreating(!creating); setEditing(false); }}
+            <Button size="sm" variant="ghost" className="h-6 text-xs gap-1" onClick={() => {
+              if (creating) {
+                setCreating(false);
+                setForm(DEFAULT_FORM);
+              } else {
+                setForm(DEFAULT_FORM);
+                setEditing(false);
+                setCreating(true);
+              }
+            }}
               data-testid="btn-add-req">
               <Plus className="h-3 w-3" /> Add
             </Button>
@@ -223,57 +243,25 @@ export function TraceabilityScreen() {
               <option value="deprecated">Deprecated</option>
             </select>
           </div>
+          <div className="flex justify-end pt-1">
+            <MondayBoardChromeControls />
+          </div>
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto divide-y divide-border/40">
-          {filtered.length === 0 ? (
-            <div className="p-4 text-xs text-muted-foreground">
-              {reqs.length === 0 ? "No requirements yet. Click Add to create your first requirement." : "No requirements match your filters."}
-            </div>
-          ) : reqPagination.paginatedItems.map(req => {
-            const linked = req.linkedCaseIds?.length ?? 0;
-            const isSelected = selectedId === req.id;
-            const implSt = (req as any).implementationStatus ?? "draft";
-            return (
-              <div key={req.id} onClick={() => { setSelectedId(req.id); setEditing(false); setCreating(false); }}
-                data-testid={`req-row-${req.id}`}
-                className={cn("px-4 py-3 cursor-pointer transition-colors", isSelected ? "bg-primary/10 border-l-2 border-primary" : "hover:bg-muted/40")}
-              >
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="font-mono text-xs text-primary font-semibold">{req.reqId}</span>
-                  <span className={cn("text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold", PRI_BADGE[req.priority ?? "medium"])}>
-                    {req.priority}
-                  </span>
-                  <span className={cn("text-[9px] font-mono px-1.5 py-0.5 rounded capitalize", IMPL_BADGE[implSt])}>
-                    {implSt.replace("_", " ")}
-                  </span>
-                  <span className={cn("ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded",
-                    linked > 0 ? "bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400" : "bg-muted text-muted-foreground")}>
-                    {linked} case{linked !== 1 ? "s" : ""}
-                  </span>
-                </div>
-                <div className="text-xs font-medium truncate">{req.title}</div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  {req.functionalArea && <span className="text-[9px] text-muted-foreground">{req.functionalArea}</span>}
-                  {req.source && <span className="text-[9px] text-muted-foreground">· {req.source}</span>}
-                </div>
-              </div>
-            );
-          })}
-          {filtered.length > 0 && (
-            <TablePagination
-              page={reqPagination.page}
-              totalPages={reqPagination.totalPages}
-              total={reqPagination.total}
-              startIndex={reqPagination.startIndex}
-              endIndex={reqPagination.endIndex}
-              pageSize={reqPagination.pageSize}
-              onPageChange={reqPagination.setPage}
-              onPageSizeChange={reqPagination.setPageSize}
-            />
-          )}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <MondayBoardTable
+            columns={reqColumns}
+            data={filtered}
+            gridLines
+            emptyMessage={reqs.length === 0 ? "No requirements yet. Click Add to create your first requirement." : "No requirements match your filters."}
+            onRowClick={(r) => { setSelectedId(r.id); setEditing(false); setCreating(false); }}
+            searchHighlightTerm={debouncedSearch}
+            paginationResetKey={`${filterArea}-${filterImpl}-${debouncedSearch}`}
+            className="border-0 rounded-none"
+          />
         </div>
+        </MondayBoardProvider>
       </div>
 
       {/* Right Panel: Create / Edit form OR Detail */}
@@ -283,7 +271,7 @@ export function TraceabilityScreen() {
           <div className="p-6 max-w-2xl space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold">{creating ? "New Requirement" : "Edit Requirement"}</h3>
-              <button onClick={() => { setCreating(false); setEditing(false); }} className="text-muted-foreground hover:text-foreground">
+              <button onClick={() => { setCreating(false); setEditing(false); setForm(DEFAULT_FORM); }} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -365,7 +353,7 @@ export function TraceabilityScreen() {
                 {(createMutation.isPending || updateMutation.isPending) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 {creating ? "Create Requirement" : "Save Changes"}
               </Button>
-              <Button variant="ghost" onClick={() => { setCreating(false); setEditing(false); }}>Cancel</Button>
+              <Button variant="ghost" onClick={() => { setCreating(false); setEditing(false); setForm(DEFAULT_FORM); }}>Cancel</Button>
             </div>
           </div>
         ) : !selected ? (

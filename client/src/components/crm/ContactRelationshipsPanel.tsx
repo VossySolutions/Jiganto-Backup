@@ -280,7 +280,7 @@ export function ContactRelationshipsPanel({ contactId, contacts, accounts = [], 
               <p className="text-xs text-muted-foreground">
                 Only contacts at <span className="font-medium text-foreground">{accountName(currentContact?.accountId)}</span> can be linked.
               </p>
-              <Select value={relatedId} onValueChange={setRelatedId}>
+              <Select value={relatedId || undefined} onValueChange={setRelatedId}>
                 <SelectTrigger data-testid="select-related-contact">
                   <SelectValue placeholder="Select contact" />
                 </SelectTrigger>

@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { FormDialogShell, FormSection, FieldGrid, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -21,13 +20,17 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Search, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { Label } from "@/components/ui/label";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
 import {
   FinanceTableSkeleton,
   FinanceEmptyState,
-  FinanceTableWrap
 } from "./FinanceUi";
-import { useTablePagination } from "@/hooks/use-table-pagination";
-import { TablePagination } from "@/components/TablePagination";
 import type { BudgetDetail, BudgetListItem } from "./types";
 
 function parseMoney(v: string | number | null | undefined): number {
@@ -63,18 +66,33 @@ interface FinanceBudgetsTabProps {
   filterProjectId?: number | null;
 }
 
+type EnrichedBudget = BudgetListItem & { ragStatus: "green" | "amber" | "red"; marginPct: number };
+
 export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingProp, searchTerm = "", filterProjectId = null }: FinanceBudgetsTabProps) {
   const { toast } = useToast();
+  const [localSearch, setLocalSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(searchTerm || localSearch);
   const [ragFilter, setRagFilter] = useState("all");
   const [contractFilter, setContractFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showImportPlan, setShowImportPlan] = useState(false);
   const [importPlanId, setImportPlanId] = useState("");
+  const [pinProject, setPinProject] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("finance-budgets-pin-project") !== "0";
+  });
   const [newProjectId, setNewProjectId] = useState("");
   const [newContractType, setNewContractType] = useState("fixed_price");
   const [newLabourBudget, setNewLabourBudget] = useState("");
   const [newExpenseBudget, setNewExpenseBudget] = useState("");
+
+  const resetCreateForm = () => {
+    setNewProjectId("");
+    setNewContractType("fixed_price");
+    setNewLabourBudget("");
+    setNewExpenseBudget("");
+  };
 
   const { data: projects = [] } = useQuery<Array<{ id: number; name: string }>>({
     queryKey: ["/api/pm/projects"],
@@ -138,6 +156,7 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
       queryClient.invalidateQueries({ queryKey: ["/api/finance/budgets"] });
       toast({ title: "Budget created" });
       setShowCreate(false);
+      resetCreateForm();
     },
     onError: () => toast({ title: "Failed to create budget", variant: "destructive" }),
   });
@@ -181,7 +200,7 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
   [budgets]);
 
   const filteredBudgets = useMemo(() => {
-    const q = searchTerm.toLowerCase();
+    const q = debouncedSearch.toLowerCase();
     return enrichedBudgets.filter((b) => {
       if (filterProjectId != null && b.projectId !== filterProjectId) return false;
       if (ragFilter !== "all" && b.ragStatus !== ragFilter) return false;
@@ -189,7 +208,92 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
       if (q && !`${b.projectName ?? ""} ${b.clientName ?? ""}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [enrichedBudgets, searchTerm, ragFilter, contractFilter, filterProjectId]);
+  }, [enrichedBudgets, debouncedSearch, ragFilter, contractFilter, filterProjectId]);
+
+  const mondayColumns: MondayColumnDef<EnrichedBudget>[] = useMemo(() => [
+    {
+      id: "project",
+      header: "Project",
+      type: "text",
+      accessor: (row) => row.projectName,
+      width: "200px",
+      sticky: pinProject,
+      editable: false,
+      render: (b) => <span className="font-medium">{b.projectName ?? `Project #${b.projectId}`}</span>,
+    },
+    {
+      id: "client",
+      header: "Client",
+      type: "text",
+      accessor: (row) => row.clientName || "",
+      width: "160px",
+      editable: false,
+      render: (b) => <span className="text-sm">{b.clientName ?? "—"}</span>,
+    },
+    {
+      id: "type",
+      header: "Type",
+      type: "status",
+      accessor: "contractType",
+      width: "130px",
+      editable: true,
+      options: [
+        { value: "fixed_price", label: "Fixed price", color: "bg-[#579bfc] text-white" },
+        { value: "time_materials", label: "Time & materials", color: "bg-[#00c875] text-white" },
+        { value: "retainer", label: "Retainer", color: "bg-[#a25ddc] text-white" },
+        { value: "mixed", label: "Mixed", color: "bg-[#fdab3d] text-white" },
+      ],
+      render: (b) => <Badge variant="outline" className="capitalize">{b.contractType.replace(/_/g, " ")}</Badge>,
+    },
+    {
+      id: "budget",
+      header: "Budget",
+      type: "currency",
+      accessor: "totalBudget",
+      width: "120px",
+      editable: false,
+      render: (b) => <span className="text-sm tabular-nums">{formatCurrency(b.totalBudget, b.budgetCurrency)}</span>,
+    },
+    {
+      id: "actual",
+      header: "Actual",
+      type: "currency",
+      accessor: "actualCost",
+      width: "120px",
+      editable: false,
+      render: (b) => <span className="text-sm tabular-nums">{formatCurrency(b.actualCost, b.budgetCurrency)}</span>,
+    },
+    {
+      id: "margin",
+      header: "Margin",
+      type: "number",
+      accessor: (row) => row.marginPct,
+      width: "110px",
+      editable: false,
+      render: (b) => (
+        <span className={cn("inline-flex items-center gap-1 text-sm tabular-nums", (b.marginPct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500")}>
+          {(b.marginPct ?? 0) >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+          {b.marginPct ?? 0}%
+        </span>
+      ),
+    },
+    {
+      id: "rag",
+      header: "RAG",
+      type: "status",
+      accessor: "ragStatus",
+      width: "100px",
+      editable: false,
+      render: (b) => ragBadge(b.ragStatus),
+    },
+  ], [pinProject]);
+
+  const updateBudgetMut = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
+      apiRequest("PUT", `/api/finance/budgets/${id}`, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/finance/budgets"] }),
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
+  });
 
   useEffect(() => {
     if (filterProjectId == null || selectedId != null) return;
@@ -197,48 +301,97 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
     if (match) setSelectedId(match.id);
   }, [filterProjectId, enrichedBudgets, selectedId]);
 
-  const pagination = useTablePagination(filteredBudgets, {
-    resetKey: `${searchTerm}-${ragFilter}-${contractFilter}`,
-  });
+  const paginationResetKey = `${debouncedSearch}|${ragFilter}|${contractFilter}|${filterProjectId}`;
+
+  const BUDGET_CSV_HEADERS = ["Project", "Client", "Type", "Budget", "Actual", "Margin", "RAG"];
+
+  const exportBudgets = () => {
+    const rows = filteredBudgets.map((b) => [
+      b.projectName ?? `Project #${b.projectId}`,
+      b.clientName ?? "",
+      b.contractType.replace(/_/g, " "),
+      String(b.totalBudget ?? ""),
+      String(b.actualCost ?? ""),
+      `${b.marginPct ?? 0}%`,
+      b.ragStatus,
+    ]);
+    downloadBoardCsv(`budgets-${new Date().toISOString().split("T")[0]}.csv`, BUDGET_CSV_HEADERS, rows);
+    toast({ title: "Budgets exported to CSV" });
+  };
+
+  const downloadBudgetsTemplate = () => {
+    downloadImportTemplateCsv("budgets-import-template.csv", BUDGET_CSV_HEADERS, BUDGET_CSV_HEADERS.map(() => ""));
+    toast({ title: "Import template downloaded" });
+  };
 
   return (
     <div className="space-y-4" data-testid="finance-budgets-tab">
-      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
-        <Select value={ragFilter} onValueChange={setRagFilter}>
-          <SelectTrigger className="w-[140px]" data-testid="filter-rag">
-            <SelectValue placeholder="RAG status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All RAG</SelectItem>
-            <SelectItem value="green">Green</SelectItem>
-            <SelectItem value="amber">Amber</SelectItem>
-            <SelectItem value="red">Red</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={contractFilter} onValueChange={setContractFilter}>
-          <SelectTrigger className="w-[160px]" data-testid="filter-contract">
-            <SelectValue placeholder="Contract type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            <SelectItem value="fixed_price">Fixed price</SelectItem>
-            <SelectItem value="time_materials">T&amp;M</SelectItem>
-            <SelectItem value="retainer">Retainer</SelectItem>
-            <SelectItem value="mixed">Mixed</SelectItem>
-          </SelectContent>
-        </Select>
-        <span className="text-sm text-muted-foreground">{filteredBudgets.length} budgets</span>
-        {budgets.length > 0 && (
-        <div className="flex flex-wrap gap-2 sm:ml-auto w-full sm:w-auto">
-          <Button size="sm" variant="outline" onClick={() => setShowImportPlan(true)} data-testid="button-import-resource-plan-budget">
+      <MondayBoardShell.Legacy
+        storageKey="jiganto-finance-budgets"
+        entityType="finance_budget"
+        stateHook={useMondayBoardShellState}
+        filterMatcher={matchBoardFilterValue}
+      >
+      <MondayBoardShell.Toolbar
+        newLabel="New Budget"
+        onNew={() => setShowCreate(true)}
+        searchValue={localSearch || searchTerm}
+        onSearchChange={setLocalSearch}
+        filterActive={ragFilter !== "all" || contractFilter !== "all"}
+        filterCount={(ragFilter !== "all" ? 1 : 0) + (contractFilter !== "all" ? 1 : 0)}
+        filterContent={
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">RAG status</Label>
+              <Select value={ragFilter} onValueChange={setRagFilter}>
+                <SelectTrigger className="h-8 text-xs" data-testid="filter-rag">
+                  <SelectValue placeholder="RAG status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All RAG</SelectItem>
+                  <SelectItem value="green">Green</SelectItem>
+                  <SelectItem value="amber">Amber</SelectItem>
+                  <SelectItem value="red">Red</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Contract type</Label>
+              <Select value={contractFilter} onValueChange={setContractFilter}>
+                <SelectTrigger className="h-8 text-xs" data-testid="filter-contract">
+                  <SelectValue placeholder="Contract type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  <SelectItem value="fixed_price">Fixed price</SelectItem>
+                  <SelectItem value="time_materials">T&amp;M</SelectItem>
+                  <SelectItem value="retainer">Retainer</SelectItem>
+                  <SelectItem value="mixed">Mixed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        }
+        pinActive={pinProject}
+        onPinToggle={() => {
+          setPinProject((v) => {
+            const next = !v;
+            localStorage.setItem("finance-budgets-pin-project", next ? "1" : "0");
+            return next;
+          });
+        }}
+        pinTitle={pinProject ? "Unpin Project column" : "Pin Project column"}
+        onExport={exportBudgets}
+        onDownloadTemplate={downloadBudgetsTemplate}
+        onPaste={() => setShowImportPlan(true)}
+        onImport={() => setShowImportPlan(true)}
+        moreMenuItems={
+          <DropdownMenuItem onClick={() => setShowImportPlan(true)} data-testid="button-import-resource-plan-budget">
             Import CRM plan
-          </Button>
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4 mr-1" /> New Budget
-          </Button>
-        </div>
-        )}
-      </div>
+          </DropdownMenuItem>
+        }
+        testId="finance-budgets-toolbar"
+      />
 
       {isLoading ? (
         <FinanceTableSkeleton rows={8} cols={7} />
@@ -255,59 +408,27 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
           ) : undefined}
         />
       ) : (
-        <Card className="rounded-xl border-border/50 overflow-hidden shadow-sm">
-          <FinanceTableWrap>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Project</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Budget</TableHead>
-                  <TableHead className="text-right">Actual</TableHead>
-                  <TableHead className="text-right">Margin</TableHead>
-                  <TableHead>RAG</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pagination.paginatedItems.map((b) => (
-                  <TableRow
-                    key={b.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => setSelectedId(b.id)}
-                    data-testid={`budget-row-${b.id}`}
-                  >
-                    <TableCell className="font-medium">{b.projectName ?? `Project #${b.projectId}`}</TableCell>
-                    <TableCell>{b.clientName ?? "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">{b.contractType.replace(/_/g, " ")}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatCurrency(b.totalBudget, b.budgetCurrency)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatCurrency(b.actualCost, b.budgetCurrency)}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      <span className={cn("inline-flex items-center gap-1", (b.marginPct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500")}>
-                        {(b.marginPct ?? 0) >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                        {b.marginPct ?? 0}%
-                      </span>
-                    </TableCell>
-                    <TableCell>{ragBadge(b.ragStatus)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </FinanceTableWrap>
-          <TablePagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            total={pagination.total}
-            startIndex={pagination.startIndex}
-            endIndex={pagination.endIndex}
-            pageSize={pagination.pageSize}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
-          />
-        </Card>
+        <MondayBoardShell.Table
+          columns={mondayColumns}
+          data={filteredBudgets}
+          emptyMessage="No budgets match your filters."
+          addItemLabel="New Budget"
+          onAddItem={() => setShowCreate(true)}
+          onRowClick={(b) => setSelectedId(b.id)}
+          onCellEdit={(rowId, columnId, value) => {
+            const field = columnId === "type" ? "contractType" : columnId;
+            updateBudgetMut.mutate({
+              id: Number(rowId),
+              payload: { [field]: value === "" ? null : value },
+            });
+          }}
+          searchHighlightTerm={debouncedSearch}
+          columnWidthStorageKey="jiganto-finance-budgets-col-widths"
+          paginationResetKey={paginationResetKey}
+          totalCount={budgets.length}
+        />
       )}
+      </MondayBoardShell.Legacy>
 
       <Sheet open={selectedId != null} onOpenChange={(open) => !open && setSelectedId(null)}>
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto" data-testid="budget-detail-drawer">
@@ -448,11 +569,14 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
 
       <FormDialogShell
         open={showCreate}
-        onOpenChange={setShowCreate}
+        onOpenChange={(open) => {
+          setShowCreate(open);
+          if (!open) resetCreateForm();
+        }}
         title="Create project budget"
         subtitle="Set labour and expense budgets for a project"
         saveLabel="Create budget"
-        onCancel={() => setShowCreate(false)}
+        onCancel={() => { setShowCreate(false); resetCreateForm(); }}
         onSubmit={() => createMutation.mutate()}
         saving={createMutation.isPending}
         disabled={!newProjectId}
@@ -494,7 +618,10 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
 
       <FormDialogShell
         open={showImportPlan}
-        onOpenChange={setShowImportPlan}
+        onOpenChange={(open) => {
+          setShowImportPlan(open);
+          if (!open) setImportPlanId("");
+        }}
         title="Import from CRM resource plan"
         subtitle="Create a project budget from an opportunity staffing plan"
         saveLabel="Import budget"

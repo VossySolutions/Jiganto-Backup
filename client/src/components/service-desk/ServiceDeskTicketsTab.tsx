@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -14,11 +14,13 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
 import {
-  Plus,
-  Calendar,
-  List,
   Clock,
   Ticket,
   Paperclip,
@@ -30,7 +32,6 @@ import {
   ServiceDeskTableSkeleton,
   ServiceDeskErrorState,
   ServiceDeskEmptyState,
-  ServiceDeskTableWrap,
 } from "./ServiceDeskUi";
 import { useToast } from "@/hooks/use-toast";
 import type { TicketRow, TicketDetail, TicketType, TicketPriority } from "./types";
@@ -38,6 +39,46 @@ import { TYPE_LABELS, PRIORITY_LABELS, slaBadgeClass } from "./types";
 import {
   FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider,
 } from "@/components/ui/form-dialog-shell";
+
+const TYPE_COLUMN_OPTIONS = Object.entries(TYPE_LABELS).map(([value, label]) => ({
+  value,
+  label,
+  color:
+    value === "incident" ? "bg-[#e2445c] text-white"
+    : value === "service_request" ? "bg-[#579bfc] text-white"
+    : value === "change_request" ? "bg-[#a25ddc] text-white"
+    : value === "question" ? "bg-[#00c875] text-white"
+    : "bg-[#fdab3d] text-white",
+}));
+
+const PRIORITY_COLUMN_OPTIONS = Object.entries(PRIORITY_LABELS).map(([value, label]) => ({
+  value,
+  label,
+  color:
+    value === "p1" ? "bg-[#e2445c] text-white"
+    : value === "p2" ? "bg-[#fdab3d] text-white"
+    : value === "p3" ? "bg-[#579bfc] text-white"
+    : "bg-[#c4c4c4] text-white",
+}));
+
+const TICKET_STATUS_VALUES = [
+  "open", "assigned", "in_progress", "pending", "resolved", "closed", "completed",
+  "answered", "submitted", "under_review", "cab_approved", "scheduled", "implementing",
+  "implemented", "fix_ready", "retesting", "fixed", "wont_fix",
+] as const;
+
+const STATUS_COLUMN_OPTIONS = TICKET_STATUS_VALUES.map((value) => ({
+  value,
+  label: value.replace(/_/g, " "),
+  color:
+    value === "open" || value === "submitted" || value === "assigned" ? "bg-[#579bfc] text-white"
+    : value === "in_progress" || value === "pending" || value === "under_review" || value === "scheduled"
+      || value === "implementing" || value === "fix_ready" || value === "retesting" ? "bg-[#fdab3d] text-white"
+    : value === "resolved" || value === "completed" || value === "answered" || value === "implemented"
+      || value === "fixed" || value === "cab_approved" ? "bg-[#00c875] text-white"
+    : value === "wont_fix" ? "bg-[#a25ddc] text-white"
+    : "bg-[#c4c4c4] text-white",
+}));
 
 interface Props {
   initialFilters?: { slaFilter?: string; status?: string; priority?: string; type?: string };
@@ -63,10 +104,15 @@ export function ServiceDeskTicketsTab({
   const [statusFilter, setStatusFilter] = useState(initialFilters?.status ?? "all");
   const [slaFilter, setSlaFilter] = useState(initialFilters?.slaFilter ?? "all");
   const [agentFilter, setAgentFilter] = useState("all");
-  const [search, setSearch] = useState(searchQuery);
+  const [localSearch, setLocalSearch] = useState(searchQuery);
+  const debouncedSearch = useDebouncedValue(localSearch);
+  const [pinRef, setPinRef] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem(`${apiBase}-pin-ref`) !== "0";
+  });
 
   useEffect(() => {
-    setSearch(searchQuery);
+    setLocalSearch(searchQuery);
   }, [searchQuery]);
 
   useEffect(() => {
@@ -77,12 +123,13 @@ export function ServiceDeskTicketsTab({
   }, [initialFilters]);
   const [selectedId, setSelectedId] = useState<number | null>(initialTicketId);
   const [showCreate, setShowCreate] = useState(false);
-  const [newTicket, setNewTicket] = useState({
+  const defaultNewTicket = () => ({
     title: "", type: "incident" as TicketType, priority: "p3" as TicketPriority, description: "",
     projectId: initialProjectId ? String(initialProjectId) : "", defectSeverity: "medium", defectEnvironment: "uat", defectStepsToReproduce: "",
     defectExpectedResult: "", defectActualResult: "", sprintPhase: "",
     defectBuildVersion: "", defectWorkaround: "", defectFixVersion: "",
   });
+  const [newTicket, setNewTicket] = useState(defaultNewTicket);
 
   useEffect(() => {
     if (initialProjectId) {
@@ -100,12 +147,18 @@ export function ServiceDeskTicketsTab({
   if (statusFilter !== "all") queryParams.set("status", statusFilter);
   if (slaFilter !== "all") queryParams.set("slaFilter", slaFilter);
   if (agentFilter !== "all") queryParams.set("agentFilter", agentFilter);
-  if (search) queryParams.set("search", search);
+  if (debouncedSearch) queryParams.set("search", debouncedSearch);
   if (view === "calendar") queryParams.set("view", "calendar");
   const qs = queryParams.toString();
 
   const { data: tickets = [], isLoading, isError, refetch, isFetching } = useQuery<TicketRow[]>({
-    queryKey: [`${apiBase}/tickets${qs ? `?${qs}` : ""}`],
+    queryKey: [`${apiBase}/tickets`, qs],
+    queryFn: async () => {
+      const url = `${apiBase}/tickets${qs ? `?${qs}` : ""}`;
+      const res = await fetchWithAuth(url);
+      if (!res.ok) throw new Error(`Failed to load tickets (${res.status})`);
+      return res.json();
+    },
     staleTime: 30_000,
   });
 
@@ -141,6 +194,7 @@ export function ServiceDeskTicketsTab({
     onSuccess: (t) => {
       toast({ title: `Ticket ${t.ref} created` });
       setShowCreate(false);
+      setNewTicket(defaultNewTicket());
       setSelectedId(t.id);
       queryClient.invalidateQueries({ queryKey: [`${apiBase}/tickets`] });
       queryClient.invalidateQueries({ queryKey: [`${apiBase}/dashboard`] });
@@ -231,58 +285,207 @@ export function ServiceDeskTicketsTab({
   const [timeHours, setTimeHours] = useState("1");
   const [timeDesc, setTimeDesc] = useState("");
   const [timeBillable, setTimeBillable] = useState(true);
+  const [timeDate, setTimeDate] = useState(() => new Date().toISOString().slice(0, 10));
+
+  useEffect(() => {
+    setCommentText("");
+    setCommentInternal(false);
+    setTimeHours("1");
+    setTimeDesc("");
+    setTimeBillable(true);
+    setTimeDate(new Date().toISOString().slice(0, 10));
+  }, [selectedId]);
+
+  const mondayColumns: MondayColumnDef<TicketRow>[] = useMemo(() => [
+    {
+      id: "ref",
+      header: "Ref",
+      type: "text",
+      accessor: "ref",
+      width: "100px",
+      sticky: pinRef,
+      editable: false,
+      render: (t) => <span className="font-mono text-xs">{t.ref}</span>,
+    },
+    {
+      id: "title",
+      header: "Title",
+      type: "text",
+      accessor: "title",
+      width: "260px",
+      editable: true,
+      render: (t) => <span className="font-medium max-w-[260px] truncate block">{t.title}</span>,
+    },
+    {
+      id: "type",
+      header: "Type",
+      type: "status",
+      accessor: "type",
+      width: "140px",
+      editable: true,
+      options: TYPE_COLUMN_OPTIONS,
+      render: (t) => <span className="text-sm">{TYPE_LABELS[t.type]}</span>,
+    },
+    {
+      id: "priority",
+      header: "Priority",
+      type: "status",
+      accessor: "priority",
+      width: "100px",
+      editable: true,
+      options: PRIORITY_COLUMN_OPTIONS,
+      render: (t) => <span className="text-sm">{t.priority.toUpperCase()}</span>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      type: "status",
+      accessor: "status",
+      width: "140px",
+      editable: true,
+      options: STATUS_COLUMN_OPTIONS,
+      render: (t) => <span className="text-sm capitalize">{t.status.replace(/_/g, " ")}</span>,
+    },
+    {
+      id: "sla",
+      header: "SLA",
+      type: "status",
+      accessor: (row) => row.slaState.resolution,
+      width: "120px",
+      editable: false,
+      render: (t) => <Badge className={slaBadgeClass(t.slaState.resolution)}>{t.slaState.resolution}</Badge>,
+    },
+    {
+      id: "agent",
+      header: "Agent",
+      type: "person",
+      accessor: (row) => row.agentName,
+      width: "160px",
+      editable: false,
+      render: (t) => <span className="text-sm">{t.agentName ?? "—"}</span>,
+    },
+  ], [pinRef]);
+
+  const patchTicketMut = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
+      apiRequest("PATCH", `${apiBase}/tickets/${id}`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`${apiBase}/tickets`] });
+      if (selectedId) queryClient.invalidateQueries({ queryKey: [`${apiBase}/tickets/${selectedId}`] });
+    },
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
+  });
+
+  const boardStorageKey = `jiganto-${apiBase.replace(/\//g, "-")}-tickets`;
+  const tablePaginationResetKey = `${typeFilter}|${priorityFilter}|${statusFilter}|${slaFilter}|${agentFilter}|${debouncedSearch}`;
+
+  const TICKET_CSV_HEADERS = ["Ref", "Title", "Type", "Priority", "Status", "SLA", "Agent"];
+
+  const exportTickets = () => {
+    const rows = tickets.map((t) => [
+      t.ref || "",
+      t.title || "",
+      TYPE_LABELS[t.type] || t.type,
+      t.priority.toUpperCase(),
+      t.status.replace(/_/g, " "),
+      t.slaState.resolution,
+      t.agentName ?? "",
+    ]);
+    downloadBoardCsv(`tickets-${new Date().toISOString().split("T")[0]}.csv`, TICKET_CSV_HEADERS, rows);
+    toast({ title: "Tickets exported to CSV" });
+  };
+
+  const downloadTicketsTemplate = () => {
+    downloadImportTemplateCsv("tickets-import-template.csv", TICKET_CSV_HEADERS, TICKET_CSV_HEADERS.map(() => ""));
+    toast({ title: "Import template downloaded" });
+  };
+
+  const importUnavailable = () => toast({ title: "Import is not available for this table yet" });
 
   return (
+    <MondayBoardShell.Legacy
+      storageKey={boardStorageKey}
+      entityType={apiBase.includes("help") ? "help_desk_ticket" : "service_desk_ticket"}
+      stateHook={useMondayBoardShellState}
+      filterMatcher={matchBoardFilterValue}
+    >
     <div className="space-y-4" data-testid="sd-tickets">
-      <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
-        <div className="flex flex-wrap gap-2 flex-1">
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-full xs:w-[130px] sm:w-[140px] h-9"><SelectValue placeholder="Type" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              {Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-            <SelectTrigger className="w-full xs:w-[120px] sm:w-[130px] h-9"><SelectValue placeholder="Priority" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All priorities</SelectItem>
-              {Object.entries(PRIORITY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={slaFilter} onValueChange={setSlaFilter}>
-            <SelectTrigger className="w-full xs:w-[120px] sm:w-[130px] h-9"><SelectValue placeholder="SLA" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All SLA</SelectItem>
-              <SelectItem value="breached">Breached</SelectItem>
-              <SelectItem value="at_risk">At Risk</SelectItem>
-              <SelectItem value="within">Within SLA</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={agentFilter} onValueChange={setAgentFilter}>
-            <SelectTrigger className="w-full xs:w-[130px] sm:w-[140px] h-9"><SelectValue placeholder="Agent" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All agents</SelectItem>
-              <SelectItem value="me">Assigned to me</SelectItem>
-              <SelectItem value="unassigned">Unassigned</SelectItem>
-            </SelectContent>
-          </Select>
-          <Input placeholder="Search…" className="w-full sm:w-40 h-9" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <div className="flex flex-wrap gap-2 shrink-0">
-          <Button variant={view === "list" ? "default" : "outline"} size="sm" className="flex-1 sm:flex-none" onClick={() => setView("list")}>
-            <List className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">List</span>
-          </Button>
-          <Button variant={view === "calendar" ? "default" : "outline"} size="sm" className="flex-1 sm:flex-none" onClick={() => setView("calendar")}>
-            <Calendar className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">Calendar</span>
-          </Button>
-          {tickets.length > 0 && (
-          <Button size="sm" className="flex-1 sm:flex-none" onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4 sm:mr-1" /><span className="hidden sm:inline">New</span>
-          </Button>
-          )}
-        </div>
-      </div>
+      <MondayBoardShell.Toolbar
+        newLabel="New Ticket"
+        onNew={() => setShowCreate(true)}
+        searchValue={localSearch}
+        onSearchChange={setLocalSearch}
+        viewLabel={view === "list" ? "List" : "Calendar"}
+        viewMenu={
+          <>
+            <DropdownMenuItem onClick={() => setView("list")}>List</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setView("calendar")}>Calendar</DropdownMenuItem>
+          </>
+        }
+        filterActive={typeFilter !== "all" || priorityFilter !== "all" || slaFilter !== "all" || agentFilter !== "all" || statusFilter !== "all"}
+        filterCount={(typeFilter !== "all" ? 1 : 0) + (priorityFilter !== "all" ? 1 : 0) + (slaFilter !== "all" ? 1 : 0) + (agentFilter !== "all" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0)}
+        filterContent={
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Type</Label>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  {Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Priority</Label>
+              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Priority" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All priorities</SelectItem>
+                  {Object.entries(PRIORITY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">SLA</Label>
+              <Select value={slaFilter} onValueChange={setSlaFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="SLA" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All SLA</SelectItem>
+                  <SelectItem value="breached">Breached</SelectItem>
+                  <SelectItem value="at_risk">At Risk</SelectItem>
+                  <SelectItem value="within">Within SLA</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Agent</Label>
+              <Select value={agentFilter} onValueChange={setAgentFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Agent" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All agents</SelectItem>
+                  <SelectItem value="me">Assigned to me</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        }
+        pinActive={pinRef}
+        onPinToggle={() => {
+          setPinRef((v) => {
+            const next = !v;
+            localStorage.setItem(`${apiBase}-pin-ref`, next ? "1" : "0");
+            return next;
+          });
+        }}
+        pinTitle={pinRef ? "Unpin Ref column" : "Pin Ref column"}
+        onExport={exportTickets}
+        onDownloadTemplate={downloadTicketsTemplate}
+        onPaste={importUnavailable}
+        onImport={importUnavailable}
+        testId="sd-tickets-toolbar"
+      />
 
       {isFetching && !isLoading && (
         <p className="text-xs text-muted-foreground">Updating…</p>
@@ -315,73 +518,30 @@ export function ServiceDeskTicketsTab({
             </div>
           ))}
         </div>
-      ) : tickets.length === 0 ? (
-        <ServiceDeskEmptyState
-          icon={Ticket}
-          title="No tickets found"
-          description="Create a ticket or adjust your filters."
-          action={<Button size="sm" onClick={() => setShowCreate(true)}><Plus className="h-4 w-4 mr-1" />New ticket</Button>}
-        />
       ) : (
-        <>
-          {/* Mobile card list */}
-          <div className="grid gap-3 sm:hidden">
-            {tickets.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className="text-left p-4 rounded-xl border border-border/50 hover:border-primary/30 active:bg-muted/50"
-                onClick={() => setSelectedId(t.id)}
-              >
-                <div className="flex justify-between gap-2 mb-1">
-                  <span className="font-mono text-xs text-muted-foreground">{t.ref}</span>
-                  <Badge className={slaBadgeClass(t.slaState.resolution)}>{t.slaState.resolution}</Badge>
-                </div>
-                <p className="font-medium text-sm line-clamp-2">{t.title}</p>
-                <div className="flex flex-wrap gap-2 mt-2 text-xs text-muted-foreground">
-                  <span>{TYPE_LABELS[t.type]}</span>
-                  <span>·</span>
-                  <span>{t.priority.toUpperCase()}</span>
-                  <span>·</span>
-                  <span className="capitalize">{t.status.replace(/_/g, " ")}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-          {/* Desktop table */}
-          <div className="hidden sm:block">
-          <ServiceDeskTableWrap>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Ref</TableHead>
-              <TableHead>Title</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Priority</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>SLA</TableHead>
-              <TableHead>Agent</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {tickets.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">No tickets found.</TableCell></TableRow>
-            ) : tickets.map((t) => (
-              <TableRow key={t.id} className="cursor-pointer" onClick={() => setSelectedId(t.id)}>
-                <TableCell className="font-mono text-xs">{t.ref}</TableCell>
-                <TableCell className="font-medium max-w-[220px] truncate">{t.title}</TableCell>
-                <TableCell>{TYPE_LABELS[t.type]}</TableCell>
-                <TableCell>{t.priority.toUpperCase()}</TableCell>
-                <TableCell className="capitalize">{t.status.replace(/_/g, " ")}</TableCell>
-                <TableCell><Badge className={slaBadgeClass(t.slaState.resolution)}>{t.slaState.resolution}</Badge></TableCell>
-                <TableCell>{t.agentName ?? "—"}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-          </ServiceDeskTableWrap>
-          </div>
-        </>
+        <MondayBoardShell.Table
+          columns={mondayColumns}
+          data={tickets}
+          emptyMessage="No tickets found. Create a ticket or adjust your filters."
+          addItemLabel="New ticket"
+          onAddItem={() => setShowCreate(true)}
+          onRowClick={(t) => setSelectedId(t.id)}
+          onCellEdit={(rowId, columnId, value) => {
+            const id = Number(rowId);
+            if (columnId === "status") {
+              statusMut.mutate({ id, status: String(value) });
+              return;
+            }
+            patchTicketMut.mutate({
+              id,
+              payload: { [columnId]: value === "" ? null : value },
+            });
+          }}
+          searchHighlightTerm={debouncedSearch}
+          columnWidthStorageKey={`jiganto-${apiBase.replace(/\//g, "-")}-tickets-col-widths`}
+          paginationResetKey={tablePaginationResetKey}
+          totalCount={tickets.length}
+        />
       )}
 
       <Sheet open={selectedId != null} onOpenChange={() => setSelectedId(null)}>
@@ -519,7 +679,7 @@ export function ServiceDeskTicketsTab({
                     ))}
                     <div className="grid grid-cols-2 gap-2">
                       <div><Label>Hours</Label><Input type="number" step="0.25" value={timeHours} onChange={(e) => setTimeHours(e.target.value)} /></div>
-                      <div><Label>Date</Label><Input type="date" defaultValue={new Date().toISOString().slice(0, 10)} id="log-date" /></div>
+                      <div><Label>Date</Label><Input type="date" value={timeDate} onChange={(e) => setTimeDate(e.target.value)} /></div>
                     </div>
                     <Textarea placeholder="Description" value={timeDesc} onChange={(e) => setTimeDesc(e.target.value)} />
                     <div className="flex items-center gap-2">
@@ -527,8 +687,7 @@ export function ServiceDeskTicketsTab({
                       <Label htmlFor="billable">Billable to client</Label>
                     </div>
                     <Button size="sm" onClick={() => {
-                      const el = document.getElementById("log-date") as HTMLInputElement;
-                      timeLogMut.mutate({ id: detail.id, logDate: el?.value ?? new Date().toISOString().slice(0, 10), hours: Number(timeHours), description: timeDesc, isBillable: timeBillable });
+                      timeLogMut.mutate({ id: detail.id, logDate: timeDate || new Date().toISOString().slice(0, 10), hours: Number(timeHours), description: timeDesc, isBillable: timeBillable });
                     }}>Log time</Button>
                   </TabsContent>
 
@@ -567,10 +726,13 @@ export function ServiceDeskTicketsTab({
 
       <FormDialogShell
         open={showCreate}
-        onOpenChange={setShowCreate}
+        onOpenChange={(open) => {
+          setShowCreate(open);
+          if (!open) setNewTicket(defaultNewTicket());
+        }}
         title="New Ticket"
         saveLabel="Create ticket"
-        onCancel={() => setShowCreate(false)}
+        onCancel={() => { setShowCreate(false); setNewTicket(defaultNewTicket()); }}
         onSubmit={() => createMut.mutate()}
         saving={createMut.isPending}
         disabled={!newTicket.title}
@@ -637,5 +799,6 @@ export function ServiceDeskTicketsTab({
         )}
       </FormDialogShell>
     </div>
+    </MondayBoardShell.Legacy>
   );
 }

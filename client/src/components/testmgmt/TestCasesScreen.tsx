@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { TmTestCase, TmTestSuite, TmTestStep } from "@shared/schema";
@@ -8,7 +8,6 @@ import {
   Pencil,
   Trash2,
   X,
-  FlaskConical,
   Clock,
   CheckCircle2,
   XCircle,
@@ -23,8 +22,13 @@ import {
 } from "@/components/ui/form-dialog-shell";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { useTablePagination } from "@/hooks/use-table-pagination";
-import { TablePagination } from "@/components/TablePagination";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
 import { useTmFetch } from "@/hooks/use-tm-fetch";
 import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
 
@@ -86,6 +90,11 @@ export function TestCasesScreen() {
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchText, setSearchText] = useState("");
+  const debouncedSearch = useDebouncedValue(searchText);
+  const [pinName, setPinName] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("tm-cases-pin-title") !== "0";
+  });
   // New Run modal state
   const [runModalOpen, setRunModalOpen] = useState(false);
   const [runName, setRunName] = useState("");
@@ -100,17 +109,106 @@ export function TestCasesScreen() {
   const isLoading = suitesQuery.isLoading || casesQuery.isLoading;
   const firstError = suitesQuery.error ?? casesQuery.error ?? null;
 
+  const suiteName = (id: number | null) => suites.find(s => s.id === id)?.name ?? "—";
+
   const filtered = allCases.filter(tc => {
     if (filterSuite && tc.suiteId !== filterSuite) return false;
     if (filterPriority !== "all" && tc.priority !== filterPriority) return false;
     if (filterStatus !== "all" && tc.status !== filterStatus) return false;
-    if (searchText && !tc.title.toLowerCase().includes(searchText.toLowerCase())) return false;
+    if (debouncedSearch && !tc.title.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
   });
 
-  const pagination = useTablePagination(filtered, {
-    resetKey: `${filterSuite}-${filterPriority}-${filterStatus}-${searchText}`,
-  });
+  const mondayColumns: MondayColumnDef<TmTestCase>[] = useMemo(() => [
+    {
+      id: "title",
+      header: "Title",
+      type: "text",
+      accessor: "title",
+      width: "240px",
+      sticky: pinName,
+      editable: true,
+      render: (tc) => (
+        <div className="min-w-0 max-w-[240px]">
+          <div className="truncate font-medium">{tc.title}</div>
+          {tc.description && <div className="text-xs text-muted-foreground truncate">{tc.description}</div>}
+        </div>
+      ),
+    },
+    {
+      id: "suite",
+      header: "Suite",
+      type: "text",
+      accessor: (row) => suiteName(row.suiteId ?? null),
+      width: "140px",
+      editable: false,
+      render: (tc) => <span className="text-muted-foreground text-xs">{suiteName(tc.suiteId ?? null)}</span>,
+    },
+    {
+      id: "priority",
+      header: "Priority",
+      type: "status",
+      accessor: "priority",
+      width: "110px",
+      editable: true,
+      options: PRIORITIES.map((p) => ({
+        value: p,
+        label: p.charAt(0).toUpperCase() + p.slice(1),
+        color: priorityColors[p],
+      })),
+      render: (tc) => (
+        <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", priorityColors[tc.priority ?? "medium"])}>
+          {tc.priority}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      type: "status",
+      accessor: "status",
+      width: "120px",
+      editable: true,
+      options: STATUSES.map((s) => ({
+        value: s,
+        label: s.charAt(0).toUpperCase() + s.slice(1),
+        color:
+          s === "active" ? "bg-[#00c875] text-white"
+          : s === "draft" ? "bg-[#fdab3d] text-white"
+          : "bg-[#c4c4c4] text-white",
+      })),
+      render: (tc) => (
+        <div className="flex items-center gap-1.5">
+          {statusIcons[tc.status ?? "draft"]}
+          <span className="text-xs capitalize">{tc.status}</span>
+        </div>
+      ),
+    },
+    {
+      id: "caseType",
+      header: "Type",
+      type: "text",
+      accessor: "caseType",
+      width: "100px",
+      editable: true,
+      render: (tc) => <span className="text-xs text-muted-foreground capitalize">{tc.caseType}</span>,
+    },
+    {
+      id: "tags",
+      header: "Tags",
+      type: "tags",
+      accessor: "tags",
+      width: "160px",
+      editable: false,
+      render: (tc) => (
+        <div className="flex flex-wrap gap-1">
+          {((tc.tags as string[]) ?? []).slice(0, 3).map(tag => (
+            <span key={tag} className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">{tag}</span>
+          ))}
+        </div>
+      ),
+    },
+  ], [suites, pinName]);
 
   const createMutation = useMutation({
     mutationFn: async (data: { tc: FormData; steps: StepDraft[] }) => {
@@ -143,6 +241,13 @@ export function TestCasesScreen() {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const patchFieldMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
+      apiRequest("PATCH", `/api/tm/cases/${id}`, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/tm/cases"] }),
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/tm/cases/${id}`),
     onSuccess: () => {
@@ -157,7 +262,7 @@ export function TestCasesScreen() {
       const runRes = await apiRequest("POST", "/api/tm/runs", {
         name,
         projectId: activeProjectId,
-        status: "not_started",
+        status: "in_progress",
         startDate: startDate || null,
       });
       const run = await runRes.json() as { id: number };
@@ -168,6 +273,7 @@ export function TestCasesScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tm/runs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tm/cycles"] });
       setRunModalOpen(false);
       setRunName("");
       setRunStartDate("");
@@ -193,7 +299,9 @@ export function TestCasesScreen() {
   }
 
   async function openEdit(tc: TmTestCase) {
+    const caseId = tc.id;
     setEditing(tc);
+    setTagInput("");
     setForm({
       title: tc.title,
       description: tc.description ?? "",
@@ -205,10 +313,15 @@ export function TestCasesScreen() {
       estimatedDuration: tc.estimatedDuration ?? null,
       tags: (tc.tags as string[]) ?? [],
     });
-    const stepsRes = await apiRequest("GET", `/api/tm/cases/${tc.id}/steps`);
-    const fetchedSteps: TmTestStep[] = await stepsRes.json();
-    setSteps(fetchedSteps.map(s => ({ action: s.action, expectedResult: s.expectedResult ?? "", testData: s.testData ?? "" })));
     setDialogOpen(true);
+    const stepsRes = await apiRequest("GET", `/api/tm/cases/${caseId}/steps`);
+    const fetchedSteps: TmTestStep[] = await stepsRes.json();
+    setEditing((current) => {
+      if (current?.id === caseId) {
+        setSteps(fetchedSteps.map(s => ({ action: s.action, expectedResult: s.expectedResult ?? "", testData: s.testData ?? "" })));
+      }
+      return current;
+    });
   }
 
   function openCreate() {
@@ -252,8 +365,6 @@ export function TestCasesScreen() {
     setForm(f => ({ ...f, tags: f.tags.filter(x => x !== t) }));
   }
 
-  const suiteName = (id: number | null) => suites.find(s => s.id === id)?.name ?? "—";
-
   return (
     <TmScreenShell
       loading={isLoading}
@@ -281,121 +392,132 @@ export function TestCasesScreen() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Input
-          placeholder="Search test cases..."
-          className="max-w-xs"
-          value={searchText}
-          onChange={e => setSearchText(e.target.value)}
-          data-testid="input-search-cases"
-        />
-        <select
-          className="border border-input rounded-md px-3 py-2 text-sm bg-background"
-          value={filterSuite ?? ""}
-          onChange={e => setFilterSuite(e.target.value ? Number(e.target.value) : null)}
-          data-testid="select-filter-suite"
-        >
-          <option value="">All Suites</option>
-          {suites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-        <select
-          className="border border-input rounded-md px-3 py-2 text-sm bg-background"
-          value={filterPriority}
-          onChange={e => setFilterPriority(e.target.value)}
-          data-testid="select-filter-priority"
-        >
-          <option value="all">All Priorities</option>
-          {PRIORITIES.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
-        </select>
-        <select
-          className="border border-input rounded-md px-3 py-2 text-sm bg-background"
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
-          data-testid="select-filter-status"
-        >
-          <option value="all">All Statuses</option>
-          {STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-        </select>
-      </div>
+      <MondayBoardShell.Legacy
+        storageKey="jiganto-tm-test-cases"
+        entityType="test_case"
+        stateHook={useMondayBoardShellState}
+        filterMatcher={matchBoardFilterValue}
+      >
+      <MondayBoardShell.Toolbar
+        newLabel="New Test Case"
+        onNew={openCreate}
+        newTestId="button-create-case"
+        searchValue={searchText}
+        onSearchChange={setSearchText}
+        searchTestId="input-search-cases"
+        filterActive={filterSuite != null || filterPriority !== "all" || filterStatus !== "all"}
+        filterCount={(filterSuite != null ? 1 : 0) + (filterPriority !== "all" ? 1 : 0) + (filterStatus !== "all" ? 1 : 0)}
+        filterContent={
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Suite</Label>
+              <Select value={filterSuite?.toString() ?? "all"} onValueChange={(v) => setFilterSuite(v === "all" ? null : Number(v))}>
+                <SelectTrigger className="h-8 text-xs" data-testid="select-filter-suite">
+                  <SelectValue placeholder="All Suites" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Suites</SelectItem>
+                  {suites.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Priority</Label>
+              <Select value={filterPriority} onValueChange={setFilterPriority}>
+                <SelectTrigger className="h-8 text-xs" data-testid="select-filter-priority">
+                  <SelectValue placeholder="All Priorities" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Priorities</SelectItem>
+                  {PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Status</Label>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="h-8 text-xs" data-testid="select-filter-status">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {STATUSES.map((s) => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        }
+        afterNewSlot={
+          <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={openRunModal} data-testid="button-start-run">
+            <Play className="h-3.5 w-3.5" /> Start Test Cycle
+          </Button>
+        }
+        pinActive={pinName}
+        onPinToggle={() => {
+          setPinName((v) => {
+            const next = !v;
+            localStorage.setItem("tm-cases-pin-title", next ? "1" : "0");
+            return next;
+          });
+        }}
+        pinTitle={pinName ? "Unpin Title column" : "Pin Title column"}
+        onExport={() => {
+          const headers = ["Title", "Suite", "Priority", "Status", "Type", "Tags"];
+          const rows = filtered.map((tc) => [
+            tc.title || "",
+            suiteName(tc.suiteId ?? null),
+            tc.priority || "",
+            tc.status || "",
+            tc.caseType || "",
+            ((tc.tags as string[]) ?? []).join("|"),
+          ]);
+          downloadBoardCsv(`test-cases-${new Date().toISOString().split("T")[0]}.csv`, headers, rows);
+          toast({ title: "Test cases exported to CSV" });
+        }}
+        onDownloadTemplate={() => {
+          const headers = ["Title", "Suite", "Priority", "Status", "Type", "Tags"];
+          downloadImportTemplateCsv("test-cases-import-template.csv", headers, headers.map(() => ""));
+          toast({ title: "Import template downloaded" });
+        }}
+        onPaste={() => toast({ title: "Import is not available for this table yet" })}
+        onImport={() => toast({ title: "Import is not available for this table yet" })}
+        testId="test-cases-toolbar"
+      />
 
       {/* Table */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        {filtered.length === 0 ? (
-          <div className="p-12 text-center">
-            <FlaskConical className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground text-sm">
-              {allCases.length === 0 ? "No test cases yet. Create your first one to get started." : "No test cases match your filters."}
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-gray-700 dark:text-foreground">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Title</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Suite</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Priority</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Type</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Tags</th>
-                  <th className="px-3 py-2.5 text-right align-middle font-semibold" />
-                </tr>
-              </thead>
-              <tbody>
-                {pagination.paginatedItems.map(tc => (
-                  <tr key={tc.id} className="border-b border-border/40 hover:bg-muted/30 group" data-testid={`case-row-${tc.id}`}>
-                    <td className="px-3 py-2.5 align-middle font-medium max-w-[240px]">
-                      <div className="truncate">{tc.title}</div>
-                      {tc.description && <div className="text-xs text-muted-foreground truncate">{tc.description}</div>}
-                    </td>
-                    <td className="px-3 py-2.5 align-middle text-muted-foreground text-xs">{suiteName(tc.suiteId ?? null)}</td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", priorityColors[tc.priority ?? "medium"])}>
-                        {tc.priority}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <div className="flex items-center gap-1.5">
-                        {statusIcons[tc.status ?? "draft"]}
-                        <span className="text-xs capitalize">{tc.status}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground capitalize">{tc.caseType}</td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <div className="flex flex-wrap gap-1">
-                        {((tc.tags as string[]) ?? []).slice(0, 3).map(tag => (
-                          <span key={tag} className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">{tag}</span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 justify-end">
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40" onClick={() => openEdit(tc)} data-testid={`button-edit-case-${tc.id}`}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={() => deleteMutation.mutate(tc.id)} data-testid={`button-delete-case-${tc.id}`}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <TablePagination
-              page={pagination.page}
-              totalPages={pagination.totalPages}
-              total={pagination.total}
-              startIndex={pagination.startIndex}
-              endIndex={pagination.endIndex}
-              pageSize={pagination.pageSize}
-              onPageChange={pagination.setPage}
-              onPageSizeChange={pagination.setPageSize}
-            />
+      <MondayBoardShell.Table
+        columns={mondayColumns}
+        data={filtered}
+        gridLines
+        emptyMessage={allCases.length === 0 ? "No test cases yet. Create your first one to get started." : "No test cases match your filters."}
+        addItemLabel="New Test Case"
+        onAddItem={openCreate}
+        onEditItem={openEdit}
+        onCellEdit={(rowId, columnId, value) => {
+          patchFieldMutation.mutate({
+            id: Number(rowId),
+            payload: { [columnId]: value === "" ? null : value },
+          });
+        }}
+        searchHighlightTerm={debouncedSearch}
+        columnWidthStorageKey="jiganto-tm-test-cases-col-widths"
+        paginationResetKey={`${filterSuite}-${filterPriority}-${filterStatus}-${debouncedSearch}`}
+        alwaysShowRowActions
+        renderRowActions={(tc) => (
+          <div className="flex items-center gap-1 justify-end">
+            <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40" onClick={() => openEdit(tc)} data-testid={`button-edit-case-${tc.id}`}>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={() => {
+              if (!window.confirm("Delete this test case?")) return;
+              deleteMutation.mutate(tc.id);
+            }} data-testid={`button-delete-case-${tc.id}`}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
           </div>
         )}
-      </div>
+      />
+      </MondayBoardShell.Legacy>
 
       {/* Case Dialog */}
       <FormDialogShell
@@ -518,7 +640,7 @@ export function TestCasesScreen() {
                 {form.tags.map(t => (
                   <span key={t} className="flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                     {t}
-                    <button onClick={() => removeTag(t)} className="hover:text-destructive" data-testid={`tag-remove-${t}`}>
+                    <button type="button" onClick={() => removeTag(t)} className="hover:text-destructive" data-testid={`tag-remove-${t}`}>
                       <X className="h-3 w-3" />
                     </button>
                   </span>
@@ -533,7 +655,7 @@ export function TestCasesScreen() {
                   className="max-w-[240px]"
                   data-testid="input-tag"
                 />
-                <Button variant="outline" size="sm" onClick={addTag} data-testid="button-add-tag">Add</Button>
+                <Button type="button" variant="outline" size="sm" onClick={addTag} data-testid="button-add-tag">Add</Button>
               </div>
             </div>
 
@@ -541,7 +663,7 @@ export function TestCasesScreen() {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <label className="text-sm font-medium">Test Steps</label>
-                <Button variant="outline" size="sm" onClick={addStep} data-testid="button-add-step">
+                <Button type="button" variant="outline" size="sm" onClick={addStep} data-testid="button-add-step">
                   <Plus className="h-3.5 w-3.5 mr-1" /> Add Step
                 </Button>
               </div>
@@ -556,7 +678,7 @@ export function TestCasesScreen() {
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-mono text-muted-foreground w-6 text-center">{i + 1}</span>
                         <span className="text-xs font-medium flex-1">Action</span>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => removeStep(i)} data-testid={`button-remove-step-${i}`}>
+                        <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => removeStep(i)} data-testid={`button-remove-step-${i}`}>
                           <X className="h-3 w-3" />
                         </Button>
                       </div>

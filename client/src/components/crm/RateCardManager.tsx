@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -16,16 +15,21 @@ import {
   Plus,
   Trash2,
   Pencil,
-  DollarSign,
   CheckCircle2,
   X,
   CreditCard,
-  Calendar,
   Loader2,
   Star,
   Download,
   Upload
 } from "lucide-react";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import {
+  MondayBoardProvider,
+  MondayBoardTable,
+  MondayBoardChromeControls,
+} from "@/components/MondayBoardTable";
+import { useDebouncedValue } from "@/lib/crm-monday-chrome";
 
 type RateCardItem = {
   id: number;
@@ -58,6 +62,8 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
   const [editingCard, setEditingCard] = useState<RateCard | null>(null);
   const [createMode, setCreateMode] = useState(false);
   const [expandedCardId, setExpandedCardId] = useState<number | null>(null);
+  const [listSearch, setListSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(listSearch);
 
   const [formName, setFormName] = useState("");
   const [formDescription, setFormDescription] = useState("");
@@ -160,6 +166,42 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
     setFormIsDefault(false);
   }, []);
 
+  useEffect(() => {
+    if (!open) resetForm();
+  }, [open, resetForm]);
+
+  useEffect(() => {
+    setNewItemRole("");
+    setNewItemRate("");
+  }, [expandedCardId]);
+
+  const handleSaveCard = () => {
+    if (!formName.trim()) {
+      toast({ title: "Name is required", variant: "destructive" });
+      return;
+    }
+    const data = {
+      name: formName.trim(),
+      description: formDescription,
+      currency: formCurrency,
+      effectiveFrom: formEffectiveFrom,
+      effectiveTo: formEffectiveTo,
+      isDefault: formIsDefault,
+    };
+    if (editingCard) {
+      updateCardMutation.mutate({
+        id: editingCard.id,
+        data: {
+          ...data,
+          effectiveFrom: data.effectiveFrom || null,
+          effectiveTo: data.effectiveTo || null,
+        },
+      });
+    } else {
+      createCardMutation.mutate(data);
+    }
+  };
+
   const startEdit = useCallback((card: RateCard) => {
     setEditingCard(card);
     setCreateMode(false);
@@ -256,15 +298,86 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
 
   const showForm = createMode || editingCard;
 
+  const filteredRateCards = useMemo(() => {
+    const q = debouncedSearch.toLowerCase();
+    return rateCards.filter((card) => {
+      if (!q) return true;
+      return `${card.name} ${card.description ?? ""} ${card.currency}`.toLowerCase().includes(q);
+    });
+  }, [rateCards, debouncedSearch]);
+
+  const mondayColumns: MondayColumnDef<RateCard>[] = useMemo(() => [
+    {
+      id: "name",
+      header: "Rate card",
+      type: "text",
+      accessor: "name",
+      width: "200px",
+      sticky: true,
+      editable: false,
+      render: (card) => (
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-sm font-bold truncate">{card.name}</span>
+          {card.isDefault && (
+            <Badge variant="secondary" className="text-[10px] gap-0.5">
+              <Star className="h-2.5 w-2.5" /> Default
+            </Badge>
+          )}
+          {selectedRateCardId === card.id && <Badge className="text-[10px] bg-[#0ea5e9]">Active</Badge>}
+        </div>
+      ),
+    },
+    {
+      id: "currency",
+      header: "Currency",
+      type: "text",
+      accessor: "currency",
+      width: "90px",
+      editable: false,
+    },
+    {
+      id: "effective",
+      header: "Effective",
+      type: "text",
+      accessor: (card) => `${card.effectiveFrom ?? ""}-${card.effectiveTo ?? ""}`,
+      width: "180px",
+      editable: false,
+      render: (card) => (
+        <span className="text-[11px] text-muted-foreground">
+          {fmtDate(card.effectiveFrom)} — {fmtDate(card.effectiveTo)}
+        </span>
+      ),
+    },
+    {
+      id: "roles",
+      header: "Roles",
+      type: "number",
+      accessor: (card) => card.items?.length ?? 0,
+      width: "70px",
+      editable: false,
+    },
+    {
+      id: "description",
+      header: "Description",
+      type: "text",
+      accessor: "description",
+      width: "200px",
+      editable: false,
+      render: (card) => <span className="text-xs text-muted-foreground truncate">{card.description ?? "—"}</span>,
+    },
+  ], [selectedRateCardId]);
+
+  const expandedCard = expandedCardId != null ? rateCards.find((c) => c.id === expandedCardId) : null;
+
   return (
     <FormDialogShell
       open={open}
-      onOpenChange={(o) => !o && onClose()}
+      onOpenChange={(o) => { if (!o) { resetForm(); onClose(); } }}
       title={readOnly ? "Rate Cards (Read-Only)" : "Rate Card Management"}
       subtitle={readOnly ? "Select a card to apply rates to this plan." : "Create and manage reusable rate cards."}
-      saveLabel="Close"
-      onCancel={onClose}
-      onSubmit={onClose}
+      saveLabel={showForm && !readOnly ? (editingCard ? "Update" : "Create") : "Close"}
+      onCancel={() => { resetForm(); onClose(); }}
+      onSubmit={showForm && !readOnly ? handleSaveCard : () => { resetForm(); onClose(); }}
       testId="rate-card-manager"
       size="xl"
       bodyClassName="max-h-[80vh]"
@@ -347,10 +460,11 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={resetForm}>Cancel</Button>
                 <Button
-                  type="submit"
+                  type="button"
                   size="sm"
                   className="bg-[#0ea5e9] hover:bg-[#0284c7] gap-1.5"
                   disabled={createCardMutation.isPending || updateCardMutation.isPending}
+                  onClick={handleSaveCard}
                   data-testid="button-save-card"
                 >
                   {(createCardMutation.isPending || updateCardMutation.isPending) ? (
@@ -381,6 +495,7 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
                     data-testid="input-import-csv"
                   />
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     className="gap-1.5"
@@ -391,6 +506,7 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
                     Import CSV
                   </Button>
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     className="gap-1.5"
@@ -402,6 +518,7 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
                     Export CSV
                   </Button>
                   <Button
+                    type="button"
                     size="sm"
                     className="gap-1.5 bg-[#0ea5e9] hover:bg-[#0284c7]"
                     onClick={startCreate}
@@ -433,184 +550,111 @@ export function RateCardManager({ open, onClose, onSelectRateCard, selectedRateC
                   )}
                 </div>
               ) : (
-                rateCards.map(card => {
-                  const isExpanded = expandedCardId === card.id;
-                  const isSelected = selectedRateCardId === card.id;
-                  const sym = currencySymbol(card.currency || "GBP");
-                  return (
-                    <Card
-                      key={card.id}
-                      className={cn("overflow-visible", isSelected && "ring-2 ring-[#0ea5e9]")}
-                      data-testid={`rate-card-manager-${card.id}`}
-                    >
-                      <div className="p-3">
-                        <div className="flex items-start justify-between gap-3 flex-wrap">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-bold truncate">{card.name}</span>
-                              {card.isDefault && (
-                                <Badge variant="secondary" className="text-[10px] gap-0.5">
-                                  <Star className="h-2.5 w-2.5" />
-                                  Default
-                                </Badge>
-                              )}
-                              {isSelected && (
-                                <Badge className="text-[10px] bg-[#0ea5e9]">
-                                  Active
-                                </Badge>
-                              )}
-                            </div>
-                            {card.description && (
-                              <p className="text-xs text-muted-foreground mt-0.5 truncate">{card.description}</p>
-                            )}
-                            <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground flex-wrap">
-                              <span className="flex items-center gap-1">
-                                <DollarSign className="h-3 w-3" />
-                                {card.currency || "GBP"}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
-                                {fmtDate(card.effectiveFrom)} — {fmtDate(card.effectiveTo)}
-                              </span>
-                              <span>{card.items?.length || 0} roles</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            {onSelectRateCard && (
-                              <Button
-                                variant={isSelected ? "default" : "outline"}
-                                size="sm"
-                                className={cn("text-xs gap-1", isSelected && "bg-[#0ea5e9] hover:bg-[#0284c7]")}
-                                onClick={() => handleSelectAndClose(card.id)}
-                                data-testid={`button-select-card-${card.id}`}
-                              >
-                                {isSelected ? <CheckCircle2 className="h-3 w-3" /> : null}
-                                {isSelected ? "Selected" : "Select"}
-                              </Button>
-                            )}
-                            {!readOnly && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setExpandedCardId(isExpanded ? null : card.id)}
-                                  data-testid={`button-expand-card-${card.id}`}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => deleteCardMutation.mutate(card.id)}
-                                  disabled={deleteCardMutation.isPending}
-                                  data-testid={`button-delete-card-${card.id}`}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                </Button>
-                              </>
-                            )}
-                            {readOnly && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs"
-                                onClick={() => setExpandedCardId(isExpanded ? null : card.id)}
-                                data-testid={`button-view-card-${card.id}`}
-                              >
-                                {isExpanded ? "Hide" : "View"} Rates
-                              </Button>
-                            )}
-                          </div>
+                <>
+                  <MondayBoardProvider storageKey="jiganto-resources-rate-cards">
+                  <div className="space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                  <Input
+                    placeholder="Search rate cards…"
+                    value={listSearch}
+                    onChange={(e) => setListSearch(e.target.value)}
+                    className="h-8 text-sm max-w-xs"
+                    data-testid="rate-card-search"
+                  />
+                  <MondayBoardChromeControls />
+                  </div>
+                  <MondayBoardTable
+                    columns={mondayColumns}
+                    data={filteredRateCards}
+                    gridLines
+                    emptyMessage="No rate cards match your search."
+                    onRowClick={(card) => setExpandedCardId(expandedCardId === card.id ? null : card.id)}
+                    searchHighlightTerm={debouncedSearch}
+                    paginationResetKey={debouncedSearch}
+                    className="border-border/60"
+                    renderRowActions={(card) => (
+                      <div className="flex items-center gap-1">
+                        {onSelectRateCard && (
+                          <Button
+                            variant={selectedRateCardId === card.id ? "default" : "outline"}
+                            size="sm"
+                            className={cn("text-xs h-7", selectedRateCardId === card.id && "bg-[#0ea5e9] hover:bg-[#0284c7]")}
+                            onClick={(e) => { e.stopPropagation(); handleSelectAndClose(card.id); }}
+                          >
+                            {selectedRateCardId === card.id ? "Selected" : "Select"}
+                          </Button>
+                        )}
+                        {!readOnly && (
+                          <>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setExpandedCardId(card.id); }}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); deleteCardMutation.mutate(card.id); }}>
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    alwaysShowRowActions
+                  />
+                  {expandedCard && (
+                    <Card className="overflow-visible border-primary/30" data-testid={`rate-card-manager-${expandedCard.id}`}>
+                      <div className="p-3 space-y-3">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-muted-foreground uppercase">Role Rates — {expandedCard.name}</span>
+                          {!readOnly && (
+                            <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => startEdit(expandedCard)}>
+                              <Pencil className="h-3 w-3" /> Edit Card Details
+                            </Button>
+                          )}
                         </div>
-
-                        {isExpanded && (
-                          <div className="mt-3 space-y-3">
-                            <Separator />
-                            <div className="flex items-center justify-between gap-2 flex-wrap">
-                              <span className="text-xs font-bold text-muted-foreground uppercase">Role Rates</span>
-                              {!readOnly && (
-                                <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => startEdit(card)}>
-                                  <Pencil className="h-3 w-3" />
-                                  Edit Card Details
-                                </Button>
-                              )}
-                            </div>
-
-                            {(card.items && card.items.length > 0) ? (
-                              <div className="space-y-1">
-                                {card.items.map(item => (
-                                  <div
-                                    key={item.id}
-                                    className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/40 rounded-md"
-                                    data-testid={`rate-item-${item.id}`}
-                                  >
-                                    <span className="text-sm font-medium">{item.roleName}</span>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-mono font-bold">
-                                        {sym}{Number(item.dailyRate).toLocaleString("en-GB")}/day
-                                      </span>
-                                      {!readOnly && (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          onClick={() => deleteItemMutation.mutate(item.id)}
-                                          disabled={deleteItemMutation.isPending}
-                                          data-testid={`button-delete-item-${item.id}`}
-                                        >
-                                          <Trash2 className="h-3 w-3 text-destructive" />
-                                        </Button>
-                                      )}
-                                    </div>
+                        {(expandedCard.items && expandedCard.items.length > 0) ? (
+                          <div className="space-y-1">
+                            {expandedCard.items.map(item => {
+                              const sym = currencySymbol(expandedCard.currency || "GBP");
+                              return (
+                                <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/40 rounded-md" data-testid={`rate-item-${item.id}`}>
+                                  <span className="text-sm font-medium">{item.roleName}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-mono font-bold">{sym}{Number(item.dailyRate).toLocaleString("en-GB")}/day</span>
+                                    {!readOnly && (
+                                      <Button variant="ghost" size="icon" onClick={() => deleteItemMutation.mutate(item.id)} disabled={deleteItemMutation.isPending}>
+                                        <Trash2 className="h-3 w-3 text-destructive" />
+                                      </Button>
+                                    )}
                                   </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-muted-foreground py-2">No role rates defined yet.</p>
-                            )}
-
-                            {!readOnly && <div className="flex items-end gap-2 p-3 border border-dashed rounded-lg bg-muted/20" data-testid="add-item-form">
-                              <div className="flex-1 space-y-1">
-                                <Label className="text-[10px] uppercase text-muted-foreground">Role / Skill</Label>
-                                <Input
-                                  value={newItemRole}
-                                  onChange={e => setNewItemRole(e.target.value)}
-                                  placeholder="e.g. Solution Architect"
-                                  className="text-sm"
-                                  list={`skills-list-${card.id}`}
-                                  data-testid="input-item-role"
-                                />
-                                <datalist id={`skills-list-${card.id}`}>
-                                  {skillsList.map(s => <option key={s.id} value={s.name} />)}
-                                </datalist>
-                              </div>
-                              <div className="w-32 space-y-1">
-                                <Label className="text-[10px] uppercase text-muted-foreground">Daily Rate ({sym})</Label>
-                                <Input
-                                  type="number"
-                                  value={newItemRate}
-                                  onChange={e => setNewItemRate(e.target.value)}
-                                  placeholder="900"
-                                  className="text-sm"
-                                  data-testid="input-item-rate"
-                                />
-                              </div>
-                              <Button
-                                size="sm"
-                                className="bg-[#0ea5e9] hover:bg-[#0284c7] gap-1"
-                                onClick={() => handleAddItem(card.id)}
-                                disabled={addItemMutation.isPending}
-                                data-testid="button-add-item"
-                              >
-                                {addItemMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                                Add
-                              </Button>
-                            </div>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground py-2">No role rates defined yet.</p>
+                        )}
+                        {!readOnly && (
+                          <div className="flex items-end gap-2 p-3 border border-dashed rounded-lg bg-muted/20" data-testid="add-item-form">
+                            <div className="flex-1 space-y-1">
+                              <Label className="text-[10px] uppercase text-muted-foreground">Role / Skill</Label>
+                              <Input value={newItemRole} onChange={e => setNewItemRole(e.target.value)} placeholder="e.g. Solution Architect" className="text-sm" list={`skills-list-${expandedCard.id}`} data-testid="input-item-role" />
+                              <datalist id={`skills-list-${expandedCard.id}`}>
+                                {skillsList.map(s => <option key={s.id} value={s.name} />)}
+                              </datalist>
+                            </div>
+                            <div className="w-32 space-y-1">
+                              <Label className="text-[10px] uppercase text-muted-foreground">Daily Rate ({currencySymbol(expandedCard.currency || "GBP")})</Label>
+                              <Input type="number" value={newItemRate} onChange={e => setNewItemRate(e.target.value)} placeholder="900" className="text-sm" data-testid="input-item-rate" />
+                            </div>
+                            <Button size="sm" className="bg-[#0ea5e9] hover:bg-[#0284c7] gap-1" onClick={() => handleAddItem(expandedCard.id)} disabled={addItemMutation.isPending} data-testid="button-add-item">
+                              {addItemMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Add
+                            </Button>
                           </div>
                         )}
                       </div>
                     </Card>
-                  );
-                })
+                  )}
+                  </div>
+                  </MondayBoardProvider>
+                </>
               )}
             </div>
           </ScrollArea>

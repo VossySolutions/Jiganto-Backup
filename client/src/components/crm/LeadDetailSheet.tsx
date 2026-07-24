@@ -138,7 +138,7 @@ export function LeadDetailSheet({
           <DetailRow label="Description" value={lead.description} />
         </div>
 
-        <LeadExtrasPanel lead={lead} initialTab={initialExtrasTab} />
+        <LeadExtrasPanel key={lead.id} lead={lead} initialTab={initialExtrasTab} />
       </SheetContent>
     </Sheet>
   );

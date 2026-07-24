@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, type ReactNode } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Trash2, Upload, Download, Pencil, UserRound, Building2, DollarSign, Clock,
-  Table2, Network, Workflow, Target, AlertTriangle, Briefcase,
+  Trash2, Pencil, UserRound, Building2, DollarSign, Clock,
+  Network, Workflow, Target, AlertTriangle, Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { Label } from "@/components/ui/label";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
 import {
   PERSON_TYPES, RESOURCE_STATUSES, STATUS_FILTERS,
   getTypeConfig, getEffectiveStatus, daysUntilExpiry, STATUS_CONFIG, PERSON_TYPE_CONFIG,
@@ -21,8 +28,6 @@ import {
 import { ResourceProfilePanel } from "./ResourceProfilePanel";
 import { ResourcesTableSkeleton, ResourcesEmptyState, TypeBadge, PersonAvatar, UtilBar } from "./ResourcesUi";
 import type { Resource, Skill, SkillCategory, ResourceSkill, ResourceAllocation } from "@shared/models/resources";
-import { useTablePagination } from "@/hooks/use-table-pagination";
-import { TablePagination } from "@/components/TablePagination";
 
 const emptyForm = () => ({
   firstName: "", lastName: "", email: "", phone: "", jobTitle: "", department: "", location: "",
@@ -46,8 +51,8 @@ type Props = {
   initialProfileId?: number | null;
   onProfileOpened?: () => void;
   utilByResource?: Record<number, number>;
-  onCreate: (data: object) => void;
-  onUpdate: (id: number, data: object) => void;
+  onCreate: (data: object, opts?: { onSuccess?: () => void; onError?: (err: Error) => void }) => void;
+  onUpdate: (id: number, data: object, opts?: { onSuccess?: () => void; onError?: (err: Error) => void }) => void;
   onDelete: (id: number) => void;
   onAddSkill: (data: object) => void;
   onRemoveSkill: (id: number) => void;
@@ -324,8 +329,13 @@ export function ResourcesPeopleTab({
   onCreate, onUpdate, onDelete, onAddSkill, onRemoveSkill, canManage = true,
 }: Props) {
   const { toast } = useToast();
-  const csvRef = useRef<HTMLInputElement>(null);
+  const [localSearch, setLocalSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(searchTerm || localSearch);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [pinName, setPinName] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("resources-people-pin-name") !== "0";
+  });
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [deptFilter, setDeptFilter] = useState("all");
@@ -383,16 +393,12 @@ export function ResourcesPeopleTab({
         if (!match) return false;
       }
       if (searchTerm) {
-        const t = searchTerm.toLowerCase();
+        const t = debouncedSearch.toLowerCase();
         if (![r.firstName, r.lastName, r.email, r.jobTitle, r.department].some((v) => (v || "").toLowerCase().includes(t))) return false;
       }
       return true;
     });
-  }, [resources, typeFilter, statusFilter, deptFilter, skillFilter, searchTerm, resourceSkills, skills, includeExpired]);
-
-  const pagination = useTablePagination(filtered, {
-    resetKey: `${typeFilter}-${statusFilter}-${deptFilter}-${skillFilter}-${searchTerm}-${includeExpired}`,
-  });
+  }, [resources, typeFilter, statusFilter, deptFilter, skillFilter, debouncedSearch, searchTerm, resourceSkills, skills, includeExpired]);
 
   // Hierarchy / org views show the whole structure, gated only by the "include expired" toggle.
   const treePeople = useMemo(
@@ -402,6 +408,127 @@ export function ResourcesPeopleTab({
   const roots = useMemo(() => buildTree(treePeople), [treePeople]);
 
   const openProfile = (r: Resource) => { setSelected(r); setShowProfile(true); };
+
+  const mondayColumns: MondayColumnDef<Resource>[] = useMemo(() => [
+    {
+      id: "name",
+      header: "Name",
+      type: "text",
+      accessor: (row) => `${row.firstName} ${row.lastName}`,
+      width: "240px",
+      sticky: pinName,
+      editable: false, // combined first+last — edit via dialog
+      render: (r) => (
+        <div className="flex items-center gap-2.5 min-w-0">
+          <PersonAvatar r={r} className="h-8 w-8" />
+          <div className="min-w-0">
+            <p className="font-semibold truncate">{r.firstName} {r.lastName}</p>
+            <p className="truncate text-xs text-muted-foreground">{r.email}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "type",
+      header: "Type",
+      type: "status",
+      accessor: "personType",
+      width: "120px",
+      editable: !!canManage,
+      options: PERSON_TYPES.map((t) => ({ value: t.value, label: t.label })),
+      render: (r) => <TypeBadge type={r.personType} />,
+    },
+    {
+      id: "role",
+      header: "Role / Department",
+      type: "text",
+      accessor: (row) => row.jobTitle || "",
+      width: "180px",
+      editable: !!canManage,
+      render: (r) => (
+        <div>
+          <p className="font-medium text-sm">{r.jobTitle ?? "—"}</p>
+          <p className="text-xs text-muted-foreground">{r.department ?? "—"}</p>
+        </div>
+      ),
+    },
+    {
+      id: "manager",
+      header: "Manager",
+      type: "person",
+      accessor: (row) => row.reportsToId,
+      width: "140px",
+      editable: false,
+      render: (r) => <span className="text-xs text-muted-foreground">{managerName(r)}</span>,
+    },
+    {
+      id: "skills",
+      header: "Skills",
+      type: "number",
+      accessor: (row) => (resourceSkills[row.id] ?? []).length,
+      width: "110px",
+      editable: false,
+      render: (r) => {
+        const rSkills = resourceSkills[r.id] ?? [];
+        return (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary hover:bg-primary hover:text-primary-foreground"
+            onClick={(e) => { e.stopPropagation(); setSelected(r); setShowProfile(true); }}
+          >
+            <Target className="h-3 w-3" /> Skills
+            <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">{rSkills.length}</span>
+          </button>
+        );
+      },
+    },
+    {
+      id: "startDate",
+      header: "Start date",
+      type: "date",
+      accessor: "startDate",
+      width: "110px",
+      editable: !!canManage,
+      render: (r) => <span className="text-xs tabular-nums">{fmtDate(r.startDate)}</span>,
+    },
+    {
+      id: "endDate",
+      header: "Expiry date",
+      type: "date",
+      accessor: "endDate",
+      width: "120px",
+      editable: !!canManage,
+      render: (r) => {
+        const eff = getEffectiveStatus(r.status, r.endDate);
+        const daysLeft = daysUntilExpiry(r.endDate);
+        return r.endDate ? (
+          <span className={cn("inline-flex items-center gap-1 text-xs tabular-nums font-medium", eff === "expired" && "text-red-600", eff === "expiring" && "text-amber-600")}>
+            {fmtDate(r.endDate)}
+            {eff === "expiring" && daysLeft != null && <AlertTriangle className="h-3 w-3" />}
+          </span>
+        ) : <span className="text-xs text-muted-foreground">—</span>;
+      },
+    },
+    {
+      id: "util",
+      header: "Util %",
+      type: "progress",
+      accessor: (row) => utilByResource[row.id] ?? 0,
+      width: "100px",
+      editable: false,
+      render: (r) => <UtilBar util={utilByResource[r.id] ?? 0} />,
+    },
+    {
+      id: "status",
+      header: "Status",
+      type: "status",
+      accessor: "status",
+      width: "110px",
+      editable: !!canManage,
+      options: RESOURCE_STATUSES.map((s) => ({ value: s.value, label: s.label })),
+      render: (r) => <StatusBadge status={getEffectiveStatus(r.status, r.endDate)} />,
+    },
+  ], [resourceSkills, utilByResource, resourceById, pinName, canManage]);
 
   const openCreate = () => { setEditing(null); setForm(emptyForm()); setShowDialog(true); };
   const openEdit = (r: Resource) => {
@@ -434,82 +561,121 @@ export function ResourcesPeopleTab({
       startDate: form.startDate || null,
       endDate: form.endDate || null,
     };
-    if (editing) onUpdate(editing.id, payload);
-    else onCreate(payload);
-    setShowDialog(false);
+    const closeDialog = () => {
+      setShowDialog(false);
+      setEditing(null);
+      setForm(emptyForm());
+    };
+    if (editing) {
+      onUpdate(editing.id, payload, { onSuccess: closeDialog });
+    } else {
+      onCreate(payload, { onSuccess: closeDialog });
+    }
   };
 
+  const PEOPLE_CSV_HEADERS = ["First Name", "Last Name", "Email", "Type", "Job Title", "Department", "Manager", "Start Date", "Expiry Date", "Status", "Utilisation %"];
+
   const exportCsv = () => {
-    const headers = ["First Name", "Last Name", "Email", "Type", "Job Title", "Department", "Manager", "Start Date", "Expiry Date", "Status", "Utilisation %"];
     const rows = filtered.map((r) => [
       r.firstName, r.lastName, r.email ?? "", getTypeConfig(r.personType).label, r.jobTitle ?? "", r.department ?? "",
       managerName(r), r.startDate ? fmtDate(r.startDate) : "", r.endDate ? fmtDate(r.endDate) : "",
-      STATUS_CONFIG[getEffectiveStatus(r.status, r.endDate)].label, utilByResource[r.id] ?? 0,
+      STATUS_CONFIG[getEffectiveStatus(r.status, r.endDate)].label, String(utilByResource[r.id] ?? 0),
     ]);
-    const csv = [headers.join(","), ...rows.map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = "people-export.csv";
-    a.click();
+    downloadBoardCsv("people-export.csv", PEOPLE_CSV_HEADERS, rows);
     toast({ title: "Exported to CSV" });
   };
 
-  const viewBtn = (mode: ViewMode, icon: ReactNode, label: string) => (
-    <Button
-      variant={viewMode === mode ? "default" : "outline"}
-      size="sm"
-      onClick={() => setViewMode(mode)}
-      data-testid={`view-${mode}`}
-    >
-      {icon} {label}
-    </Button>
-  );
+  const downloadPeopleTemplate = () => {
+    downloadImportTemplateCsv("people-import-template.csv", PEOPLE_CSV_HEADERS, PEOPLE_CSV_HEADERS.map(() => ""));
+    toast({ title: "Import template downloaded" });
+  };
+
+  const importUnavailable = () => toast({ title: "Import is not available for this table yet" });
+
+  const paginationResetKey = `${typeFilter}|${statusFilter}|${deptFilter}|${skillFilter}|${debouncedSearch}|${includeExpired}`;
 
   return (
     <div className="space-y-4">
-      {/* View + filter bar */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-1.5">
-          {viewBtn("table", <Table2 className="mr-1 h-4 w-4" />, "Table")}
-          {viewBtn("hierarchy", <Workflow className="mr-1 h-4 w-4" />, "Hierarchy")}
-          {viewBtn("org", <Network className="mr-1 h-4 w-4" />, "Org Chart")}
-          {viewBtn("project", <Briefcase className="mr-1 h-4 w-4" />, "Project")}
-        </div>
-
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Type" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            {PERSON_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All status</SelectItem>
-            {STATUS_FILTERS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={deptFilter} onValueChange={setDeptFilter}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Department" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All departments</SelectItem>
-            {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Input className="w-44" placeholder="Filter by skill..." value={skillFilter} onChange={(e) => setSkillFilter(e.target.value)} />
-        <label className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium text-muted-foreground">
-          <Checkbox checked={includeExpired} onCheckedChange={(v) => setIncludeExpired(Boolean(v))} data-testid="toggle-include-expired" />
-          Include expired
-        </label>
-
-        <div className="ml-auto flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => csvRef.current?.click()}><Upload className="mr-1 h-4 w-4" /> Import CSV</Button>
-          <Button variant="outline" size="sm" onClick={exportCsv}><Download className="mr-1 h-4 w-4" /> Export</Button>
-          {canManage && <Button size="sm" onClick={openCreate}><Plus className="mr-1 h-4 w-4" /> Add person</Button>}
-          <input ref={csvRef} type="file" accept=".csv" className="hidden" />
-        </div>
-      </div>
+      <MondayBoardShell.Legacy
+        storageKey="jiganto-resources-people"
+        entityType="resource_person"
+        stateHook={useMondayBoardShellState}
+        filterMatcher={matchBoardFilterValue}
+      >
+      <MondayBoardShell.Toolbar
+        newLabel="Add person"
+        onNew={canManage ? openCreate : undefined}
+        searchValue={localSearch || searchTerm}
+        onSearchChange={setLocalSearch}
+        viewLabel={viewMode === "table" ? "Table" : viewMode === "hierarchy" ? "Hierarchy" : viewMode === "org" ? "Org Chart" : "Project"}
+        viewMenu={
+          <>
+            <DropdownMenuItem onClick={() => setViewMode("table")} data-testid="view-table">Table</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setViewMode("hierarchy")} data-testid="view-hierarchy">Hierarchy</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setViewMode("org")} data-testid="view-org">Org Chart</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setViewMode("project")} data-testid="view-project">Project</DropdownMenuItem>
+          </>
+        }
+        filterActive={typeFilter !== "all" || statusFilter !== "all" || deptFilter !== "all" || !!skillFilter || includeExpired}
+        filterCount={(typeFilter !== "all" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0) + (deptFilter !== "all" ? 1 : 0) + (skillFilter ? 1 : 0) + (includeExpired ? 1 : 0)}
+        filterContent={
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Type</Label>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  {PERSON_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Status</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All status</SelectItem>
+                  {STATUS_FILTERS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Department</Label>
+              <Select value={deptFilter} onValueChange={setDeptFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Department" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All departments</SelectItem>
+                  {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Skill</Label>
+              <Input className="h-8 text-xs" placeholder="Filter by skill..." value={skillFilter} onChange={(e) => setSkillFilter(e.target.value)} />
+            </div>
+            <label className="flex cursor-pointer items-center gap-2 text-xs">
+              <Checkbox checked={includeExpired} onCheckedChange={(v) => setIncludeExpired(Boolean(v))} data-testid="toggle-include-expired" />
+              Include expired
+            </label>
+          </div>
+        }
+        grouped={viewMode === "table"}
+        pinActive={pinName}
+        onPinToggle={() => {
+          setPinName((v) => {
+            const next = !v;
+            localStorage.setItem("resources-people-pin-name", next ? "1" : "0");
+            return next;
+          });
+        }}
+        pinTitle={pinName ? "Unpin Name column" : "Pin Name column"}
+        onExport={exportCsv}
+        onDownloadTemplate={downloadPeopleTemplate}
+        onPaste={importUnavailable}
+        onImport={importUnavailable}
+        testId="resources-people-toolbar"
+      />
 
       <Legend />
 
@@ -528,88 +694,35 @@ export function ResourcesPeopleTab({
       ) : filtered.length === 0 ? (
         <ResourcesEmptyState title="No people match your filters" description="Try adjusting filters or add a new person." />
       ) : (
-        <Card className="rounded-xl border-border/50 overflow-hidden">
-          <CardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[960px]">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Name</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Type</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Role / Department</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Manager</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Skills</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Start date</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Expiry date</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Util %</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
-                  <th className="px-3 py-2.5 text-right align-middle font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pagination.paginatedItems.map((r) => {
-                  const rSkills = resourceSkills[r.id] ?? [];
-                  const util = utilByResource[r.id] ?? 0;
-                  const eff = getEffectiveStatus(r.status, r.endDate);
-                  const daysLeft = daysUntilExpiry(r.endDate);
-                  return (
-                    <tr key={r.id} className="border-b border-border/40 cursor-pointer hover:bg-muted/30" onClick={() => openProfile(r)}>
-                      <td className="px-3 py-2.5 align-middle">
-                        <div className="flex items-center gap-2.5">
-                          <PersonAvatar r={r} className="h-8 w-8" />
-                          <div className="min-w-0">
-                            <p className="font-semibold">{r.firstName} {r.lastName}</p>
-                            <p className="truncate text-xs text-muted-foreground">{r.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 align-middle"><TypeBadge type={r.personType} /></td>
-                      <td className="px-3 py-2.5 align-middle"><p className="font-medium">{r.jobTitle ?? "—"}</p><p className="text-xs text-muted-foreground">{r.department ?? "—"}</p></td>
-                      <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground">{managerName(r)}</td>
-                      <td className="px-3 py-2.5 align-middle">
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary hover:bg-primary hover:text-primary-foreground"
-                          onClick={(e) => { e.stopPropagation(); openProfile(r); }}
-                        >
-                          <Target className="h-3 w-3" /> Skills
-                          <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">{rSkills.length}</span>
-                        </button>
-                      </td>
-                      <td className="px-3 py-2.5 align-middle text-xs tabular-nums">{fmtDate(r.startDate)}</td>
-                      <td className="px-3 py-2.5 align-middle text-xs tabular-nums">
-                        {r.endDate ? (
-                          <span
-                            className={cn("inline-flex items-center gap-1 font-medium", eff === "expired" && "text-red-600", eff === "expiring" && "text-amber-600")}
-                          >
-                            {fmtDate(r.endDate)}
-                            {eff === "expiring" && daysLeft != null && <AlertTriangle className="h-3 w-3" />}
-                          </span>
-                        ) : <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="px-3 py-2.5 align-middle"><UtilBar util={util} /></td>
-                      <td className="px-3 py-2.5 align-middle"><StatusBadge status={eff} /></td>
-                      <td className="px-3 py-2.5 align-middle text-right" onClick={(e) => e.stopPropagation()}>
-                        {canManage && <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>}
-                        {canManage && <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={() => onDelete(r.id)}><Trash2 className="h-4 w-4" /></Button>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <TablePagination
-              page={pagination.page}
-              totalPages={pagination.totalPages}
-              total={pagination.total}
-              startIndex={pagination.startIndex}
-              endIndex={pagination.endIndex}
-              pageSize={pagination.pageSize}
-              onPageChange={pagination.setPage}
-              onPageSizeChange={pagination.setPageSize}
-            />
-          </CardContent>
-        </Card>
+        <MondayBoardShell.Table
+          columns={mondayColumns}
+          data={filtered}
+          emptyMessage="No people match your filters."
+          addItemLabel="Add person"
+          onAddItem={canManage ? openCreate : undefined}
+          onRowClick={openProfile}
+          onCellEdit={canManage ? (rowId, columnId, value) => {
+            const field = columnId === "type" ? "personType" : columnId === "role" ? "jobTitle" : columnId;
+            onUpdate(Number(rowId), { [field]: value === "" ? null : value });
+          } : undefined}
+          searchHighlightTerm={debouncedSearch}
+          columnWidthStorageKey="jiganto-resources-people-col-widths"
+          paginationResetKey={paginationResetKey}
+          totalCount={resources.length}
+          renderRowActions={canManage ? (r) => (
+            <div className="flex justify-end gap-0">
+              <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40" onClick={() => openEdit(r)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={() => onDelete(r.id)}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : undefined}
+        />
       )}
+
+      </MondayBoardShell.Legacy>
 
       {showProfile && selected && (
         <ResourceProfilePanel

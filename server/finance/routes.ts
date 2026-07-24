@@ -222,6 +222,7 @@ const invoiceCreateSchema = z.object({
   clientId: z.number().int().positive().nullable().optional(),
   contractType: z.enum(["fixed_price", "time_materials", "retainer", "mixed"]),
   issueDate: z.string().optional(),
+  dueDate: z.string().optional(),
   paymentTerms: z.string().optional(),
   currency: z.string().optional(),
   exchangeRate: z.union([z.string(), z.number()]).nullable().optional(),

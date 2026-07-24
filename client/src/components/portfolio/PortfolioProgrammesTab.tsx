@@ -1,13 +1,21 @@
-import { useState, useMemo, Fragment } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, ChevronDown, ChevronRight, LayoutGrid, List, GitBranch, ArrowLeft } from "lucide-react";
+import { Loader2, ChevronDown, ChevronRight, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ProgrammeListItem } from "./types";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
+import { useToast } from "@/hooks/use-toast";
+import type { ProgrammeListItem, PortfolioProjectRow } from "./types";
 import { formatBudget } from "./rag-utils";
 import { PortfolioProgrammeDetail } from "./PortfolioProgrammeDetail";
 
@@ -17,13 +25,27 @@ function RagBadge({ status }: { status: string | null }) {
   return <Badge variant="outline" className={cn("text-[10px]", cls)}>{status || "green"}</Badge>;
 }
 
+type ProgrammeTableRow = {
+  id: string;
+  rowType: "programme" | "child";
+  programme: ProgrammeListItem;
+  child?: PortfolioProjectRow;
+};
+
 export function PortfolioProgrammesTab({ searchTerm = "" }: { searchTerm?: string }) {
+  const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [localSearch, setLocalSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(searchTerm || localSearch);
   const [view, setView] = useState<"table" | "card" | "cascade">("table");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [filterPortfolio, setFilterPortfolio] = useState("");
   const [filterRag, setFilterRag] = useState("");
   const [selected, setSelected] = useState<{ id: number; source: "program" | "project" } | null>(null);
+  const [pinName, setPinName] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("portfolio-programmes-pin-name") !== "0";
+  });
 
   const { data: programmes = [], isLoading } = useQuery<ProgrammeListItem[]>({
     queryKey: ["/api/portfolio/programmes"],
@@ -34,7 +56,7 @@ export function PortfolioProgrammesTab({ searchTerm = "" }: { searchTerm?: strin
     let rows = programmes;
     if (filterPortfolio) rows = rows.filter((p) => p.portfolioName === filterPortfolio);
     if (filterRag) rows = rows.filter((p) => (p.ragStatus || "").toLowerCase() === filterRag.toLowerCase());
-    const q = searchTerm.trim().toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
     if (q) {
       rows = rows.filter((p) =>
         p.name.toLowerCase().includes(q)
@@ -43,17 +65,220 @@ export function PortfolioProgrammesTab({ searchTerm = "" }: { searchTerm?: strin
       );
     }
     return rows;
-  }, [programmes, filterPortfolio, filterRag, searchTerm]);
+  }, [programmes, filterPortfolio, filterRag, debouncedSearch]);
 
   const portfolios = useMemo(() => Array.from(new Set(programmes.map((p) => p.portfolioName).filter(Boolean))), [programmes]);
 
-  const toggle = (key: string) => {
+  const toggle = useCallback((key: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
+  }, []);
+
+  const tableRows = useMemo(() => {
+    const rows: ProgrammeTableRow[] = [];
+    for (const prog of filtered) {
+      const key = `${prog.source}-${prog.id}`;
+      rows.push({ id: key, rowType: "programme", programme: prog });
+      if (expanded.has(key)) {
+        for (const child of prog.children) {
+          rows.push({
+            id: `child-${child.id}-${key}`,
+            rowType: "child",
+            programme: prog,
+            child,
+          });
+        }
+      }
+    }
+    return rows;
+  }, [filtered, expanded]);
+
+  const mondayColumns: MondayColumnDef<ProgrammeTableRow>[] = useMemo(() => [
+    {
+      id: "expand",
+      header: "",
+      type: "text",
+      accessor: "id",
+      width: "40px",
+      editable: false, // no write API for programmes board
+      render: (row) => {
+        if (row.rowType !== "programme") return null;
+        const key = `${row.programme.source}-${row.programme.id}`;
+        const open = expanded.has(key);
+        if (row.programme.childCount <= 0) return null;
+        return (
+          <button
+            type="button"
+            className="inline-flex items-center justify-center"
+            onClick={(e) => { e.stopPropagation(); toggle(key); }}
+          >
+            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
+        );
+      },
+    },
+    {
+      id: "name",
+      header: "Programme",
+      type: "text",
+      accessor: (row) => row.rowType === "programme" ? row.programme.name : row.child?.name,
+      width: "240px",
+      sticky: pinName,
+      editable: false, // no write API for programmes board
+      render: (row) => {
+        if (row.rowType === "child" && row.child) {
+          return (
+            <span className={cn("text-sm text-muted-foreground", view === "cascade" ? "pl-8" : "pl-4")}>
+              ↳ {row.child.name}
+            </span>
+          );
+        }
+        return <span className="font-semibold text-sm">{row.programme.name}</span>;
+      },
+    },
+    {
+      id: "owner",
+      header: "Owner",
+      type: "person",
+      accessor: (row) => row.rowType === "programme" ? row.programme.ownerName : row.child?.managerName,
+      width: "140px",
+      editable: false,
+      render: (row) => (
+        <span className="text-xs">
+          {row.rowType === "programme" ? (row.programme.ownerName || "—") : (row.child?.managerName || "—")}
+        </span>
+      ),
+    },
+    {
+      id: "clients",
+      header: "Client(s)",
+      type: "text",
+      accessor: (row) => row.rowType === "programme" ? row.programme.clientNames.join(", ") : row.child?.clientName,
+      width: "180px",
+      editable: false,
+      render: (row) => (
+        <span className="text-xs">
+          {row.rowType === "programme"
+            ? (row.programme.clientNames.join(", ") || "—")
+            : (row.child?.clientName || "—")}
+        </span>
+      ),
+    },
+    {
+      id: "projects",
+      header: "Projects",
+      type: "number",
+      accessor: (row) => row.rowType === "programme" ? row.programme.childCount : null,
+      width: "90px",
+      editable: false,
+      render: (row) => (
+        row.rowType === "programme"
+          ? <span className="font-mono text-xs">{row.programme.childCount}</span>
+          : null
+      ),
+    },
+    {
+      id: "health",
+      header: "Health",
+      type: "rag",
+      accessor: (row) => row.rowType === "programme" ? row.programme.ragStatus : row.child?.ragStatus,
+      width: "100px",
+      editable: false,
+      render: (row) => (
+        <RagBadge status={row.rowType === "programme" ? row.programme.ragStatus : (row.child?.ragStatus ?? null)} />
+      ),
+    },
+    {
+      id: "progress",
+      header: "Progress",
+      type: "progress",
+      accessor: (row) => row.rowType === "programme" ? row.programme.progress : row.child?.progress,
+      width: "100px",
+      editable: false,
+      render: (row) => (
+        <span className="font-mono text-xs">
+          {row.rowType === "programme" ? `${row.programme.progress}%` : `${row.child?.progress ?? 0}%`}
+        </span>
+      ),
+    },
+    {
+      id: "budget",
+      header: "Budget",
+      type: "currency",
+      accessor: (row) => row.rowType === "programme" ? row.programme.budget : row.child?.budget,
+      width: "120px",
+      editable: false,
+      render: (row) => (
+        <span className="font-mono text-xs">
+          {formatBudget(row.rowType === "programme" ? row.programme.budget : (row.child?.budget ?? 0))}
+        </span>
+      ),
+    },
+    {
+      id: "endDate",
+      header: "End Date",
+      type: "date",
+      accessor: (row) => row.rowType === "programme" ? row.programme.endDate : row.child?.endDate,
+      width: "110px",
+      editable: false,
+      render: (row) => (
+        <span className="font-mono text-xs">
+          {(row.rowType === "programme" ? row.programme.endDate : row.child?.endDate) || "—"}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      type: "status",
+      accessor: (row) => row.rowType === "programme" ? row.programme.status : row.child?.status,
+      width: "110px",
+      editable: false,
+      render: (row) => (
+        <Badge variant="outline" className="text-[10px]">
+          {row.rowType === "programme" ? row.programme.status : row.child?.status}
+        </Badge>
+      ),
+    },
+  ], [expanded, toggle, view, pinName]);
+
+  const handleRowClick = useCallback((row: ProgrammeTableRow) => {
+    if (row.rowType === "child" && row.child) {
+      setLocation(`/modules/projects/${row.child.id}`);
+      return;
+    }
+    setSelected({ id: row.programme.id, source: row.programme.source });
+  }, [setLocation]);
+
+  const paginationResetKey = `${debouncedSearch}|${filterPortfolio}|${filterRag}|${view}|${Array.from(expanded).join(",")}`;
+
+  const PROGRAMME_CSV_HEADERS = ["Programme", "Owner", "Client(s)", "Projects", "Health", "Progress", "Budget", "End Date", "Status"];
+
+  const exportProgrammes = () => {
+    const rows = filtered.map((p) => [
+      p.name || "",
+      p.ownerName || "",
+      p.clientNames.join(", "),
+      String(p.childCount ?? 0),
+      p.ragStatus || "",
+      `${p.progress ?? 0}%`,
+      String(p.budget ?? ""),
+      p.endDate || "",
+      p.status || "",
+    ]);
+    downloadBoardCsv(`programmes-${new Date().toISOString().split("T")[0]}.csv`, PROGRAMME_CSV_HEADERS, rows);
+    toast({ title: "Programmes exported to CSV" });
   };
+
+  const downloadProgrammesTemplate = () => {
+    downloadImportTemplateCsv("programmes-import-template.csv", PROGRAMME_CSV_HEADERS, PROGRAMME_CSV_HEADERS.map(() => ""));
+    toast({ title: "Import template downloaded" });
+  };
+
+  const importUnavailable = () => toast({ title: "Import is not available for this table yet" });
 
   if (selected) {
     return (
@@ -68,25 +293,74 @@ export function PortfolioProgrammesTab({ searchTerm = "" }: { searchTerm?: strin
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Tabs value={view} onValueChange={(v) => setView(v as typeof view)}>
-          <TabsList>
-            <TabsTrigger value="table" className="gap-1"><List className="h-3.5 w-3.5" />Table</TabsTrigger>
-            <TabsTrigger value="card" className="gap-1"><LayoutGrid className="h-3.5 w-3.5" />Card</TabsTrigger>
-            <TabsTrigger value="cascade" className="gap-1"><GitBranch className="h-3.5 w-3.5" />Cascade</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <select value={filterPortfolio} onChange={(e) => setFilterPortfolio(e.target.value)} className="text-xs border rounded-lg px-2 py-1.5 bg-background">
-          <option value="">All Portfolios</option>
-          {portfolios.map((p) => <option key={p} value={p!}>{p}</option>)}
-        </select>
-        <select value={filterRag} onChange={(e) => setFilterRag(e.target.value)} className="text-xs border rounded-lg px-2 py-1.5 bg-background">
-          <option value="">All RAG</option>
-          <option value="green">Green</option>
-          <option value="amber">Amber</option>
-          <option value="red">Red</option>
-        </select>
-      </div>
+      <MondayBoardShell.Legacy
+        storageKey="jiganto-portfolio-programmes"
+        entityType="portfolio_programme"
+        stateHook={useMondayBoardShellState}
+        filterMatcher={matchBoardFilterValue}
+      >
+      <MondayBoardShell.Toolbar
+        newLabel="Programme"
+        searchValue={localSearch || searchTerm}
+        onSearchChange={setLocalSearch}
+        viewLabel={view === "table" ? "Table" : view === "card" ? "Card" : "Cascade"}
+        viewMenu={
+          <>
+            <DropdownMenuItem onClick={() => setView("table")}>Table</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setView("card")}>Card</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setView("cascade")}>Cascade</DropdownMenuItem>
+          </>
+        }
+        filterActive={!!filterPortfolio || !!filterRag}
+        filterCount={(filterPortfolio ? 1 : 0) + (filterRag ? 1 : 0)}
+        filterContent={
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Portfolio</Label>
+              <Select value={filterPortfolio || "all"} onValueChange={(v) => setFilterPortfolio(v === "all" ? "" : v)}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="All Portfolios" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Portfolios</SelectItem>
+                  {portfolios.map((p) => (
+                    <SelectItem key={p} value={p!}>{p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">RAG</Label>
+              <Select value={filterRag || "all"} onValueChange={(v) => setFilterRag(v === "all" ? "" : v)}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="All RAG" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All RAG</SelectItem>
+                  <SelectItem value="green">Green</SelectItem>
+                  <SelectItem value="amber">Amber</SelectItem>
+                  <SelectItem value="red">Red</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        }
+        grouped={view === "cascade"}
+        pinActive={pinName}
+        onPinToggle={() => {
+          setPinName((v) => {
+            const next = !v;
+            localStorage.setItem("portfolio-programmes-pin-name", next ? "1" : "0");
+            return next;
+          });
+        }}
+        pinTitle={pinName ? "Unpin Programme column" : "Pin Programme column"}
+        onExport={exportProgrammes}
+        onDownloadTemplate={downloadProgrammesTemplate}
+        onPaste={importUnavailable}
+        onImport={importUnavailable}
+        testId="portfolio-programmes-toolbar"
+      />
 
       {view === "card" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -105,65 +379,18 @@ export function PortfolioProgrammesTab({ searchTerm = "" }: { searchTerm?: strin
           ))}
         </div>
       ) : (
-        <Card className="border-border/30 overflow-hidden">
-          <div className="overflow-x-auto scrollbar-thin">
-            <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[800px]">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
-                  <th className="w-8 px-3 py-2.5 text-left align-middle font-semibold" />
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Programme</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Owner</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Client(s)</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Projects</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Health</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Progress</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Budget</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">End Date</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((prog) => {
-                  const key = `${prog.source}-${prog.id}`;
-                  const open = expanded.has(key);
-                  return (
-                    <Fragment key={key}>
-                      <tr className="border-b border-border/40 hover:bg-muted/30 cursor-pointer" onClick={() => setSelected({ id: prog.id, source: prog.source })}>
-                        <td className="px-3 py-2.5 align-middle" onClick={(e) => { e.stopPropagation(); toggle(key); }}>
-                          {prog.childCount > 0 ? (open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />) : null}
-                        </td>
-                        <td className="px-3 py-2.5 align-middle font-semibold">{prog.name}</td>
-                        <td className="px-3 py-2.5 align-middle text-xs">{prog.ownerName || "—"}</td>
-                        <td className="px-3 py-2.5 align-middle text-xs">{prog.clientNames.join(", ") || "—"}</td>
-                        <td className="px-3 py-2.5 align-middle font-mono text-xs">{prog.childCount}</td>
-                        <td className="px-3 py-2.5 align-middle"><RagBadge status={prog.ragStatus} /></td>
-                        <td className="px-3 py-2.5 align-middle font-mono text-xs">{prog.progress}%</td>
-                        <td className="px-3 py-2.5 align-middle font-mono text-xs">{formatBudget(prog.budget)}</td>
-                        <td className="px-3 py-2.5 align-middle font-mono text-xs">{prog.endDate || "—"}</td>
-                        <td className="px-3 py-2.5 align-middle"><Badge variant="outline" className="text-[10px]">{prog.status}</Badge></td>
-                      </tr>
-                      {open && prog.children.map((child) => (
-                        <tr key={`child-${child.id}`} className="border-b border-border/40 bg-muted/10 hover:bg-muted/30 cursor-pointer" onClick={() => setLocation(`/modules/projects/${child.id}`)}>
-                          <td />
-                          <td className={cn("px-3 py-2.5 align-middle pl-8 text-muted-foreground", view === "cascade" && "pl-12")}>↳ {child.name}</td>
-                          <td className="px-3 py-2.5 align-middle text-xs">{child.managerName || "—"}</td>
-                          <td className="px-3 py-2.5 align-middle text-xs">{child.clientName || "—"}</td>
-                          <td />
-                          <td className="px-3 py-2.5 align-middle"><RagBadge status={child.ragStatus} /></td>
-                          <td className="px-3 py-2.5 align-middle font-mono text-xs">{child.progress}%</td>
-                          <td className="px-3 py-2.5 align-middle font-mono text-xs">{formatBudget(child.budget)}</td>
-                          <td className="px-3 py-2.5 align-middle font-mono text-xs">{child.endDate || "—"}</td>
-                          <td className="px-3 py-2.5 align-middle"><Badge variant="outline" className="text-[10px]">{child.status}</Badge></td>
-                        </tr>
-                      ))}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <MondayBoardShell.Table
+          columns={mondayColumns}
+          data={tableRows}
+          emptyMessage="No programmes match your filters."
+          onRowClick={handleRowClick}
+          searchHighlightTerm={debouncedSearch}
+          columnWidthStorageKey="jiganto-portfolio-programmes-col-widths"
+          paginationResetKey={paginationResetKey}
+          totalCount={programmes.length}
+        />
       )}
+      </MondayBoardShell.Legacy>
     </div>
   );
 }

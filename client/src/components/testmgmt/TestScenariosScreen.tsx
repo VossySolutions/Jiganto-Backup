@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { TmScenario, TmTestCase } from "@shared/schema";
@@ -7,11 +7,18 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useTmProject } from "@/contexts/TmProjectContext";
 import {
-  Plus, Pencil, Trash2, BookOpen, Link, X, ChevronRight,
+  Plus, Pencil, Trash2, BookOpen, Link, X,
   Loader2, Check, Save, LayoutGrid, Sparkles,
 } from "lucide-react";
 import { useTmFetch } from "@/hooks/use-tm-fetch";
 import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import {
+  MondayBoardProvider,
+  MondayBoardTable,
+  MondayBoardChromeControls,
+} from "@/components/MondayBoardTable";
+import { useDebouncedValue } from "@/lib/crm-monday-chrome";
 
 const PRI_BADGE: Record<string, string> = {
   critical: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
@@ -51,6 +58,7 @@ export function TestScenariosScreen() {
   const [form, setForm] = useState<ScenarioForm>(EMPTY_FORM);
   const [linking, setLinking] = useState(false);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [filterArea, setFilterArea] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
@@ -162,9 +170,18 @@ export function TestScenariosScreen() {
   const filtered = scenarios.filter(s => {
     if (filterArea !== "all" && s.functionalArea !== filterArea) return false;
     if (filterStatus !== "all" && s.status !== filterStatus) return false;
-    if (search && !s.title.toLowerCase().includes(search.toLowerCase()) && !s.scenarioId.toLowerCase().includes(search.toLowerCase())) return false;
+    if (debouncedSearch && !s.title.toLowerCase().includes(debouncedSearch.toLowerCase()) && !s.scenarioId.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
   });
+
+  const scenarioColumns: MondayColumnDef<TmScenario>[] = useMemo(() => [
+    { id: "scenarioId", header: "ID", type: "text", accessor: "scenarioId", width: "90px", editable: false, render: (s) => <span className="font-mono text-xs text-muted-foreground">{s.scenarioId}</span> },
+    { id: "title", header: "Title", type: "text", accessor: "title", width: "180px", sticky: true, editable: false, render: (s) => <span className="text-sm font-medium truncate">{s.title}</span> },
+    { id: "area", header: "Area", type: "text", accessor: "functionalArea", width: "120px", editable: false },
+    { id: "status", header: "Status", type: "text", accessor: "status", width: "90px", editable: false, render: (s) => <span className={cn("text-[9px] font-mono px-1.5 py-0.5 rounded-full capitalize", STATUS_BADGE[s.status ?? "draft"])}>{s.status}</span> },
+    { id: "priority", header: "Priority", type: "text", accessor: "priority", width: "80px", editable: false, render: (s) => s.priority ? <span className={cn("text-[9px] font-mono px-1.5 py-0.5 rounded capitalize", PRI_BADGE[s.priority])}>{s.priority}</span> : null },
+    { id: "cases", header: "Cases", type: "number", accessor: (s) => s.linkedCaseIds?.length ?? 0, width: "70px", editable: false },
+  ], []);
 
   const areas = Array.from(new Set(scenarios.map(s => s.functionalArea).filter(Boolean)));
   const draftCount = scenarios.filter(s => s.status === "draft").length;
@@ -211,6 +228,7 @@ export function TestScenariosScreen() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left: scenario list */}
         <div className="w-[340px] min-w-[280px] border-r border-border flex flex-col overflow-hidden">
+          <MondayBoardProvider storageKey="jiganto-tm-test-scenarios">
           {/* Filters */}
           <div className="flex-shrink-0 px-3 py-2 border-b border-border space-y-2">
             <input
@@ -243,45 +261,25 @@ export function TestScenariosScreen() {
                 <option value="deprecated">Deprecated</option>
               </select>
             </div>
+            <div className="flex justify-end">
+              <MondayBoardChromeControls />
+            </div>
           </div>
 
           {/* List */}
-          <div className="flex-1 overflow-y-auto divide-y divide-border">
-            {filtered.length === 0 ? (
-              <div className="p-6 text-center text-sm text-muted-foreground">
-                {scenarios.length === 0 ? "No scenarios yet. Create your first one." : "No scenarios match your filters."}
-              </div>
-            ) : (
-              filtered.map(s => (
-                <button
-                  key={s.id}
-                  onClick={() => { setSelectedId(s.id); setEditing(false); setCreating(false); }}
-                  data-testid={`scenario-row-${s.id}`}
-                  className={cn(
-                    "w-full text-left px-4 py-3 transition-colors flex items-start gap-2.5 group",
-                    s.id === selectedId ? "bg-primary/5 border-l-2 border-primary" : "hover:bg-muted/40"
-                  )}
-                >
-                  <BookOpen className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0 group-hover:text-primary" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-xs font-mono text-muted-foreground">{s.scenarioId}</span>
-                      <span className={cn("text-[9px] font-mono px-1.5 py-0.5 rounded-full capitalize", STATUS_BADGE[s.status ?? "draft"])}>{s.status}</span>
-                    </div>
-                    <div className="text-sm font-medium truncate">{s.title}</div>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      {s.functionalArea && <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">{s.functionalArea}</span>}
-                      {s.priority && <span className={cn("text-[9px] font-mono px-1.5 py-0.5 rounded capitalize", PRI_BADGE[s.priority])}>{s.priority}</span>}
-                      {(s.linkedCaseIds?.length ?? 0) > 0 && (
-                        <span className="text-[10px] text-muted-foreground">{s.linkedCaseIds?.length} case{s.linkedCaseIds?.length !== 1 ? "s" : ""}</span>
-                      )}
-                    </div>
-                  </div>
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-1" />
-                </button>
-              ))
-            )}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <MondayBoardTable
+              columns={scenarioColumns}
+              data={filtered}
+              gridLines
+              emptyMessage={scenarios.length === 0 ? "No scenarios yet. Create your first one." : "No scenarios match your filters."}
+              onRowClick={(s) => { setSelectedId(s.id); setEditing(false); setCreating(false); }}
+              searchHighlightTerm={debouncedSearch}
+              paginationResetKey={`${debouncedSearch}-${filterArea}-${filterStatus}`}
+              className="border-0 rounded-none h-full"
+            />
           </div>
+          </MondayBoardProvider>
         </div>
 
         {/* Right: detail / form */}
@@ -291,7 +289,7 @@ export function TestScenariosScreen() {
             <div className="p-6 max-w-2xl space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-semibold">{creating ? "New Test Scenario" : "Edit Scenario"}</h3>
-                <button onClick={() => { setCreating(false); setEditing(false); }} className="text-muted-foreground hover:text-foreground">
+                <button onClick={() => { setCreating(false); setEditing(false); setForm(EMPTY_FORM); }} className="text-muted-foreground hover:text-foreground">
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -391,7 +389,7 @@ export function TestScenariosScreen() {
                   {(createMutation.isPending || updateMutation.isPending) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                   {creating ? "Create Scenario" : "Save Changes"}
                 </Button>
-                <Button variant="ghost" onClick={() => { setCreating(false); setEditing(false); }}>Cancel</Button>
+                <Button variant="ghost" onClick={() => { setCreating(false); setEditing(false); setForm(EMPTY_FORM); }}>Cancel</Button>
               </div>
             </div>
           ) : selected ? (

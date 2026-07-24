@@ -1,8 +1,7 @@
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { EXPENSE_CATEGORIES } from "@shared/schema";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,9 +19,12 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Upload, CheckCircle2, XCircle, Receipt, Trash2 } from "lucide-react";
-import { FinanceTableSkeleton, FinanceEmptyState, FinanceTableWrap, FinanceButtonSpinner } from "./FinanceUi";
-import { useTablePagination } from "@/hooks/use-table-pagination";
-import { TablePagination } from "@/components/TablePagination";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
+import { FinanceTableSkeleton, FinanceEmptyState, FinanceButtonSpinner } from "./FinanceUi";
 import type { ExpenseReportRow } from "./types";
 import type { ExpenseItem } from "@shared/schema";
 
@@ -74,9 +76,15 @@ interface FinanceExpensesTabProps {
 
 export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingProp, searchTerm = "" }: FinanceExpensesTabProps) {
   const { toast } = useToast();
+  const [localSearch, setLocalSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(searchTerm || localSearch);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [pinName, setPinName] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("finance-expenses-pin-name") !== "0";
+  });
   const receiptRef = useRef<HTMLInputElement>(null);
 
   const [formName, setFormName] = useState("");
@@ -88,6 +96,10 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   const [detailLine, setDetailLine] = useState(makeDraftLine());
+
+  useEffect(() => {
+    setDetailLine(makeDraftLine());
+  }, [selectedReportId]);
 
   const { data: fetchedReports = [], isLoading: fetchLoading } = useQuery<ExpenseReportRow[]>({
     queryKey: ["/api/finance/expenses/reports"],
@@ -145,17 +157,20 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
     mutationFn: async () => {
       const items = draftLines
         .filter((line) => line.amount)
-        .map((line) => ({
-          itemDate: line.itemDate,
-          category: line.category,
-          description: line.description || formName,
-          amount: line.amount,
-          isBillable: line.isBillable,
-          vatAmount: line.vatAmount || null,
-          paymentMethod: line.paymentMethod,
-          mileageDistance: useMileage ? mileageDistance : null,
-          mileageVehicleType: useMileage ? mileageVehicle : null,
-        }));
+        .map((line) => {
+          const isFirstLine = line.key === draftLines[0]?.key;
+          return {
+            itemDate: line.itemDate,
+            category: line.category,
+            description: line.description || formName,
+            amount: line.amount,
+            isBillable: line.isBillable,
+            vatAmount: line.vatAmount || null,
+            paymentMethod: line.paymentMethod,
+            mileageDistance: useMileage && isFirstLine ? mileageDistance : null,
+            mileageVehicleType: useMileage && isFirstLine ? mileageVehicle : null,
+          };
+        });
       const res = await apiRequest("POST", "/api/finance/expenses/reports", {
         name: formName,
         projectId: Number(formProjectId),
@@ -167,11 +182,14 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
       if (receiptFile && firstItemId) {
         const fd = new FormData();
         fd.append("receipt", receiptFile);
-        await fetch(`/api/finance/expenses/items/${firstItemId}/receipt`, {
+        const uploadRes = await fetch(`/api/finance/expenses/items/${firstItemId}/receipt`, {
           method: "POST",
           body: fd,
           credentials: "include",
         });
+        if (!uploadRes.ok) {
+          throw new Error("Receipt upload failed");
+        }
       }
       return report;
     },
@@ -181,7 +199,10 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
       setShowCreate(false);
       resetForm();
     },
-    onError: () => toast({ title: "Failed to create expense report", variant: "destructive" }),
+    onError: (err: Error) => toast({
+      title: err.message === "Receipt upload failed" ? "Receipt upload failed" : "Failed to create expense report",
+      variant: "destructive",
+    }),
   });
 
   const submitMutation = useMutation({
@@ -240,41 +261,144 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
   const hasValidLines = draftLines.some((line) => line.amount && parseFloat(line.amount) > 0);
 
   const filtered = useMemo(() => {
-    const q = searchTerm.toLowerCase();
+    const q = debouncedSearch.toLowerCase();
     return reports.filter((r) => {
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (q && !`${r.name} ${r.projectName ?? ""} ${r.userName ?? ""}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [reports, searchTerm, statusFilter]);
+  }, [reports, debouncedSearch, statusFilter]);
 
-  const pagination = useTablePagination(filtered, {
-    resetKey: `${searchTerm}-${statusFilter}`,
+  const mondayColumns: MondayColumnDef<ExpenseReportRow>[] = useMemo(() => [
+    {
+      id: "name",
+      header: "Report",
+      type: "text",
+      accessor: "name",
+      width: "220px",
+      sticky: pinName,
+      editable: true,
+      render: (r) => <span className="font-medium">{r.name}</span>,
+    },
+    {
+      id: "project",
+      header: "Project",
+      type: "text",
+      accessor: (row) => row.projectName,
+      width: "180px",
+      editable: false,
+      render: (r) => <span className="text-sm">{r.projectName ?? `Project #${r.projectId}`}</span>,
+    },
+    {
+      id: "submitter",
+      header: "Submitter",
+      type: "person",
+      accessor: (row) => row.userName,
+      width: "160px",
+      editable: false,
+      render: (r) => <span className="text-sm">{r.userName ?? "—"}</span>,
+    },
+    {
+      id: "amount",
+      header: "Amount",
+      type: "currency",
+      accessor: "totalAmount",
+      width: "120px",
+      editable: false,
+      render: (r) => <span className="text-sm tabular-nums">{formatCurrency(r.totalAmount)}</span>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      type: "status",
+      accessor: "status",
+      width: "120px",
+      editable: false,
+      render: (r) => statusBadge(r.status),
+    },
+  ], [pinName]);
+
+  const updateExpenseMut = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
+      apiRequest("PUT", `/api/finance/expenses/reports/${id}`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/expenses/reports"] });
+    },
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
+
+  const paginationResetKey = `${debouncedSearch}|${statusFilter}`;
+
+  const EXPENSE_CSV_HEADERS = ["Report", "Project", "Submitter", "Amount", "Status"];
+
+  const exportExpenses = () => {
+    const rows = filtered.map((r) => [
+      r.name || "",
+      r.projectName ?? `Project #${r.projectId}`,
+      r.userName ?? "",
+      String(r.totalAmount ?? ""),
+      r.status || "",
+    ]);
+    downloadBoardCsv(`expenses-${new Date().toISOString().split("T")[0]}.csv`, EXPENSE_CSV_HEADERS, rows);
+    toast({ title: "Expenses exported to CSV" });
+  };
+
+  const downloadExpensesTemplate = () => {
+    downloadImportTemplateCsv("expenses-import-template.csv", EXPENSE_CSV_HEADERS, EXPENSE_CSV_HEADERS.map(() => ""));
+    toast({ title: "Import template downloaded" });
+  };
+
+  const importUnavailable = () => toast({ title: "Import is not available for this table yet" });
 
   return (
     <div className="space-y-4" data-testid="finance-expenses-tab">
-      <div className="flex flex-wrap items-center gap-3">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="submitted">Submitted</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-            <SelectItem value="paid">Paid</SelectItem>
-          </SelectContent>
-        </Select>
-        {reports.length > 0 && (
-        <Button onClick={() => setShowCreate(true)} className="sm:ml-auto w-full sm:w-auto" data-testid="button-create-expense">
-          <Plus className="h-4 w-4 mr-1" />
-          New Expense Report
-        </Button>
-        )}
-      </div>
+      <MondayBoardShell.Legacy
+        storageKey="jiganto-finance-expenses"
+        entityType="finance_expense"
+        stateHook={useMondayBoardShellState}
+        filterMatcher={matchBoardFilterValue}
+      >
+      <MondayBoardShell.Toolbar
+        newLabel="New Expense Report"
+        onNew={() => setShowCreate(true)}
+        newTestId="button-create-expense"
+        searchValue={localSearch || searchTerm}
+        onSearchChange={setLocalSearch}
+        filterActive={statusFilter !== "all"}
+        filterCount={statusFilter !== "all" ? 1 : 0}
+        filterContent={
+          <div className="space-y-1.5">
+            <Label className="text-xs">Status</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="submitted">Submitted</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        }
+        pinActive={pinName}
+        onPinToggle={() => {
+          setPinName((v) => {
+            const next = !v;
+            localStorage.setItem("finance-expenses-pin-name", next ? "1" : "0");
+            return next;
+          });
+        }}
+        pinTitle={pinName ? "Unpin Report column" : "Pin Report column"}
+        onExport={exportExpenses}
+        onDownloadTemplate={downloadExpensesTemplate}
+        onPaste={importUnavailable}
+        onImport={importUnavailable}
+        testId="finance-expenses-toolbar"
+      />
 
       {isLoading ? (
         <FinanceTableSkeleton rows={7} cols={6} />
@@ -288,99 +412,76 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
           ) : undefined}
         />
       ) : (
-        <Card className="rounded-xl border-border/50 overflow-hidden shadow-sm">
-          <FinanceTableWrap>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Report</TableHead>
-                  <TableHead>Project</TableHead>
-                  <TableHead>Submitter</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pagination.paginatedItems.map((r) => (
-                  <TableRow key={r.id} data-testid={`expense-row-${r.id}`}>
-                    <TableCell className="font-medium">
-                      <button
-                        type="button"
-                        className="text-left hover:text-primary hover:underline underline-offset-2"
-                        onClick={() => setSelectedReportId(r.id)}
-                      >
-                        {r.name}
-                      </button>
-                    </TableCell>
-                    <TableCell>{r.projectName ?? `Project #${r.projectId}`}</TableCell>
-                    <TableCell>{r.userName ?? "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatCurrency(r.totalAmount)}</TableCell>
-                    <TableCell>{statusBadge(r.status)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        {r.status === "draft" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => submitMutation.mutate(r.id)}
-                            disabled={submitMutation.isPending && submitMutation.variables === r.id}
-                          >
-                            {submitMutation.isPending && submitMutation.variables === r.id
-                              ? <FinanceButtonSpinner />
-                              : "Submit"}
-                          </Button>
-                        )}
-                        {r.status === "submitted" && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => rejectMutation.mutate(r.id)}
-                              disabled={rejectMutation.isPending && rejectMutation.variables === r.id}
-                            >
-                              {rejectMutation.isPending && rejectMutation.variables === r.id
-                                ? <FinanceButtonSpinner />
-                                : <XCircle className="h-3 w-3" />}
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => approveMutation.mutate(r.id)}
-                              disabled={approveMutation.isPending && approveMutation.variables === r.id}
-                            >
-                              {approveMutation.isPending && approveMutation.variables === r.id
-                                ? <FinanceButtonSpinner />
-                                : <CheckCircle2 className="h-3 w-3" />}
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </FinanceTableWrap>
-          <TablePagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            total={pagination.total}
-            startIndex={pagination.startIndex}
-            endIndex={pagination.endIndex}
-            pageSize={pagination.pageSize}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
-          />
-        </Card>
+        <MondayBoardShell.Table
+          columns={mondayColumns}
+          data={filtered}
+          emptyMessage="No reports match your current filters."
+          addItemLabel="New Expense Report"
+          onAddItem={() => setShowCreate(true)}
+          onRowClick={(r) => setSelectedReportId(r.id)}
+          onCellEdit={(rowId, columnId, value) => {
+            updateExpenseMut.mutate({
+              id: Number(rowId),
+              payload: { [columnId]: value === "" ? null : value },
+            });
+          }}
+          searchHighlightTerm={debouncedSearch}
+          columnWidthStorageKey="jiganto-finance-expenses-col-widths"
+          paginationResetKey={paginationResetKey}
+          totalCount={reports.length}
+          renderRowActions={(r) => (
+            <div className="flex justify-end gap-1">
+              {r.status === "draft" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => submitMutation.mutate(r.id)}
+                  disabled={submitMutation.isPending && submitMutation.variables === r.id}
+                >
+                  {submitMutation.isPending && submitMutation.variables === r.id
+                    ? <FinanceButtonSpinner />
+                    : "Submit"}
+                </Button>
+              )}
+              {r.status === "submitted" && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => rejectMutation.mutate(r.id)}
+                    disabled={rejectMutation.isPending && rejectMutation.variables === r.id}
+                  >
+                    {rejectMutation.isPending && rejectMutation.variables === r.id
+                      ? <FinanceButtonSpinner />
+                      : <XCircle className="h-3 w-3" />}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => approveMutation.mutate(r.id)}
+                    disabled={approveMutation.isPending && approveMutation.variables === r.id}
+                  >
+                    {approveMutation.isPending && approveMutation.variables === r.id
+                      ? <FinanceButtonSpinner />
+                      : <CheckCircle2 className="h-3 w-3" />}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+        />
       )}
+      </MondayBoardShell.Legacy>
 
       <FormDialogShell
         open={showCreate}
-        onOpenChange={setShowCreate}
+        onOpenChange={(open) => {
+          setShowCreate(open);
+          if (!open) resetForm();
+        }}
         title="Create expense report"
         subtitle="Submit project expenses for approval"
         saveLabel="Create report"
-        onCancel={() => setShowCreate(false)}
+        onCancel={() => { setShowCreate(false); resetForm(); }}
         onSubmit={() => createMutation.mutate()}
         saving={createMutation.isPending}
         disabled={!formName || !formProjectId || !hasValidLines}
@@ -510,7 +611,12 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
         </FormSection>
       </FormDialogShell>
 
-      <Sheet open={selectedReportId != null} onOpenChange={(open) => !open && setSelectedReportId(null)}>
+      <Sheet open={selectedReportId != null} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedReportId(null);
+          setDetailLine(makeDraftLine());
+        }
+      }}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
             <SheetTitle>{reportDetail?.name ?? "Expense report"}</SheetTitle>

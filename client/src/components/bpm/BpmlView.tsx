@@ -20,9 +20,15 @@ import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import MondayTable, { type ColumnDef, type GroupDef, defaultStatusColors } from "@/components/MondayTable";
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { type ColumnDef, type GroupDef, defaultStatusColors } from "@/components/MondayTable";
+import {
+  useMondayBoard,
+} from "@/components/MondayBoardTable";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
 import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
 import { type ConditionalFormatRule } from "@/lib/conditionalFormatting";
 import { BpmlVersionHistory } from "@/components/bpm/BpmlVersionHistory";
@@ -35,9 +41,7 @@ import {
   Search,
   Loader2,
   Trash2,
-  Download,
   Upload,
-  Settings2,
   GripVertical,
   ChevronDown,
   ChevronRight,
@@ -48,17 +52,11 @@ import {
   ArrowUp,
   ArrowDown,
   X,
-  Pencil,
   LayoutGrid,
   List,
   Clock,
-  Filter,
-  ArrowUpDown,
   Save,
   Bookmark,
-  ClipboardCopy,
-  Image as ImageIcon,
-  FileDown,
   Pin,
   Share2
 } from "lucide-react";
@@ -82,19 +80,19 @@ import * as XLSX from "xlsx";
 const STATUS_COLORS = defaultStatusColors;
 
 const BPML_CATALOGUE_COLUMNS: ColumnDef<any>[] = [
-  { id: "name", header: "Name", type: "text", accessor: "name", width: "minmax(200px, 2fr)" },
+  { id: "name", header: "Name", type: "text", accessor: "name", width: "minmax(200px, 2fr)", editable: true },
   {
-    id: "templateType", header: "Type", type: "status", accessor: "templateType",
+    id: "templateType", header: "Type", type: "status", accessor: "templateType", editable: true,
     options: bpmlTemplateTypeEnum.map(v => ({ value: v, label: v.charAt(0).toUpperCase() + v.slice(1), color: STATUS_COLORS[v] || "bg-muted text-foreground" })),
   },
-  { id: "erpPlatform", header: "ERP Platform", type: "text", accessor: ((row: any) => row.erpPlatform || "\u2014") as any },
-  { id: "processArea", header: "Process Area", type: "text", accessor: ((row: any) => row.processArea || "\u2014") as any },
+  { id: "erpPlatform", header: "ERP Platform", type: "text", accessor: ((row: any) => row.erpPlatform || "") as any, editable: true },
+  { id: "processArea", header: "Process Area", type: "text", accessor: ((row: any) => row.processArea || "") as any, editable: true },
   {
-    id: "status", header: "Status", type: "status", accessor: "status",
+    id: "status", header: "Status", type: "status", accessor: "status", editable: true,
     options: bpmlTemplateStatusEnum.map(v => ({ value: v, label: v.charAt(0).toUpperCase() + v.slice(1), color: STATUS_COLORS[v] || "bg-muted text-foreground" })),
   },
-  { id: "version", header: "Version", type: "text", accessor: ((row: any) => row.version || "\u2014") as any, width: "80px" },
-  { id: "updatedAt", header: "Updated", type: "date", accessor: "updatedAt", width: "140px" },
+  { id: "version", header: "Version", type: "text", accessor: ((row: any) => row.version || "") as any, width: "80px", editable: true },
+  { id: "updatedAt", header: "Updated", type: "date", accessor: "updatedAt", width: "140px", editable: false },
 ];
 
 const BPML_GROUPING_OPTIONS = [
@@ -400,14 +398,15 @@ export default function BpmlView() {
   const [detailPanelSize, setDetailPanelSize] = useState<"sm" | "md" | "lg">("md");
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearch = useDebouncedValue(searchTerm);
   const [importPreview, setImportPreview] = useState<Record<string, any>[] | null>(null);
   const [importFileName, setImportFileName] = useState("");
 
   const [newTemplateName, setNewTemplateName] = useState("");
   const [newTemplateDesc, setNewTemplateDesc] = useState("");
   const [newTemplateType, setNewTemplateType] = useState("standard");
-  const [newTemplateErp, setNewTemplateErp] = useState("");
-  const [newTemplateArea, setNewTemplateArea] = useState("");
+  const [newTemplateErp, setNewTemplateErp] = useState("none");
+  const [newTemplateArea, setNewTemplateArea] = useState("none");
 
   const [editingTemplate, setEditingTemplate] = useState<BpmlTemplate | null>(null);
   const [customFieldName, setCustomFieldName] = useState("");
@@ -417,6 +416,7 @@ export default function BpmlView() {
   const [customFieldOptionInput, setCustomFieldOptionInput] = useState("");
 
   const [catalogueSearch, setCatalogueSearch] = useState("");
+  const debouncedCatalogueSearch = useDebouncedValue(catalogueSearch);
   const [catalogueFilterType, setCatalogueFilterType] = useState("all");
   const [catalogueFilterErp, setCatalogueFilterErp] = useState("all");
   const [catalogueFilterArea, setCatalogueFilterArea] = useState("all");
@@ -431,7 +431,6 @@ export default function BpmlView() {
   const [secondarySortDir, setSecondarySortDir] = useState<"asc" | "desc">("asc");
   const [importMode, setImportMode] = useState<"append" | "upsert">("append");
   const [formatRules, setFormatRules] = useState<ConditionalFormatRule[]>([]);
-  const [showFormatPanel, setShowFormatPanel] = useState(false);
   const [pendingFilterOperator, setPendingFilterOperator] = useState<BpmlFilterOperator>("contains");
   const [entryGroupBy, setEntryGroupBy] = useState("none");
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
@@ -446,7 +445,7 @@ export default function BpmlView() {
   const [importLibraryFile, setImportLibraryFile] = useState<File | null>(null);
   const [importLibraryPreview, setImportLibraryPreview] = useState<Record<string, any>[] | null>(null);
 
-  const [isExporting, setIsExporting] = useState(false);
+  const [, setIsExporting] = useState(false);
   const [showFilterPopover, setShowFilterPopover] = useState(false);
   const [pendingFilterField, setPendingFilterField] = useState("");
   const [pendingFilterValue, setPendingFilterValue] = useState("");
@@ -471,6 +470,11 @@ export default function BpmlView() {
       queryClient.invalidateQueries({ predicate: (q) => (q.queryKey[0] as string)?.startsWith("/api/bpml/templates") });
       setSelectedTemplateId(template.id);
       setShowCreateTemplateDialog(false);
+      setNewTemplateName("");
+      setNewTemplateDesc("");
+      setNewTemplateType("standard");
+      setNewTemplateErp("none");
+      setNewTemplateArea("none");
       toast({ title: "Library created" });
     },
   });
@@ -603,8 +607,8 @@ export default function BpmlView() {
   const filteredData = useMemo(() => {
     let data = tableData;
 
-    if (searchTerm) {
-      const lower = searchTerm.toLowerCase();
+    if (debouncedSearch) {
+      const lower = debouncedSearch.toLowerCase();
       data = data.filter(row =>
         Object.values(row).some(v => v && String(v).toLowerCase().includes(lower))
       );
@@ -629,7 +633,7 @@ export default function BpmlView() {
     }
 
     return data;
-  }, [tableData, searchTerm, entryFilters, entrySortField, entrySortDir, secondarySortField, secondarySortDir]);
+  }, [tableData, debouncedSearch, entryFilters, entrySortField, entrySortDir, secondarySortField, secondarySortDir]);
 
   const groups = useMemo<GroupDef<any>[] | undefined>(() => {
     if (entryGroupBy === "none") return undefined;
@@ -649,8 +653,8 @@ export default function BpmlView() {
 
   const filteredCatalogueData = useMemo(() => {
     let data = [...templates];
-    if (catalogueSearch) {
-      const lower = catalogueSearch.toLowerCase();
+    if (debouncedCatalogueSearch) {
+      const lower = debouncedCatalogueSearch.toLowerCase();
       data = data.filter(t => t.name.toLowerCase().includes(lower) || (t.description || "").toLowerCase().includes(lower));
     }
     if (catalogueFilterType !== "all") data = data.filter(t => t.templateType === catalogueFilterType);
@@ -658,7 +662,7 @@ export default function BpmlView() {
     if (catalogueFilterArea !== "all") data = data.filter(t => t.processArea === catalogueFilterArea);
     if (catalogueFilterStatus !== "all") data = data.filter(t => t.status === catalogueFilterStatus);
     return data;
-  }, [templates, catalogueSearch, catalogueFilterType, catalogueFilterErp, catalogueFilterArea, catalogueFilterStatus]);
+  }, [templates, debouncedCatalogueSearch, catalogueFilterType, catalogueFilterErp, catalogueFilterArea, catalogueFilterStatus]);
 
   const catalogueTableGroups = useMemo<GroupDef<any>[] | undefined>(() => {
     if (catalogueGroupBy === "none") return undefined;
@@ -715,6 +719,8 @@ export default function BpmlView() {
   }, [selectedTemplateId, entries, createEntryMutation]);
 
   const handleDeleteEntries = useCallback((ids: (number | string)[]) => {
+    const n = ids.length;
+    if (!window.confirm(n === 1 ? "Delete this BPML entry?" : `Delete ${n} BPML entries?`)) return;
     deleteEntriesMutation.mutate(ids.map(Number));
   }, [deleteEntriesMutation]);
 
@@ -723,8 +729,8 @@ export default function BpmlView() {
       name: newTemplateName,
       description: newTemplateDesc || undefined,
       templateType: newTemplateType,
-      erpPlatform: newTemplateErp || undefined,
-      processArea: newTemplateArea || undefined,
+      erpPlatform: newTemplateErp && newTemplateErp !== "none" ? newTemplateErp : undefined,
+      processArea: newTemplateArea && newTemplateArea !== "none" ? newTemplateArea : undefined,
       visibleSections: ["core", "ownership"],
       customFields: [],
     });
@@ -1163,80 +1169,123 @@ export default function BpmlView() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 mb-6 flex-wrap">
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search libraries..."
-                value={catalogueSearch}
-                onChange={(e) => setCatalogueSearch(e.target.value)}
-                className="pl-9"
-                data-testid="input-search-libraries"
-              />
-            </div>
-            <Select value={catalogueFilterType} onValueChange={setCatalogueFilterType}>
-              <SelectTrigger className="w-[160px]" data-testid="select-filter-type">
-                <SelectValue placeholder="All Types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {bpmlTemplateTypeEnum.map(t => (
-                  <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={catalogueFilterErp} onValueChange={setCatalogueFilterErp}>
-              <SelectTrigger className="w-[160px]" data-testid="select-filter-erp">
-                <SelectValue placeholder="All ERP" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All ERP Platforms</SelectItem>
-                {bpmlErpPlatformEnum.map(e => (
-                  <SelectItem key={e} value={e}>{e}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={catalogueFilterArea} onValueChange={setCatalogueFilterArea}>
-              <SelectTrigger className="w-[160px]" data-testid="select-filter-area">
-                <SelectValue placeholder="All Areas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Process Areas</SelectItem>
-                {bpmlProcessAreaEnum.map(a => (
-                  <SelectItem key={a} value={a}>{a}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={catalogueFilterStatus} onValueChange={setCatalogueFilterStatus}>
-              <SelectTrigger className="w-[140px]" data-testid="select-filter-status">
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                {bpmlTemplateStatusEnum.map(s => (
-                  <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={catalogueGroupBy} onValueChange={setCatalogueGroupBy}>
-              <SelectTrigger className="w-[180px]" data-testid="select-catalogue-group-by">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
+          <MondayBoardShell.Legacy
+            storageKey="jiganto-bpml-catalogue"
+            entityType="bpml_library"
+            stateHook={useMondayBoardShellState}
+            filterMatcher={matchBoardFilterValue}
+          >
+          <MondayBoardShell.Toolbar
+            newLabel="Create BPML Library"
+            onNew={() => setShowCreateTemplateDialog(true)}
+            newTestId="button-create-bpml-library-toolbar"
+            searchValue={catalogueSearch}
+            onSearchChange={setCatalogueSearch}
+            searchPlaceholder="Search libraries..."
+            searchTestId="input-search-libraries"
+            viewLabel={catalogueViewMode === "table" ? "Table" : "Grid"}
+            viewIcon={catalogueViewMode === "table" ? <List className="h-3.5 w-3.5" /> : <LayoutGrid className="h-3.5 w-3.5" />}
+            viewMenu={
+              <>
+                <DropdownMenuItem onClick={() => setCatalogueViewMode("grid")} data-testid="button-view-grid">Grid</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCatalogueViewMode("table")} data-testid="button-view-table">Table</DropdownMenuItem>
+              </>
+            }
+            filterActive={catalogueFilterType !== "all" || catalogueFilterErp !== "all" || catalogueFilterArea !== "all" || catalogueFilterStatus !== "all"}
+            filterCount={
+              (catalogueFilterType !== "all" ? 1 : 0) +
+              (catalogueFilterErp !== "all" ? 1 : 0) +
+              (catalogueFilterArea !== "all" ? 1 : 0) +
+              (catalogueFilterStatus !== "all" ? 1 : 0)
+            }
+            filterContent={
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Type</Label>
+                  <Select value={catalogueFilterType} onValueChange={setCatalogueFilterType}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="select-filter-type"><SelectValue placeholder="All Types" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      {bpmlTemplateTypeEnum.map(t => (
+                        <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">ERP Platform</Label>
+                  <Select value={catalogueFilterErp} onValueChange={setCatalogueFilterErp}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="select-filter-erp"><SelectValue placeholder="All ERP" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All ERP Platforms</SelectItem>
+                      {bpmlErpPlatformEnum.map(e => (
+                        <SelectItem key={e} value={e}>{e}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Process Area</Label>
+                  <Select value={catalogueFilterArea} onValueChange={setCatalogueFilterArea}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="select-filter-area"><SelectValue placeholder="All Areas" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Process Areas</SelectItem>
+                      {bpmlProcessAreaEnum.map(a => (
+                        <SelectItem key={a} value={a}>{a}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Status</Label>
+                  <Select value={catalogueFilterStatus} onValueChange={setCatalogueFilterStatus}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="select-filter-status"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      {bpmlTemplateStatusEnum.map(s => (
+                        <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            }
+            groupActive={catalogueGroupBy !== "none"}
+            groupLabel={catalogueGroupBy === "none" ? "Group by" : (BPML_GROUPING_OPTIONS.find(o => o.value === catalogueGroupBy)?.label ?? "Group by")}
+            groupContent={
+              <>
                 {BPML_GROUPING_OPTIONS.map(opt => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  <DropdownMenuItem key={opt.value} onClick={() => setCatalogueGroupBy(opt.value)} data-testid={`catalogue-group-${opt.value}`}>
+                    {opt.label}
+                  </DropdownMenuItem>
                 ))}
-              </SelectContent>
-            </Select>
-            <div className="flex items-center border rounded-md">
-              <Button size="icon" variant="ghost" className={cn("rounded-none rounded-l-md toggle-elevate", catalogueViewMode === "grid" && "toggle-elevated")} onClick={() => setCatalogueViewMode("grid")} data-testid="button-view-grid">
-                <LayoutGrid className="h-4 w-4" />
-              </Button>
-              <Button size="icon" variant="ghost" className={cn("rounded-none rounded-r-md toggle-elevate", catalogueViewMode === "table" && "toggle-elevated")} onClick={() => setCatalogueViewMode("table")} data-testid="button-view-table">
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+              </>
+            }
+            grouped={catalogueViewMode === "table" && catalogueGroupBy !== "none"}
+            onExport={() => {
+              const headers = ["Name", "Type", "ERP Platform", "Process Area", "Status", "Version", "Updated"];
+              const rows = filteredCatalogueData.map((t) => [
+                t.name || "",
+                t.templateType || "",
+                t.erpPlatform || "",
+                t.processArea || "",
+                t.status || "",
+                t.version || "",
+                t.updatedAt ? String(t.updatedAt) : "",
+              ]);
+              downloadBoardCsv(`bpml-libraries-${new Date().toISOString().split("T")[0]}.csv`, headers, rows);
+              toast({ title: "Libraries exported to CSV" });
+            }}
+            onDownloadTemplate={() => {
+              const headers = ["Name", "Type", "ERP Platform", "Process Area", "Status", "Version", "Updated"];
+              downloadImportTemplateCsv("bpml-library-import-template.csv", headers, headers.map(() => ""));
+              toast({ title: "Import template downloaded" });
+            }}
+            onImport={() => setShowImportLibraryDialog(true)}
+            onPaste={() => setShowImportLibraryDialog(true)}
+            className="mb-6"
+            testId="bpml-catalogue-toolbar"
+          />
 
           {!hasActiveFilters && templates.length > 0 && recentLibraries.length > 0 && (
             <div className="mb-6" data-testid="section-recent-libraries">
@@ -1298,14 +1347,22 @@ export default function BpmlView() {
               </CardContent>
             </Card>
           ) : catalogueViewMode === "table" ? (
-            <MondayTable
+            <MondayBoardShell.Table
               columns={BPML_CATALOGUE_COLUMNS}
               data={catalogueGroupBy !== "none" ? [] : filteredCatalogueData}
               columnWidthStorageKey="jiganto-bpml-catalogue-col-widths"
               totalCount={templates.length}
               groups={catalogueTableGroups}
               onRowClick={(row: any) => setSelectedTemplateId(row.id)}
+              onCellEdit={(rowId, columnId, value) => {
+                updateTemplateMutation.mutate({
+                  id: Number(rowId),
+                  [columnId]: value === "" ? null : value,
+                });
+              }}
               selectable
+              gridLines
+              paginationResetKey={`${debouncedCatalogueSearch}|${catalogueFilterType}|${catalogueFilterErp}|${catalogueFilterArea}|${catalogueFilterStatus}|${catalogueGroupBy}`}
               emptyMessage="No libraries match your filters"
               data-testid="table-libraries"
             />
@@ -1343,6 +1400,7 @@ export default function BpmlView() {
               ))}
             </div>
           )}
+          </MondayBoardShell.Legacy>
         </div>
 
         <FormDialogShell
@@ -1403,9 +1461,10 @@ export default function BpmlView() {
                 </div>
                 <div>
                   <FieldLabel>ERP Platform</FieldLabel>
-                  <Select value={newTemplateErp} onValueChange={setNewTemplateErp}>
+                  <Select value={newTemplateErp || "none"} onValueChange={setNewTemplateErp}>
                     <SelectTrigger data-testid="select-library-erp"><SelectValue placeholder="Select..." /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
                       {bpmlErpPlatformEnum.map(e => (
                         <SelectItem key={e} value={e}>{e}</SelectItem>
                       ))}
@@ -1414,9 +1473,10 @@ export default function BpmlView() {
                 </div>
                 <div>
                   <FieldLabel>Process Area</FieldLabel>
-                  <Select value={newTemplateArea} onValueChange={setNewTemplateArea}>
+                  <Select value={newTemplateArea || "none"} onValueChange={setNewTemplateArea}>
                     <SelectTrigger data-testid="select-library-area"><SelectValue placeholder="Select..." /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
                       {bpmlProcessAreaEnum.map(a => (
                         <SelectItem key={a} value={a}>{a}</SelectItem>
                       ))}
@@ -1452,7 +1512,7 @@ export default function BpmlView() {
               <div>
                 <FieldLabel>Upload File</FieldLabel>
                 <div className="flex items-center gap-2 mt-1">
-                  <Button variant="outline" size="sm" onClick={() => catalogueImportRef.current?.click()} data-testid="button-import-library-file">
+                  <Button type="button" variant="outline" size="sm" onClick={() => catalogueImportRef.current?.click()} data-testid="button-import-library-file">
                     <Upload className="h-4 w-4 mr-1" />
                     {importLibraryFile ? importLibraryFile.name : "Choose .csv or .xlsx file"}
                   </Button>
@@ -1517,8 +1577,14 @@ export default function BpmlView() {
   }
 
   return (
+    <MondayBoardShell.Legacy
+      storageKey="jiganto-bpml-entries"
+      entityType="bpml_entry"
+      stateHook={useMondayBoardShellState}
+      filterMatcher={matchBoardFilterValue}
+    >
     <div className="flex flex-col h-full min-h-0" data-testid="bpml-table-view">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 px-3 sm:px-4 py-2 border-b">
+      <div className="px-3 sm:px-4 py-2 border-b space-y-2">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <Button size="sm" variant="ghost" onClick={() => { setSelectedTemplateId(null); setSearchTerm(""); setEntryFilters([]); setEntrySortField("sequenceOrder"); setEntrySortDir("asc"); setEntryGroupBy("none"); setActiveViewId(null); }} data-testid="button-back-to-libraries">
             <ChevronRight className="h-4 w-4 rotate-180 mr-1" />
@@ -1535,118 +1601,95 @@ export default function BpmlView() {
             <Badge variant="outline" className="text-xs">{selectedTemplate.processArea}</Badge>
           )}
           <Badge variant="secondary" className="text-xs">{filteredData.length} entries</Badge>
-          <Separator orientation="vertical" className="h-5" />
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Search..."
-              className="h-8 w-[180px] pl-8 text-sm"
-              data-testid="input-bpml-search"
-            />
-          </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap overflow-x-auto pb-1 sm:pb-0 max-w-full">
-          <Popover open={showFilterPopover} onOpenChange={setShowFilterPopover}>
-            <PopoverTrigger asChild>
-              <Button size="sm" variant="outline" data-testid="button-entry-filter"
-                className={cn(entryFilters.length > 0 && "bg-green-50 border-green-500 text-green-700 dark:bg-green-950/40 dark:border-green-500 dark:text-green-400")}>
-                <Filter className="h-4 w-4 mr-1" />
-                Filter
-                {entryFilters.length > 0 && (
-                  <Badge className="ml-1 text-[10px] px-1 bg-green-500 text-white no-default-hover-elevate no-default-active-elevate">{entryFilters.length}</Badge>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[320px]" align="end">
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium">Filters</h4>
-                {entryFilters.map((f, idx) => {
-                  const fieldDef = BPML_FILTER_FIELDS.find(ff => ff.value === f.field);
-                  const opLabel = BPML_FILTER_OPERATORS.find(o => o.value === f.operator)?.label || f.operator;
-                  return (
-                    <div key={idx} className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs shrink-0">{fieldDef?.label || f.field}</Badge>
-                      <span className="text-xs text-muted-foreground">{opLabel}{f.value ? ` "${f.value.replace(/_/g, " ")}"` : ""}</span>
-                      <Button size="icon" variant="ghost" className="h-5 w-5 ml-auto shrink-0" onClick={() => handleRemoveFilter(idx)} data-testid={`button-remove-filter-${idx}`}>
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  );
-                })}
-                <Separator />
-                <div className="space-y-2">
-                  <Select value={pendingFilterField} onValueChange={v => { setPendingFilterField(v); setPendingFilterValue(""); }}>
-                    <SelectTrigger className="h-8 text-xs" data-testid="select-filter-field"><SelectValue placeholder="Select field..." /></SelectTrigger>
+
+        <MondayBoardShell.Toolbar
+          newLabel="Add Entry"
+          onNew={handleAddEntry}
+          newTestId="button-add-bpml-entry"
+          searchValue={searchTerm}
+          onSearchChange={setSearchTerm}
+          searchPlaceholder="Search entries..."
+          searchTestId="input-bpml-search"
+          filterOpen={showFilterPopover}
+          onFilterOpenChange={setShowFilterPopover}
+          filterActive={entryFilters.length > 0}
+          filterCount={entryFilters.length}
+          filterContent={
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium">Filters</h4>
+              {entryFilters.map((f, idx) => {
+                const fieldDef = BPML_FILTER_FIELDS.find(ff => ff.value === f.field);
+                const opLabel = BPML_FILTER_OPERATORS.find(o => o.value === f.operator)?.label || f.operator;
+                return (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs shrink-0">{fieldDef?.label || f.field}</Badge>
+                    <span className="text-xs text-muted-foreground">{opLabel}{f.value ? ` "${f.value.replace(/_/g, " ")}"` : ""}</span>
+                    <Button size="icon" variant="ghost" className="h-5 w-5 ml-auto shrink-0" onClick={() => handleRemoveFilter(idx)} data-testid={`button-remove-filter-${idx}`}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                );
+              })}
+              <Separator />
+              <div className="space-y-2">
+                <Select value={pendingFilterField} onValueChange={v => { setPendingFilterField(v); setPendingFilterValue(""); }}>
+                  <SelectTrigger className="h-8 text-xs" data-testid="select-filter-field"><SelectValue placeholder="Select field..." /></SelectTrigger>
+                  <SelectContent>
+                    {BPML_FILTER_FIELDS.map(f => (
+                      <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {pendingFilterField && (
+                  <Select value={pendingFilterOperator} onValueChange={v => setPendingFilterOperator(v as BpmlFilterOperator)}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="select-filter-operator"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {BPML_FILTER_FIELDS.map(f => (
-                        <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                      {BPML_FILTER_OPERATORS.map(o => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {pendingFilterField && (
-                    <Select value={pendingFilterOperator} onValueChange={v => setPendingFilterOperator(v as BpmlFilterOperator)}>
-                      <SelectTrigger className="h-8 text-xs" data-testid="select-filter-operator"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {BPML_FILTER_OPERATORS.map(o => (
-                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  {pendingFilterField && !["is_empty", "is_not_empty"].includes(pendingFilterOperator) && (
-                    <Select value={pendingFilterValue} onValueChange={setPendingFilterValue}>
-                      <SelectTrigger className="h-8 text-xs" data-testid="select-filter-value"><SelectValue placeholder="Select value..." /></SelectTrigger>
-                      <SelectContent>
-                        {(() => {
-                          const fieldDef = BPML_FILTER_FIELDS.find(f => f.value === pendingFilterField);
-                          if (fieldDef?.options) {
-                            return fieldDef.options.map(o => (
-                              <SelectItem key={o} value={o}>{o.replace(/_/g, " ")}</SelectItem>
-                            ));
-                          }
-                          return uniqueFieldValues(pendingFilterField).map(v => (
-                            <SelectItem key={v} value={v}>{v}</SelectItem>
-                          ));
-                        })()}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  <Button
-                    size="sm"
-                    className="w-full"
-                    disabled={!pendingFilterField || (!["is_empty", "is_not_empty"].includes(pendingFilterOperator) && !pendingFilterValue)}
-                    onClick={handleAddFilter}
-                    data-testid="button-add-filter"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Filter
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline" data-testid="button-entry-sort"
-                className={cn(entrySortField && entrySortField !== "sequenceOrder" && "bg-green-50 border-green-500 text-green-700 dark:bg-green-950/40 dark:border-green-500 dark:text-green-400")}>
-                <ArrowUpDown className="h-4 w-4 mr-1" />
-                Sort
-                {entrySortField && entrySortField !== "sequenceOrder" && (
-                  <Badge className="ml-1 text-[10px] px-1 bg-green-500 text-white no-default-hover-elevate no-default-active-elevate">
-                    {entrySortDir === "asc" ? "A-Z" : "Z-A"}
-                  </Badge>
                 )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="max-h-[400px] overflow-y-auto">
-              {entrySortField && entrySortField !== "sequenceOrder" && (
+                {pendingFilterField && !["is_empty", "is_not_empty"].includes(pendingFilterOperator) && (
+                  <Select value={pendingFilterValue} onValueChange={setPendingFilterValue}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="select-filter-value"><SelectValue placeholder="Select value..." /></SelectTrigger>
+                    <SelectContent>
+                      {(() => {
+                        const fieldDef = BPML_FILTER_FIELDS.find(f => f.value === pendingFilterField);
+                        if (fieldDef?.options) {
+                          return fieldDef.options.map(o => (
+                            <SelectItem key={o} value={o}>{o.replace(/_/g, " ")}</SelectItem>
+                          ));
+                        }
+                        return uniqueFieldValues(pendingFilterField).map(v => (
+                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        ));
+                      })()}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Button
+                  size="sm"
+                  className="w-full"
+                  disabled={!pendingFilterField || (!["is_empty", "is_not_empty"].includes(pendingFilterOperator) && !pendingFilterValue)}
+                  onClick={handleAddFilter}
+                  data-testid="button-add-filter"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Filter
+                </Button>
+              </div>
+            </div>
+          }
+          sortActive={entrySortField !== "sequenceOrder" || !!secondarySortField}
+          sortLabel={entrySortField !== "sequenceOrder" ? `Sort: ${BPML_SORT_OPTIONS.find(o => o.value === entrySortField)?.label ?? entrySortField}` : "Sort"}
+          sortContent={
+            <>
+              {entrySortField !== "sequenceOrder" && (
                 <>
                   <DropdownMenuItem onClick={() => { setEntrySortField("sequenceOrder"); setEntrySortDir("asc"); setActiveViewId(null); }} data-testid="menuitem-sort-clear">
-                    <X className="h-3.5 w-3.5 mr-1.5 text-red-500" />
-                    <span className="text-red-600 dark:text-red-400">Clear Sort</span>
+                    Clear sort
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                 </>
@@ -1665,18 +1708,14 @@ export default function BpmlView() {
                   }}
                   data-testid={`menuitem-sort-${opt.value}`}
                 >
-                  <span className="flex-1">{opt.label}</span>
-                  {entrySortField === opt.value && (
-                    <Badge variant="secondary" className="ml-2 text-[10px]">{entrySortDir}</Badge>
-                  )}
+                  {opt.label}{entrySortField === opt.value ? ` (${entrySortDir})` : ""}
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
               <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Then sort by</div>
               {secondarySortField && (
                 <DropdownMenuItem onClick={() => { setSecondarySortField(""); setActiveViewId(null); }} data-testid="menuitem-secondary-sort-clear">
-                  <X className="h-3.5 w-3.5 mr-1.5 text-red-500" />
-                  <span className="text-red-600 dark:text-red-400">Clear secondary sort</span>
+                  Clear secondary sort
                 </DropdownMenuItem>
               )}
               {BPML_SORT_OPTIONS.filter(o => o.value !== entrySortField).map(opt => (
@@ -1693,34 +1732,19 @@ export default function BpmlView() {
                   }}
                   data-testid={`menuitem-secondary-sort-${opt.value}`}
                 >
-                  <span className="flex-1">{opt.label}</span>
-                  {secondarySortField === opt.value && (
-                    <Badge variant="secondary" className="ml-2 text-[10px]">{secondarySortDir}</Badge>
-                  )}
+                  {opt.label}{secondarySortField === opt.value ? ` (${secondarySortDir})` : ""}
                 </DropdownMenuItem>
               ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline" data-testid="button-entry-group-by"
-                className={cn(entryGroupBy !== "none" && "bg-green-50 border-green-500 text-green-700 dark:bg-green-950/40 dark:border-green-500 dark:text-green-400")}>
-                <ChevronDown className="h-4 w-4 mr-1" />
-                Group
-                {entryGroupBy !== "none" && (
-                  <Badge className="ml-1 text-[10px] px-1 bg-green-500 text-white no-default-hover-elevate no-default-active-elevate">
-                    {BPML_ENTRY_GROUP_OPTIONS.find(o => o.value === entryGroupBy)?.label || entryGroupBy}
-                  </Badge>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="max-h-[400px] overflow-y-auto">
+            </>
+          }
+          groupActive={entryGroupBy !== "none"}
+          groupLabel={entryGroupBy === "none" ? "Group by" : (BPML_ENTRY_GROUP_OPTIONS.find(o => o.value === entryGroupBy)?.label ?? "Group by")}
+          groupContent={
+            <>
               {entryGroupBy !== "none" && (
                 <>
                   <DropdownMenuItem onClick={() => { setEntryGroupBy("none"); setActiveViewId(null); }} data-testid="menuitem-group-clear">
-                    <X className="h-3.5 w-3.5 mr-1.5 text-red-500" />
-                    <span className="text-red-600 dark:text-red-400">Clear Group</span>
+                    Clear group
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                 </>
@@ -1731,91 +1755,50 @@ export default function BpmlView() {
                   onClick={() => { setEntryGroupBy(opt.value); setActiveViewId(null); }}
                   data-testid={`menuitem-group-${opt.value}`}
                 >
-                  <span className="flex-1">{opt.label}</span>
-                  {entryGroupBy === opt.value && (
-                    <Badge variant="secondary" className="ml-2 text-[10px]">Active</Badge>
-                  )}
+                  {opt.label}{entryGroupBy === opt.value ? " (active)" : ""}
                 </DropdownMenuItem>
               ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <Separator orientation="vertical" className="h-5" />
-
-          <Button size="sm" onClick={handleAddEntry} data-testid="button-add-bpml-entry">
-            <Plus className="h-4 w-4 mr-1" />
-            Add Entry
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setShowFormatPanel(true)} data-testid="button-bpml-conditional-format">
-            <ImageIcon className="h-4 w-4 mr-1" />
-            Format
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline" disabled={isExporting} data-testid="button-download-bpml">
-                {isExporting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleCopyToClipboard} data-testid="menuitem-bpml-clipboard">
-                <ClipboardCopy className="h-4 w-4 mr-2" />Copy to Clipboard
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportPng} data-testid="menuitem-bpml-export-png">
-                <ImageIcon className="h-4 w-4 mr-2" />Export as PNG
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportPdf} data-testid="menuitem-bpml-export-pdf">
-                <FileDown className="h-4 w-4 mr-2" />Export as PDF
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleDownloadTemplate} data-testid="menuitem-download-data">
-                Download Data (CSV)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleDownloadBlankTemplate} data-testid="menuitem-download-blank">
-                Download Blank CSV
-              </DropdownMenuItem>
+            </>
+          }
+          grouped={entryGroupBy !== "none"}
+          columnsHiddenCount={hiddenColumnIds.size}
+          columnsContent={
+            <DropdownMenuItem onSelect={() => setShowColumnConfig(true)} data-testid="button-column-config">
+              Configure columns…
+            </DropdownMenuItem>
+          }
+          onImport={() => fileInputRef.current?.click()}
+          onPaste={() => fileInputRef.current?.click()}
+          onExport={handleDownloadTemplate}
+          onDownloadTemplate={handleDownloadBlankTemplate}
+          moreMenuItems={
+            <>
+              <DropdownMenuItem onClick={handleCopyToClipboard} data-testid="menuitem-bpml-clipboard">Copy to clipboard</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPng} data-testid="menuitem-bpml-export-png">Export as PNG</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPdf} data-testid="menuitem-bpml-export-pdf">Export as PDF</DropdownMenuItem>
               {selectedTemplate && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setShowSavePlatformTemplate(true)} data-testid="menuitem-save-bpml-platform-template">
-                    <LayoutTemplate className="h-4 w-4 mr-2" /> Save as Template
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem onClick={() => setShowSavePlatformTemplate(true)} data-testid="menuitem-save-bpml-platform-template">
+                  Save as platform template
+                </DropdownMenuItem>
               )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {selectedTemplate && (
-            <SaveAsPlatformTemplateDialog
-              open={showSavePlatformTemplate}
-              onOpenChange={setShowSavePlatformTemplate}
-              endpoint={`/api/bpml/templates/${selectedTemplate.id}/save-as-template`}
-              defaultName={selectedTemplate.name}
-              defaultDescription={selectedTemplate.description ?? ""}
-            />
-          )}
-          <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} data-testid="button-upload-bpml">
-            <Upload className="h-4 w-4 mr-1" />
-            Import
-          </Button>
-          <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileUpload} />
-          <Button size="sm" variant="outline" onClick={() => setShowColumnConfig(true)} data-testid="button-column-config"
-            className={cn((hiddenColumnIds.size > 0 || columnOrder.length > 0) && "bg-green-50 border-green-500 text-green-700 dark:bg-green-950/40 dark:border-green-500 dark:text-green-400")}>
-            <Settings2 className="h-4 w-4 mr-1" />
-            Columns
-            {hiddenColumnIds.size > 0 && (
-              <Badge className="ml-1 text-[10px] px-1 bg-green-500 text-white no-default-hover-elevate no-default-active-elevate">
-                {hiddenColumnIds.size} hidden
-              </Badge>
-            )}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => {
-            setEditingTemplate(selectedTemplate || null);
-            setShowEditTemplateDialog(true);
-          }} data-testid="button-edit-library">
-            <Pencil className="h-4 w-4 mr-1" />
-            Edit Library
-          </Button>
-        </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => { setEditingTemplate(selectedTemplate || null); setShowEditTemplateDialog(true); }} data-testid="button-edit-library">
+                Edit library
+              </DropdownMenuItem>
+            </>
+          }
+          testId="bpml-entries-toolbar"
+        />
+        <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileUpload} />
+        {selectedTemplate && (
+          <SaveAsPlatformTemplateDialog
+            open={showSavePlatformTemplate}
+            onOpenChange={setShowSavePlatformTemplate}
+            endpoint={`/api/bpml/templates/${selectedTemplate.id}/save-as-template`}
+            defaultName={selectedTemplate.name}
+            defaultDescription={selectedTemplate.description ?? ""}
+          />
+        )}
       </div>
 
       <div className="flex items-center gap-1 px-4 py-1.5 border-b bg-muted/20 flex-wrap">
@@ -1910,7 +1893,7 @@ export default function BpmlView() {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <MondayTable
+          <MondayBoardShell.Table
             columns={columns}
             data={groups ? [] : filteredData}
             columnWidthStorageKey="jiganto-bpml-list-col-widths"
@@ -1921,6 +1904,7 @@ export default function BpmlView() {
             onDeleteItems={(ids) => handleDeleteEntries(ids)}
             selectable
             gridLines
+            paginationResetKey={`${debouncedSearch}|${entryGroupBy}|${entrySortField}|${entrySortDir}|${secondarySortField}|${secondarySortDir}|${JSON.stringify(entryFilters)}`}
             renderBulkActions={(selectedIds) => (
               <>
                 <Button
@@ -2285,8 +2269,8 @@ export default function BpmlView() {
               name: editingTemplate.name,
               description: editingTemplate.description,
               templateType: editingTemplate.templateType,
-              erpPlatform: editingTemplate.erpPlatform,
-              processArea: editingTemplate.processArea,
+              erpPlatform: editingTemplate.erpPlatform && editingTemplate.erpPlatform !== "none" ? editingTemplate.erpPlatform : null,
+              processArea: editingTemplate.processArea && editingTemplate.processArea !== "none" ? editingTemplate.processArea : null,
               version: editingTemplate.version,
               status: editingTemplate.status,
             });
@@ -2348,9 +2332,10 @@ export default function BpmlView() {
               <FieldGrid cols={2}>
                 <div>
                   <FieldLabel>ERP Platform</FieldLabel>
-                  <Select value={editingTemplate.erpPlatform || ""} onValueChange={v => setEditingTemplate({ ...editingTemplate, erpPlatform: v })}>
+                  <Select value={editingTemplate.erpPlatform || "none"} onValueChange={v => setEditingTemplate({ ...editingTemplate, erpPlatform: v === "none" ? null : v })}>
                     <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
                       {bpmlErpPlatformEnum.map(e => (
                         <SelectItem key={e} value={e}>{e}</SelectItem>
                       ))}
@@ -2359,9 +2344,10 @@ export default function BpmlView() {
                 </div>
                 <div>
                   <FieldLabel>Process Area</FieldLabel>
-                  <Select value={editingTemplate.processArea || ""} onValueChange={v => setEditingTemplate({ ...editingTemplate, processArea: v })}>
+                  <Select value={editingTemplate.processArea || "none"} onValueChange={v => setEditingTemplate({ ...editingTemplate, processArea: v === "none" ? null : v })}>
                     <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
                       {bpmlProcessAreaEnum.map(a => (
                         <SelectItem key={a} value={a}>{a}</SelectItem>
                       ))}
@@ -2515,14 +2501,37 @@ export default function BpmlView() {
         </SheetContent>
       </Sheet>
 
-      <ConditionalFormattingPanel
-        open={showFormatPanel}
-        onOpenChange={setShowFormatPanel}
+      <BpmlFormatPanel
         rules={formatRules}
         onRulesChange={setFormatRules}
         columns={columns}
         data={filteredData}
       />
     </div>
+    </MondayBoardShell.Legacy>
+  );
+}
+
+function BpmlFormatPanel({
+  rules,
+  onRulesChange,
+  columns,
+  data,
+}: {
+  rules: ConditionalFormatRule[];
+  onRulesChange: (rules: ConditionalFormatRule[]) => void;
+  columns: ColumnDef<any>[];
+  data: any[];
+}) {
+  const { formatPanelOpen, setFormatPanelOpen } = useMondayBoard();
+  return (
+    <ConditionalFormattingPanel
+      open={formatPanelOpen}
+      onOpenChange={setFormatPanelOpen}
+      rules={rules}
+      onRulesChange={onRulesChange}
+      columns={columns}
+      data={data}
+    />
   );
 }

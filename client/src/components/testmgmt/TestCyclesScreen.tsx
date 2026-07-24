@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
@@ -15,8 +15,17 @@ import {
   Play,
   Calendar,
   FileDown,
-  FileSignature
+  FileSignature,
+  LayoutList,
+  LayoutGrid,
 } from "lucide-react";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import {
+  MondayBoardProvider,
+  MondayBoardTable,
+  MondayBoardChromeControls,
+} from "@/components/MondayBoardTable";
+import { useDebouncedValue } from "@/lib/crm-monday-chrome";
 import { FormDialogShell, FormSection, FieldGrid, FieldLabel } from "@/components/ui/form-dialog-shell";
 import { useAuth } from "@/hooks/use-auth";
 import { useTmFetch } from "@/hooks/use-tm-fetch";
@@ -34,10 +43,14 @@ export function TestCyclesScreen() {
   const { activeProjectId, activeProject, qsParam } = useTmProject();
   const labels = getTmLabels(activeProject?.methodology);
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({
+  const [listLayout, setListLayout] = useState<"cards" | "table">("cards");
+  const [cycleSearch, setCycleSearch] = useState("");
+  const debouncedCycleSearch = useDebouncedValue(cycleSearch);
+  const emptyForm = () => ({
     name: "", testPhase: "uat", methodology: activeProject?.methodology ?? "waterfall",
     startDate: "", endDate: "", buildVersion: "", notes: "",
   });
+  const [form, setForm] = useState(emptyForm);
 
   const {
     data: cycles = [],
@@ -83,10 +96,17 @@ export function TestCyclesScreen() {
   }
 
   const createMutation = useMutation({
-    mutationFn: (body: Record<string, unknown>) => apiRequest("POST", "/api/tm/runs", { ...body, projectId: activeProjectId, status: "planning" }),
+    mutationFn: (body: Record<string, unknown>) => apiRequest("POST", "/api/tm/runs", {
+      ...body,
+      projectId: activeProjectId,
+      status: "planning",
+      startDate: body.startDate || null,
+      endDate: body.endDate || null,
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tm/cycles"] });
       setCreateOpen(false);
+      setForm(emptyForm());
       toast({ title: "Test cycle created" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -120,6 +140,38 @@ export function TestCyclesScreen() {
     }
   }
 
+  const filteredCycles = useMemo(() => {
+    const q = debouncedCycleSearch.toLowerCase();
+    return cycles.filter((c) => {
+      if (!q) return true;
+      return `${c.name} ${c.testPhase ?? ""} ${c.status ?? ""} ${c.buildVersion ?? ""}`.toLowerCase().includes(q);
+    });
+  }, [cycles, debouncedCycleSearch]);
+
+  const cycleColumns: MondayColumnDef<EnrichedCycle>[] = useMemo(() => [
+    {
+      id: "name",
+      header: "Cycle",
+      type: "text",
+      accessor: "name",
+      width: "200px",
+      sticky: true,
+      editable: false,
+      render: (cycle) => (
+        <div className="flex items-center gap-2">
+          <span className={cn("w-2 h-2 rounded-full shrink-0", CYCLE_STATUS_COLORS[cycle.status ?? "planning"] ?? "bg-muted")} />
+          <span className="font-medium">{cycle.name}</span>
+          {activeProject?.activeCycleId === cycle.id && <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono">ACTIVE</span>}
+        </div>
+      ),
+    },
+    { id: "phase", header: "Phase", type: "text", accessor: (c) => c.testPhase, width: "80px", editable: false, render: (c) => <span className="text-[10px] font-mono uppercase">{c.testPhase ?? "uat"}</span> },
+    { id: "dates", header: "Dates", type: "text", accessor: (c) => `${c.startDate ?? ""}-${c.endDate ?? ""}`, width: "160px", editable: false, render: (c) => c.startDate ? `${c.startDate} → ${c.endDate}` : "—" },
+    { id: "status", header: "Status", type: "text", accessor: "status", width: "100px", editable: false, render: (c) => <span className="capitalize text-xs">{c.status?.replace("_", " ")}</span> },
+    { id: "completion", header: "Done", type: "text", accessor: (c) => c.metrics?.completionPct, width: "70px", editable: false, render: (c) => c.metrics ? `${c.metrics.completionPct}%` : "—" },
+    { id: "passRate", header: "Pass", type: "text", accessor: (c) => c.metrics?.passRatePct, width: "70px", editable: false, render: (c) => c.metrics ? `${c.metrics.passRatePct}%` : "—" },
+  ], [activeProject?.activeCycleId]);
+
   return (
     <TmScreenShell
       loading={isLoading}
@@ -128,14 +180,80 @@ export function TestCyclesScreen() {
       label="Loading test cycles..."
     >
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="text-xl font-semibold">Test Cycles</h2>
             <p className="text-sm text-muted-foreground">Organising envelopes for testing windows · {labels.area} methodology</p>
           </div>
-          <Button onClick={() => setCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> New Cycle</Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex border rounded-lg overflow-hidden">
+              <Button variant={listLayout === "cards" ? "secondary" : "ghost"} size="sm" className="h-8 rounded-none" onClick={() => setListLayout("cards")}>
+                <LayoutGrid className="h-3.5 w-3.5 mr-1" /> Cards
+              </Button>
+              <Button variant={listLayout === "table" ? "secondary" : "ghost"} size="sm" className="h-8 rounded-none" onClick={() => setListLayout("table")}>
+                <LayoutList className="h-3.5 w-3.5 mr-1" /> Table
+              </Button>
+            </div>
+            <Button onClick={() => setCreateOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> New Cycle</Button>
+          </div>
         </div>
 
+      {listLayout === "table" ? (
+        <MondayBoardProvider storageKey="jiganto-tm-test-cycles">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+          <input
+            className="max-w-xs h-8 px-3 text-sm border border-border rounded-md bg-background"
+            placeholder="Search cycles…"
+            value={cycleSearch}
+            onChange={(e) => setCycleSearch(e.target.value)}
+            data-testid="cycle-search"
+          />
+          <MondayBoardChromeControls />
+          </div>
+          <MondayBoardTable
+            columns={cycleColumns}
+            data={filteredCycles}
+            gridLines
+            emptyMessage="No test cycles match your search."
+            searchHighlightTerm={debouncedCycleSearch}
+            paginationResetKey={`${debouncedCycleSearch}-${activeProjectId}`}
+            renderRowActions={(cycle) => {
+              const linkedEsign = esignForCycle(cycle.id);
+              const isActive = activeProject?.activeCycleId === cycle.id;
+              return (
+                <div className="flex items-center gap-1">
+                  {!isActive && cycle.status !== "signed_off" && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); setActiveMutation.mutate(cycle.id); }}>Active</Button>
+                  )}
+                  {cycle.status === "completed" && (
+                    <>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); signOffMutation.mutate(cycle.id); }}>Sign off</Button>
+                      {linkedEsign ? (
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); setLocation(`/modules/e-sign?request=${linkedEsign.id}`); }}>e-Sign</Button>
+                      ) : (
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={(e) => { e.stopPropagation(); requestEsign(cycle); }}>
+                          <FileSignature className="h-3 w-3" /> e-Sign
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  {cycle.status === "signed_off" && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={(e) => { e.stopPropagation(); downloadCyclePdf(cycle.id, cycle.name); }}>
+                      <FileDown className="h-3 w-3" /> PDF
+                    </Button>
+                  )}
+                  {linkedEsign && cycle.status !== "completed" && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); setLocation(`/modules/e-sign?request=${linkedEsign.id}`); }}>e-Sign</Button>
+                  )}
+                </div>
+              );
+            }}
+            alwaysShowRowActions
+          />
+        </div>
+        </MondayBoardProvider>
+      ) : (
       <div className="grid gap-4">
         {cycles.map(cycle => {
           const m = cycle.metrics;
@@ -223,13 +341,17 @@ export function TestCyclesScreen() {
           <div className="text-center py-12 text-muted-foreground text-sm">No test cycles yet. Create one to begin execution.</div>
         )}
       </div>
+      )}
 
         <FormDialogShell
           open={createOpen}
-          onOpenChange={setCreateOpen}
+          onOpenChange={(open) => {
+            setCreateOpen(open);
+            setForm(emptyForm());
+          }}
           title="Create Test Cycle"
           saveLabel="Create Cycle"
-          onCancel={() => setCreateOpen(false)}
+          onCancel={() => { setCreateOpen(false); setForm(emptyForm()); }}
           onSubmit={() => createMutation.mutate(form)}
           saving={createMutation.isPending}
           disabled={!form.name.trim()}

@@ -490,8 +490,8 @@ export const crmSavedViews = pgTable("crm_saved_views", {
   tenantId: integer("tenant_id").notNull(),
   userId: varchar("user_id"),
   name: text("name").notNull(),
-  entityType: text("entity_type").notNull(), // accounts, contacts, leads, opportunities, activities
-  filters: jsonb("filters").notNull(), // JSON array of filter conditions
+  entityType: text("entity_type").notNull(), // accounts, contacts, leads, opportunities, activities, and any board entityType
+  filters: jsonb("filters").notNull(), // JSON array OR board snapshot blob (__boardViewV2 / __leadViewV2)
   columns: jsonb("columns"), // Optional: which columns to show
   sortBy: text("sort_by"),
   sortOrder: text("sort_order").default("asc"),

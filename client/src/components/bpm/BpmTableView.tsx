@@ -1,15 +1,14 @@
 import { useMemo, useCallback, useState } from "react";
 import type { Node, Edge } from "@xyflow/react";
-import { MondayTable, type ColumnDef, type GroupDef } from "@/components/MondayTable";
+import { type ColumnDef, type GroupDef } from "@/components/MondayTable";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useDebouncedValue } from "@/lib/crm-monday-chrome";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
-  Plus,
-  Download,
-  Upload,
-  Search,
   MoreHorizontal,
   ArrowUp,
   ArrowDown
@@ -149,6 +148,7 @@ interface BpmTableViewProps {
   onNodesChange: (nodes: Node[]) => void;
   onEdgesChange: (edges: Edge[]) => void;
   onSetDirty: () => void;
+  onExport: () => void;
   onDownloadTemplate: () => void;
   onImportCsv: () => void;
 }
@@ -160,16 +160,18 @@ export default function BpmTableView({
   onNodesChange,
   onEdgesChange,
   onSetDirty,
+  onExport,
   onDownloadTemplate,
   onImportCsv,
 }: BpmTableViewProps) {
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearch = useDebouncedValue(searchTerm);
 
   const rows = useMemo(() => nodesToRows(nodes, edges), [nodes, edges]);
 
   const filteredRows = useMemo(() => {
-    if (!searchTerm.trim()) return rows;
-    const term = searchTerm.toLowerCase();
+    if (!debouncedSearch.trim()) return rows;
+    const term = debouncedSearch.toLowerCase();
     return rows.filter(r =>
       r.label.toLowerCase().includes(term) ||
       r.notes.toLowerCase().includes(term) ||
@@ -177,7 +179,7 @@ export default function BpmTableView({
       r.lane.toLowerCase().includes(term) ||
       SHAPE_LABEL_MAP[r.shapeType]?.toLowerCase().includes(term)
     );
-  }, [rows, searchTerm]);
+  }, [rows, debouncedSearch]);
 
   const laneNodes = useMemo(() => nodes.filter(n => n.type === "swimlane_lane"), [nodes]);
   const lanes = useMemo(() => {
@@ -436,7 +438,7 @@ export default function BpmTableView({
     {
       id: "owner",
       header: "Owner",
-      type: "text" as const,
+      type: "person" as const,
       accessor: "owner" as keyof TableRow,
       width: "140px",
       editable: true,
@@ -460,7 +462,7 @@ export default function BpmTableView({
     {
       id: "cost",
       header: "Cost",
-      type: "text" as const,
+      type: "number" as const,
       accessor: "cost" as keyof TableRow,
       width: "100px",
       editable: true,
@@ -468,7 +470,7 @@ export default function BpmTableView({
     {
       id: "duration",
       header: "Duration",
-      type: "text" as const,
+      type: "number" as const,
       accessor: "duration" as keyof TableRow,
       width: "100px",
       editable: true,
@@ -492,40 +494,36 @@ export default function BpmTableView({
   ], [lanes]);
 
   return (
+    <MondayBoardShell.Legacy
+      storageKey="jiganto-bpm-table-view"
+      entityType="bpm_diagram_node"
+      stateHook={useMondayBoardShellState}
+      filterMatcher={matchBoardFilterValue}
+    >
     <div className="flex flex-col h-full" data-testid="bpm-table-view">
-      <div className="flex items-center justify-between gap-3 px-4 py-2 border-b flex-wrap">
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search nodes..."
-              className="h-8 w-[200px] pl-8 text-sm"
-              data-testid="input-table-search"
-            />
-          </div>
-          <Badge variant="secondary" className="text-xs">
+      <MondayBoardShell.Toolbar
+        newLabel="Add Shape"
+        onNew={handleAddNode}
+        newTestId="button-add-table-row"
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search nodes..."
+        searchTestId="input-table-search"
+        grouped={!!groups}
+        onExport={onExport}
+        onDownloadTemplate={onDownloadTemplate}
+        onPaste={onImportCsv}
+        onImport={onImportCsv}
+        afterGroupSlot={
+          <Badge variant="secondary" className="text-xs h-8 px-2.5 inline-flex items-center">
             {filteredRows.length} node{filteredRows.length !== 1 ? "s" : ""}
           </Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={onDownloadTemplate} data-testid="button-download-template">
-            <Download className="h-4 w-4 mr-1" />
-            Download Template
-          </Button>
-          <Button size="sm" variant="outline" onClick={onImportCsv} data-testid="button-import-csv">
-            <Upload className="h-4 w-4 mr-1" />
-            Import CSV
-          </Button>
-          <Button size="sm" onClick={handleAddNode} data-testid="button-add-table-row">
-            <Plus className="h-4 w-4 mr-1" />
-            Add Shape
-          </Button>
-        </div>
-      </div>
+        }
+        className="px-4 py-2 border-b"
+        testId="bpm-table-toolbar"
+      />
       <div className="flex-1 overflow-auto p-4">
-        <MondayTable
+        <MondayBoardShell.Table
           columns={columns}
           data={groups ? [] : filteredRows}
           columnWidthStorageKey="jiganto-bpm-table-col-widths"
@@ -534,6 +532,8 @@ export default function BpmTableView({
           onCellEdit={handleCellEdit}
           onDeleteItems={handleDeleteNodes}
           selectable
+          gridLines
+          paginationResetKey={`${debouncedSearch}|${lanes.join(",")}`}
           renderBulkActions={(selectedIds) => (
             <>
               <Button
@@ -586,6 +586,7 @@ export default function BpmTableView({
         />
       </div>
     </div>
+    </MondayBoardShell.Legacy>
   );
 }
 

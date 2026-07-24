@@ -267,8 +267,8 @@ export default function ResourceManagementPage() {
                 initialProfileId={profileResourceId}
                 onProfileOpened={() => setProfileResourceId(null)}
                 utilByResource={utilByResource}
-                onCreate={(d) => createResourceMutation.mutate(d)}
-                onUpdate={(id, d) => updateResourceMutation.mutate({ id, data: d })}
+                onCreate={(d, opts) => createResourceMutation.mutate(d, opts)}
+                onUpdate={(id, d, opts) => updateResourceMutation.mutate({ id, data: d }, opts)}
                 onDelete={(id) => deleteResourceMutation.mutate(id)}
                 onAddSkill={(d) => addSkillMutation.mutate(d as { resourceId: number; skillId: number; proficiencyLevel: string; skillLevel: number })}
                 onRemoveSkill={(id) => {

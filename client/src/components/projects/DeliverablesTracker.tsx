@@ -4,6 +4,14 @@ import { useLocation } from "wouter";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { PmDeliverablePhase, PmDeliverable } from "@shared/models/projects";
+import { type ColumnDef as MondayColumnDef, type GroupDef } from "@/components/MondayTable";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { useDebouncedValue, recordToMondayGroups, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
 import {
   Dialog,
   DialogContent,
@@ -15,17 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
-import { useTablePagination } from "@/hooks/use-table-pagination";
-import { TablePagination } from "@/components/TablePagination";
 import {
-  Search,
-  ChevronRight,
-  Settings,
-  Upload,
-  Download,
-  Plus,
   Trash2,
-  Pencil,
   ClipboardList,
   GripVertical,
   FileText,
@@ -53,8 +52,6 @@ const TYPE_ICONS: Record<string, typeof FileText> = {
 const DELIVERABLE_TYPES = ["Document","Report","Plan","Specification","Presentation","Template","Sign-off","Strategy","Design Doc","Milestone","Test Doc","Test Cycle","Assessment","Development","Data","Handover","Review","Other"];
 const STATUS_OPTIONS = ["Not Started","In Progress","In Review","Approved","Completed","Overdue"];
 const RAG_OPTIONS = ["Green","Amber","Red","Blue","N/A"];
-const STATUS_CYCLE = ["Not Started","In Progress","In Review","Approved","Completed"];
-const RAG_CYCLE = ["Green","Amber","Red","Blue"];
 
 const TPLS: Record<string, { name: string; color: string }[]> = {
   agile: [
@@ -102,31 +99,6 @@ const KPI_DEFS: KpiDef[] = [
 
 function initials(name: string) {
   return (name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
-}
-
-function ragClasses(r: string) {
-  if (r === "Green") return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
-  if (r === "Amber") return "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300";
-  if (r === "Red") return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
-  if (r === "Blue") return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
-  return "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400";
-}
-
-function ragDot(r: string) {
-  if (r === "Green") return "#22c55e";
-  if (r === "Amber") return "#f59e0b";
-  if (r === "Red") return "#ef4444";
-  if (r === "Blue") return "#3b82f6";
-  return "#9ca3af";
-}
-
-function statusClasses(s: string) {
-  if (s === "Completed") return "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300";
-  if (s === "Approved") return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
-  if (s === "In Progress") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
-  if (s === "In Review") return "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300";
-  if (s === "Overdue") return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
-  return "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400";
 }
 
 function progColor(p: number) {
@@ -194,7 +166,7 @@ function PeopleEditor({ label, hint, people, onChange }: PeopleEditorProps) {
                 {initials(name)}
               </div>
               <span className="flex-1 text-[13px]">{name}</span>
-              <button className="text-muted-foreground/60 hover:text-red-500 text-sm" onClick={() => onChange(people.filter((_, j) => j !== i))} data-testid={`remove-person-${label.toLowerCase()}-${i}`}>✕</button>
+              <button type="button" className="text-muted-foreground/60 hover:text-red-500 text-sm" onClick={() => onChange(people.filter((_, j) => j !== i))} data-testid={`remove-person-${label.toLowerCase()}-${i}`}>✕</button>
             </div>
           ))}
         </div>
@@ -204,10 +176,15 @@ function PeopleEditor({ label, hint, people, onChange }: PeopleEditorProps) {
             placeholder="Add name…"
             value={inputVal}
             onChange={e => setInputVal(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && add()}
+            onKeyDown={e => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add();
+              }
+            }}
             data-testid={`input-person-${label.toLowerCase()}`}
           />
-          <Button size="sm" className="h-7 px-3 text-xs" onClick={add} data-testid={`add-person-${label.toLowerCase()}`}>＋</Button>
+          <Button type="button" size="sm" className="h-7 px-3 text-xs" onClick={add} data-testid={`add-person-${label.toLowerCase()}`}>＋</Button>
         </div>
       </div>
     </div>
@@ -261,12 +238,17 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
 
   // UI State
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebouncedValue(searchQuery);
   const [phaseFilter, setPhaseFilter] = useState("");
   const [ragFilter, setRagFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [activeKpi, setActiveKpi] = useState<string | null>(null);
-  const [collapsedPhases, setCollapsedPhases] = useState<Set<number>>(new Set());
-  const [allCollapsed, setAllCollapsed] = useState(false);
+  const [sortField, setSortField] = useState<"name" | "dueDate" | "status" | "progress">("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [pinName, setPinName] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("deliverables-pin-name") !== "0";
+  });
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [openDrawerId, setOpenDrawerId] = useState<number | null>(null);
 
@@ -275,6 +257,9 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
   const [editDelId, setEditDelId] = useState<number | null>(null);
   const [showPhaseModal, setShowPhaseModal] = useState(false);
   const [savingPhases, setSavingPhases] = useState(false);
+  const [savingDeliverable, setSavingDeliverable] = useState(false);
+  const [savingReview, setSavingReview] = useState(false);
+  const [savingImport, setSavingImport] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewDelId, setReviewDelId] = useState<number | null>(null);
@@ -312,8 +297,8 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
 
   // Derived data
   const filteredDeliverables = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    return deliverables.filter(d => {
+    const q = debouncedSearch.toLowerCase();
+    const result = deliverables.filter(d => {
       if (q) {
         const owners = (d.owners as string[] || []).join(" ").toLowerCase();
         const reviewers = (d.reviewers as string[] || []).join(" ").toLowerCase();
@@ -326,7 +311,24 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
       if (effectiveStatus && d.status !== effectiveStatus) return false;
       return true;
     });
-  }, [deliverables, searchQuery, phaseFilter, ragFilter, statusFilter, activeKpi]);
+
+    result.sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      if (sortField === "name") return dir * a.name.localeCompare(b.name);
+      if (sortField === "status") return dir * (a.status || "").localeCompare(b.status || "");
+      if (sortField === "progress") return dir * ((a.progress || 0) - (b.progress || 0));
+      const aDate = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+      const bDate = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      return dir * (aDate - bDate);
+    });
+
+    return result;
+  }, [deliverables, debouncedSearch, phaseFilter, ragFilter, statusFilter, activeKpi, sortField, sortDir]);
+
+  const handleDeliverableSort = (field: typeof sortField) => {
+    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortField(field); setSortDir("asc"); }
+  };
 
   const kpiCounts = useMemo(() => {
     const counts: Record<string, number> = { total: deliverables.length };
@@ -339,57 +341,6 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
     setActiveKpi(prev => prev === filter ? null : filter);
   };
 
-  const toggleCollapse = (phaseId: number) => {
-    setCollapsedPhases(prev => {
-      const next = new Set(prev);
-      next.has(phaseId) ? next.delete(phaseId) : next.add(phaseId);
-      return next;
-    });
-  };
-
-  const toggleCollapseAll = () => {
-    if (allCollapsed) {
-      setCollapsedPhases(new Set());
-    } else {
-      setCollapsedPhases(new Set(phases.map(p => p.id)));
-    }
-    setAllCollapsed(!allCollapsed);
-  };
-
-  const toggleSelect = (id: number) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const togglePhaseSelect = (phaseName: string, checked: boolean) => {
-    const phaseDelIds = deliverables.filter(d => d.phaseName === phaseName).map(d => d.id);
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      phaseDelIds.forEach(id => checked ? next.add(id) : next.delete(id));
-      return next;
-    });
-  };
-
-  const clearSelection = () => setSelectedIds(new Set());
-
-  const cycleStatus = async (del: PmDeliverable) => {
-    const i = STATUS_CYCLE.indexOf(del.status);
-    const newStatus = STATUS_CYCLE[(i + 1) % STATUS_CYCLE.length];
-    const updates: any = { status: newStatus };
-    if (newStatus === "Approved") updates.version = del.version + 1;
-    await updateDelMut.mutateAsync({ id: del.id, data: updates });
-    invalidateAll();
-  };
-
-  const cycleRag = async (del: PmDeliverable) => {
-    const i = RAG_CYCLE.indexOf(del.ragStatus);
-    const newRag = RAG_CYCLE[(i + 1) % RAG_CYCLE.length];
-    await updateDelMut.mutateAsync({ id: del.id, data: { ragStatus: newRag } });
-    invalidateAll();
-  };
 
   // Add/Edit Modal
   const openAddModal = () => {
@@ -412,31 +363,39 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
   };
 
   const saveDeliverable = async () => {
-    const data: any = {
-      name: formName || "Untitled",
-      phaseName: formPhase,
-      type: formType,
-      status: formStatus,
-      ragStatus: formRag,
-      dueDate: formDue || null,
-      progress: formProg,
-      notes: formNotes,
-      owners: formOwners,
-      reviewers: formReviewers,
-      approvers: formApprovers,
-    };
+    if (savingDeliverable) return;
+    setSavingDeliverable(true);
+    try {
+      const data: any = {
+        name: formName || "Untitled",
+        phaseName: formPhase || null,
+        type: formType,
+        status: formStatus,
+        ragStatus: formRag,
+        dueDate: formDue || null,
+        progress: formProg,
+        notes: formNotes || null,
+        owners: formOwners,
+        reviewers: formReviewers,
+        approvers: formApprovers,
+      };
 
-    if (editDelId) {
-      await updateDelMut.mutateAsync({ id: editDelId, data });
-    } else {
-      data.projectId = projectId;
-      data.version = 1;
-      data.auditLog = [];
-      await createDelMut.mutateAsync(data);
+      if (editDelId) {
+        await updateDelMut.mutateAsync({ id: editDelId, data });
+      } else {
+        data.projectId = projectId;
+        data.version = 1;
+        data.auditLog = [];
+        await createDelMut.mutateAsync(data);
+      }
+      setShowAddModal(false);
+      invalidateAll();
+      toast({ title: editDelId ? "Deliverable updated" : "Deliverable created" });
+    } catch {
+      toast({ title: "Error saving deliverable. Please try again.", variant: "destructive" });
+    } finally {
+      setSavingDeliverable(false);
     }
-    setShowAddModal(false);
-    invalidateAll();
-    toast({ title: editDelId ? "Deliverable updated" : "Deliverable created" });
   };
 
   const deleteDeliverable = async (id: number) => {
@@ -447,39 +406,19 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
     toast({ title: "Deliverable deleted" });
   };
 
-  // Bulk actions
-  const bulkSetStatus = async (status: string) => {
-    for (const id of selectedIds) {
-      const del = deliverables.find(d => d.id === id);
-      if (!del) continue;
-      const updates: any = { status };
-      if (status === "Approved") updates.version = del.version + 1;
-      await updateDelMut.mutateAsync({ id, data: updates });
-    }
-    clearSelection();
-    invalidateAll();
-    toast({ title: `${selectedIds.size} deliverables updated` });
-  };
-
-  const bulkDelete = async () => {
-    if (!confirm(`Delete ${selectedIds.size} deliverable(s)?`)) return;
-    for (const id of selectedIds) {
-      await deleteDelMut.mutateAsync(id);
-    }
-    clearSelection();
-    invalidateAll();
-    toast({ title: "Deliverables deleted" });
-  };
-
   const bulkMove = async () => {
     if (!bulkMoveTarget) return;
-    for (const id of selectedIds) {
-      await updateDelMut.mutateAsync({ id, data: { phaseName: bulkMoveTarget } });
+    try {
+      for (const id of selectedIds) {
+        await updateDelMut.mutateAsync({ id, data: { phaseName: bulkMoveTarget } });
+      }
+      setSelectedIds(new Set());
+      setShowBulkMoveModal(false);
+      invalidateAll();
+      toast({ title: "Deliverables moved" });
+    } catch {
+      toast({ title: "Error moving deliverables. Please try again.", variant: "destructive" });
     }
-    clearSelection();
-    setShowBulkMoveModal(false);
-    invalidateAll();
-    toast({ title: "Deliverables moved" });
   };
 
   // Phase modal
@@ -568,7 +507,7 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
   };
 
   const submitReview = async (type: "approve" | "changes" | "comment") => {
-    if (!reviewDelId) return;
+    if (!reviewDelId || savingReview) return;
     const del = deliverables.find(d => d.id === reviewDelId);
     if (!del) return;
 
@@ -591,10 +530,17 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
       updates.status = "In Progress";
     }
 
-    await updateDelMut.mutateAsync({ id: reviewDelId, data: updates });
-    setShowReviewModal(false);
-    invalidateAll();
-    toast({ title: type === "approve" ? "Approved" : type === "changes" ? "Changes requested" : "Comment added" });
+    setSavingReview(true);
+    try {
+      await updateDelMut.mutateAsync({ id: reviewDelId, data: updates });
+      setShowReviewModal(false);
+      invalidateAll();
+      toast({ title: type === "approve" ? "Approved" : type === "changes" ? "Changes requested" : "Comment added" });
+    } catch {
+      toast({ title: "Error submitting review. Please try again.", variant: "destructive" });
+    } finally {
+      setSavingReview(false);
+    }
   };
 
   // Audit modal
@@ -604,38 +550,33 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
   };
 
   // Import/Export
+  const DELIVERABLE_CSV_HEADERS = ["Name","Phase","Type","Owners","Reviewers","Approvers","Due Date","Status","RAG","Progress %","Notes"];
+
   const exportCSV = () => {
-    const headers = ["Name","Phase","Type","Owners","Reviewers","Approvers","Due Date","Status","RAG","Progress %","Notes"];
     const rows = deliverables.map(d => [
-      `"${(d.name || "").replace(/"/g, '""')}"`,
-      `"${(d.phaseName || "").replace(/"/g, '""')}"`,
-      `"${(d.type || "").replace(/"/g, '""')}"`,
-      `"${((d.owners as string[]) || []).join("|").replace(/"/g, '""')}"`,
-      `"${((d.reviewers as string[]) || []).join("|").replace(/"/g, '""')}"`,
-      `"${((d.approvers as string[]) || []).join("|").replace(/"/g, '""')}"`,
-      `"${(d.dueDate || "").replace(/"/g, '""')}"`,
-      `"${(d.status || "").replace(/"/g, '""')}"`,
-      `"${(d.ragStatus || "").replace(/"/g, '""')}"`,
-      `"${d.progress || 0}"`,
-      `"${(d.notes || "").replace(/"/g, '""')}"`,
-    ].join(","));
-    const csv = [headers.join(","), ...rows].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "deliverables-export.csv"; a.click();
-    URL.revokeObjectURL(url);
+      d.name || "",
+      d.phaseName || "",
+      d.type || "",
+      ((d.owners as string[]) || []).join("|"),
+      ((d.reviewers as string[]) || []).join("|"),
+      ((d.approvers as string[]) || []).join("|"),
+      d.dueDate || "",
+      d.status || "",
+      d.ragStatus || "",
+      String(d.progress || 0),
+      d.notes || "",
+    ]);
+    downloadBoardCsv("deliverables-export.csv", DELIVERABLE_CSV_HEADERS, rows);
     toast({ title: "CSV exported" });
   };
 
   const downloadTemplate = () => {
-    const headers = "Name,Phase,Type,Owners,Reviewers,Approvers,Due Date,Status,RAG,Progress %,Notes";
-    const example = '"Project Charter","Initiation","Document","Sarah R","James M|Karen L","Alex B","2025-03-15","Not Started","Green","0","Example note here"';
-    const blob = new Blob([headers + "\n" + example], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "deliverables-import-template.csv"; a.click();
-    URL.revokeObjectURL(url);
+    downloadImportTemplateCsv(
+      "deliverables-import-template.csv",
+      DELIVERABLE_CSV_HEADERS,
+      ["Project Charter","Initiation","Document","Sarah R","James M|Karen L","Alex B","2025-03-15","Not Started","Green","0","Example note here"],
+    );
+    toast({ title: "Import template downloaded" });
   };
 
   const openImportModal = () => {
@@ -721,32 +662,39 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
   };
 
   const confirmImport = async () => {
-    if (!importRows.length) return;
-    const createdPhaseNames = new Set(phases.map(p => p.name));
-    const existingDelKeys = new Set(deliverables.map(d => `${d.name}|||${d.phaseName || ""}`));
-    let skipped = 0;
-    for (const r of importRows) {
-      if (r.phaseName && !createdPhaseNames.has(r.phaseName)) {
-        const c = PHASE_PAL[createdPhaseNames.size % PHASE_PAL.length];
-        await createPhaseMut.mutateAsync({ projectId, name: r.phaseName, color: c, sortOrder: createdPhaseNames.size });
-        createdPhaseNames.add(r.phaseName);
+    if (!importRows.length || savingImport) return;
+    setSavingImport(true);
+    try {
+      const createdPhaseNames = new Set(phases.map(p => p.name));
+      const existingDelKeys = new Set(deliverables.map(d => `${d.name}|||${d.phaseName || ""}`));
+      let skipped = 0;
+      for (const r of importRows) {
+        if (r.phaseName && !createdPhaseNames.has(r.phaseName)) {
+          const c = PHASE_PAL[createdPhaseNames.size % PHASE_PAL.length];
+          await createPhaseMut.mutateAsync({ projectId, name: r.phaseName, color: c, sortOrder: createdPhaseNames.size });
+          createdPhaseNames.add(r.phaseName);
+        }
+        const key = `${r.name}|||${r.phaseName || ""}`;
+        if (existingDelKeys.has(key)) {
+          skipped++;
+          continue;
+        }
+        existingDelKeys.add(key);
+        await createDelMut.mutateAsync({
+          ...r,
+          projectId,
+        });
       }
-      const key = `${r.name}|||${r.phaseName || ""}`;
-      if (existingDelKeys.has(key)) {
-        skipped++;
-        continue;
-      }
-      existingDelKeys.add(key);
-      await createDelMut.mutateAsync({
-        ...r,
-        projectId,
-      });
+      const imported = importRows.length - skipped;
+      setShowImportModal(false);
+      invalidateAll();
+      toast({ title: `${imported} deliverable${imported !== 1 ? "s" : ""} imported${skipped > 0 ? ` (${skipped} duplicate${skipped !== 1 ? "s" : ""} skipped)` : ""}` });
+      setImportRows([]);
+    } catch {
+      toast({ title: "Error importing deliverables. Please try again.", variant: "destructive" });
+    } finally {
+      setSavingImport(false);
     }
-    const imported = importRows.length - skipped;
-    setShowImportModal(false);
-    invalidateAll();
-    toast({ title: `${imported} deliverable${imported !== 1 ? "s" : ""} imported${skipped > 0 ? ` (${skipped} duplicate${skipped !== 1 ? "s" : ""} skipped)` : ""}` });
-    setImportRows([]);
   };
 
   // Group deliverables by phase
@@ -759,7 +707,7 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
     phases.forEach(p => {
       const all = allDelsForPhase(p.name);
       const items = filteredDeliverables.filter(d => d.phaseName === p.name);
-      if (items.length > 0 || all.length > 0 || (!searchQuery && !ragFilter && !statusFilter && !activeKpi)) {
+      if (items.length > 0 || all.length > 0 || (!debouncedSearch && !ragFilter && !statusFilter && !activeKpi)) {
         groups.push({ phase: p, phaseName: p.name, items, allItems: all });
       }
     });
@@ -769,7 +717,143 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
     }
 
     return groups;
-  }, [phases, filteredDeliverables, deliverables, searchQuery, ragFilter, statusFilter, activeKpi]);
+  }, [phases, filteredDeliverables, deliverables, debouncedSearch, ragFilter, statusFilter, activeKpi]);
+
+  const tablePaginationResetKey = `${debouncedSearch}|${phaseFilter}|${ragFilter}|${statusFilter}|${activeKpi}|${sortField}|${sortDir}`;
+
+  const groupColors = useMemo(() => {
+    const colors: Record<string, string> = { Unassigned: "#888" };
+    phases.forEach((p) => { colors[p.name] = p.color; });
+    return colors;
+  }, [phases]);
+
+  const tableGroups: GroupDef<PmDeliverable>[] | undefined = useMemo(() => {
+    if (phaseGroups.length === 0) return undefined;
+    const grouped = Object.fromEntries(phaseGroups.map((g) => [g.phaseName, g.items]));
+    return recordToMondayGroups(
+      grouped,
+      groupColors,
+      (items) => {
+        const approved = items.filter((d) => d.status === "Approved").length;
+        return `${approved}/${items.length} approved`;
+      },
+    );
+  }, [phaseGroups, groupColors]);
+
+  const mondayColumns: MondayColumnDef<PmDeliverable>[] = useMemo(() => [
+    {
+      id: "name",
+      header: "Deliverable",
+      type: "text",
+      accessor: "name",
+      width: "240px",
+      sticky: pinName,
+      editable: true,
+      render: (d) => {
+        const TypeIcon = TYPE_ICONS[d.type] || FileText;
+        return (
+          <div className="flex items-center gap-2 min-w-0">
+            <TypeIcon className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-[13.5px] font-medium leading-tight">{d.name}</div>
+              {d.notes && <div className="text-[11.5px] text-muted-foreground truncate mt-0.5">{d.notes}</div>}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: "type",
+      header: "Type",
+      type: "text",
+      accessor: "type",
+      width: "100px",
+      editable: true,
+      render: (d) => <span className="text-[12.5px] text-muted-foreground">{d.type}</span>,
+    },
+    {
+      id: "dueDate",
+      header: "Due",
+      type: "date",
+      accessor: "dueDate",
+      width: "100px",
+      editable: true,
+      render: (d) => {
+        const dateInfo = formatDate(d.dueDate);
+        const dateDisplay = typeof dateInfo === "string" ? { text: dateInfo, className: "" } : dateInfo;
+        return <span className={`text-[12.5px] ${dateDisplay.className}`}>{dateDisplay.text}</span>;
+      },
+    },
+    {
+    {
+      id: "status",
+      header: "Status",
+      type: "status",
+      accessor: "status",
+      width: "110px",
+      editable: true,
+      options: STATUS_OPTIONS.map((s) => ({ value: s, label: s })),
+    },
+    {
+      id: "ragStatus",
+      header: "RAG",
+      type: "status",
+      accessor: "ragStatus",
+      width: "86px",
+      editable: true,
+      options: RAG_OPTIONS.filter((r) => r !== "N/A").map((r) => ({ value: r, label: r })),
+    },
+    {
+      id: "progress",
+      header: "Progress",
+      type: "number",
+      accessor: "progress",
+      width: "96px",
+      editable: true,
+      render: (d) => (
+        <div className="flex items-center gap-1.5">
+          <div className="w-14 h-1 bg-border rounded-full overflow-hidden shrink-0">
+            <div className="h-full rounded-full" style={{ width: `${d.progress}%`, background: progColor(d.progress) }} />
+          </div>
+          <span className="text-[11.5px] text-muted-foreground">{d.progress}%</span>
+        </div>
+      ),
+    },
+    {
+      id: "version",
+      header: "Ver",
+      type: "text",
+      accessor: "version",
+      width: "54px",
+      editable: false,
+      render: (d) => (
+        <span className="px-1.5 py-0.5 rounded bg-muted text-[10.5px] font-mono font-bold text-muted-foreground">v{d.version}.0</span>
+      ),
+    },
+    {
+      id: "approvals",
+      header: "Approvals",
+      type: "status",
+      accessor: "id",
+      width: "130px",
+      editable: false,
+      render: (d) => {
+        const ai = approvalInfo(d);
+        const isDrawerOpen = openDrawerId === d.id;
+        return (
+          <button
+            type="button"
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-bold cursor-pointer transition hover:scale-105 whitespace-nowrap ${ai.cls} ${isDrawerOpen ? "ring-2 ring-current" : ""}`}
+            onClick={(e) => { e.stopPropagation(); setOpenDrawerId((prev) => (prev === d.id ? null : d.id)); }}
+            title="Click to see people & approvals"
+            data-testid={`approval-chip-${d.id}`}
+          >
+            {ai.icon} {ai.label}
+          </button>
+        );
+      },
+    },
+  ], [openDrawerId, pinName]);
 
   const isLoading = phasesLoading || delsLoading;
 
@@ -781,13 +865,16 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
     );
   }
 
-  const activeFilters = [];
-  if (activeKpi) activeFilters.push({ label: `Status: ${activeKpi}`, clear: () => setActiveKpi(null) });
-  if (phaseFilter) activeFilters.push({ label: `Phase: ${phaseFilter}`, clear: () => setPhaseFilter("") });
-  if (ragFilter) activeFilters.push({ label: `RAG: ${ragFilter}`, clear: () => setRagFilter("") });
-  if (statusFilter) activeFilters.push({ label: `Status: ${statusFilter}`, clear: () => setStatusFilter("") });
+  const activeFilterCount =
+    (activeKpi ? 1 : 0) + (phaseFilter ? 1 : 0) + (ragFilter ? 1 : 0) + (statusFilter ? 1 : 0);
 
   return (
+    <MondayBoardShell.Legacy
+      storageKey="jiganto-deliverables"
+      entityType="project_deliverable"
+      stateHook={useMondayBoardShellState}
+      filterMatcher={matchBoardFilterValue}
+    >
     <div className="space-y-4" data-testid="deliverables-tracker">
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5" data-testid="deliverables-kpi-row">
@@ -820,156 +907,218 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
         })}
       </div>
 
-      {/* Bulk Action Bar */}
-      {selectedIds.size > 0 && (
-        <div className="bg-blue-600 text-white rounded-lg px-4 py-2.5 flex items-center gap-3 flex-wrap animate-in slide-in-from-top-2" data-testid="bulk-action-bar">
-          <span className="font-bold text-sm">{selectedIds.size} selected</span>
-          <span className="opacity-30 text-lg">|</span>
-          <button className="px-3 py-1 rounded-md text-xs font-semibold bg-white/15 border border-white/30 hover:bg-white/25 transition" onClick={() => bulkSetStatus("Approved")} data-testid="bulk-approve">✅ Mark Approved</button>
-          <button className="px-3 py-1 rounded-md text-xs font-semibold bg-white/15 border border-white/30 hover:bg-white/25 transition" onClick={() => bulkSetStatus("In Progress")} data-testid="bulk-inprogress">🔵 In Progress</button>
-          <button className="px-3 py-1 rounded-md text-xs font-semibold bg-white/15 border border-white/30 hover:bg-white/25 transition" onClick={() => { setBulkMoveTarget(""); setShowBulkMoveModal(true); }} data-testid="bulk-move">📁 Move Phase</button>
-          <button className="px-3 py-1 rounded-md text-xs font-semibold bg-red-500/40 border border-red-500/50 hover:bg-red-500/60 transition" onClick={bulkDelete} data-testid="bulk-delete">🗑 Delete</button>
-          <button className="ml-auto px-3 py-1 rounded-md text-xs font-semibold bg-white/15 border border-white/30 hover:bg-white/25 transition" onClick={clearSelection} data-testid="bulk-clear">✕ Clear</button>
-        </div>
-      )}
-
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 flex-wrap" data-testid="deliverables-toolbar">
-        <div className="flex items-center gap-2 border rounded-lg px-3 py-1.5 bg-background flex-1 min-w-[180px] max-w-[280px]">
-          <Search className="h-3.5 w-3.5 text-muted-foreground/60" />
-          <input
-            type="text"
-            className="border-none outline-none bg-transparent text-[13px] w-full placeholder:text-muted-foreground/40"
-            placeholder="Search deliverables…"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            data-testid="input-search-deliverables"
-          />
-        </div>
-        <select className="h-8 px-2.5 pr-7 border rounded-lg bg-background text-[13px] outline-none appearance-none cursor-pointer" value={phaseFilter} onChange={e => setPhaseFilter(e.target.value)} data-testid="select-phase-filter">
-          <option value="">All Phases</option>
-          {phases.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-        </select>
-        <select className="h-8 px-2.5 pr-7 border rounded-lg bg-background text-[13px] outline-none appearance-none cursor-pointer" value={ragFilter} onChange={e => setRagFilter(e.target.value)} data-testid="select-rag-filter">
-          <option value="">All RAG</option>
-          {RAG_OPTIONS.filter(r => r !== "N/A").map(r => <option key={r}>{r}</option>)}
-        </select>
-        <select className="h-8 px-2.5 pr-7 border rounded-lg bg-background text-[13px] outline-none appearance-none cursor-pointer" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} data-testid="select-status-filter">
-          <option value="">All Statuses</option>
-          {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-        </select>
-
-        {activeFilters.map((f, i) => (
-          <div key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-600 text-white rounded-full text-xs font-semibold cursor-pointer" onClick={f.clear} data-testid={`filter-pill-${i}`}>
-            {f.label} <span className="opacity-70">✕</span>
+      <MondayBoardShell.Toolbar
+        newLabel="Add Deliverable"
+        onNew={openAddModal}
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search deliverables…"
+        filterActive={activeFilterCount > 0}
+        filterCount={activeFilterCount}
+        filterContent={
+          <div className="space-y-3">
+            {activeKpi && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">KPI filter</Label>
+                <Select value={activeKpi} onValueChange={(v) => setActiveKpi(v === "all" ? null : v)}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All deliverables</SelectItem>
+                    {KPI_DEFS.filter((k) => k.filter).map((k) => (
+                      <SelectItem key={k.key} value={k.filter!}>{k.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Phase</Label>
+              <Select value={phaseFilter || "all"} onValueChange={(v) => setPhaseFilter(v === "all" ? "" : v)}>
+                <SelectTrigger className="h-8 text-xs" data-testid="select-phase-filter"><SelectValue placeholder="All Phases" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Phases</SelectItem>
+                  {phases.map((p) => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">RAG</Label>
+              <Select value={ragFilter || "all"} onValueChange={(v) => setRagFilter(v === "all" ? "" : v)}>
+                <SelectTrigger className="h-8 text-xs" data-testid="select-rag-filter"><SelectValue placeholder="All RAG" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All RAG</SelectItem>
+                  {RAG_OPTIONS.filter((r) => r !== "N/A").map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Status</Label>
+              <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
+                <SelectTrigger className="h-8 text-xs" data-testid="select-status-filter"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        ))}
+        }
+        grouped
+        sortActive={sortField !== "name" || sortDir !== "asc"}
+        sortLabel={`Sort${sortField !== "name" ? `: ${sortField}` : ""}`}
+        sortContent={
+          <>
+            <DropdownMenuItem onClick={() => handleDeliverableSort("name")}>Name {sortField === "name" ? `(${sortDir})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleDeliverableSort("dueDate")}>Due date {sortField === "dueDate" ? `(${sortDir})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleDeliverableSort("status")}>Status {sortField === "status" ? `(${sortDir})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleDeliverableSort("progress")}>Progress {sortField === "progress" ? `(${sortDir})` : ""}</DropdownMenuItem>
+          </>
+        }
+        onImport={openImportModal}
+        onPaste={openImportModal}
+        onExport={exportCSV}
+        onDownloadTemplate={downloadTemplate}
+        pinActive={pinName}
+        onPinToggle={() => {
+          setPinName((v) => {
+            const next = !v;
+            localStorage.setItem("deliverables-pin-name", next ? "1" : "0");
+            return next;
+          });
+        }}
+        pinTitle={pinName ? "Unpin Deliverable column" : "Pin Deliverable column"}
+        moreMenuItems={
+          <DropdownMenuItem onClick={openPhaseModal} data-testid="button-manage-phases">
+            Manage Phases
+          </DropdownMenuItem>
+        }
+        testId="deliverables-toolbar"
+      />
 
-        <div className="flex-1" />
-        <button className="h-8 px-3 border rounded-lg bg-background text-[13px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/30 transition cursor-pointer" onClick={toggleCollapseAll} data-testid="button-collapse-all">
-          {allCollapsed ? "⊞ Expand All" : "⊟ Collapse All"}
-        </button>
-      </div>
-
-      {/* Header Actions */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <button className="h-8 px-3 border rounded-lg bg-background text-[13px] font-semibold text-muted-foreground hover:text-foreground hover:border-foreground/30 transition flex items-center gap-1.5 cursor-pointer" onClick={openPhaseModal} data-testid="button-manage-phases">
-          <Settings className="h-3.5 w-3.5" /> Manage Phases
-        </button>
-        <button className="h-8 px-3 border rounded-lg bg-background text-[13px] font-semibold text-muted-foreground hover:text-foreground hover:border-foreground/30 transition flex items-center gap-1.5 cursor-pointer" onClick={openImportModal} data-testid="button-import">
-          <Upload className="h-3.5 w-3.5" /> Import
-        </button>
-        <button className="h-8 px-3 border rounded-lg bg-background text-[13px] font-semibold text-muted-foreground hover:text-foreground hover:border-foreground/30 transition flex items-center gap-1.5 cursor-pointer" onClick={exportCSV} data-testid="button-export">
-          <Download className="h-3.5 w-3.5" /> Export
-        </button>
-        <div className="flex-1" />
-        <Button size="sm" className="h-8 gap-1.5" onClick={openAddModal} data-testid="button-add-deliverable">
-          <Plus className="h-3.5 w-3.5" /> Add Deliverable
-        </Button>
-      </div>
-
-      {/* Phase Groups */}
-      <div className="space-y-3" data-testid="phase-groups">
-        {phaseGroups.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground" data-testid="empty-deliverables">
+      {/* Deliverables table — grouped by phase */}
+      <div data-testid="phase-groups">
+        {phaseGroups.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground rounded-xl border" data-testid="empty-deliverables">
             <div className="text-3xl mb-2">📭</div>
             <p>No deliverables found. Add phases first, then create deliverables.</p>
           </div>
-        )}
-
-        {phaseGroups.map(group => {
-          const { phase, phaseName, items, allItems } = group;
-          const phaseId = phase?.id || -1;
-          const phaseColor = phase?.color || "#888";
-          const approved = allItems.filter(d => d.status === "Approved").length;
-          const total = allItems.length;
-          const pct = total ? Math.round(approved / total * 100) : 0;
-          const isCollapsed = collapsedPhases.has(phaseId);
-          const phaseComplete = total > 0 && approved === total;
-
-          return (
-            <div key={phaseName} className="rounded-xl border overflow-hidden shadow-sm" data-testid={`phase-group-${phaseName}`}>
-              {/* Phase Header */}
-              <div
-                className="flex items-center gap-2.5 px-4 py-2.5 bg-muted/50 cursor-pointer select-none border-b hover:bg-muted/70 transition"
-                onClick={() => toggleCollapse(phaseId)}
-                data-testid={`phase-header-${phaseName}`}
-              >
-                <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground/60 transition-transform ${isCollapsed ? "" : "rotate-90"}`} />
-                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: phaseColor }} />
-                <span className="text-[13px] font-bold flex-1" style={{ color: phaseColor }}>{phaseName}</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-20 h-1.5 bg-border rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: phaseColor }} />
-                  </div>
-                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">{approved}/{total} approved</span>
+        ) : (
+          <>
+            <MondayBoardShell.Table
+              columns={mondayColumns}
+              data={filteredDeliverables}
+              groups={tableGroups}
+              onRowClick={(d) => openEditModal(d)}
+              onEditItem={openEditModal}
+              onCellEdit={(rowId, columnId, value) => {
+                const id = Number(rowId);
+                updateDelMut.mutate(
+                  { id, data: { [columnId]: value === "" ? null : value } },
+                  { onSuccess: () => invalidateAll() },
+                );
+              }}
+              addItemLabel="Add Deliverable"
+              onAddItem={() => openAddModal()}
+              searchHighlightTerm={debouncedSearch}
+              columnWidthStorageKey="jiganto-deliverables-col-widths"
+              paginationResetKey={tablePaginationResetKey}
+              totalCount={deliverables.length}
+              renderRowActions={(d) => (
+                <div className="flex gap-1">
+                  {(d.type === "Sign-off" || d.status === "In Review") && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-primary"
+                      title="Request e-Sign"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const params = new URLSearchParams({
+                          compose: "1",
+                          projectId: String(projectId),
+                          deliverableId: String(d.id),
+                          deliverableTitle: d.name,
+                        });
+                        setLocation(`/modules/e-sign?${params.toString()}`);
+                      }}
+                      data-testid={`button-signoff-${d.id}`}
+                    >
+                      <FileSignature className="h-3 w-3" />
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Audit trail" onClick={(e) => { e.stopPropagation(); openAuditModal(d.id); }} data-testid={`button-audit-${d.id}`}>
+                    <ClipboardList className="h-3 w-3" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-600" title="Delete" onClick={(e) => { e.stopPropagation(); deleteDeliverable(d.id); }} data-testid={`button-delete-${d.id}`}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
                 </div>
-                {phaseComplete && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">✓ Complete</span>}
-                <span className="text-[11.5px] text-muted-foreground bg-border px-2 py-0.5 rounded-full whitespace-nowrap">{items.length}{items.length !== total ? ` shown / ${total}` : ` / ${total}`}</span>
-              </div>
-
-              {/* Table */}
-              {!isCollapsed && (
-                <PhaseGroupTable
-                  phaseName={phaseName}
-                  items={items}
-                  selectedIds={selectedIds}
-                  openDrawerId={openDrawerId}
-                  deliverables={deliverables}
-                  onToggleSelect={toggleSelect}
-                  onCycleStatus={cycleStatus}
-                  onCycleRag={cycleRag}
-                  onToggleDrawer={(id) => setOpenDrawerId(prev => prev === id ? null : id)}
-                  onEdit={openEditModal}
-                  onAudit={openAuditModal}
-                  onDelete={deleteDeliverable}
-                  onReview={openReviewModal}
-                  onTogglePhaseSelect={togglePhaseSelect}
-                  onRequestSignoff={(del) => {
-                    const params = new URLSearchParams({
-                      compose: "1",
-                      projectId: String(projectId),
-                      deliverableId: String(del.id),
-                      deliverableTitle: del.name,
-                    });
-                    setLocation(`/modules/e-sign?${params.toString()}`);
-                  }}
-                  paginationResetKey={`${phaseName}|${searchQuery}|${phaseFilter}|${ragFilter}|${statusFilter}|${activeKpi}`}
-                />
               )}
-            </div>
-          );
-        })}
+              renderBulkActions={(ids) => (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={() => {
+                    ids.forEach((id) => {
+                      const del = deliverables.find((d) => d.id === Number(id));
+                      if (!del) return;
+                      updateDelMut.mutate({ id: del.id, data: { status: "Approved", version: del.version + 1 } });
+                    });
+                    invalidateAll();
+                    toast({ title: `${ids.length} deliverables updated` });
+                  }} data-testid="bulk-approve">
+                    Mark Approved
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={() => {
+                    ids.forEach((id) => {
+                      updateDelMut.mutate({ id: Number(id), data: { status: "In Progress" } });
+                    });
+                    invalidateAll();
+                    toast({ title: `${ids.length} deliverables updated` });
+                  }} data-testid="bulk-inprogress">
+                    In Progress
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={() => {
+                    setSelectedIds(new Set(ids.map(Number)));
+                    setBulkMoveTarget("");
+                    setShowBulkMoveModal(true);
+                  }} data-testid="bulk-move">
+                    Move Phase
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs text-red-600" onClick={async () => {
+                    if (!confirm(`Delete ${ids.length} deliverable(s)?`)) return;
+                    for (const id of ids) await deleteDelMut.mutateAsync(Number(id));
+                    invalidateAll();
+                    toast({ title: "Deliverables deleted" });
+                  }} data-testid="bulk-delete">
+                    Delete
+                  </Button>
+                </div>
+              )}
+            />
+            {openDrawerId != null && (() => {
+              const drawerDel = deliverables.find((d) => d.id === openDrawerId);
+              if (!drawerDel) return null;
+              return (
+                <DeliverableApprovalPanel
+                  d={drawerDel}
+                  onClose={() => setOpenDrawerId(null)}
+                  onAudit={() => openAuditModal(drawerDel.id)}
+                  onReview={() => openReviewModal(drawerDel.id)}
+                />
+              );
+            })()}
+          </>
+        )}
       </div>
 
       {/* Add/Edit Modal */}
       <FormDialogShell
         open={showAddModal}
-        onOpenChange={setShowAddModal}
+        onOpenChange={(open) => { if (!savingDeliverable) setShowAddModal(open); }}
         onCancel={() => setShowAddModal(false)}
         onSubmit={saveDeliverable}
         title={editDelId ? "Edit Deliverable" : "Add Deliverable"}
-        saveLabel="Save Deliverable"
+        saveLabel={savingDeliverable ? "Saving..." : "Save Deliverable"}
+        saving={savingDeliverable}
         saveTestId="button-save-deliverable"
         size="lg"
       >
@@ -1043,11 +1192,12 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
       {/* Review Modal */}
       <FormDialogShell
         open={showReviewModal}
-        onOpenChange={setShowReviewModal}
+        onOpenChange={(open) => { if (!savingReview) setShowReviewModal(open); }}
         onCancel={() => setShowReviewModal(false)}
         onSubmit={() => submitReview("approve")}
         title={reviewDelId ? `Review: ${deliverables.find(d => d.id === reviewDelId)?.name}` : "Review Deliverable"}
-        saveLabel="Approve"
+        saveLabel={savingReview ? "Saving..." : "Approve"}
+        saving={savingReview}
         saveTestId="button-review-approve"
         size="md"
       >
@@ -1078,8 +1228,8 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
             );
           })()}
           <div className="flex flex-wrap gap-2 pt-2">
-            <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => submitReview("comment")} data-testid="button-review-comment">💬 Comment</Button>
-            <Button variant="destructive" onClick={() => submitReview("changes")} data-testid="button-review-changes">🔴 Request Changes</Button>
+            <Button type="button" className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => submitReview("comment")} disabled={savingReview} data-testid="button-review-comment">💬 Comment</Button>
+            <Button type="button" variant="destructive" onClick={() => submitReview("changes")} disabled={savingReview} data-testid="button-review-changes">🔴 Request Changes</Button>
           </div>
         </FormSection>
       </FormDialogShell>
@@ -1134,6 +1284,7 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
                   { key: "custom", label: "✏️ Start Fresh" },
                 ].map(t => (
                   <button
+                    type="button"
                     key={t.key}
                     className={`px-3 py-1.5 rounded-full border text-xs font-semibold cursor-pointer transition ${
                       selectedTemplate === t.key ? "border-blue-500 text-blue-600 bg-blue-50" : "border-border text-muted-foreground bg-muted/50 hover:border-blue-400 hover:text-blue-500"
@@ -1165,6 +1316,7 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
                       data-testid={`input-phase-name-${i}`}
                     />
                     <button
+                      type="button"
                       className="text-muted-foreground/40 hover:text-red-500 transition cursor-pointer text-sm"
                       onClick={() => setTempPhases(prev => prev.filter((_, j) => j !== i))}
                       data-testid={`delete-phase-${i}`}
@@ -1173,6 +1325,7 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
                 ))}
               </div>
               <button
+                type="button"
                 className="w-full mt-2 h-8 border rounded-lg bg-background text-[13px] font-semibold text-muted-foreground hover:text-foreground hover:border-foreground/30 transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
                 onClick={addTempPhase}
                 data-testid="button-add-phase"
@@ -1187,20 +1340,21 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
       {/* Import Modal */}
       <FormDialogShell
         open={showImportModal}
-        onOpenChange={setShowImportModal}
+        onOpenChange={(open) => { if (!savingImport) setShowImportModal(open); }}
         onCancel={() => setShowImportModal(false)}
         onSubmit={confirmImport}
         title="Import Deliverables"
-        saveLabel={`Add ${importRows.length} Deliverables`}
-        disabled={importRows.length === 0 || importTab !== "upload"}
+        saveLabel={savingImport ? "Importing..." : `Add ${importRows.length} Deliverables`}
+        saving={savingImport}
+        disabled={importRows.length === 0 || importTab !== "upload" || savingImport}
         saveTestId="button-confirm-import"
         size="xl"
       >
         <FormSection title="Import options" icon={<span className="h-2 w-2 rounded-full bg-cyan-500" />}>
           <div>
             <div className="flex border-b mb-5">
-              <button className={`px-5 py-2 text-[13px] font-semibold border-b-[2.5px] -mb-px transition ${importTab === "upload" ? "text-blue-600 border-blue-600" : "text-muted-foreground border-transparent hover:text-foreground"}`} onClick={() => setImportTab("upload")} data-testid="import-tab-upload">📂 Upload CSV</button>
-              <button className={`px-5 py-2 text-[13px] font-semibold border-b-[2.5px] -mb-px transition ${importTab === "template" ? "text-blue-600 border-blue-600" : "text-muted-foreground border-transparent hover:text-foreground"}`} onClick={() => setImportTab("template")} data-testid="import-tab-template">📋 Download Template</button>
+              <button type="button" className={`px-5 py-2 text-[13px] font-semibold border-b-[2.5px] -mb-px transition ${importTab === "upload" ? "text-blue-600 border-blue-600" : "text-muted-foreground border-transparent hover:text-foreground"}`} onClick={() => setImportTab("upload")} data-testid="import-tab-upload">📂 Upload CSV</button>
+              <button type="button" className={`px-5 py-2 text-[13px] font-semibold border-b-[2.5px] -mb-px transition ${importTab === "template" ? "text-blue-600 border-blue-600" : "text-muted-foreground border-transparent hover:text-foreground"}`} onClick={() => setImportTab("template")} data-testid="import-tab-template">📋 Download Template</button>
             </div>
 
             {importTab === "upload" && (
@@ -1283,7 +1437,7 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
                       }`}>{f.label}</span>
                     ))}
                   </div>
-                  <Button size="sm" onClick={downloadTemplate} data-testid="button-download-template">⬇ Download CSV Template</Button>
+                  <Button type="button" size="sm" onClick={downloadTemplate} data-testid="button-download-template">⬇ Download CSV Template</Button>
                 </div>
                 <div className="text-[13px] text-muted-foreground leading-relaxed">
                   <strong className="text-foreground">Field guidance:</strong><br />
@@ -1320,348 +1474,81 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
         </DialogContent>
       </Dialog>
     </div>
+    </MondayBoardShell.Legacy>
   );
 }
 
-function PhaseGroupTable({
-  phaseName,
-  items,
-  selectedIds,
-  openDrawerId,
-  deliverables,
-  onToggleSelect,
-  onCycleStatus,
-  onCycleRag,
-  onToggleDrawer,
-  onEdit,
+function DeliverableApprovalPanel({
+  d,
+  onClose,
   onAudit,
-  onDelete,
   onReview,
-  onTogglePhaseSelect,
-  onRequestSignoff,
-  paginationResetKey,
-}: {
-  phaseName: string;
-  items: PmDeliverable[];
-  selectedIds: Set<number>;
-  openDrawerId: number | null;
-  deliverables: PmDeliverable[];
-  onToggleSelect: (id: number) => void;
-  onCycleStatus: (del: PmDeliverable) => Promise<void>;
-  onCycleRag: (del: PmDeliverable) => Promise<void>;
-  onToggleDrawer: (id: number) => void;
-  onEdit: (del: PmDeliverable) => void;
-  onAudit: (id: number) => void;
-  onDelete: (id: number) => Promise<void>;
-  onReview: (id: number) => void;
-  onTogglePhaseSelect: (phaseName: string, checked: boolean) => void;
-  onRequestSignoff: (del: PmDeliverable) => void;
-  paginationResetKey: string;
-}) {
-  const pagination = useTablePagination(items, { resetKey: paginationResetKey });
-
-  return (
-    <div className="bg-background overflow-x-auto">
-      <table className="w-full text-sm text-gray-700 dark:text-foreground border-collapse min-w-[900px]">
-        <thead>
-          <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
-            <th className="w-9 px-3 py-2.5 text-left align-middle font-semibold">
-              <input
-                type="checkbox"
-                className="accent-blue-600 cursor-pointer"
-                onChange={e => onTogglePhaseSelect(phaseName, e.target.checked)}
-                data-testid={`checkbox-phase-all-${phaseName}`}
-              />
-            </th>
-            <th className="px-3 py-2.5 text-left align-middle font-semibold">Deliverable</th>
-            <th className="px-3 py-2.5 text-left align-middle font-semibold w-[100px]">Type</th>
-            <th className="px-3 py-2.5 text-left align-middle font-semibold w-[100px]">Due</th>
-            <th className="px-3 py-2.5 text-left align-middle font-semibold w-[110px]">Status</th>
-            <th className="px-3 py-2.5 text-left align-middle font-semibold w-[86px]">RAG</th>
-            <th className="px-3 py-2.5 text-left align-middle font-semibold w-[96px]">Progress</th>
-            <th className="px-3 py-2.5 text-center align-middle font-semibold w-[54px]">Ver</th>
-            <th className="px-3 py-2.5 text-center align-middle font-semibold w-[130px]">Approvals</th>
-            <th className="w-[68px]" />
-          </tr>
-        </thead>
-        <tbody>
-          {items.length === 0 && (
-            <tr>
-              <td colSpan={10} className="text-center py-8 text-muted-foreground">
-                <div className="text-2xl mb-1">🔍</div>
-                <p className="text-sm">No deliverables match filters</p>
-              </td>
-            </tr>
-          )}
-          {pagination.paginatedItems.map(d => {
-            const isSel = selectedIds.has(d.id);
-            const isDrawerOpen = openDrawerId === d.id;
-            const ai = approvalInfo(d);
-            const TypeIcon = TYPE_ICONS[d.type] || FileText;
-            const dateInfo = formatDate(d.dueDate);
-            const dateDisplay = typeof dateInfo === "string" ? { text: dateInfo, className: "" } : dateInfo;
-
-            return (
-              <PhaseRow
-                key={d.id}
-                d={d}
-                isSel={isSel}
-                isDrawerOpen={isDrawerOpen}
-                ai={ai}
-                TypeIcon={TypeIcon}
-                dateDisplay={dateDisplay}
-                onToggleSelect={onToggleSelect}
-                onCycleStatus={() => onCycleStatus(d)}
-                onCycleRag={() => onCycleRag(d)}
-                onToggleDrawer={() => onToggleDrawer(d.id)}
-                onEdit={() => onEdit(d)}
-                onAudit={() => onAudit(d.id)}
-                onDelete={() => onDelete(d.id)}
-                onReview={() => onReview(d.id)}
-                deliverables={deliverables}
-                onRequestSignoff={onRequestSignoff}
-              />
-            );
-          })}
-        </tbody>
-      </table>
-      <TablePagination
-        page={pagination.page}
-        totalPages={pagination.totalPages}
-        total={pagination.total}
-        startIndex={pagination.startIndex}
-        endIndex={pagination.endIndex}
-        pageSize={pagination.pageSize}
-        onPageChange={pagination.setPage}
-        onPageSizeChange={pagination.setPageSize}
-      />
-    </div>
-  );
-}
-
-// Phase table row with approval drawer
-function PhaseRow({
-  d, isSel, isDrawerOpen, ai, TypeIcon, dateDisplay,
-  onToggleSelect, onCycleStatus, onCycleRag, onToggleDrawer,
-  onEdit, onAudit, onDelete, onReview, deliverables: _deliverables, onRequestSignoff,
 }: {
   d: PmDeliverable;
-  isSel: boolean;
-  isDrawerOpen: boolean;
-  ai: ReturnType<typeof approvalInfo>;
-  TypeIcon: typeof FileText;
-  dateDisplay: { text: string; className: string };
-  onToggleSelect: (id: number) => void;
-  onCycleStatus: () => void;
-  onCycleRag: () => void;
-  onToggleDrawer: () => void;
-  onEdit: () => void;
+  onClose: () => void;
   onAudit: () => void;
-  onDelete: () => void;
   onReview: (prefill: string) => void;
-  deliverables: PmDeliverable[];
-  onRequestSignoff: (del: PmDeliverable) => void;
 }) {
   const audit = (d.auditLog as AuditEntry[]) || [];
   const approvers = (d.approvers as string[]) || [];
   const owners = (d.owners as string[]) || [];
   const reviewers = (d.reviewers as string[]) || [];
-  const approvedSet = new Set(audit.filter(a => a.action === "approve").map(a => a.who));
-  const changesBy = new Set(audit.filter(a => a.action === "changes").map(a => a.who));
-  const reviewedBy = new Set(audit.filter(a => a.action === "comment").map(a => a.who));
+  const approvedSet = new Set(audit.filter((a) => a.action === "approve").map((a) => a.who));
+  const changesBy = new Set(audit.filter((a) => a.action === "changes").map((a) => a.who));
+  const reviewedBy = new Set(audit.filter((a) => a.action === "comment").map((a) => a.who));
   const lastAudit = audit.length ? audit[audit.length - 1] : null;
 
   return (
-    <>
-      <tr
-        className={`group border-b border-border/40 transition cursor-pointer hover:bg-muted/30 ${isSel ? "bg-blue-50/50" : ""} ${isDrawerOpen ? "bg-purple-50/30 border-b-0" : ""}`}
-        onClick={onEdit}
-        data-testid={`row-deliverable-${d.id}`}
-      >
-        <td className="px-3 py-2.5 align-middle">
-          <input type="checkbox" className="accent-blue-600 cursor-pointer" checked={isSel} onChange={() => onToggleSelect(d.id)} onClick={e => e.stopPropagation()} data-testid={`checkbox-deliverable-${d.id}`} />
-        </td>
-        <td className="px-3 py-2.5 align-middle">
-          <div className="flex items-center gap-2">
-            <TypeIcon className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-            <div className="min-w-0">
-              <div className="text-[13.5px] font-medium leading-tight">{d.name}</div>
-              {d.notes && <div className="text-[11.5px] text-muted-foreground truncate mt-0.5">{d.notes}</div>}
+    <div className="mt-3 rounded-xl border border-purple-200 bg-gradient-to-b from-purple-50/80 to-muted/30 p-4 animate-in slide-in-from-top-1" data-testid={`drawer-${d.id}`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-semibold">{d.name} — approvals</span>
+        <button type="button" className="text-muted-foreground hover:text-foreground text-sm" onClick={onClose}>✕ Close</button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="px-2">
+          <div className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-2.5">Owner(s)</div>
+          {owners.length === 0 && <div className="text-xs text-muted-foreground/40">None assigned</div>}
+          {owners.map((name, i) => (
+            <div key={i} className="flex items-center gap-2.5 p-1.5 rounded-lg mb-1">
+              <div className="w-7 h-7 rounded-full text-[11px] font-bold text-white flex items-center justify-center shrink-0" style={{ background: AV_COL[i % AV_COL.length] }}>{initials(name)}</div>
+              <div className="min-w-0"><div className="text-[13px] font-medium truncate">{name}</div></div>
             </div>
-          </div>
-        </td>
-        <td className="px-3 py-2.5 align-middle text-[12.5px] text-muted-foreground">{d.type}</td>
-        <td className="px-3 py-2.5 align-middle"><span className={`text-[12.5px] ${dateDisplay.className}`}>{dateDisplay.text}</span></td>
-        <td className="px-3 py-2.5 align-middle">
-          <span
-            className={`inline-block px-2 py-0.5 rounded-full text-[11.5px] font-semibold cursor-pointer transition hover:scale-105 ${statusClasses(d.status)}`}
-            onClick={e => { e.stopPropagation(); onCycleStatus(); }}
-            title="Click to cycle"
-            data-testid={`status-pill-${d.id}`}
-          >{d.status}</span>
-        </td>
-        <td className="px-3 py-2.5 align-middle">
-          <span
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11.5px] font-semibold cursor-pointer transition hover:scale-105 ${ragClasses(d.ragStatus)}`}
-            onClick={e => { e.stopPropagation(); onCycleRag(); }}
-            title="Click to cycle"
-            data-testid={`rag-pill-${d.id}`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ragDot(d.ragStatus) }} />
-            {d.ragStatus}
-          </span>
-        </td>
-        <td className="px-3 py-2.5 align-middle">
-          <div className="flex items-center gap-1.5">
-            <div className="w-14 h-1 bg-border rounded-full overflow-hidden shrink-0">
-              <div className="h-full rounded-full" style={{ width: `${d.progress}%`, background: progColor(d.progress) }} />
+          ))}
+        </div>
+        <div className="px-2 border-l">
+          <div className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-2.5">Reviewer(s)</div>
+          {reviewers.length === 0 && <div className="text-xs text-muted-foreground/40">None assigned</div>}
+          {reviewers.map((name, i) => (
+            <div key={i} className="flex items-center gap-2.5 p-1.5 rounded-lg mb-1">
+              <div className="w-7 h-7 rounded-full text-[11px] font-bold text-white flex items-center justify-center shrink-0" style={{ background: AV_COL[i % AV_COL.length] }}>{initials(name)}</div>
+              <div className="flex-1 min-w-0"><div className="text-[13px] font-medium truncate">{name}</div></div>
+              {changesBy.has(name) ? <span className="text-[11px] font-bold text-red-600">Changes</span> : reviewedBy.has(name) ? <span className="text-[11px] font-bold text-blue-600">Reviewed</span> : <span className="text-[11px] text-muted-foreground">Pending</span>}
             </div>
-            <span className="text-[11.5px] text-muted-foreground">{d.progress}%</span>
-          </div>
-        </td>
-        <td className="px-3 py-2.5 align-middle text-center">
-          <span className="px-1.5 py-0.5 rounded bg-muted text-[10.5px] font-mono font-bold text-muted-foreground">v{d.version}.0</span>
-        </td>
-        <td className="px-3 py-2.5 align-middle text-center">
-          <button
-            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-bold cursor-pointer transition hover:scale-105 whitespace-nowrap ${ai.cls} ${isDrawerOpen ? "ring-2 ring-current" : ""}`}
-            onClick={e => { e.stopPropagation(); onToggleDrawer(); }}
-            title="Click to see people & approvals"
-            data-testid={`approval-chip-${d.id}`}
-          >
-            {ai.icon} {ai.label}
-          </button>
-        </td>
-        <td className="px-3 py-2.5 align-middle">
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
-            {(d.type === "Sign-off" || d.status === "In Review") && (
-              <button
-                className="w-6 h-6 rounded-md border flex items-center justify-center text-primary hover:text-primary hover:border-primary/30 transition cursor-pointer"
-                title="Request e-Sign"
-                onClick={e => { e.stopPropagation(); onRequestSignoff(d); }}
-                data-testid={`button-signoff-${d.id}`}
-              >
-                <FileSignature className="h-3 w-3" />
-              </button>
-            )}
-            <button className="w-6 h-6 rounded-md border flex items-center justify-center text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40 hover:border-foreground/30 transition cursor-pointer" title="Edit" onClick={e => { e.stopPropagation(); onEdit(); }} data-testid={`button-edit-${d.id}`}>
-              <Pencil className="h-3 w-3" />
-            </button>
-            <button className="w-6 h-6 rounded-md border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground/30 transition cursor-pointer" title="Audit trail" onClick={e => { e.stopPropagation(); onAudit(); }} data-testid={`button-audit-${d.id}`}>
-              <ClipboardList className="h-3 w-3" />
-            </button>
-            <button className="w-6 h-6 rounded-md border flex items-center justify-center text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40 hover:border-red-300 transition cursor-pointer" title="Delete" onClick={e => { e.stopPropagation(); onDelete(); }} data-testid={`button-delete-${d.id}`}>
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
-        </td>
-      </tr>
-
-      {/* Approval Drawer */}
-      {isDrawerOpen && (
-        <tr className="border-b" data-testid={`drawer-${d.id}`}>
-          <td colSpan={10} className="p-0">
-            <div className="bg-gradient-to-b from-purple-50/80 to-muted/30 border-t border-purple-200 p-4 pl-12 animate-in slide-in-from-top-1">
-              <div className="grid grid-cols-3 gap-0">
-                {/* Owners */}
-                <div className="px-4 relative">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-2.5 flex items-center gap-1.5">
-                    <span className="w-[18px] h-[18px] rounded bg-blue-100 flex items-center justify-center text-[10px]">✍️</span>
-                    Owner(s)
-                  </div>
-                  {owners.length === 0 && <div className="text-xs text-muted-foreground/40 px-1">None assigned</div>}
-                  {owners.map((name, i) => (
-                    <div key={i} className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-blue-50/50 transition mb-1">
-                      <div className="w-7 h-7 rounded-full text-[11px] font-bold text-white flex items-center justify-center shrink-0" style={{ background: AV_COL[i % AV_COL.length] }}>
-                        {initials(name)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[13px] font-medium truncate">{name}</div>
-                        <div className="text-[11px] text-muted-foreground/50">Document Owner</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Reviewers */}
-                <div className="px-4 relative border-l">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-2.5 flex items-center gap-1.5">
-                    <span className="w-[18px] h-[18px] rounded bg-amber-100 flex items-center justify-center text-[10px]">👁️</span>
-                    Reviewer(s)
-                  </div>
-                  {reviewers.length === 0 && <div className="text-xs text-muted-foreground/40 px-1">None assigned</div>}
-                  {reviewers.map((name, i) => (
-                    <div key={i} className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-amber-50/50 transition mb-1">
-                      <div className="w-7 h-7 rounded-full text-[11px] font-bold text-white flex items-center justify-center shrink-0" style={{ background: AV_COL[i % AV_COL.length] }}>
-                        {initials(name)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[13px] font-medium truncate">{name}</div>
-                        <div className="text-[11px] text-muted-foreground/50">Reviewer</div>
-                      </div>
-                      <div>
-                        {changesBy.has(name) ? (
-                          <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 text-[11px] font-bold">⚠ Changes</span>
-                        ) : reviewedBy.has(name) ? (
-                          <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold">Reviewed</span>
-                        ) : (
-                          <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 text-[11px] font-bold">Pending</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Approvers */}
-                <div className="px-4 relative border-l">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-2.5 flex items-center gap-1.5">
-                    <span className="w-[18px] h-[18px] rounded bg-green-100 flex items-center justify-center text-[10px]">✅</span>
-                    Approver(s)
-                  </div>
-                  {approvers.length === 0 && <div className="text-xs text-muted-foreground/40 px-1">None assigned</div>}
-                  {approvers.map((name, i) => (
-                    <div key={i} className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-green-50/50 transition mb-1">
-                      <div className="w-7 h-7 rounded-full text-[11px] font-bold text-white flex items-center justify-center shrink-0" style={{ background: AV_COL[i % AV_COL.length] }}>
-                        {initials(name)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[13px] font-medium truncate">{name}</div>
-                        <div className="text-[11px] text-muted-foreground/50">Approver</div>
-                      </div>
-                      <div>
-                        {approvedSet.has(name) ? (
-                          <span className="px-1.5 py-0.5 rounded-full bg-green-100 text-green-800 text-[11px] font-bold">✓ Approved</span>
-                        ) : changesBy.has(name) ? (
-                          <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 text-[11px] font-bold">⚠ Changes</span>
-                        ) : (
-                          <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 text-[11px] font-bold">Pending</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Drawer Footer */}
-              <div className="col-span-3 border-t mt-3 pt-2.5 flex items-center justify-between flex-wrap gap-2">
-                <div className="text-xs text-muted-foreground">
-                  {lastAudit
-                    ? <>Last activity: <strong>{lastAudit.who}</strong> {lastAudit.action === "approve" ? "approved" : lastAudit.action === "changes" ? "requested changes" : "commented"} · {lastAudit.time}</>
-                    : "No activity yet"
-                  }
-                  {" "}·{" "}<strong>v{d.version}.0</strong>
-                </div>
-                <div className="flex gap-1.5">
-                  <button className="px-2.5 py-1 rounded-md border text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-foreground/30 transition cursor-pointer" onClick={e => { e.stopPropagation(); onAudit(); }} data-testid={`drawer-history-${d.id}`}>📋 History</button>
-                  <button className="px-2.5 py-1 rounded-md bg-red-600 border-red-600 text-white text-xs font-semibold hover:brightness-110 transition cursor-pointer" onClick={e => { e.stopPropagation(); onReview("changes"); }} data-testid={`drawer-changes-${d.id}`}>🔴 Request Changes</button>
-                  <button className="px-2.5 py-1 rounded-md bg-green-600 border-green-600 text-white text-xs font-semibold hover:brightness-110 transition cursor-pointer" onClick={e => { e.stopPropagation(); onReview("approve"); }} data-testid={`drawer-approve-${d.id}`}>✅ Approve</button>
-                </div>
-              </div>
+          ))}
+        </div>
+        <div className="px-2 border-l">
+          <div className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-2.5">Approver(s)</div>
+          {approvers.length === 0 && <div className="text-xs text-muted-foreground/40">None assigned</div>}
+          {approvers.map((name, i) => (
+            <div key={i} className="flex items-center gap-2.5 p-1.5 rounded-lg mb-1">
+              <div className="w-7 h-7 rounded-full text-[11px] font-bold text-white flex items-center justify-center shrink-0" style={{ background: AV_COL[i % AV_COL.length] }}>{initials(name)}</div>
+              <div className="flex-1 min-w-0"><div className="text-[13px] font-medium truncate">{name}</div></div>
+              {approvedSet.has(name) ? <span className="text-[11px] font-bold text-green-600">Approved</span> : changesBy.has(name) ? <span className="text-[11px] font-bold text-red-600">Changes</span> : <span className="text-[11px] text-muted-foreground">Pending</span>}
             </div>
-          </td>
-        </tr>
-      )}
-    </>
+          ))}
+        </div>
+      </div>
+      <div className="border-t mt-3 pt-2.5 flex items-center justify-between flex-wrap gap-2">
+        <div className="text-xs text-muted-foreground">
+          {lastAudit ? <>Last: <strong>{lastAudit.who}</strong> · {lastAudit.time}</> : "No activity yet"} · <strong>v{d.version}.0</strong>
+        </div>
+        <div className="flex gap-1.5">
+          <button type="button" className="px-2.5 py-1 rounded-md border text-xs font-semibold" onClick={onAudit} data-testid={`drawer-history-${d.id}`}>History</button>
+          <button type="button" className="px-2.5 py-1 rounded-md bg-red-600 text-white text-xs font-semibold" onClick={() => onReview("changes")} data-testid={`drawer-changes-${d.id}`}>Request Changes</button>
+          <button type="button" className="px-2.5 py-1 rounded-md bg-green-600 text-white text-xs font-semibold" onClick={() => onReview("approve")} data-testid={`drawer-approve-${d.id}`}>Approve</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

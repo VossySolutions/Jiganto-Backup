@@ -189,18 +189,18 @@ function toggleCP(fromSwitch){
   }
   const btn=document.getElementById('cpBtn');
   if(btn) btn.classList.toggle('on',showCP);
-  renderAll();
-  updateCpBanner();
-  if(showCP){
-    if(!tasks.some(t=>t.predId)){
-      showToast('Add links in the Pred column (or Edit → Predecessor)','info',4200);
-      pulsePredColumn();
-    } else if(!criticalIds.size){
-      showToast('No critical path found for current dependencies','info',3000);
-    } else {
-      showToast('Critical path: '+criticalIds.size+' item'+(criticalIds.size===1?'':'s')+' highlighted','ok',2200);
-      focusFirstCritical();
-    }
+    renderAll();
+    updateCpBanner();
+    if(showCP){
+      if(!tasks.some(t=>t.predId)){
+        showToast('Add links in the Pred column (or Edit → Predecessor)','info',4200);
+        pulsePredColumn();
+      } else if(!criticalIds.size){
+        showToast('No critical path found for current dependencies','info',3000);
+      } else {
+        showToast('Critical path: '+criticalIds.size+' item'+(criticalIds.size===1?'':'s')+' highlighted','ok',2200);
+        focusFirstCritical();
+      }
   }
 }
 function updateCpBanner(){
@@ -286,17 +286,17 @@ function toggleZoomFit(fromSwitch){
   const sw=document.getElementById('switchZoomFit');
   const on=fromSwitch===true?!!(sw&&sw.checked):!zoomFitActive;
   if(sw) sw.checked=on;
-  if(on){
-    zoomBeforeFit={zoom,colW};
-    zoomFitActive=true;
-    zoomToFit();
-  } else {
-    zoomFitActive=false;
-    zoom=zoomBeforeFit.zoom||'week';
-    colW=zoomBeforeFit.colW||28;
-    const sel=document.getElementById('zoomToSelect');
-    if(sel) sel.value=zoom;
-    renderAll();
+    if(on){
+      zoomBeforeFit={zoom,colW};
+      zoomFitActive=true;
+      zoomToFit();
+    } else {
+      zoomFitActive=false;
+      zoom=zoomBeforeFit.zoom||'week';
+      colW=zoomBeforeFit.colW||28;
+      const sel=document.getElementById('zoomToSelect');
+      if(sel) sel.value=zoom;
+      renderAll();
   }
 }
 function applyAutoSchedule(){
@@ -437,20 +437,20 @@ function restoreHistory(idx){
 }
 function undo(){
   if(historyIdx<0||!history.length) return;
-  const live=snapshotTasks();
-  // Live mutated past tip (e.g. drag) — stash live for Redo, then restore tip
-  if(live!==history[historyIdx]){
-    history.splice(historyIdx+1);
-    history.push(live);
-    if(history.length>MAX_HISTORY){
-      history.shift();
-      historyIdx=Math.max(0,historyIdx-1);
+    const live=snapshotTasks();
+    // Live mutated past tip (e.g. drag) — stash live for Redo, then restore tip
+    if(live!==history[historyIdx]){
+      history.splice(historyIdx+1);
+      history.push(live);
+      if(history.length>MAX_HISTORY){
+        history.shift();
+        historyIdx=Math.max(0,historyIdx-1);
+      }
+      restoreHistory(historyIdx);
+      return;
     }
-    restoreHistory(historyIdx);
-    return;
-  }
-  if(historyIdx<=0) return;
-  restoreHistory(historyIdx-1);
+    if(historyIdx<=0) return;
+    restoreHistory(historyIdx-1);
 }
 function redo(){
   if(historyIdx>=history.length-1) return;
@@ -1444,16 +1444,16 @@ function getVisible(){
     // When type-filtering, still show matching rows even if an ancestor folder is collapsed
     // (otherwise "Milestones only" looks empty). Otherwise respect collapse.
     if(!filteringTypes){
-      let p=t.parent;
-      const seen=new Set();
-      while(p!==null){
-        if(seen.has(p)||p===t.id) break;
-        seen.add(p);
-        if(collapsed[p]) return false;
+    let p=t.parent;
+    const seen=new Set();
+    while(p!==null){
+      if(seen.has(p)||p===t.id) break;
+      seen.add(p);
+      if(collapsed[p]) return false;
         const pt=taskById.get(p);
-        if(!pt||pt.parent===pt.id) break;
-        p=pt.parent;
-      }
+      if(!pt||pt.parent===pt.id) break;
+      p=pt.parent;
+    }
     }
     if(filteringTypes&&!levelFilterTypes.has(Number(t.type))) return false;
     if(filteringOwners&&!ownerFilterOwners.has(t.owner||'')) return false;
@@ -1711,8 +1711,8 @@ function zoomToFit(){
 
 // ── VIEW (Gantt / List are independent toggles) ──────────────
 function syncViewButtons(){
-  const gBtn=document.getElementById('viewGanttBtn');
-  const lBtn=document.getElementById('viewListBtn');
+    const gBtn=document.getElementById('viewGanttBtn');
+    const lBtn=document.getElementById('viewListBtn');
   if(gBtn){
     gBtn.classList.toggle('on',viewShowGantt);
     gBtn.setAttribute('aria-pressed',viewShowGantt?'true':'false');
@@ -1725,8 +1725,8 @@ function syncViewButtons(){
 
 function applyViewPanes(){
   syncViewButtons();
-  const gv=document.getElementById('ganttView');
-  const lv=document.getElementById('listView');
+    const gv=document.getElementById('ganttView');
+    const lv=document.getElementById('listView');
   const taskPanel=document.getElementById('taskPanel');
   const splitter=document.getElementById('panelSplitter');
 
@@ -1734,15 +1734,15 @@ function applyViewPanes(){
   if(viewShowList&&!viewShowGantt){
     mainView='list';
     if(gv){ gv.hidden=true; gv.style.display='none'; gv.classList.remove('timeline-only','list-only-panel'); }
-    if(lv){ lv.hidden=false; lv.style.display='block'; }
-    renderListView();
+      if(lv){ lv.hidden=false; lv.style.display='block'; }
+      renderListView();
     updateCpBanner();
-    return;
-  }
+      return;
+    }
 
   // Chart container (timeline ± left list panel)
   mainView='gantt';
-  if(lv){ lv.hidden=true; lv.style.display='none'; }
+    if(lv){ lv.hidden=true; lv.style.display='none'; }
   if(gv){
     gv.hidden=false;
     gv.style.display='flex';
@@ -1757,7 +1757,7 @@ function applyViewPanes(){
     splitter.hidden=!viewShowList;
     splitter.style.display=viewShowList?'':'none';
   }
-  renderAll();
+    renderAll();
 }
 
 /** Click Gantt or List to toggle that pane on/off (at least one stays on). */
@@ -1954,7 +1954,7 @@ function renderTaskPanel(){
       '<div class="row-insert-gap is-empty"><button type="button" class="row-insert-btn" onclick="event.stopPropagation();addNewItem()" title="Add a new item" aria-label="Add row">+</button></div>';
   } else {
   scroll.innerHTML=visible.map((t,i)=>buildTaskRowHTML(t,i)+buildRowInsertBetween(t.id)).join('');
-  bindCustomCellClicks();
+    bindCustomCellClicks();
   bindRowInsertClicks(scroll);
   }
   if(selectedTaskId!=null){
@@ -2024,7 +2024,7 @@ function buildTaskRowHTML(t,index){
       '<div class="task-indent" style="width:'+indentPx+'px;"></div>'+
       '<div class="task-toggle '+(hasKids?(isCollapsed?'collapsed':'expanded'):'leaf')+'" onclick="event.stopPropagation();toggleCollapse('+t.id+')"></div>'+
       '<div class="task-name ie-cell" data-ie-field="name" data-level="'+effectiveType(t)+'" id="tn-'+t.id+'" onclick="event.stopPropagation();beginCellEdit('+t.id+',\'name\')" title="Click to edit · Tab to next">'+esc(t.name)+'</div>'+
-      '</div>'+
+    '</div>'+
     '<div class="task-type-col ie-cell" data-ie-field="type" onclick="event.stopPropagation();beginCellEdit('+t.id+',\'type\')" title="'+esc(typeHint)+'">'+
       '<span class="task-type-badge" style="background:'+typeColor+'22;color:'+typeColor+';">'+esc(typeName)+(hasKids?' · folder':'')+'</span>'+
     '</div>'+
@@ -2134,23 +2134,23 @@ function expandSubtree(id){
  * @param {boolean} [forceAll] when true (bottom switch), always collapse everything
  */
 function collapseAll(forceAll){
-  const selected=!forceAll?getSelectedTask():null;
-  if(selected){
-    const hasKids=tasks.some(c=>c.parent===selected.id);
-    if(!hasKids){
-      showToast('Select a folder (row with children), or clear selection to collapse all','info',2800);
-      return;
-    }
-    collapseSubtree(selected.id);
-    selectTask(selected.id);
-    showToast('Collapsed "'+selected.name+'" and subfolders','ok',2000);
-  } else {
-    collapsed={};
+    const selected=!forceAll?getSelectedTask():null;
+    if(selected){
+      const hasKids=tasks.some(c=>c.parent===selected.id);
+      if(!hasKids){
+        showToast('Select a folder (row with children), or clear selection to collapse all','info',2800);
+        return;
+      }
+      collapseSubtree(selected.id);
+      selectTask(selected.id);
+      showToast('Collapsed "'+selected.name+'" and subfolders','ok',2000);
+    } else {
+      collapsed={};
     tasks.forEach(t=>{ if(getChildren(t.id).length) collapsed[t.id]=true; });
-    const sw=document.getElementById('switchCollapse');
-    if(sw) sw.checked=true;
-    showToast('Collapsed all folders','ok',1800);
-  }
+      const sw=document.getElementById('switchCollapse');
+      if(sw) sw.checked=true;
+      showToast('Collapsed all folders','ok',1800);
+    }
   refreshVisibleStructure();
 }
 /**
@@ -2159,17 +2159,17 @@ function collapseAll(forceAll){
  * - No selection → expand entire structure
  */
 function expandAll(forceAll){
-  const selected=!forceAll?getSelectedTask():null;
-  if(selected){
-    expandSubtree(selected.id);
-    selectTask(selected.id);
-    showToast('Expanded "'+selected.name+'" and subfolders','ok',1800);
-  } else {
-    collapsed={};
-    const sw=document.getElementById('switchCollapse');
-    if(sw) sw.checked=false;
-    showToast('Expanded all','ok',1600);
-  }
+    const selected=!forceAll?getSelectedTask():null;
+    if(selected){
+      expandSubtree(selected.id);
+      selectTask(selected.id);
+      showToast('Expanded "'+selected.name+'" and subfolders','ok',1800);
+    } else {
+      collapsed={};
+      const sw=document.getElementById('switchCollapse');
+      if(sw) sw.checked=false;
+      showToast('Expanded all','ok',1600);
+    }
   refreshVisibleStructure();
 }
 function indentTask(){
@@ -2210,7 +2210,7 @@ function indentTask(){
     showToast('"'+newParent.name+'" is now a '+typeLabel(newParent)+' (folder)','ok',2800);
     if(!isUnsavedLocal(newParent)) void persistSave(newParent);
   } else {
-    showToast('Indented under "'+newParent.name+'"','ok',2200);
+  showToast('Indented under "'+newParent.name+'"','ok',2200);
   }
   void persistSave(t);
 }
@@ -2448,7 +2448,7 @@ function buildTimelineHeader(start,end,totalW){
     else if(zoom==='week') lbl=dt.toLocaleDateString('en-GB',{weekday:'short'}).toUpperCase().slice(0,3);
     else if(zoom==='month'&&dt.getDate()%5===0) lbl=String(dt.getDate());
     else if(zoom==='quarter'&&dt.getDate()===1) lbl=dt.toLocaleDateString('en-GB',{month:'short'});
-    dHTML+='<div class="tl-day-cell '+(isWE?'weekend':'')+' '+(isT?'today-col':'')+'" style="width:'+colW+'px;">'+lbl+'</div>';
+  dHTML+='<div class="tl-day-cell '+(isWE?'weekend':'')+' '+(isT?'today-col':'')+'" style="width:'+colW+'px;">'+lbl+'</div>';
   });
   dHTML+='</div>';
   html+=dHTML;
@@ -2493,7 +2493,7 @@ function renderTimeline(start,end,totalW){
   // Draw bars at deterministic Y = index * ROW_H (avoids offsetTop drift after undo/create)
   void rows.offsetHeight;
   visible.forEach((t,i)=>{ drawTaskBar(t,start,barsLayer,i*ROW_H); });
-  const totalH=visible.length*ROW_H;
+    const totalH=visible.length*ROW_H;
   const tlInner=document.getElementById('tlInner');
   if(tlInner){
     tlInner.style.width=totalW+'px';
@@ -2511,34 +2511,34 @@ function renderTimeline(start,end,totalW){
     depSvg.setAttribute('width',totalW);
     depSvg.setAttribute('height',totalH+'px');
   }
-  renderDeps(visible,start);
-  syncHeaderHeights();
-  const tw=document.getElementById('tlWrap');
-  const th=document.getElementById('tlHeader');
-  if(tw&&th) th.style.transform='translateX('+(-tw.scrollLeft)+'px)';
-  bindTimelineClicks(start);
+    renderDeps(visible,start);
+    syncHeaderHeights();
+    const tw=document.getElementById('tlWrap');
+    const th=document.getElementById('tlHeader');
+    if(tw&&th) th.style.transform='translateX('+(-tw.scrollLeft)+'px)';
+    bindTimelineClicks(start);
 }
 
 function drawTaskBar(t,rangeStart,rows,rowTop){
-    const row=document.getElementById('gr-'+t.id);
-    if(!row) return;
+  const row=document.getElementById('gr-'+t.id);
+  if(!row) return;
   // Prefer deterministic Y from caller; never trust offsetTop after DOM mutations
   if(rowTop==null||!Number.isFinite(rowTop)) rowTop=row.offsetTop||0;
   const hasKids=getChildren(t.id).length>0;
   const eff=getEffectiveDates(t);
-    const isCrit=showCP&&criticalIds.has(t.id);
+  const isCrit=showCP&&criticalIds.has(t.id);
 
-    if(t.type===6){
+  if(t.type===6){
     const offsetDays=daysBetween(rangeStart,D(eff.start));
-      const left=offsetDays*colW;
-      const el=document.createElement('div');
+    const left=offsetDays*colW;
+    const el=document.createElement('div');
     el.className='milestone-diamond'+(isCrit?' critical':'');
     el.dataset.id=String(t.id);
     const msTop=rowTop+(ROW_H-12)/2;
     el.style.cssText='left:'+(left-6)+'px;top:'+msTop+'px;width:12px;height:12px;';
     el.title=t.name+' · '+fmtDisp(D(eff.start))+(isCrit?' · Critical':'');
     el.onclick=(e)=>{ e.stopPropagation(); openEdit(t.id); };
-      rows.appendChild(el);
+    rows.appendChild(el);
     const msLbl=document.createElement('div');
     msLbl.className='bar-label-outside bar-label-milestone';
     msLbl.textContent=t.name;
@@ -2546,24 +2546,24 @@ function drawTaskBar(t,rangeStart,rows,rowTop){
     rows.appendChild(msLbl);
     // Center of diamond — required for dependency routing
     registerBar(t.id,left-6,msTop,12,12);
-    } else {
+  } else {
     const s=D(eff.start),e=D(eff.end);
     const left=daysBetween(rangeStart,s)*colW;
     const width=Math.max((taskDurationDays(eff.start,eff.end)+1)*colW,colW);
     const barH=Math.max(22,Math.round(ROW_H*0.7));
     const barTop=rowTop+(ROW_H-barH)/2;
-      const el=document.createElement('div');
+    const el=document.createElement('div');
     el.className='gantt-bar '+getTaskBarClass(t,hasKids,isCrit);
-      el.id='bar-'+t.id;
+    el.id='bar-'+t.id;
     el.style.cssText='left:'+left+'px;top:'+barTop+'px;width:'+width+'px;height:'+barH+'px;';
     const typeNm=typeLabel(t);
     el.title=hasKids
       ?(t.name+'\n'+fmtDisp(s)+' → '+fmtDisp(e)+'\n'+typeNm+' (folder) · Drag to move this group and all children')
       :(t.name+'\n'+fmtDisp(s)+' → '+fmtDisp(e)+'\n'+t.prog+'% · '+typeNm);
-      const pf=document.createElement('div');
-      pf.className='bar-prog-fill';
+    const pf=document.createElement('div');
+    pf.className='bar-prog-fill';
     pf.style.width=t.prog+'%';
-      el.appendChild(pf);
+    el.appendChild(pf);
     const labelFitsInside=width>=80;
     if(hasKids||labelFitsInside){
       const lbl=document.createElement('div');
@@ -2571,8 +2571,8 @@ function drawTaskBar(t,rangeStart,rows,rowTop){
       lbl.textContent=t.name;
       el.appendChild(lbl);
     }
-      const rl=document.createElement('div');rl.className='bar-resize-l';
-      const rr=document.createElement('div');rr.className='bar-resize-r';
+    const rl=document.createElement('div');rl.className='bar-resize-l';
+    const rr=document.createElement('div');rr.className='bar-resize-r';
     if(!hasKids){ el.appendChild(rl); el.appendChild(rr); }
     if(!hasKids&&t.type!==1&&t.id!==1){
       const connL=document.createElement('div');
@@ -2587,16 +2587,16 @@ function drawTaskBar(t,rangeStart,rows,rowTop){
       connR.addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();startConnectorDrag(t.id,'end',e);});
       connL.addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();startConnectorDrag(t.id,'start',e);});
     }
-      registerBar(t.id,left,barTop,width,barH);
-      el.onclick=(e2)=>{
-        e2.stopPropagation();
+    registerBar(t.id,left,barTop,width,barH);
+    el.onclick=(e2)=>{
+      e2.stopPropagation();
       if(e2.target.closest('.bar-dep-handle')) return;
-        selectTask(t.id);
-      };
+      selectTask(t.id);
+    };
     el.ondblclick=(e2)=>{e2.stopPropagation();if(!depLinkDragging)openEdit(t.id);};
     if(hasKids) setupSummaryMove(el,t,rangeStart);
     else setupDrag(el,t,rangeStart,rl,rr);
-      rows.appendChild(el);
+    rows.appendChild(el);
     if(!hasKids&&!labelFitsInside){
       const extLbl=document.createElement('div');
       extLbl.className='bar-label-outside';
@@ -2611,15 +2611,15 @@ function bindTimelineClicks(rangeStart){
   document.querySelectorAll('.tl-grid-row').forEach(row=>{
     row.onclick=(e)=>{
       if(depDrawMode||e.target.closest('.gantt-bar')||e.target.closest('.milestone-diamond')||e.target.closest('.bar-label-outside')) return;
-      e.stopPropagation();
+        e.stopPropagation();
       const rect=row.getBoundingClientRect();
       const x=e.clientX-rect.left;
       const dayIndex=Math.max(0,Math.floor(x/colW));
       const dateStr=fmt(addDays(rangeStart,dayIndex));
-      const taskId=parseInt(row.dataset.taskId,10);
+        const taskId=parseInt(row.dataset.taskId,10);
       const rowTask=getTaskById(taskId);
       addTaskOnTimeline(dateStr,rowTask||null);
-    };
+      };
   });
 }
 function addTaskOnTimeline(dateStr,rowTask){
@@ -2699,7 +2699,7 @@ function renderDeps(visible,start){
       x1=fp.left+fp.width; y1=fp.midY;
       tipX=tp.left+tp.width; tipY=tp.midY;
       dirX=-1; dirY=0;
-    } else {
+      } else {
       // FS: leave RIGHT of pred → enter LEFT of succ
       x1=fp.left+fp.width; y1=fp.midY;
       tipX=tp.left; tipY=tp.midY;
@@ -2732,7 +2732,7 @@ function renderDeps(visible,start){
           ' V'+pathEndY.toFixed(1)+
           ' H'+pathEndX.toFixed(1);
         labelX=elbowX; labelY=(y1+tipY)/2;
-      } else {
+    } else {
         const railY=y1+(tipY>y1?1:-1)*(ROW_H*0.5);
         d='M'+x1.toFixed(1)+','+y1.toFixed(1)+
           ' V'+railY.toFixed(1)+
@@ -2790,16 +2790,16 @@ function renderDeps(visible,start){
 
     if(depType!=='FS'){
       const tag=depType;
-    const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
       bg.setAttribute('x',labelX-10); bg.setAttribute('y',labelY-7);
       bg.setAttribute('width',20); bg.setAttribute('height',14);
       bg.setAttribute('rx',3); bg.setAttribute('fill','#fff');
       bg.setAttribute('stroke',color); bg.setAttribute('stroke-width','0.8');
-    const lbl=document.createElementNS('http://www.w3.org/2000/svg','text');
+      const lbl=document.createElementNS('http://www.w3.org/2000/svg','text');
       lbl.setAttribute('x',labelX); lbl.setAttribute('y',labelY+1);
-    lbl.setAttribute('text-anchor','middle');
-    lbl.setAttribute('dominant-baseline','middle');
-    lbl.setAttribute('font-size','8');
+      lbl.setAttribute('text-anchor','middle');
+      lbl.setAttribute('dominant-baseline','middle');
+      lbl.setAttribute('font-size','8');
       lbl.setAttribute('font-family','Inter,sans-serif');
       lbl.setAttribute('fill',color); lbl.setAttribute('font-weight','600');
       lbl.textContent=tag;
@@ -2943,7 +2943,7 @@ function setupDrag(el,task,rangeStart,rl,rr){
       selectTask(task.id);
       updateUndoRedoButtons();
       if(!isUnsavedLocal(task)){
-      persistSave(task);
+        persistSave(task);
         if(autoSchedule) void persistScheduleChanges(task);
       }
     };
@@ -3746,9 +3746,9 @@ window.downloadSampleTemplate=downloadSampleTemplate;
 window.downloadTemplate=downloadTemplate;
 
 function getCurrentPlanAoA(){
-  calcWBS();
+    calcWBS();
   const ordered=getOrderedTasks().filter(t=>!isLocalOnly(t));
-  const wbsMap={};
+    const wbsMap={};
   tasks.forEach(t=>{ if(t.wbs) wbsMap[t.id]=t.wbs; });
   const ragLabel={g:'Green',a:'Amber',r:'Red'};
   const header=['WBS','Level','Name','Owner','RAG','DependsOn','Start','End','DurationDays','Notes'];
@@ -4129,7 +4129,7 @@ function parseMSProjectXML(text){
   parsed.forEach((pt,idx)=>{
     while(stack.length&&stack[stack.length-1].outlineLevel>=pt.outlineLevel) stack.pop();
     const parentWbs=stack.length?stack[stack.length-1].wbs:null;
-      rows.push({
+    rows.push({
       wbs:pt.wbs||String(idx+1),
       name:pt.name,
       type:pt.type,
@@ -4175,7 +4175,7 @@ function parseMSProjectFile(file){
 }
 async function applyImportedRows(rows,sourceLabel){
   let errors=0;
-    const {projectId}=ganttMeta();
+  const {projectId}=ganttMeta();
   showLoading('Importing '+rows.length+' items…');
   try{
     if(projectId){
@@ -4663,8 +4663,8 @@ function ieEditType(id,cell){
   cell.classList.add('editing');
   const hasKids=getChildren(t.id).length>0;
   const original=t.type;
-  const sel=document.createElement('select');
-  sel.className='ie-select';
+    const sel=document.createElement('select');
+    sel.className='ie-select';
   // Folders: Task/Milestone are not valid — offer container types
   const opts=hasKids
     ?[[2,'Phase'],[3,'Workstream'],[4,'Activity'],[0,'Program'],[7,'Release']]
@@ -4729,10 +4729,10 @@ function ieEditDate(id,field,cell){
   if(getChildren(t.id).length) return;
   cell.classList.add('editing');
   const original=t[field]||'';
-  const inp=document.createElement('input');
+    const inp=document.createElement('input');
   inp.type='date';
-  inp.className='ie-input';
-  inp.value=original;
+    inp.className='ie-input';
+    inp.value=original;
   cell.innerHTML=''; cell.appendChild(inp); inp.focus();
   let done=false;
   const commit=(navigate)=>{
@@ -4848,7 +4848,7 @@ function ieEditPred(id,cell){
       return;
     }
     if(datesMoved){
-      renderAll();
+    renderAll();
     } else {
       cell.classList.remove('editing');
       cell.innerHTML='<span class="pred-val">'+esc(formatPred(t))+'</span>';
@@ -5038,7 +5038,7 @@ function ieEditCustom(id,colId,cell){
   if(type==='checkbox'){
     const wrap=document.createElement('label');
     wrap.style.cssText='display:flex;align-items:center;justify-content:center;width:100%;height:100%;cursor:pointer;';
-    const inp=document.createElement('input');
+  const inp=document.createElement('input');
     inp.type='checkbox';
     inp.checked=original==='1'||original==='true'||original==='yes';
     wrap.appendChild(inp);
@@ -5097,7 +5097,7 @@ function makeEditable(td, task, field, options=null){
     });
     td.innerHTML='';td.appendChild(sel);sel.focus();
     let done=false;
-    const commit=()=>{
+  const commit=()=>{
       if(done) return; done=true;
       const val=sel.value;
       if(String(val)!==original) pushHistory();
@@ -5141,8 +5141,8 @@ function makeEditable(td, task, field, options=null){
       if(options?.onCommit) options.onCommit();
     };
     inp.onblur=()=>{ if(!done) commit(); };
-    inp.onkeydown=(e)=>{
-      if(e.key==='Enter'){e.preventDefault();commit();}
+  inp.onkeydown=(e)=>{
+    if(e.key==='Enter'){e.preventDefault();commit();}
       if(e.key==='Escape'){done=true;td.classList.remove('editing');renderAll();}
     };
   }
@@ -5247,7 +5247,7 @@ function canHavePredecessor(t){
   if(t.type===1||t.id===1) return false;
   if(getChildren(t.id).length) return false;
     return true;
-}
+  }
 function canBePredecessor(t){
   return canHavePredecessor(t);
 }
@@ -5354,22 +5354,22 @@ function createDepLink(fromId,toId,depType){
   let type=(depType||'FS').toUpperCase();
   if(type==='FF'||type==='EE') type='FS';
   if(type!=='SS') type='FS';
-  pushHistory();
+    pushHistory();
   targetTask.predId=fromId;
   targetTask.depType=type;
   let datesMoved=false;
   if(autoSchedule) datesMoved=!!applyAutoSchedule();
-  pushHistory();
+    pushHistory();
   const fromName=(tasks.find(x=>x.id===fromId)||{}).name||('#'+fromId);
   showDepToast('Linked ('+type+'): “'+fromName+'” → “'+targetTask.name+'”');
-  if(!isUnsavedLocal(targetTask)){
+    if(!isUnsavedLocal(targetTask)){
     void persistSave(targetTask);
-    if(autoSchedule) void persistScheduleChanges(targetTask);
-  }
+      if(autoSchedule) void persistScheduleChanges(targetTask);
+    }
   if(datesMoved) renderAll();
   else softRefreshAfterDepChange(toId);
-    return true;
-  }
+  return true;
+}
 function removeDepLink(succId){
   const t=tasks.find(x=>x.id===succId);
   if(!t||!t.predId) return;
@@ -5565,24 +5565,24 @@ async function persistCreate(t,opts){
       assigneeId:assigneeId||null,
       order:tasks.filter(x=>x.type!==1).length,
     });
-      if(created?.id){
-        const oldId=t.id;
+    if(created?.id){
+      const oldId=t.id;
         let draft=null;
         const nameInp=document.querySelector('#tn-'+oldId+' input, #tr-'+oldId+' .task-name.editing input');
         if(nameInp) draft=nameInp.value;
         const wasEditing=draft!=null||!!document.querySelector('#tr-'+oldId+' .ie-cell.editing');
-        t.id=created.id;
-        // Remap children/preds that pointed at the temp local id — never rewrite this row onto itself
-        tasks.filter(x=>x.id!==t.id&&(x.parent===oldId||x.predId===oldId)).forEach(c=>{
-          if(c.parent===oldId) c.parent=t.id;
-          if(c.predId===oldId) c.predId=t.id;
-        });
-        if(t.parent===oldId||t.parent===t.id) t.parent=null;
-        if(selectedTaskId===oldId) selectedTaskId=t.id;
+      t.id=created.id;
+      // Remap children/preds that pointed at the temp local id — never rewrite this row onto itself
+      tasks.filter(x=>x.id!==t.id&&(x.parent===oldId||x.predId===oldId)).forEach(c=>{
+        if(c.parent===oldId) c.parent=t.id;
+        if(c.predId===oldId) c.predId=t.id;
+      });
+      if(t.parent===oldId||t.parent===t.id) t.parent=null;
+      if(selectedTaskId===oldId) selectedTaskId=t.id;
         if(checkedRowIds.has(oldId)){
           checkedRowIds.delete(oldId);
           checkedRowIds.add(t.id);
-        }
+    }
         invalidateTaskIndex();
     calcWBS();
         if(wasEditing){
@@ -5614,7 +5614,7 @@ async function persistDelete(t,silent){
     const res=await fetch('/api/pm/tasks/'+t.id,{method:'DELETE',credentials:'include',headers:h});
     if(!res.ok) throw new Error('HTTP '+res.status);
     if(!silent){
-      showToast('✓ Deleted','ok');
+    showToast('✓ Deleted','ok');
     notifyGanttParent();
     }
     return true;
@@ -5651,7 +5651,7 @@ async function persistDeletes(removed,predCleared){
 
 async function persistSave(t){
   if(!t||t.type===1||t.id===1){
-  const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
+    const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
     if(!projectId) return false;
   const h=await apiAuthHeaders(true);
     try{
@@ -5696,7 +5696,7 @@ async function persistSave(t){
     const parentTaskId=(t.parent&&t.parent!==1)?ganttIdToDbTaskId(t.parent):null;
     let predIds=predecessorIdsForSave(t.predId);
     if(t.predId&&predIds===null){ t.predId=null; predIds=[]; }
-      const assigneeId=t.owner?ownerMap[t.owner]||null:null;
+    const assigneeId=t.owner?ownerMap[t.owner]||null:null;
     await put('/api/pm/tasks/'+t.id,{
       name:t.name,
       plannedStartDate:t.start||null,
@@ -6128,37 +6128,37 @@ async function openVersionsModal(){
 function renderVersionsListHtml(list){
   const el=document.getElementById('versionsList');
   if(!el) return;
-  if(!list.length){
-    el.innerHTML='<div class="versions-empty">'+
-      '<div class="versions-empty-title">No saved versions yet</div>'+
-      '<div>Save a snapshot of the current plan to compare baselines later.</div>'+
-      '<button type="button" class="btn btn-p" style="margin-top:12px;" onclick="promptSaveVersion(\'update\')">Save first version</button>'+
-    '</div>';
-    return;
-  }
-  const active=list.find(v=>v.isActive);
-  if(active){
-    activePlanVersion=active;
-    updatePlanChip();
-  }
-  el.innerHTML=list.map(v=>{
-    const date=formatVersionDate(v.date||v.createdAt);
-    const activeBadge=v.isActive?' <span class="ver-active-badge">Active</span>':'';
-    return '<div class="ver-row'+(v.isActive?' is-active':'')+'" data-vid="'+v.id+'" data-name="'+escAttr(v.name)+'">'+
-      '<div class="ver-main">'+
-        '<div class="ver-title">'+esc(v.name)+activeBadge+'</div>'+
-        '<div class="ver-meta">v'+v.versionNumber+(date?' · '+esc(date):'')+'</div>'+
-      '</div>'+
-      '<div class="ver-actions">'+
-        (v.isActive
-          ?'<button type="button" class="btn btn-ghost btn-xs" onclick="confirmUpdateActiveSnapshot()" title="Overwrite this snapshot with the live schedule (name stays the same)">Update schedule</button>'
-          :'<button type="button" class="btn btn-p btn-xs" onclick="activatePlanVersion('+v.id+')">Activate</button>')+
-        '<button type="button" class="btn btn-ghost btn-xs" onclick="copyPlanVersion('+v.id+')">Copy</button>'+
-        '<button type="button" class="btn btn-ghost btn-xs" onclick="renamePlanVersion('+v.id+')" title="Change the display name only">Rename</button>'+
-        (v.isActive?'':'<button type="button" class="btn btn-danger btn-xs" onclick="deletePlanVersion('+v.id+')">Delete</button>')+
-      '</div>'+
-    '</div>';
-  }).join('');
+    if(!list.length){
+      el.innerHTML='<div class="versions-empty">'+
+        '<div class="versions-empty-title">No saved versions yet</div>'+
+        '<div>Save a snapshot of the current plan to compare baselines later.</div>'+
+        '<button type="button" class="btn btn-p" style="margin-top:12px;" onclick="promptSaveVersion(\'update\')">Save first version</button>'+
+      '</div>';
+      return;
+    }
+    const active=list.find(v=>v.isActive);
+    if(active){
+      activePlanVersion=active;
+      updatePlanChip();
+    }
+    el.innerHTML=list.map(v=>{
+      const date=formatVersionDate(v.date||v.createdAt);
+      const activeBadge=v.isActive?' <span class="ver-active-badge">Active</span>':'';
+      return '<div class="ver-row'+(v.isActive?' is-active':'')+'" data-vid="'+v.id+'" data-name="'+escAttr(v.name)+'">'+
+        '<div class="ver-main">'+
+          '<div class="ver-title">'+esc(v.name)+activeBadge+'</div>'+
+          '<div class="ver-meta">v'+v.versionNumber+(date?' · '+esc(date):'')+'</div>'+
+        '</div>'+
+        '<div class="ver-actions">'+
+          (v.isActive
+            ?'<button type="button" class="btn btn-ghost btn-xs" onclick="confirmUpdateActiveSnapshot()" title="Overwrite this snapshot with the live schedule (name stays the same)">Update schedule</button>'
+            :'<button type="button" class="btn btn-p btn-xs" onclick="activatePlanVersion('+v.id+')">Activate</button>')+
+          '<button type="button" class="btn btn-ghost btn-xs" onclick="copyPlanVersion('+v.id+')">Copy</button>'+
+          '<button type="button" class="btn btn-ghost btn-xs" onclick="renamePlanVersion('+v.id+')" title="Change the display name only">Rename</button>'+
+          (v.isActive?'':'<button type="button" class="btn btn-danger btn-xs" onclick="deletePlanVersion('+v.id+')">Delete</button>')+
+        '</div>'+
+      '</div>';
+    }).join('');
 }
 
 async function refreshVersionsList(opts){
@@ -6176,11 +6176,11 @@ async function refreshVersionsList(opts){
   }
   if(result&&result.error){
     if(!soft||!Array.isArray(versionsListCache)){
-      el.innerHTML='<div class="versions-empty">'+
-        '<div class="versions-empty-title">Could not load versions</div>'+
-        '<div>Check your connection and refresh the page.</div>'+
-      '</div>';
-    }
+    el.innerHTML='<div class="versions-empty">'+
+      '<div class="versions-empty-title">Could not load versions</div>'+
+      '<div>Check your connection and refresh the page.</div>'+
+    '</div>';
+  }
     return;
   }
   const list=(result&&result.list)||versionsListCache||[];

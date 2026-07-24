@@ -45,8 +45,16 @@ import {
   ChevronRight,
   Filter,
   Menu,
-  Store
+  Store,
+  LayoutGrid,
+  LayoutList,
 } from "lucide-react";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import {
+  MondayBoardProvider,
+  MondayBoardTable,
+  MondayBoardChromeControls,
+} from "@/components/MondayBoardTable";
 import type { PlatformTemplateWithMeta } from "@shared/models/templates";
 import {
   TEMPLATE_MODULES, CATEGORY_TAGS, SORT_OPTIONS,
@@ -282,6 +290,7 @@ export default function TemplatesPage() {
   const [sort, setSort] = useState("most_used");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"library" | "marketplace">("library");
+  const [catalogLayout, setCatalogLayout] = useState<"cards" | "table">("cards");
 
   const [previewTpl, setPreviewTpl] = useState<PlatformTemplateWithMeta | null>(null);
   const [applyTpl, setApplyTpl] = useState<PlatformTemplateWithMeta | null>(null);
@@ -393,6 +402,53 @@ export default function TemplatesPage() {
     ? marketplaceQuery.isLoading && !marketplaceQuery.data
     : templatesQuery.isLoading && !templatesQuery.data;
   const hasFilters = !!(selectedModule || tierFilter !== "all" || tagFilter || createdByFilter !== "all" || debouncedSearch);
+
+  const templateTableColumns: MondayColumnDef<PlatformTemplateWithMeta>[] = useMemo(() => [
+    {
+      id: "name",
+      header: "Template",
+      type: "text",
+      accessor: "name",
+      width: "240px",
+      sticky: true,
+      editable: false,
+      render: (t) => (
+        <div className="min-w-0">
+          <div className="font-medium truncate">{t.name}</div>
+          <div className="text-xs text-muted-foreground truncate">{snapshotSummary(t)}</div>
+        </div>
+      ),
+    },
+    {
+      id: "module",
+      header: "Module",
+      type: "text",
+      accessor: "module",
+      width: "120px",
+      editable: false,
+      render: (t) => {
+        const color = moduleColor(t.module);
+        return <Badge variant="outline" className="text-[10px]" style={{ borderColor: color, color }}>{moduleLabel(t.module)}</Badge>;
+      },
+    },
+    {
+      id: "uses",
+      header: "Uses",
+      type: "number",
+      accessor: (t) => t.usageCount ?? 0,
+      width: "70px",
+      editable: false,
+    },
+    {
+      id: "tier",
+      header: "Tier",
+      type: "text",
+      accessor: "tier",
+      width: "100px",
+      editable: false,
+      render: (t) => <TierBadge tier={t.tier} showCredit={t.showContributorCredit ?? false} orgName={t.contributorOrgName} />,
+    },
+  ], []);
 
   const activeChips = useMemo(() => {
     const chips: { key: string; label: string; clear: () => void }[] = [];
@@ -646,7 +702,7 @@ export default function TemplatesPage() {
                     </>
                   )}
 
-                  <div className="flex items-center justify-between mb-4 gap-2">
+                  <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
                     <h2 className="text-sm font-semibold text-muted-foreground truncate">
                       {viewMode === "marketplace"
                         ? "Marketplace"
@@ -655,15 +711,49 @@ export default function TemplatesPage() {
                         ({(viewMode === "marketplace" ? marketplaceQuery.isFetching : templatesQuery.isFetching) && !isInitialLoading ? "…" : templates.length})
                       </span>
                     </h2>
-                    {(viewMode === "marketplace" ? marketplaceQuery.isFetching : templatesQuery.isFetching) && !isInitialLoading && (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
-                    )}
+                    <div className="flex items-center gap-2">
+                      <div className="flex border rounded-lg overflow-hidden">
+                        <Button variant={catalogLayout === "cards" ? "secondary" : "ghost"} size="sm" className="h-8 rounded-none" onClick={() => setCatalogLayout("cards")}>
+                          <LayoutGrid className="h-3.5 w-3.5 mr-1" /> Cards
+                        </Button>
+                        <Button variant={catalogLayout === "table" ? "secondary" : "ghost"} size="sm" className="h-8 rounded-none" onClick={() => setCatalogLayout("table")}>
+                          <LayoutList className="h-3.5 w-3.5 mr-1" /> Table
+                        </Button>
+                      </div>
+                      {(viewMode === "marketplace" ? marketplaceQuery.isFetching : templatesQuery.isFetching) && !isInitialLoading && (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+                      )}
+                    </div>
                   </div>
 
                   {isInitialLoading ? (
                     hasFilters ? <TemplatesGridSkeleton count={6} /> : <TemplatesPageSkeleton />
                   ) : templates.length === 0 ? (
                     <TemplatesEmptyState filtered={hasFilters} />
+                  ) : catalogLayout === "table" ? (
+                    <MondayBoardProvider storageKey="jiganto-templates-catalog">
+                    <div className="space-y-2">
+                      <div className="flex justify-end">
+                        <MondayBoardChromeControls />
+                      </div>
+                    <MondayBoardTable
+                      columns={templateTableColumns}
+                      data={templates}
+                      gridLines
+                      emptyMessage="No templates match your filters."
+                      onRowClick={(t) => setPreviewTpl(t)}
+                      searchHighlightTerm={debouncedSearch}
+                      paginationResetKey={`${debouncedSearch}-${selectedModule}-${tierFilter}-${viewMode}`}
+                      renderRowActions={(t) => (
+                        <div className="flex items-center gap-1">
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); setPreviewTpl(t); }}>Preview</Button>
+                          <Button size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openApply(t); }} disabled={applyMut.isPending && applyTpl?.id === t.id}>Use</Button>
+                        </div>
+                      )}
+                      alwaysShowRowActions
+                    />
+                    </div>
+                    </MondayBoardProvider>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="template-grid">
                       {templates.map(t => (
@@ -804,7 +894,7 @@ export default function TemplatesPage() {
         <FormSection icon={<Plus className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Module type">
           <div className="space-y-1.5">
             <FieldLabel required>Module type</FieldLabel>
-            <Select value={createModule} onValueChange={setCreateModule}>
+            <Select value={createModule || undefined} onValueChange={setCreateModule}>
               <SelectTrigger data-testid="create-module-select">
                 <SelectValue placeholder="Select module…" />
               </SelectTrigger>

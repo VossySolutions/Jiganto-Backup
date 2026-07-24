@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useModuleTabUrl } from "@/hooks/use-module-tab-url";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
@@ -50,6 +50,13 @@ import { asArray, fetchSurveys, fetchSurvey, fetchSurveyResponses, fetchSurveyRe
 import { SurveyAiTokenBanner } from "@/components/surveys/SurveyAiTokenBanner";
 import { SurveyQuestionToolbar } from "@/components/surveys/SurveyQuestionToolbar";
 import { SurveyBuilderActions } from "@/components/surveys/SurveyBuilderActions";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import {
+  MondayBoardProvider,
+  MondayBoardTable,
+  MondayBoardChromeControls,
+} from "@/components/MondayBoardTable";
+import { useDebouncedValue } from "@/lib/crm-monday-chrome";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/ui/metric-card";
 import { RichTextField } from "@/components/surveys/RichTextField";
@@ -651,7 +658,7 @@ const WIZARD_CATEGORIES = CATEGORIES;
 
 type CreationMode = "scratch" | "template" | "ai";
 
-function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (id: number) => void }) {
+function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (survey: SurveyWithDetails) => void }) {
   const C = useSurveyColors();
   // step 0 = mode picker | 1 = mode-specific | 2 = details | 3 = settings | 4 = review
   const [step, setStep] = useState(0);
@@ -701,7 +708,7 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
       }
       qc.invalidateQueries({ queryKey: ["/api/surveys"] });
       toast({ title: `Survey created ✓${questionsToAdd.length ? ` · ${questionsToAdd.length} questions added` : ""}` });
-      onCreated(survey.id);
+      onCreated(survey as SurveyWithDetails);
     },
   });
 
@@ -1098,6 +1105,7 @@ export default function SurveysPage() {
   const [shareModal, setShareModal] = useState<SurveyWithDetails | null>(null);
   const [dashTab, setDashTab] = useState<"active" | "history">("active");
   const [searchQ, setSearchQ] = useState("");
+  const debouncedSearchQ = useDebouncedValue(searchQ);
   const [statusFilter, setStatusFilter] = useState("");
   const [selectedQId, setSelectedQId] = useState<number | null>(null);
   const [builderTitle, setBuilderTitle] = useState("");
@@ -1297,10 +1305,49 @@ export default function SurveysPage() {
 
   // ── Filtered list ─────────────────────────────────────────────────────────
   const filteredSurveys = surveys.filter(s => {
-    const matchSearch = s.title.toLowerCase().includes(searchQ.toLowerCase());
+    const matchSearch = s.title.toLowerCase().includes(debouncedSearchQ.toLowerCase());
     const matchStatus = !statusFilter || s.status === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  const surveyTableColumns: MondayColumnDef<SurveyWithDetails>[] = useMemo(() => [
+    {
+      id: "title",
+      header: "Survey",
+      type: "text",
+      accessor: "title",
+      width: "280px",
+      sticky: true,
+      editable: false,
+      render: (s) => (
+        <div className="min-w-0">
+          <div className="font-medium truncate">{s.title}</div>
+          <div className="text-xs text-muted-foreground">{s.questions.length} questions · {s.responseCount} responses</div>
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      type: "text",
+      accessor: "status",
+      width: "110px",
+      editable: false,
+      render: (s) => {
+        const st = statusStyles[s.status] || statusStyles.draft;
+        return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: st.bg, color: st.color }}>{st.label}</span>;
+      },
+    },
+    {
+      id: "sent",
+      header: "Sent",
+      type: "text",
+      accessor: (s) => s.sentAt,
+      width: "120px",
+      editable: false,
+      render: (s) => <span className="text-xs text-muted-foreground">{s.sentAt ? fmtDate(s.sentAt.toString()) : s.status === "draft" ? "Not yet sent" : "—"}</span>,
+    },
+  ], [statusStyles]);
 
   const kpiTotal = surveys.length;
   const kpiActive = surveys.filter(s => s.status === "active").length;
@@ -1409,87 +1456,92 @@ export default function SurveysPage() {
             ))}
           </div>
 
-          {/* Search + filter (history only) */}
-          {dashTab === "history" && (
+          {/* Search + filter */}
+          {(dashTab === "history" || dashTab === "active") && (
             <div className="survey-search-bar">
               <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
                 style={{ flex: 1, padding: "8px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, fontSize: 13, outline: "none" }}
                 placeholder="Search surveys…" data-testid="input-search-surveys" />
-              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-                style={{ width: 150, padding: "8px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, fontSize: 13, outline: "none" }}>
-                <option value="">All statuses</option>
-                <option value="active">Active</option>
-                <option value="draft">Draft</option>
-                <option value="closed">Closed</option>
-                <option value="archived">Archived</option>
-              </select>
+              {dashTab === "history" && (
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+                  style={{ width: 150, padding: "8px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, fontSize: 13, outline: "none" }}>
+                  <option value="">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="draft">Draft</option>
+                  <option value="closed">Closed</option>
+                  <option value="archived">Archived</option>
+                </select>
+              )}
+              {/* Active tab is table-only (PARTIAL); cards toggle applies to All Surveys */}
+              {dashTab === "history" && (
               <button onClick={() => setListView(listView === "card" ? "list" : "card")}
                 style={{ padding: "8px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, background: C.surface, cursor: "pointer", fontSize: 12 }}>
-                {listView === "card" ? "☰ List" : "▦ Cards"}
+                {listView === "card" ? "☰ Table" : "▦ Cards"}
               </button>
+              )}
               <button onClick={() => setMainTab("templates")} style={{ padding: "8px 12px", border: `1px solid ${C.line2}`, borderRadius: 8, background: C.tealL, color: C.teal, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>📋 Templates</button>
             </div>
           )}
 
-          {/* Survey list */}
+          {/* Survey list — Active always has a list; history supports card grid */}
           <div className={listView === "card" && dashTab === "history" ? "survey-card-grid" : undefined}>
             {isLoading ? (
               listView === "card" && dashTab === "history" ? <SurveyCardSkeleton count={6} /> : <SurveyRowSkeleton rows={5} />
+            ) : listView === "list" || dashTab === "active" ? (
+              <MondayBoardProvider storageKey="jiganto-surveys-list">
+              <div className="space-y-2">
+                <div className="flex justify-end">
+                  <MondayBoardChromeControls />
+                </div>
+              <MondayBoardTable
+                columns={surveyTableColumns}
+                data={dashTab === "active"
+                  ? filteredSurveys.filter(s => ["active", "draft"].includes(s.status))
+                  : filteredSurveys}
+                gridLines
+                emptyMessage={dashTab === "active"
+                  ? (debouncedSearchQ ? "No surveys match your search." : "No active or draft surveys.")
+                  : "No surveys match your filters."}
+                onRowClick={(s) => openResults(s.id)}
+                searchHighlightTerm={debouncedSearchQ}
+                paginationResetKey={`${debouncedSearchQ}-${statusFilter}-${dashTab}`}
+                className="bg-card"
+                renderRowActions={(s) => (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {s.status === "draft" ? (
+                      <>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openBuilder(s); }}>Edit</Button>
+                        <Button size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); activateMut.mutate(s.id); }}>Activate</Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openBuilder(s); }}>Edit</Button>
+                        <Button size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openResults(s.id); }}>Results</Button>
+                      </>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); duplicateMut.mutate(s.id); }}>Duplicate</Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); saveTemplateMut.mutate(s.id); }}>Save template</Button>
+                    {s.status !== "archived" && (
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); archiveMut.mutate({ id: s.id, archive: true }); }}>Archive</Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={(e) => { e.stopPropagation(); if (confirm(`Delete "${s.title}"?`)) deleteMut.mutate(s.id); }}>Delete</Button>
+                  </div>
+                )}
+                alwaysShowRowActions
+              />
+              </div>
+              </MondayBoardProvider>
             ) : (
-              (dashTab === "active" ? surveys.filter(s => ["active", "draft"].includes(s.status)).slice(0, 8) : filteredSurveys).map(s => {
+              filteredSurveys.map(s => {
                 const st = statusStyles[s.status] || statusStyles.draft;
                 const icon = CATEGORY_ICONS[s.category || ""] || "📋";
-                const iconBg = s.status === "active" ? C.tealL : s.status === "closed" ? C.roseL : s.status === "draft" ? C.amberL : C.blueL;
-                if (listView === "card" && dashTab === "history") {
-                  return (
+                return (
                     <div key={s.id} style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,.06)", cursor: "pointer" }} onClick={() => openResults(s.id)}>
                       <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
                       <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{s.title}</div>
                       <div style={{ fontSize: 12, color: C.ink4, marginBottom: 10 }}>{s.responseCount} responses · {s.questions.length} questions</div>
                       <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 500, background: st.bg, color: st.color }}>{st.label}</span>
                     </div>
-                  );
-                }
-                return (
-                  <div key={s.id} data-testid={`survey-row-${s.id}`}
-                    className="survey-list-row"
-                    style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: "18px 22px", marginBottom: 10, boxShadow: "0 1px 3px rgba(0,0,0,.06)", transition: "box-shadow .15s" }}>
-                    <div style={{ width: 46, height: 46, borderRadius: 11, background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{icon}</div>
-                    <div style={{ flex: 1, cursor: "pointer", minWidth: 0 }} onClick={() => openResults(s.id)}>
-                      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.title}</div>
-                      <div style={{ fontSize: 12, color: C.ink4 }}>
-                        {s.questions.length} questions · {s.responseCount} responses
-                        {s.status === "draft" ? " · Not yet sent" : s.sentAt ? ` · Sent ${fmtDate(s.sentAt.toString())}` : ""}
-                      </div>
-                    </div>
-                    <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 500, background: st.bg, color: st.color, flexShrink: 0 }}>
-                      {st.dot && "● "}{st.label}
-                    </span>
-                    <div className="survey-list-row-actions">
-                      {s.status === "completed" || s.status === "closed" ? (
-                        <button onClick={() => openResults(s.id)} style={btnPrimary} data-testid={`button-results-${s.id}`}>Results</button>
-                      ) : s.status === "draft" ? (
-                        <>
-                          <button onClick={() => openBuilder(s)} style={btnGhost} data-testid={`button-edit-${s.id}`}>Edit</button>
-                          <button onClick={() => activateMut.mutate(s.id)} style={btnPrimary} data-testid={`button-activate-${s.id}`}>Activate</button>
-                        </>
-                      ) : (
-                        <>
-                          <button onClick={() => openBuilder(s)} style={btnGhost} data-testid={`button-edit-${s.id}`}>Edit</button>
-                          <button onClick={() => openResults(s.id)} style={btnPrimary} data-testid={`button-results-${s.id}`}>Results</button>
-                        </>
-                      )}
-                      <button onClick={() => duplicateMut.mutate(s.id)} disabled={duplicateMut.isPending}
-                        title="Duplicate survey"
-                        style={{ ...btnGhost }} data-testid={`button-duplicate-${s.id}`}>⧉ Duplicate</button>
-                      {s.status === "closed" && (
-                        <button onClick={() => archiveMut.mutate({ id: s.id, archive: true })} style={btnGhost}>Archive</button>
-                      )}
-                      <button onClick={() => saveTemplateMut.mutate(s.id)} style={btnGhost} title="Save as template">Save tpl</button>
-                      <button onClick={() => { if (confirm(`Delete "${s.title}"?`)) deleteMut.mutate(s.id); }}
-                        style={{ ...btnGhost, color: C.rose, borderColor: "#f0b8b8" }} data-testid={`button-delete-${s.id}`}>Delete</button>
-                    </div>
-                  </div>
                 );
               })
             )}
@@ -1524,7 +1576,7 @@ export default function SurveysPage() {
           </div>
         </div>
 
-        {wizardOpen && <NewSurveyWizard onClose={() => setWizardOpen(false)} onCreated={id => { setWizardOpen(false); setActiveSurveyId(id); openBuilder(surveys.find(s => s.id === id) || { id, title: "", questions: [], responseCount: 0 } as any); }} />}
+        {wizardOpen && <NewSurveyWizard onClose={() => setWizardOpen(false)} onCreated={survey => { setWizardOpen(false); setActiveSurveyId(survey.id); openBuilder(surveys.find(s => s.id === survey.id) || survey); }} />}
         {shareModal && <ShareModal survey={shareModal} onClose={() => setShareModal(null)} />}
     </ModuleShell>
   );

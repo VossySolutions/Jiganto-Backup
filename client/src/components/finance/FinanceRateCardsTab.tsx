@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { RATE_CARD_TYPES } from "@shared/schema";
@@ -21,7 +21,6 @@ import {
   Download,
   Upload,
   ChevronDown,
-  ChevronRight,
   Star,
   CreditCard
 } from "lucide-react";
@@ -29,9 +28,16 @@ import {
   FinanceTableSkeleton,
   FinanceEmptyState
 } from "./FinanceUi";
-import { useTablePagination } from "@/hooks/use-table-pagination";
-import { TablePagination } from "@/components/TablePagination";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import {
+  MondayBoardProvider,
+  MondayBoardTable,
+  MondayBoardChromeControls,
+} from "@/components/MondayBoardTable";
+import { useDebouncedValue } from "@/lib/crm-monday-chrome";
 import type { FinanceRateCard, FinanceRateCardItem } from "./types";
+
+const currencySymbol = (c: string) => (c === "USD" ? "$" : c === "EUR" ? "€" : "£");
 
 interface FinanceRateCardsTabProps {
   rateCards?: FinanceRateCard[];
@@ -41,6 +47,7 @@ interface FinanceRateCardsTabProps {
 
 export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoadingProp, searchTerm = "" }: FinanceRateCardsTabProps) {
   const { toast } = useToast();
+  const debouncedSearch = useDebouncedValue(searchTerm);
   const csvRef = useRef<HTMLInputElement>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -55,6 +62,12 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
   const [newRole, setNewRole] = useState("");
   const [newChargeRate, setNewChargeRate] = useState("");
   const [newCostRate, setNewCostRate] = useState("");
+
+  useEffect(() => {
+    setNewRole("");
+    setNewChargeRate("");
+    setNewCostRate("");
+  }, [expandedId]);
 
   const { data: fetchedRateCards = [], isLoading: fetchLoading } = useQuery<FinanceRateCard[]>({
     queryKey: ["/api/finance/rate-cards"],
@@ -122,13 +135,66 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
     setShowForm(true);
   };
 
-  const filtered = rateCards.filter((c) => {
+  const filtered = useMemo(() => rateCards.filter((c) => {
     if (typeFilter !== "all" && c.cardType !== typeFilter) return false;
-    if (searchTerm && !c.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+    if (debouncedSearch && !c.name.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
-  });
+  }), [rateCards, typeFilter, debouncedSearch]);
 
-  const pagination = useTablePagination(filtered, { resetKey: `${searchTerm}-${typeFilter}` });
+  const mondayColumns: MondayColumnDef<FinanceRateCard>[] = useMemo(() => [
+    {
+      id: "name",
+      header: "Rate card",
+      type: "text",
+      accessor: "name",
+      width: "220px",
+      sticky: true,
+      editable: false,
+      render: (card) => (
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-medium truncate">{card.name}</span>
+          {card.isDefault && <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0" />}
+        </div>
+      ),
+    },
+    {
+      id: "type",
+      header: "Type",
+      type: "text",
+      accessor: "cardType",
+      width: "120px",
+      editable: false,
+      render: (card) => <Badge variant="outline" className="capitalize">{card.cardType}</Badge>,
+    },
+    {
+      id: "currency",
+      header: "Currency",
+      type: "text",
+      accessor: "currency",
+      width: "100px",
+      editable: false,
+      render: (card) => <Badge variant="secondary">{card.currency}</Badge>,
+    },
+    {
+      id: "roles",
+      header: "Roles",
+      type: "number",
+      accessor: (card) => card.items?.length ?? 0,
+      width: "80px",
+      editable: false,
+    },
+    {
+      id: "description",
+      header: "Description",
+      type: "text",
+      accessor: "description",
+      width: "240px",
+      editable: false,
+      render: (card) => <span className="text-sm text-muted-foreground truncate">{card.description ?? "—"}</span>,
+    },
+  ], []);
+
+  const expandedCard = expandedId != null ? filtered.find((c) => c.id === expandedId) ?? rateCards.find((c) => c.id === expandedId) : null;
 
   const allItems = rateCards.flatMap((c) => (c.items ?? []).map((i) => ({ ...i, cardName: c.name })));
 
@@ -176,6 +242,7 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
 
   return (
     <div className="space-y-4" data-testid="finance-rate-cards-tab">
+      <MondayBoardProvider storageKey="jiganto-finance-rate-cards">
       <div className="flex flex-wrap items-center gap-3">
         <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger className="w-[150px]">
@@ -203,6 +270,7 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
           <Plus className="h-4 w-4 mr-1" /> New Rate Card
         </Button>
         )}
+        <MondayBoardChromeControls />
       </div>
 
       {isLoading ? (
@@ -217,92 +285,91 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
           ) : undefined}
         />
       ) : (
-        <div className="space-y-2">
-          {pagination.paginatedItems.map((card) => {
-            const expanded = expandedId === card.id;
-            return (
-              <Card key={card.id} className="rounded-xl border-border/50" data-testid={`rate-card-${card.id}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => setExpandedId(expanded ? null : card.id)} className="shrink-0">
-                      {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium">{card.name}</span>
-                        {card.isDefault && <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />}
-                        <Badge variant="outline" className="capitalize">{card.cardType}</Badge>
-                        <Badge variant="secondary">{card.currency}</Badge>
-                      </div>
-                      {card.description && <p className="text-sm text-muted-foreground mt-0.5 truncate">{card.description}</p>}
-                    </div>
-                    <div className="flex gap-1 shrink-0">
-                      <Button size="sm" variant="ghost" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40" onClick={() => startEdit(card)}><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={() => deleteCardMutation.mutate(card.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                    </div>
-                  </div>
-
-                  {expanded && (
-                    <div className="mt-4 pl-7 space-y-3">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Role</TableHead>
-                            <TableHead className="text-right">Charge rate</TableHead>
-                            <TableHead className="text-right">Cost rate</TableHead>
-                            <TableHead className="w-10" />
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {(card.items ?? []).map((item: FinanceRateCardItem) => (
-                            <TableRow key={item.id}>
-                              <TableCell>{item.roleName}</TableCell>
-                              <TableCell className="text-right tabular-nums">£{item.dailyRate}</TableCell>
-                              <TableCell className="text-right tabular-nums">£{item.costRate ?? "—"}</TableCell>
-                              <TableCell>
-                                <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={() => deleteItemMutation.mutate(item.id)}>
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                      <div className="flex flex-wrap items-end gap-2">
-                        <Input placeholder="Role name" value={newRole} onChange={(e) => setNewRole(e.target.value)} className="max-w-[160px]" />
-                        <Input placeholder="Charge £/day" value={newChargeRate} onChange={(e) => setNewChargeRate(e.target.value)} className="max-w-[120px]" />
-                        <Input placeholder="Cost £/day" value={newCostRate} onChange={(e) => setNewCostRate(e.target.value)} className="max-w-[120px]" />
-                        <Button
-                          size="sm"
-                          disabled={!newRole || !newChargeRate}
-                          onClick={() => addItemMutation.mutate({
-                            cardId: card.id,
-                            roleName: newRole.trim(),
-                            dailyRate: newChargeRate,
-                            costRate: newCostRate || "0",
-                          })}
-                        >
-                          <Plus className="h-3 w-3 mr-1" /> Add role
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-          <TablePagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            total={pagination.total}
-            startIndex={pagination.startIndex}
-            endIndex={pagination.endIndex}
-            pageSize={pagination.pageSize}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
+        <div className="space-y-3">
+          <MondayBoardTable
+            columns={mondayColumns}
+            data={filtered}
+            gridLines
+            emptyMessage="No rate cards match your search or filters."
+            onRowClick={(card) => setExpandedId(expandedId === card.id ? null : card.id)}
+            renderRowActions={(card) => (
+              <>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40" onClick={(e) => { e.stopPropagation(); startEdit(card); }}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={(e) => { e.stopPropagation(); deleteCardMutation.mutate(card.id); }}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+            alwaysShowRowActions
+            searchHighlightTerm={debouncedSearch}
+            paginationResetKey={`${debouncedSearch}-${typeFilter}`}
+            totalCount={rateCards.length}
+            columnWidthStorageKey="jiganto-finance-rate-cards-col-widths"
           />
+
+          {expandedCard && (
+            <Card className="rounded-xl border-primary/30" data-testid={`rate-card-${expandedCard.id}`}>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button type="button" onClick={() => setExpandedId(null)} className="shrink-0">
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                  <span className="font-medium">{expandedCard.name}</span>
+                  {expandedCard.isDefault && <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />}
+                  <Badge variant="outline" className="capitalize">{expandedCard.cardType}</Badge>
+                  <Badge variant="secondary">{expandedCard.currency}</Badge>
+                </div>
+                <div className="pl-7 space-y-3">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Role</TableHead>
+                        <TableHead className="text-right">Charge rate</TableHead>
+                        <TableHead className="text-right">Cost rate</TableHead>
+                        <TableHead className="w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(expandedCard.items ?? []).map((item: FinanceRateCardItem) => (
+                        <TableRow key={item.id}>
+                          <TableCell>{item.roleName}</TableCell>
+                          <TableCell className="text-right tabular-nums">{currencySymbol(expandedCard.currency || "GBP")}{item.dailyRate}</TableCell>
+                          <TableCell className="text-right tabular-nums">{item.costRate != null ? `${currencySymbol(expandedCard.currency || "GBP")}${item.costRate}` : "—"}</TableCell>
+                          <TableCell>
+                            <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={() => deleteItemMutation.mutate(item.id)}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <Input placeholder="Role name" value={newRole} onChange={(e) => setNewRole(e.target.value)} className="max-w-[160px]" />
+                    <Input placeholder={`Charge ${currencySymbol(expandedCard.currency || "GBP")}/day`} value={newChargeRate} onChange={(e) => setNewChargeRate(e.target.value)} className="max-w-[120px]" />
+                    <Input placeholder={`Cost ${currencySymbol(expandedCard.currency || "GBP")}/day`} value={newCostRate} onChange={(e) => setNewCostRate(e.target.value)} className="max-w-[120px]" />
+                    <Button
+                      size="sm"
+                      disabled={!newRole || !newChargeRate}
+                      onClick={() => addItemMutation.mutate({
+                        cardId: expandedCard.id,
+                        roleName: newRole.trim(),
+                        dailyRate: newChargeRate,
+                        costRate: newCostRate || "0",
+                      })}
+                    >
+                      <Plus className="h-3 w-3 mr-1" /> Add role
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
+      </MondayBoardProvider>
 
       <FormDialogShell
         open={showForm}

@@ -2,14 +2,24 @@ import {
   useState,
   useCallback,
   useRef,
-  useEffect
+  useEffect,
+  useMemo,
 } from "react";
-import { TablePagination } from "@/components/TablePagination";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { useTablePagination } from "@/hooks/use-table-pagination";
+import { TablePagination } from "@/components/TablePagination";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { useDebouncedValue, recordToMondayGroups, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
 import { FormDialogShell, FormSection, FieldGrid, FieldLabel } from "@/components/ui/form-dialog-shell";
 import {
   Dialog,
@@ -30,18 +40,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   X,
-  Search,
-  ChevronDown,
-  Plus,
-  Download,
-  Upload,
   Share2,
   Archive,
   CheckCircle2,
   RotateCcw,
   AlertTriangle,
   Flag,
-  Loader2,
+  Eye,
 } from "lucide-react";
 
 type LogType = "risk" | "assumptions" | "issues" | "dependencies" | "decisions";
@@ -359,19 +364,26 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
 
   const [activeView, setActiveView] = useState<"table" | "cards">("table");
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebouncedValue(searchQuery);
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [statFilter, setStatFilter] = useState("all");
   const [showArchived, setShowArchived] = useState(false);
   const [escalatedOnly, setEscalatedOnly] = useState(false);
+  const [sortField, setSortField] = useState<"title" | "priority" | "status" | "dueDate" | "owner">("title");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [groupBy, setGroupBy] = useState<"none" | "status" | "priority" | "category" | "owner" | "workstream">("none");
+  const [pinName, setPinName] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem(`raidd-${logType}-pin-title`) !== "0";
+  });
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [drawerItem, setDrawerItem] = useState<RaiddItem | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEscDialog, setShowEscDialog] = useState(false);
   const [escTargetId, setEscTargetId] = useState<number | null>(null);
   const [archiveTargetId, setArchiveTargetId] = useState<number | null>(null);
-  const [showColsMenu, setShowColsMenu] = useState(false);
   const [colVisibility, setColVisibility] = useState<Record<string, boolean>>(() => {
     const vis: Record<string, boolean> = {};
     config.columns.forEach(c => { vis[c.key] = c.visible; });
@@ -382,8 +394,17 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
   const [escForm, setEscForm] = useState({ level: "PMO", to: "", reason: "", deadline: "" });
   const [noteText, setNoteText] = useState("");
 
-  const colsMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const priorityRank = (p: string | null) => {
+    const order: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+    return order[p || ""] ?? 9;
+  };
+
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortField(field); setSortDir("asc"); }
+  };
 
   const { data: items = [], isLoading } = useQuery<RaiddItem[]>({
     queryKey: ["/api/pm/projects", projectId, "raidd", config.typeValue],
@@ -413,16 +434,15 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
   });
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (colsMenuRef.current && !colsMenuRef.current.contains(e.target as Node)) setShowColsMenu(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+    const vis: Record<string, boolean> = {};
+    config.columns.forEach(c => { vis[c.key] = c.visible; });
+    setColVisibility(vis);
+  }, [logType, config.columns]);
 
-  const filteredItems = items.filter((item) => {
+  const filteredItems = useMemo(() => {
+    let result = items.filter((item) => {
     if (!showArchived && item.archived) return false;
-    if (searchQuery && !item.title.toLowerCase().includes(searchQuery.toLowerCase()) && !item.code?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (debouncedSearch && !item.title.toLowerCase().includes(debouncedSearch.toLowerCase()) && !item.code?.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     if (priorityFilter !== "all" && item.priority !== priorityFilter) return false;
     if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
     if (ownerFilter !== "all" && item.ownerName !== ownerFilter) return false;
@@ -446,22 +466,69 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
       if (statFilter === "deferred" && item.status !== "Deferred") return false;
     }
     return true;
-  });
+    });
+
+    result.sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      if (sortField === "title") return dir * (a.title || "").localeCompare(b.title || "");
+      if (sortField === "priority") return dir * (priorityRank(a.priority) - priorityRank(b.priority));
+      if (sortField === "status") return dir * (a.status || "").localeCompare(b.status || "");
+      if (sortField === "owner") return dir * (a.ownerName || "").localeCompare(b.ownerName || "");
+      const aDate = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+      const bDate = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      return dir * (aDate - bDate);
+    });
+
+    return result;
+  }, [items, showArchived, debouncedSearch, priorityFilter, categoryFilter, ownerFilter, escalatedOnly, statFilter, sortField, sortDir]);
+
+  const tableGroups = useMemo(() => {
+    if (groupBy === "none") return undefined;
+    const grouped: Record<string, RaiddItem[]> = {};
+    for (const item of filteredItems) {
+      let key: string;
+      if (groupBy === "status") key = item.status || "—";
+      else if (groupBy === "priority") key = item.priority || "—";
+      else if (groupBy === "category") key = item.category || "—";
+      else if (groupBy === "owner") key = item.ownerName || "Unassigned";
+      else key = item.workstream || "—";
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(item);
+    }
+    return recordToMondayGroups(grouped, {}, (items) => `${items.length} items`);
+  }, [filteredItems, groupBy]);
 
   const uniqueOwners = [...new Set(items.filter(i => i.ownerName).map(i => i.ownerName!))];
 
-  const tablePagination = useTablePagination(filteredItems, {
-    resetKey: `${activeView}|${searchQuery}|${priorityFilter}|${categoryFilter}|${ownerFilter}|${statFilter}|${showArchived}|${escalatedOnly}`,
+  const tablePaginationResetKey = `${activeView}|${debouncedSearch}|${priorityFilter}|${categoryFilter}|${ownerFilter}|${statFilter}|${showArchived}|${escalatedOnly}|${sortField}|${sortDir}|${groupBy}`;
+
+  const cardsPagination = useTablePagination(filteredItems, {
+    resetKey: tablePaginationResetKey,
+    enabled: activeView === "cards",
   });
 
   const saveField = useCallback((item: RaiddItem, field: string, value: any) => {
-    const activity = item.activityLog || [];
-    activity.unshift({ dot: "", text: `${field} updated`, time: nowStr(), type: "system" });
-    updateMutation.mutate({ id: item.id, updates: { [field]: value, activityLog: activity, updatedAt: new Date().toISOString() } });
-    if (drawerItem?.id === item.id) {
-      setDrawerItem({ ...drawerItem, [field]: value, activityLog: activity });
+    let coerced = value;
+    if (field === "score") {
+      if (value === "" || value == null) {
+        coerced = null;
+      } else {
+        const n = Number(value);
+        if (!Number.isFinite(n)) {
+          toast({ title: "Score must be a number", variant: "destructive" });
+          return;
+        }
+        coerced = n;
+      }
+    } else if (field === "providerConfirmed") {
+      coerced = value === true || value === "true";
     }
-  }, [updateMutation, drawerItem]);
+    const activity = [{ dot: "", text: `${field} updated`, time: nowStr(), type: "system" }, ...(item.activityLog || [])];
+    updateMutation.mutate({ id: item.id, updates: { [field]: coerced, activityLog: activity, updatedAt: new Date().toISOString() } });
+    if (drawerItem?.id === item.id) {
+      setDrawerItem({ ...drawerItem, [field]: coerced, activityLog: activity });
+    }
+  }, [updateMutation, drawerItem, toast]);
 
   const handleAddItem = () => {
     if (!newItem.title.trim()) return;
@@ -482,11 +549,10 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
   };
 
   const handleEscalate = () => {
-    if (!escTargetId) return;
+    if (!escTargetId || updateMutation.isPending) return;
     const item = items.find(i => i.id === escTargetId);
     if (!item) return;
-    const activity = item.activityLog || [];
-    activity.unshift({ dot: "amber", text: `Escalated to ${escForm.level} (${escForm.to || "unassigned"})`, time: nowStr(), type: "system" });
+    const activity = [{ dot: "amber", text: `Escalated to ${escForm.level} (${escForm.to || "unassigned"})`, time: nowStr(), type: "system" }, ...(item.activityLog || [])];
     updateMutation.mutate({
       id: escTargetId,
       updates: {
@@ -500,6 +566,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
       },
     });
     setShowEscDialog(false);
+    setEscTargetId(null);
     setEscForm({ level: "PMO", to: "", reason: "", deadline: "" });
     if (drawerItem?.id === escTargetId) {
       setDrawerItem({ ...drawerItem, escalated: true, escalationLevel: escForm.level, escalationTo: escForm.to, escalationReason: escForm.reason, escalationDays: 0, status: "Escalated", activityLog: activity });
@@ -507,8 +574,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
   };
 
   const handleDeEscalate = (item: RaiddItem) => {
-    const activity = item.activityLog || [];
-    activity.unshift({ dot: "green", text: "De-escalated", time: nowStr(), type: "system" });
+    const activity = [{ dot: "green", text: "De-escalated", time: nowStr(), type: "system" }, ...(item.activityLog || [])];
     updateMutation.mutate({
       id: item.id,
       updates: { escalated: false, escalationLevel: null, escalationDays: null, status: "Open", activityLog: activity },
@@ -519,8 +585,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
   };
 
   const handleCloseItem = (item: RaiddItem) => {
-    const activity = item.activityLog || [];
-    activity.unshift({ dot: "green", text: "Item closed", time: nowStr(), type: "system" });
+    const activity = [{ dot: "green", text: "Item closed", time: nowStr(), type: "system" }, ...(item.activityLog || [])];
     updateMutation.mutate({ id: item.id, updates: { closed: true, status: "Closed", activityLog: activity } });
     if (drawerItem?.id === item.id) setDrawerItem({ ...drawerItem, closed: true, status: "Closed", activityLog: activity });
   };
@@ -528,24 +593,21 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
   const handleArchive = (id: number) => {
     const item = items.find(i => i.id === id);
     if (!item) return;
-    const activity = item.activityLog || [];
-    activity.unshift({ dot: "", text: "Archived", time: nowStr(), type: "system" });
+    const activity = [{ dot: "", text: "Archived", time: nowStr(), type: "system" }, ...(item.activityLog || [])];
     updateMutation.mutate({ id, updates: { archived: true, activityLog: activity } });
     if (drawerItem?.id === id) { setDrawerItem(null); }
     setArchiveTargetId(null);
   };
 
   const handleRestore = (item: RaiddItem) => {
-    const activity = item.activityLog || [];
-    activity.unshift({ dot: "green", text: "Restored from archive", time: nowStr(), type: "system" });
+    const activity = [{ dot: "green", text: "Restored from archive", time: nowStr(), type: "system" }, ...(item.activityLog || [])];
     updateMutation.mutate({ id: item.id, updates: { archived: false, activityLog: activity } });
     if (drawerItem?.id === item.id) setDrawerItem({ ...drawerItem, archived: false, activityLog: activity });
   };
 
   const handleAddNote = (item: RaiddItem) => {
     if (!noteText.trim()) return;
-    const activity = item.activityLog || [];
-    activity.unshift({ dot: "", text: `Note: ${noteText.trim()}`, time: nowStr(), type: "user" });
+    const activity = [{ dot: "", text: `Note: ${noteText.trim()}`, time: nowStr(), type: "user" }, ...(item.activityLog || [])];
     updateMutation.mutate({ id: item.id, updates: { activityLog: activity } });
     setDrawerItem({ ...item, activityLog: activity });
     setNoteText("");
@@ -599,24 +661,32 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
 
   const handleExport = () => {
     const headers = ["Code", "Title", "Status", "Priority", "Category", "Owner", "Workstream", "Escalated", "Description"];
-    const csvRows = [headers.join(",")];
-    items.filter(i => !i.archived).forEach(item => {
-      csvRows.push([
-        item.code || "", `"${(item.title || "").replace(/"/g, '""')}"`, item.status || "", item.priority || "",
-        item.category || "", item.ownerName || "", item.workstream || "", item.escalated ? "Yes" : "No",
-        `"${(item.description || "").replace(/"/g, '""')}"`,
-      ].join(","));
-    });
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${config.typeValue}-log-export.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const rows = items.filter(i => !i.archived).map(item => [
+      item.code || "",
+      item.title || "",
+      item.status || "",
+      item.priority || "",
+      item.category || "",
+      item.ownerName || "",
+      item.workstream || "",
+      item.escalated ? "Yes" : "No",
+      item.description || "",
+    ]);
+    downloadBoardCsv(`${config.typeValue}-log-export.csv`, headers, rows);
+    toast({ title: "Exported to CSV" });
   };
 
-  const [importing, setImporting] = useState(false);
+  const downloadRaiddTemplate = () => {
+    const headers = ["Code", "Title", "Status", "Priority", "Category", "Owner", "Workstream", "Escalated", "Description"];
+    downloadImportTemplateCsv(
+      `${config.typeValue}-import-template.csv`,
+      headers,
+      ["", "Example title", config.statusOptions[0] || "Open", "Medium", "", "", "", "No", ""],
+    );
+    toast({ title: "Import template downloaded" });
+  };
+
+  const [, setImporting] = useState(false);
 
   const parseCsvLine = (line: string): string[] => {
     const result: string[] = [];
@@ -758,7 +828,6 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
     setShowArchived(false);
   };
 
-  const visibleCols = config.columns.filter(c => colVisibility[c.key]);
 
   const renderPriBadge = (pri: string | null) => {
     if (!pri) return <span className="text-muted-foreground">-</span>;
@@ -780,11 +849,11 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
     );
   };
 
-  const renderCell = (col: ColumnDef, item: RaiddItem) => {
+  const renderCellContent = (colKey: string, item: RaiddItem) => {
     const dash = <span className="text-muted-foreground">-</span>;
-    switch (col.key) {
+    switch (colKey) {
       case "code": return <span className="text-[11px] font-semibold font-mono text-indigo-600 bg-indigo-500/10 px-1.5 py-0.5 rounded" data-testid={`text-code-${item.id}`}>{item.code || item.id}</span>;
-      case "title": return <span className={`font-medium text-foreground ${item.closed ? "line-through text-muted-foreground" : ""}`}>{item.title}</span>;
+      case "title": return <span className={`font-medium text-foreground text-sm ${item.closed ? "line-through text-muted-foreground" : ""}`}>{item.title}</span>;
       case "category": return item.category || dash;
       case "score":
         if (item.score == null) return dash;
@@ -820,19 +889,84 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
     }
   };
 
+  const COL_WIDTHS: Record<string, string> = {
+    code: "80px", title: "240px", category: "120px", score: "70px", priority: "100px",
+    status: "130px", owner: "140px", escalation: "110px", days: "90px", issueType: "100px",
+    timelineImpact: "130px", resolution: "140px", basis: "120px", dueDate: "110px",
+    dependentOn: "140px", requiredByDate: "110px", providerConfirmed: "90px",
+    decisionBody: "130px", decisionDate: "110px", rationale: "160px",
+  };
+
+  const raiddColumnType = (key: string): MondayColumnDef<RaiddItem>["type"] => {
+    if (key === "priority" || key === "status" || key === "issueType") return "status";
+    if (key === "owner") return "text"; // ownerName string — person type has no inline editor
+    if (key === "score" || key === "days") return "number";
+    if (key === "dueDate" || key === "requiredByDate" || key === "decisionDate") return "date";
+    if (key === "providerConfirmed") return "checkbox";
+    return "text";
+  };
+
+  const RAIDD_NON_EDITABLE = new Set(["code", "escalation", "days"]);
+
+  const RAIDD_FIELD_MAP: Record<string, string> = {
+    owner: "ownerName",
+    days: "escalationDays",
+  };
+
+  const mondayColumns: MondayColumnDef<RaiddItem>[] = useMemo(() => {
+    return config.columns
+      .filter((c) => c.key !== "cb" && c.key !== "actions" && colVisibility[c.key])
+      .map((c) => {
+        const options =
+          c.key === "priority" ? config.priorityOptions.map((v) => ({ value: v, label: v }))
+          : c.key === "status" ? config.statusOptions.map((v) => ({ value: v, label: v }))
+          : c.key === "issueType" && logType === "issues"
+            ? ["Blocker", "Impediment", "Escalation", "Change Request", "Information Gap"].map((v) => ({ value: v, label: v }))
+          : c.key === "issueType" && logType === "dependencies"
+            ? ["Internal", "External", "Incoming", "Outgoing"].map((v) => ({ value: v, label: v }))
+          : undefined;
+        return {
+          id: c.key,
+          header: c.label || c.key,
+          type: raiddColumnType(c.key),
+          accessor: (item: RaiddItem) => {
+            if (c.key === "owner") return item.ownerName ?? "";
+            if (c.key === "days") return item.escalationDays;
+            if (c.key === "providerConfirmed") return item.providerConfirmed ?? false;
+            return (item as any)[c.key] ?? "";
+          },
+          width: COL_WIDTHS[c.key] || "120px",
+          sticky: c.key === "title" ? pinName : false,
+          editable: !RAIDD_NON_EDITABLE.has(c.key),
+          options,
+          render: (item: RaiddItem) => renderCellContent(c.key, item),
+        };
+      });
+  }, [config.columns, config.priorityOptions, config.statusOptions, colVisibility, logType, pinName]);
+
+
   const renderDrawerFields = (item: RaiddItem) => {
-    const sel = (label: string, field: string, options: string[], value: string | null) => (
-      <div className="flex flex-col gap-1" key={field}>
-        <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</label>
-        <select className="w-full px-2 py-1.5 border rounded-md text-[12.5px] bg-background" value={value || ""} onChange={(e) => saveField(item, field, e.target.value)} data-testid={`select-${field}-${item.id}`}>
-          {options.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-      </div>
-    );
+    const sel = (label: string, field: string, options: string[], value: string | null) => {
+      const opts = value && !options.includes(value) ? [value, ...options] : options;
+      return (
+        <div className="flex flex-col gap-1" key={field}>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</label>
+          <select className="w-full px-2 py-1.5 border rounded-md text-[12.5px] bg-background" value={value || ""} onChange={(e) => saveField(item, field, e.target.value)} data-testid={`select-${field}-${item.id}`}>
+            {opts.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+      );
+    };
     const txt = (label: string, field: string, value: string | null) => (
       <div className="flex flex-col gap-1" key={field}>
         <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</label>
         <input className="w-full px-2 py-1.5 border rounded-md text-[12.5px] bg-background" value={value || ""} onChange={(e) => saveField(item, field, e.target.value)} data-testid={`input-${field}-${item.id}`} />
+      </div>
+    );
+    const date = (label: string, field: string, value: string | null) => (
+      <div className="flex flex-col gap-1" key={field}>
+        <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</label>
+        <input type="date" className="w-full px-2 py-1.5 border rounded-md text-[12.5px] bg-background" value={value || ""} onChange={(e) => saveField(item, field, e.target.value || null)} data-testid={`input-${field}-${item.id}`} />
       </div>
     );
     const area = (label: string, field: string, value: string | null) => (
@@ -851,10 +985,10 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
     ];
 
     if (logType === "risk") return [...common, txt("Risk Score (1-25)", "score", item.score?.toString() || null), area("Mitigation Action", "mitigation", item.mitigation), area("Contingency Plan", "contingency", item.contingency)];
-    if (logType === "assumptions") return [...common, area("Basis for Assumption", "basis", item.basis), txt("Validation Method", "validationMethod", item.validationMethod), txt("Validation Due Date", "dueDate", item.dueDate)];
+    if (logType === "assumptions") return [...common, area("Basis for Assumption", "basis", item.basis), txt("Validation Method", "validationMethod", item.validationMethod), date("Validation Due Date", "dueDate", item.dueDate)];
     if (logType === "issues") return [...common, sel("Issue Type", "issueType", ["Blocker", "Impediment", "Escalation", "Change Request", "Information Gap"], item.issueType), sel("Timeline Impact", "timelineImpact", ["None", "Minor Delay", "Moderate Delay", "Major Delay", "Critical Path"], item.timelineImpact), area("Resolution Plan", "resolution", item.resolution)];
-    if (logType === "dependencies") return [...common, sel("Dependency Type", "issueType", ["Internal", "External", "Incoming", "Outgoing"], item.issueType), txt("Dependent On", "dependentOn", item.dependentOn), txt("Required By Date", "requiredByDate", item.requiredByDate), sel("Provider Confirmed", "providerConfirmed", ["false", "true"], item.providerConfirmed?.toString() || "false")];
-    if (logType === "decisions") return [...common, sel("Decision Body", "decisionBody", ["Project Board", "Steering Committee", "PMO", "Workstream Lead", "Technical Authority"], item.decisionBody), txt("Decision Date", "decisionDate", item.decisionDate), area("Rationale", "rationale", item.rationale)];
+    if (logType === "dependencies") return [...common, sel("Dependency Type", "issueType", ["Internal", "External", "Incoming", "Outgoing"], item.issueType), txt("Dependent On", "dependentOn", item.dependentOn), date("Required By Date", "requiredByDate", item.requiredByDate), sel("Provider Confirmed", "providerConfirmed", ["false", "true"], item.providerConfirmed?.toString() || "false")];
+    if (logType === "decisions") return [...common, sel("Decision Body", "decisionBody", ["Project Board", "Steering Committee", "PMO", "Workstream Lead", "Technical Authority"], item.decisionBody), date("Decision Date", "decisionDate", item.decisionDate), area("Rationale", "rationale", item.rationale)];
     return common;
   };
 
@@ -866,43 +1000,152 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
     );
   }
 
+  const boardStorageKey = `jiganto-raidd-${logType}`;
+
   return (
+    <MondayBoardShell.Legacy
+      storageKey={boardStorageKey}
+      entityType={`raidd_${logType}`}
+      stateHook={useMondayBoardShellState}
+      filterMatcher={matchBoardFilterValue}
+    >
     <div className="flex flex-col h-full overflow-hidden" data-testid={`raidd-log-${logType}`}>
-      {/* Actions only — tool icon + name live in workspace topbar */}
-      <div className="bg-background border-b px-5 py-3 flex items-center justify-end shrink-0">
-        <div className="flex gap-2 items-center">
-          <div className="relative" ref={colsMenuRef}>
-            <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => setShowColsMenu(!showColsMenu)} data-testid="button-columns">
-              Columns <ChevronDown className="h-3 w-3 ml-1" />
-            </Button>
-            {showColsMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-background border rounded-lg shadow-lg z-50 min-w-[200px] py-1.5">
-                {config.columns.filter(c => !c.locked).map(c => (
-                  <div key={c.key} className="flex items-center gap-2 px-3 py-1.5 text-[12.5px] cursor-pointer hover:bg-muted" onClick={() => setColVisibility(prev => ({ ...prev, [c.key]: !prev[c.key] }))} data-testid={`col-toggle-${c.key}`}>
-                    <div className={`w-3.5 h-3.5 border-[1.5px] rounded-sm flex items-center justify-center shrink-0 ${colVisibility[c.key] ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30"}`}>
-                      {colVisibility[c.key] && <span className="text-[9px]">✓</span>}
-                    </div>
-                    {c.label || c.key}
-                  </div>
-                ))}
+      <input type="file" ref={fileInputRef} accept=".csv" className="hidden" onChange={handleImport} />
+      <MondayBoardShell.Toolbar
+        newLabel={config.addLabel}
+        onNew={() => setShowAddDialog(true)}
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder={`Search ${config.title.toLowerCase()}...`}
+        viewLabel={activeView === "table" ? "Table" : "Cards"}
+        viewMenu={
+          <>
+            <DropdownMenuItem onClick={() => setActiveView("table")} data-testid="button-table-view">Table</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setActiveView("cards")} data-testid="button-cards-view">Cards</DropdownMenuItem>
+          </>
+        }
+        filterActive={priorityFilter !== "all" || categoryFilter !== "all" || ownerFilter !== "all" || escalatedOnly || showArchived || statFilter !== "all"}
+        filterCount={
+          (priorityFilter !== "all" ? 1 : 0) +
+          (categoryFilter !== "all" ? 1 : 0) +
+          (ownerFilter !== "all" ? 1 : 0) +
+          (escalatedOnly ? 1 : 0) +
+          (showArchived ? 1 : 0) +
+          (statFilter !== "all" ? 1 : 0)
+        }
+        filterContent={
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Priority</Label>
+              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                <SelectTrigger className="h-8 text-xs" data-testid="select-priority-filter"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Priorities</SelectItem>
+                  {config.priorityOptions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Category</Label>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="h-8 text-xs" data-testid="select-category-filter"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {config.categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Owner</Label>
+              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                <SelectTrigger className="h-8 text-xs" data-testid="select-owner-filter"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Owners</SelectItem>
+                  {uniqueOwners.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <Checkbox checked={escalatedOnly} onCheckedChange={(v) => setEscalatedOnly(v === true)} data-testid="button-escalated-filter" />
+              Escalated only
+            </label>
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <Checkbox checked={showArchived} onCheckedChange={(v) => setShowArchived(v === true)} data-testid="button-show-archived" />
+              Show archived
+            </label>
+            {statFilter !== "all" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Stat filter</Label>
+                <Select value={statFilter} onValueChange={setStatFilter}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All items</SelectItem>
+                    {config.statCards.map((s) => (
+                      <SelectItem key={s.filter} value={s.filter}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>
-          <input type="file" ref={fileInputRef} accept=".csv" className="hidden" onChange={handleImport} />
-          <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => fileInputRef.current?.click()} disabled={importing} data-testid="button-import">
-            {importing ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Importing...</> : <><Upload className="h-3 w-3 mr-1" /> Import</>}
-          </Button>
-          <Button variant="outline" size="sm" className="text-xs h-8" onClick={handleExport} data-testid="button-export">
-            <Download className="h-3 w-3 mr-1" /> Export
-          </Button>
-          <Button size="sm" className="text-xs h-8" onClick={() => setShowAddDialog(true)} data-testid="button-add-item">
-            <Plus className="h-3 w-3 mr-1" /> {config.addLabel}
-          </Button>
-        </div>
-      </div>
+        }
+        sortActive={sortField !== "title" || sortDir !== "asc"}
+        sortLabel={`Sort${sortField !== "title" ? `: ${sortField}` : ""}`}
+        sortContent={
+          <>
+            <DropdownMenuItem onClick={() => handleSort("title")}>Title {sortField === "title" ? `(${sortDir})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleSort("priority")}>Priority {sortField === "priority" ? `(${sortDir})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleSort("status")}>Status {sortField === "status" ? `(${sortDir})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleSort("dueDate")}>Due date {sortField === "dueDate" ? `(${sortDir})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleSort("owner")}>Owner {sortField === "owner" ? `(${sortDir})` : ""}</DropdownMenuItem>
+          </>
+        }
+        groupActive={groupBy !== "none"}
+        groupLabel={groupBy === "none" ? "Group by" : `Group by ${groupBy}`}
+        groupContent={
+          <>
+            <DropdownMenuItem onClick={() => setGroupBy("none")}>None</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setGroupBy("status")}>Status</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setGroupBy("priority")}>Priority</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setGroupBy("category")}>Category</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setGroupBy("owner")}>Owner</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setGroupBy("workstream")}>Workstream</DropdownMenuItem>
+          </>
+        }
+        grouped={groupBy !== "none"}
+        pinActive={pinName}
+        onPinToggle={() => {
+          setPinName((v) => {
+            const next = !v;
+            localStorage.setItem(`raidd-${logType}-pin-title`, next ? "1" : "0");
+            return next;
+          });
+        }}
+        pinTitle={pinName ? "Unpin Title column" : "Pin Title column"}
+        columnsHiddenCount={config.columns.filter((c) => !c.locked && !colVisibility[c.key]).length}
+        columnsContent={
+          <>
+            {config.columns.filter((c) => !c.locked).map((c) => (
+              <label key={c.key} className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-muted rounded-sm">
+                <Checkbox
+                  checked={colVisibility[c.key]}
+                  onCheckedChange={() => setColVisibility((prev) => ({ ...prev, [c.key]: !prev[c.key] }))}
+                  data-testid={`col-toggle-${c.key}`}
+                />
+                {c.label || c.key}
+              </label>
+            ))}
+          </>
+        }
+        onImport={() => fileInputRef.current?.click()}
+        onPaste={() => fileInputRef.current?.click()}
+        onExport={handleExport}
+        onDownloadTemplate={downloadRaiddTemplate}
+        testId={`raidd-${logType}-toolbar`}
+      />
 
-      {/* Selection Toolbar */}
-      {selectedIds.size > 0 && (
+      {/* Selection Toolbar — cards view only (table uses MondayBoardTable bulk bar) */}
+      {activeView === "cards" && selectedIds.size > 0 && (
         <div className="flex items-center gap-3 bg-slate-800 text-white px-5 py-2.5 shrink-0" data-testid="selection-toolbar">
           <span className="text-[13px] font-semibold mr-1">{selectedIds.size} item{selectedIds.size > 1 ? "s" : ""} selected</span>
           <div className="w-px h-5 bg-white/20" />
@@ -919,35 +1162,6 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
         </div>
       )}
 
-      {/* Filter Row */}
-      <div className="bg-background border-b px-5 py-2 flex gap-2 items-center flex-wrap shrink-0">
-        <div className="flex items-center gap-1.5 bg-muted border rounded-md px-2.5 py-1 w-[220px]">
-          <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <input type="text" placeholder={`Search ${config.title.toLowerCase()}...`} className="bg-transparent border-none outline-none text-[12px] w-full" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} data-testid="input-search" />
-        </div>
-        <select className="text-[11.5px] border rounded-md px-2.5 py-1.5 bg-background text-muted-foreground cursor-pointer" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} data-testid="select-priority-filter">
-          <option value="all">All Priorities</option>
-          {config.priorityOptions.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <select className="text-[11.5px] border rounded-md px-2.5 py-1.5 bg-background text-muted-foreground cursor-pointer" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} data-testid="select-category-filter">
-          <option value="all">All Categories</option>
-          {config.categories.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select className="text-[11.5px] border rounded-md px-2.5 py-1.5 bg-background text-muted-foreground cursor-pointer" value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} data-testid="select-owner-filter">
-          <option value="all">All Owners</option>
-          {uniqueOwners.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-        <button className={`text-[11.5px] border rounded-md px-2.5 py-1.5 font-semibold cursor-pointer ${escalatedOnly ? "bg-amber-500 text-white border-amber-500" : "bg-amber-500/10 border-amber-500/30 text-amber-600"}`} onClick={() => setEscalatedOnly(!escalatedOnly)} data-testid="button-escalated-filter">
-          <Flag className="w-3 h-3 inline mr-1" /> Escalated
-        </button>
-        <button className={`text-[11.5px] border rounded-md px-2.5 py-1.5 cursor-pointer ${showArchived ? "bg-primary/10 border-primary text-primary" : "bg-background border-muted-foreground/30 text-muted-foreground"}`} onClick={() => setShowArchived(!showArchived)} data-testid="button-show-archived">
-          Show Archived
-        </button>
-        <div className="ml-auto flex gap-1.5">
-          <button className={`text-[11.5px] border rounded-md px-2.5 py-1.5 cursor-pointer ${activeView === "table" ? "bg-primary/10 border-primary text-primary" : "bg-background border-muted-foreground/30 text-muted-foreground"}`} onClick={() => setActiveView("table")} data-testid="button-table-view">Table</button>
-          <button className={`text-[11.5px] border rounded-md px-2.5 py-1.5 cursor-pointer ${activeView === "cards" ? "bg-primary/10 border-primary text-primary" : "bg-background border-muted-foreground/30 text-muted-foreground"}`} onClick={() => setActiveView("cards")} data-testid="button-cards-view">Cards</button>
-        </div>
-      </div>
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto p-5 bg-muted/30">
@@ -976,78 +1190,68 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
 
         {/* Table View */}
         {activeView === "table" && (
-          <div className="bg-background border rounded-lg overflow-hidden mb-4">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-gray-700 dark:text-foreground border-collapse">
-                <thead>
-                  <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
-                    {visibleCols.map(c => (
-                      <th key={c.key} className={`text-left align-middle font-semibold whitespace-nowrap ${c.key === "cb" ? "w-9 px-2 py-2.5" : "px-3 py-2.5"}`}>{c.label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredItems.length === 0 ? (
-                    <tr>
-                      <td colSpan={visibleCols.length} className="text-center text-muted-foreground py-12">
-                        <p className="text-[13px]">No items match your filters. <span className="text-primary cursor-pointer" onClick={clearFilters}>Clear filters</span></p>
-                      </td>
-                    </tr>
-                  ) : (
-                    tablePagination.paginatedItems.map(item => (
-                      <tr key={item.id} className={`border-b border-border/40 last:border-b-0 cursor-pointer transition-colors hover:bg-muted/30 ${item.escalated ? "bg-amber-50 dark:bg-amber-500/5 border-l-[3px] border-l-amber-500" : ""} ${selectedIds.has(item.id) ? "bg-primary/5" : ""} ${item.archived ? "opacity-50" : ""}`} data-testid={`row-raidd-${item.id}`}>
-                        {visibleCols.map(c => {
-                          if (c.key === "cb") {
-                            return (
-                              <td key="cb" className="px-2 py-2.5 align-middle w-9" onClick={(e) => e.stopPropagation()}>
-                                <input type="checkbox" className="w-[15px] h-[15px] rounded-sm accent-primary cursor-pointer" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)} data-testid={`checkbox-${item.id}`} />
-                              </td>
-                            );
-                          }
-                          if (c.key === "actions") {
-                            return (
-                              <td key="actions" className="px-3 py-2.5 align-middle whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
-                                <button className="text-[11px] text-muted-foreground hover:text-primary px-1.5 py-0.5 rounded" onClick={() => setDrawerItem(item)} title="Open" data-testid={`button-edit-${item.id}`}>
-                                  <Search className="w-3 h-3" />
-                                </button>
-                                {item.archived ? (
-                                  <button className="text-[11px] text-green-500 px-1.5 py-0.5 rounded" onClick={() => handleRestore(item)} title="Restore" data-testid={`button-restore-${item.id}`}>
-                                    <RotateCcw className="w-3 h-3" />
-                                  </button>
-                                ) : (
-                                  <button className="text-[11px] text-muted-foreground hover:text-red-500 px-1.5 py-0.5 rounded" onClick={() => setArchiveTargetId(item.id)} title="Archive" data-testid={`button-archive-${item.id}`}>
-                                    <Archive className="w-3 h-3" />
-                                  </button>
-                                )}
-                              </td>
-                            );
-                          }
-                          return (
-                            <td key={c.key} className={`px-3 py-2.5 align-middle text-[12.5px] ${c.key === "title" ? "font-medium text-foreground" : "text-muted-foreground"}`} onClick={() => setDrawerItem(item)}>
-                              {renderCell(c, item)}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex items-center justify-between px-3.5 py-2.5 border-t bg-muted/30 text-[11.5px] text-muted-foreground">
-              <span>Showing {filteredItems.length} of {items.filter(i => !i.archived).length} items</span>
-            </div>
-            <TablePagination
-              page={tablePagination.page}
-              totalPages={tablePagination.totalPages}
-              total={tablePagination.total}
-              startIndex={tablePagination.startIndex}
-              endIndex={tablePagination.endIndex}
-              pageSize={tablePagination.pageSize}
-              onPageChange={tablePagination.setPage}
-              onPageSizeChange={tablePagination.setPageSize}
-            />
-          </div>
+          <MondayBoardShell.Table
+            columns={mondayColumns}
+            data={filteredItems}
+            groups={tableGroups}
+            onRowClick={(item) => setDrawerItem(item)}
+            onOpenItem={(item) => setDrawerItem(item)}
+            onCellEdit={(rowId, columnId, value) => {
+              const item = items.find((i) => i.id === Number(rowId));
+              if (!item) return;
+              const field = RAIDD_FIELD_MAP[columnId] || columnId;
+              let next: unknown = value === "" ? null : value;
+              if (field === "providerConfirmed") next = value === true || value === "true";
+              if (field === "score") next = value === "" || value == null ? null : Number(value);
+              saveField(item, field, next);
+            }}
+            emptyMessage="No items match your filters."
+            addItemLabel={config.addLabel}
+            onAddItem={() => setShowAddDialog(true)}
+            searchHighlightTerm={debouncedSearch}
+            columnWidthStorageKey={`jiganto-raidd-${logType}-col-widths`}
+            paginationResetKey={tablePaginationResetKey}
+            totalCount={items.filter((i) => !i.archived).length}
+            className="mb-4"
+            renderRowActions={(item) => (
+              <div className="flex items-center gap-0.5">
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setDrawerItem(item)} title="Open" data-testid={`button-edit-${item.id}`}>
+                  <Eye className="h-3.5 w-3.5" />
+                </Button>
+                {item.archived ? (
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-green-500" onClick={() => handleRestore(item)} title="Restore" data-testid={`button-restore-${item.id}`}>
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-red-500" onClick={() => setArchiveTargetId(item.id)} title="Archive" data-testid={`button-archive-${item.id}`}>
+                    <Archive className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            )}
+            renderBulkActions={(ids) => (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={() => shareItems(items.filter((i) => ids.includes(i.id)))} data-testid="button-share-selected">
+                  <Share2 className="h-3 w-3" /> Share Selected
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs text-amber-600" onClick={() => {
+                  ids.forEach((id) => {
+                    const item = items.find((i) => i.id === Number(id));
+                    if (item && !item.closed) handleCloseItem(item);
+                  });
+                }} data-testid="button-bulk-close">
+                  <CheckCircle2 className="h-3 w-3" /> Close Items
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => {
+                  const n = ids.length;
+                  if (!window.confirm(n === 1 ? "Archive this item?" : `Archive ${n} items?`)) return;
+                  ids.forEach((id) => handleArchive(Number(id)));
+                }} data-testid="button-bulk-archive">
+                  <Archive className="h-3 w-3" /> Archive
+                </Button>
+              </div>
+            )}
+          />
         )}
 
         {/* Card View */}
@@ -1058,7 +1262,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
                 <p className="text-[13px]">No items match your filters. <span className="text-primary cursor-pointer" onClick={clearFilters}>Clear filters</span></p>
               </div>
             ) : (
-              tablePagination.paginatedItems.map(item => (
+              cardsPagination.paginatedItems.map(item => (
                 <div key={item.id} className={`bg-background border rounded-lg p-3.5 cursor-pointer transition-all hover:border-primary hover:shadow-sm ${item.escalated ? "border-l-[3px] border-l-amber-500 bg-amber-50 dark:bg-amber-500/5" : ""} ${selectedIds.has(item.id) ? "border-primary shadow-[0_0_0_2px] shadow-primary/20" : ""}`} onClick={() => setDrawerItem(item)} data-testid={`card-raidd-${item.id}`}>
                   <div className="flex items-center justify-between mb-2.5 gap-2">
                     <span className="text-[11px] font-semibold font-mono text-indigo-600 bg-indigo-500/10 px-1.5 py-0.5 rounded">{item.code || item.id}</span>
@@ -1081,14 +1285,14 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
         {activeView === "cards" && filteredItems.length > 0 && (
           <div className="bg-background border rounded-lg">
             <TablePagination
-              page={tablePagination.page}
-              totalPages={tablePagination.totalPages}
-              total={tablePagination.total}
-              startIndex={tablePagination.startIndex}
-              endIndex={tablePagination.endIndex}
-              pageSize={tablePagination.pageSize}
-              onPageChange={tablePagination.setPage}
-              onPageSizeChange={tablePagination.setPageSize}
+              page={cardsPagination.page}
+              totalPages={cardsPagination.totalPages}
+              total={cardsPagination.total}
+              startIndex={cardsPagination.startIndex}
+              endIndex={cardsPagination.endIndex}
+              pageSize={cardsPagination.pageSize}
+              onPageChange={cardsPagination.setPage}
+              onPageSizeChange={cardsPagination.setPageSize}
             />
           </div>
         )}
@@ -1260,8 +1464,14 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
       {/* Add Item Dialog */}
       <FormDialogShell
         open={showAddDialog}
-        onOpenChange={setShowAddDialog}
-        onCancel={() => setShowAddDialog(false)}
+        onOpenChange={(open) => {
+          setShowAddDialog(open);
+          if (!open) setNewItem({ title: "", category: "", priority: "Medium", workstream: "" });
+        }}
+        onCancel={() => {
+          setShowAddDialog(false);
+          setNewItem({ title: "", category: "", priority: "Medium", workstream: "" });
+        }}
         onSubmit={handleAddItem}
         title={config.addLabel}
         saveLabel={createMutation.isPending ? "Creating..." : config.addLabel}
@@ -1302,7 +1512,13 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
       </FormDialogShell>
 
       {/* Escalation Dialog */}
-      <Dialog open={showEscDialog} onOpenChange={setShowEscDialog}>
+      <Dialog open={showEscDialog} onOpenChange={(open) => {
+        setShowEscDialog(open);
+        if (!open) {
+          setEscTargetId(null);
+          setEscForm({ level: "PMO", to: "", reason: "", deadline: "" });
+        }
+      }}>
         <DialogContent className="sm:max-w-[460px]" data-testid="dialog-escalation">
           <DialogHeader>
             <DialogTitle>Raise Escalation</DialogTitle>
@@ -1328,8 +1544,8 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEscDialog(false)} data-testid="button-cancel-esc">Cancel</Button>
-            <Button className="bg-amber-500 hover:bg-amber-600 text-white" onClick={handleEscalate} data-testid="button-confirm-esc">Escalate</Button>
+            <Button type="button" variant="outline" onClick={() => setShowEscDialog(false)} data-testid="button-cancel-esc">Cancel</Button>
+            <Button type="button" className="bg-amber-500 hover:bg-amber-600 text-white" onClick={handleEscalate} disabled={updateMutation.isPending} data-testid="button-confirm-esc">{updateMutation.isPending ? "Escalating..." : "Escalate"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1348,5 +1564,6 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </MondayBoardShell.Legacy>
   );
 }

@@ -819,6 +819,27 @@ export async function saveReportSnapshot(
   return row;
 }
 
+/** Latest snapshot for a project report type (used to restore sectionOverrides). */
+export async function getLatestReportSnapshot(
+  tenantId: number,
+  reportType: string,
+  projectId: number,
+) {
+  const [row] = await db
+    .select()
+    .from(pmReportSnapshots)
+    .where(
+      and(
+        eq(pmReportSnapshots.tenantId, tenantId),
+        eq(pmReportSnapshots.reportType, reportType),
+        eq(pmReportSnapshots.projectId, projectId),
+      ),
+    )
+    .orderBy(desc(pmReportSnapshots.generatedAt))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function listReportSchedules(tenantId: number) {
   return db.select().from(pmReportSchedules).where(eq(pmReportSchedules.tenantId, tenantId)).orderBy(desc(pmReportSchedules.createdAt));
 }

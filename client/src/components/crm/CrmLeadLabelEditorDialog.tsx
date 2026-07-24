@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import type { StatusOption } from "@/components/MondayTable";
 import { LABEL_COLOR_PRESETS, slugifyLabelValue } from "@/lib/crm-lead-labels";
@@ -27,6 +27,10 @@ export function CrmLeadLabelEditorDialog({
   lockedValues = [],
 }: CrmLeadLabelEditorDialogProps) {
   const [draft, setDraft] = useState<StatusOption[]>(() => options.map((o) => ({ ...o })));
+
+  useEffect(() => {
+    if (open) setDraft(options.map((o) => ({ ...o })));
+  }, [open]);
 
   const resetFromProps = (nextOpen: boolean) => {
     if (nextOpen) setDraft(options.map((o) => ({ ...o })));
@@ -88,7 +92,7 @@ export function CrmLeadLabelEditorDialog({
       <div className="space-y-3" data-testid="lead-label-editor">
         {draft.map((opt, index) => {
           const locked = lockedValues.includes(opt.value);
-          const isDarkText = opt.color.includes("text-[#323338]");
+          const isDarkText = (opt.color ?? "").includes("text-[#323338]");
           return (
             <div key={opt.value} className="space-y-1.5" data-testid={`lead-label-row-${opt.value}`}>
               <div className="flex items-stretch gap-1.5">

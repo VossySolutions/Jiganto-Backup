@@ -72,7 +72,9 @@ export function WorkspaceRowDetailPanel({
 }) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const focusedFieldRef = useRef<string | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
+  const [fieldDrafts, setFieldDrafts] = useState<Record<string, string>>({});
   const [showPublicShare, setShowPublicShare] = useState(false);
   const [localComments, setLocalComments] = useState<LocalComment[]>([]);
   const [localAttachments, setLocalAttachments] = useState<LocalAttachment[]>([]);
@@ -127,6 +129,20 @@ export function WorkspaceRowDetailPanel({
 
   const row = useMemo(() => rows.find((item) => item.id === rowId), [rowId, rows]);
   const rowData = ((row?.data || {}) as Record<string, unknown>) ?? {};
+
+  useEffect(() => {
+    const data = ((row?.data || {}) as Record<string, unknown>) ?? {};
+    setFieldDrafts((prev) => {
+      const next: Record<string, string> = {};
+      for (const column of columns) {
+        if (column.type === "select" || column.type === "date" || column.type === "checkbox") continue;
+        const key = String(column.id);
+        const serverVal = String(data[key] ?? "");
+        next[key] = focusedFieldRef.current === key && key in prev ? prev[key] : serverVal;
+      }
+      return next;
+    });
+  }, [rowId, row?.data, columns]);
 
   useEffect(() => {
     if (rowId <= 0 || readOnly) return;
@@ -224,7 +240,7 @@ export function WorkspaceRowDetailPanel({
                   <Label className="text-xs text-muted-foreground">{column.name}</Label>
                   {column.type === "select" ? (
                     <Select
-                      value={value}
+                      value={value || undefined}
                       onValueChange={(next) => updateRowMutation.mutate({ key, value: next })}
                       disabled={readOnly}
                     >
@@ -262,8 +278,19 @@ export function WorkspaceRowDetailPanel({
                     </Select>
                   ) : (
                     <Input
-                      value={value}
-                      onChange={(e) => updateRowMutation.mutate({ key, value: e.target.value })}
+                      value={fieldDrafts[key] ?? value}
+                      onChange={(e) => setFieldDrafts((prev) => ({ ...prev, [key]: e.target.value }))}
+                      onFocus={() => { focusedFieldRef.current = key; }}
+                      onBlur={(e) => {
+                        focusedFieldRef.current = null;
+                        const next = e.target.value;
+                        if (next !== String(rowData[key] ?? "")) {
+                          updateRowMutation.mutate({ key, value: next });
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                      }}
                       disabled={readOnly}
                     />
                   )}

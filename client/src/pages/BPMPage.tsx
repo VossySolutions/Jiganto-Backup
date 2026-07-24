@@ -22,7 +22,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import MondayTable, { type ColumnDef, type GroupDef } from "@/components/MondayTable";
+import { type ColumnDef, type GroupDef } from "@/components/MondayTable";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
 import { useToast } from "@/hooks/use-toast";
 import { ModuleShell } from "@/components/ModuleShell";
 import { cn } from "@/lib/utils";
@@ -60,7 +64,7 @@ import {
 } from "@/components/icons/ModuleIcons";
 
 import type { ProcessResource } from "@shared/models/bpm";
-import { parseCsvContent, buildDiagramFromRows, type ParsedProcessRow } from "@/components/bpm/BpmTableView";
+import { parseCsvContent, buildDiagramFromRows, generateBlankTemplate, type ParsedProcessRow } from "@/components/bpm/BpmTableView";
 const BpmlView = lazy(() => import("@/components/bpm/BpmlView"));
 const OrgChartView = lazy(() => import("@/components/bpm/OrgChartView"));
 import { PortalAssetPanel } from "@/components/bpm/PortalAssetPanel";
@@ -470,13 +474,13 @@ const FW_GROUPING_OPTIONS = [
 ];
 
 const FW_TABLE_COLUMNS: ColumnDef<FrameworkItem>[] = [
-  { id: "name", header: "Name", type: "text", accessor: "name", width: "minmax(200px, 2fr)" },
+  { id: "name", header: "Name", type: "text", accessor: "name", width: "minmax(200px, 2fr)", editable: true },
   {
-    id: "category", header: "Category", type: "status", accessor: "category",
+    id: "category", header: "Category", type: "status", accessor: "category", editable: true,
     options: FRAMEWORK_CATEGORIES.map(c => ({ value: c.value, label: c.label, color: "bg-primary/10 text-primary" })),
   },
   {
-    id: "status", header: "Status", type: "status", accessor: "status",
+    id: "status", header: "Status", type: "status", accessor: "status", editable: true,
     options: [
       { value: "draft", label: "Draft", color: FRAMEWORK_STATUS_COLORS.draft },
       { value: "review", label: "Review", color: FRAMEWORK_STATUS_COLORS.review },
@@ -485,14 +489,16 @@ const FW_TABLE_COLUMNS: ColumnDef<FrameworkItem>[] = [
       { value: "archived", label: "Archived", color: FRAMEWORK_STATUS_COLORS.archived },
     ],
   },
-  { id: "vendor", header: "Vendor", type: "text", accessor: (row: FrameworkItem) => row.vendor || "—" },
-  { id: "version", header: "Version", type: "text", accessor: (row: FrameworkItem) => row.version || "—", width: "80px" },
-  { id: "phases", header: "Phases", type: "number", accessor: (row: FrameworkItem) => Array.isArray(row.phases) ? row.phases.length : 0, width: "80px" },
-  { id: "updatedAt", header: "Last Updated", type: "date", accessor: "updatedAt", width: "140px" },
+  { id: "vendor", header: "Vendor", type: "text", accessor: (row: FrameworkItem) => row.vendor || "", editable: true },
+  { id: "version", header: "Version", type: "text", accessor: (row: FrameworkItem) => row.version || "", width: "80px", editable: true },
+  { id: "phases", header: "Phases", type: "number", accessor: (row: FrameworkItem) => Array.isArray(row.phases) ? row.phases.length : 0, width: "80px", editable: false },
+  { id: "updatedAt", header: "Last Updated", type: "date", accessor: "updatedAt", width: "140px", editable: false },
 ];
 
 function FrameworksCatalogue({ onOpenFramework, onCreateNew }: { onOpenFramework: (fw: FrameworkItem) => void; onCreateNew: () => void }) {
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [filterCategory, setFilterCategory] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [groupBy, setGroupBy] = useState("none");
@@ -505,13 +511,41 @@ function FrameworksCatalogue({ onOpenFramework, onCreateNew }: { onOpenFramework
     mutationFn: (id: number) => apiRequest("DELETE", `/api/frameworks/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/frameworks`] }),
   });
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
+      apiRequest("PATCH", `/api/frameworks/${id}`, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/frameworks`] }),
+  });
   const filtered = useMemo(() => frameworksList.filter(fw => {
-    const matchesSearch = !search || fw.name.toLowerCase().includes(search.toLowerCase()) || fw.description?.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = !debouncedSearch || fw.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || fw.description?.toLowerCase().includes(debouncedSearch.toLowerCase());
     const matchesCategory = filterCategory === "all" || fw.category === filterCategory;
     return matchesSearch && matchesCategory;
-  }), [frameworksList, search, filterCategory]);
+  }), [frameworksList, debouncedSearch, filterCategory]);
   const getCategoryLabel = (cat: string) => FRAMEWORK_CATEGORIES.find(c => c.value === cat)?.label || cat;
   const getCategoryIcon = (cat: string) => FRAMEWORK_CATEGORIES.find(c => c.value === cat)?.icon || FolderOpen;
+
+  const FW_CSV_HEADERS = ["Name", "Category", "Status", "Vendor", "Version", "Phases", "Last Updated"];
+
+  const exportFrameworks = () => {
+    const rows = filtered.map((fw) => [
+      fw.name || "",
+      getCategoryLabel(fw.category),
+      fw.status || "",
+      fw.vendor || "",
+      fw.version || "",
+      String(Array.isArray(fw.phases) ? fw.phases.length : 0),
+      fw.updatedAt ? String(fw.updatedAt) : "",
+    ]);
+    downloadBoardCsv(`frameworks-${new Date().toISOString().split("T")[0]}.csv`, FW_CSV_HEADERS, rows);
+    toast({ title: "Frameworks exported to CSV" });
+  };
+
+  const downloadFrameworksTemplate = () => {
+    downloadImportTemplateCsv("frameworks-import-template.csv", FW_CSV_HEADERS, FW_CSV_HEADERS.map(() => ""));
+    toast({ title: "Import template downloaded" });
+  };
+
+  const importUnavailable = () => toast({ title: "Import is not available for this table yet" });
 
   const fwTableGroups = useMemo((): GroupDef<FrameworkItem>[] | undefined => {
     if (groupBy === "none") return undefined;
@@ -548,39 +582,63 @@ function FrameworksCatalogue({ onOpenFramework, onCreateNew }: { onOpenFramework
             New Framework
           </Button>
         </div>
-        <div className="flex items-center gap-3 mb-6 flex-wrap">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search frameworks..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" data-testid="input-search-frameworks" />
-          </div>
-          <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-[220px]" data-testid="select-filter-fw-category">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {FRAMEWORK_CATEGORIES.map(cat => <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={groupBy} onValueChange={setGroupBy}>
-            <SelectTrigger className="w-[180px]" data-testid="select-fw-group-by">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
+        <MondayBoardShell.Legacy
+          storageKey="jiganto-bpm-frameworks"
+          entityType="bpm_framework"
+          stateHook={useMondayBoardShellState}
+          filterMatcher={matchBoardFilterValue}
+        >
+        <MondayBoardShell.Toolbar
+          newLabel="New Framework"
+          onNew={onCreateNew}
+          newTestId="button-create-framework-toolbar"
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search frameworks..."
+          searchTestId="input-search-frameworks"
+          viewLabel={viewMode === "table" ? "Table" : "Grid"}
+          viewIcon={viewMode === "table" ? <List className="h-3.5 w-3.5" /> : <LayoutGrid className="h-3.5 w-3.5" />}
+          viewMenu={
+            <>
+              <DropdownMenuItem onClick={() => setViewMode("grid")} data-testid="button-fw-view-grid">Grid</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setViewMode("table")} data-testid="button-fw-view-table">Table</DropdownMenuItem>
+            </>
+          }
+          filterActive={filterCategory !== "all"}
+          filterCount={filterCategory !== "all" ? 1 : 0}
+          filterContent={
+            <div className="space-y-1.5">
+              <Label className="text-xs">Category</Label>
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger className="h-8 text-xs" data-testid="select-filter-fw-category">
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {FRAMEWORK_CATEGORIES.map(cat => <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          }
+          groupActive={groupBy !== "none"}
+          groupLabel={groupBy === "none" ? "Group by" : (FW_GROUPING_OPTIONS.find(o => o.value === groupBy)?.label ?? "Group by")}
+          groupContent={
+            <>
               {FW_GROUPING_OPTIONS.map(opt => (
-                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                <DropdownMenuItem key={opt.value} onClick={() => setGroupBy(opt.value)} data-testid={`fw-group-${opt.value}`}>
+                  {opt.label}
+                </DropdownMenuItem>
               ))}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center border rounded-md">
-            <Button size="icon" variant="ghost" className={cn("rounded-none rounded-l-md toggle-elevate", viewMode === "grid" && "toggle-elevated")} onClick={() => setViewMode("grid")} data-testid="button-fw-view-grid">
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
-            <Button size="icon" variant="ghost" className={cn("rounded-none rounded-r-md toggle-elevate", viewMode === "table" && "toggle-elevated")} onClick={() => setViewMode("table")} data-testid="button-fw-view-table">
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+            </>
+          }
+          grouped={viewMode === "table" && groupBy !== "none"}
+          onExport={exportFrameworks}
+          onDownloadTemplate={downloadFrameworksTemplate}
+          onPaste={importUnavailable}
+          onImport={importUnavailable}
+          className="mb-6"
+          testId="frameworks-toolbar"
+        />
         {isLoading ? (
           <ModuleTabLoading label="Loading frameworks…" />
         ) : filtered.length === 0 ? (
@@ -593,16 +651,28 @@ function FrameworksCatalogue({ onOpenFramework, onCreateNew }: { onOpenFramework
             </CardContent>
           </Card>
         ) : viewMode === "table" ? (
-          <MondayTable
+          <MondayBoardShell.Table
             columns={FW_TABLE_COLUMNS}
             data={filtered}
             columnWidthStorageKey="jiganto-bpm-frameworks-col-widths"
             totalCount={frameworksList.length}
             groups={fwTableGroups}
             onRowClick={onOpenFramework}
+            onCellEdit={(rowId, columnId, value) => {
+              updateMutation.mutate({
+                id: Number(rowId),
+                payload: { [columnId]: value === "" ? null : value },
+              });
+            }}
             selectable
+            gridLines
+            paginationResetKey={`${debouncedSearch}|${filterCategory}|${groupBy}`}
             renderRowActions={(row: FrameworkItem) => (
-              <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(row.id); }} data-testid={`button-delete-fw-${row.id}`}>
+              <Button size="icon" variant="ghost" onClick={(e) => {
+                e.stopPropagation();
+                if (!window.confirm(`Delete framework "${row.name}"?`)) return;
+                deleteMutation.mutate(row.id);
+              }} data-testid={`button-delete-fw-${row.id}`}>
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             )}
@@ -622,7 +692,11 @@ function FrameworksCatalogue({ onOpenFramework, onCreateNew }: { onOpenFramework
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <Badge className={cn("text-xs", FRAMEWORK_STATUS_COLORS[fw.status] || "")} data-testid={`badge-fw-status-${fw.id}`}>{fw.status}</Badge>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 invisible group-hover:visible" onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(fw.id); }} data-testid={`button-delete-fw-${fw.id}`}>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 invisible group-hover:visible" onClick={(e) => {
+                          e.stopPropagation();
+                          if (!window.confirm(`Delete framework "${fw.name}"?`)) return;
+                          deleteMutation.mutate(fw.id);
+                        }} data-testid={`button-delete-fw-${fw.id}`}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -649,6 +723,7 @@ function FrameworksCatalogue({ onOpenFramework, onCreateNew }: { onOpenFramework
             })}
           </div>
         )}
+        </MondayBoardShell.Legacy>
       </div>
     </div>
   );
@@ -1401,13 +1476,13 @@ const DIAGRAM_GROUPING_OPTIONS = [
 ];
 
 const DIAGRAM_TABLE_COLUMNS: ColumnDef<BpmDiagram>[] = [
-  { id: "name", header: "Name", type: "text", accessor: "name", width: "minmax(200px, 2fr)" },
+  { id: "name", header: "Name", type: "text", accessor: "name", width: "minmax(200px, 2fr)", editable: true },
   {
-    id: "type", header: "Type", type: "status", accessor: "type",
+    id: "type", header: "Type", type: "status", accessor: "type", editable: true,
     options: DIAGRAM_TYPE_OPTIONS.map(o => ({ value: o.value, label: o.label, color: "bg-primary/10 text-primary" })),
   },
   {
-    id: "status", header: "Status", type: "status", accessor: "status",
+    id: "status", header: "Status", type: "status", accessor: "status", editable: true,
     options: [
       { value: "draft", label: "Draft", color: STATUS_COLORS.draft },
       { value: "active", label: "Active", color: STATUS_COLORS.active },
@@ -1415,8 +1490,8 @@ const DIAGRAM_TABLE_COLUMNS: ColumnDef<BpmDiagram>[] = [
       { value: "archived", label: "Archived", color: STATUS_COLORS.archived },
     ],
   },
-  { id: "version", header: "Version", type: "number", accessor: (row: BpmDiagram) => row.version, width: "80px" },
-  { id: "updatedAt", header: "Last Updated", type: "date", accessor: "updatedAt", width: "140px" },
+  { id: "version", header: "Version", type: "number", accessor: (row: BpmDiagram) => row.version, width: "80px", editable: true },
+  { id: "updatedAt", header: "Last Updated", type: "date", accessor: "updatedAt", width: "140px", editable: false },
 ];
 
 function DiagramCatalogue({
@@ -1439,6 +1514,7 @@ function DiagramCatalogue({
   libraries: BpmLibrary[];
 }) {
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [filterType, setFilterType] = useState("all");
   const [filterLibrary, setFilterLibrary] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
@@ -1464,6 +1540,12 @@ function DiagramCatalogue({
     },
   });
 
+  const updateDiagramMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
+      apiRequest("PATCH", `/api/bpm/diagrams/${id}`, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/bpm/diagrams"] }),
+  });
+
   const duplicateMutation = useMutation({
     mutationFn: ({ id, name }: { id: number; name: string }) =>
       apiRequest("POST", `/api/bpm/diagrams/${id}/duplicate`, { name }),
@@ -1485,13 +1567,13 @@ function DiagramCatalogue({
 
   const filtered = useMemo(() => {
     return diagrams.filter(d => {
-      const matchesSearch = !search || d.name.toLowerCase().includes(search.toLowerCase());
+      const matchesSearch = !debouncedSearch || d.name.toLowerCase().includes(debouncedSearch.toLowerCase());
       const matchesTypeFilter = !typeFilter || typeFilter.includes(d.type);
       const matchesDropdown = filterType === "all" || d.type === filterType;
       const matchesLibrary = filterLibrary === "all" || (filterLibrary === "unassigned" ? d.libraryId === null : d.libraryId === Number(filterLibrary));
       return matchesSearch && matchesTypeFilter && matchesDropdown && matchesLibrary;
     });
-  }, [diagrams, search, filterType, filterLibrary, typeFilter]);
+  }, [diagrams, debouncedSearch, filterType, filterLibrary, typeFilter]);
 
   const getTypeIcon = (type: string) => {
     const opt = DIAGRAM_TYPE_OPTIONS.find(o => o.value === type);
@@ -1525,6 +1607,32 @@ function DiagramCatalogue({
     }));
   }, [filtered, groupBy]);
 
+  const DIAGRAM_CSV_HEADERS = ["Name", "Type", "Status", "Version", "Last Updated"];
+
+  const exportDiagrams = () => {
+    const rows = filtered.map((d) => [
+      d.name || "",
+      getTypeLabel(d.type),
+      d.status || "",
+      String(d.version ?? ""),
+      d.updatedAt ? String(d.updatedAt) : "",
+    ]);
+    downloadBoardCsv(`diagrams-${new Date().toISOString().split("T")[0]}.csv`, DIAGRAM_CSV_HEADERS, rows);
+    toast({ title: "Diagrams exported to CSV" });
+  };
+
+  const downloadDiagramImportTemplate = () => {
+    const BOM = "\uFEFF";
+    const blob = new Blob([BOM + generateBlankTemplate()], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "bpm_import_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Import template downloaded" });
+  };
+
   return (
     <div className="flex-1 overflow-auto p-6">
       <div className="max-w-7xl mx-auto">
@@ -1553,63 +1661,101 @@ function DiagramCatalogue({
           </div>
         </div>
 
-        <div className="flex items-center gap-3 mb-6 flex-wrap">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search diagrams..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-              data-testid="input-search-diagrams"
-            />
-          </div>
-          <Select value={filterLibrary} onValueChange={setFilterLibrary}>
-            <SelectTrigger className="w-[200px]" data-testid="select-filter-library">
-              <SelectValue placeholder="All Libraries" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Libraries</SelectItem>
-              <SelectItem value="unassigned">Unassigned</SelectItem>
-              {libraries.map(lib => (
-                <SelectItem key={lib.id} value={String(lib.id)}>{lib.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-[200px]" data-testid="select-filter-type">
-              <SelectValue placeholder="All Types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              {availableTypes.map(opt => (
-                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={groupBy} onValueChange={setGroupBy}>
-            <SelectTrigger className="w-[180px]" data-testid="select-group-by">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
+        <MondayBoardShell.Legacy
+          storageKey="jiganto-bpm-diagrams"
+          entityType="bpm_diagram"
+          stateHook={useMondayBoardShellState}
+          filterMatcher={matchBoardFilterValue}
+        >
+        <MondayBoardShell.Toolbar
+          newLabel="New Diagram"
+          onNew={onCreateNew}
+          newTestId="button-create-diagram-toolbar"
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Search diagrams..."
+          searchTestId="input-search-diagrams"
+          viewLabel={viewMode === "table" ? "Table" : "Grid"}
+          viewIcon={viewMode === "table" ? <List className="h-3.5 w-3.5" /> : <LayoutGrid className="h-3.5 w-3.5" />}
+          viewMenu={
+            <>
+              <DropdownMenuItem onClick={() => setViewMode("grid")} data-testid="button-view-grid">Grid</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setViewMode("table")} data-testid="button-view-table">Table</DropdownMenuItem>
+            </>
+          }
+          filterActive={filterLibrary !== "all" || filterType !== "all"}
+          filterCount={(filterLibrary !== "all" ? 1 : 0) + (filterType !== "all" ? 1 : 0)}
+          filterContent={
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Library</Label>
+                <Select value={filterLibrary} onValueChange={setFilterLibrary}>
+                  <SelectTrigger className="h-8 text-xs" data-testid="select-filter-library">
+                    <SelectValue placeholder="All Libraries" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Libraries</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {libraries.map(lib => (
+                      <SelectItem key={lib.id} value={String(lib.id)}>{lib.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Type</Label>
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="h-8 text-xs" data-testid="select-filter-type">
+                    <SelectValue placeholder="All Types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    {availableTypes.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          }
+          groupActive={groupBy !== "none"}
+          groupLabel={groupBy === "none" ? "Group by" : (DIAGRAM_GROUPING_OPTIONS.find(o => o.value === groupBy)?.label ?? "Group by")}
+          groupContent={
+            <>
               {DIAGRAM_GROUPING_OPTIONS.map(opt => (
-                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                <DropdownMenuItem key={opt.value} onClick={() => setGroupBy(opt.value)} data-testid={`diagram-group-${opt.value}`}>
+                  {opt.label}
+                </DropdownMenuItem>
               ))}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center border rounded-md">
-            <Button size="icon" variant="ghost" className={cn("rounded-none rounded-l-md toggle-elevate", viewMode === "grid" && "toggle-elevated")} onClick={() => setViewMode("grid")} data-testid="button-view-grid">
-              <LayoutGrid className="h-4 w-4" />
+            </>
+          }
+          grouped={viewMode === "table" && groupBy !== "none"}
+          onImport={onImportCsv}
+          onPaste={onImportCsv}
+          onExport={exportDiagrams}
+          onDownloadTemplate={downloadDiagramImportTemplate}
+          moreMenuItems={
+            <>
+              <DropdownMenuItem onClick={onCreateLibrary} data-testid="button-create-library-menu">New Library</DropdownMenuItem>
+              <DropdownMenuItem onClick={onCreateTemplate} data-testid="button-create-template-menu">New Template</DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setShowCompareDialog(true)}
+                disabled={diagrams.length < 2}
+                data-testid="button-compare-diagrams-menu"
+              >
+                Compare diagrams
+              </DropdownMenuItem>
+            </>
+          }
+          afterGroupSlot={
+            <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setShowCompareDialog(true)} disabled={diagrams.length < 2} data-testid="button-compare-diagrams">
+              <ArrowLeftRight className="h-3.5 w-3.5" />
+              Compare
             </Button>
-            <Button size="icon" variant="ghost" className={cn("rounded-none rounded-r-md toggle-elevate", viewMode === "table" && "toggle-elevated")} onClick={() => setViewMode("table")} data-testid="button-view-table">
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
-          <Button size="sm" variant="outline" onClick={() => setShowCompareDialog(true)} disabled={diagrams.length < 2} data-testid="button-compare-diagrams">
-            <ArrowLeftRight className="h-4 w-4 mr-1" />
-            Compare
-          </Button>
-        </div>
+          }
+          className="mb-6"
+          testId="diagrams-toolbar"
+        />
 
         {!isLoading && diagrams.length > 0 && !search && filterType === "all" && filterLibrary === "all" && (
           (() => {
@@ -1669,14 +1815,22 @@ function DiagramCatalogue({
             </CardContent>
           </Card>
         ) : viewMode === "table" ? (
-          <MondayTable
+          <MondayBoardShell.Table
             columns={DIAGRAM_TABLE_COLUMNS}
             data={filtered}
             columnWidthStorageKey="jiganto-bpm-diagrams-col-widths"
             totalCount={diagrams.length}
             groups={tableGroups}
             onRowClick={onOpenDiagram}
+            onCellEdit={(rowId, columnId, value) => {
+              updateDiagramMutation.mutate({
+                id: Number(rowId),
+                payload: { [columnId]: value === "" ? null : value },
+              });
+            }}
             selectable
+            gridLines
+            paginationResetKey={`${debouncedSearch}|${filterType}|${filterLibrary}|${groupBy}`}
             renderRowActions={(row: BpmDiagram) => (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1767,6 +1921,7 @@ function DiagramCatalogue({
             })}
           </div>
         )}
+        </MondayBoardShell.Legacy>
       </div>
 
       <AlertDialog open={deleteConfirmId !== null} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
@@ -1854,7 +2009,7 @@ function DiagramCatalogue({
           <div className="space-y-4 py-2">
             <div>
               <Label>As-Is Diagram</Label>
-              <Select value={compareAsIs ? String(compareAsIs) : ""} onValueChange={(v) => setCompareAsIs(Number(v))}>
+              <Select value={compareAsIs ? String(compareAsIs) : undefined} onValueChange={(v) => setCompareAsIs(Number(v))}>
                 <SelectTrigger data-testid="select-compare-as-is">
                   <SelectValue placeholder="Select As-Is diagram..." />
                 </SelectTrigger>
@@ -1867,7 +2022,7 @@ function DiagramCatalogue({
             </div>
             <div>
               <Label>To-Be Diagram</Label>
-              <Select value={compareToBe ? String(compareToBe) : ""} onValueChange={(v) => setCompareToBe(Number(v))}>
+              <Select value={compareToBe ? String(compareToBe) : undefined} onValueChange={(v) => setCompareToBe(Number(v))}>
                 <SelectTrigger data-testid="select-compare-to-be">
                   <SelectValue placeholder="Select To-Be diagram..." />
                 </SelectTrigger>
@@ -3099,13 +3254,13 @@ export default function BPMPage() {
   const [newDiagramName, setNewDiagramName] = useState("");
   const [newDiagramType, setNewDiagramType] = useState("process_flow");
   const [newDiagramDescription, setNewDiagramDescription] = useState("");
-  const [newDiagramLibraryId, setNewDiagramLibraryId] = useState("");
+  const [newDiagramLibraryId, setNewDiagramLibraryId] = useState("none");
   const [selectedTemplate, setSelectedTemplate] = useState("blank");
   const [templateTab, setTemplateTab] = useState("builtin");
   const [saveTemplateName, setSaveTemplateName] = useState("");
   const [saveTemplateDescription, setSaveTemplateDescription] = useState("");
-  const [saveTemplateVendor, setSaveTemplateVendor] = useState("");
-  const [saveTemplateProcessType, setSaveTemplateProcessType] = useState("");
+  const [saveTemplateVendor, setSaveTemplateVendor] = useState("none");
+  const [saveTemplateProcessType, setSaveTemplateProcessType] = useState("none");
   const [saveTemplateLibraryId, setSaveTemplateLibraryId] = useState("");
   const [manageFilterLibrary, setManageFilterLibrary] = useState("all");
   const [pendingTemplateData, setPendingTemplateData] = useState<{ nodes: any[]; edges: any[] } | null>(null);
@@ -3113,14 +3268,14 @@ export default function BPMPage() {
 
   const [newLibraryName, setNewLibraryName] = useState("");
   const [newLibraryDescription, setNewLibraryDescription] = useState("");
-  const [newLibraryVendor, setNewLibraryVendor] = useState("");
+  const [newLibraryVendor, setNewLibraryVendor] = useState("none");
   const [newLibrarySystemTag, setNewLibrarySystemTag] = useState("");
   const [newLibraryIsTemplate, setNewLibraryIsTemplate] = useState(false);
   const [newLibraryStatus, setNewLibraryStatus] = useState("draft");
 
   const [newTemplateName, setNewTemplateName] = useState("");
   const [newTemplateLibraryId, setNewTemplateLibraryId] = useState("");
-  const [newTemplateProcessType, setNewTemplateProcessType] = useState("");
+  const [newTemplateProcessType, setNewTemplateProcessType] = useState("none");
   const [newTemplateDescription, setNewTemplateDescription] = useState("");
 
   const [showImportCsvDialog, setShowImportCsvDialog] = useState(false);
@@ -3135,7 +3290,7 @@ export default function BPMPage() {
   const [newFrameworkName, setNewFrameworkName] = useState("");
   const [newFrameworkDescription, setNewFrameworkDescription] = useState("");
   const [newFrameworkCategory, setNewFrameworkCategory] = useState("project_delivery");
-  const [newFrameworkVendor, setNewFrameworkVendor] = useState("");
+  const [newFrameworkVendor, setNewFrameworkVendor] = useState("none");
   const [useTemplate, setUseTemplate] = useState<"blank" | "sap_activate" | "workday">("blank");
 
   const { data: userTemplates = [] } = useQuery<BpmTemplate[]>({
@@ -3156,7 +3311,7 @@ export default function BPMPage() {
       setShowCreateDialog(false);
       setNewDiagramName("");
       setNewDiagramDescription("");
-      setNewDiagramLibraryId("");
+      setNewDiagramLibraryId("none");
       setSelectedTemplate("blank");
       setActiveDiagram(diagram);
       setView("editor");
@@ -3174,7 +3329,7 @@ export default function BPMPage() {
       setShowCreateLibraryDialog(false);
       setNewLibraryName("");
       setNewLibraryDescription("");
-      setNewLibraryVendor("");
+      setNewLibraryVendor("none");
       setNewLibrarySystemTag("");
       setNewLibraryIsTemplate(false);
       setNewLibraryStatus("draft");
@@ -3192,7 +3347,7 @@ export default function BPMPage() {
       setShowCreateTemplateDialog(false);
       setNewTemplateName("");
       setNewTemplateLibraryId("");
-      setNewTemplateProcessType("");
+      setNewTemplateProcessType("none");
       setNewTemplateDescription("");
       toast({ title: "Template Created", description: "New template has been created" });
     },
@@ -3208,8 +3363,8 @@ export default function BPMPage() {
       setShowSaveTemplateDialog(false);
       setSaveTemplateName("");
       setSaveTemplateDescription("");
-      setSaveTemplateVendor("");
-      setSaveTemplateProcessType("");
+      setSaveTemplateVendor("none");
+      setSaveTemplateProcessType("none");
       setSaveTemplateLibraryId("");
       setPendingTemplateData(null);
       toast({ title: "Template Saved", description: "Your diagram has been saved as a reusable template" });
@@ -3332,7 +3487,7 @@ export default function BPMPage() {
       description: saveTemplateDescription || null,
       type: "process_flow",
       category: "user",
-      vendor: saveTemplateVendor || null,
+      vendor: saveTemplateVendor && saveTemplateVendor !== "none" ? saveTemplateVendor : null,
       processType: saveTemplateProcessType && saveTemplateProcessType !== "none" ? saveTemplateProcessType : null,
       templateData: pendingTemplateData,
       isSystem: false,
@@ -3354,9 +3509,9 @@ export default function BPMPage() {
     mutationFn: (data: any) => apiRequest("POST", "/api/frameworks", data),
     onSuccess: async (res) => {
       const fw = await res.json();
-      queryClient.invalidateQueries({ queryKey: ["/api/frameworks", "/api/frameworks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/frameworks"] });
       setShowCreateFrameworkDialog(false);
-      setNewFrameworkName(""); setNewFrameworkDescription(""); setNewFrameworkCategory("project_delivery"); setNewFrameworkVendor(""); setUseTemplate("blank");
+      setNewFrameworkName(""); setNewFrameworkDescription(""); setNewFrameworkCategory("project_delivery"); setNewFrameworkVendor("none"); setUseTemplate("blank");
       setActiveFramework(fw);
       toast({ title: "Created", description: "Framework created successfully" });
     },
@@ -3369,7 +3524,7 @@ export default function BPMPage() {
 
   const handleBackFromFramework = () => {
     setActiveFramework(null);
-    queryClient.invalidateQueries({ queryKey: ["/api/frameworks", "/api/frameworks"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/frameworks"] });
   };
 
   const handleCreateFramework = () => {
@@ -3703,7 +3858,7 @@ export default function BPMPage() {
             </div>
             <div>
               <FieldLabel>Vendor (optional)</FieldLabel>
-              <Select value={newLibraryVendor} onValueChange={setNewLibraryVendor}>
+              <Select value={newLibraryVendor || "none"} onValueChange={setNewLibraryVendor}>
                 <SelectTrigger data-testid="select-library-vendor">
                   <SelectValue placeholder="None" />
                 </SelectTrigger>
@@ -3773,7 +3928,7 @@ export default function BPMPage() {
             </div>
             <div>
               <FieldLabel>Library (required)</FieldLabel>
-              <Select value={newTemplateLibraryId} onValueChange={setNewTemplateLibraryId}>
+              <Select value={newTemplateLibraryId || undefined} onValueChange={setNewTemplateLibraryId}>
                 <SelectTrigger data-testid="select-new-template-library">
                   <SelectValue placeholder="Select a library" />
                 </SelectTrigger>
@@ -3794,7 +3949,7 @@ export default function BPMPage() {
             </div>
             <div>
               <FieldLabel>Process Type (optional)</FieldLabel>
-              <Select value={newTemplateProcessType} onValueChange={setNewTemplateProcessType}>
+              <Select value={newTemplateProcessType || "none"} onValueChange={setNewTemplateProcessType}>
                 <SelectTrigger data-testid="select-new-template-process-type">
                   <SelectValue placeholder="None" />
                 </SelectTrigger>
@@ -3842,7 +3997,7 @@ export default function BPMPage() {
             </div>
             <div>
               <FieldLabel>Library (required)</FieldLabel>
-              <Select value={saveTemplateLibraryId} onValueChange={setSaveTemplateLibraryId}>
+              <Select value={saveTemplateLibraryId || undefined} onValueChange={setSaveTemplateLibraryId}>
                 <SelectTrigger data-testid="select-save-template-library">
                   <SelectValue placeholder="Select a library" />
                 </SelectTrigger>
@@ -3864,7 +4019,7 @@ export default function BPMPage() {
             <FieldGrid cols={2}>
               <div>
                 <FieldLabel>Vendor</FieldLabel>
-                <Select value={saveTemplateVendor} onValueChange={setSaveTemplateVendor}>
+                <Select value={saveTemplateVendor || "none"} onValueChange={setSaveTemplateVendor}>
                   <SelectTrigger className="text-sm" data-testid="select-template-vendor">
                     <SelectValue placeholder="None" />
                   </SelectTrigger>
@@ -3878,7 +4033,7 @@ export default function BPMPage() {
               </div>
               <div>
                 <FieldLabel>Process Type</FieldLabel>
-                <Select value={saveTemplateProcessType} onValueChange={setSaveTemplateProcessType}>
+                <Select value={saveTemplateProcessType || "none"} onValueChange={setSaveTemplateProcessType}>
                   <SelectTrigger className="text-sm" data-testid="select-template-process-type">
                     <SelectValue placeholder="None" />
                   </SelectTrigger>
@@ -4073,14 +4228,14 @@ export default function BPMPage() {
             <div>
               <FieldLabel>Start from template</FieldLabel>
               <div className="flex gap-2 flex-wrap">
-                <Button size="sm" variant={useTemplate === "blank" ? "default" : "outline"} onClick={() => { setUseTemplate("blank"); setNewFrameworkName(""); setNewFrameworkDescription(""); }} data-testid="button-template-blank">
+                <Button type="button" size="sm" variant={useTemplate === "blank" ? "default" : "outline"} onClick={() => { setUseTemplate("blank"); setNewFrameworkName(""); setNewFrameworkDescription(""); }} data-testid="button-template-blank">
                   Blank Framework
                 </Button>
-                <Button size="sm" variant={useTemplate === "sap_activate" ? "default" : "outline"} onClick={loadSapActivateTemplate} data-testid="button-template-sap-activate">
+                <Button type="button" size="sm" variant={useTemplate === "sap_activate" ? "default" : "outline"} onClick={loadSapActivateTemplate} data-testid="button-template-sap-activate">
                   <LayoutTemplate className="h-4 w-4 mr-1" />
                   SAP Activate
                 </Button>
-                <Button size="sm" variant={useTemplate === "workday" ? "default" : "outline"} onClick={loadWorkdayTemplate} data-testid="button-template-workday">
+                <Button type="button" size="sm" variant={useTemplate === "workday" ? "default" : "outline"} onClick={loadWorkdayTemplate} data-testid="button-template-workday">
                   <LayoutTemplate className="h-4 w-4 mr-1" />
                   Workday
                 </Button>
@@ -4140,6 +4295,7 @@ export default function BPMPage() {
             </div>
             <div className="flex items-center gap-3">
               <Button
+                type="button"
                 variant="outline"
                 onClick={() => importCsvFileRef.current?.click()}
                 data-testid="button-import-select-file"

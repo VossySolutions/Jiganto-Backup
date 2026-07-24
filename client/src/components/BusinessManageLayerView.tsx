@@ -13,13 +13,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { LayoutList, LayoutGrid, Upload, Download, FileText, Edit2, Loader2, Search, Target, Flag, Crosshair, Zap, TrendingUp, BarChart3, Layers, ChevronDown, ChevronRight, MessageSquare, Send, Trash2, ShieldCheck } from "lucide-react";
+import { LayoutList, LayoutGrid, Download, Edit2, Loader2, Target, Flag, Crosshair, Zap, TrendingUp, BarChart3, MessageSquare, Send, Trash2, ShieldCheck } from "lucide-react";
 import { BusinessLoadingState } from "@/components/business/BusinessLoadingState";
 import { Link } from "wouter";
 import { resolveBusinessLinkedRecordHref, formatBusinessLinkedRecordLabel } from "@/lib/business-linked-record";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import {
+  useDebouncedValue,
+  recordToMondayGroups,
+} from "@/lib/crm-monday-chrome";
 import * as XLSX from "xlsx";
 
 // ── Extended entity types (matching actual API responses) ─────────────────────
@@ -166,8 +174,30 @@ type FieldDef = { key: string; label: string; type: FieldType; options?: {value:
 
 function buildFormInit(item: Record<string,unknown>, fields: FieldDef[]): Record<string,unknown> {
   const init: Record<string,unknown> = {};
-  fields.forEach(f => { init[f.key] = item[f.key] ?? ""; });
+  fields.forEach(f => {
+    const raw = item[f.key];
+    if ((raw === null || raw === undefined || raw === "") && f.type === "select" && f.options?.some(o => o.value === "none")) {
+      init[f.key] = "none";
+    } else {
+      init[f.key] = raw ?? "";
+    }
+  });
   return init;
+}
+
+function sanitizeFormPayload(form: Record<string,unknown>, fields: FieldDef[]): Record<string,unknown> {
+  const out: Record<string,unknown> = {};
+  fields.forEach(f => {
+    let v = form[f.key];
+    if (v === "" || v === "none") {
+      out[f.key] = null;
+    } else if (f.type === "number" && typeof v === "string") {
+      out[f.key] = Number(v);
+    } else {
+      out[f.key] = v;
+    }
+  });
+  return out;
 }
 
 function EditDialog({
@@ -189,7 +219,7 @@ function EditDialog({
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
       <DialogContent className="max-w-2xl">
-        <SubmitForm onSubmit={() => onSave(form)} disabled={isSaving}>
+        <SubmitForm onSubmit={() => onSave(sanitizeFormPayload(form, fields))} disabled={isSaving}>
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         <div className="grid grid-cols-2 gap-4 py-2 max-h-[60vh] overflow-y-auto pr-1">
           {fields.map(f => (
@@ -198,7 +228,14 @@ function EditDialog({
               {f.type === "textarea" ? (
                 <Textarea value={String(form[f.key] ?? "")} onChange={e => set(f.key, e.target.value)} rows={3} className="text-sm" />
               ) : f.type === "select" ? (
-                <Select value={String(form[f.key] ?? "")} onValueChange={v => set(f.key, v)}>
+                <Select
+                  value={(() => {
+                    const raw = form[f.key];
+                    if (raw === "" || raw == null) return f.options?.some(o => o.value === "none") ? "none" : "";
+                    return String(raw);
+                  })()}
+                  onValueChange={v => set(f.key, v)}
+                >
                   <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select…" /></SelectTrigger>
                   <SelectContent>{(f.options ?? []).map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
                 </Select>
@@ -332,6 +369,23 @@ const DELIVERY_TYPE_OPTIONS = [
 
 const DELIVERY_TYPE_LABELS: Record<string,string> = Object.fromEntries(DELIVERY_TYPE_OPTIONS.map(o => [o.value, o.label]));
 
+function businessColumnType(key: string): "text" | "status" | "person" | "date" | "number" {
+  const k = key.toLowerCase();
+  // rag/status use "status" so built-in inline editor works (rag/progress types are display-only)
+  if (k.includes("rag") || k === "ragstatus") return "status";
+  if (k.includes("status") || k.includes("priority") || k.includes("type")) return "status";
+  if (k.includes("owner") || k.includes("person")) return "person";
+  if (k.includes("date") || k.includes("cadence")) return "date";
+  if (k.includes("progress") || k.includes("percent")) return "number";
+  if (k.includes("value") || k.includes("count") || k.includes("target") || k.includes("current")) return "number";
+  return "text";
+}
+
+/** Parent/link columns are display-only; owner stays person (no built-in editor). */
+const BUSINESS_NON_EDITABLE_KEYS = new Set([
+  "ref", "strategyItemId", "goalId", "objectiveId", "linkedRecordRef", "departmentName",
+]);
+
 const RAG_CHECKIN_OPTIONS = [
   { value: "green", label: "🟢 On Track" },
   { value: "amber", label: "🟡 At Risk" },
@@ -363,20 +417,22 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
   });
   const [view, setView] = useState<"table"|"card">("table");
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [activeFilters, setActiveFilters] = useState<Record<string,string>>({});
   const [editItem, setEditItem] = useState<T|null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<"none"|"ragStatus"|"status"|"departmentName"|"ownerName"|"parent">("none");
+  const [pinRef, setPinRef] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem(`business-${entityType || refPrefix}-pin-ref`) !== "0";
+  });
 
   // ── Check-in Sheet state ──────────────────────────────────────────────────
   const [checkinItem, setCheckinItem] = useState<T|null>(null);
   const [checkinRag, setCheckinRag] = useState("");
   const [checkinProgress, setCheckinProgress] = useState("");
   const [checkinNote, setCheckinNote] = useState("");
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { setCollapsedGroups(new Set()); }, [groupBy]);
 
   // ── Notes query (shared list, filtered per entity type) ─────────────────
   const { data: allNotesRaw } = useQuery<ReviewNote[]>({
@@ -470,7 +526,7 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
   });
 
   const filtered = useMemo(() => {
-    const s = search.toLowerCase().trim();
+    const s = debouncedSearch.toLowerCase().trim();
     return items.filter(item => {
       const textMatch = !s || searchKeys.some(k => String(item[k] ?? "").toLowerCase().includes(s));
       const filterMatch = Object.entries(activeFilters).every(([k, v]) =>
@@ -478,9 +534,10 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
       );
       return textMatch && filterMatch;
     });
-  }, [items, search, activeFilters, searchKeys]);
+  }, [items, debouncedSearch, activeFilters, searchKeys]);
   const pagination = useTablePagination(filtered, {
-    resetKey: `${view}|${search}|${groupBy}|${Object.values(activeFilters).join("|")}`,
+    resetKey: `${view}|${debouncedSearch}|${groupBy}|${Object.values(activeFilters).join("|")}`,
+    enabled: view === "card",
   });
 
   const getGroupLabel = (item: T): string => {
@@ -503,36 +560,63 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
     return raw;
   };
 
-  const ragGroupHeaderClass: Record<string, string> = {
-    "🟢 On Track": "bg-green-50/80 dark:bg-green-950/30 border-green-300 dark:border-green-800 text-green-700 dark:text-green-400",
-    "🟡 At Risk":  "bg-amber-50/80 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400",
-    "🔴 Behind":   "bg-red-50/80 dark:bg-red-950/30 border-red-300 dark:border-red-800 text-red-700 dark:text-red-400",
+  const groupColors: Record<string, string> = {
+    "🟢 On Track": "#22c55e",
+    "🟡 At Risk": "#f59e0b",
+    "🔴 Behind": "#ef4444",
   };
 
-  const toggleGroup = (label: string) =>
-    setCollapsedGroups(prev => {
-      const next = new Set(prev);
-      if (next.has(label)) next.delete(label); else next.add(label);
-      return next;
-    });
-
-  type TableRow<U> = { type: "header"; label: string; count: number; collapsed: boolean } | { type: "data"; item: U; rowIndex: number };
-
-  const tableRows: TableRow<T>[] = useMemo(() => {
-    if (groupBy === "none") return pagination.paginatedItems.map((item, i) => ({ type: "data" as const, item, rowIndex: i }));
-    const groupOrder = Array.from(new Set(pagination.paginatedItems.map(item => getGroupLabel(item))));
-    const result: TableRow<T>[] = [];
-    for (const label of groupOrder) {
-      const groupItems = pagination.paginatedItems.filter(item => getGroupLabel(item) === label);
-      const isCollapsed = collapsedGroups.has(label);
-      result.push({ type: "header", label, count: groupItems.length, collapsed: isCollapsed });
-      if (!isCollapsed) {
-        groupItems.forEach((item, i) => result.push({ type: "data", item, rowIndex: i }));
-      }
+  const mondayGroups = useMemo(() => {
+    if (groupBy === "none") return undefined;
+    const grouped: Record<string, T[]> = {};
+    for (const item of filtered) {
+      const label = getGroupLabel(item);
+      if (!grouped[label]) grouped[label] = [];
+      grouped[label].push(item);
     }
-    return result;
+    return recordToMondayGroups(grouped, groupColors);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagination.paginatedItems, groupBy, collapsedGroups]);
+  }, [filtered, groupBy, parentItems, parentKey]);
+
+  const mondayColumns: MondayColumnDef<T>[] = useMemo(() => {
+    const cols: MondayColumnDef<T>[] = [
+      {
+        id: "ref",
+        header: "Ref",
+        type: "text",
+        accessor: (item) => refCode(refPrefix, item.id, entityRefs, entityType),
+        width: "80px",
+        sticky: pinRef,
+        editable: false,
+        render: (item) => (
+          <span className="font-mono text-[10px] whitespace-nowrap" style={{ color: accent }}>
+            {refCode(refPrefix, item.id, entityRefs, entityType)}
+          </span>
+        ),
+      },
+      ...columns.map((c) => {
+        const type = businessColumnType(c.key);
+        const k = c.key.toLowerCase();
+        const options =
+          type === "status"
+            ? k.includes("rag")
+              ? BUSINESS_RAG_CELL_OPTIONS
+              : BUSINESS_STATUS_CELL_OPTIONS
+            : undefined;
+        return {
+          id: c.key,
+          header: c.label,
+          type,
+          accessor: (item: T) => item[c.key as keyof T],
+          width: c.width,
+          editable: !BUSINESS_NON_EDITABLE_KEYS.has(c.key) && type !== "person",
+          options,
+          render: (item: T) => c.render(item),
+        };
+      }),
+    ];
+    return cols;
+  }, [columns, refPrefix, entityRefs, entityType, accent, pinRef]);
 
   const importMutation = useMutation({
     mutationFn: async (rows: Record<string, unknown>[]) => {
@@ -666,60 +750,72 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
     return <BusinessLoadingState variant="table" label={`Loading ${title.toLowerCase()}…`} />;
   }
 
+  const boardStorageKey = `jiganto-business-${entityType || refPrefix}`;
+
   return (
+    <MondayBoardShell.Legacy
+      storageKey={boardStorageKey}
+      entityType={`business_${entityType || refPrefix}`}
+      stateHook={useMondayBoardShellState}
+      filterMatcher={matchBoardFilterValue}
+    >
     <div className="space-y-4 w-full min-w-0">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-        <div className="flex items-center gap-3 mr-auto">
-          <div className="p-2 rounded-lg" style={{ background: `${accent}20` }}>
-            <Icon className="h-5 w-5" style={{ color: accent }} />
-          </div>
-          <div>
-            <h2 className="text-base font-semibold">{title}</h2>
-            <p className="text-xs text-muted-foreground">{subtitle} · <span className="font-medium">{filtered.length}</span> of {items.length}</p>
-          </div>
+      <div className="flex items-center gap-3 mb-1">
+        <div className="p-2 rounded-lg" style={{ background: `${accent}20` }}>
+          <Icon className="h-5 w-5" style={{ color: accent }} />
         </div>
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="h-8 pl-8 w-full sm:w-40 text-xs" />
+        <div>
+          <h2 className="text-base font-semibold">{title}</h2>
+          <p className="text-xs text-muted-foreground">{subtitle} · <span className="font-medium">{filtered.length}</span> of {items.length}</p>
         </div>
+      </div>
 
-        {/* Dynamic filters */}
-        {filters.map(f => (
-          <Select key={f.key} value={activeFilters[f.key] ?? "all"} onValueChange={v => setActiveFilters(p => ({ ...p, [f.key]: v }))}>
-            <SelectTrigger className="h-8 w-[130px] text-xs"><SelectValue placeholder={f.label} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{filterAllLabel(f.label)}</SelectItem>
-              {f.options.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        ))}
-
-        {/* Group by — table mode only */}
-        {view === "table" && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className={cn(
-                  "inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-medium border transition-colors",
-                  groupBy !== "none"
-                    ? "bg-[#0ea5e9]/10 border-[#0ea5e9]/30 text-[#0ea5e9] hover:bg-[#0ea5e9]/20"
-                    : "border-border bg-card text-muted-foreground hover:bg-muted"
-                )}
-                data-testid="button-group-by"
-              >
-                <Layers className="h-3.5 w-3.5" />
-                {groupBy === "none" ? "Group" :
-                  groupBy === "ragStatus" ? "Group: RAG" :
-                  groupBy === "status" ? "Group: Status" :
-                  groupBy === "departmentName" ? "Group: Dept" :
-                  groupBy === "parent" ? `Group: ${parentLabel}` : "Group: Owner"}
-                <ChevronDown className="h-3 w-3" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-44">
+      <MondayBoardShell.Toolbar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search…"
+        afterNewSlot={addButton}
+        viewLabel={view === "table" ? "Table" : "Cards"}
+        viewMenu={
+          <>
+            <DropdownMenuItem onClick={() => setView("table")} data-testid="business-view-table">
+              <LayoutList className="h-3.5 w-3.5 mr-2" /> Table
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setView("card")} data-testid="business-view-card">
+              <LayoutGrid className="h-3.5 w-3.5 mr-2" /> Cards
+            </DropdownMenuItem>
+          </>
+        }
+        filterActive={filters.some((f) => (activeFilters[f.key] ?? "all") !== "all")}
+        filterCount={filters.filter((f) => (activeFilters[f.key] ?? "all") !== "all").length}
+        filterContent={
+          filters.length > 0 ? (
+            <div className="space-y-3">
+              {filters.map((f) => (
+                <div key={f.key} className="space-y-1.5">
+                  <Label className="text-xs">{f.label}</Label>
+                  <Select
+                    value={activeFilters[f.key] ?? "all"}
+                    onValueChange={(v) => setActiveFilters((p) => ({ ...p, [f.key]: v }))}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder={f.label} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{filterAllLabel(f.label)}</SelectItem>
+                      {f.options.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+          ) : undefined
+        }
+        groupContent={
+          view === "table" ? (
+            <>
               <DropdownMenuItem onClick={() => setGroupBy("none")} data-testid="group-none">None</DropdownMenuItem>
               {parentItems && parentItems.length > 0 && (
                 <DropdownMenuItem onClick={() => setGroupBy("parent")} data-testid="group-parent">{parentLabel}</DropdownMenuItem>
@@ -728,158 +824,86 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
               <DropdownMenuItem onClick={() => setGroupBy("status")} data-testid="group-status">Status</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setGroupBy("departmentName")} data-testid="group-department">Department</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setGroupBy("ownerName")} data-testid="group-owner">Owner</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-
-        {/* View toggle */}
-        <div className="flex rounded-md border border-border overflow-hidden">
-          {(["table","card"] as const).map(v => (
-            <button key={v} onClick={() => setView(v)}
-              className={cn("px-2.5 py-1.5 flex items-center gap-1 text-xs transition-colors",
-                view === v ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted")}>
-              {v === "table" ? <LayoutList className="h-3.5 w-3.5" /> : <LayoutGrid className="h-3.5 w-3.5" />}
-              <span className="hidden sm:inline capitalize">{v}</span>
-            </button>
-          ))}
-        </div>
-
-        <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setImportOpen(true)} disabled={importMutation.isPending}>
-          {importMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-          Import
-        </Button>
-        {sheetConfig && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-                <Download className="h-3.5 w-3.5" /> Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleDownloadTemplate}>
-                <Download className="h-3.5 w-3.5 mr-2" /> Download Template
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleExportCurrentData}>
-                <FileText className="h-3.5 w-3.5 mr-2" /> Export Current Data
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-        {addButton}
-      </div>
+            </>
+          ) : undefined
+        }
+        groupActive={view === "table" && groupBy !== "none"}
+        groupLabel={
+          groupBy === "none" ? "Group by" :
+          groupBy === "ragStatus" ? "Group: RAG" :
+          groupBy === "status" ? "Group: Status" :
+          groupBy === "departmentName" ? "Group: Dept" :
+          groupBy === "parent" ? `Group: ${parentLabel}` : "Group: Owner"
+        }
+        grouped={view === "table" && groupBy !== "none"}
+        pinActive={pinRef}
+        onPinToggle={() => {
+          setPinRef((v) => {
+            const next = !v;
+            localStorage.setItem(`business-${entityType || refPrefix}-pin-ref`, next ? "1" : "0");
+            return next;
+          });
+        }}
+        pinTitle={pinRef ? "Unpin Ref column" : "Pin Ref column"}
+        onImport={() => setImportOpen(true)}
+        onPaste={() => setImportOpen(true)}
+        onExport={sheetConfig ? handleExportCurrentData : undefined}
+        onDownloadTemplate={sheetConfig ? handleDownloadTemplate : undefined}
+        testId="business-manage-toolbar"
+      />
 
       {/* Table View */}
       {view === "table" && (
-        <div className="rounded-xl border border-border bg-card w-full min-w-0 max-w-full max-h-[min(70vh,720px)] overflow-auto">
-            <table className="text-xs border-collapse w-full table-auto" style={{ minWidth: 1100 }}>
-              <thead className="sticky top-0 z-20">
-                <tr className="border-b-2 border-border bg-muted/95 backdrop-blur-sm shadow-sm">
-                  <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap w-[80px] sticky left-0 z-30 bg-muted/95">Ref</th>
-                  {columns.map(c => (
-                    <th key={c.key} className="px-3 py-2.5 text-left font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap" style={{ width: c.width }}>
-                      {c.label}
-                    </th>
-                  ))}
-                  <th className="px-3 py-2.5 text-right font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap sticky right-0 z-30 bg-muted/95 min-w-[100px]">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr><td colSpan={columns.length + 2} className="px-4 py-14 text-center text-muted-foreground">No records match the current filters</td></tr>
-                ) : tableRows.map(row => {
-                  if (row.type === "header") {
-                    return (
-                      <tr key={`gh-${row.label}`}>
-                        <td
-                          colSpan={columns.length + 2}
-                          className={cn(
-                            "px-4 py-0 border-b border-border/40 cursor-pointer select-none",
-                            ragGroupHeaderClass[row.label] ?? "bg-muted/60 text-muted-foreground"
-                          )}
-                          onClick={() => toggleGroup(row.label)}
-                          data-testid={`group-header-${row.label}`}
-                        >
-                          <div className="flex items-center gap-2 py-2">
-                            <span className="inline-flex">
-                              {row.collapsed
-                                ? <ChevronRight className="h-3.5 w-3.5 opacity-70" />
-                                : <ChevronDown className="h-3.5 w-3.5 opacity-70" />}
-                            </span>
-                            <Layers className="h-3.5 w-3.5 opacity-60" />
-                            <span className="font-semibold text-xs uppercase tracking-wider">{row.label}</span>
-                            <span className="font-normal opacity-60 text-xs normal-case tracking-normal">
-                              · {row.count} item{row.count !== 1 ? "s" : ""}
-                              {row.collapsed && <span className="ml-1 italic">(collapsed)</span>}
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  }
-                  const { item, rowIndex } = row;
-                  return (
-                    <tr key={item.id}
-                      className={cn("border-t border-border/30 hover:bg-muted/30 transition-colors", rowIndex % 2 !== 0 ? "bg-muted/10" : "")}>
-                      <td className={cn(
-                        "px-3 py-2 font-mono text-[10px] text-muted-foreground whitespace-nowrap sticky left-0 z-10",
-                        rowIndex % 2 !== 0 ? "bg-muted/10" : "bg-card",
-                      )} style={{ color: accent }}>
-                        {refCode(refPrefix, item.id, entityRefs, entityType)}
-                      </td>
-                      {columns.map(c => (
-                        <td key={c.key} className="px-3 py-2 align-middle max-w-[220px]">{c.render(item)}</td>
-                      ))}
-                      <td className={cn(
-                        "px-2 py-2 text-right whitespace-nowrap sticky right-0 z-10 border-l border-border/40",
-                        rowIndex % 2 !== 0 ? "bg-muted/10" : "bg-card",
-                      )}>
-                        {entityType && (
-                          <button onClick={() => openCheckin(item)}
-                            className="relative text-muted-foreground hover:text-primary p-1 rounded hover:bg-muted transition-colors mr-0.5"
-                            title="Add / view check-in notes"
-                            data-testid={`button-checkin-${item.id}`}>
-                            <MessageSquare className="h-3.5 w-3.5" />
-                            {(noteCountByItem[item.id] || 0) > 0 && (
-                              <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] rounded-full text-[8px] font-bold flex items-center justify-center px-0.5 leading-none"
-                                style={{ background: accent, color: "#fff" }}>
-                                {noteCountByItem[item.id]}
-                              </span>
-                            )}
-                          </button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 px-2 gap-1 shrink-0"
-                          onClick={() => setEditItem(item)}
-                          title="Edit record"
-                          data-testid={`button-edit-${item.id}`}
-                        >
-                          <Edit2 className="h-3 w-3" />
-                          <span className="text-[10px] font-medium">Edit</span>
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          <div className="px-4 py-2 border-t border-border bg-muted/20 flex flex-wrap gap-2 justify-between items-center">
-            <span className="text-xs text-muted-foreground">{filtered.length} of {items.length} records shown</span>
-            <span className="text-xs text-muted-foreground">Use the <strong className="font-medium text-foreground">Edit</strong> button in the Actions column to update any row</span>
-          </div>
-          <TablePagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            total={pagination.total}
-            startIndex={pagination.startIndex}
-            endIndex={pagination.endIndex}
-            pageSize={pagination.pageSize}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
+        <div data-testid="business-manage-table">
+          <MondayBoardShell.Table
+            columns={mondayColumns}
+            data={filtered}
+            groups={mondayGroups}
+            emptyMessage="No records match the current filters"
+            searchHighlightTerm={debouncedSearch}
+            columnWidthStorageKey={`jiganto-business-${entityType || refPrefix}-col-widths`}
+            paginationResetKey={`${debouncedSearch}|${groupBy}|${Object.values(activeFilters).join("|")}|${apiBase}`}
+            totalCount={items.length}
+            onCellEdit={(rowId, columnId, value) => {
+              updateMutation.mutate({
+                id: Number(rowId),
+                payload: { [columnId]: value === "" ? null : value },
+              });
+            }}
+            onEditItem={(item) => setEditItem(item)}
+            renderRowActions={(item) => (
+              <div className="flex items-center justify-end gap-0.5">
+                {entityType && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openCheckin(item); }}
+                    className="relative text-muted-foreground hover:text-primary p-1 rounded hover:bg-muted transition-colors"
+                    title="Add / view check-in notes"
+                    data-testid={`button-checkin-${item.id}`}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    {(noteCountByItem[item.id] || 0) > 0 && (
+                      <span
+                        className="absolute -top-1 -right-1 min-w-[14px] h-[14px] rounded-full text-[8px] font-bold flex items-center justify-center px-0.5 leading-none"
+                        style={{ background: accent, color: "#fff" }}
+                      >
+                        {noteCountByItem[item.id]}
+                      </span>
+                    )}
+                  </button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 gap-1 shrink-0"
+                  onClick={(e) => { e.stopPropagation(); setEditItem(item); }}
+                  title="Edit record"
+                  data-testid={`button-edit-${item.id}`}
+                >
+                  <Edit2 className="h-3 w-3" />
+                  <span className="text-[10px] font-medium">Edit</span>
+                </Button>
+              </div>
+            )}
           />
         </div>
       )}
@@ -1069,6 +1093,7 @@ function ManageLayerView<T extends {id:number; [k:string]: unknown}>({
         </DialogContent>
       </Dialog>
     </div>
+    </MondayBoardShell.Legacy>
   );
 }
 
@@ -1165,6 +1190,28 @@ const EDIT_RAG_OPTIONS = [
   { value: "amber", label: "🟡 Amber — At Risk" },
   { value: "red",   label: "🔴 Red — Behind" },
 ];
+
+const BUSINESS_STATUS_CELL_OPTIONS = EDIT_STATUS_OPTIONS.map((o) => ({
+  ...o,
+  color:
+    o.value === "on_track" || o.value === "completed" || o.value === "active"
+      ? "bg-[#00c875] text-white"
+      : o.value === "at_risk" || o.value === "on_hold"
+        ? "bg-[#fdab3d] text-white"
+        : o.value === "off_track" || o.value === "cancelled"
+          ? "bg-[#e2445c] text-white"
+          : "bg-[#579bfc] text-white",
+}));
+
+const BUSINESS_RAG_CELL_OPTIONS = EDIT_RAG_OPTIONS.map((o) => ({
+  ...o,
+  color:
+    o.value === "green"
+      ? "bg-[#00c875] text-white"
+      : o.value === "amber"
+        ? "bg-[#fdab3d] text-white"
+        : "bg-[#e2445c] text-white",
+}));
 
 // ── Title cell ────────────────────────────────────────────────────────────────
 function TitleCell({ text }: { text: string }) {
@@ -1355,7 +1402,7 @@ export function EnhancedInitiativesTab({
     queryKey: ["/api/portfolio/programmes"],
   });
   const linkedRecordOptions = useMemo(() => [
-    { value: "", label: "None" },
+    { value: "none", label: "None" },
     ...projects.map(p => ({
       value: `project:${p.id}`,
       label: `${p.name}${p.workType ? ` (${p.workType.replace(/_/g, " ")})` : ""}${p.code ? ` · ${p.code}` : ""}`,

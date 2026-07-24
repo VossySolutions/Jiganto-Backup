@@ -1,21 +1,32 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { Filter } from "lucide-react";
-import { useTablePagination } from "@/hooks/use-table-pagination";
-import { TablePagination } from "@/components/TablePagination";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
 import { SEV_BADGE } from "@/lib/tm-utils";
 import type { TmHdDefect } from "@/types/testmgmt";
 import { useTmFetch } from "@/hooks/use-tm-fetch";
 import { TmScreenShell } from "@/components/testmgmt/TmScreenShell";
+
+const DEFECT_STATUSES = ["open", "assigned", "in_progress", "fix_ready", "retesting", "fixed", "wont_fix", "closed"] as const;
 
 export function DefectTriageScreen() {
   const { toast } = useToast();
   const [filterSev, setFilterSev] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
+  const [pinRef, setPinRef] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("tm-defects-pin-ref") !== "0";
+  });
 
   const {
     data: defects = [],
@@ -37,7 +48,7 @@ export function DefectTriageScreen() {
   const filtered = defects.filter(d => {
     if (filterSev !== "all" && d.severity !== filterSev) return false;
     if (filterStatus !== "all" && d.status !== filterStatus) return false;
-    if (search && !d.title.toLowerCase().includes(search.toLowerCase()) && !d.ref.toLowerCase().includes(search.toLowerCase())) return false;
+    if (debouncedSearch && !d.title.toLowerCase().includes(debouncedSearch.toLowerCase()) && !d.ref.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
     return true;
   });
 
@@ -48,7 +59,67 @@ export function DefectTriageScreen() {
     return b.daysOpen - a.daysOpen;
   });
 
-  const pagination = useTablePagination(sorted, { resetKey: `${filterSev}-${filterStatus}-${search}` });
+  const mondayColumns: MondayColumnDef<TmHdDefect>[] = useMemo(() => [
+    {
+      id: "ref",
+      header: "Ref",
+      type: "text",
+      accessor: "ref",
+      width: "100px",
+      sticky: pinRef,
+      editable: false,
+      render: (d) => <span className="font-mono text-xs">{d.ref}</span>,
+    },
+    {
+      id: "title",
+      header: "Title",
+      type: "text",
+      accessor: "title",
+      width: "280px",
+      editable: false,
+      render: (d) => <span className="text-xs font-medium max-w-[280px] truncate block">{d.title}</span>,
+    },
+    {
+      id: "severity",
+      header: "Severity",
+      type: "text",
+      accessor: "severity",
+      width: "110px",
+      editable: false,
+      render: (d) => (
+        <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded uppercase", SEV_BADGE[d.severity ?? "medium"])}>
+          {d.severity}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      type: "status",
+      accessor: "status",
+      width: "150px",
+      editable: true,
+      options: DEFECT_STATUSES.map((s) => ({ value: s, label: s.replace("_", " ") })),
+    },
+    {
+      id: "daysOpen",
+      header: "Days Open",
+      type: "number",
+      accessor: "daysOpen",
+      width: "100px",
+      editable: false,
+      render: (d) => <span className="font-mono text-xs">{d.daysOpen}</span>,
+    },
+    {
+      id: "linkedTestCaseId",
+      header: "Test Case",
+      type: "text",
+      accessor: "linkedTestCaseId",
+      width: "110px",
+      editable: false,
+      render: (d) => <span className="text-xs text-muted-foreground">{d.linkedTestCaseId ? `#${d.linkedTestCaseId}` : "—"}</span>,
+    },
+  ], [pinRef]);
 
   return (
     <TmScreenShell
@@ -58,66 +129,93 @@ export function DefectTriageScreen() {
       label="Loading defect triage..."
     >
       <div className="flex flex-col h-full overflow-hidden">
-        <div className="flex items-center gap-3 px-6 py-3 border-b border-border flex-wrap">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <input className="border rounded px-2.5 py-1 text-xs bg-background w-48" placeholder="Search defects..."
-            value={search} onChange={e => setSearch(e.target.value)} />
-          <select className="border rounded px-2 py-1 text-xs bg-background" value={filterSev} onChange={e => setFilterSev(e.target.value)}>
-            <option value="all">All Severities</option>
-            {["critical", "high", "medium", "low"].map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select className="border rounded px-2 py-1 text-xs bg-background" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-            <option value="all">All Statuses</option>
-            {["open", "assigned", "in_progress", "fix_ready", "retesting", "fixed", "wont_fix", "closed"].map(s =>
-              <option key={s} value={s}>{s.replace("_", " ")}</option>)}
-          </select>
-          <span className="text-xs text-muted-foreground">{sorted.length} defects · sorted by severity, then days open</span>
-        </div>
-
-        <div className="flex-1 overflow-auto">
-          <table className="w-full text-sm text-gray-700 dark:text-foreground">
-            <thead className="sticky top-0 bg-gray-100 dark:bg-muted/80">
-              <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
-                <th className="px-3 py-2.5 text-left align-middle font-semibold">Ref</th>
-                <th className="px-3 py-2.5 text-left align-middle font-semibold">Title</th>
-                <th className="px-3 py-2.5 text-left align-middle font-semibold">Severity</th>
-                <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
-                <th className="px-3 py-2.5 text-left align-middle font-semibold">Days Open</th>
-                <th className="px-3 py-2.5 text-left align-middle font-semibold">Test Case</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagination.paginatedItems.map(d => (
-                <tr key={d.id} className="border-b border-border/40 hover:bg-muted/30">
-                  <td className="px-3 py-2.5 align-middle font-mono text-xs">{d.ref}</td>
-                  <td className="px-3 py-2.5 align-middle text-xs font-medium max-w-[280px] truncate">{d.title}</td>
-                  <td className="px-3 py-2.5 align-middle">
-                    <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded uppercase", SEV_BADGE[d.severity ?? "medium"])}>{d.severity}</span>
-                  </td>
-                  <td className="px-3 py-2.5 align-middle">
-                    <select className="text-xs border rounded px-1 py-0.5 bg-background capitalize"
-                      value={d.status} onChange={e => updateMutation.mutate({ id: d.id, status: e.target.value })}>
-                      {["open", "assigned", "in_progress", "fix_ready", "retesting", "fixed", "wont_fix", "closed"].map(s =>
-                        <option key={s} value={s}>{s.replace("_", " ")}</option>)}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2.5 align-middle font-mono text-xs">{d.daysOpen}</td>
-                  <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground">{d.linkedTestCaseId ? `#${d.linkedTestCaseId}` : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <TablePagination
-          page={pagination.page}
-          totalPages={pagination.totalPages}
-          total={pagination.total}
-          startIndex={pagination.startIndex}
-          endIndex={pagination.endIndex}
-          pageSize={pagination.pageSize}
-          onPageChange={pagination.setPage}
-          onPageSizeChange={pagination.setPageSize}
+        <MondayBoardShell.Legacy
+          storageKey="jiganto-tm-defect-triage"
+          entityType="test_defect"
+          stateHook={useMondayBoardShellState}
+          filterMatcher={matchBoardFilterValue}
+        >
+        <MondayBoardShell.Toolbar
+          newLabel="Defect"
+          searchValue={search}
+          onSearchChange={setSearch}
+          filterActive={filterSev !== "all" || filterStatus !== "all"}
+          filterCount={(filterSev !== "all" ? 1 : 0) + (filterStatus !== "all" ? 1 : 0)}
+          filterContent={
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Severity</Label>
+                <Select value={filterSev} onValueChange={setFilterSev}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="All Severities" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Severities</SelectItem>
+                    {["critical", "high", "medium", "low"].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Status</Label>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    {DEFECT_STATUSES.map((s) => (
+                      <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          }
+          pinActive={pinRef}
+          onPinToggle={() => {
+            setPinRef((v) => {
+              const next = !v;
+              localStorage.setItem("tm-defects-pin-ref", next ? "1" : "0");
+              return next;
+            });
+          }}
+          pinTitle={pinRef ? "Unpin Ref column" : "Pin Ref column"}
+          onExport={() => {
+            const headers = ["Ref", "Title", "Severity", "Status", "Days Open", "Test Case"];
+            const rows = sorted.map((d) => [
+              d.ref || "",
+              d.title || "",
+              d.severity || "",
+              d.status || "",
+              String(d.daysOpen ?? ""),
+              d.linkedTestCaseId ? `#${d.linkedTestCaseId}` : "",
+            ]);
+            downloadBoardCsv(`defects-${new Date().toISOString().split("T")[0]}.csv`, headers, rows);
+            toast({ title: "Defects exported to CSV" });
+          }}
+          onDownloadTemplate={() => {
+            const headers = ["Ref", "Title", "Severity", "Status", "Days Open", "Test Case"];
+            downloadImportTemplateCsv("defects-import-template.csv", headers, headers.map(() => ""));
+            toast({ title: "Import template downloaded" });
+          }}
+          onPaste={() => toast({ title: "Import is not available for this table yet" })}
+          onImport={() => toast({ title: "Import is not available for this table yet" })}
+          testId="defect-triage-toolbar"
+          className="mx-6 mt-3"
         />
+
+        <div className="flex-1 overflow-auto p-4">
+          <MondayBoardShell.Table
+            columns={mondayColumns}
+            data={sorted}
+            gridLines
+            emptyMessage="No defects match your filters."
+            searchHighlightTerm={debouncedSearch}
+            columnWidthStorageKey="jiganto-tm-defect-triage-col-widths"
+            paginationResetKey={`${filterSev}-${filterStatus}-${debouncedSearch}`}
+            onCellEdit={(rowId, columnId, value) => {
+              if (columnId !== "status") return;
+              updateMutation.mutate({ id: Number(rowId), status: String(value) });
+            }}
+          />
+        </div>
+        </MondayBoardShell.Legacy>
       </div>
     </TmScreenShell>
   );

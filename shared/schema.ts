@@ -7,6 +7,7 @@ import { relations } from "drizzle-orm";
 export * from "./models/auth";
 export * from "./models/chat";
 export * from "./models/crm";
+export * from "./models/board";
 export * from "./models/business";
 export * from "./models/documents";
 export * from "./models/tasks";

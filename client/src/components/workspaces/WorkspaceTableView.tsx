@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import { useDebouncedValue, CRM_SEARCH_INPUT_CLASS, CRM_TOOLBAR_CLASS } from "@/lib/crm-monday-chrome";
+import { MondayBoardProvider, MondayBoardChromeControls, useMondayBoard } from "@/components/MondayBoardTable";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -111,6 +113,21 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Business": "bg-green-500/10 text-green-600 dark:text-green-400",
   "Strategy": "bg-purple-500/10 text-purple-600 dark:text-purple-400",
 };
+
+/** Applies Monday density padding to the custom workspace HTML table (not MondayTable). */
+function WorkspaceDensityBridge() {
+  const { density } = useMondayBoard();
+  const pad =
+    density === "compact" ? "0.25rem 0.5rem" : density === "expanded" ? "0.75rem 0.75rem" : "0.5rem 0.75rem";
+  return (
+    <style>{`
+      [data-workspace-board-table] th,
+      [data-workspace-board-table] td {
+        padding: ${pad};
+      }
+    `}</style>
+  );
+}
 
 const COLUMN_TYPES = [
   { type: "text", label: "Text", icon: Type },
@@ -536,6 +553,7 @@ export function WorkspaceTableView({
   const [secondarySortDirection, setSecondarySortDirection] = useState<"asc" | "desc">("asc");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebouncedValue(searchQuery);
   const [editingCell, setEditingCell] = useState<{ rowId: number; colId: number } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [activeView, setActiveView] = useState<string>("table");
@@ -1320,11 +1338,11 @@ export function WorkspaceTableView({
   const processedRows = useMemo(() => {
     let result = [...rows];
 
-    if (searchQuery) {
+    if (debouncedSearchQuery) {
       result = result.filter((row) => {
         const rowData = (row.data as Record<string, unknown>) || {};
         return Object.values(rowData).some((v) =>
-          String(v || "").toLowerCase().includes(searchQuery.toLowerCase())
+          String(v || "").toLowerCase().includes(debouncedSearchQuery.toLowerCase())
         );
       });
     }
@@ -1367,10 +1385,10 @@ export function WorkspaceTableView({
     }
 
     return result;
-  }, [rows, searchQuery, filterRules, sortColumn, sortDirection, secondarySortColumn, secondarySortDirection]);
+  }, [rows, debouncedSearchQuery, filterRules, sortColumn, sortDirection, secondarySortColumn, secondarySortDirection]);
 
   const rowPagination = useTablePagination(processedRows, {
-    resetKey: `${searchQuery}-${JSON.stringify(filterRules)}-${sortColumn}-${sortDirection}`,
+    resetKey: `${debouncedSearchQuery}-${JSON.stringify(filterRules)}-${sortColumn}-${sortDirection}`,
   });
 
   const displayRows = rowPagination.paginatedItems;
@@ -1547,7 +1565,8 @@ export function WorkspaceTableView({
   return (
     <>
       <WorkspaceQueryShell query={tableDataQuery} skeleton="table">
-      <div className="border rounded-md bg-card overflow-hidden" data-testid="workspace-table">
+      <MondayBoardProvider storageKey={`jiganto-workspace-table-${databaseId}`}>
+      <div className="border rounded-xl border-border/60 bg-card overflow-hidden" data-testid="workspace-table">
         <SavedViewsStrip
           databaseId={databaseId}
           activeViewConfig={{
@@ -1562,7 +1581,7 @@ export function WorkspaceTableView({
           onApplyView={handleApplyView}
         />
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 border-b">
+        <div className={cn(CRM_TOOLBAR_CLASS, "flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 border-b rounded-none")}>
           <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
             {viewOptions.map((v) => (
               <Button
@@ -1585,7 +1604,7 @@ export function WorkspaceTableView({
             </Button>
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-7 text-xs w-full sm:w-40" data-testid="table-search-input" />
+              <Input placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={cn(CRM_SEARCH_INPUT_CLASS, "w-full sm:w-[200px]")} data-testid="table-search-input" />
             </div>
             <FilterPanel columns={columns} filterRules={filterRules} onUpdateFilters={setFilterRules} />
             <Popover>
@@ -1698,6 +1717,12 @@ export function WorkspaceTableView({
                 </TooltipContent>
               </Tooltip>
             )}
+            {activeView === "table" && (
+              <>
+                <WorkspaceDensityBridge />
+                <MondayBoardChromeControls grouped={!!groupByColumn} showFormat={false} />
+              </>
+            )}
           </div>
         </div>
 
@@ -1720,7 +1745,7 @@ export function WorkspaceTableView({
                 </div>
               </div>
             ) : (
-              <table className="w-full text-sm text-gray-700 dark:text-foreground">
+              <table className="w-full text-sm text-gray-700 dark:text-foreground" data-workspace-board-table>
                 <thead>
                   <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
                     <th className="w-8 px-1 py-2.5 border-r">
@@ -2025,6 +2050,7 @@ export function WorkspaceTableView({
           </span>
         </div>
       </div>
+      </MondayBoardProvider>
       </WorkspaceQueryShell>
 
       <FormDialogShell
@@ -2045,9 +2071,9 @@ export function WorkspaceTableView({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 px-1">
-            <Button variant={inlineTemplateCategory === null ? "default" : "outline"} size="sm" onClick={() => setInlineTemplateCategory(null)} data-testid="inline-template-category-all">All</Button>
+            <Button type="button" variant={inlineTemplateCategory === null ? "default" : "outline"} size="sm" onClick={() => setInlineTemplateCategory(null)} data-testid="inline-template-category-all">All</Button>
             {TEMPLATE_CATEGORIES.map((cat) => (
-              <Button key={cat} variant={inlineTemplateCategory === cat ? "default" : "outline"} size="sm" onClick={() => setInlineTemplateCategory(inlineTemplateCategory === cat ? null : cat)} data-testid={`inline-template-category-${cat.toLowerCase().replace(/\s+/g, "-")}`}>{cat}</Button>
+              <Button type="button" key={cat} variant={inlineTemplateCategory === cat ? "default" : "outline"} size="sm" onClick={() => setInlineTemplateCategory(inlineTemplateCategory === cat ? null : cat)} data-testid={`inline-template-category-${cat.toLowerCase().replace(/\s+/g, "-")}`}>{cat}</Button>
             ))}
           </div>
           <div className="flex-1 overflow-y-auto px-1 pb-2">

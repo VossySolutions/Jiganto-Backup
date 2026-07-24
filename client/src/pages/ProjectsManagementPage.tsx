@@ -53,7 +53,9 @@ const PmRaciTool = lazy(() => import("@/components/projects/PmSecondaryTools").t
 const PmResourceTrackerTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmResourceTrackerTool })));
 const PmTimesheetsTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmTimesheetsTool })));
 const PmFinanceTrackerTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmFinanceTrackerTool })));
-const PmStatusReportingTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmStatusReportingTool })));
+const PmStatusReportingTool = lazy(() =>
+  import("@/components/projects/PmWeeklyStatusReport").then((m) => ({ default: m.PmWeeklyStatusReport })),
+);
 const PmChangeLogTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmChangeLogTool })));
 const PmDocumentationTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmDocumentationTool })));
 const PmTestTrackerTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmTestTrackerTool })));
@@ -196,8 +198,8 @@ function ProjectDetailView({
   const enabledTools = useMemo(() => {
     const coalesced = coalesceAgileTools(enabledToolsSorted);
     const withAlways = [...coalesced];
-    // Mock always-on tools: Overview + 360° even if missing from DB for older projects
-    for (const id of ["360_report", "project_dashboard"] as const) {
+    // Always-on tools: Overview + Status Reporting + 360° even if missing from DB for older projects
+    for (const id of ["360_report", "status_reporting", "project_dashboard"] as const) {
       if (!withAlways.some((t: any) => t.toolType === id)) {
         withAlways.unshift({
           id: -Math.abs(id.split("").reduce((a, c) => a + c.charCodeAt(0), 0)),

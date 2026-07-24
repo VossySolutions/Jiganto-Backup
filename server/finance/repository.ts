@@ -1683,6 +1683,7 @@ export async function createInvoice(
     clientId?: number | null;
     contractType: string;
     issueDate?: string;
+    dueDate?: string;
     paymentTerms?: string;
     currency?: string;
     exchangeRate?: string | number | null;
@@ -1708,7 +1709,7 @@ export async function createInvoice(
   const settings = await getOrCreateFinanceSettings(tenantId);
   const issueDate = data.issueDate ?? todayIso();
   const paymentTerms = data.paymentTerms ?? settings.defaultPaymentTerms ?? "net_30";
-  const dueDate = dueDateFromTerms(issueDate, paymentTerms);
+  const dueDate = data.dueDate || dueDateFromTerms(issueDate, paymentTerms);
   const year = new Date(issueDate).getFullYear();
   const prefix = settings.invoicePrefix ?? "INV";
   const seq = await nextInvoiceSeq(tenantId, prefix, year);

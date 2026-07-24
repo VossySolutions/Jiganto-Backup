@@ -1,6 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,21 +11,15 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
-  CheckCircle2,
-  XCircle,
   Clock,
   UserCheck,
-  Users,
   Plus,
   Copy,
   Calendar,
   BarChart3,
-  ChevronDown,
-  ChevronRight,
   PenLine,
   CheckSquare
 } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
   FinanceTabLoading,
@@ -34,6 +27,13 @@ import {
   FinanceButtonSpinner
 } from "./FinanceUi";
 import type { FinanceTimesheetPeriod } from "./types";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import {
+  MondayBoardProvider,
+  MondayBoardTable,
+  MondayBoardChromeControls,
+} from "@/components/MondayBoardTable";
+import { useDebouncedValue } from "@/lib/crm-monday-chrome";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 
@@ -46,7 +46,17 @@ function formatWeekRange(start: string, end: string) {
 function getMonday(d = new Date()) {
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.setDate(diff));
+  const monday = new Date(d);
+  monday.setDate(diff);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+function formatLocalDate(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function parseHoursInput(val: string, useHhMm: boolean): number {
@@ -124,20 +134,21 @@ export function FinanceTimesheetsTab({
   periods: periodsProp,
   pendingPeriods: pendingProp,
   isLoading: isLoadingProp,
+  searchTerm = "",
   canApprove = true,
   ownResourceId = null,
   initialViewMode = "entry",
 }: FinanceTimesheetsTabProps) {
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [periodSearch, setPeriodSearch] = useState("");
+  const debouncedPeriodSearch = useDebouncedValue(periodSearch || searchTerm);
   const [viewMode, setViewMode] = useState<"entry" | "approval" | "reports">(initialViewMode);
   const [gridMode, setGridMode] = useState<"weekly" | "daily">("weekly");
-  const [selectedDay] = useState(1);
+  const [selectedDay, setSelectedDay] = useState(1);
   const [useHhMm, setUseHhMm] = useState(false);
   const [selectedResourceId, setSelectedResourceId] = useState<string>("");
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
   const [newProjectName, setNewProjectName] = useState("");
-  const [selectedForBulk, setSelectedForBulk] = useState<number[]>([]);
   const [expandedPeriodId, setExpandedPeriodId] = useState<number | null>(null);
   const [signoffPeriodId, setSignoffPeriodId] = useState<number | null>(null);
   const [signoffEmail, setSignoffEmail] = useState("");
@@ -186,16 +197,6 @@ export function FinanceTimesheetsTab({
     return map;
   }, [signoffRequests]);
 
-  const signoffStatusLabel: Record<string, string> = {
-    pending: "Awaiting signature",
-    partially_signed: "Partially signed",
-    completed: "Signed",
-    declined: "Declined",
-    voided: "Voided",
-    expired: "Expired",
-    draft: "Draft",
-  };
-
   const activePeriodId = selectedPeriodId ?? (selectedResourceId
     ? periods.find((p) => String(p.resourceId) === selectedResourceId)?.id ?? null
     : null);
@@ -213,7 +214,7 @@ export function FinanceTimesheetsTab({
   });
 
   const { data: missing = [] } = useQuery<Array<{ resourceId: number; name: string }>>({
-    queryKey: [`/api/finance/timesheets/reports/missing?weekStartDate=${getMonday().toISOString().slice(0, 10)}`],
+    queryKey: [`/api/finance/timesheets/reports/missing?weekStartDate=${formatLocalDate(getMonday())}`],
     enabled: viewMode === "reports",
     staleTime: 30_000,
   });
@@ -247,8 +248,8 @@ export function FinanceTimesheetsTab({
       sunday.setDate(sunday.getDate() + 6);
       return apiRequest("POST", "/api/finance/timesheets/periods", {
         resourceId: Number(selectedResourceId),
-        weekStartDate: monday.toISOString().slice(0, 10),
-        weekEndDate: sunday.toISOString().slice(0, 10),
+        weekStartDate: formatLocalDate(monday),
+        weekEndDate: formatLocalDate(sunday),
       });
     },
     onSuccess: async (res) => {
@@ -259,6 +260,20 @@ export function FinanceTimesheetsTab({
     },
     onError: () => toast({ title: "Failed to create timesheet week", variant: "destructive" }),
   });
+
+  const handleNewWeek = () => {
+    if (!selectedResourceId) return;
+    const monday = formatLocalDate(getMonday());
+    const existing = periods.find(
+      (p) => String(p.resourceId) === selectedResourceId && String(p.weekStartDate).slice(0, 10) === monday,
+    );
+    if (existing) {
+      toast({ title: "Period already exists" });
+      setSelectedPeriodId(existing.id);
+      return;
+    }
+    createPeriodMutation.mutate();
+  };
 
   const saveEntryMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
@@ -299,7 +314,7 @@ export function FinanceTimesheetsTab({
   const bulkApproveMutation = useMutation({
     mutationFn: ({ periodIds, role }: { periodIds: number[]; role: "pm" | "rm" }) =>
       apiRequest("POST", "/api/resources/timesheets/periods/bulk-approve", { periodIds, role }),
-    onSuccess: () => { invalidate(); setSelectedForBulk([]); toast({ title: "Bulk approval complete" }); },
+    onSuccess: () => { invalidate(); toast({ title: "Bulk approval complete" }); },
     onError: () => toast({ title: "Bulk approval failed", variant: "destructive" }),
   });
 
@@ -322,10 +337,6 @@ export function FinanceTimesheetsTab({
       toast({ title: "E-sign request failed", description: err.message, variant: "destructive" });
     },
   });
-
-  const toggleBulk = (id: number) => {
-    setSelectedForBulk((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
-  };
 
   const selectedPeriod = periodDetail;
   const isDraft = selectedPeriod?.status === "draft";
@@ -376,9 +387,6 @@ export function FinanceTimesheetsTab({
     () => pendingPeriods.map((p) => `${p.id}:${p.approvalStatus ?? p.status}`).join("|"),
     [pendingPeriods]
   );
-  const approvalPagination = useTablePagination(pendingPeriods ?? [], {
-    resetKey: pendingResetKey,
-  });
 
   const handleHourChange = (project: string, dayIdx: number, value: string) => {
     if (!activePeriodId || !selectedResourceId || !isDraft) return;
@@ -412,6 +420,97 @@ export function FinanceTimesheetsTab({
   };
 
   const resourcePeriods = periods.filter((p) => String(p.resourceId) === selectedResourceId);
+
+  const filteredResourcePeriods = useMemo(() => {
+    const q = debouncedPeriodSearch.toLowerCase();
+    return resourcePeriods.filter((p) => {
+      if (!q) return true;
+      const label = `${formatWeekRange(String(p.weekStartDate), String(p.weekEndDate))} ${p.status ?? ""} ${p.approvalStatus ?? ""}`.toLowerCase();
+      return label.includes(q);
+    });
+  }, [resourcePeriods, debouncedPeriodSearch]);
+
+  const filteredPendingPeriods = useMemo(() => {
+    const q = debouncedPeriodSearch.toLowerCase();
+    return pendingPeriods.filter((p) => {
+      if (!q) return true;
+      const label = `${resourceName(p.resourceId)} ${formatWeekRange(String(p.weekStartDate), String(p.weekEndDate))} ${p.totalHours ?? ""} ${p.approvalStatus ?? p.status ?? ""}`.toLowerCase();
+      return label.includes(q);
+    });
+  }, [pendingPeriods, debouncedPeriodSearch, resources]);
+
+  type PeriodRow = FinanceTimesheetPeriod & { resourceLabel?: string };
+
+  const periodListColumns: MondayColumnDef<PeriodRow>[] = useMemo(() => [
+    {
+      id: "resource",
+      header: "Resource",
+      type: "text",
+      accessor: (row) => row.resourceLabel ?? resourceName(row.resourceId),
+      width: "160px",
+      editable: false,
+      render: (row) => <span className="font-medium">{row.resourceLabel ?? resourceName(row.resourceId)}</span>,
+    },
+    {
+      id: "week",
+      header: "Week",
+      type: "text",
+      accessor: (row) => formatWeekRange(String(row.weekStartDate), String(row.weekEndDate)),
+      width: "220px",
+      editable: false,
+    },
+    {
+      id: "hours",
+      header: "Hours",
+      type: "number",
+      accessor: (row) => row.totalHours ?? "0",
+      width: "80px",
+      editable: false,
+    },
+    {
+      id: "status",
+      header: "Status",
+      type: "text",
+      accessor: (row) => row.approvalStatus ?? row.status,
+      width: "120px",
+      editable: false,
+      render: (row) => <Badge variant="outline" className="capitalize">{row.approvalStatus ?? row.status ?? "—"}</Badge>,
+    },
+  ], [resources]);
+
+  const entryPeriodColumns: MondayColumnDef<FinanceTimesheetPeriod>[] = useMemo(() => [
+    {
+      id: "week",
+      header: "Week",
+      type: "text",
+      accessor: (row) => formatWeekRange(String(row.weekStartDate), String(row.weekEndDate)),
+      width: "240px",
+      sticky: true,
+      editable: false,
+      render: (row) => (
+        <span className={cn("font-medium", activePeriodId === row.id && "text-primary")}>
+          {formatWeekRange(String(row.weekStartDate), String(row.weekEndDate))}
+        </span>
+      ),
+    },
+    {
+      id: "hours",
+      header: "Hours",
+      type: "number",
+      accessor: (row) => row.totalHours ?? "0",
+      width: "80px",
+      editable: false,
+    },
+    {
+      id: "status",
+      header: "Status",
+      type: "text",
+      accessor: (row) => row.status,
+      width: "120px",
+      editable: false,
+      render: (row) => <Badge variant="outline" className="capitalize">{row.status ?? "—"}</Badge>,
+    },
+  ], [activePeriodId]);
 
   if (isLoading) {
     return (
@@ -452,24 +551,52 @@ export function FinanceTimesheetsTab({
                 ))}
               </SelectContent>
             </Select>
-            <Select value={activePeriodId ? String(activePeriodId) : ""} onValueChange={(v) => setSelectedPeriodId(Number(v))}>
-              <SelectTrigger className="w-64"><SelectValue placeholder="Select week" /></SelectTrigger>
-              <SelectContent>
-                {resourcePeriods.map((p) => (
-                  <SelectItem key={p.id} value={String(p.id)}>{formatWeekRange(String(p.weekStartDate), String(p.weekEndDate))}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="sm" onClick={() => createPeriodMutation.mutate()} disabled={!selectedResourceId || createPeriodMutation.isPending}>
+            <Button variant="outline" size="sm" onClick={handleNewWeek} disabled={!selectedResourceId || createPeriodMutation.isPending}>
               {createPeriodMutation.isPending ? <FinanceButtonSpinner className="mr-1" /> : <Calendar className="h-4 w-4 mr-1" />}
               New Week
             </Button>
-            <div className="flex gap-1 ml-auto">
+            <div className="flex gap-1 ml-auto items-center">
               <Button variant={gridMode === "weekly" ? "secondary" : "ghost"} size="sm" onClick={() => setGridMode("weekly")}>Weekly</Button>
               <Button variant={gridMode === "daily" ? "secondary" : "ghost"} size="sm" onClick={() => setGridMode("daily")}>Daily</Button>
+              {gridMode === "daily" && (
+                <Select value={String(selectedDay)} onValueChange={(v) => setSelectedDay(Number(v))}>
+                  <SelectTrigger className="w-24 h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {DAY_LABELS.map((d, i) => (
+                      <SelectItem key={d} value={String(i + 1)}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Button variant={useHhMm ? "secondary" : "ghost"} size="sm" onClick={() => setUseHhMm(!useHhMm)}>HH:MM</Button>
             </div>
           </div>
+
+          {selectedResourceId && (
+            <MondayBoardProvider storageKey="jiganto-finance-timesheets-entry-periods">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+              <Input
+                placeholder="Search periods…"
+                value={periodSearch}
+                onChange={(e) => setPeriodSearch(e.target.value)}
+                className="max-w-xs h-8 text-sm"
+                data-testid="timesheet-period-search"
+              />
+              <MondayBoardChromeControls />
+              </div>
+              <MondayBoardTable
+                columns={entryPeriodColumns}
+                data={filteredResourcePeriods}
+                gridLines
+                emptyMessage={resourcePeriods.length === 0 ? "No timesheet periods yet — create a new week." : "No periods match your search."}
+                onRowClick={(row) => setSelectedPeriodId(row.id)}
+                searchHighlightTerm={debouncedPeriodSearch}
+                paginationResetKey={`${selectedResourceId}-${debouncedPeriodSearch}`}
+              />
+            </div>
+            </MondayBoardProvider>
+          )}
 
           {selectedPeriod && (
             <>
@@ -578,105 +705,73 @@ export function FinanceTimesheetsTab({
 
       {viewMode === "approval" && (
         <div className="space-y-3">
-          {canApprove && pendingPeriods.length > 0 && (
-            <div className="flex flex-wrap gap-2 p-3 rounded-lg border bg-muted/20">
-              <Checkbox
-                checked={selectedForBulk.length === pendingPeriods.length}
-                onCheckedChange={(v) => setSelectedForBulk(v ? pendingPeriods.map((p) => p.id) : [])}
-              />
-              <span className="text-sm text-muted-foreground self-center">{selectedForBulk.length} selected</span>
-              <Button size="sm" variant="outline" disabled={!selectedForBulk.length || bulkApproveMutation.isPending}
-                onClick={() => bulkApproveMutation.mutate({ periodIds: selectedForBulk, role: "pm" })}>
-                <CheckSquare className="h-4 w-4 mr-1" /> Bulk PM Approve
-              </Button>
-              <Button size="sm" disabled={!selectedForBulk.length || bulkApproveMutation.isPending}
-                onClick={() => bulkApproveMutation.mutate({ periodIds: selectedForBulk, role: "rm" })}>
-                Bulk RM Approve
-              </Button>
-            </div>
-          )}
           {pendingPeriods.length === 0 ? (
             <Card><CardContent className="py-12 text-center text-muted-foreground">No timesheets pending approval</CardContent></Card>
-          ) : approvalPagination.paginatedItems.map((p) => {
-            const periodSignoff = signoffByPeriodId.get(p.id);
-            const signoffActive = periodSignoff && !["voided", "declined", "expired"].includes(periodSignoff.status);
-            return (
-            <Card key={p.id}>
-              <CardContent className="p-4 flex flex-col gap-3">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  <div className="flex items-start gap-3">
-                    {canApprove && (
-                      <Checkbox checked={selectedForBulk.includes(p.id)} onCheckedChange={() => toggleBulk(p.id)} className="mt-1" />
-                    )}
-                    <button type="button" className="text-left" onClick={() => setExpandedPeriodId(expandedPeriodId === p.id ? null : p.id)}>
-                      <div className="flex items-center gap-2">
-                        {expandedPeriodId === p.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        <p className="font-medium">{resourceName(p.resourceId)}</p>
-                      </div>
-                      <p className="text-sm text-muted-foreground pl-6">{formatWeekRange(String(p.weekStartDate), String(p.weekEndDate))}</p>
-                      <div className="text-sm mt-1 flex flex-wrap items-center gap-1.5 pl-6">
-                        <span>{p.totalHours ?? "0"} hrs</span>
-                        <Badge variant="outline">{p.approvalStatus ?? p.status}</Badge>
-                        {periodSignoff && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setLocation(`/modules/e-sign?request=${periodSignoff.id}`); }}
-                            className={cn(
-                              "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border",
-                              periodSignoff.status === "completed"
-                                ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800"
-                                : periodSignoff.status === "declined"
-                                ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
-                                : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
-                            )}
-                          >
-                            <PenLine className="h-3 w-3" />
-                            {signoffStatusLabel[periodSignoff.status] || periodSignoff.status}
-                          </button>
-                        )}
-                      </div>
-                    </button>
+          ) : (
+            <MondayBoardProvider storageKey="jiganto-finance-timesheets-approval-periods">
+            <>
+              <div className="flex items-center gap-2 flex-wrap">
+              <Input
+                placeholder="Search pending periods…"
+                value={periodSearch}
+                onChange={(e) => setPeriodSearch(e.target.value)}
+                className="max-w-xs h-8 text-sm"
+                data-testid="timesheet-approval-search"
+              />
+              <MondayBoardChromeControls />
+              </div>
+              <MondayBoardTable
+                columns={periodListColumns}
+                data={filteredPendingPeriods}
+                gridLines
+                selectable={canApprove}
+                onRowClick={(row) => setExpandedPeriodId(expandedPeriodId === row.id ? null : row.id)}
+                searchHighlightTerm={debouncedPeriodSearch}
+                paginationResetKey={`${pendingResetKey}-${debouncedPeriodSearch}`}
+                renderBulkActions={canApprove ? (ids) => (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!ids.length || bulkApproveMutation.isPending}
+                      onClick={() => bulkApproveMutation.mutate({ periodIds: ids.map(Number), role: "pm" })}>
+                      <CheckSquare className="h-3 w-3 mr-1" /> Bulk PM Approve
+                    </Button>
+                    <Button size="sm" className="h-7 text-xs" disabled={!ids.length || bulkApproveMutation.isPending}
+                      onClick={() => bulkApproveMutation.mutate({ periodIds: ids.map(Number), role: "rm" })}>
+                      Bulk RM Approve
+                    </Button>
                   </div>
-                  {canApprove && (
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setSignoffPeriodId(p.id)}
-                        disabled={!!signoffActive}>
-                        <PenLine className="h-4 w-4 mr-1" /> E-Sign
+                ) : undefined}
+                renderRowActions={(p) => {
+                  if (!canApprove) return null;
+                  const periodSignoff = signoffByPeriodId.get(p.id);
+                  const signoffActive = periodSignoff && !["voided", "declined", "expired"].includes(periodSignoff.status);
+                  return (
+                    <div className="flex items-center gap-1">
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); setSignoffPeriodId(p.id); }} disabled={!!signoffActive}>
+                        <PenLine className="h-3 w-3 mr-1" /> E-Sign
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => rejectMutation.mutate({ id: p.id, reason: "Needs revision" })}
-                        disabled={rejectMutation.isPending && rejectMutation.variables?.id === p.id}>
-                        {rejectMutation.isPending && rejectMutation.variables?.id === p.id ? <FinanceButtonSpinner className="mr-1" /> : <XCircle className="h-4 w-4 mr-1" />}
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); rejectMutation.mutate({ id: p.id, reason: "Needs revision" }); }}>
                         Return
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => approvePmMutation.mutate(p.id)}
-                        disabled={!!p.approvedByPmAt || (approvePmMutation.isPending && approvePmMutation.variables === p.id)}>
-                        {approvePmMutation.isPending && approvePmMutation.variables === p.id ? <FinanceButtonSpinner className="mr-1" /> : <Users className="h-4 w-4 mr-1" />}
-                        PM Approve
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); approvePmMutation.mutate(p.id); }} disabled={!!p.approvedByPmAt}>
+                        PM
                       </Button>
-                      <Button size="sm" onClick={() => approveRmMutation.mutate(p.id)}
-                        disabled={!!p.approvedByRmAt || (approveRmMutation.isPending && approveRmMutation.variables === p.id)}>
-                        {approveRmMutation.isPending && approveRmMutation.variables === p.id ? <FinanceButtonSpinner className="mr-1" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
-                        RM Approve
+                      <Button size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); approveRmMutation.mutate(p.id); }} disabled={!!p.approvedByRmAt}>
+                        RM
                       </Button>
                     </div>
-                  )}
-                </div>
-                {expandedPeriodId === p.id && <PeriodEntriesPanel periodId={p.id} canApprove={canApprove} onChanged={invalidate} />}
-              </CardContent>
-            </Card>
-          );
-          })}
-          {pendingPeriods.length > 0 && (
-            <TablePagination
-              page={approvalPagination.page}
-              totalPages={approvalPagination.totalPages}
-              total={approvalPagination.total}
-              startIndex={approvalPagination.startIndex}
-              endIndex={approvalPagination.endIndex}
-              pageSize={approvalPagination.pageSize}
-              onPageChange={approvalPagination.setPage}
-              onPageSizeChange={approvalPagination.setPageSize}
-            />
+                  );
+                }}
+                alwaysShowRowActions={canApprove}
+              />
+              {expandedPeriodId != null && (
+                <Card className="rounded-xl border-primary/30">
+                  <CardContent className="p-4">
+                    <PeriodEntriesPanel periodId={expandedPeriodId} canApprove={canApprove} onChanged={invalidate} />
+                  </CardContent>
+                </Card>
+              )}
+            </>
+            </MondayBoardProvider>
           )}
 
           {signoffPeriodId && (

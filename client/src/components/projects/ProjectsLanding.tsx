@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, lazy, Suspense, useDeferredValue } from "react";
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,13 +19,15 @@ import {
 import { TablePagination } from "@/components/TablePagination";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTablePagination } from "@/hooks/use-table-pagination";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
 import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import {
   Sheet,
@@ -39,18 +41,13 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   Calendar,
-  Columns3,
   ExternalLink,
   GripVertical,
-  LayoutGrid,
   Loader2,
   Plus,
   Pencil,
-  TableProperties,
-  SquareKanban,
   AlertTriangle,
   ArrowRight,
-  ArrowUpDown,
 } from "lucide-react";
 import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
 import { AppKanbanBoard } from "@/components/kanban";
@@ -251,29 +248,6 @@ function normalizeRag(rag: string | null | undefined) {
   return "";
 }
 
-function ragWord(rag: string | null | undefined, dimension: RagDimension = "scope") {
-  const r = normalizeRag(rag);
-  if (!r) return "—";
-  return RAG_LABELS[dimension][r] || r;
-}
-
-function RagChip({ rag, label, dimension = "scope" }: { rag: string | null | undefined; label?: string; dimension?: RagDimension }) {
-  const r = normalizeRag(rag);
-  const cls = !r
-    ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-    : RAG_CHIP[r] || RAG_CHIP.green;
-  const text = ragWord(rag, dimension);
-  return (
-    <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold", cls)}>
-      <span className={cn(
-        "h-1.5 w-1.5 rounded-full",
-        !r ? "bg-slate-400" : r === "green" ? "bg-green-500" : r === "amber" ? "bg-amber-500" : r === "red" ? "bg-red-500" : "bg-blue-500",
-      )} />
-      {label ? `${label}: ${text}` : text}
-    </span>
-  );
-}
-
 /** Full-width RAG pill used as a dedicated table column — left-aligned so dots line up. */
 function RagPill({
   rag,
@@ -450,33 +424,45 @@ function projectKanbanColumnId(status: string | null | undefined): string {
   return "draft";
 }
 
+type ProjectSortCol = "name" | "type" | "status" | "customer" | "lead" | "progress" | "score" | "end" | "start";
+
+const SORT_LABELS: Record<ProjectSortCol, string> = {
+  name: "Project name",
+  type: "Type",
+  status: "Status",
+  customer: "Customer",
+  lead: "Lead",
+  start: "Start date",
+  end: "End date",
+  progress: "Progress",
+  score: "Health score",
+};
+
 function ProjectTable({
   projects,
   visible,
   onOpen,
   onOpenWorkspace,
   onEdit,
-  pagination,
+  searchHighlight,
+  paginationResetKey,
+  totalCount,
+  sortCol,
+  sortDir,
+  pinFirstColumn = true,
 }: {
   projects: LandingProject[];
   visible: Record<ColumnId, boolean>;
   onOpen: (p: LandingProject) => void;
   onOpenWorkspace: (id: number) => void;
   onEdit: (id: number) => void;
-  pagination: {
-    page: number;
-    totalPages: number;
-    total: number;
-    startIndex: number;
-    endIndex: number;
-    pageSize: number;
-    setPage: (page: number) => void;
-    setPageSize: (size: number) => void;
-  };
+  searchHighlight: string;
+  paginationResetKey: string;
+  totalCount: number;
+  sortCol: ProjectSortCol;
+  sortDir: "asc" | "desc";
+  pinFirstColumn?: boolean;
 }) {
-  const [sortCol, setSortCol] = useState<string>("name");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-
   const sorted = useMemo(() => {
     return [...projects].sort((a, b) => {
       const pick = (p: LandingProject): string | number => {
@@ -490,7 +476,7 @@ function ProjectTable({
           case "score": return p.healthScore ?? 0;
           case "end": return p.endDate || "";
           case "start": return p.startDate || "";
-          default: return (p as any)[sortCol] ?? "";
+          default: return "";
         }
       };
       const va = pick(a);
@@ -500,163 +486,253 @@ function ProjectTable({
     });
   }, [projects, sortCol, sortDir]);
 
-  const toggleSort = (col: string) => {
-    if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortCol(col); setSortDir("asc"); }
+  const mondayColumns: MondayColumnDef<LandingProject>[] = useMemo(() => [
+    {
+      id: "name",
+      header: "Project name",
+      type: "text",
+      accessor: "name",
+      width: "240px",
+      sticky: pinFirstColumn,
+      editable: true,
+      render: (p) => (
+        <div className="flex items-start gap-2.5 min-w-0">
+          <span className={cn("mt-1.5 h-1.5 w-1.5 rounded-full shrink-0", STATUS_COLORS[normalizeStatus(p.status)]?.dot || "bg-slate-400")} />
+          <div className="min-w-0">
+            <p className="font-semibold truncate text-sm">{p.name}</p>
+            {p.code && <p className="truncate text-xs text-muted-foreground font-mono">{p.code}</p>}
+            {p.attention && (
+              <p className="inline-flex items-center gap-1 mt-0.5 text-[10px] font-bold text-red-700">
+                <AlertTriangle className="h-2.5 w-2.5" /> Needs attention
+              </p>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "type",
+      header: "Type",
+      type: "text",
+      accessor: (p) => p.workType || p.projectType,
+      width: "120px",
+      hidden: !visible.type,
+      editable: false,
+      render: (p) => <TypeBadge type={p.workType || p.projectType} />,
+    },
+    {
+      id: "status",
+      header: "Status",
+      type: "status",
+      accessor: "status",
+      width: "120px",
+      hidden: !visible.status,
+      editable: true,
+      options: Object.keys(STATUS_COLORS).map((s) => ({
+        value: s,
+        label: s.replace(/_/g, " "),
+        color: STATUS_COLORS[s]?.bg,
+      })),
+      render: (p) => <StatusBadge status={normalizeStatus(p.status)} />,
+    },
+    {
+      id: "customer",
+      header: "Customer",
+      type: "text",
+      accessor: (p) => p.customer || "",
+      width: "140px",
+      hidden: !visible.customer,
+      editable: true,
+      render: (p) => <span className="text-xs text-muted-foreground">{p.customer || "—"}</span>,
+    },
+    {
+      id: "lead",
+      header: "Lead",
+      type: "person",
+      accessor: (p) => leadOf(p),
+      width: "160px",
+      hidden: !visible.lead,
+      editable: false,
+      render: (p) => <PersonCell name={leadOf(p)} role="PM" />,
+    },
+    {
+      id: "pmo",
+      header: "PMO owner",
+      type: "person",
+      accessor: "pmoName",
+      width: "140px",
+      hidden: !visible.pmo,
+      editable: false,
+      render: (p) => <PersonCell name={p.pmoName} />,
+    },
+    {
+      id: "portfolio",
+      header: "Portfolio",
+      type: "text",
+      accessor: (p) => p.portfolioName || "",
+      width: "130px",
+      hidden: !visible.portfolio,
+      editable: false,
+      render: (p) => <span className="text-xs text-muted-foreground">{p.portfolioName || "—"}</span>,
+    },
+    {
+      id: "method",
+      header: "Methodology",
+      type: "text",
+      accessor: (p) => p.framework || p.methodology || "",
+      width: "130px",
+      hidden: !visible.method,
+      editable: false,
+      render: (p) => <span className="text-xs text-muted-foreground capitalize">{p.framework || p.methodology || "—"}</span>,
+    },
+    {
+      id: "team",
+      header: "Team",
+      type: "text",
+      accessor: () => "",
+      width: "100px",
+      hidden: !visible.team,
+      editable: false,
+      render: (p) => <TeamAvatars team={p.team} />,
+    },
+    {
+      id: "start",
+      header: "Start date",
+      type: "date",
+      accessor: "startDate",
+      width: "110px",
+      hidden: !visible.start,
+      editable: true,
+      render: (p) => <span className="text-xs tabular-nums">{formatDate(p.startDate)}</span>,
+    },
+    {
+      id: "end",
+      header: "End date",
+      type: "date",
+      accessor: "endDate",
+      width: "110px",
+      hidden: !visible.end,
+      editable: true,
+      render: (p) => <span className="text-xs tabular-nums">{formatDate(p.endDate)}</span>,
+    },
+    {
+      id: "progress",
+      header: "Progress",
+      type: "number",
+      accessor: "progress",
+      width: "120px",
+      hidden: !visible.progress,
+      editable: true,
+      render: (p) => <ProgressBar value={p.progress || 0} completed={normalizeStatus(p.status) === "completed"} />,
+    },
+    {
+      id: "ragBudget",
+      header: "Budget",
+      type: "status",
+      accessor: "financialRag",
+      width: "120px",
+      hidden: !visible.ragBudget,
+      editable: true,
+      options: Object.keys(RAG_CHIP).map((r) => ({ value: r, label: r, color: RAG_CHIP[r] })),
+      render: (p) => <RagPill rag={p.financialRag} dimension="budget" />,
+    },
+    {
+      id: "ragSchedule",
+      header: "Sched",
+      type: "status",
+      accessor: "scheduleRag",
+      width: "120px",
+      hidden: !visible.ragSchedule,
+      editable: true,
+      options: Object.keys(RAG_CHIP).map((r) => ({ value: r, label: r, color: RAG_CHIP[r] })),
+      render: (p) => <RagPill rag={p.scheduleRag} dimension="schedule" />,
+    },
+    {
+      id: "ragScope",
+      header: "Scope",
+      type: "status",
+      accessor: "ragStatus",
+      width: "120px",
+      hidden: !visible.ragScope,
+      editable: true,
+      options: Object.keys(RAG_CHIP).map((r) => ({ value: r, label: r, color: RAG_CHIP[r] })),
+      render: (p) => <RagPill rag={p.ragStatus} dimension="scope" />,
+    },
+    {
+      id: "score",
+      header: "Health score",
+      type: "number",
+      accessor: "healthScore",
+      width: "90px",
+      hidden: !visible.score,
+      editable: false,
+      render: (p) => <HealthScore score={p.healthScore} />,
+    },
+  ], [visible, pinFirstColumn]);
+
+  const PROJECT_COL_FIELD: Record<string, string> = {
+    start: "startDate",
+    end: "endDate",
+    ragBudget: "financialRag",
+    ragSchedule: "scheduleRag",
+    ragScope: "ragStatus",
   };
 
-  const thClass = "px-3 py-2.5 text-left align-middle font-semibold cursor-pointer select-none whitespace-nowrap";
-  const thStatic = "px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap";
-
   return (
-    <Card className="rounded-xl border-border/50 overflow-hidden" data-testid="projects-table">
-      <CardContent className="p-0 overflow-x-auto">
-        <table className="w-full text-sm text-gray-700 dark:text-foreground min-w-[960px]">
-          <thead>
-            <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
-              <th className={thClass} onClick={() => toggleSort("name")}>
-                <span className="inline-flex items-center gap-1">Project name <ArrowUpDown className="h-3 w-3 opacity-50" /></span>
-              </th>
-              {visible.type && <th className={thClass} onClick={() => toggleSort("type")}><span className="inline-flex items-center gap-1">Type <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
-              {visible.status && <th className={thClass} onClick={() => toggleSort("status")}><span className="inline-flex items-center gap-1">Status <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
-              {visible.customer && <th className={thClass} onClick={() => toggleSort("customer")}><span className="inline-flex items-center gap-1">Customer <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
-              {visible.lead && <th className={thClass} onClick={() => toggleSort("lead")}><span className="inline-flex items-center gap-1">Lead <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
-              {visible.pmo && <th className={thStatic}>PMO owner</th>}
-              {visible.portfolio && <th className={thStatic}>Portfolio</th>}
-              {visible.method && <th className={thStatic}>Methodology</th>}
-              {visible.team && <th className={thStatic}>Team</th>}
-              {visible.start && <th className={thClass} onClick={() => toggleSort("start")}><span className="inline-flex items-center gap-1">Start <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
-              {visible.end && <th className={thClass} onClick={() => toggleSort("end")}><span className="inline-flex items-center gap-1">End <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
-              {visible.progress && <th className={thClass} onClick={() => toggleSort("progress")}><span className="inline-flex items-center gap-1">Progress <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
-              {visible.ragBudget && <th className={thStatic}>Budget</th>}
-              {visible.ragSchedule && <th className={thStatic}>Sched</th>}
-              {visible.ragScope && <th className={thStatic}>Scope</th>}
-              {visible.score && <th className={thClass} onClick={() => toggleSort("score")}><span className="inline-flex items-center gap-1">Score <ArrowUpDown className="h-3 w-3 opacity-50" /></span></th>}
-              <th className={cn(thStatic, "text-right")}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((p) => {
-              const lead = leadOf(p);
-              return (
-                <tr
-                  key={p.id}
-                  className={cn(
-                    "border-b border-border/40 cursor-pointer hover:bg-muted/30",
-                    p.attention && "bg-red-50/40 dark:bg-red-950/10",
-                  )}
-                  onClick={() => onOpenWorkspace(p.id)}
-                  data-testid={`table-row-${p.id}`}
-                >
-                  <td className="px-3 py-2.5 align-middle">
-                    <div className="flex items-start gap-2.5">
-                      <span className={cn("mt-1.5 h-1.5 w-1.5 rounded-full flex-shrink-0", STATUS_COLORS[normalizeStatus(p.status)]?.dot || "bg-slate-400")} />
-                      <div className="min-w-0">
-                        <p className="font-semibold truncate">{p.name}</p>
-                        {p.code && <p className="truncate text-xs text-muted-foreground font-mono">{p.code}</p>}
-                        {p.attention && (
-                          <p className="inline-flex items-center gap-1 mt-0.5 text-[10px] font-bold text-red-700">
-                            <AlertTriangle className="h-2.5 w-2.5" /> Needs attention
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  {visible.type && <td className="px-3 py-2.5 align-middle"><TypeBadge type={p.workType || p.projectType} /></td>}
-                  {visible.status && <td className="px-3 py-2.5 align-middle"><StatusBadge status={normalizeStatus(p.status)} /></td>}
-                  {visible.customer && <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground whitespace-nowrap">{p.customer || "—"}</td>}
-                  {visible.lead && (
-                    <td className="px-3 py-2.5 align-middle">
-                      <PersonCell name={lead} role="PM" />
-                    </td>
-                  )}
-                  {visible.pmo && (
-                    <td className="px-3 py-2.5 align-middle">
-                      <PersonCell name={p.pmoName} />
-                    </td>
-                  )}
-                  {visible.portfolio && <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground whitespace-nowrap">{p.portfolioName || "—"}</td>}
-                  {visible.method && <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground whitespace-nowrap capitalize">{p.framework || p.methodology || "—"}</td>}
-                  {visible.team && <td className="px-3 py-2.5 align-middle"><TeamAvatars team={p.team} /></td>}
-                  {visible.start && <td className="px-3 py-2.5 align-middle text-xs tabular-nums">{formatDate(p.startDate)}</td>}
-                  {visible.end && <td className="px-3 py-2.5 align-middle text-xs tabular-nums">{formatDate(p.endDate)}</td>}
-                  {visible.progress && (
-                    <td className="px-3 py-2.5 align-middle">
-                      <ProgressBar value={p.progress || 0} completed={normalizeStatus(p.status) === "completed"} />
-                    </td>
-                  )}
-                  {visible.ragBudget && (
-                    <td className="px-3 py-2.5 align-middle">
-                      <RagPill rag={p.financialRag} dimension="budget" />
-                    </td>
-                  )}
-                  {visible.ragSchedule && (
-                    <td className="px-3 py-2.5 align-middle">
-                      <RagPill rag={p.scheduleRag} dimension="schedule" />
-                    </td>
-                  )}
-                  {visible.ragScope && (
-                    <td className="px-3 py-2.5 align-middle">
-                      <RagPill rag={p.ragStatus} dimension="scope" />
-                    </td>
-                  )}
-                  {visible.score && <td className="px-3 py-2.5 align-middle"><HealthScore score={p.healthScore} /></td>}
-                  <td className="px-3 py-2.5 align-middle text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="inline-flex gap-0.5 justify-end">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                        onClick={() => onEdit(p.id)}
-                        title="Edit project"
-                        data-testid={`button-edit-row-${p.id}`}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
-                        onClick={() => onOpenWorkspace(p.id)}
-                        title="Open workspace"
-                        data-testid={`button-open-${p.id}`}
-                      >
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground"
-                        onClick={() => onOpen(p)}
-                        title="Preview project"
-                        data-testid={`button-preview-${p.id}`}
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {sorted.length === 0 && (
-              <tr>
-                <td colSpan={20} className="px-3 py-12 text-center text-sm text-muted-foreground">No work items found</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        <TablePagination
-          page={pagination.page}
-          totalPages={pagination.totalPages}
-          total={pagination.total}
-          startIndex={pagination.startIndex}
-          endIndex={pagination.endIndex}
-          pageSize={pagination.pageSize}
-          onPageChange={pagination.setPage}
-          onPageSizeChange={pagination.setPageSize}
-        />
-      </CardContent>
-    </Card>
+    <div data-testid="projects-table">
+      <MondayBoardShell.Table
+        columns={mondayColumns}
+        data={sorted}
+        onRowClick={(p) => onOpenWorkspace(p.id)}
+        onCellEdit={(rowId, columnId, value) => {
+          const field = PROJECT_COL_FIELD[columnId] || columnId;
+          apiRequest("PUT", `/api/pm/projects/${Number(rowId)}`, {
+            [field]: value === "" ? null : value,
+          }).then(() => {
+            queryClient.invalidateQueries({ queryKey: ["/api/pm/projects"] });
+          });
+        }}
+        emptyMessage="No work items found"
+        searchHighlightTerm={searchHighlight}
+        columnWidthStorageKey="jiganto-projects-landing-col-widths"
+        paginationResetKey={`${paginationResetKey}|${sortCol}|${sortDir}`}
+        totalCount={totalCount}
+        renderRowActions={(p) => (
+          <div className="inline-flex gap-0.5 justify-end">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={() => onEdit(p.id)}
+              title="Edit project"
+              data-testid={`button-edit-row-${p.id}`}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
+              onClick={() => onOpenWorkspace(p.id)}
+              title="Open workspace"
+              data-testid={`button-open-${p.id}`}
+            >
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground"
+              onClick={() => onOpen(p)}
+              title="Preview project"
+              data-testid={`button-preview-${p.id}`}
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      />
+    </div>
   );
 }
 
@@ -665,7 +741,7 @@ function ProjectCards({
   onOpen,
   onOpenWorkspace,
 }: {
-  projects: LandingProject[];
+  projects: readonly LandingProject[];
   onOpen: (p: LandingProject) => void;
   onOpenWorkspace: (id: number) => void;
 }) {
@@ -949,8 +1025,20 @@ export function ProjectsLandingView({
   const [healthFilter, setHealthFilter] = useState<string>("all");
   const [mineFilter, setMineFilter] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const deferredSearch = useDeferredValue(searchQuery);
+  const debouncedSearch = useDebouncedValue(searchQuery);
   const [visibleCols, setVisibleCols] = useState<Record<ColumnId, boolean>>(loadVisibleColumns);
+  const [sortCol, setSortCol] = useState<ProjectSortCol>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [pinName, setPinName] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("projects-landing-pin-name") !== "0";
+  });
+  const { toast } = useToast();
+
+  const handleProjectSort = (col: ProjectSortCol) => {
+    if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortCol(col); setSortDir("asc"); }
+  };
   const [selected, setSelected] = useState<LandingProject | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [editProjectId, setEditProjectId] = useState<number | null>(null);
@@ -1017,23 +1105,58 @@ export function ProjectsLandingView({
           return false;
         }
       }
-      if (deferredSearch) {
-        const q = deferredSearch.toLowerCase();
+      if (debouncedSearch) {
+        const q = debouncedSearch.toLowerCase();
         const hay = `${p.name || ""} ${p.description || ""} ${p.code || ""} ${p.customer || ""} ${leadOf(p) || ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [projects, statusFilter, typeFilter, customerFilter, portfolioFilter, healthFilter, deferredSearch, mineFilter, user]);
+  }, [projects, statusFilter, typeFilter, customerFilter, portfolioFilter, healthFilter, debouncedSearch, mineFilter, user]);
+
+  const tablePaginationResetKey = `${statusFilter}-${typeFilter}-${customerFilter}-${portfolioFilter}-${healthFilter}-${debouncedSearch}-${mineFilter}`;
 
   const pagination = useTablePagination(filtered, {
-    resetKey: `${statusFilter}-${typeFilter}-${customerFilter}-${portfolioFilter}-${healthFilter}-${deferredSearch}-${mineFilter}-${viewMode}`,
-    enabled: viewMode !== "kanban",
+    resetKey: `${tablePaginationResetKey}-${viewMode}`,
+    enabled: viewMode === "cards",
   });
 
-  const paged = viewMode === "kanban" ? filtered : pagination.paginatedItems;
+  const paged = viewMode === "cards" ? pagination.paginatedItems : filtered;
 
   const visibleCount = Object.values(visibleCols).filter(Boolean).length;
+  const activeFilterCount =
+    (mineFilter ? 1 : 0) +
+    (typeFilter !== "all" ? 1 : 0) +
+    (statusFilter !== "all" ? 1 : 0) +
+    (customerFilter !== "all" ? 1 : 0) +
+    (portfolioFilter !== "all" ? 1 : 0) +
+    (healthFilter !== "all" ? 1 : 0);
+
+  const PROJECT_CSV_HEADERS = ["Project name", "Code", "Type", "Status", "Customer", "Lead", "Progress", "RAG", "Start", "End"];
+
+  const exportProjects = () => {
+    const rows = filtered.map((p) => [
+      p.name || "",
+      p.code || "",
+      p.workType || p.projectType || "",
+      p.status || "",
+      p.customer || "",
+      leadOf(p) || "",
+      String(p.progress ?? 0),
+      p.ragStatus || "",
+      p.startDate || "",
+      p.endDate || "",
+    ]);
+    downloadBoardCsv(`projects-${new Date().toISOString().split("T")[0]}.csv`, PROJECT_CSV_HEADERS, rows);
+    toast({ title: "Projects exported to CSV" });
+  };
+
+  const downloadProjectsTemplate = () => {
+    downloadImportTemplateCsv("projects-import-template.csv", PROJECT_CSV_HEADERS, PROJECT_CSV_HEADERS.map(() => ""));
+    toast({ title: "Import template downloaded" });
+  };
+
+  const importUnavailable = () => toast({ title: "Import is not available for this table yet" });
 
   if (isLoading) {
     return (
@@ -1136,154 +1259,168 @@ export function ProjectsLandingView({
               })}
             </div>
 
-            <div className="flex items-center gap-2 mb-4 flex-wrap" data-testid="filter-bar">
-              <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5" data-testid="view-toggle">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={cn("gap-1.5 h-8 text-xs", viewMode === "table" && "bg-background shadow-sm text-primary")}
-                  onClick={() => setViewMode("table")}
-                  data-testid="view-table"
-                >
-                  <TableProperties className="h-3.5 w-3.5" /> Table
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={cn("gap-1.5 h-8 text-xs", viewMode === "cards" && "bg-background shadow-sm text-primary")}
-                  onClick={() => setViewMode("cards")}
-                  data-testid="view-cards"
-                >
-                  <LayoutGrid className="h-3.5 w-3.5" /> Cards
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={cn("gap-1.5 h-8 text-xs", viewMode === "kanban" && "bg-background shadow-sm text-primary")}
-                  onClick={() => {
-                    setViewMode("kanban");
-                    setStatusFilter("all");
-                  }}
-                  data-testid="view-kanban"
-                >
-                  <SquareKanban className="h-3.5 w-3.5" /> Kanban
-                </Button>
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn("h-8 text-xs", mineFilter && "bg-primary/10 border-primary text-primary")}
-                onClick={() => {
-                  const next = !mineFilter;
-                  setMineFilter(next);
-                  setDashTab(next ? "my" : "projects");
-                }}
-                data-testid="filter-mine"
-              >
-                My Projects
-              </Button>
-
-              <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); }}>
-                <SelectTrigger className="w-[130px] h-8" data-testid="filter-type"><SelectValue placeholder="Type" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All types</SelectItem>
-                  {WORK_TYPE_OPTIONS.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-
-              <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); }}>
-                <SelectTrigger className="w-[130px] h-8" data-testid="filter-status"><SelectValue placeholder="Status" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  {Object.keys(STATUS_COLORS).map((s) => (
-                    <SelectItem key={s} value={s}>{s.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={customerFilter} onValueChange={(v) => { setCustomerFilter(v); }}>
-                <SelectTrigger className="w-[140px] h-8" data-testid="filter-customer"><SelectValue placeholder="Customer" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All customers</SelectItem>
-                  {customers.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-
-              <Select value={portfolioFilter} onValueChange={(v) => { setPortfolioFilter(v); }}>
-                <SelectTrigger className="w-[140px] h-8" data-testid="filter-portfolio"><SelectValue placeholder="Portfolio" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All portfolios</SelectItem>
-                  {portfolios.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-
-              <Select value={healthFilter} onValueChange={(v) => { setHealthFilter(v); }}>
-                <SelectTrigger className="w-[170px] h-8 text-foreground" data-testid="filter-health"><SelectValue placeholder="RAG" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">RAG</SelectItem>
-                  <SelectItem value="attention">Needs attention</SelectItem>
-                  <SelectItem value="red">Red — needs attention</SelectItem>
-                  <SelectItem value="amber">Amber — monitor</SelectItem>
-                  <SelectItem value="green">Green — on track</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <div className="flex-1" />
-
-              {attentionCount > 0 && (
-                <div className="text-xs font-bold text-red-700 dark:text-red-400 inline-flex items-center gap-1">
-                  <AlertTriangle className="h-3.5 w-3.5" /> {attentionCount} project{attentionCount === 1 ? "" : "s"} need attention
+            <MondayBoardShell.Legacy
+              storageKey="jiganto-projects-landing"
+              entityType="project"
+              stateHook={useMondayBoardShellState}
+              filterMatcher={matchBoardFilterValue}
+            >
+            <MondayBoardShell.Toolbar
+              newLabel="New Work Item"
+              onNew={onNewProject}
+              searchValue={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder="Search projects..."
+              viewLabel={viewMode === "table" ? "Table" : viewMode === "cards" ? "Cards" : "Kanban"}
+              viewMenu={
+                <>
+                  <DropdownMenuItem onClick={() => setViewMode("table")} data-testid="view-table">Table</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setViewMode("cards")} data-testid="view-cards">Cards</DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => { setViewMode("kanban"); setStatusFilter("all"); }}
+                    data-testid="view-kanban"
+                  >
+                    Kanban
+                  </DropdownMenuItem>
+                </>
+              }
+              filterActive={activeFilterCount > 0}
+              filterCount={activeFilterCount}
+              filterContent={
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <Checkbox
+                      checked={mineFilter}
+                      onCheckedChange={(v) => {
+                        const next = v === true;
+                        setMineFilter(next);
+                        setDashTab(next ? "my" : "projects");
+                      }}
+                    />
+                    My Projects only
+                  </label>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Type</Label>
+                    <Select value={typeFilter} onValueChange={setTypeFilter}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-type"><SelectValue placeholder="Type" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All types</SelectItem>
+                        {WORK_TYPE_OPTIONS.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Status</Label>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-status"><SelectValue placeholder="Status" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        {Object.keys(STATUS_COLORS).map((s) => (
+                          <SelectItem key={s} value={s}>{s.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Customer</Label>
+                    <Select value={customerFilter} onValueChange={setCustomerFilter}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-customer"><SelectValue placeholder="Customer" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All customers</SelectItem>
+                        {customers.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Portfolio</Label>
+                    <Select value={portfolioFilter} onValueChange={setPortfolioFilter}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-portfolio"><SelectValue placeholder="Portfolio" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All portfolios</SelectItem>
+                        {portfolios.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">RAG / Health</Label>
+                    <Select value={healthFilter} onValueChange={setHealthFilter}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-health"><SelectValue placeholder="RAG" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All RAG</SelectItem>
+                        <SelectItem value="attention">Needs attention</SelectItem>
+                        <SelectItem value="red">Red — needs attention</SelectItem>
+                        <SelectItem value="amber">Amber — monitor</SelectItem>
+                        <SelectItem value="green">Green — on track</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              )}
-
-              {viewMode === "table" && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 gap-1.5" data-testid="button-columns">
-                      <Columns3 className="h-3.5 w-3.5" />
-                      Columns
-                      <Badge variant="secondary" className="text-[10px] ml-0.5">
-                        {visibleCount === COLUMN_DEFS.length ? "All" : `${visibleCount}/${COLUMN_DEFS.length}`}
-                      </Badge>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>Show / hide columns</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {COLUMN_DEFS.map((col) => (
-                      <DropdownMenuCheckboxItem
-                        key={col.id}
-                        checked={visibleCols[col.id]}
-                        onCheckedChange={(checked) => setVisibleCols((prev) => ({ ...prev, [col.id]: !!checked }))}
-                      >
-                        {col.label}
-                      </DropdownMenuCheckboxItem>
+              }
+              sortContent={
+                viewMode === "table" ? (
+                  <>
+                    {(Object.keys(SORT_LABELS) as ProjectSortCol[]).map((col) => (
+                      <DropdownMenuItem key={col} onClick={() => handleProjectSort(col)} data-testid={`sort-projects-${col}`}>
+                        {SORT_LABELS[col]} {sortCol === col ? `(${sortDir})` : ""}
+                      </DropdownMenuItem>
                     ))}
-                    <DropdownMenuSeparator />
-                    <div className="px-2 py-1.5">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => setVisibleCols(Object.fromEntries(COLUMN_DEFS.map((c) => [c.id, true])) as Record<ColumnId, boolean>)}
-                      >
-                        Reset
-                      </Button>
-                    </div>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </div>
+                  </>
+                ) : undefined
+              }
+              sortActive={viewMode === "table" && (sortCol !== "name" || sortDir !== "asc")}
+              sortLabel={viewMode === "table" ? `Sort: ${SORT_LABELS[sortCol]}` : "Sort"}
+              columnsContent={
+                viewMode === "table" ? (
+                  <>
+                    {COLUMN_DEFS.map((col) => (
+                      <label key={col.id} className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-muted rounded-sm">
+                        <Checkbox
+                          checked={visibleCols[col.id]}
+                          onCheckedChange={(v) => setVisibleCols((prev) => ({ ...prev, [col.id]: v === true }))}
+                        />
+                        {col.label}
+                      </label>
+                    ))}
+                  </>
+                ) : undefined
+              }
+              columnsHiddenCount={viewMode === "table" ? COLUMN_DEFS.length - visibleCount : 0}
+              pinActive={pinName}
+              onPinToggle={() => {
+                setPinName((v) => {
+                  const next = !v;
+                  localStorage.setItem("projects-landing-pin-name", next ? "1" : "0");
+                  return next;
+                });
+              }}
+              pinTitle={pinName ? "Unpin Project name column" : "Pin Project name column"}
+              onExport={exportProjects}
+              onDownloadTemplate={downloadProjectsTemplate}
+              onPaste={importUnavailable}
+              onImport={importUnavailable}
+              afterGroupSlot={
+                attentionCount > 0 ? (
+                  <span className="text-xs font-bold text-red-700 dark:text-red-400 inline-flex items-center gap-1 px-1">
+                    <AlertTriangle className="h-3.5 w-3.5" /> {attentionCount} need attention
+                  </span>
+                ) : undefined
+              }
+              testId="projects-landing-toolbar"
+            />
 
             {viewMode === "table" && (
               <ProjectTable
-                projects={paged}
+                projects={filtered}
                 visible={visibleCols}
                 onOpen={openPreview}
                 onOpenWorkspace={onOpenProject}
                 onEdit={openEdit}
-                pagination={pagination}
+                searchHighlight={debouncedSearch}
+                paginationResetKey={tablePaginationResetKey}
+                totalCount={projects.length}
+                sortCol={sortCol}
+                sortDir={sortDir}
+                pinFirstColumn={pinName}
               />
             )}
             {viewMode === "cards" && (
@@ -1308,6 +1445,7 @@ export function ProjectsLandingView({
                 onOpen={(p) => onOpenProject(p.id)}
               />
             )}
+            </MondayBoardShell.Legacy>
           </>
         )}
       </div>

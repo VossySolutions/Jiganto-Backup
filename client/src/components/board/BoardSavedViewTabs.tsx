@@ -8,7 +8,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Plus, X, Table2 } from "lucide-react";
-import type { FilterConfig, SortConfig, ColumnConfig } from "./SavedViewsDropdown";
+import {
+  BOARD_SAVED_VIEWS_API,
+  encodeBoardViewFilters,
+  decodeBoardViewFilters,
+  type BoardViewSnapshot,
+  type BoardFilterRule,
+  type BoardSortRule,
+} from "@/lib/board-filters";
 
 type SavedView = {
   id: number;
@@ -19,54 +26,56 @@ type SavedView = {
   isDefault: boolean | null;
 };
 
-export type LeadViewSnapshot = {
-  filters: FilterConfig[];
-  sorts: SortConfig[];
-  columns: ColumnConfig[];
-  viewMode?: string;
-  groupBy?: string;
+export type { BoardViewSnapshot };
+
+type BoardSavedViewTabsProps = {
+  entityType: string;
+  current: BoardViewSnapshot;
+  onApply: (snapshot: BoardViewSnapshot) => void;
+  /** Default sorts when clicking Main Table */
+  mainTableSorts?: BoardSortRule[];
+  apiBase?: string;
 };
 
-type CrmLeadSavedViewTabsProps = {
-  entityType?: string;
-  current: LeadViewSnapshot;
-  onApply: (snapshot: LeadViewSnapshot) => void;
-};
-
-function snapshotFromSavedView(view: SavedView): LeadViewSnapshot {
-  const filtersRaw = view.filters as any;
-  let filters: FilterConfig[] = [];
-  let viewMode = "table";
-  let groupBy = "none";
-  if (filtersRaw && typeof filtersRaw === "object" && !Array.isArray(filtersRaw) && filtersRaw.__leadViewV2) {
-    filters = Array.isArray(filtersRaw.rules) ? filtersRaw.rules : [];
-    viewMode = filtersRaw.viewMode || "table";
-    groupBy = filtersRaw.groupBy || "none";
-  } else if (Array.isArray(filtersRaw)) {
-    filters = filtersRaw;
-  }
-  const sorts = Array.isArray(view.sorts) ? (view.sorts as SortConfig[]) : [];
-  const columns = Array.isArray(view.columns) ? (view.columns as ColumnConfig[]) : [];
-  return { filters, sorts, columns, viewMode, groupBy };
+function snapshotFromSavedView(view: SavedView): BoardViewSnapshot {
+  const decoded = decodeBoardViewFilters(view.filters);
+  const sortsFromCol = Array.isArray(view.sorts)
+    ? (view.sorts as { columnId?: string; field?: string; direction?: string; dir?: string }[]).map((s) => ({
+        field: s.field || s.columnId || "created",
+        dir: (s.dir || s.direction || "desc") as "asc" | "desc",
+      }))
+    : [];
+  const columns = Array.isArray(view.columns)
+    ? (view.columns as BoardViewSnapshot["columns"])
+    : [];
+  return {
+    filters: decoded.rules as BoardFilterRule[],
+    sorts: decoded.sorts.length ? decoded.sorts : sortsFromCol,
+    columns,
+    viewMode: decoded.viewMode,
+    groupBy: decoded.groupBy,
+  };
 }
 
-export function CrmLeadSavedViewTabs({
-  entityType = "lead",
+export function BoardSavedViewTabs({
+  entityType,
   current,
   onApply,
-}: CrmLeadSavedViewTabsProps) {
+  mainTableSorts = [{ field: "created", dir: "desc" }],
+  apiBase = BOARD_SAVED_VIEWS_API,
+}: BoardSavedViewTabsProps) {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [name, setName] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const { toast } = useToast();
   const defaultAppliedRef = useRef(false);
+  const listUrl = `${apiBase}?entityType=${entityType}`;
 
   const { data: savedViews = [] } = useQuery<SavedView[]>({
-    queryKey: [`/api/crm/saved-views?entityType=${entityType}`],
+    queryKey: [listUrl],
   });
 
-  // Auto-apply default view once on load (ignore onApply identity churn)
   useEffect(() => {
     if (defaultAppliedRef.current || !savedViews.length) return;
     const def = savedViews.find((v) => v.isDefault);
@@ -74,28 +83,28 @@ export function CrmLeadSavedViewTabs({
     if (!def) return;
     setActiveId(def.id);
     onApply(snapshotFromSavedView(def));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply once when views first load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedViews]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", "/api/crm/saved-views", {
+      return apiRequest("POST", apiBase, {
         entityType,
         name: name.trim(),
-        filters: {
-          __leadViewV2: true,
+        filters: encodeBoardViewFilters({
           rules: current.filters,
           viewMode: current.viewMode || "table",
           groupBy: current.groupBy || "none",
-        },
-        sorts: current.sorts,
+          sorts: current.sorts,
+        }),
+        sorts: current.sorts.map((s) => ({ columnId: s.field, direction: s.dir })),
         columns: current.columns,
         isDefault,
         isShared: false,
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/crm/saved-views?entityType=${entityType}`] });
+      queryClient.invalidateQueries({ queryKey: [listUrl] });
       setSaveOpen(false);
       setName("");
       setIsDefault(false);
@@ -105,24 +114,19 @@ export function CrmLeadSavedViewTabs({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/crm/saved-views/${id}`),
+    mutationFn: (id: number) => apiRequest("DELETE", `${apiBase}/${id}`),
     onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: [`/api/crm/saved-views?entityType=${entityType}`] });
+      queryClient.invalidateQueries({ queryKey: [listUrl] });
       if (activeId === id) setActiveId(null);
       toast({ title: "View deleted" });
     },
   });
 
-  const applyView = (view: SavedView) => {
-    setActiveId(view.id);
-    onApply(snapshotFromSavedView(view));
-  };
-
   return (
     <>
       <div
         className="flex items-center gap-0.5 overflow-x-auto border-b border-border pb-0"
-        data-testid="leads-saved-view-tabs"
+        data-testid="board-saved-view-tabs"
       >
         <button
           type="button"
@@ -136,13 +140,13 @@ export function CrmLeadSavedViewTabs({
             setActiveId(null);
             onApply({
               filters: [],
-              sorts: [{ columnId: "date", direction: "desc" }],
+              sorts: mainTableSorts,
               columns: current.columns,
               viewMode: "table",
               groupBy: "none",
             });
           }}
-          data-testid="leads-view-tab-main"
+          data-testid="board-view-tab-main"
         >
           <Table2 className="h-3.5 w-3.5" />
           Main Table
@@ -161,8 +165,11 @@ export function CrmLeadSavedViewTabs({
                 "px-2.5 text-[13px] font-medium",
                 activeId === view.id ? "text-primary" : "text-muted-foreground hover:text-foreground",
               )}
-              onClick={() => applyView(view)}
-              data-testid={`leads-view-tab-${view.id}`}
+              onClick={() => {
+                setActiveId(view.id);
+                onApply(snapshotFromSavedView(view));
+              }}
+              data-testid={`board-view-tab-${view.id}`}
             >
               {view.name}
             </button>
@@ -215,7 +222,7 @@ export function CrmLeadSavedViewTabs({
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Hot leads board"
+              placeholder="e.g. My working view"
               data-testid="input-view-tab-name"
             />
           </div>

@@ -1,14 +1,9 @@
-import { useState, useMemo, useEffect } from "react";
-import { useCrmPagination } from "@/hooks/use-crm-pagination";
-import { CrmTablePagination } from "./CrmTablePagination";
-import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
+import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -17,16 +12,96 @@ import { buildContractSignoffUrl } from "@/lib/crm-contract-signoff";
 import { ContractFormDialog } from "./ContractFormDialog";
 import { resolveDocumentTitle, type LinkedDocument } from "./DocumentLinkSelect";
 import {
-  Plus, Download, Upload, Search, ArrowUpDown, Layers,
-  X, Trash2, Paintbrush, MoreHorizontal, Pencil,
+  Trash2, MoreHorizontal, Pencil,
   FileSignature, Clock, CheckCircle2, XCircle, FileText, Link2
 } from "lucide-react";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
-import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
-import { evaluateConditionalFormatting, type ConditionalFormatRule } from "@/lib/conditionalFormatting";
-import type { ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { type ConditionalFormatRule } from "@/lib/conditionalFormatting";
+import { type ColumnDef as MondayColumnDef, type StatusOption } from "@/components/MondayTable";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import {
+  matchBoardFilterValue,
+  type BoardFilterFieldDef,
+  type BoardSortFieldDef,
+} from "@/lib/board-filters";
 import { useCrmUsers } from "./CrmUsersProvider";
 import type { CrmAccountDetail, CrmContract } from "./types";
+import {
+  useDebouncedValue,
+  recordToMondayGroups,
+  downloadBoardCsv,
+  downloadImportTemplateCsv,
+} from "@/lib/crm-monday-chrome";
+import type { CrmColumnDef } from "@/lib/crm-list-columns";
+
+const CONTRACT_IMPORT_HEADERS = [
+  "name", "type", "status", "startDate", "endDate",
+  "value", "recurringValue", "terms", "accountName",
+] as const;
+
+const CONTRACT_IMPORT_EXAMPLE: Record<string, string> = {
+  name: "Acme Support Agreement 2026",
+  type: "service",
+  status: "active",
+  startDate: "2026-01-01",
+  endDate: "2026-12-31",
+  value: "48000",
+  recurringValue: "4000",
+  terms: "Net 30 days. Quarterly reviews.",
+  accountName: "Acme Ltd",
+};
+
+const CONTRACT_TABLE_COLUMNS: CrmColumnDef[] = [
+  { id: "account", label: "Account" },
+  { id: "status", label: "Status" },
+  { id: "value", label: "Value" },
+  { id: "startDate", label: "Start Date" },
+  { id: "endDate", label: "End Date" },
+  { id: "signoff", label: "Sign-off" },
+  { id: "owner", label: "Owner" },
+];
+
+const CONTRACT_FILTER_FIELDS: BoardFilterFieldDef[] = [
+  { field: "name", label: "Contract", textInput: true },
+  { field: "status", label: "Status" },
+  { field: "type", label: "Type" },
+  { field: "account", label: "Account", textInput: true },
+  { field: "owner", label: "Owner" },
+  { field: "value", label: "Value", textInput: true },
+];
+
+const CONTRACT_SORT_FIELDS: BoardSortFieldDef[] = [
+  { field: "name", label: "Name" },
+  { field: "value", label: "Value" },
+  { field: "startDate", label: "Start Date" },
+  { field: "endDate", label: "End Date" },
+  { field: "status", label: "Status" },
+];
+
+const CONTRACT_STATUS_FILTER_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "expiring_soon", label: "Expiring Soon" },
+  { value: "expired", label: "Expired" },
+  { value: "draft", label: "Draft" },
+  { value: "sent", label: "Sent" },
+  { value: "terminated", label: "Terminated" },
+];
+
+const CONTRACT_TYPE_OPTIONS = [
+  { value: "service", label: "Service" },
+  { value: "subscription", label: "Subscription" },
+  { value: "license", label: "License" },
+  { value: "maintenance", label: "Maintenance" },
+];
+
+const CONTRACT_STATUS_EDIT_OPTIONS: StatusOption[] = [
+  { value: "draft", label: "Draft", color: "#6b7280" },
+  { value: "sent", label: "Sent", color: "#f59e0b" },
+  { value: "active", label: "Active", color: "#22c55e" },
+  { value: "expired", label: "Expired", color: "#ef4444" },
+  { value: "terminated", label: "Terminated", color: "#94a3b8" },
+];
 
 interface CrmContractsTabProps {
   contracts: CrmContract[];
@@ -59,26 +134,6 @@ function getStatusInfo(status: string): { label: string; color: string; bg: stri
     case "draft": return { label: "Draft", color: "#6b7280", bg: "rgba(107,114,128,0.1)", dot: "#6b7280" };
     default: return { label: status, color: "#6b7280", bg: "rgba(107,114,128,0.1)", dot: "#6b7280" };
   }
-}
-
-function formatValue(val: string | null, recurring: string | null): string {
-  const num = parseFloat(val || "0");
-  if (num === 0 && !recurring) return "—";
-  if (recurring) {
-    const rNum = parseFloat(recurring);
-    if (rNum >= 1000) return `£${Math.round(rNum / 1000)}K/yr`;
-    return `£${rNum.toLocaleString()}/yr`;
-  }
-  if (num >= 1000000) return `£${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `£${Math.round(num / 1000)}K`;
-  return `£${num.toLocaleString()}`;
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  const d = new Date(dateStr);
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${months[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 function ContractIcon({ className }: { className?: string }) {
@@ -122,29 +177,121 @@ function RenewalIcon({ className }: { className?: string }) {
   );
 }
 
+const SIGNOFF_STATUS_CFG: Record<string, { icon: ReactNode; cls: string; label: string }> = {
+  draft:             { icon: <Clock className="h-3 w-3" />,         cls: "text-muted-foreground",                label: "Draft" },
+  pending:           { icon: <Clock className="h-3 w-3" />,         cls: "text-amber-600 dark:text-amber-400",   label: "Pending" },
+  partially_signed:  { icon: <Clock className="h-3 w-3" />,         cls: "text-amber-600 dark:text-amber-400",   label: "Partial" },
+  sent:              { icon: <Clock className="h-3 w-3" />,         cls: "text-amber-600 dark:text-amber-400",   label: "Pending" },
+  completed:         { icon: <CheckCircle2 className="h-3 w-3" />,  cls: "text-green-600 dark:text-green-400",   label: "Signed" },
+  declined:          { icon: <XCircle className="h-3 w-3" />,       cls: "text-red-600 dark:text-red-400",       label: "Declined" },
+  cancelled:         { icon: <XCircle className="h-3 w-3" />,       cls: "text-muted-foreground",                label: "Cancelled" },
+  voided:            { icon: <XCircle className="h-3 w-3" />,       cls: "text-muted-foreground",                label: "Voided" },
+  expired:           { icon: <Clock className="h-3 w-3" />,         cls: "text-orange-600 dark:text-orange-400", label: "Expired" },
+};
+
+function getContractFilterFieldValue(
+  c: {
+    name: string;
+    accountName: string;
+    computedStatus: string;
+    type: string | null;
+    ownerUserId: string | null;
+    valueNum: number;
+  },
+  field: string,
+): string {
+  switch (field) {
+    case "name":
+      return c.name || "";
+    case "account":
+      return c.accountName || "";
+    case "status":
+      return c.computedStatus || "";
+    case "type":
+      return c.type || "";
+    case "owner":
+      return c.ownerUserId || "__unassigned__";
+    case "value":
+      return String(c.valueNum ?? "");
+    default:
+      return "";
+  }
+}
+
+function compareContractsByRules<T extends {
+  name: string;
+  valueNum: number;
+  startDate: string | null;
+  endDate: string | null;
+  computedStatus: string;
+}>(a: T, b: T, rules: { field: string; dir: "asc" | "desc" }[]): number {
+  for (const rule of rules) {
+    const dir = rule.dir === "asc" ? 1 : -1;
+    let cmp = 0;
+    if (rule.field === "value") cmp = a.valueNum - b.valueNum;
+    else if (rule.field === "startDate") cmp = (a.startDate || "").localeCompare(b.startDate || "");
+    else if (rule.field === "endDate") cmp = (a.endDate || "").localeCompare(b.endDate || "");
+    else if (rule.field === "status") cmp = a.computedStatus.localeCompare(b.computedStatus);
+    else cmp = a.name.localeCompare(b.name);
+    if (cmp !== 0) return dir * cmp;
+  }
+  return 0;
+}
+
 export function CrmContractsTab({ contracts, accounts, searchTerm, initialContractId = null }: CrmContractsTabProps) {
-  const { resolveOwner } = useCrmUsers();
+  const { users, resolveOwner } = useCrmUsers();
   const [formOpen, setFormOpen] = useState(false);
   const [editingContract, setEditingContract] = useState<CrmContract | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [localSearch, setLocalSearch] = useState("");
-  const [sortField, setSortField] = useState<"name" | "value" | "startDate" | "endDate" | "status">("name");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [groupBy, setGroupBy] = useState<"none" | "status" | "type" | "account">("none");
-  const [formatPanelOpen, setFormatPanelOpen] = useState(false);
   const [formatRules, setFormatRules] = useState<ConditionalFormatRule[]>([]);
   const [importOpen, setImportOpen] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
+  const shell = useMondayBoardShellState({
+    storageKey: "jiganto-crm-contracts",
+    columnDefs: CONTRACT_TABLE_COLUMNS,
+    defaultSortField: "name",
+    defaultSortDir: "asc",
+    defaultGroupBy: "none",
+  });
+  const {
+    localSearch,
+    setLocalSearch,
+    filterRules,
+    setFilterRules,
+    filterOpen,
+    setFilterOpen,
+    sortRules,
+    onSortToggle,
+    onSortAdd,
+    onSortRemove,
+    groupBy,
+    setGroupBy,
+    ownerFilter,
+    setOwnerFilter,
+    viewMode,
+    setViewModePersist,
+    pinActive,
+    togglePin,
+    isColVisible,
+    setColVisible,
+    moveColumn,
+    columnMenuItems,
+    columnOrderIds,
+    viewSnapshot,
+    applyViewSnapshot,
+  } = shell;
+  const debouncedLocalSearch = useDebouncedValue(localSearch);
+
+  const consumedInitialId = useRef(false);
   useEffect(() => {
+    if (consumedInitialId.current) return;
     if (!initialContractId || contracts.length === 0) return;
     const match = contracts.find((c) => c.id === initialContractId);
     if (match) {
       setEditingContract(match);
       setFormOpen(true);
+      consumedInitialId.current = true;
     }
   }, [initialContractId, contracts]);
 
@@ -175,7 +322,6 @@ export function CrmContractsTab({ contracts, accounts, searchTerm, initialContra
     mutationFn: (ids: number[]) => apiRequest("POST", "/api/crm/contracts/bulk-delete", { ids }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/contracts"] });
-      setSelectedIds(new Set());
       toast({ title: "Contracts deleted successfully" });
     },
     onError: () => toast({ title: "Failed to delete contracts", variant: "destructive" }),
@@ -188,6 +334,15 @@ export function CrmContractsTab({ contracts, accounts, searchTerm, initialContra
       toast({ title: "Contract deleted" });
     },
     onError: () => toast({ title: "Failed to delete contract", variant: "destructive" }),
+  });
+
+  const updateContractMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: number; updates: Partial<CrmContract> }) =>
+      apiRequest("PUT", `/api/crm/contracts/${id}`, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/contracts"] });
+    },
+    onError: () => toast({ title: "Failed to update contract", variant: "destructive" }),
   });
 
   function openCreateForm() {
@@ -233,6 +388,26 @@ export function CrmContractsTab({ contracts, accounts, searchTerm, initialContra
     return latest;
   }
 
+  const ownerSelectOptions: StatusOption[] = useMemo(
+    () => [
+      { value: "", label: "Unassigned", color: "#94a3b8" },
+      ...users.map((u) => {
+        const o = resolveOwner(u.id);
+        return { value: u.id, label: o.name, color: o.color };
+      }),
+    ],
+    [users, resolveOwner],
+  );
+
+  const personUsers = useMemo(
+    () =>
+      users.map((u) => {
+        const o = resolveOwner(u.id);
+        return { id: u.id, name: o.name, initials: o.initials, color: o.color };
+      }),
+    [users, resolveOwner],
+  );
+
   const enrichedContracts = useMemo(() => {
     let result = contracts.map(c => {
       const account = accounts.find(a => a.id === c.accountId);
@@ -251,7 +426,7 @@ export function CrmContractsTab({ contracts, accounts, searchTerm, initialContra
       };
     });
 
-    const search = localSearch || searchTerm;
+    const search = debouncedLocalSearch || searchTerm;
     if (search) {
       const s = search.toLowerCase();
       result = result.filter(c =>
@@ -261,118 +436,37 @@ export function CrmContractsTab({ contracts, accounts, searchTerm, initialContra
       );
     }
 
-    if (statusFilter !== "all") {
-      result = result.filter(c => {
-        if (statusFilter === "active") return c.computedStatus === "active";
-        if (statusFilter === "expiring") return c.computedStatus === "expiring_soon";
-        if (statusFilter === "expired") return c.computedStatus === "expired";
-        if (statusFilter === "draft") return c.computedStatus === "draft";
-        if (statusFilter === "sent") return c.status === "sent";
-        if (statusFilter === "terminated") return c.status === "terminated";
-        return true;
+    if (ownerFilter === "__unassigned__") {
+      result = result.filter((c) => !c.ownerUserId);
+    } else if (ownerFilter !== "all") {
+      result = result.filter((c) => c.ownerUserId === ownerFilter);
+    }
+
+    for (const rule of filterRules) {
+      if ((rule.operator === "is" || rule.operator === "is_not" || rule.operator === "contains" || rule.operator === "not_contains" || rule.operator === "gt" || rule.operator === "lt") && !rule.value) {
+        continue;
+      }
+      result = result.filter((c) => {
+        const raw = getContractFilterFieldValue(c, rule.field);
+        const forEmpty = rule.field === "owner" ? c.ownerUserId || "" : raw;
+        const fieldVal =
+          rule.operator === "is_empty" || rule.operator === "is_not_empty" ? forEmpty : raw;
+        return matchBoardFilterValue(fieldVal, rule.operator, rule.value);
       });
     }
 
-    if (typeFilter !== "all") {
-      result = result.filter(c => c.type === typeFilter);
-    }
+    return [...result].sort((a, b) => compareContractsByRules(a, b, sortRules));
+  }, [contracts, accounts, debouncedLocalSearch, searchTerm, ownerFilter, filterRules, sortRules, resolveOwner, linkedDocuments]);
 
-    result.sort((a, b) => {
-      const dir = sortDir === "asc" ? 1 : -1;
-      if (sortField === "name") return dir * a.name.localeCompare(b.name);
-      if (sortField === "value") return dir * (a.valueNum - b.valueNum);
-      if (sortField === "startDate") return dir * ((a.startDate || "").localeCompare(b.startDate || ""));
-      if (sortField === "endDate") return dir * ((a.endDate || "").localeCompare(b.endDate || ""));
-      if (sortField === "status") return dir * a.computedStatus.localeCompare(b.computedStatus);
-      return 0;
-    });
-
-    return result;
-  }, [contracts, accounts, localSearch, searchTerm, statusFilter, typeFilter, sortField, sortDir, resolveOwner, linkedDocuments]);
-
-  const pagination = useCrmPagination(enrichedContracts, {
-    resetKey: `${localSearch}|${searchTerm}|${statusFilter}|${typeFilter}|${sortField}|${sortDir}|${groupBy}`,
-    enabled: groupBy === "none",
-  });
-
-  const currentFilters = useMemo((): FilterConfig[] => {
-    const filters: FilterConfig[] = [];
-    if (statusFilter !== "all") filters.push({ columnId: "status", operator: "equals", value: statusFilter });
-    if (typeFilter !== "all") filters.push({ columnId: "type", operator: "equals", value: typeFilter });
-    return filters;
-  }, [statusFilter, typeFilter]);
-
-  const currentSorts = useMemo((): SortConfig[] => (
-    [{ columnId: sortField, direction: sortDir }]
-  ), [sortField, sortDir]);
-
-  const applySavedView = (filters: FilterConfig[], sorts?: SortConfig[]) => {
-    setStatusFilter("all");
-    setTypeFilter("all");
-    for (const f of filters) {
-      if (f.columnId === "status") setStatusFilter(f.value);
-      if (f.columnId === "type") setTypeFilter(f.value);
-    }
-    if (sorts?.[0]) {
-      setSortField(sorts[0].columnId as typeof sortField);
-      setSortDir(sorts[0].direction);
-    }
-  };
-
-  const formatColumns: MondayColumnDef<any>[] = [
-    { id: "name", header: "Contract", type: "text", accessor: "name" },
-    { id: "accountName", header: "Account", type: "text", accessor: "accountName" },
-    { id: "computedStatus", header: "Status", type: "text", accessor: "computedStatus" },
-    { id: "value", header: "Value", type: "currency", accessor: "value" },
-  ];
-
-  const cellFormatMap = useMemo(() => {
-    if (formatRules.length === 0) return {};
-    return evaluateConditionalFormatting(enrichedContracts as any[], formatColumns, formatRules);
-  }, [formatRules, enrichedContracts]);
-
-  function getCellStyle(rowId: number | string, columnId: string): Record<string, string> {
-    const rowFormat = cellFormatMap[rowId];
-    if (!rowFormat) return {};
-    const style: Record<string, string> = {};
-    if (rowFormat.row) {
-      if (rowFormat.row.bgColor) style.backgroundColor = rowFormat.row.bgColor;
-      if (rowFormat.row.textColor) style.color = rowFormat.row.textColor;
-    }
-    const cellFormat = rowFormat.cells?.[columnId];
-    if (cellFormat) {
-      if (cellFormat.bgColor) style.backgroundColor = cellFormat.bgColor;
-      if (cellFormat.textColor) style.color = cellFormat.textColor;
-    }
-    return style;
-  }
-
-  function getCellClasses(rowId: number | string, columnId: string): string {
-    const rowFormat = cellFormatMap[rowId];
-    if (!rowFormat) return "";
-    const classes: string[] = [];
-    if (rowFormat.row?.bold || rowFormat.cells?.[columnId]?.bold) classes.push("font-bold");
-    if (rowFormat.row?.italic || rowFormat.cells?.[columnId]?.italic) classes.push("italic");
-    return classes.join(" ");
-  }
+  type EnrichedContract = (typeof enrichedContracts)[number];
 
   const totalValue = enrichedContracts.reduce((sum, c) => sum + c.valueNum, 0);
   const expiringCount = contracts.filter(c => getContractStatus(c.status, c.endDate) === "expiring_soon").length;
-  const draftCount = contracts.filter(c => getContractStatus(c.status, c.endDate) === "draft").length;
-
-  const statusCounts = {
-    all: contracts.length,
-    active: contracts.filter(c => getContractStatus(c.status, c.endDate) === "active").length,
-    expiring: expiringCount,
-    expired: contracts.filter(c => getContractStatus(c.status, c.endDate) === "expired").length,
-    draft: draftCount,
-    sent: contracts.filter(c => c.status === "sent").length,
-    terminated: contracts.filter(c => c.status === "terminated").length,
-  };
+  const activeCount = contracts.filter(c => getContractStatus(c.status, c.endDate) === "active").length;
 
   const groupedData = useMemo(() => {
     if (groupBy === "none") return null;
-    const groups: Record<string, typeof enrichedContracts> = {};
+    const groups: Record<string, EnrichedContract[]> = {};
     for (const c of enrichedContracts) {
       let key: string;
       if (groupBy === "status") key = getStatusInfo(c.computedStatus).label;
@@ -389,203 +483,305 @@ export function CrmContractsTab({ contracts, accounts, searchTerm, initialContra
     "Service": "#3b82f6", "Subscription": "#8b5cf6", "License": "#06b6d4", "Maintenance": "#ec4899",
   };
 
-  const allSelected = enrichedContracts.length > 0 && selectedIds.size === enrichedContracts.length;
-  const toggleSelectAll = () => {
-    if (allSelected) setSelectedIds(new Set());
-    else setSelectedIds(new Set(enrichedContracts.map(c => c.id)));
-  };
-  const toggleSelectOne = (id: number) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
+  const tableGroups = useMemo(
+    () => recordToMondayGroups(
+      groupedData,
+      groupColors,
+      (items) => `£${items.reduce((s, c) => s + c.valueNum, 0).toLocaleString()}`,
+    ),
+    [groupedData],
+  );
 
-  const handleSort = (field: typeof sortField) => {
-    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortField(field); setSortDir("asc"); }
+  const mondayColumns: MondayColumnDef<EnrichedContract>[] = useMemo(() => {
+    const byId: Record<string, MondayColumnDef<EnrichedContract>> = {
+      name: {
+        id: "name",
+        header: "Contract",
+        type: "text",
+        accessor: "name",
+        width: "220px",
+        sticky: pinActive,
+        editable: true,
+        summary: "count",
+      },
+      account: {
+        id: "account",
+        header: "Account",
+        type: "text",
+        accessor: (row) => row.accountName,
+        width: "160px",
+        hidden: !isColVisible("account"),
+        editable: false,
+        render: (c) => <span className="text-sm text-muted-foreground">{c.accountName || "—"}</span>,
+      },
+      status: {
+        id: "status",
+        header: "Status",
+        type: "status",
+        accessor: (row) => row.status || "draft",
+        width: "130px",
+        hidden: !isColVisible("status"),
+        editable: true,
+        options: CONTRACT_STATUS_EDIT_OPTIONS,
+      },
+      value: {
+        id: "value",
+        header: "Value",
+        type: "currency",
+        accessor: "value",
+        width: "120px",
+        hidden: !isColVisible("value"),
+        editable: true,
+        summary: "sum",
+      },
+      startDate: {
+        id: "startDate",
+        header: "Start Date",
+        type: "date",
+        accessor: "startDate",
+        width: "120px",
+        hidden: !isColVisible("startDate"),
+        editable: true,
+      },
+      endDate: {
+        id: "endDate",
+        header: "End Date",
+        type: "date",
+        accessor: "endDate",
+        width: "120px",
+        hidden: !isColVisible("endDate"),
+        editable: true,
+      },
+      signoff: {
+        id: "signoff",
+        header: "Sign-off",
+        type: "files",
+        accessor: () => null,
+        width: "110px",
+        hidden: !isColVisible("signoff"),
+        editable: false,
+        render: (c) => {
+          const req = getContractSignoffStatus(c.id);
+          if (!req) {
+            return (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  requestSignoff(c);
+                }}
+                className={cn(
+                  "inline-flex items-center gap-1 text-xs transition-colors",
+                  c.documentId
+                    ? "text-muted-foreground hover:text-primary"
+                    : "text-amber-600 dark:text-amber-400 hover:text-amber-700",
+                )}
+                title={c.documentId ? "Send for sign-off" : "Link a document before sending for sign-off"}
+                data-testid={`button-signoff-contract-${c.id}`}
+              >
+                <FileSignature className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{c.documentId ? "Send" : "Link doc"}</span>
+              </button>
+            );
+          }
+          const cfg = SIGNOFF_STATUS_CFG[req.status] || SIGNOFF_STATUS_CFG.draft;
+          return (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLocation(`/modules/e-sign?request=${req.id}`);
+              }}
+              className={cn("inline-flex items-center gap-1 text-xs font-medium transition-colors hover:opacity-80", cfg.cls)}
+              title={`View in e-Sign: ${req.title}`}
+              data-testid={`signoff-status-contract-${c.id}`}
+            >
+              {cfg.icon}
+              {cfg.label}
+            </button>
+          );
+        },
+      },
+      owner: {
+        id: "owner",
+        header: "Owner",
+        type: "select",
+        accessor: (row) => row.ownerUserId || "",
+        width: "160px",
+        hidden: !isColVisible("owner"),
+        editable: true,
+        options: ownerSelectOptions,
+      },
+    };
+
+    const order = ["name", ...(columnOrderIds.length ? columnOrderIds : CONTRACT_TABLE_COLUMNS.map((c) => c.id))];
+    const seen = new Set<string>();
+    const ordered: MondayColumnDef<EnrichedContract>[] = [];
+    for (const id of order) {
+      if (seen.has(id) || !byId[id]) continue;
+      seen.add(id);
+      ordered.push(byId[id]);
+    }
+    for (const id of Object.keys(byId)) {
+      if (!seen.has(id)) ordered.push(byId[id]);
+    }
+    return ordered;
+  }, [
+    allSignoffRequests,
+    linkedDocuments,
+    setLocation,
+    pinActive,
+    isColVisible,
+    ownerSelectOptions,
+    columnOrderIds,
+  ]);
+
+  const handleCellEdit = useCallback(
+    (rowId: number | string, columnId: string, value: unknown) => {
+      const id = typeof rowId === "string" ? Number(rowId) : rowId;
+      const updates: Partial<CrmContract> = {};
+
+      switch (columnId) {
+        case "name":
+          updates.name = String(value || "") || "Untitled";
+          break;
+        case "status":
+          updates.status = String(value || "") || null;
+          break;
+        case "value":
+          updates.value = value === "" || value == null ? null : String(value);
+          break;
+        case "startDate":
+          updates.startDate = value ? String(value) : null;
+          break;
+        case "endDate":
+          updates.endDate = value ? String(value) : null;
+          break;
+        case "owner":
+          updates.ownerUserId = String(value || "") || null;
+          break;
+        default:
+          return;
+      }
+
+      updateContractMutation.mutate({ id, updates });
+    },
+    [updateContractMutation],
+  );
+
+  const getFilterFieldOptions = useCallback(
+    (field: string) => {
+      switch (field) {
+        case "status":
+          return CONTRACT_STATUS_FILTER_OPTIONS;
+        case "type":
+          return CONTRACT_TYPE_OPTIONS;
+        case "owner":
+          return [
+            { value: "__unassigned__", label: "Unassigned" },
+            ...users.map((u) => ({ value: u.id, label: resolveOwner(u.id).name })),
+          ];
+        case "account":
+          return Array.from(new Set(enrichedContracts.map((c) => c.accountName).filter(Boolean))).map(
+            (v) => ({ value: v, label: v }),
+          );
+        default:
+          return [];
+      }
+    },
+    [users, resolveOwner, enrichedContracts],
+  );
+
+  const currentFilters = useMemo((): FilterConfig[] => (
+    filterRules.map((r) => ({
+      columnId: r.field,
+      operator: (r.operator === "contains" || r.operator === "not_contains"
+        ? "contains"
+        : r.operator === "gt"
+          ? "greaterThan"
+          : r.operator === "lt"
+            ? "lessThan"
+            : "equals") as FilterConfig["operator"],
+      value: r.value,
+    }))
+  ), [filterRules]);
+
+  const currentSorts = useMemo(
+    (): SortConfig[] => sortRules.map((r) => ({ columnId: r.field, direction: r.dir })),
+    [sortRules],
+  );
+
+  const applySavedView = (
+    filters: FilterConfig[],
+    sorts?: SortConfig[],
+    _columns?: unknown,
+    extras?: { viewMode?: string; groupBy?: string },
+  ) => {
+    const nextRules = filters.map((f, i) => ({
+      id: `sv-${i}-${f.columnId}`,
+      field: f.columnId,
+      operator: (f.operator === "contains"
+        ? "contains"
+        : f.operator === "greaterThan"
+          ? "gt"
+          : f.operator === "lessThan"
+            ? "lt"
+            : "is") as "is" | "contains" | "gt" | "lt",
+      value: f.value,
+    }));
+    setFilterRules(nextRules);
+    if (sorts?.length) {
+      applyViewSnapshot({
+        ...viewSnapshot,
+        filters: nextRules,
+        sorts: sorts.map((s) => ({ field: s.columnId, dir: s.direction })),
+        viewMode: extras?.viewMode || viewMode,
+        groupBy: extras?.groupBy || groupBy,
+      });
+    }
+    if (extras?.viewMode) setViewModePersist(extras.viewMode as typeof viewMode);
+    if (extras?.groupBy) setGroupBy(extras.groupBy);
   };
 
   const exportToCSV = () => {
-    const headers = ["Contract", "Account", "Status", "Value", "Start Date", "End Date", "Type", "Owner"];
-    const rows = enrichedContracts.map(c => [
-      c.name, c.accountName, getStatusInfo(c.computedStatus).label,
-      c.value || c.recurringValue || "", c.startDate || "", c.endDate || "",
-      c.type || "", c.owner.name,
-    ]);
-    const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${(c || "").replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `contracts-${new Date().toISOString().split("T")[0]}.csv`; a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: "Contracts exported to CSV" });
+    const headers = [...CONTRACT_IMPORT_HEADERS];
+    const rows = enrichedContracts.map((c) =>
+      headers.map((h) => {
+        switch (h) {
+          case "name": return c.name || "";
+          case "type": return c.type || "";
+          case "status": return c.status || "";
+          case "startDate": return c.startDate || "";
+          case "endDate": return c.endDate || "";
+          case "value": return c.value || "";
+          case "recurringValue": return c.recurringValue || "";
+          case "terms": return c.terms || "";
+          case "accountName": return c.accountName || "";
+          default: return "";
+        }
+      }),
+    );
+    downloadBoardCsv(`contracts-${new Date().toISOString().split("T")[0]}.csv`, headers, rows);
+    toast({ title: "Contracts exported to CSV", description: "File uses the same columns as Import." });
   };
 
-  const handleEdit = (c: typeof enrichedContracts[0]) => {
+  const downloadImportTemplate = () => {
+    downloadImportTemplateCsv("contracts-import-template.csv", [...CONTRACT_IMPORT_HEADERS], CONTRACT_IMPORT_EXAMPLE);
+    toast({ title: "Import template downloaded" });
+  };
+
+  const handleEdit = (c: EnrichedContract) => {
     openEditForm(c);
   };
 
-  const renderRow = (c: typeof enrichedContracts[0]) => {
-    const status = getStatusInfo(c.computedStatus);
-
-    return (
-      <tr
-        key={c.id}
-        className={cn(
-          "border-b border-border/40 hover:bg-muted/30 transition-colors cursor-pointer",
-          selectedIds.has(c.id) && "bg-blue-50/50 dark:bg-blue-950/20"
-        )}
-        data-testid={`contract-row-${c.id}`}
-      >
-        <td className="px-3 py-2.5 align-middle w-10" onClick={(e) => e.stopPropagation()}>
-          <Checkbox
-            checked={selectedIds.has(c.id)}
-            onCheckedChange={() => toggleSelectOne(c.id)}
-            data-testid={`checkbox-contract-${c.id}`}
-          />
-        </td>
-        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(c.id, "name"))} style={getCellStyle(c.id, "name")}>
-          <span className="text-sm font-semibold">{c.name}</span>
-        </td>
-        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(c.id, "accountName"))} style={getCellStyle(c.id, "accountName")}>
-          <span className="text-sm text-muted-foreground">{c.accountName || "—"}</span>
-        </td>
-        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(c.id, "computedStatus"))} style={getCellStyle(c.id, "computedStatus")}>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: status.dot }} />
-            <span
-              className="text-xs font-medium"
-              style={{ color: status.color }}
-            >
-              {status.label}
-            </span>
-          </span>
-        </td>
-        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(c.id, "value"))} style={getCellStyle(c.id, "value")}>
-          <span className="text-sm font-semibold">{formatValue(c.value, c.recurringValue)}</span>
-        </td>
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-          <span className="text-sm text-muted-foreground">{formatDate(c.startDate)}</span>
-        </td>
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-          <span className="text-sm text-muted-foreground">{formatDate(c.endDate)}</span>
-        </td>
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-          {(() => {
-            const req = getContractSignoffStatus(c.id);
-            if (!req) {
-              return (
-                <button
-                  onClick={() => requestSignoff(c)}
-                  className={cn(
-                    "inline-flex items-center gap-1 text-xs transition-colors",
-                    c.documentId
-                      ? "text-muted-foreground hover:text-primary"
-                      : "text-amber-600 dark:text-amber-400 hover:text-amber-700",
-                  )}
-                  title={c.documentId ? "Send for sign-off" : "Link a document before sending for sign-off"}
-                  data-testid={`button-signoff-contract-${c.id}`}
-                >
-                  <FileSignature className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{c.documentId ? "Send" : "Link doc"}</span>
-                </button>
-              );
-            }
-            const cfgMap: Record<string, { icon: React.ReactNode; cls: string; label: string }> = {
-              draft:             { icon: <Clock className="h-3 w-3" />,         cls: "text-muted-foreground",                label: "Draft" },
-              pending:           { icon: <Clock className="h-3 w-3" />,         cls: "text-amber-600 dark:text-amber-400",   label: "Pending" },
-              partially_signed:  { icon: <Clock className="h-3 w-3" />,         cls: "text-amber-600 dark:text-amber-400",   label: "Partial" },
-              sent:              { icon: <Clock className="h-3 w-3" />,         cls: "text-amber-600 dark:text-amber-400",   label: "Pending" },
-              completed:         { icon: <CheckCircle2 className="h-3 w-3" />,  cls: "text-green-600 dark:text-green-400",   label: "Signed" },
-              declined:          { icon: <XCircle className="h-3 w-3" />,       cls: "text-red-600 dark:text-red-400",       label: "Declined" },
-              cancelled:         { icon: <XCircle className="h-3 w-3" />,       cls: "text-muted-foreground",                label: "Cancelled" },
-              voided:            { icon: <XCircle className="h-3 w-3" />,       cls: "text-muted-foreground",                label: "Voided" },
-              expired:           { icon: <Clock className="h-3 w-3" />,         cls: "text-orange-600 dark:text-orange-400", label: "Expired" },
-            };
-            const cfg = cfgMap[req.status] || cfgMap.draft;
-            return (
-              <button
-                onClick={() => setLocation(`/modules/e-sign?request=${req.id}`)}
-                className={cn("inline-flex items-center gap-1 text-xs font-medium transition-colors hover:opacity-80", cfg.cls)}
-                title={`View in e-Sign: ${req.title}`}
-                data-testid={`signoff-status-contract-${c.id}`}
-              >
-                {cfg.icon}
-                {cfg.label}
-              </button>
-            );
-          })()}
-        </td>
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-          <div className="flex items-center justify-end">
-            <div
-              className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-              style={{ backgroundColor: c.owner.color }}
-              title={c.owner.name}
-            >
-              {c.owner.initials}
-            </div>
-          </div>
-        </td>
-        <td className="px-3 py-2.5 align-middle text-right whitespace-nowrap">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()} data-testid={`button-actions-contract-${c.id}`}>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleEdit(c)} data-testid={`action-edit-contract-${c.id}`}>
-                <Pencil className="h-3.5 w-3.5 mr-2" />
-                Edit
-              </DropdownMenuItem>
-              {c.documentId ? (
-                <>
-                  <DropdownMenuItem
-                    onClick={() => window.open(`/modules/documents?doc=${c.documentId}`, "_blank", "noopener,noreferrer")}
-                    data-testid={`action-view-document-contract-${c.id}`}
-                  >
-                    <FileText className="h-3.5 w-3.5 mr-2" />
-                    View linked document
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => requestSignoff(c)} data-testid={`action-signoff-contract-${c.id}`}>
-                    <FileSignature className="h-3.5 w-3.5 mr-2" />
-                    Send for sign-off
-                  </DropdownMenuItem>
-                </>
-              ) : (
-                <>
-                  <DropdownMenuItem onClick={() => openEditForm(c)} data-testid={`action-link-document-contract-${c.id}`}>
-                    <Link2 className="h-3.5 w-3.5 mr-2" />
-                    Link document
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled
-                    className="opacity-60"
-                    data-testid={`action-signoff-disabled-contract-${c.id}`}
-                  >
-                    <FileSignature className="h-3.5 w-3.5 mr-2" />
-                    Send for sign-off (needs document)
-                  </DropdownMenuItem>
-                </>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => deleteMutation.mutate(c.id)}
-                className="text-red-600 focus:text-red-700"
-                data-testid={`action-delete-contract-${c.id}`}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </td>
-      </tr>
-    );
-  };
+  const groupContent = (
+    <>
+      <DropdownMenuItem onClick={() => setGroupBy("none")} data-testid="group-contracts-none">None</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("status")} data-testid="group-contracts-status">Status</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("type")} data-testid="group-contracts-type">Type</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("account")} data-testid="group-contracts-account">Account</DropdownMenuItem>
+    </>
+  );
 
   return (
     <div className="space-y-4">
@@ -595,8 +791,8 @@ export function CrmContractsTab({ contracts, accounts, searchTerm, initialContra
         <MetricCard title="Expiring (30 days)" value={expiringCount} subtitle="End date within 30d" helpText="Active contracts whose end date falls within the next 30 days." icon={ExpiringIcon} borderColor="#f97316" valueClassName="text-[#f97316]" testId="card-expiring-contracts" />
         <MetricCard
           title="Active Contracts"
-          value={contracts.length > 0 ? `${Math.round((statusCounts.active / contracts.length) * 100)}%` : "0%"}
-          subtitle={`${statusCounts.active} of ${contracts.length} contracts`}
+          value={contracts.length > 0 ? `${Math.round((activeCount / contracts.length) * 100)}%` : "0%"}
+          subtitle={`${activeCount} of ${contracts.length} contracts`}
           helpText="Percentage of all contracts currently in active status (not draft, expired, or terminated)."
           icon={RenewalIcon}
           borderColor="#8b5cf6"
@@ -605,320 +801,152 @@ export function CrmContractsTab({ contracts, accounts, searchTerm, initialContra
         />
       </div>
 
-      {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl" data-testid="bulk-actions-contracts">
-          <span className="text-sm font-medium text-blue-700 dark:text-blue-400">{selectedIds.size} selected</span>
-          <button
-            onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-950/60 transition-colors"
-            data-testid="button-bulk-delete-contracts"
-          >
-            <Trash2 className="h-3 w-3" />
-            Delete
-          </button>
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-background border border-border hover:bg-muted transition-colors"
-            data-testid="button-clear-selection-contracts"
-          >
-            <X className="h-3 w-3" />
-            Clear
-          </button>
-        </div>
-      )}
+      <MondayBoardShell<EnrichedContract>
+        storageKey="jiganto-crm-contracts"
+        entityType="contracts"
+        testId="contracts-board"
+        viewSnapshot={viewSnapshot}
+        onApplyViewSnapshot={applyViewSnapshot}
+        mainTableSorts={[{ field: "name", dir: "asc" }]}
+        newLabel="New Contract"
+        onNew={openCreateForm}
+        newTestId="button-add-contract"
+        searchValue={localSearch}
+        onSearchChange={setLocalSearch}
+        searchTestId="input-search-contracts"
+        personUsers={personUsers}
+        personValue={ownerFilter}
+        onPersonChange={setOwnerFilter}
+        viewMode={viewMode}
+        onViewModeChange={setViewModePersist}
+        filterRules={filterRules}
+        onFilterRulesChange={setFilterRules}
+        filterFields={CONTRACT_FILTER_FIELDS}
+        getFilterFieldOptions={getFilterFieldOptions}
+        filterOpen={filterOpen}
+        onFilterOpenChange={setFilterOpen}
+        sortRules={sortRules}
+        sortFields={CONTRACT_SORT_FIELDS}
+        onSortToggle={onSortToggle}
+        onSortAdd={onSortAdd}
+        onSortRemove={onSortRemove}
+        defaultSortField="name"
+        groupContent={groupContent}
+        groupActive={groupBy !== "none"}
+        groupLabel={groupBy === "none" ? "Group by" : `Group by ${groupBy}`}
+        grouped={groupBy !== "none"}
+        pinActive={pinActive}
+        onPinToggle={togglePin}
+        pinTitle={pinActive ? "Unpin Contract column" : "Pin Contract column"}
+        columnMenuItems={columnMenuItems}
+        onColumnVisible={setColVisible}
+        onColumnMove={moveColumn}
+        savedViewFilters={currentFilters}
+        savedViewSorts={currentSorts}
+        onApplySavedViewDropdown={applySavedView}
+        onExport={exportToCSV}
+        onDownloadTemplate={downloadImportTemplate}
+        onPaste={() => setImportOpen(true)}
+        onImport={() => setImportOpen(true)}
+        tableProps={{
+          columns: mondayColumns,
+          data: enrichedContracts,
+          groups: tableGroups,
+          conditionalFormatRules: formatRules,
+          onConditionalFormatRulesChange: setFormatRules,
+          emptyMessage: "No contracts yet. Create your first contract to start tracking agreements.",
+          addItemLabel: "New Contract",
+          onAddItem: () => openCreateForm(),
+          onEditItem: handleEdit,
+          onCellEdit: handleCellEdit,
+          onDeleteItems: (ids) => {
+            const n = ids.length;
+            if (!window.confirm(n === 1 ? "Delete this contract?" : `Delete ${n} contracts?`)) return;
+            if (ids.length === 1) {
+              deleteMutation.mutate(Number(ids[0]));
+            } else {
+              bulkDeleteMutation.mutate(ids.map(Number));
+            }
+          },
+          searchHighlightTerm: searchTerm || debouncedLocalSearch,
+          columnWidthStorageKey: "jiganto-crm-contracts-col-widths",
+          paginationResetKey: `${debouncedLocalSearch}|${searchTerm}|${ownerFilter}|${JSON.stringify(filterRules)}|${JSON.stringify(sortRules)}|${groupBy}`,
+          totalCount: contracts.length,
+          renderRowActions: (c) => (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()} data-testid={`button-actions-contract-${c.id}`}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleEdit(c)} data-testid={`action-edit-contract-${c.id}`}>
+                  <Pencil className="h-3.5 w-3.5 mr-2" />
+                  Edit
+                </DropdownMenuItem>
+                {c.documentId ? (
+                  <>
+                    <DropdownMenuItem
+                      onClick={() => window.open(`/modules/documents?doc=${c.documentId}`, "_blank", "noopener,noreferrer")}
+                      data-testid={`action-view-document-contract-${c.id}`}
+                    >
+                      <FileText className="h-3.5 w-3.5 mr-2" />
+                      View linked document
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => requestSignoff(c)} data-testid={`action-signoff-contract-${c.id}`}>
+                      <FileSignature className="h-3.5 w-3.5 mr-2" />
+                      Send for sign-off
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <>
+                    <DropdownMenuItem onClick={() => openEditForm(c)} data-testid={`action-link-document-contract-${c.id}`}>
+                      <Link2 className="h-3.5 w-3.5 mr-2" />
+                      Link document
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled
+                      className="opacity-60"
+                      data-testid={`action-signoff-disabled-contract-${c.id}`}
+                    >
+                      <FileSignature className="h-3.5 w-3.5 mr-2" />
+                      Send for sign-off (needs document)
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (!window.confirm("Delete this contract?")) return;
+                    deleteMutation.mutate(c.id);
+                  }}
+                  className="text-red-600 focus:text-red-700"
+                  data-testid={`action-delete-contract-${c.id}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ),
+        }}
+      />
 
-      <div className="flex flex-wrap items-center gap-2" data-testid="contracts-toolbar">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger
-            className={cn(
-              "h-9 w-auto min-w-[140px] rounded-lg text-sm font-medium border transition-colors gap-1.5",
-              statusFilter !== "all"
-                ? "bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
-                : "bg-background border-border text-foreground"
-            )}
-            data-testid="select-status-filter"
-          >
-            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-            </svg>
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses ({statusCounts.all})</SelectItem>
-            <SelectItem value="active">Active ({statusCounts.active})</SelectItem>
-            <SelectItem value="expiring">Expiring Soon ({statusCounts.expiring})</SelectItem>
-            <SelectItem value="expired">Expired ({statusCounts.expired})</SelectItem>
-            <SelectItem value="draft">Draft ({statusCounts.draft})</SelectItem>
-            <SelectItem value="sent">Sent ({statusCounts.sent})</SelectItem>
-            <SelectItem value="terminated">Terminated ({statusCounts.terminated})</SelectItem>
-          </SelectContent>
-        </Select>
+      <ImportModal
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
+        entityName="Contracts"
+        templateHeaders={[...CONTRACT_IMPORT_HEADERS]}
+        exampleRow={{ ...CONTRACT_IMPORT_EXAMPLE }}
+        currentCount={contracts.length}
+        onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
+      />
 
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger
-            className={cn(
-              "h-9 w-auto min-w-[130px] rounded-lg text-sm font-medium border transition-colors gap-1.5",
-              typeFilter !== "all"
-                ? "bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-400"
-                : "bg-background border-border text-foreground"
-            )}
-            data-testid="select-type-filter"
-          >
-            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
-            </svg>
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="service">Service</SelectItem>
-            <SelectItem value="subscription">Subscription</SelectItem>
-            <SelectItem value="license">License</SelectItem>
-            <SelectItem value="maintenance">Maintenance</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className={cn(
-                "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-                sortField !== "name" || sortDir !== "asc"
-                  ? "bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800 text-cyan-700 dark:text-cyan-400"
-                  : "bg-background border-border text-foreground hover:bg-muted"
-              )}
-              data-testid="button-sort-contracts"
-            >
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              Sort: {sortField === "name" ? "Name" : sortField === "value" ? "Value" : sortField === "startDate" ? "Start" : sortField === "endDate" ? "End" : "Status"}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={() => handleSort("name")} data-testid="sort-contracts-name">Name</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSort("value")} data-testid="sort-contracts-value">Value</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSort("startDate")} data-testid="sort-contracts-start">Start Date</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSort("endDate")} data-testid="sort-contracts-end">End Date</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSort("status")} data-testid="sort-contracts-status">Status</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className={cn(
-                "inline-flex items-center justify-center h-9 w-9 rounded-lg border transition-colors",
-                groupBy !== "none"
-                  ? "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"
-                  : "bg-background border-border text-foreground hover:bg-muted"
-              )}
-              title={groupBy === "none" ? "Group" : `Grouped by ${groupBy}`}
-              aria-label={groupBy === "none" ? "Group contracts" : `Grouped by ${groupBy}`}
-              data-testid="button-group-contracts"
-            >
-              <Layers className="h-4 w-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={() => setGroupBy("none")} data-testid="group-contracts-none">None</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setGroupBy("status")} data-testid="group-contracts-status">Status</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setGroupBy("type")} data-testid="group-contracts-type">Type</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setGroupBy("account")} data-testid="group-contracts-account">Account</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <button
-          onClick={() => setFormatPanelOpen(true)}
-          className={cn(
-            "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-            formatRules.length > 0
-              ? "bg-[#8b5cf6]/10 border-[#8b5cf6]/30 text-[#8b5cf6]"
-              : "bg-background border-border text-foreground hover:bg-muted"
-          )}
-          data-testid="button-format-contracts"
-        >
-          <Paintbrush className="h-3.5 w-3.5" />
-          Format{formatRules.length > 0 ? ` (${formatRules.length})` : ""}
-        </button>
-
-        <div className="flex-1" />
-
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search contracts..."
-            value={localSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
-            className="h-9 pl-9 pr-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/20 w-[200px]"
-            data-testid="input-search-contracts"
-          />
-        </div>
-
-        <button
-          onClick={exportToCSV}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
-          data-testid="button-export-contracts"
-        >
-          <Download className="h-3.5 w-3.5" />
-          Export
-        </button>
-
-        <button
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
-          onClick={() => setImportOpen(true)}
-          data-testid="button-import-contracts"
-        >
-          <Upload className="h-3.5 w-3.5" />
-          Import
-        </button>
-        <ImportModal
-          isOpen={importOpen}
-          onClose={() => setImportOpen(false)}
-          entityName="Contracts"
-          templateHeaders={["name","type","status","startDate","endDate","value","recurringValue","terms","accountName"]}
-          exampleRow={{ name:"Acme Support Agreement 2026",type:"service",status:"active",startDate:"2026-01-01",endDate:"2026-12-31",value:"48000",recurringValue:"4000",terms:"Net 30 days. Quarterly reviews.",accountName:"Acme Ltd" }}
-          currentCount={contracts.length}
-          onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
-        />
-
-        <SavedViewsDropdown
-          entityType="contracts"
-          currentFilters={currentFilters}
-          currentSorts={currentSorts}
-          onApplyView={applySavedView}
-        />
-
-        {enrichedContracts.length > 0 && (
-        <button
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white transition-colors"
-          onClick={openCreateForm}
-          data-testid="button-add-contract"
-        >
-          <Plus className="h-4 w-4" />
-          New Contract
-        </button>
-        )}
-
-        <ContractFormDialog
-          open={formOpen}
-          onClose={closeForm}
-          editing={editingContract}
-          accounts={accounts}
-        />
-      </div>
-
-      <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden w-full" data-testid="contracts-table">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-gray-700 dark:text-foreground">
-            <thead>
-              <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
-                <th className="px-3 py-2.5 align-middle w-10">
-                  <Checkbox
-                    checked={allSelected}
-                    onCheckedChange={toggleSelectAll}
-                    data-testid="checkbox-select-all-contracts"
-                  />
-                </th>
-                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("name")}>
-                  Contract {sortField === "name" && (sortDir === "asc" ? "↑" : "↓")}
-                </th>
-                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">
-                  Account
-                </th>
-                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("status")}>
-                  Status {sortField === "status" && (sortDir === "asc" ? "↑" : "↓")}
-                </th>
-                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("value")}>
-                  Value {sortField === "value" && (sortDir === "asc" ? "↑" : "↓")}
-                </th>
-                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("startDate")}>
-                  Start Date {sortField === "startDate" && (sortDir === "asc" ? "↑" : "↓")}
-                </th>
-                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap cursor-pointer hover:text-foreground" onClick={() => handleSort("endDate")}>
-                  End Date {sortField === "endDate" && (sortDir === "asc" ? "↑" : "↓")}
-                </th>
-                <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">
-                  Sign-off
-                </th>
-                <th className="px-3 py-2.5 text-right align-middle font-semibold whitespace-nowrap">
-                  Owner
-                </th>
-                <th className="px-3 py-2.5 text-right align-middle font-semibold whitespace-nowrap">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {enrichedContracts.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="text-center py-16 text-muted-foreground">
-                    <div className="flex flex-col items-center gap-2">
-                      <ContractIcon className="h-10 w-10 opacity-30" />
-                      <p className="text-sm">No contracts yet. Create your first contract to start tracking agreements.</p>
-                      <Button
-                        size="sm"
-                        className="mt-2 bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
-                        onClick={openCreateForm}
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        New Contract
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ) : groupedData ? (
-                Object.entries(groupedData).flatMap(([groupName, groupContracts]) => [
-                  <tr key={`group-header-${groupName}`} className="bg-muted/40 border-b border-border/40" data-testid={`group-contracts-header-${groupName}`}>
-                    <td colSpan={10} className="px-4 py-2">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="h-2.5 w-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: groupColors[groupName] || "#6b7280" }}
-                        />
-                        <span className="text-sm font-semibold">{groupName}</span>
-                        <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-                          {groupContracts.length}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground ml-2">
-                          £{groupContracts.reduce((s, c) => s + c.valueNum, 0).toLocaleString()}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>,
-                  ...groupContracts.map(renderRow)
-                ])
-              ) : (
-                pagination.paginatedItems.map(renderRow)
-              )}
-            </tbody>
-          </table>
-        </div>
-        {groupBy !== "none" && enrichedContracts.length > 0 && (
-          <div className="px-4 py-2.5 border-t border-border/40 bg-muted/20 text-xs text-muted-foreground" data-testid="contracts-count-footer">
-            {enrichedContracts.length} of {contracts.length} contracts
-            {selectedIds.size > 0 && <span className="ml-2 text-[#0ea5e9]">({selectedIds.size} selected)</span>}
-          </div>
-        )}
-        {groupBy === "none" && (
-          <CrmTablePagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            total={pagination.total}
-            startIndex={pagination.startIndex}
-            endIndex={pagination.endIndex}
-            pageSize={pagination.pageSize}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
-            extra={selectedIds.size > 0 ? <span className="text-[#0ea5e9]">({selectedIds.size} selected)</span> : undefined}
-          />
-        )}
-      </div>
-
-      <ConditionalFormattingPanel
-        open={formatPanelOpen}
-        onOpenChange={setFormatPanelOpen}
-        rules={formatRules}
-        onRulesChange={setFormatRules}
-        columns={formatColumns}
-        data={enrichedContracts as any[]}
+      <ContractFormDialog
+        open={formOpen}
+        onClose={closeForm}
+        editing={editingContract}
+        accounts={accounts}
       />
     </div>
   );

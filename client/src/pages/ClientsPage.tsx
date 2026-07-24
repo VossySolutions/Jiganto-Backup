@@ -53,7 +53,20 @@ import {
 
 } from "@/components/ui/alert-dialog";
 
-import { Plus, Briefcase, TrendingUp, Users, AlertTriangle, Search, LayoutGrid, List, X } from "lucide-react";
+import { Plus, Briefcase, TrendingUp, Users, AlertTriangle, X } from "lucide-react";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { ClientFormDialog } from "@/components/clients/ClientFormDialog";
 
@@ -88,16 +101,6 @@ import { useLocation } from "wouter";
 
 import type { ClientKpis, ClientWorkspace } from "@/components/clients/types";
 import { userDisplayName } from "@/components/clients/types";
-
-import { Input } from "@/components/ui/input";
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 import {
   collectUniqueTags,
@@ -151,7 +154,13 @@ export default function ClientsPage() {
     return saved === "cards" ? "cards" : "table";
   });
 
+  const [pinClient, setPinClient] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("clients-pin-name") !== "0";
+  });
+
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
 
   const [accountManagerFilter, setAccountManagerFilter] = useState("all");
 
@@ -377,11 +386,46 @@ export default function ClientsPage() {
     localStorage.setItem("clients-view-mode", mode);
   };
 
-  const clientsListResetKey = `${filter}-${search}-${accountManagerFilter}-${engagementFilter}-${tagFilter}-${sortKey}-${sortDir}`;
+  const clientsListResetKey = `${filter}-${debouncedSearch}-${accountManagerFilter}-${engagementFilter}-${tagFilter}-${sortKey}-${sortDir}`;
 
-  const clientsPagination = useTablePagination(displayed, {
+  const clientsCardPagination = useTablePagination(displayed, {
     resetKey: clientsListResetKey,
+    enabled: viewMode === "cards",
   });
+
+  const sortLabel: Record<ClientSortKey, string> = {
+    name: "Name",
+    industry: "Industry",
+    engagementStatus: "Engagement",
+    accountManager: "Account manager",
+    projects: "Projects",
+    atRisk: "At risk",
+  };
+
+  const CLIENT_CSV_HEADERS = ["Client", "Industry", "Engagement", "Account manager", "Tags", "Projects", "At risk"];
+
+  const exportClients = () => {
+    const rows = displayed.map((c) => [
+      c.name || "",
+      c.industry || "",
+      (c.engagementStatus || "").replace(/_/g, " "),
+      userDisplayName(c.accountManagerUser),
+      c.tags || "",
+      String(c.projectCount ?? 0),
+      String(c.atRiskCount ?? 0),
+    ]);
+    downloadBoardCsv(`clients-${new Date().toISOString().split("T")[0]}.csv`, CLIENT_CSV_HEADERS, rows);
+    toast({ title: "Clients exported to CSV" });
+  };
+
+  const downloadClientsTemplate = () => {
+    downloadImportTemplateCsv("clients-import-template.csv", CLIENT_CSV_HEADERS, CLIENT_CSV_HEADERS.map(() => ""));
+    toast({ title: "Import template downloaded" });
+  };
+
+  const importUnavailable = () => {
+    toast({ title: "Import is not available for this table yet" });
+  };
 
 
 
@@ -453,31 +497,7 @@ export default function ClientsPage() {
 
             titleTestId="clients-title"
 
-            actions={
-
-              canCreate ? (
-
-                <Button
-
-                  size="sm"
-
-                  className="gap-2 w-full sm:w-auto shrink-0"
-
-                  onClick={() => openForm()}
-
-                  data-testid="button-add-client"
-
-                >
-
-                  <Plus className="h-4 w-4" />
-
-                  Add Client
-
-                </Button>
-
-              ) : undefined
-
-            }
+            actions={undefined}
 
           />
 
@@ -576,97 +596,122 @@ export default function ClientsPage() {
 
 
 
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-                <div className="relative flex-1 min-w-0">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search clients, tags, industry…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9"
-                    data-testid="input-clients-search"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Select value={accountManagerFilter} onValueChange={setAccountManagerFilter}>
-                    <SelectTrigger className="w-[160px] h-9" data-testid="filter-account-manager">
-                      <SelectValue placeholder="Account manager" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All managers</SelectItem>
-                      <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                      {accountManagerOptions.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>
-                          {m.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={engagementFilter} onValueChange={setEngagementFilter}>
-                    <SelectTrigger className="w-[150px] h-9" data-testid="filter-engagement-status">
-                      <SelectValue placeholder="Engagement" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All statuses</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="on_hold">On hold</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="archived">Archived</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={tagFilter} onValueChange={setTagFilter}>
-                    <SelectTrigger className="w-[130px] h-9" data-testid="filter-tags">
-                      <SelectValue placeholder="Tags" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All tags</SelectItem>
-                      {allTags.map((tag) => (
-                        <SelectItem key={tag} value={tag}>
-                          {tag}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            <MondayBoardShell.Legacy
+              storageKey="jiganto-clients"
+              entityType="client"
+              stateHook={useMondayBoardShellState}
+              filterMatcher={matchBoardFilterValue}
+            >
+            <MondayBoardShell.Toolbar
+              newLabel="Add Client"
+              onNew={canCreate ? () => openForm() : undefined}
+              newTestId="button-add-client-toolbar"
+              searchValue={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Search clients, tags, industry…"
+              searchTestId="input-clients-search"
+              viewLabel={viewMode === "table" ? "Table" : "Cards"}
+              viewMenu={
+                <>
+                  <DropdownMenuItem onClick={() => setView("table")} data-testid="clients-view-table">Table</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setView("cards")} data-testid="clients-view-cards">Cards</DropdownMenuItem>
+                </>
+              }
+              filterActive={hasActiveFilters}
+              filterCount={
+                (accountManagerFilter !== "all" ? 1 : 0) +
+                (engagementFilter !== "all" ? 1 : 0) +
+                (tagFilter !== "all" ? 1 : 0)
+              }
+              filterContent={
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Account manager</Label>
+                    <Select value={accountManagerFilter} onValueChange={setAccountManagerFilter}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-account-manager">
+                        <SelectValue placeholder="Account manager" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All managers</SelectItem>
+                        <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                        {accountManagerOptions.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Engagement</Label>
+                    <Select value={engagementFilter} onValueChange={setEngagementFilter}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-engagement-status">
+                        <SelectValue placeholder="Engagement" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="on_hold">On hold</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="archived">Archived</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Tags</Label>
+                    <Select value={tagFilter} onValueChange={setTagFilter}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-tags">
+                        <SelectValue placeholder="Tags" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All tags</SelectItem>
+                        {allTags.map((tag) => (
+                          <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   {hasActiveFilters && (
-                    <Button variant="ghost" size="sm" className="h-9 gap-1" onClick={clearFilters}>
+                    <Button variant="ghost" size="sm" className="h-8 gap-1 w-full" onClick={clearFilters}>
                       <X className="h-3.5 w-3.5" />
-                      Clear
+                      Clear filters
                     </Button>
                   )}
-                  <div className="flex items-center rounded-lg border p-0.5 ml-auto lg:ml-0">
-                    <Button
-                      type="button"
-                      variant={viewMode === "table" ? "secondary" : "ghost"}
-                      size="sm"
-                      className="h-8 px-2.5"
-                      onClick={() => setView("table")}
-                      data-testid="clients-view-table"
-                    >
-                      <List className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={viewMode === "cards" ? "secondary" : "ghost"}
-                      size="sm"
-                      className="h-8 px-2.5"
-                      onClick={() => setView("cards")}
-                      data-testid="clients-view-cards"
-                    >
-                      <LayoutGrid className="h-4 w-4" />
-                    </Button>
-                  </div>
                 </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {displayed.length} client{displayed.length === 1 ? "" : "s"}
-                {hasActiveFilters ? " matching filters" : ""}
-                {viewMode === "table" ? " · Click column headers to sort" : ""}
-                {displayed.length > clientsPagination.pageSize
-                  ? ` · Page ${clientsPagination.page} of ${clientsPagination.totalPages}`
-                  : ""}
-              </p>
-            </div>
+              }
+              sortContent={
+                viewMode === "table" ? (
+                  <>
+                    {(Object.keys(sortLabel) as ClientSortKey[]).map((key) => (
+                      <DropdownMenuItem key={key} onClick={() => handleSort(key)} data-testid={`sort-clients-${key}`}>
+                        {sortLabel[key]} {sortKey === key ? `(${sortDir})` : ""}
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                ) : undefined
+              }
+              sortActive={viewMode === "table" && sortKey !== "name"}
+              sortLabel={viewMode === "table" ? `Sort: ${sortLabel[sortKey]}` : "Sort"}
+              pinActive={pinClient}
+              onPinToggle={() => {
+                setPinClient((v) => {
+                  const next = !v;
+                  localStorage.setItem("clients-pin-name", next ? "1" : "0");
+                  return next;
+                });
+              }}
+              pinTitle={pinClient ? "Unpin Client column" : "Pin Client column"}
+              onExport={exportClients}
+              onDownloadTemplate={downloadClientsTemplate}
+              onPaste={importUnavailable}
+              onImport={importUnavailable}
+              testId="clients-toolbar"
+            />
+            <p className="text-xs text-muted-foreground mb-3">
+              {displayed.length} client{displayed.length === 1 ? "" : "s"}
+              {hasActiveFilters ? " matching filters" : ""}
+              {viewMode === "cards" && displayed.length > clientsCardPagination.pageSize
+                ? ` · Page ${clientsCardPagination.page} of ${clientsCardPagination.totalPages}`
+                : ""}
+            </p>
 
 
 
@@ -741,38 +786,16 @@ export default function ClientsPage() {
             ) : viewMode === "table" ? (
 
               <ClientTable
-
-                clients={clientsPagination.paginatedItems}
-
-                sortKey={sortKey}
-
-                sortDir={sortDir}
-
-                onSort={handleSort}
-
+                clients={displayed}
+                paginationResetKey={clientsListResetKey}
+                searchHighlightTerm={debouncedSearch}
+                pinFirstColumn={pinClient}
                 onViewDetails={(c) => navigate(clientDetailPath(c.id))}
-
                 onArchive={setArchiving}
-
                 onDelete={setDeleting}
-
                 onUnarchive={(c) => unarchiveMutation.mutate(c.id)}
-
                 canCreate={canCreate}
-
                 canDelete={canDelete}
-
-                pagination={{
-                  page: clientsPagination.page,
-                  totalPages: clientsPagination.totalPages,
-                  total: clientsPagination.total,
-                  startIndex: clientsPagination.startIndex,
-                  endIndex: clientsPagination.endIndex,
-                  pageSize: clientsPagination.pageSize,
-                  onPageChange: clientsPagination.setPage,
-                  onPageSizeChange: clientsPagination.setPageSize,
-                }}
-
               />
 
             ) : (
@@ -780,7 +803,7 @@ export default function ClientsPage() {
               <div className="rounded-xl border bg-card overflow-hidden">
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4 p-3 sm:p-4">
 
-                {clientsPagination.paginatedItems.map((client) => (
+                {clientsCardPagination.paginatedItems.map((client) => (
 
                   <ClientCard
 
@@ -806,20 +829,22 @@ export default function ClientsPage() {
 
               </div>
               <TablePagination
-                page={clientsPagination.page}
-                totalPages={clientsPagination.totalPages}
-                total={clientsPagination.total}
-                startIndex={clientsPagination.startIndex}
-                endIndex={clientsPagination.endIndex}
-                pageSize={clientsPagination.pageSize}
-                onPageChange={clientsPagination.setPage}
-                onPageSizeChange={clientsPagination.setPageSize}
+                page={clientsCardPagination.page}
+                totalPages={clientsCardPagination.totalPages}
+                total={clientsCardPagination.total}
+                startIndex={clientsCardPagination.startIndex}
+                endIndex={clientsCardPagination.endIndex}
+                pageSize={clientsCardPagination.pageSize}
+                onPageChange={clientsCardPagination.setPage}
+                onPageSizeChange={clientsCardPagination.setPageSize}
               />
               </div>
 
             )}
 
             </ClientsPanelState>
+
+            </MondayBoardShell.Legacy>
 
           </div>
 

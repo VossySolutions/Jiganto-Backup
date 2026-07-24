@@ -2243,23 +2243,35 @@ function CanvasEditorInner({
     }
   }, [nodes, edges, diagramName, onSaveAsTemplate]);
 
-  const handleDownloadTemplate = useCallback(() => {
-    const hasNodes = nodes.filter(n => n.type !== 'swimlane_pool' && n.type !== 'swimlane_lane').length > 0;
-    const csvContent = hasNodes ? generateCsvTemplate(nodes, edges) : generateBlankTemplate();
+  const handleExportCsv = useCallback(() => {
+    const processNodes = nodes.filter(n => n.type !== 'swimlane_pool' && n.type !== 'swimlane_lane');
+    const csvContent = processNodes.length > 0 ? generateCsvTemplate(nodes, edges) : generateBlankTemplate();
     const BOM = "\uFEFF";
     const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = hasNodes
-      ? `${diagramName.replace(/\s+/g, "_")}_template.csv`
-      : "bpm_import_template.csv";
+    a.download = `${diagramName.replace(/\s+/g, "_")}_export.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast({ title: hasNodes ? "Exported" : "Template Downloaded", description: hasNodes ? "Current diagram exported as CSV" : "Blank template with example data downloaded" });
+    toast({ title: "Exported", description: "Current diagram exported as CSV" });
   }, [nodes, edges, diagramName, toast]);
+
+  const handleDownloadTemplate = useCallback(() => {
+    const BOM = "\uFEFF";
+    const blob = new Blob([BOM + generateBlankTemplate()], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "bpm_import_template.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: "Template Downloaded", description: "Blank template with example data downloaded" });
+  }, [toast]);
 
   const handleImportCsvClick = useCallback(() => {
     setShowImportDialog(true);
@@ -2553,6 +2565,7 @@ function CanvasEditorInner({
           onNodesChange={handleTableNodesChange}
           onEdgesChange={handleTableEdgesChange}
           onSetDirty={() => setIsDirty(true)}
+          onExport={handleExportCsv}
           onDownloadTemplate={handleDownloadTemplate}
           onImportCsv={handleImportCsvClick}
         />

@@ -434,18 +434,31 @@ function SelectCell({
 function PriorityCell({ 
   value,
   editable,
-  onChange
+  onChange,
+  options,
 }: { 
   value: string;
   editable?: boolean;
   onChange?: (value: string) => void;
+  options?: StatusOption[];
 }) {
-  const getColor = () => priorityColors[value?.toLowerCase()] || priorityColors.medium;
+  const getColor = () => {
+    if (options?.length) {
+      const match = options.find(
+        (o) => o.value === value || o.value.toLowerCase() === String(value || "").toLowerCase(),
+      );
+      if (match?.color) return match.color;
+    }
+    return priorityColors[value?.toLowerCase()] || priorityColors.medium;
+  };
   const mondayCellClass = cn(
     "w-full min-h-[32px] px-2 flex items-center justify-center",
     "rounded-[4px] text-[13px] font-medium capitalize text-center leading-tight",
     getColor(),
   );
+  const choices = options?.length
+    ? options.map((o) => [o.value, o.color || priorityColors[o.value] || priorityColors.medium] as const)
+    : Object.entries(priorityColors);
 
   if (!editable || !onChange) {
     return <span className={mondayCellClass}>{value || "Medium"}</span>;
@@ -459,7 +472,7 @@ function PriorityCell({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[140px] p-1">
-        {Object.entries(priorityColors).map(([priority, color]) => (
+        {choices.map(([priority, color]) => (
           <DropdownMenuItem
             key={priority}
             onClick={() => onChange(priority)}
@@ -877,6 +890,18 @@ interface CellRendererProps<T> {
   searchHighlightTerm?: string;
 }
 
+/** Column types with a built-in editor — custom `render` must not swallow these when editable. */
+const INLINE_EDITABLE_TYPES = new Set([
+  "status",
+  "select",
+  "priority",
+  "date",
+  "checkbox",
+  "text",
+  "number",
+  "currency",
+]);
+
 function CellRenderer<T>({ 
   column, 
   value, 
@@ -892,8 +917,30 @@ function CellRenderer<T>({
 }: CellRendererProps<T>) {
   const editable = column.editable && !!onEdit;
 
+  // Custom render is display-only. When the column is editable, prefer the built-in
+  // editor (status/select/date/text/…) so `render` no longer silently blocks updates.
   if (column.render) {
-    return <>{column.render(row, value)}</>;
+    const useBuiltInEditor = editable && INLINE_EDITABLE_TYPES.has(column.type);
+    if (!useBuiltInEditor) {
+      return <>{column.render(row, value)}</>;
+    }
+    // text/number/currency: keep custom display until the user starts editing
+    if (
+      (column.type === "text" || column.type === "number" || column.type === "currency") &&
+      !isEditing
+    ) {
+      return (
+        <div
+          className="w-full min-w-0 cursor-text"
+          onClick={(e) => {
+            e.stopPropagation();
+            onStartEdit?.();
+          }}
+        >
+          {column.render(row, value)}
+        </div>
+      );
+    }
   }
 
   if (column.type === "formula") {
@@ -931,6 +978,7 @@ function CellRenderer<T>({
           value={value as string}
           editable={editable}
           onChange={onEdit as (v: string) => void}
+          options={column.options}
         />
       );
     case "person":

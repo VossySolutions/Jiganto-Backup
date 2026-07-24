@@ -80,7 +80,7 @@ export function SavedViewsDropdown({
   const { toast } = useToast();
 
   const { data: savedViews = [] } = useQuery<SavedView[]>({
-    queryKey: [`/api/crm/saved-views?entityType=${entityType}`],
+    queryKey: [`/api/board-saved-views?entityType=${entityType}`],
   });
 
   const createViewMutation = useMutation({
@@ -92,7 +92,7 @@ export function SavedViewsDropdown({
       isDefault: boolean;
       isShared: boolean;
     }) => {
-      return apiRequest("POST", "/api/crm/saved-views", {
+      return apiRequest("POST", "/api/board-saved-views", {
         entityType,
         name: data.name,
         filters: data.filters,
@@ -103,6 +103,7 @@ export function SavedViewsDropdown({
       });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/board-saved-views?entityType=${entityType}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/crm/saved-views?entityType=${entityType}`] });
       toast({ title: "View saved successfully" });
       setSaveDialogOpen(false);
@@ -116,8 +117,9 @@ export function SavedViewsDropdown({
   });
 
   const deleteViewMutation = useMutation({
-    mutationFn: async (id: number) => apiRequest("DELETE", `/api/crm/saved-views/${id}`),
+    mutationFn: async (id: number) => apiRequest("DELETE", `/api/board-saved-views/${id}`),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/board-saved-views?entityType=${entityType}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/crm/saved-views?entityType=${entityType}`] });
       toast({ title: "View deleted" });
     },

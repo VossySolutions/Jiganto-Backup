@@ -186,7 +186,11 @@ export default function TaskManagementPage() {
     { id: "source", header: "Source", type: "text", accessor: (r: RowTask) => r.source, width: "90px" },
     { id: "workspaceName", header: "Workspace", type: "text", accessor: "workspaceName", width: "110px" },
     { id: "contextLabel", header: "Project / context", type: "text", accessor: "contextLabel", width: "140px" },
-    { id: "priority", header: "Priority", type: "priority", accessor: "priority", width: "90px", editable: true },
+    { id: "priority", header: "Priority", type: "priority", accessor: "priority", width: "90px", editable: true, options: [
+      { value: "low", label: "Low", color: "bg-[#579bfc] text-white" },
+      { value: "medium", label: "Medium", color: "bg-[#fdab3d] text-white" },
+      { value: "high", label: "High", color: "bg-[#e2445c] text-white" },
+    ] },
     { id: "dueDate", header: "Due", type: "date", accessor: "dueDate", width: "110px", editable: true },
     { id: "status", header: "Status", type: "status", accessor: "status", width: "120px", editable: true, options: statusOptions },
     { id: "dueGroup", header: "Due group", type: "text", accessor: "dueGroup", width: "0", hidden: true },
@@ -221,9 +225,9 @@ export default function TaskManagementPage() {
             icon={CheckSquare}
             title="My Tasks"
             subtitle="What you need to do today, across everything"
-            searchPlaceholder=""
-            searchValue=""
-            onSearchChange={() => {}}
+            searchPlaceholder="Search tasks…"
+            searchValue={filters.search}
+            onSearchChange={(v) => syncFiltersToUrl({ ...filters, search: v })}
             titleTestId="task-mgmt-title"
           />
         </div>
@@ -310,7 +314,7 @@ export default function TaskManagementPage() {
                     onCellEdit={(id, columnId, value) =>
                       updateMutation.mutateAsync({ id: String(id), updates: { [columnId]: value } })
                     }
-                    onAddItem={() => {}}
+                    onAddItem={undefined}
                     dateField="dueDate"
                     statusField="status"
                     titleField="title"

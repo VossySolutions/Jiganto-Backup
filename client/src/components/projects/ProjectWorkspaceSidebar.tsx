@@ -80,7 +80,7 @@ const SECTION_OVERRIDES: Record<string, string> = {
 };
 
 const OVERVIEW_TOOL_IDS = ["project_dashboard", "360_report"] as const;
-const ALWAYS_TOOL_IDS = new Set<string>(["project_dashboard", "360_report"]);
+const ALWAYS_TOOL_IDS = new Set<string>(["project_dashboard", "360_report", "status_reporting"]);
 
 function toolDisplayName(toolType: string, fallback?: string | null): string {
   if (toolType === "project_dashboard") return "Overview";

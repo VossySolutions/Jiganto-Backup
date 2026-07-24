@@ -123,7 +123,8 @@ import {
 import {
   insertUserRoleSchema,
   insertUserInvitationSchema,
-  profiles
+  profiles,
+  boardFieldValues,
 } from "@shared/schema";
 import { users as usersTable } from "@shared/models/auth";
 import { PLATFORM_ROLES } from "@shared/models/permissions";
@@ -2691,7 +2692,7 @@ export async function registerRoutes(
     try {
       const tenantId = requireApiTenantId(req, res);
       if (tenantId == null) return;
-      const account = await storage.createCrmAccount({ ...req.body, tenantId, ownerUserId: userId });
+      const account = await storage.createCrmAccount({ ...req.body, tenantId, ownerUserId: req.body.ownerUserId || userId });
       res.status(201).json(account);
     } catch (err) {
       res.status(400).json({ message: "Failed to create account" });
@@ -2742,7 +2743,7 @@ export async function registerRoutes(
     try {
       const tenantId = requireApiTenantId(req, res);
       if (tenantId == null) return;
-      const contact = await storage.createCrmContact({ ...req.body, tenantId, ownerUserId: userId });
+      const contact = await storage.createCrmContact({ ...req.body, tenantId, ownerUserId: req.body.ownerUserId || userId });
       res.status(201).json(contact);
     } catch (err) {
       res.status(400).json({ message: "Failed to create contact" });
@@ -2876,43 +2877,136 @@ export async function registerRoutes(
   });
 
   // CRM Saved Views
-  app.get("/api/crm/saved-views", async (req, res) => {
+  const handleGetSavedViews = async (req: any, res: any) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const tenantId = requireApiTenantId(req, res);
     if (tenantId == null) return;
     const entityType = req.query.entityType as string | undefined;
     const views = await storage.getCrmSavedViews(tenantId, entityType, userId);
-    res.json(views);
-  });
+    // Normalize: expose sorts from snapshot/filters blob for clients
+    res.json(
+      views.map((v: any) => {
+        const filters = v.filters;
+        let sorts = (v as any).sorts;
+        if (
+          !sorts &&
+          filters &&
+          typeof filters === "object" &&
+          !Array.isArray(filters) &&
+          Array.isArray((filters as any).sorts)
+        ) {
+          sorts = (filters as any).sorts;
+        }
+        return { ...v, sorts: sorts || [] };
+      }),
+    );
+  };
 
-  app.post("/api/crm/saved-views", async (req, res) => {
+  const handleCreateSavedView = async (req: any, res: any) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     try {
       const tenantId = requireApiTenantId(req, res);
       if (tenantId == null) return;
-      const view = await storage.createCrmSavedView({ ...req.body, tenantId, userId });
-      res.status(201).json(view);
+      const body = { ...req.body };
+      // Persist sorts inside filters blob (no separate sorts column)
+      if (body.sorts && body.filters && typeof body.filters === "object" && !Array.isArray(body.filters)) {
+        body.filters = { ...body.filters, sorts: body.sorts };
+      }
+      const { sorts: _sorts, snapshot: _snapshot, ...insertBody } = body;
+      const view = await storage.createCrmSavedView({ ...insertBody, tenantId, userId });
+      res.status(201).json({ ...view, sorts: body.sorts || [] });
     } catch (err) {
       console.error("Failed to create saved view:", err);
       res.status(400).json({ message: "Failed to create saved view" });
     }
-  });
+  };
 
-  app.put("/api/crm/saved-views/:id", async (req, res) => {
+  const handleUpdateSavedView = async (req: any, res: any) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const view = await storage.updateCrmSavedView(Number(req.params.id), req.body);
+    const { sorts: _sorts, ...updates } = req.body || {};
+    const view = await storage.updateCrmSavedView(Number(req.params.id), updates);
     if (!view) return res.status(404).json({ message: "Saved view not found" });
     res.json(view);
-  });
+  };
 
-  app.delete("/api/crm/saved-views/:id", async (req, res) => {
+  const handleDeleteSavedView = async (req: any, res: any) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     await storage.deleteCrmSavedView(Number(req.params.id));
     res.status(204).send();
+  };
+
+  app.get("/api/crm/saved-views", handleGetSavedViews);
+  app.post("/api/crm/saved-views", handleCreateSavedView);
+  app.put("/api/crm/saved-views/:id", handleUpdateSavedView);
+  app.delete("/api/crm/saved-views/:id", handleDeleteSavedView);
+
+  // Board saved views — same storage, first-class for all modules
+  app.get("/api/board-saved-views", handleGetSavedViews);
+  app.post("/api/board-saved-views", handleCreateSavedView);
+  app.put("/api/board-saved-views/:id", handleUpdateSavedView);
+  app.delete("/api/board-saved-views/:id", handleDeleteSavedView);
+
+  // Board custom column cells — lets any module table carry custom columns
+  app.get("/api/board-field-values", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
+    const entityType = req.query.entityType as string | undefined;
+    if (!entityType) return res.status(400).json({ message: "entityType is required" });
+    const rows = await db
+      .select()
+      .from(boardFieldValues)
+      .where(
+        and(
+          eq(boardFieldValues.tenantId, tenantId),
+          eq(boardFieldValues.entityType, entityType),
+        ),
+      );
+    res.json(rows);
+  });
+
+  app.put("/api/board-field-values", async (req, res) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
+    const parsed = z
+      .object({
+        entityType: z.string().min(1),
+        entityId: z.union([z.string(), z.number()]),
+        fieldName: z.string().min(1),
+        value: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
+      })
+      .safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid cell payload" });
+    const { entityType, fieldName } = parsed.data;
+    const entityId = String(parsed.data.entityId);
+    const value =
+      parsed.data.value == null || parsed.data.value === "" ? null : String(parsed.data.value);
+    try {
+      const [row] = await db
+        .insert(boardFieldValues)
+        .values({ tenantId, entityType, entityId, fieldName, value })
+        .onConflictDoUpdate({
+          target: [
+            boardFieldValues.tenantId,
+            boardFieldValues.entityType,
+            boardFieldValues.entityId,
+            boardFieldValues.fieldName,
+          ],
+          set: { value, updatedAt: new Date() },
+        })
+        .returning();
+      res.json(row);
+    } catch (err) {
+      console.error("Failed to save board field value:", err);
+      res.status(400).json({ message: "Failed to save value" });
+    }
   });
 
   // CRM Email Templates
@@ -3312,7 +3406,7 @@ export async function registerRoutes(
     try {
       const tenantId = requireApiTenantId(req, res);
       if (tenantId == null) return;
-      const lead = await storage.createCrmLead({ ...req.body, tenantId, ownerUserId: userId });
+      const lead = await storage.createCrmLead({ ...req.body, tenantId, ownerUserId: req.body.ownerUserId || userId });
       res.status(201).json(lead);
     } catch (err) {
       res.status(400).json({ message: "Failed to create lead" });
@@ -3655,7 +3749,7 @@ export async function registerRoutes(
       const opportunityData = { 
         ...req.body, 
         tenantId, 
-        ownerUserId: userId,
+        ownerUserId: req.body.ownerUserId || userId,
         stageId: req.body.stageId ? Number(req.body.stageId) : null,
         accountId: req.body.accountId ? Number(req.body.accountId) : null,
         probability: req.body.probability ? Number(req.body.probability) : null,
@@ -3999,9 +4093,15 @@ export async function registerRoutes(
     try {
       const tenantId = requireApiTenantId(req, res);
       if (tenantId == null) return;
-      const contract = await storage.createCrmContract({ ...req.body, tenantId, ownerUserId: userId });
+      const { normalizeCrmContractBody } = await import("./lib/crm-api-body");
+      const contract = await storage.createCrmContract({
+        ...normalizeCrmContractBody(req.body as Record<string, unknown>),
+        tenantId,
+        ownerUserId: req.body.ownerUserId || userId,
+      });
       res.status(201).json(contract);
     } catch (err) {
+      console.error("Failed to create contract:", err);
       res.status(400).json({ message: "Failed to create contract" });
     }
   });
@@ -7505,14 +7605,22 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
   app.post("/api/pm/milestones/import", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const tenantId = requireApiTenantId(req, res);
+    if (tenantId == null) return;
     const { milestones } = req.body;
     if (!Array.isArray(milestones)) return res.status(400).json({ message: "milestones must be an array" });
-    const created = [];
-    for (const m of milestones) {
-      const result = await storage.createPmMilestone(m);
-      created.push(result);
+    try {
+      const created = [];
+      for (const m of milestones) {
+        // Tenant middleware only stamps the top-level body, not each array row
+        const result = await storage.createPmMilestone({ ...m, tenantId });
+        created.push(result);
+      }
+      res.status(201).json(created);
+    } catch (err) {
+      console.error("Failed to import milestones:", err);
+      res.status(400).json({ message: "Failed to import milestones" });
     }
-    res.status(201).json(created);
   });
 
   app.get("/api/pm/projects/:projectId/milestones", async (req, res) => {
@@ -8926,7 +9034,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       if (tenantId == null) return;
       const body = { ...req.body, tenantId };
       Object.keys(body).forEach(k => { if (body[k] === "") body[k] = undefined; });
-      const validated = insertResourceSchema.parse(body);
+      const { withApiDates } = await import("./lib/crm-api-body");
+      const validated = insertResourceSchema.parse(withApiDates(body, ["startDate", "endDate"]));
       const resource = await storage.createResource(validated);
       res.status(201).json(resource);
     } catch (err: any) {
@@ -8941,7 +9050,8 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
     try {
       const body = { ...req.body };
       Object.keys(body).forEach(k => { if (body[k] === "") body[k] = undefined; });
-      const validated = insertResourceSchema.partial().parse(body);
+      const { withApiDates } = await import("./lib/crm-api-body");
+      const validated = insertResourceSchema.partial().parse(withApiDates(body, ["startDate", "endDate"]));
       const resource = await storage.updateResource(Number(req.params.id), validated);
       if (!resource) return res.status(404).json({ message: "Resource not found" });
       res.json(resource);

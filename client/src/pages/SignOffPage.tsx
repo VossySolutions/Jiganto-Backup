@@ -35,7 +35,7 @@ import {
   FileText, FileSpreadsheet, Presentation, Upload, Link2,
   CheckCircle2, ChevronRight, ChevronLeft, Plus, Trash2, Send, Download,
   Bell, Eye, ArrowLeft, Copy, X, User, AlertTriangle,
-  BookOpen, MoreHorizontal, Search, GripVertical, LayoutTemplate,
+  BookOpen, MoreHorizontal, GripVertical, LayoutTemplate,
   Ban, Image as ImageIcon,
 } from "lucide-react";
 import {
@@ -54,6 +54,13 @@ import {
 } from "@/components/esign/EsignLoadingState";
 import { FieldPlacementEditor, type PlacedField } from "@/components/esign/FieldPlacementEditor";
 import { MetricCard } from "@/components/ui/metric-card";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
 import "@/styles/esign.css";
 
 type View = "dashboard" | "templates" | "compose" | "detail" | "audit";
@@ -145,8 +152,13 @@ export default function SignOffPage() {
   const [view, setView] = useModuleTabUrl(SIGNOFF_VIEWS, "dashboard");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState("awaiting");
-  const [search, setSearch] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(localSearch);
   const [sort, setSort] = useState("");
+  const [pinDoc, setPinDoc] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("esign-pin-document") !== "0";
+  });
   const [composeStep, setComposeStep] = useState(1);
 
   // Compose state
@@ -306,11 +318,11 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
   const listUrl = useMemo(() => {
     const p = new URLSearchParams();
     if (statusFilter && statusFilter !== "all") p.set("status", statusFilter);
-    if (search.trim()) p.set("search", search.trim());
+    if (debouncedSearch.trim()) p.set("search", debouncedSearch.trim());
     if (sort) p.set("sort", sort);
     const qs = p.toString();
     return qs ? `/api/signoff?${qs}` : "/api/signoff";
-  }, [statusFilter, search, sort]);
+  }, [statusFilter, debouncedSearch, sort]);
 
   const { data: requests = [], isLoading: listLoading, isFetching: listFetching, isError: listError, refetch: refetchList } = useQuery<SignoffRequest[]>({ queryKey: [listUrl], staleTime: 30_000 });
   const { data: allRequests = [], isLoading: kpiLoading } = useQuery<SignoffRequest[]>({ queryKey: ["/api/signoff"], staleTime: 30_000 });
@@ -681,6 +693,133 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
 
   function openDetail(id: number) { setSelectedId(id); setView("detail"); }
   function openAudit(id: number) { setSelectedId(id); setView("audit"); }
+
+  const signoffMondayColumns: MondayColumnDef<SignoffRequest>[] = useMemo(() => [
+    {
+      id: "title",
+      header: "Document",
+      type: "text",
+      accessor: "title",
+      width: "240px",
+      sticky: pinDoc,
+      editable: true,
+      render: (r) => <div className="font-medium truncate max-w-[240px]">{r.title}</div>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      type: "status",
+      accessor: "status",
+      width: "140px",
+      editable: false,
+      render: (r) => {
+        const st = SIGNOFF_STATUS[r.status] || { label: r.status, color: "bg-muted text-muted-foreground" };
+        return (
+          <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium", st.color)}>
+            {st.label}
+          </span>
+        );
+      },
+    },
+    {
+      id: "signers",
+      header: "Signers",
+      type: "person",
+      accessor: (row) => row.signers.length,
+      width: "160px",
+      editable: false,
+      render: (r) => {
+        const signed = r.signers.filter(s => s.status === "signed").length;
+        return (
+          <div className="flex items-center gap-2">
+            <div className="flex -space-x-1.5">
+              {r.signers.slice(0, 4).map((s, i) => (
+                <div key={s.id} title={s.name}
+                  className={cn("w-7 h-7 rounded-full border-2 border-background flex items-center justify-center text-[10px] font-bold text-white",
+                    s.status === "signed" ? "bg-green-600" : avatarColor(i))}>
+                  {getInitials(s.name)}
+                </div>
+              ))}
+            </div>
+            <span className="text-xs text-muted-foreground">{signed}/{r.signers.length}</span>
+          </div>
+        );
+      },
+    },
+    {
+      id: "sentAt",
+      header: "Sent",
+      type: "date",
+      accessor: "sentAt",
+      width: "120px",
+      editable: false,
+      render: (r) => <span className="text-muted-foreground">{fmtDate(r.sentAt)}</span>,
+    },
+    {
+      id: "deadline",
+      header: "Expiry",
+      type: "date",
+      accessor: "deadline",
+      width: "120px",
+      editable: true,
+      render: (r) => <span className="text-muted-foreground">{fmtDate(r.deadline)}</span>,
+    },
+    {
+      id: "createdByName",
+      header: "Sent by",
+      type: "person",
+      accessor: "createdByName",
+      width: "140px",
+      editable: false,
+      render: (r) => <span className="text-muted-foreground truncate max-w-[140px] block">{r.createdByName || "—"}</span>,
+    },
+    {
+      id: "project",
+      header: "Project",
+      type: "text",
+      accessor: (row) => row.project?.name || "",
+      width: "140px",
+      editable: false,
+      render: (r) => <span className="text-muted-foreground truncate max-w-[140px] block">{r.project?.name || "—"}</span>,
+    },
+  ], [pinDoc]);
+
+  const patchSignoffMut = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
+      apiRequest("PATCH", `/api/signoff/${id}`, payload),
+    onSuccess: () => invalidateList(),
+  });
+
+  const renderSignoffRowActions = (r: SignoffRequest) => {
+    const canRemind = r.status === "pending" || r.status === "partially_signed";
+    const canVoid = ["pending", "partially_signed", "draft"].includes(r.status);
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="p-1.5 rounded-lg hover:bg-muted" aria-label="Actions" onClick={(e) => e.stopPropagation()}><MoreHorizontal className="h-4 w-4" /></button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => openDetail(r.id)}><Eye className="h-4 w-4 mr-2" /> View</DropdownMenuItem>
+          {canRemind && <DropdownMenuItem onClick={() => handleRemind(r.id)}><Bell className="h-4 w-4 mr-2" /> Remind</DropdownMenuItem>}
+          {r.status === "completed" && (
+            <DropdownMenuItem asChild>
+              <a href={`/api/signoff/${r.id}/signed-pdf`} target="_blank" rel="noreferrer"><Download className="h-4 w-4 mr-2" /> Download</a>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onClick={() => handleDuplicate(r.id)}><Copy className="h-4 w-4 mr-2" /> Duplicate</DropdownMenuItem>
+          {canVoid && (
+            <DropdownMenuItem onClick={() => { setVoidTargetId(r.id); setVoidDialogOpen(true); }}><Ban className="h-4 w-4 mr-2" /> Void</DropdownMenuItem>
+          )}
+          {r.status !== "completed" && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleDelete(r.id)} className="text-red-600 focus:text-red-700"><Trash2 className="h-4 w-4 mr-2" /> Delete</DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
 
   const canProceed1 = srcType === "upload" ? !!uploadedFile
     : srcType === "jiganto_doc" ? !!selectedDocId
@@ -1567,33 +1706,79 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
         </div>
         )}
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
-          <div className="flex gap-1 bg-muted p-1 rounded-lg overflow-x-auto">
-            {FILTER_TABS.map(t => (
-              <button key={t.key} onClick={() => setStatusFilter(t.key)} data-testid={`tab-${t.key}`}
-                className={cn("px-3 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors",
-                  statusFilter === t.key ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground")}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2 sm:ml-auto">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search documents…"
-                className="pl-9 pr-3 py-2 border border-border rounded-lg text-sm w-full sm:w-56 focus:outline-none focus:ring-2 focus:ring-primary/30" />
+        <MondayBoardShell.Legacy
+          storageKey="jiganto-esign-requests"
+          entityType="esign_request"
+          stateHook={useMondayBoardShellState}
+          filterMatcher={matchBoardFilterValue}
+        >
+        <MondayBoardShell.Toolbar
+          newLabel="New e-Sign"
+          onNew={() => openCompose()}
+          newTestId="button-new-esign-toolbar"
+          searchValue={localSearch}
+          onSearchChange={setLocalSearch}
+          searchPlaceholder="Search documents…"
+          searchTestId="input-esign-search"
+          filterActive={statusFilter !== "all"}
+          filterCount={statusFilter !== "all" ? 1 : 0}
+          filterContent={
+            <div className="space-y-1.5">
+              <Label className="text-xs">Status</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FILTER_TABS.map((t) => (
+                    <SelectItem key={t.key} value={t.key} data-testid={`tab-${t.key}`}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <select value={sort} onChange={e => setSort(e.target.value)}
-              className="px-3 py-2 border border-border rounded-lg text-sm bg-background">
-              <option value="">Sort: Newest</option>
-              <option value="title">Title</option>
-              <option value="expiry">Expiry</option>
-              <option value="status">Status</option>
-            </select>
-          </div>
-        </div>
+          }
+          sortActive={!!sort}
+          sortLabel={sort ? `Sort: ${sort === "title" ? "Title" : sort === "expiry" ? "Expiry" : "Status"}` : "Sort"}
+          sortContent={
+            <>
+              <DropdownMenuItem onClick={() => setSort("")} data-testid="sort-esign-newest">Newest {sort === "" ? "(active)" : ""}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSort("title")} data-testid="sort-esign-title">Title {sort === "title" ? "(active)" : ""}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSort("expiry")} data-testid="sort-esign-expiry">Expiry {sort === "expiry" ? "(active)" : ""}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSort("status")} data-testid="sort-esign-status">Status {sort === "status" ? "(active)" : ""}</DropdownMenuItem>
+            </>
+          }
+          pinActive={pinDoc}
+          onPinToggle={() => {
+            setPinDoc((v) => {
+              const next = !v;
+              localStorage.setItem("esign-pin-document", next ? "1" : "0");
+              return next;
+            });
+          }}
+          pinTitle={pinDoc ? "Unpin Document column" : "Pin Document column"}
+          onExport={() => {
+            const headers = ["Document", "Status", "Signers", "Sent", "Expiry", "Sent by", "Project"];
+            const rows = requests.map((r) => [
+              r.title || "",
+              SIGNOFF_STATUS[r.status]?.label || r.status,
+              `${r.signers.filter((s) => s.status === "signed").length}/${r.signers.length}`,
+              r.sentAt ? String(r.sentAt) : "",
+              r.deadline ? String(r.deadline) : "",
+              r.createdByName || "",
+              r.project?.name || "",
+            ]);
+            downloadBoardCsv(`esign-requests-${new Date().toISOString().split("T")[0]}.csv`, headers, rows);
+            toast({ title: "Requests exported to CSV" });
+          }}
+          onDownloadTemplate={() => {
+            const headers = ["Document", "Status", "Signers", "Sent", "Expiry", "Sent by", "Project"];
+            downloadImportTemplateCsv("esign-import-template.csv", headers, headers.map(() => ""));
+            toast({ title: "Import template downloaded" });
+          }}
+          onPaste={() => toast({ title: "Import is not available for this table yet" })}
+          onImport={() => toast({ title: "Import is not available for this table yet" })}
+          testId="esign-requests-toolbar"
+        />
 
-        <div className={cn("bg-card border border-border rounded-xl overflow-hidden esign-table-wrap", listFetching && !listLoading && "is-fetching")}>
+        <div className={cn("bg-card border border-border rounded-xl overflow-hidden esign-table-wrap mt-4", listFetching && !listLoading && "is-fetching")}>
           {listLoading ? (
             <EsignTableSkeleton />
           ) : listError ? (
@@ -1613,85 +1798,25 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
             </div>
           ) : (
             <>
-            <div className="overflow-x-auto esign-desktop-table">
-              <table className="w-full text-sm text-gray-700 dark:text-foreground">
-                <thead>
-                  <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
-                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Document</th>
-                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Status</th>
-                    <th className="px-3 py-2.5 text-left align-middle font-semibold hidden md:table-cell">Signers</th>
-                    <th className="px-3 py-2.5 text-left align-middle font-semibold hidden lg:table-cell">Sent</th>
-                    <th className="px-3 py-2.5 text-left align-middle font-semibold hidden lg:table-cell">Expiry</th>
-                    <th className="px-3 py-2.5 text-left align-middle font-semibold hidden xl:table-cell">Sent by</th>
-                    <th className="px-3 py-2.5 text-left align-middle font-semibold hidden xl:table-cell">Project</th>
-                    <th className="px-3 py-2.5 text-right align-middle font-semibold w-12"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {requests.map(r => {
-                    const st = SIGNOFF_STATUS[r.status] || { label: r.status, color: "bg-muted text-muted-foreground", icon: "📄" };
-                    const signed = r.signers.filter(s => s.status === "signed").length;
-                    const canRemind = r.status === "pending" || r.status === "partially_signed";
-                    const canVoid = ["pending", "partially_signed", "draft"].includes(r.status);
-                    return (
-                      <tr key={r.id} data-testid={`doc-row-${r.id}`} className="border-b border-border/40 last:border-b-0 hover:bg-muted/30 transition-colors">
-                        <td className="px-3 py-2.5 align-middle cursor-pointer" onClick={() => openDetail(r.id)}>
-                          <div className="font-medium truncate max-w-[200px]">{r.title}</div>
-                        </td>
-                        <td className="px-3 py-2.5 align-middle">
-                          <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium", st.color)}>
-                            {st.label}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 align-middle hidden md:table-cell">
-                          <div className="flex items-center gap-2">
-                            <div className="flex -space-x-1.5">
-                              {r.signers.slice(0, 4).map((s, i) => (
-                                <div key={s.id} title={s.name}
-                                  className={cn("w-7 h-7 rounded-full border-2 border-background flex items-center justify-center text-[10px] font-bold text-white",
-                                    s.status === "signed" ? "bg-green-600" : avatarColor(i))}>
-                                  {getInitials(s.name)}
-                                </div>
-                              ))}
-                            </div>
-                            <span className="text-xs text-muted-foreground">{signed}/{r.signers.length}</span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2.5 align-middle text-muted-foreground hidden lg:table-cell">{fmtDate(r.sentAt)}</td>
-                        <td className="px-3 py-2.5 align-middle text-muted-foreground hidden lg:table-cell">{fmtDate(r.deadline)}</td>
-                        <td className="px-3 py-2.5 align-middle text-muted-foreground hidden xl:table-cell truncate max-w-[120px]">{r.createdByName || "—"}</td>
-                        <td className="px-3 py-2.5 align-middle text-muted-foreground hidden xl:table-cell truncate max-w-[120px]">{r.project?.name || "—"}</td>
-                        <td className="px-3 py-2.5 align-middle text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="p-1.5 rounded-lg hover:bg-muted" aria-label="Actions"><MoreHorizontal className="h-4 w-4" /></button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openDetail(r.id)}><Eye className="h-4 w-4 mr-2" /> View</DropdownMenuItem>
-                              {canRemind && <DropdownMenuItem onClick={() => handleRemind(r.id)}><Bell className="h-4 w-4 mr-2" /> Remind</DropdownMenuItem>}
-                              {r.status === "completed" && (
-                                <DropdownMenuItem asChild>
-                                  <a href={`/api/signoff/${r.id}/signed-pdf`} target="_blank" rel="noreferrer"><Download className="h-4 w-4 mr-2" /> Download</a>
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem onClick={() => handleDuplicate(r.id)}><Copy className="h-4 w-4 mr-2" /> Duplicate</DropdownMenuItem>
-                              {canVoid && (
-                                <DropdownMenuItem onClick={() => { setVoidTargetId(r.id); setVoidDialogOpen(true); }}><Ban className="h-4 w-4 mr-2" /> Void</DropdownMenuItem>
-                              )}
-                              {r.status !== "completed" && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => handleDelete(r.id)} className="text-red-600 focus:text-red-700"><Trash2 className="h-4 w-4 mr-2" /> Delete</DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="esign-desktop-table">
+              <MondayBoardShell.Table
+                columns={signoffMondayColumns}
+                data={requests}
+                gridLines
+                onRowClick={(r) => openDetail(r.id)}
+                onCellEdit={(rowId, columnId, value) => {
+                  patchSignoffMut.mutate({
+                    id: Number(rowId),
+                    payload: { [columnId]: value === "" ? null : value },
+                  });
+                }}
+                searchHighlightTerm={debouncedSearch}
+                columnWidthStorageKey="jiganto-esign-requests-col-widths"
+                paginationResetKey={`${statusFilter}-${debouncedSearch}-${sort}`}
+                alwaysShowRowActions
+                renderRowActions={renderSignoffRowActions}
+                className="border-0"
+              />
             </div>
             {/* Mobile card list */}
             <div className="esign-mobile-cards">
@@ -1715,6 +1840,7 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
             </>
           )}
         </div>
+        </MondayBoardShell.Legacy>
         </div>
           </div>
         </div>

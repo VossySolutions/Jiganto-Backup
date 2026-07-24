@@ -13,6 +13,7 @@ import {
   getHealthMatrix,
   generate360Report,
   saveReportSnapshot,
+  getLatestReportSnapshot,
   listReportSchedules,
   createReportSchedule,
   listPortfoliosWithLinks,
@@ -211,9 +212,16 @@ export function registerPortfolioRoutes(app: Express): void {
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const tenantId = requireApiTenantId(req, res);
       if (tenantId == null) return;
-    const report = await generate360Report(tenantId, Number(req.params.projectId));
+    const projectId = Number(req.params.projectId);
+    const report = await generate360Report(tenantId, projectId);
     if (!report) return res.status(404).json({ message: "Project not found" });
-    res.json(report);
+    const latest = await getLatestReportSnapshot(tenantId, "360_report", projectId);
+    const content = (latest?.contentJson || null) as Record<string, unknown> | null;
+    const sectionOverrides =
+      content?.sectionOverrides && typeof content.sectionOverrides === "object"
+        ? content.sectionOverrides
+        : undefined;
+    res.json(sectionOverrides ? { ...report, sectionOverrides } : report);
   });
 
   app.post("/api/portfolio/reports/360/:projectId", async (req, res) => {
@@ -222,10 +230,15 @@ export function registerPortfolioRoutes(app: Express): void {
     const tenantId = requireApiTenantId(req, res);
       if (tenantId == null) return;
     const narrative = typeof req.body?.narrative === "string" ? req.body.narrative : undefined;
+    const sectionOverrides =
+      req.body?.sectionOverrides && typeof req.body.sectionOverrides === "object"
+        ? req.body.sectionOverrides
+        : undefined;
     const report = await generate360Report(tenantId, Number(req.params.projectId), narrative);
     if (!report) return res.status(404).json({ message: "Project not found" });
-    const snapshot = await saveReportSnapshot(tenantId, "360_report", report, userId, Number(req.params.projectId));
-    res.status(201).json({ report, snapshotId: snapshot.id });
+    const content = sectionOverrides ? { ...report, sectionOverrides } : report;
+    const snapshot = await saveReportSnapshot(tenantId, "360_report", content, userId, Number(req.params.projectId));
+    res.status(201).json({ report: content, snapshotId: snapshot.id });
   });
 
   app.get("/api/portfolio/reports/360/:projectId/pptx", async (req, res) => {

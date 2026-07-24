@@ -1,5 +1,4 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -8,20 +7,15 @@ import { Label } from "@/components/ui/label";
 import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { LeadFormDialog } from "./LeadFormDialog";
 import { LeadDetailSheet, type CrmLead } from "./LeadDetailSheet";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
-  Plus, Download, Upload, ArrowUpRight, Search,
-  SlidersHorizontal, ArrowUpDown, Layers,
-  UserCheck, ChevronDown,   Maximize2, Minimize2,
-  Columns3, Table2, List, Calendar, Settings2, GanttChart, FileText,
-  MessageSquare, Paperclip, ListTodo, FolderPlus, X,
-  ChevronsUpDown, ChevronsDownUp, Pin, ClipboardPaste,
-  BarChart3, LayoutDashboard, Clock, FormInput, Paintbrush, ChevronUp, GripVertical,
-  MoreHorizontal, UserRound,
+  ArrowUpRight,
+  UserCheck, ChevronDown,
+  Settings2,
+  MessageSquare, Paperclip, ListTodo, FolderPlus,
 } from "lucide-react";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { useCrmUsers } from "./CrmUsersProvider";
@@ -39,7 +33,6 @@ import {
   CrmLeadFormView,
   CrmLeadTimesheetView,
 } from "./CrmLeadExtraViews";
-import { CrmLeadSavedViewTabs } from "./CrmLeadSavedViewTabs";
 import { CrmLeadAddColumnDialog } from "./CrmLeadAddColumnDialog";
 import { CrmLeadPasteDialog } from "./CrmLeadPasteDialog";
 import { loadColumnVisibility, saveColumnVisibility, type CrmColumnDef } from "@/lib/crm-list-columns";
@@ -66,11 +59,14 @@ import {
   type LeadSortRule,
   type LeadSortField,
 } from "@/lib/crm-lead-manual-groups";
-import MondayTable, {
+import {
   type ColumnDef,
   type GroupDef,
   type StatusOption,
 } from "@/components/MondayTable";
+import { MondayBoardShell, BoardColumnsAddAction } from "@/components/board";
+import type { BoardFilterFieldDef, BoardFilterRule, BoardViewMode, BoardViewSnapshot } from "@/lib/board-filters";
+import { BOARD_VIEW_MODES } from "@/lib/board-filters";
 
 /** Columns accepted by POST /api/crm/leads/bulk-import (and blank template). */
 const LEAD_IMPORT_HEADERS = [
@@ -149,7 +145,13 @@ import {
   type LeadFilterOperator,
   type LeadFilterRule,
 } from "@/lib/crm-lead-filters";
-import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
+import { type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
+
+const LEAD_FILTER_FIELD_DEFS: BoardFilterFieldDef[] = FILTER_FIELDS.map((f) => ({
+  field: f.field,
+  label: f.label,
+  textInput: f.field === "company" || f.field === "title" || f.field === "industry",
+}));
 
 type LeadAttachmentSummaryRow = { id: number; entityId: number };
 type LeadTaskSummaryRow = { id: number; leadId: number | null; status?: string | null; completedAt?: string | null };
@@ -184,31 +186,7 @@ type LeadGroupBy =
   | "manual"
   | "followUp";
 
-type TableDensity = "compact" | "comfortable" | "expanded";
-type LeadViewMode =
-  | "table"
-  | "list"
-  | "board"
-  | "calendar"
-  | "gantt"
-  | "document"
-  | "chart"
-  | "form"
-  | "dashboard"
-  | "timesheet";
-
-const VIEW_OPTIONS: { id: LeadViewMode; label: string; icon: typeof Table2 }[] = [
-  { id: "table", label: "Table", icon: Table2 },
-  { id: "list", label: "List", icon: List },
-  { id: "board", label: "Board", icon: Columns3 },
-  { id: "calendar", label: "Calendar", icon: Calendar },
-  { id: "gantt", label: "Gantt", icon: GanttChart },
-  { id: "document", label: "Document", icon: FileText },
-  { id: "chart", label: "Chart", icon: BarChart3 },
-  { id: "form", label: "Form", icon: FormInput },
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "timesheet", label: "Timesheet", icon: Clock },
-];
+type LeadViewMode = BoardViewMode;
 
 interface CrmLeadsTabProps {
   leads: CrmLead[];
@@ -357,10 +335,6 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   const [groupBy, setGroupBy] = useState<LeadGroupBy>("none");
   const [manualGroups, setManualGroups] = useState<ManualLeadGroup[]>(() => loadManualLeadGroups());
   const [selectedLeadIds, setSelectedLeadIds] = useState<(number | string)[]>([]);
-  const [density, setDensity] = useState<TableDensity>("comfortable");
-  const [formatPanelOpen, setFormatPanelOpen] = useState(false);
-  const [expandAllSignal, setExpandAllSignal] = useState(0);
-  const [collapseAllSignal, setCollapseAllSignal] = useState(0);
   const [pinCompany, setPinCompany] = useState(() => {
     if (typeof window === "undefined") return true;
     return localStorage.getItem("crm-leads-pin-company") !== "0";
@@ -388,7 +362,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   const [viewMode, setViewMode] = useState<LeadViewMode>(() => {
     if (typeof window === "undefined") return "table";
     const stored = localStorage.getItem("crm-leads-view-mode") as LeadViewMode | null;
-    return stored && VIEW_OPTIONS.some((v) => v.id === stored) ? stored : "table";
+    return stored && BOARD_VIEW_MODES.includes(stored) ? stored : "table";
   });
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>(() => loadLeadStatusOptions());
   const [ratingOptions, setRatingOptions] = useState<StatusOption[]>(() => loadLeadRatingOptions());
@@ -565,12 +539,6 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     return [...LEAD_TABLE_COLUMNS, ...customCols];
   }, [customFields]);
 
-  const hiddenAddableCount = allAddableColumns.filter((c) => !isColVisible(c.id)).length;
-  const activeFilterCount = filterRules.filter((r) => {
-    const op = FILTER_OPERATORS.find((o) => o.value === (r.operator || "is")) || FILTER_OPERATORS[0];
-    return !op.needsValue || !!r.value;
-  }).length;
-
   const hotCount = leads.filter((l) => getTemperature(l.score) === "hot").length;
   const warmCount = leads.filter((l) => getTemperature(l.score) === "warm").length;
   const coldCount = leads.filter((l) => getTemperature(l.score) === "cold").length;
@@ -613,36 +581,6 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
       case "score": return ["0", "40", "80", "100"].map((v) => ({ value: v, label: v }));
       default: return [];
     }
-  };
-
-  const addFilterRule = () => {
-    setFilterRules((prev) => [
-      ...prev,
-      {
-        id: `f_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        field: "status",
-        operator: "is",
-        value: "",
-      },
-    ]);
-  };
-
-  const updateFilterRule = (id: string, patch: Partial<LeadFilterRule>) => {
-    setFilterRules((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              ...patch,
-              ...(patch.field ? { value: "", operator: patch.operator || r.operator || "is" } : {}),
-            }
-          : r,
-      ),
-    );
-  };
-
-  const removeFilterRule = (id: string) => {
-    setFilterRules((prev) => prev.filter((r) => r.id !== id));
   };
 
   const filteredLeads = useMemo(() => {
@@ -749,7 +687,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
       setColumnOrderIds(ordered);
       localStorage.setItem("crm-leads-column-order", JSON.stringify(ordered));
     }
-    if (extras?.viewMode && VIEW_OPTIONS.some((v) => v.id === extras.viewMode)) {
+    if (extras?.viewMode && BOARD_VIEW_MODES.includes(extras.viewMode as LeadViewMode)) {
       setViewModePersist(extras.viewMode as LeadViewMode);
     }
     if (extras?.groupBy) {
@@ -757,18 +695,37 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     }
   };
 
-  const applyViewSnapshot = (snap: {
-    filters: FilterConfig[];
-    sorts: SortConfig[];
-    columns: { id: string; visible: boolean; order: number }[];
-    viewMode?: string;
-    groupBy?: string;
-  }) => {
-    applySavedView(snap.filters, snap.sorts, snap.columns, {
+  const applyViewSnapshot = (snap: BoardViewSnapshot) => {
+    const asFilterConfigs: FilterConfig[] = (snap.filters || []).map((f: any) => {
+      if (f.field) {
+        return {
+          columnId: `${f.field}|${f.operator || "is"}`,
+          operator: leadOpToSaved((f.operator || "is") as LeadFilterOperator),
+          value: f.value || "",
+        };
+      }
+      return f as FilterConfig;
+    });
+    const asSortConfigs: SortConfig[] = (snap.sorts || []).map((s: any) => ({
+      columnId: s.columnId || s.field || "date",
+      direction: (s.direction || s.dir || "desc") as "asc" | "desc",
+    }));
+    applySavedView(asFilterConfigs, asSortConfigs, snap.columns, {
       viewMode: snap.viewMode,
       groupBy: snap.groupBy,
     });
   };
+
+  const viewSnapshot = useMemo(
+    (): BoardViewSnapshot => ({
+      filters: filterRules as BoardFilterRule[],
+      sorts: sortRules,
+      columns: savedViewColumns,
+      viewMode,
+      groupBy,
+    }),
+    [filterRules, sortRules, savedViewColumns, viewMode, groupBy],
+  );
 
   const persistRowOrder = (
     ids: (number | string)[],
@@ -1169,11 +1126,17 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   };
 
   const columnsMenuItems = useMemo(() => {
-    const standard = LEAD_TABLE_COLUMNS.map((c) => ({ id: c.id, label: c.label, kind: "standard" as const }));
+    const standard = LEAD_TABLE_COLUMNS.map((c) => ({
+      id: c.id,
+      label: c.label,
+      kind: "builtin" as const,
+      visible: isColVisible(c.id),
+    }));
     const custom = customFields.map((f) => ({
       id: `custom_${f.fieldName}`,
       label: f.fieldLabel,
       kind: "custom" as const,
+      visible: isColVisible(`custom_${f.fieldName}`),
     }));
     const all = [...standard, ...custom];
     if (columnOrderIds.length === 0) return all;
@@ -1184,7 +1147,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
       if (ai !== bi) return ai - bi;
       return 0;
     });
-  }, [customFields, columnOrderIds]);
+  }, [customFields, columnOrderIds, columnVisibility]);
 
   const moveColumnInMenu = (columnId: string, dir: -1 | 1) => {
     setColumnOrderIds((prev) => {
@@ -1479,980 +1442,524 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     });
   };
 
-  const cycleDensity = () => {
-    setDensity((prev) =>
-      prev === "comfortable" ? "expanded" : prev === "expanded" ? "compact" : "comfortable",
-    );
-  };
-
   const groupByLabel =
     groupBy === "none" ? "Group by" : `Group by ${groupBy}`;
 
-  /** monday.com board toolbar control */
-  const toolBtn = (active = false) =>
-    cn(
-      "inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[13px] font-medium transition-colors whitespace-nowrap",
-      "text-foreground hover:bg-muted",
-      active && "bg-primary/15 text-primary hover:bg-primary/15",
-    );
-  const iconBtn = (active = false) =>
-    cn(
-      "inline-flex items-center justify-center h-8 w-8 rounded-md transition-colors",
-      "text-muted-foreground hover:bg-muted hover:text-foreground",
-      active && "bg-primary/15 text-primary hover:bg-primary/15",
-    );
-  const toolbarDivider = (
-    <div className="h-5 w-px shrink-0 bg-border mx-0.5" aria-hidden />
+  const personUsers = users.map((user) => {
+    const owner = resolveOwner(user.id);
+    return { id: user.id, name: owner.name, initials: owner.initials, color: owner.color };
+  });
+
+  const groupContent = (
+    <>
+      <DropdownMenuItem onClick={() => setGroupBy("none")} data-testid="group-none">None</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("status")} data-testid="group-status">Status</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("owner")} data-testid="group-owner">Owner</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("source")} data-testid="group-source">Source</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("temperature")} data-testid="group-temperature">Temperature</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("rating")} data-testid="group-rating">Rating</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("title")} data-testid="group-title">Title</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("industry")} data-testid="group-industry">Industry</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("followUp")} data-testid="group-followup">Follow-up date</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("manual")} data-testid="group-manual">Manual groups</DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={handleCreateManualGroup} data-testid="group-create-manual">
+        <FolderPlus className="h-3.5 w-3.5 mr-2" />
+        Create new group{selectedLeadIds.length > 0 ? ` (${selectedLeadIds.length} selected)` : ""}…
+      </DropdownMenuItem>
+      {manualGroups.length > 0 && (
+        <>
+          <DropdownMenuSeparator />
+          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Delete group</div>
+          {manualGroups.map((g) => (
+            <DropdownMenuItem
+              key={`del-${g.id}`}
+              className="text-destructive"
+              onClick={() => {
+                persistManualGroups(deleteManualGroup(manualGroups, g.id));
+                toast({ title: `Deleted group “${g.title}”` });
+              }}
+            >
+              Delete “{g.title}”
+            </DropdownMenuItem>
+          ))}
+        </>
+      )}
+    </>
+  );
+
+  const columnsHeaderActions = (
+    <>
+      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Add column</div>
+      <BoardColumnsAddAction onClick={() => setAddColumnOpen(true)} />
+      <DropdownMenuItem
+        onClick={() => onOpenCustomFieldsSettings?.()}
+        data-testid="button-create-custom-field"
+      >
+        <Settings2 className="h-3.5 w-3.5 mr-2" />
+        Manage custom fields…
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setLabelEditor("status")} data-testid="button-edit-status-labels-menu">
+        Edit status labels…
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setLabelEditor("rating")} data-testid="button-edit-rating-labels-menu">
+        Edit rating labels…
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setLabelEditor("source")} data-testid="button-edit-source-labels-menu">
+        Edit source labels…
+      </DropdownMenuItem>
+    </>
   );
 
   return (
     <div className="space-y-3">
-      <CrmLeadSavedViewTabs
+      <MondayBoardShell<CrmLead>
+        storageKey="jiganto-crm-leads"
         entityType="lead"
-        current={{
-          filters: currentFilters,
-          sorts: currentSorts,
-          columns: savedViewColumns,
-          viewMode,
-          groupBy,
+        ownsCustomColumns
+        isColumnVisible={isColVisible}
+        testId="leads-table"
+        viewSnapshot={viewSnapshot}
+        onApplyViewSnapshot={applyViewSnapshot}
+        mainTableSorts={[{ field: "date", dir: "desc" }]}
+        newLabel="New Lead"
+        onNew={() => {
+          sessionStorage.removeItem("crm-leads-pending-status");
+          sessionStorage.removeItem("crm-leads-pending-group");
+          openCreateForm();
         }}
-        onApply={applyViewSnapshot}
-      />
-
-      {/* monday.com-style board toolbar */}
-      <div
-        className="flex items-center gap-1 min-w-0 overflow-x-auto overscroll-x-contain rounded-lg border border-border bg-muted/80 px-2 py-1.5 [-ms-overflow-style:none] [scrollbar-width:thin]"
-        data-testid="filter-temperature-bar"
-      >
-        <div className="flex items-center gap-1 shrink-0">
-          <Button
-            className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 rounded-md text-[13px] font-medium shadow-none px-3"
-            data-testid="button-add-lead"
-            onClick={() => {
-              sessionStorage.removeItem("crm-leads-pending-status");
-              sessionStorage.removeItem("crm-leads-pending-group");
-              openCreateForm();
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            New Lead
-          </Button>
-
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder="Search / Filter Board"
-              value={localSearch}
-              onChange={(e) => setLocalSearch(e.target.value)}
-              className="pl-8 h-8 w-[200px] rounded-md border-border text-[13px] bg-background shadow-none focus-visible:ring-primary"
-              data-testid="input-search-leads"
-            />
-          </div>
-
-          {toolbarDivider}
-
-          <div className="flex items-center gap-0.5" data-testid="owner-avatar-filter">
-            <button
-              type="button"
-              onClick={() => setOwnerFilter("all")}
-              className={toolBtn(ownerFilter === "all" || !ownerFilter)}
-              title="All people"
-            >
-              <UserRound className="h-3.5 w-3.5" />
-              Person
-            </button>
-            <button
-              type="button"
-              onClick={() => setOwnerFilter(ownerFilter === "__unassigned__" ? "all" : "__unassigned__")}
-              className={cn(
-                "h-7 w-7 rounded-full border text-[10px] font-semibold transition-colors",
-                ownerFilter === "__unassigned__"
-                  ? "ring-2 ring-primary border-primary"
-                  : "border-border bg-background text-muted-foreground hover:bg-muted",
-              )}
-              title="Unassigned"
-            >
-              —
-            </button>
-            {users.slice(0, 12).map((user) => {
-              const owner = resolveOwner(user.id);
-              const active = ownerFilter === user.id;
-              return (
-                <button
-                  key={user.id}
-                  type="button"
-                  title={owner.name}
-                  onClick={() => setOwnerFilter(active ? "all" : user.id)}
-                  className={cn(
-                    "h-7 w-7 rounded-full text-white text-[10px] font-semibold transition-transform",
-                    active && "ring-2 ring-offset-1 ring-offset-background ring-primary scale-105",
-                  )}
-                  style={{ backgroundColor: owner.color }}
-                  data-testid={`filter-owner-avatar-${user.id}`}
-                >
-                  {owner.initials}
-                </button>
-              );
-            })}
-          </div>
-
-          {toolbarDivider}
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className={toolBtn()} data-testid="view-switcher-leads">
-                {(() => {
-                  const current = VIEW_OPTIONS.find((v) => v.id === viewMode) || VIEW_OPTIONS[0];
-                  const Icon = current.icon;
-                  return (
-                    <>
-                      <Icon className="h-3.5 w-3.5" />
-                      {current.label}
-                      <ChevronDown className="h-3 w-3 opacity-60" />
-                    </>
-                  );
-                })()}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              {VIEW_OPTIONS.map((view) => (
-                <DropdownMenuItem
-                  key={view.id}
-                  onClick={() => setViewModePersist(view.id)}
-                  className="gap-2"
-                  data-testid={`view-leads-${view.id}`}
-                >
-                  <view.icon className="h-4 w-4" />
-                  {view.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
-            <PopoverTrigger asChild>
-              <button
-                className={toolBtn(activeFilterCount > 0)}
-                data-testid="button-filter"
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                Filter
-                {activeFilterCount > 0 && (
-                  <span className="h-4 min-w-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-            </PopoverTrigger>
-          <PopoverContent align="start" className="w-[520px] space-y-2 p-3">
-            {filterRules.length === 0 ? (
-              <p className="text-xs text-muted-foreground px-1">No filters applied.</p>
-            ) : (
-              <div className="space-y-2">
-                {filterRules.map((rule, idx) => {
-                  const op = rule.operator || "is";
-                  const opMeta = FILTER_OPERATORS.find((o) => o.value === op) || FILTER_OPERATORS[0];
-                  const useTextInput =
-                    op === "contains" ||
-                    op === "not_contains" ||
-                    op === "gt" ||
-                    op === "lt" ||
-                    rule.field === "company" ||
-                    rule.field === "title" ||
-                    rule.field === "industry";
-                  return (
-                  <div key={rule.id} className="flex items-center gap-1.5" data-testid={`filter-rule-${idx}`}>
-                    <span className="text-xs text-muted-foreground w-9 shrink-0">{idx === 0 ? "Where" : "and"}</span>
-                    <Select value={rule.field} onValueChange={(v) => updateFilterRule(rule.id, { field: v as LeadFilterField })}>
-                      <SelectTrigger className="h-8 w-[100px] text-xs shrink-0" data-testid={`filter-rule-field-${idx}`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                        {FILTER_FIELDS.map((f) => (
-                          <SelectItem key={f.field} value={f.field}>{f.label}</SelectItem>
-                        ))}
-                </SelectContent>
-              </Select>
-                    <Select
-                      value={op}
-                      onValueChange={(v) => updateFilterRule(rule.id, { operator: v as LeadFilterOperator, value: FILTER_OPERATORS.find((o) => o.value === v)?.needsValue ? rule.value : "" })}
-                    >
-                      <SelectTrigger className="h-8 w-[120px] text-xs shrink-0" data-testid={`filter-rule-op-${idx}`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                        {FILTER_OPERATORS.map((o) => (
-                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-                    {opMeta.needsValue && (
-                      useTextInput ? (
-                        <Input
-                          className="h-8 flex-1 text-xs"
-                          value={rule.value}
-                          placeholder={op === "gt" || op === "lt" ? "Value…" : "Text…"}
-                          onChange={(e) => updateFilterRule(rule.id, { value: e.target.value })}
-                          data-testid={`filter-rule-value-${idx}`}
-                        />
-                      ) : (
-                        <Select value={rule.value} onValueChange={(v) => updateFilterRule(rule.id, { value: v })}>
-                          <SelectTrigger className="h-8 flex-1 text-xs" data-testid={`filter-rule-value-${idx}`}>
-                            <SelectValue placeholder="Select…" />
-                </SelectTrigger>
-                <SelectContent>
-                            {getFilterFieldOptions(rule.field).map((o) => (
-                              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-                      )
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 shrink-0"
-                      onClick={() => removeFilterRule(rule.id)}
-                      data-testid={`button-remove-filter-${idx}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-            </div>
-                  );
-                })}
-              </div>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-primary hover:text-primary hover:bg-primary/10 gap-1 h-7 px-1.5"
-              onClick={addFilterRule}
-              data-testid="button-new-filter"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              New Filter
-            </Button>
-            {filterRules.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-                onClick={() => setFilterRules([])}
-              data-testid="button-clear-filters"
-            >
-              Clear filters
-            </Button>
-            )}
-          </PopoverContent>
-        </Popover>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className={toolBtn(sortRules.length > 1 || sortRules[0]?.field !== "date")}
-              data-testid="button-sort"
-            >
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              Sort{sortRules.length > 1 ? ` (${sortRules.length})` : ""}
-              <ChevronDown className="h-3 w-3 opacity-60" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64">
-            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Active sorts</div>
-            {sortRules.map((rule, idx) => {
-              const meta = LEAD_SORT_FIELDS.find((f) => f.field === rule.field);
-              return (
-                <div key={rule.field} className="flex items-center gap-1 px-2 py-1">
-                  <span className="text-xs text-muted-foreground w-4">{idx + 1}.</span>
-                  <button
-                    type="button"
-                    className="flex-1 text-left text-sm hover:underline"
-                    onClick={() => handleSortToggle(rule.field)}
-                  >
-                    {meta?.label || rule.field} ({rule.dir})
-                  </button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => removeSortRule(rule.field)}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              );
-            })}
-            <DropdownMenuSeparator />
-            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Add sort</div>
-            {LEAD_SORT_FIELDS.filter((f) => !sortRules.some((r) => r.field === f.field)).map((f) => (
-              <DropdownMenuItem key={f.field} onClick={() => addSortRule(f.field)}>
-                {f.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {viewMode === "table" && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-                className={toolBtn(groupBy !== "none")}
-                title={groupByLabel}
-                aria-label={groupBy === "none" ? "Group leads" : groupByLabel}
-              data-testid="button-group"
-            >
-                <Layers className="h-3.5 w-3.5" />
-                {groupByLabel}
-                <ChevronDown className="h-3 w-3 opacity-60" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => setGroupBy("none")} data-testid="group-none">None</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGroupBy("status")} data-testid="group-status">Status</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGroupBy("owner")} data-testid="group-owner">Owner</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGroupBy("source")} data-testid="group-source">Source</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGroupBy("temperature")} data-testid="group-temperature">Temperature</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGroupBy("rating")} data-testid="group-rating">Rating</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGroupBy("title")} data-testid="group-title">Title</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGroupBy("industry")} data-testid="group-industry">Industry</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGroupBy("followUp")} data-testid="group-followup">Follow-up date</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGroupBy("manual")} data-testid="group-manual">Manual groups</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleCreateManualGroup} data-testid="group-create-manual">
-                <FolderPlus className="h-3.5 w-3.5 mr-2" />
-                Create new group{selectedLeadIds.length > 0 ? ` (${selectedLeadIds.length} selected)` : ""}…
-            </DropdownMenuItem>
-              {manualGroups.length > 0 && (
-                <>
-                  <DropdownMenuSeparator />
-                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Delete group</div>
-                  {manualGroups.map((g) => (
-                    <DropdownMenuItem
-                      key={`del-${g.id}`}
-                      className="text-destructive"
-                      onClick={() => {
-                        persistManualGroups(deleteManualGroup(manualGroups, g.id));
-                        toast({ title: `Deleted group “${g.title}”` });
-                      }}
-                    >
-                      Delete “{g.title}”
-            </DropdownMenuItem>
-                  ))}
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-
-        {viewMode === "table" && groupBy !== "none" && (
-          <>
-            <button
-              type="button"
-              className={iconBtn()}
-              title="Expand all groups"
-              onClick={() => setExpandAllSignal((n) => n + 1)}
-              data-testid="button-expand-all-groups"
-            >
-              <ChevronsUpDown className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              className={iconBtn()}
-              title="Collapse all groups"
-              onClick={() => setCollapseAllSignal((n) => n + 1)}
-              data-testid="button-collapse-all-groups"
-            >
-              <ChevronsDownUp className="h-3.5 w-3.5" />
-            </button>
-          </>
-        )}
-
-        {viewMode === "table" && (
-          <button
-            type="button"
-            className={toolBtn(pinCompany)}
-            title={pinCompany ? "Unpin Company column" : "Pin Company column"}
-            onClick={() => {
-              setPinCompany((v) => {
-                const next = !v;
-                localStorage.setItem("crm-leads-pin-company", next ? "1" : "0");
-                return next;
+        newTestId="button-add-lead"
+        searchValue={localSearch}
+        onSearchChange={setLocalSearch}
+        searchTestId="input-search-leads"
+        personUsers={personUsers}
+        personValue={ownerFilter}
+        onPersonChange={setOwnerFilter}
+        viewMode={viewMode}
+        onViewModeChange={setViewModePersist}
+        filterRules={filterRules as BoardFilterRule[]}
+        onFilterRulesChange={(rules) => setFilterRules(rules as LeadFilterRule[])}
+        filterFields={LEAD_FILTER_FIELD_DEFS}
+        getFilterFieldOptions={(field) => getFilterFieldOptions(field as LeadFilterField)}
+        filterOpen={filterOpen}
+        onFilterOpenChange={setFilterOpen}
+        sortRules={sortRules}
+        sortFields={LEAD_SORT_FIELDS}
+        onSortToggle={(field) => handleSortToggle(field as LeadSortField)}
+        onSortAdd={(field) => addSortRule(field as LeadSortField)}
+        onSortRemove={(field) => removeSortRule(field as LeadSortField)}
+        defaultSortField="date"
+        groupContent={groupContent}
+        groupActive={groupBy !== "none"}
+        groupLabel={groupByLabel}
+        grouped={groupBy !== "none"}
+        pinActive={pinCompany}
+        onPinToggle={() => {
+          setPinCompany((v) => {
+            const next = !v;
+            localStorage.setItem("crm-leads-pin-company", next ? "1" : "0");
+            return next;
+          });
+        }}
+        pinTitle={pinCompany ? "Unpin Company column" : "Pin Company column"}
+        columnMenuItems={columnsMenuItems}
+        onColumnVisible={setColVisible}
+        onColumnMove={moveColumnInMenu}
+        columnsHeaderActions={columnsHeaderActions}
+        savedViewFilters={currentFilters}
+        savedViewSorts={currentSorts}
+        savedViewColumns={savedViewColumns}
+        onApplySavedViewDropdown={applySavedView}
+        onExport={exportToCSV}
+        onDownloadTemplate={downloadImportTemplate}
+        onPaste={() => setPasteOpen(true)}
+        onImport={() => setImportOpen(true)}
+        renderAlternateView={(mode) => {
+          if (mode === "list") {
+            return (
+              <CrmLeadListView
+                leads={filteredLeads}
+                statusOptions={statusOptions}
+                resolveOwner={resolveOwner}
+                onOpenLead={setViewingLead}
+                onConvert={handleConvert}
+              />
+            );
+          }
+          if (mode === "board") {
+            return (
+              <CrmLeadBoardView
+                leads={filteredLeads}
+                statusOptions={statusOptions}
+                resolveOwner={resolveOwner}
+                onOpenLead={setViewingLead}
+                onConvert={handleConvert}
+                onAddLead={(status) => {
+                  if (status && status !== "converted") {
+                    sessionStorage.setItem("crm-leads-pending-status", status);
+                  } else {
+                    sessionStorage.removeItem("crm-leads-pending-status");
+                  }
+                  openCreateForm();
+                }}
+                onStatusChange={async (leadId, status) => {
+                  try {
+                    await updateLeadMutation.mutateAsync({ id: leadId, updates: { status } });
+                    toast({ title: "Status updated" });
+                  } catch {
+                    toast({ title: "Failed to update status", variant: "destructive" });
+                    throw new Error("status update failed");
+                  }
+                }}
+              />
+            );
+          }
+          if (mode === "calendar") {
+            return (
+              <CrmLeadCalendarView
+                leads={filteredLeads}
+                statusOptions={statusOptions}
+                onOpenLead={setViewingLead}
+                onAddLead={openCreateForm}
+              />
+            );
+          }
+          if (mode === "gantt") {
+            return (
+              <CrmLeadGanttView
+                leads={filteredLeads}
+                statusOptions={statusOptions}
+                resolveOwner={resolveOwner}
+                onOpenLead={setViewingLead}
+                onConvert={handleConvert}
+                onAddLead={openCreateForm}
+                onFollowUpChange={async (leadId, isoDate) => {
+                  const lead = leads.find((l) => l.id === leadId);
+                  const prev = (lead?.customData && typeof lead.customData === "object")
+                    ? { ...lead.customData }
+                    : {};
+                  prev._followUpDate = isoDate;
+                  await updateLeadMutation.mutateAsync({ id: leadId, updates: { customData: prev } });
+                  toast({ title: "Follow-up date updated" });
+                }}
+              />
+            );
+          }
+          if (mode === "document") {
+            return (
+              <CrmLeadDocumentView
+                leads={filteredLeads}
+                statusOptions={statusOptions}
+                resolveOwner={resolveOwner}
+                onOpenLead={setViewingLead}
+                onConvert={handleConvert}
+                onAddLead={openCreateForm}
+                onSaveDescription={async (leadId, description) => {
+                  await updateLeadMutation.mutateAsync({ id: leadId, updates: { description } });
+                  toast({ title: "Document saved" });
+                }}
+              />
+            );
+          }
+          if (mode === "chart") {
+            return (
+              <CrmLeadChartView
+                leads={filteredLeads}
+                statusOptions={statusOptions}
+                ratingOptions={ratingOptions}
+                sourceOptions={mergedSourceOptions}
+                resolveOwner={resolveOwner}
+                onOpenLead={setViewingLead}
+                onAddLead={openCreateForm}
+              />
+            );
+          }
+          if (mode === "dashboard") {
+            return (
+              <CrmLeadDashboardView
+                leads={filteredLeads}
+                statusOptions={statusOptions}
+                resolveOwner={resolveOwner}
+                onOpenLead={setViewingLead}
+                onAddLead={openCreateForm}
+              />
+            );
+          }
+          if (mode === "form") {
+            return (
+              <CrmLeadFormView
+                key={formViewLead?.id ?? "new"}
+                leads={filteredLeads}
+                statusOptions={statusOptions}
+                ratingOptions={ratingOptions}
+                sourceOptions={mergedSourceOptions}
+                resolveOwner={resolveOwner}
+                onOpenLead={(lead) => {
+                  if (!lead?.id) setFormViewLead(null);
+                  else setFormViewLead(lead);
+                }}
+                editingLead={formViewLead}
+                onAddLead={() => {
+                  setFormViewLead(null);
+                  openCreateForm();
+                }}
+                onSubmit={async (data) => {
+                  const payload = {
+                    firstName: data.firstName || "Unknown",
+                    lastName: data.lastName || "Unknown",
+                    email: data.email || null,
+                    phone: data.phone || null,
+                    company: data.company || null,
+                    title: data.title || null,
+                    source: data.source || null,
+                    status: data.status || "new",
+                    rating: data.rating || null,
+                    score: data.score ? Number(data.score) : null,
+                    industry: data.industry || null,
+                    website: data.website || null,
+                    description: data.description || null,
+                  };
+                  if (formViewLead) {
+                    await updateLeadMutation.mutateAsync({ id: formViewLead.id, updates: payload });
+                    toast({ title: "Lead updated" });
+                  } else {
+                    await apiRequest("POST", "/api/crm/leads", payload);
+                    queryClient.invalidateQueries({ queryKey: ["/api/crm/leads"] });
+                    toast({ title: "Lead created" });
+                    setFormViewLead(null);
+                  }
+                }}
+              />
+            );
+          }
+          if (mode === "timesheet") {
+            return (
+              <CrmLeadTimesheetView
+                leads={filteredLeads}
+                statusOptions={statusOptions}
+                resolveOwner={resolveOwner}
+                onOpenLead={setViewingLead}
+                onAddLead={openCreateForm}
+                onSaveTimesheet={async (leadId, entries) => {
+                  const lead = leads.find((l) => l.id === leadId);
+                  const prev = (lead?.customData && typeof lead.customData === "object")
+                    ? { ...lead.customData }
+                    : {};
+                  prev._timesheet = entries;
+                  await updateLeadMutation.mutateAsync({ id: leadId, updates: { customData: prev } });
+                  toast({ title: "Timesheet saved" });
+                }}
+              />
+            );
+          }
+          return null;
+        }}
+        tableProps={{
+          columns: tableColumns,
+          data: filteredLeads,
+          groups: tableGroups,
+          selectable: true,
+          gridLines: true,
+          reorderable: true,
+          onRowReorder: persistRowOrder,
+          onColumnReorder: handleColumnReorder,
+          showColumnSummary: true,
+          emptyMessage: "No leads yet. Capture leads to grow your sales pipeline.",
+          addItemLabel: "Add Lead",
+          onRowSelect: (ids) => setSelectedLeadIds(ids),
+          onRowFilesDrop: async (lead, files) => {
+            try {
+              for (const file of files) {
+                const fileUrl = await new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(String(reader.result));
+                  reader.onerror = () => reject(new Error("Failed to read file"));
+                  reader.readAsDataURL(file);
+                });
+                await apiRequest("POST", "/api/crm/attachments", {
+                  entityType: "lead",
+                  entityId: lead.id,
+                  fileName: file.name,
+                  fileType: file.type || null,
+                  fileSize: file.size,
+                  fileUrl,
+                });
+              }
+              queryClient.invalidateQueries({
+                queryKey: [`/api/crm/attachments?entityType=lead&entityId=${lead.id}`],
               });
-            }}
-            data-testid="button-pin-company"
-          >
-            <Pin className="h-3.5 w-3.5" />
-            Pin
-          </button>
-        )}
-
-        {toolbarDivider}
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className={toolBtn(hiddenAddableCount > 0)}
-              data-testid="button-add-column"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Columns
-              {hiddenAddableCount > 0 && (
-                <span className="h-4 min-w-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
-                  {hiddenAddableCount}
-                </span>
-              )}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="w-72 max-h-[min(75vh,560px)] overflow-y-auto"
-          >
-            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Add column</div>
-            <DropdownMenuItem
-              onClick={() => setAddColumnOpen(true)}
-              data-testid="button-add-column-type"
-            >
-              <Plus className="h-3.5 w-3.5 mr-2" />
-              Add column (choose type)…
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => onOpenCustomFieldsSettings?.()}
-              data-testid="button-create-custom-field"
-            >
-              <Settings2 className="h-3.5 w-3.5 mr-2" />
-              Manage custom fields…
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setLabelEditor("status")} data-testid="button-edit-status-labels-menu">
-              Edit status labels…
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setLabelEditor("rating")} data-testid="button-edit-rating-labels-menu">
-              Edit rating labels…
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setLabelEditor("source")} data-testid="button-edit-source-labels-menu">
-              Edit source labels…
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-              Columns · use arrows to reorder headers
-            </div>
-            {columnsMenuItems.map((col, idx) => (
-              <div
-                key={col.id}
-                className="flex items-center gap-0.5 px-1.5 py-0.5 hover:bg-accent/60 rounded-sm"
-                data-testid={`column-menu-row-${col.id}`}
-              >
-                <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
-                <button
-                  type="button"
-                  className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-muted disabled:opacity-30"
-                  disabled={idx === 0}
-                  title="Move column left / earlier"
-                  aria-label={`Move ${col.label} earlier`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    moveColumnInMenu(col.id, -1);
-                  }}
-                  data-testid={`column-move-up-${col.id}`}
-                >
-                  <ChevronUp className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-muted disabled:opacity-30"
-                  disabled={idx >= columnsMenuItems.length - 1}
-                  title="Move column right / later"
-                  aria-label={`Move ${col.label} later`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    moveColumnInMenu(col.id, 1);
-                  }}
-                  data-testid={`column-move-down-${col.id}`}
-                >
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-                <label className="flex flex-1 items-center gap-2 min-w-0 cursor-pointer px-1 py-1 text-sm">
-                  <Checkbox
-                    checked={isColVisible(col.id)}
-                    onCheckedChange={(checked) => setColVisible(col.id, checked === true)}
-                    data-testid={`add-column-${col.id}`}
-                  />
-                  <span className="truncate">
-                    {col.label}
-                    {col.kind === "custom" ? (
-                      <span className="text-[10px] text-muted-foreground ml-1">custom</span>
-                    ) : null}
-                  </span>
-                </label>
-              </div>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {viewMode === "table" && (
-          <button
-            type="button"
-            onClick={cycleDensity}
-            className={iconBtn()}
-            title={`Density: ${density}`}
-            aria-label={`Table density ${density}`}
-            data-testid="button-density"
-          >
-            {density === "compact" ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-          </button>
-        )}
-        </div>
-
-        <div className="flex items-center gap-0.5 shrink-0 ml-auto pl-1.5">
-          {toolbarDivider}
-          <SavedViewsDropdown
-            entityType="lead"
-            currentFilters={currentFilters}
-            currentSorts={currentSorts}
-            columns={savedViewColumns}
-            onApplyView={applySavedView}
-            triggerClassName="border-transparent bg-transparent text-foreground hover:bg-muted shadow-none h-8 px-2.5 rounded-md"
-          />
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={iconBtn(formatPanelOpen)}
-                title="More actions"
-                aria-label="More actions"
-                data-testid="button-leads-more"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              {viewMode === "table" && (
-                <DropdownMenuItem
-                  className="gap-2"
-                  onSelect={() => setFormatPanelOpen(true)}
-                  data-testid="button-conditional-formatting"
-                >
-                  <Paintbrush className="h-3.5 w-3.5" />
-                  Format
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem className="gap-2" onSelect={exportToCSV} data-testid="button-export-leads">
-                <Download className="h-3.5 w-3.5" />
-                Export CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="gap-2"
-                onSelect={downloadImportTemplate}
-                data-testid="button-download-import-template"
-              >
-                <FileText className="h-3.5 w-3.5" />
-                Download import template
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="gap-2" onSelect={() => setPasteOpen(true)} data-testid="button-paste-leads">
-                <ClipboardPaste className="h-3.5 w-3.5" />
-                Paste
-              </DropdownMenuItem>
-              <DropdownMenuItem className="gap-2" onSelect={() => setImportOpen(true)} data-testid="button-import-leads">
-                <Upload className="h-3.5 w-3.5" />
-                Import
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <ImportModal
-            isOpen={importOpen}
-            onClose={() => setImportOpen(false)}
-            entityName="Leads"
-            templateHeaders={[...LEAD_IMPORT_HEADERS]}
-            exampleRow={{ ...LEAD_IMPORT_EXAMPLE }}
-            currentCount={leads.length}
-            onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
-          />
-        </div>
-      </div>
-
-      <div data-testid="leads-table">
-        {viewMode === "table" && (
-          <MondayTable
-            columns={tableColumns}
-            data={filteredLeads}
-            groups={tableGroups}
-            selectable
-            gridLines
-            density={density}
-            reorderable
-            hideFormatToolbar={true}
-            formatPanelOpen={formatPanelOpen}
-            onFormatPanelOpenChange={setFormatPanelOpen}
-            onRowReorder={persistRowOrder}
-            onColumnReorder={handleColumnReorder}
-            expandAllSignal={expandAllSignal}
-            collapseAllSignal={collapseAllSignal}
-            showColumnSummary
-            emptyMessage="No leads yet. Capture leads to grow your sales pipeline."
-            addItemLabel="Add Lead"
-            onRowSelect={(ids) => setSelectedLeadIds(ids)}
-            onRowFilesDrop={async (lead, files) => {
-              try {
-                for (const file of files) {
-                  const fileUrl = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(String(reader.result));
-                    reader.onerror = () => reject(new Error("Failed to read file"));
-                    reader.readAsDataURL(file);
-                  });
-                  await apiRequest("POST", "/api/crm/attachments", {
-                    entityType: "lead",
-                    entityId: lead.id,
-                    fileName: file.name,
-                    fileType: file.type || null,
-                    fileSize: file.size,
-                    fileUrl,
-                  });
-                }
-                queryClient.invalidateQueries({
-                  queryKey: [`/api/crm/attachments?entityType=lead&entityId=${lead.id}`],
-                });
-                queryClient.invalidateQueries({ queryKey: ["/api/crm/attachments?entityType=lead"] });
-                toast({ title: `${files.length} file(s) attached` });
-              } catch {
-                toast({
-                  title: "Upload failed",
-                  description: "If this persists, run npm run db:push to create the attachments table.",
-                  variant: "destructive",
-                });
-              }
-            }}
-            onAddItem={(groupId) => {
-              if (groupId && groupId !== "ungrouped" && manualGroups.some((g) => g.id === groupId)) {
-                sessionStorage.setItem("crm-leads-pending-group", groupId);
-              } else {
-                sessionStorage.removeItem("crm-leads-pending-group");
-              }
-              // When grouped by status, prefill create form with that column's status
-              if (groupBy === "status" && groupId) {
-                const opt = statusOptions.find((o) => o.value === groupId || o.label === groupId);
-                const status = opt?.value || groupId.toLowerCase();
-                if (status && status !== "converted") {
-                  sessionStorage.setItem("crm-leads-pending-status", status);
-                } else {
-                  sessionStorage.removeItem("crm-leads-pending-status");
-                }
-              } else {
-                sessionStorage.removeItem("crm-leads-pending-status");
-              }
-              openCreateForm();
-            }}
-            onRowDoubleClick={(lead) => {
-              setExtrasTab("comments");
-              setViewingLead(lead);
-            }}
-            onOpenItem={(lead) => {
-              setExtrasTab("comments");
-              setViewingLead(lead);
-            }}
-            onCellEdit={handleCellEdit}
-            onEditItem={handleEdit}
-            onDeleteItems={(ids) => {
-              const n = ids.length;
-              if (!window.confirm(n === 1 ? "Delete this lead?" : `Delete ${n} leads?`)) return;
-              if (ids.length === 1) {
-                deleteMutation.mutate(typeof ids[0] === "string" ? Number(ids[0]) : ids[0]);
-              } else {
-                bulkDeleteMutation.mutate(ids);
-              }
-              setSelectedLeadIds([]);
-            }}
-            searchHighlightTerm={effectiveSearch}
-            columnWidthStorageKey="jiganto-crm-leads-col-widths"
-            pagination={{
-              defaultPageSize: 25,
-              resetKey: `${effectiveSearch}|${JSON.stringify(filterRules)}|${ownerFilter}|${JSON.stringify(sortRules)}|${groupBy}`,
-            }}
-            totalCount={leads.length}
-            className="border rounded-xl border-border/60"
-            alwaysShowRowActions
-            rowActionsWidth="minmax(140px, max-content)"
-            renderRowActions={(lead) => (
-              <div className="flex items-center justify-end gap-0.5 shrink-0 whitespace-nowrap">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0"
-                  title="Comments"
-                  onClick={(e) => { e.stopPropagation(); openLeadExtras(lead, "comments"); }}
-                  data-testid={`button-comments-lead-${lead.id}`}
-                >
-                  <MessageSquare className="h-3.5 w-3.5" />
-        </Button>
-                {manualGroups.length > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0"
-                        title="Move to group"
-                        onClick={(e) => e.stopPropagation()}
-                        data-testid={`button-move-group-lead-${lead.id}`}
-                      >
-                        <FolderPlus className="h-3.5 w-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                      {manualGroups.map((g) => (
-                        <DropdownMenuItem
-                          key={g.id}
-                          onClick={() => handleMoveSelectedToGroup(g.id, [lead.id])}
-                        >
-                          {g.title}
-                        </DropdownMenuItem>
-                      ))}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleMoveSelectedToGroup("ungrouped", [lead.id])}>
-                        Ungroup
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-                {lead.status !== "converted" && (
-                    <Button
-                    variant="ghost"
-                      size="sm"
-                    onClick={(e) => { e.stopPropagation(); handleConvert(lead); }}
-                    className="text-primary hover:text-primary hover:bg-primary/10 h-7 px-2 shrink-0"
-                    data-testid={`button-convert-lead-${lead.id}`}
-                    >
-                    <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
-                    Convert
-                    </Button>
-                )}
-                  </div>
-            )}
-            renderBulkActions={(ids) => (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" data-testid="button-bulk-status">
-                      <UserCheck className="h-3 w-3" />
-                      Change Status
-                      <ChevronDown className="h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    {statusOptions.filter((o) => o.value !== "converted").map((opt) => (
-                      <DropdownMenuItem key={opt.value} onClick={() => handleBulkStatusChange(ids, opt.value)}>
-                        {opt.label}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" data-testid="button-bulk-move-group">
-                      <FolderPlus className="h-3 w-3" />
-                      Move to group
-                      <ChevronDown className="h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    {manualGroups.length === 0 ? (
-                      <DropdownMenuItem onClick={handleCreateManualGroup}>Create first group…</DropdownMenuItem>
-                    ) : (
-                      <>
-                        {manualGroups.map((g) => (
-                          <DropdownMenuItem key={g.id} onClick={() => handleMoveSelectedToGroup(g.id, ids)}>
-                            {g.title}
-                          </DropdownMenuItem>
-                        ))}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleMoveSelectedToGroup("ungrouped", ids)}>
-                          Ungroup
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleCreateManualGroup}>
-                          New group with selection…
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-          </div>
-        )}
-          />
-        )}
-
-        {viewMode === "list" && (
-          <CrmLeadListView
-            leads={filteredLeads}
-            statusOptions={statusOptions}
-            resolveOwner={resolveOwner}
-            onOpenLead={setViewingLead}
-            onConvert={handleConvert}
-          />
-        )}
-
-        {viewMode === "board" && (
-          <CrmLeadBoardView
-            leads={filteredLeads}
-            statusOptions={statusOptions}
-            resolveOwner={resolveOwner}
-            onOpenLead={setViewingLead}
-            onConvert={handleConvert}
-            onAddLead={(status) => {
+              queryClient.invalidateQueries({ queryKey: ["/api/crm/attachments?entityType=lead"] });
+              toast({ title: `${files.length} file(s) attached` });
+            } catch {
+              toast({
+                title: "Upload failed",
+                description: "If this persists, run npm run db:push to create the attachments table.",
+                variant: "destructive",
+              });
+            }
+          },
+          onAddItem: (groupId) => {
+            if (groupId && groupId !== "ungrouped" && manualGroups.some((g) => g.id === groupId)) {
+              sessionStorage.setItem("crm-leads-pending-group", groupId);
+            } else {
+              sessionStorage.removeItem("crm-leads-pending-group");
+            }
+            if (groupBy === "status" && groupId) {
+              const opt = statusOptions.find((o) => o.value === groupId || o.label === groupId);
+              const status = opt?.value || groupId.toLowerCase();
               if (status && status !== "converted") {
                 sessionStorage.setItem("crm-leads-pending-status", status);
               } else {
                 sessionStorage.removeItem("crm-leads-pending-status");
               }
-              openCreateForm();
-            }}
-            onStatusChange={async (leadId, status) => {
-              try {
-                await updateLeadMutation.mutateAsync({ id: leadId, updates: { status } });
-                toast({ title: "Status updated" });
-              } catch {
-                toast({ title: "Failed to update status", variant: "destructive" });
-                throw new Error("status update failed");
-              }
-            }}
-          />
-        )}
+            } else {
+              sessionStorage.removeItem("crm-leads-pending-status");
+            }
+            openCreateForm();
+          },
+          onRowDoubleClick: (lead) => {
+            setExtrasTab("comments");
+            setViewingLead(lead);
+          },
+          onOpenItem: (lead) => {
+            setExtrasTab("comments");
+            setViewingLead(lead);
+          },
+          onCellEdit: handleCellEdit,
+          onEditItem: handleEdit,
+          onDeleteItems: (ids) => {
+            const n = ids.length;
+            if (!window.confirm(n === 1 ? "Delete this lead?" : `Delete ${n} leads?`)) return;
+            if (ids.length === 1) {
+              deleteMutation.mutate(typeof ids[0] === "string" ? Number(ids[0]) : ids[0]);
+            } else {
+              bulkDeleteMutation.mutate(ids);
+            }
+            setSelectedLeadIds([]);
+          },
+          searchHighlightTerm: effectiveSearch,
+          columnWidthStorageKey: "jiganto-crm-leads-col-widths",
+          paginationResetKey: `${effectiveSearch}|${JSON.stringify(filterRules)}|${ownerFilter}|${JSON.stringify(sortRules)}|${groupBy}`,
+          totalCount: leads.length,
+          alwaysShowRowActions: true,
+          rowActionsWidth: "minmax(140px, max-content)",
+          renderRowActions: (lead) => (
+            <div className="flex items-center justify-end gap-0.5 shrink-0 whitespace-nowrap">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                title="Comments"
+                onClick={(e) => { e.stopPropagation(); openLeadExtras(lead, "comments"); }}
+                data-testid={`button-comments-lead-${lead.id}`}
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+              </Button>
+              {manualGroups.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      title="Move to group"
+                      onClick={(e) => e.stopPropagation()}
+                      data-testid={`button-move-group-lead-${lead.id}`}
+                    >
+                      <FolderPlus className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                    {manualGroups.map((g) => (
+                      <DropdownMenuItem
+                        key={g.id}
+                        onClick={() => handleMoveSelectedToGroup(g.id, [lead.id])}
+                      >
+                        {g.title}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleMoveSelectedToGroup("ungrouped", [lead.id])}>
+                      Ungroup
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              {lead.status !== "converted" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => { e.stopPropagation(); handleConvert(lead); }}
+                  className="text-primary hover:text-primary hover:bg-primary/10 h-7 px-2 shrink-0"
+                  data-testid={`button-convert-lead-${lead.id}`}
+                >
+                  <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
+                  Convert
+                </Button>
+              )}
+            </div>
+          ),
+          renderBulkActions: (ids) => (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" data-testid="button-bulk-status">
+                    <UserCheck className="h-3 w-3" />
+                    Change Status
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  {statusOptions.filter((o) => o.value !== "converted").map((opt) => (
+                    <DropdownMenuItem key={opt.value} onClick={() => handleBulkStatusChange(ids, opt.value)}>
+                      {opt.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" data-testid="button-bulk-move-group">
+                    <FolderPlus className="h-3 w-3" />
+                    Move to group
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  {manualGroups.length === 0 ? (
+                    <DropdownMenuItem onClick={handleCreateManualGroup}>Create first group…</DropdownMenuItem>
+                  ) : (
+                    <>
+                      {manualGroups.map((g) => (
+                        <DropdownMenuItem key={g.id} onClick={() => handleMoveSelectedToGroup(g.id, ids)}>
+                          {g.title}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => handleMoveSelectedToGroup("ungrouped", ids)}>
+                        Ungroup
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleCreateManualGroup}>
+                        New group with selection…
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ),
+        }}
+      />
 
-        {viewMode === "calendar" && (
-          <CrmLeadCalendarView
-            leads={filteredLeads}
-            statusOptions={statusOptions}
-            onOpenLead={setViewingLead}
-            onAddLead={openCreateForm}
-          />
-        )}
-
-        {viewMode === "gantt" && (
-          <CrmLeadGanttView
-            leads={filteredLeads}
-            statusOptions={statusOptions}
-            resolveOwner={resolveOwner}
-            onOpenLead={setViewingLead}
-            onConvert={handleConvert}
-            onAddLead={openCreateForm}
-            onFollowUpChange={async (leadId, isoDate) => {
-              const lead = leads.find((l) => l.id === leadId);
-              const prev = (lead?.customData && typeof lead.customData === "object")
-                ? { ...lead.customData }
-                : {};
-              prev._followUpDate = isoDate;
-              await updateLeadMutation.mutateAsync({ id: leadId, updates: { customData: prev } });
-              toast({ title: "Follow-up date updated" });
-            }}
-          />
-        )}
-
-        {viewMode === "document" && (
-          <CrmLeadDocumentView
-            leads={filteredLeads}
-            statusOptions={statusOptions}
-            resolveOwner={resolveOwner}
-            onOpenLead={setViewingLead}
-            onConvert={handleConvert}
-            onAddLead={openCreateForm}
-            onSaveDescription={async (leadId, description) => {
-              await updateLeadMutation.mutateAsync({ id: leadId, updates: { description } });
-              toast({ title: "Document saved" });
-            }}
-          />
-        )}
-
-        {viewMode === "chart" && (
-          <CrmLeadChartView
-            leads={filteredLeads}
-            statusOptions={statusOptions}
-            ratingOptions={ratingOptions}
-            sourceOptions={mergedSourceOptions}
-            resolveOwner={resolveOwner}
-            onOpenLead={setViewingLead}
-            onAddLead={openCreateForm}
-          />
-        )}
-
-        {viewMode === "dashboard" && (
-          <CrmLeadDashboardView
-            leads={filteredLeads}
-            statusOptions={statusOptions}
-            resolveOwner={resolveOwner}
-            onOpenLead={setViewingLead}
-            onAddLead={openCreateForm}
-          />
-        )}
-
-        {viewMode === "form" && (
-          <CrmLeadFormView
-            key={formViewLead?.id ?? "new"}
-            leads={filteredLeads}
-            statusOptions={statusOptions}
-            ratingOptions={ratingOptions}
-            sourceOptions={mergedSourceOptions}
-            resolveOwner={resolveOwner}
-            onOpenLead={(lead) => {
-              if (!lead?.id) setFormViewLead(null);
-              else setFormViewLead(lead);
-            }}
-            editingLead={formViewLead}
-            onAddLead={() => {
-              setFormViewLead(null);
-              openCreateForm();
-            }}
-            onSubmit={async (data) => {
-              const payload = {
-                firstName: data.firstName || "Unknown",
-                lastName: data.lastName || "Unknown",
-                email: data.email || null,
-                phone: data.phone || null,
-                company: data.company || null,
-                title: data.title || null,
-                source: data.source || null,
-                status: data.status || "new",
-                rating: data.rating || null,
-                score: data.score ? Number(data.score) : null,
-                industry: data.industry || null,
-                website: data.website || null,
-                description: data.description || null,
-              };
-              if (formViewLead) {
-                await updateLeadMutation.mutateAsync({ id: formViewLead.id, updates: payload });
-                toast({ title: "Lead updated" });
-              } else {
-                await apiRequest("POST", "/api/crm/leads", payload);
-                queryClient.invalidateQueries({ queryKey: ["/api/crm/leads"] });
-                toast({ title: "Lead created" });
-                setFormViewLead(null);
-              }
-            }}
-          />
-        )}
-
-        {viewMode === "timesheet" && (
-          <CrmLeadTimesheetView
-            leads={filteredLeads}
-            statusOptions={statusOptions}
-            resolveOwner={resolveOwner}
-            onOpenLead={setViewingLead}
-            onAddLead={openCreateForm}
-            onSaveTimesheet={async (leadId, entries) => {
-              const lead = leads.find((l) => l.id === leadId);
-              const prev = (lead?.customData && typeof lead.customData === "object")
-                ? { ...lead.customData }
-                : {};
-              prev._timesheet = entries;
-              await updateLeadMutation.mutateAsync({ id: leadId, updates: { customData: prev } });
-              toast({ title: "Timesheet saved" });
-            }}
-          />
-        )}
-      </div>
+      <ImportModal
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
+        entityName="Leads"
+        templateHeaders={[...LEAD_IMPORT_HEADERS]}
+        exampleRow={{ ...LEAD_IMPORT_EXAMPLE }}
+        currentCount={leads.length}
+        onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
+      />
 
       <CrmLeadAddColumnDialog
         open={addColumnOpen}

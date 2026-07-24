@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import type { PmMilestone } from "@shared/models/projects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,10 +13,14 @@ import {
   FieldGrid,
   FieldLabel
 } from "@/components/ui/form-dialog-shell";
-import { useTablePagination } from "@/hooks/use-table-pagination";
-import { TablePagination } from "@/components/TablePagination";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
 import {
-  Search, Plus, Upload, Download, LayoutList, Clock, CalendarDays,
+  MondayBoardProvider,
+  MondayBoardTable,
+  MondayBoardChromeControls,
+} from "@/components/MondayBoardTable";
+import {
+  Plus, Upload, Download, LayoutList, Clock, CalendarDays,
   Target, AlertTriangle, CheckCircle2, XCircle, Loader2, Trash2, X,
 } from "lucide-react";
 
@@ -77,13 +82,13 @@ const normaliseRAG = (v: string) => {
   };
   return m[(v || "").toLowerCase().trim()] || "Green";
 };
-const normaliseDate = (v: string) => {
-  if (!v) return todayStr();
+const normaliseDate = (v: string): string | null => {
+  if (!v) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
   const dmy = v.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
   if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
   const dt = new Date(v);
-  return isNaN(dt.getTime()) ? todayStr() : dt.toISOString().split("T")[0];
+  return isNaN(dt.getTime()) ? null : dt.toISOString().split("T")[0];
 };
 
 interface MilestoneTrackerProps {
@@ -98,9 +103,7 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
   const showProjectCol = mode !== "project";
   const showPortfolioCols = mode === "portfolio";
   const { toast } = useToast();
-  const [view, setView] = useState<"table" | "timeline">("table");
-  const [sortKey, setSortKey] = useState("targetDate");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [view, setView] = useState<"table" | "timeline">("timeline");
   const [granularity, setGranularity] = useState("Monthly");
   const [groupBy, setGroupBy] = useState("Project");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -112,19 +115,7 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
   const [fRAG, setFRAG] = useState("");
   const [fDateFrom, setFDateFrom] = useState("");
   const [fDateTo, setFDateTo] = useState("");
-  const [editingComment, setEditingComment] = useState<number | null>(null);
-  const [editingDate, setEditingDate] = useState<number | null>(null);
-  const [editingCell, setEditingCell] = useState<{ id: number; field: string } | null>(null);
-  const [editingCellVal, setEditingCellVal] = useState("");
-  const [commentVal, setCommentVal] = useState("");
-  const [dateVal, setDateVal] = useState("");
   const [ragDropdownId, setRagDropdownId] = useState<number | null>(null);
-
-  const startEditCell = (id: number, field: string, value: string) => {
-    setEditingCell({ id, field });
-    setEditingCellVal(value || "");
-  };
-  const cancelEditCell = () => setEditingCell(null);
 
   const queryKey = mode === "project" && projectId
     ? ["/api/pm/projects", projectId, "milestones"]
@@ -188,18 +179,13 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
       else if (def?.filter) ms = ms.filter(m => m.ragStatus === def.filter);
     }
     return [...ms].sort((a, b) => {
-      let va: any = (a as any)[sortKey] || "";
-      let vb: any = (b as any)[sortKey] || "";
-      if (sortKey === "ragStatus") {
-        const order: Record<string, number> = { Red: 0, Amber: 1, Green: 2, Blue: 3 };
-        va = order[va] ?? 9;
-        vb = order[vb] ?? 9;
-      }
-      if (va < vb) return sortDir === "asc" ? -1 : 1;
-      if (va > vb) return sortDir === "asc" ? 1 : -1;
+      const va = a.targetDate || "";
+      const vb = b.targetDate || "";
+      if (va < vb) return -1;
+      if (va > vb) return 1;
       return 0;
     });
-  }, [milestones, fProject, fPhase, fWS, fRAG, fDateFrom, fDateTo, activeKpi, sortKey, sortDir]);
+  }, [milestones, fProject, fPhase, fWS, fRAG, fDateFrom, fDateTo, activeKpi]);
 
   const activeFilters = [
     fProject && { label: `Project: ${fProject}`, clear: () => setFProject("") },
@@ -213,25 +199,87 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
 
   const clearAll = () => { setFProject(""); setFPhase(""); setFWS(""); setFRAG(""); setFDateFrom(""); setFDateTo(""); setActiveKpi(null); };
 
-  const tablePagination = useTablePagination(filtered, {
-    resetKey: `${view}|${fProject}|${fPhase}|${fWS}|${fRAG}|${fDateFrom}|${fDateTo}|${activeKpi}|${sortKey}|${sortDir}`,
-  });
+  const ragStatusOptions = useMemo(
+    () => RAG_ORDER.map((r) => ({ value: r, label: RAG_CONFIG[r].label, color: RAG_CONFIG[r].dot })),
+    [],
+  );
 
-  const handleSort = (key: string) => {
-    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortKey(key); setSortDir("asc"); }
-  };
+  const mondayColumns: MondayColumnDef<EnrichedMilestone>[] = useMemo(() => {
+    const cols: MondayColumnDef<EnrichedMilestone>[] = [];
+    if (showPortfolioCols) {
+      cols.push({
+        id: "ref",
+        header: "Ref",
+        type: "text",
+        accessor: (row) => row.ref || `MS-${row.id}`,
+        width: "90px",
+        editable: false,
+      });
+      cols.push(
+        { id: "client", header: "Client", type: "text", accessor: (row) => row.client, width: "110px", editable: false },
+        { id: "portfolio", header: "Portfolio", type: "text", accessor: (row) => row.portfolio, width: "110px", editable: false },
+        { id: "programme", header: "Programme", type: "text", accessor: (row) => row.programme, width: "110px", editable: false },
+      );
+    }
+    if (showProjectCol) {
+      cols.push({
+        id: "projectName",
+        header: "Project",
+        type: "text",
+        accessor: "projectName",
+        width: "140px",
+        editable: true,
+      });
+    }
+    cols.push(
+      { id: "phase", header: "Phase", type: "text", accessor: "phase", width: "110px", editable: true },
+      { id: "workstream", header: "Workstream", type: "text", accessor: "workstream", width: "120px", editable: true },
+      { id: "name", header: "Milestone", type: "text", accessor: "name", width: "180px", sticky: true, editable: true },
+      {
+        id: "targetDate",
+        header: "Date",
+        type: "date",
+        accessor: "targetDate",
+        width: "120px",
+        editable: true,
+        render: (row) => {
+          const od = isOverdue(row.targetDate, row.ragStatus || "Green");
+          return (
+            <span className={cn("text-sm", od && "text-red-600 font-semibold")}>
+              {fmt(row.targetDate)}
+            </span>
+          );
+        },
+      },
+      {
+        id: "ragStatus",
+        header: "RAG",
+        type: "status",
+        accessor: "ragStatus",
+        width: "110px",
+        editable: true,
+        options: ragStatusOptions,
+        render: (row) => {
+          const cfg = RAG_CONFIG[row.ragStatus || "Green"] || RAG_CONFIG.Green;
+          return (
+            <span
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
+              style={{ background: ragBg(cfg), color: ragFg(cfg) }}
+            >
+              <span className="w-2 h-2 rounded-full" style={{ background: cfg.dot }} />
+              {cfg.label}
+            </span>
+          );
+        },
+      },
+      { id: "commentary", header: "Commentary", type: "text", accessor: "commentary", width: "200px", editable: true },
+    );
+    return cols;
+  }, [showPortfolioCols, showProjectCol, ragStatusOptions]);
 
   const onUpdate = useCallback((id: number, patch: any) => {
     updateMut.mutate({ id, data: patch });
   }, [updateMut]);
-
-  const commitEditCell = () => {
-    if (editingCell) {
-      onUpdate(editingCell.id, { [editingCell.field]: editingCellVal || null });
-      setEditingCell(null);
-    }
-  };
 
   const onDelete = useCallback((id: number) => {
     if (!window.confirm("Delete this milestone?")) return;
@@ -381,268 +429,37 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
 
       {/* Table View */}
       {view === "table" && (
-        <div className="bg-card border rounded-xl overflow-hidden shadow-sm" data-testid="milestone-table-view">
-          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-            <table className="w-full text-sm text-gray-700 dark:text-foreground">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
-                  {showPortfolioCols && (
-                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Ref</th>
-                  )}
-                  {showPortfolioCols && (
-                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Client</th>
-                  )}
-                  {showPortfolioCols && (
-                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Portfolio</th>
-                  )}
-                  {showPortfolioCols && (
-                    <th className="px-3 py-2.5 text-left align-middle font-semibold">Programme</th>
-                  )}
-                  {showProjectCol && (
-                    <th className={`px-3 py-2.5 text-left align-middle font-semibold cursor-pointer hover:text-foreground ${sortKey === "projectName" ? "text-primary" : "text-muted-foreground"}`} onClick={() => handleSort("projectName")}>
-                      Project {sortKey === "projectName" ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
-                    </th>
-                  )}
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Phase</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Workstream</th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Milestone</th>
-                  <th className={`px-3 py-2.5 text-left align-middle font-semibold cursor-pointer hover:text-foreground ${sortKey === "targetDate" ? "text-primary" : "text-muted-foreground"}`} onClick={() => handleSort("targetDate")}>
-                    Date {sortKey === "targetDate" ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
-                  </th>
-                  <th className={`px-3 py-2.5 text-left align-middle font-semibold cursor-pointer hover:text-foreground ${sortKey === "ragStatus" ? "text-primary" : "text-muted-foreground"}`} onClick={() => handleSort("ragStatus")}>
-                    RAG {sortKey === "ragStatus" ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
-                  </th>
-                  <th className="px-3 py-2.5 text-left align-middle font-semibold">Commentary</th>
-                  <th className="px-3 py-2.5 align-middle w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 && (
-                  <tr><td colSpan={(showProjectCol ? 1 : 0) + (showPortfolioCols ? 4 : 0) + 7} className="text-center py-12 text-muted-foreground">
-                    <Search className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                    No milestones match the current filters
-                  </td></tr>
-                )}
-                {tablePagination.paginatedItems.map(m => {
-                  const em = m as EnrichedMilestone;
-                  const od = isOverdue(m.targetDate, m.ragStatus || "Green");
-                  const cfg = RAG_CONFIG[m.ragStatus || "Green"] || RAG_CONFIG.Green;
-                  return (
-                    <tr key={m.id} className="border-b border-border/40 last:border-b-0 hover:bg-muted/30 transition group" data-testid={`milestone-row-${m.id}`}>
-                      {showPortfolioCols && (
-                        <td className="px-3 py-2.5 align-middle font-mono text-xs text-muted-foreground">{em.ref || `MS-${String(m.id).padStart(3, "0")}`}</td>
-                      )}
-                      {showPortfolioCols && (
-                        <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground">{em.client || "—"}</td>
-                      )}
-                      {showPortfolioCols && (
-                        <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground">{em.portfolio || "—"}</td>
-                      )}
-                      {showPortfolioCols && (
-                        <td className="px-3 py-2.5 align-middle text-xs text-muted-foreground">{em.programme || "—"}</td>
-                      )}
-                      {showProjectCol && (
-                        <td className="px-3 py-2.5 align-middle">
-                          {editingCell?.id === m.id && editingCell.field === "projectName" ? (
-                            <input
-                              className="border border-primary rounded px-1.5 py-0.5 text-[13px] w-full bg-primary/5 text-foreground outline-none font-semibold"
-                              value={editingCellVal}
-                              onChange={e => setEditingCellVal(e.target.value)}
-                              onBlur={commitEditCell}
-                              onKeyDown={e => { if (e.key === "Enter") commitEditCell(); if (e.key === "Escape") cancelEditCell(); }}
-                              autoFocus
-                              data-testid={`project-edit-${m.id}`}
-                            />
-                          ) : (
-                            <span
-                              className="font-semibold text-primary text-[13px] cursor-text"
-                              onClick={() => startEditCell(m.id, "projectName", m.projectName || "")}
-                              title="Click to edit project"
-                              data-testid={`project-display-${m.id}`}
-                            >
-                              {m.projectName || <em className="opacity-40 text-muted-foreground font-normal">Add project…</em>}
-                            </span>
-                          )}
-                        </td>
-                      )}
-                      <td className="px-3 py-2.5 align-middle">
-                        {editingCell?.id === m.id && editingCell.field === "phase" ? (
-                          <input
-                            className="border border-primary rounded px-1.5 py-0.5 text-[12.5px] w-full bg-primary/5 text-foreground outline-none"
-                            value={editingCellVal}
-                            onChange={e => setEditingCellVal(e.target.value)}
-                            onBlur={commitEditCell}
-                            onKeyDown={e => { if (e.key === "Enter") commitEditCell(); if (e.key === "Escape") cancelEditCell(); }}
-                            autoFocus
-                            list={`phase-list-${m.id}`}
-                            data-testid={`phase-edit-${m.id}`}
-                          />
-                        ) : (
-                          <span
-                            className="text-muted-foreground text-[12.5px] cursor-text"
-                            onClick={() => startEditCell(m.id, "phase", m.phase || "")}
-                            title="Click to edit phase"
-                            data-testid={`phase-display-${m.id}`}
-                          >
-                            {m.phase || <em className="opacity-40">Add phase…</em>}
-                          </span>
-                        )}
-                        <datalist id={`phase-list-${m.id}`}>{phases.map(p => <option key={p} value={p} />)}</datalist>
-                      </td>
-                      <td className="px-3 py-2.5 align-middle">
-                        {editingCell?.id === m.id && editingCell.field === "workstream" ? (
-                          <input
-                            className="border border-primary rounded px-1.5 py-0.5 text-[12.5px] w-full bg-primary/5 text-foreground outline-none"
-                            value={editingCellVal}
-                            onChange={e => setEditingCellVal(e.target.value)}
-                            onBlur={commitEditCell}
-                            onKeyDown={e => { if (e.key === "Enter") commitEditCell(); if (e.key === "Escape") cancelEditCell(); }}
-                            autoFocus
-                            list={`ws-list-${m.id}`}
-                            data-testid={`workstream-edit-${m.id}`}
-                          />
-                        ) : (
-                          <span
-                            className="text-muted-foreground text-[12.5px] cursor-text"
-                            onClick={() => startEditCell(m.id, "workstream", m.workstream || "")}
-                            title="Click to edit workstream"
-                            data-testid={`workstream-display-${m.id}`}
-                          >
-                            {m.workstream || <em className="opacity-40">Add workstream…</em>}
-                          </span>
-                        )}
-                        <datalist id={`ws-list-${m.id}`}>{workstreams.map(w => <option key={w} value={w} />)}</datalist>
-                      </td>
-                      <td className="px-3 py-2.5 align-middle">
-                        {editingCell?.id === m.id && editingCell.field === "name" ? (
-                          <input
-                            className="border border-primary rounded px-1.5 py-0.5 text-sm w-full bg-primary/5 text-foreground outline-none font-medium"
-                            value={editingCellVal}
-                            onChange={e => setEditingCellVal(e.target.value)}
-                            onBlur={commitEditCell}
-                            onKeyDown={e => { if (e.key === "Enter") commitEditCell(); if (e.key === "Escape") cancelEditCell(); }}
-                            autoFocus
-                            data-testid={`name-edit-${m.id}`}
-                          />
-                        ) : (
-                          <span
-                            className={`font-medium text-foreground cursor-text ${od ? "text-red-600 dark:text-red-400" : ""}`}
-                            onClick={() => startEditCell(m.id, "name", m.name)}
-                            title="Click to edit milestone name"
-                            data-testid={`name-display-${m.id}`}
-                          >
-                            {m.name}
-                          </span>
-                        )}
-                        {od && editingCell?.field !== "name" && (
-                          <span aria-label="Overdue" className="inline-block">
-                            <AlertTriangle className="inline h-3.5 w-3.5 ml-1.5 text-red-500" />
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 align-middle">
-                        {editingDate === m.id ? (
-                          <input
-                            type="date"
-                            className="border border-primary rounded px-1.5 py-0.5 text-xs w-full bg-primary/5 text-foreground outline-none"
-                            value={dateVal}
-                            onChange={e => setDateVal(e.target.value)}
-                            onBlur={() => { onUpdate(m.id, { targetDate: dateVal }); setEditingDate(null); }}
-                            onKeyDown={e => { if (e.key === "Enter") { onUpdate(m.id, { targetDate: dateVal }); setEditingDate(null); } if (e.key === "Escape") setEditingDate(null); }}
-                            autoFocus
-                            data-testid={`date-edit-${m.id}`}
-                          />
-                        ) : (
-                          <span
-                            className={`text-[12.5px] cursor-pointer ${od ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}
-                            onClick={() => { setEditingDate(m.id); setDateVal(m.targetDate || ""); }}
-                            title="Click to edit date"
-                            data-testid={`date-display-${m.id}`}
-                          >
-                            {fmt(m.targetDate)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 align-middle">
-                        <div className="relative inline-block">
-                          <span
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold cursor-pointer transition hover:scale-105"
-                            style={{ background: ragBg(cfg), color: ragFg(cfg) }}
-                            onClick={e => { e.stopPropagation(); setRagDropdownId(ragDropdownId === m.id ? null : m.id); }}
-                            title="Click to change RAG"
-                            data-testid={`rag-pill-${m.id}`}
-                          >
-                            <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: cfg.dot }} />
-                            {m.ragStatus || "Green"}
-                            <span className="opacity-50 text-[10px] ml-0.5">▾</span>
-                          </span>
-                          {ragDropdownId === m.id && (
-                            <div className="absolute top-full left-0 mt-1 bg-popover border rounded-xl shadow-lg p-1.5 z-50 min-w-[140px] animate-in fade-in slide-in-from-top-1" onClick={e => e.stopPropagation()}>
-                              {RAG_ORDER.map(r => {
-                                const c = RAG_CONFIG[r];
-                                return (
-                                  <div key={r} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-muted text-sm font-semibold" onClick={() => { onUpdate(m.id, { ragStatus: r }); setRagDropdownId(null); }}>
-                                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: c.dot }} />
-                                    <span style={{ color: ragFg(c) }}>{r}</span>
-                                    <span className="text-muted-foreground text-[11px] ml-auto">{c.label}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 align-middle">
-                        {editingComment === m.id ? (
-                          <textarea
-                            className="w-full border border-primary rounded px-2 py-1 text-[12.5px] bg-primary/5 text-foreground outline-none resize-none"
-                            value={commentVal}
-                            maxLength={200}
-                            rows={2}
-                            onChange={e => setCommentVal(e.target.value)}
-                            onBlur={() => { onUpdate(m.id, { commentary: commentVal }); setEditingComment(null); }}
-                            onKeyDown={e => { if (e.key === "Escape") setEditingComment(null); }}
-                            autoFocus
-                            data-testid={`comment-edit-${m.id}`}
-                          />
-                        ) : (
-                          <span
-                            className="text-[12.5px] text-muted-foreground cursor-text block truncate max-w-[300px]"
-                            title={m.commentary || "Click to add commentary"}
-                            onClick={() => { setEditingComment(m.id); setCommentVal(m.commentary || ""); }}
-                            data-testid={`comment-display-${m.id}`}
-                          >
-                            {m.commentary || <em className="opacity-40">Add note…</em>}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 align-middle">
-                        <button
-                          className="opacity-0 group-hover:opacity-100 p-1 rounded border border-border hover:border-red-400 transition text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-                          onClick={() => onDelete(m.id)}
-                          title="Delete"
-                          data-testid={`delete-milestone-${m.id}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <TablePagination
-            page={tablePagination.page}
-            totalPages={tablePagination.totalPages}
-            total={tablePagination.total}
-            startIndex={tablePagination.startIndex}
-            endIndex={tablePagination.endIndex}
-            pageSize={tablePagination.pageSize}
-            onPageChange={tablePagination.setPage}
-            onPageSizeChange={tablePagination.setPageSize}
-          />
+        <MondayBoardProvider storageKey="jiganto-milestones-table">
+        <div className="flex items-center justify-end mb-2">
+          <MondayBoardChromeControls />
         </div>
+        <div data-testid="milestone-table-view">
+        <MondayBoardTable
+          columns={mondayColumns}
+          data={filtered as EnrichedMilestone[]}
+          gridLines
+          emptyMessage="No milestones match the current filters"
+          onCellEdit={(id, columnId, value) =>
+            onUpdate(Number(id), { [columnId]: value === "" || value == null ? null : value })
+          }
+          renderRowActions={(row) => (
+            <button
+              type="button"
+              className="p-1 rounded border border-border hover:border-red-400 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+              onClick={(e) => { e.stopPropagation(); onDelete(row.id); }}
+              title="Delete"
+              data-testid={`delete-milestone-${row.id}`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+          alwaysShowRowActions
+          paginationResetKey={`${view}|${fProject}|${fPhase}|${fWS}|${fRAG}|${fDateFrom}|${fDateTo}|${activeKpi}`}
+          className="shadow-sm"
+          columnWidthStorageKey="jiganto-milestones-col-widths"
+        />
+        </div>
+        </MondayBoardProvider>
       )}
 
       {/* Timeline View */}
@@ -1081,14 +898,16 @@ function ImportMilestonesModal({ open, onClose, onImport, mode, projectId }: {
       const cells = parseCSVRow(line);
       const obj: Record<string, string> = {};
       headers.forEach((h, hi) => { if (h) obj[h] = cells[hi] || ""; });
-      if (!obj.projectName && !obj.name) { errors.push(`Row ${i + 2}: skipped`); return; }
+      if (!obj.name?.trim()) { errors.push(`Row ${i + 2}: Milestone name required`); return; }
+      const targetDate = normaliseDate(obj.targetDate || "");
+      if (!targetDate) { errors.push(`Row ${i + 2}: Invalid or missing target date`); return; }
       rows.push({
         projectId: mode === "project" ? projectId : null,
-        name: obj.name || "(untitled)",
+        name: obj.name.trim(),
         projectName: obj.projectName || (mode === "project" ? undefined : "Unknown Project"),
         phase: obj.phase || null,
         workstream: obj.workstream || null,
-        targetDate: normaliseDate(obj.targetDate || ""),
+        targetDate,
         ragStatus: normaliseRAG(obj.ragStatus || ""),
         commentary: (obj.commentary || "").slice(0, 200),
       });
@@ -1143,8 +962,8 @@ function ImportMilestonesModal({ open, onClose, onImport, mode, projectId }: {
     >
       <FormSection title="Import setup" icon={<span className="h-2 w-2 rounded-full bg-violet-500" />}>
         <div className="flex border-b -mx-6 px-6 mb-4">
-          <button className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${tab === "upload" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"}`} onClick={() => setTab("upload")}>Upload File</button>
-          <button className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${tab === "template" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"}`} onClick={() => setTab("template")}>Template</button>
+          <button type="button" className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${tab === "upload" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"}`} onClick={() => setTab("upload")}>Upload File</button>
+          <button type="button" className={`px-5 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${tab === "template" ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"}`} onClick={() => setTab("template")}>Template</button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -1215,7 +1034,7 @@ function ImportMilestonesModal({ open, onClose, onImport, mode, projectId }: {
                     <span key={f as string} className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${req ? "bg-primary/10 border-primary text-primary" : "bg-background border-border text-muted-foreground"}`}>{f as string}</span>
                   ))}
                 </div>
-                <Button size="sm" onClick={downloadTemplate} data-testid="button-download-template">
+                <Button type="button" size="sm" onClick={downloadTemplate} data-testid="button-download-template">
                   <Download className="h-3.5 w-3.5 mr-1.5" /> Download CSV Template
                 </Button>
               </div>

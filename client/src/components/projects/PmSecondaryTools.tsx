@@ -352,65 +352,6 @@ export function PmFinanceTrackerTool({ projectId, project }: ToolProps) {
   );
 }
 
-export function PmStatusReportingTool({ projectId, project }: ToolProps) {
-  const { toast } = useToast();
-  const meta = (project?.metadata as Record<string, unknown>) || {};
-  const reports = (meta.statusReports as { id: string; title: string; date: string; author: string; summary: string }[]) || [];
-  const [title, setTitle] = useState("");
-  const [summary, setSummary] = useState("");
-
-  const saveReport = useMutation({
-    mutationFn: async () => {
-      const next = [
-        { id: String(Date.now()), title, date: new Date().toISOString().slice(0, 10), author: "Current User", summary },
-        ...reports,
-      ];
-      return apiRequest("PUT", `/api/pm/projects/${projectId}`, {
-        metadata: { ...meta, statusReports: next },
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId] });
-      setTitle("");
-      setSummary("");
-      toast({ title: "Status report saved" });
-    },
-  });
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <Input placeholder="Report title (e.g. Week 12 Status)" value={title} onChange={(e) => setTitle(e.target.value)} />
-          <textarea className="w-full min-h-[80px] rounded-md border px-3 py-2 text-sm" placeholder="Summary…" value={summary} onChange={(e) => setSummary(e.target.value)} />
-          <Button size="sm" disabled={!title.trim() || saveReport.isPending} onClick={() => saveReport.mutate()}>
-            {saveReport.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Saving…</> : "Save Report"}
-          </Button>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Title</TableHead><TableHead>Author</TableHead><TableHead>Summary</TableHead></TableRow></TableHeader>
-            <TableBody>
-              {reports.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No status reports yet.</TableCell></TableRow>
-              ) : reports.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell>{r.date}</TableCell>
-                  <TableCell className="font-medium">{r.title}</TableCell>
-                  <TableCell>{r.author}</TableCell>
-                  <TableCell className="max-w-xs truncate">{r.summary}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 export function PmChangeLogTool({ projectId }: ToolProps) {
   const { toast } = useToast();
   const [title, setTitle] = useState("");

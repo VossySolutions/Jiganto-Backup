@@ -6,7 +6,6 @@ import {
   Building2,
   CalendarClock,
   CreditCard,
-  Download,
   HeartPulse,
   Plus,
   Settings2,
@@ -24,7 +23,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { fetchWithAuth, queryClient, apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { CustomerMgmtDashboard, CustomerDetail, BetaProgramme, DiscountRule, PricingPlan } from "@shared/models/customer-mgmt";
+import type { CustomerMgmtDashboard, CustomerDetail, BetaProgramme, DiscountRule, PricingPlan, CommercialCustomer } from "@shared/models/customer-mgmt";
 import { formatGbp } from "@shared/models/customer-mgmt";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +61,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ModuleHeader } from "@/components/ModuleHeader";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
 import { ModuleWelcomeBanner } from "@/components/ModuleWelcomeBanner";
@@ -265,6 +269,7 @@ export default function CustomerManagementPage() {
   const [healthSection, setHealthSection] = useState<HealthSectionId>("attention");
   const [selectedSlug, setSelectedSlug] = useState("");
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [statusFilter, setStatusFilter] = useState("all");
   const [planFilter, setPlanFilter] = useState("all");
   const [csmFilter, setCsmFilter] = useState("all");
@@ -275,6 +280,10 @@ export default function CustomerManagementPage() {
   const [editPlan, setEditPlan] = useState<PricingPlan | null>(null);
   const [discountRule, setDiscountRule] = useState<DiscountRule | null | "new">(null);
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+  const [pinOrg, setPinOrg] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("customer-mgmt-pin-org") !== "0";
+  });
   const [editCustomerOpen, setEditCustomerOpen] = useState(false);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
   const [addDiscountOpen, setAddDiscountOpen] = useState(false);
@@ -467,8 +476,8 @@ export default function CustomerManagementPage() {
   const filteredCustomers = useMemo(() => {
     if (!dashboard) return [];
     let rows = dashboard.overview.customers;
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase();
       rows = rows.filter(
         (c) =>
           c.name.toLowerCase().includes(q) ||
@@ -482,11 +491,9 @@ export default function CustomerManagementPage() {
     if (planFilter !== "all") rows = rows.filter((c) => c.plan === planFilter);
     if (csmFilter !== "all") rows = rows.filter((c) => c.csmName === csmFilter);
     return rows;
-  }, [dashboard, search, statusFilter, planFilter, csmFilter]);
+  }, [dashboard, debouncedSearch, statusFilter, planFilter, csmFilter]);
 
-  const customersPagination = useTablePagination(filteredCustomers, {
-    resetKey: `${search}-${statusFilter}-${planFilter}-${csmFilter}`,
-  });
+  const customersPaginationResetKey = `${debouncedSearch}-${statusFilter}-${planFilter}-${csmFilter}`;
   const attentionPagination = useTablePagination(dashboard?.health.attentionRows ?? [], {
     resetKey: dashboard?.health.attentionRows.length ?? 0,
     enabled: !!dashboard,
@@ -525,23 +532,30 @@ export default function CustomerManagementPage() {
     ).sort();
   }, [dashboard]);
 
+  const CUSTOMER_CSV_HEADERS = ["Organisation", "Domain", "Plan", "Status", "MRR", "Health", "CSM"];
+
   const exportCustomers = () => {
     if (!dashboard) return;
-    const header = "Organisation,Domain,Plan,Status,MRR,Health,CSM\n";
-    const body = filteredCustomers
-      .map(
-        (c) =>
-          `"${c.name}","${c.domain}",${c.plan},"${c.statusLabel}",${c.mrrPence ?? ""},${c.healthScore},"${c.csmName}"`,
-      )
-      .join("\n");
-    const blob = new Blob([header + body], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "jiganto-customers.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    const rows = filteredCustomers.map((c) => [
+      c.name || "",
+      c.domain || "",
+      c.plan || "",
+      c.statusLabel || "",
+      c.mrrPence != null ? String(c.mrrPence) : "",
+      String(c.healthScore ?? ""),
+      c.csmName || "",
+    ]);
+    downloadBoardCsv("jiganto-customers.csv", CUSTOMER_CSV_HEADERS, rows);
     toast({ title: "Export complete", description: "Customer list downloaded as CSV." });
+  };
+
+  const downloadCustomerTemplate = () => {
+    downloadImportTemplateCsv("jiganto-customers-import-template.csv", CUSTOMER_CSV_HEADERS, CUSTOMER_CSV_HEADERS.map(() => ""));
+    toast({ title: "Import template downloaded" });
+  };
+
+  const importUnavailable = () => {
+    toast({ title: "Import is not available for this table yet" });
   };
 
   const openGrant = (target: GrantAccessTarget) => {
@@ -553,6 +567,124 @@ export default function CustomerManagementPage() {
     setSelectedSlug(slug);
     setView("detail");
   };
+
+  const customerColumns: MondayColumnDef<CommercialCustomer>[] = useMemo(
+    () => [
+      {
+        id: "organisation",
+        header: "Organisation",
+        type: "text",
+        accessor: "name",
+        width: "260px",
+        sticky: pinOrg,
+        editable: true,
+        render: (c) => <CustomerOrgCell customer={c} />,
+      },
+      {
+        id: "plan",
+        header: "Plan",
+        type: "status",
+        accessor: "plan",
+        width: "120px",
+        editable: true,
+        options: [
+          { value: "starter", label: "Starter" },
+          { value: "growth", label: "Growth" },
+          { value: "enterprise", label: "Enterprise" },
+        ],
+        render: (c) => <PlanBadge plan={c.plan} />,
+      },
+      {
+        id: "health",
+        header: "Health",
+        type: "progress",
+        accessor: "healthScore",
+        width: "120px",
+        editable: false,
+        render: (c) => <HealthBadge band={c.healthBand} score={c.healthScore} />,
+      },
+      {
+        id: "csm",
+        header: "CSM",
+        type: "person",
+        accessor: "csmName",
+        width: "150px",
+        editable: false,
+        render: (c) => (
+          <div className="flex items-center gap-1.5 text-xs">
+            <OrgAvatar initials={c.csmInitials} color="#378ADD" size="sm" />
+            {c.csmName}
+          </div>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        type: "status",
+        accessor: "statusLabel",
+        width: "130px",
+        editable: false,
+        render: (c) => (
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-[10px]",
+              c.status === "trial" && "border-red-300 text-red-700",
+              c.status === "free_access" && "border-teal-300 text-teal-700",
+              c.status === "active" && "border-emerald-300 text-emerald-700",
+            )}
+          >
+            {c.statusLabel}
+          </Badge>
+        ),
+      },
+      {
+        id: "mrr",
+        header: "MRR",
+        type: "currency",
+        accessor: "mrrPence",
+        width: "110px",
+        editable: false,
+        render: (c) => <MrrCell pence={c.mrrPence} />,
+      },
+      {
+        id: "nextAction",
+        header: "Next action",
+        type: "text",
+        accessor: "nextAction",
+        width: "160px",
+        editable: false,
+        render: (c) =>
+          c.trialDaysLeft != null && c.trialDaysLeft <= 7 ? (
+            <Button
+              size="sm"
+              className="h-7 text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                openGrant({
+                  customerId: c.id,
+                  customerSlug: c.slug,
+                  customerName: c.name,
+                  subtitle: `${c.statusLabel}`,
+                });
+              }}
+            >
+              Extend
+            </Button>
+          ) : (
+            <span
+              className={cn(
+                "text-xs",
+                c.nextActionUrgent && "text-red-600 font-semibold",
+              )}
+            >
+              {c.nextAction}
+            </span>
+          ),
+      },
+    ],
+    [openGrant, pinOrg],
+  );
 
   if (permissionsLoading) {
     return <ModulePageLoadingShell label="Loading Customer Management..." testId="customer-mgmt-loading" />;
@@ -661,24 +793,13 @@ export default function CustomerManagementPage() {
             icon={FinanceIcon}
             title="Customer Management"
             subtitle={headerSubtitle}
-            searchPlaceholder={view === "customers" ? "Search organisations..." : undefined}
-            searchValue={view === "customers" ? search : undefined}
-            onSearchChange={view === "customers" ? setSearch : undefined}
-            searchTestId="input-customer-mgmt-search"
+            searchPlaceholder={undefined}
+            searchValue={undefined}
+            onSearchChange={undefined}
+            searchTestId={undefined}
             titleTestId="customer-mgmt-title"
             actions={
-              view === "customers" ? (
-                <>
-                  <Button variant="outline" size="sm" className="gap-1.5 h-9" onClick={exportCustomers}>
-                    <Download className="h-4 w-4" />
-                    <span className="hidden sm:inline">Export</span>
-                  </Button>
-                  <Button size="sm" className="gap-1.5 h-9" onClick={() => setAddCustomerOpen(true)}>
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Add customer</span>
-                  </Button>
-                </>
-              ) : view === "detail" && detail ? (
+              view === "detail" && detail ? (
                 <Button
                   size="sm"
                   className="gap-1.5 h-9"
@@ -842,51 +963,82 @@ export default function CustomerManagementPage() {
                     />
                   </div>
                   <SectionCard title="Organisations">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 border-b mb-4 pb-3 -mx-1">
-                      <div className="flex items-center gap-1 overflow-x-auto flex-nowrap">
-                        {(["all", "active", "trial", "at-risk", "suspended"] as const).map((f) => (
-                          <button
-                            key={f}
-                            type="button"
-                            onClick={() => setStatusFilter(f)}
-                            className={cn(
-                              "px-3 py-1.5 text-sm font-medium rounded-full border transition-colors capitalize shrink-0",
-                              statusFilter === f
-                                ? "border-[#534AB7] bg-[#534AB7]/10 text-[#534AB7]"
-                                : "border-border text-muted-foreground hover:bg-muted/50",
-                            )}
-                          >
-                            {f === "at-risk" ? "At risk" : f}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:ml-auto shrink-0 w-full sm:w-auto">
-                        <Select value={planFilter} onValueChange={setPlanFilter}>
-                          <SelectTrigger className="h-8 w-full sm:w-[130px]">
-                            <SelectValue placeholder="All plans" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All plans</SelectItem>
-                            <SelectItem value="starter">Starter</SelectItem>
-                            <SelectItem value="growth">Growth</SelectItem>
-                            <SelectItem value="enterprise">Enterprise</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Select value={csmFilter} onValueChange={setCsmFilter}>
-                          <SelectTrigger className="h-8 w-full sm:w-[140px]">
-                            <SelectValue placeholder="All CSMs" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All CSMs</SelectItem>
-                            {csmOptions.map((name) => (
-                              <SelectItem key={name} value={name}>
-                                {name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
+                    <MondayBoardShell.Legacy
+                      storageKey="jiganto-customer-mgmt"
+                      entityType="customer_management"
+                      stateHook={useMondayBoardShellState}
+                      filterMatcher={matchBoardFilterValue}
+                    >
+                    <MondayBoardShell.Toolbar
+                      newLabel="Add customer"
+                      onNew={() => setAddCustomerOpen(true)}
+                      newTestId="button-add-customer-toolbar"
+                      searchValue={search}
+                      onSearchChange={setSearch}
+                      searchPlaceholder="Search organisations…"
+                      searchTestId="input-customer-mgmt-search"
+                      filterActive={statusFilter !== "all" || planFilter !== "all" || csmFilter !== "all"}
+                      filterCount={
+                        (statusFilter !== "all" ? 1 : 0) +
+                        (planFilter !== "all" ? 1 : 0) +
+                        (csmFilter !== "all" ? 1 : 0)
+                      }
+                      filterContent={
+                        <div className="space-y-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Status</Label>
+                            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All statuses</SelectItem>
+                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="trial">Trial</SelectItem>
+                                <SelectItem value="at-risk">At risk</SelectItem>
+                                <SelectItem value="suspended">Suspended</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Plan</Label>
+                            <Select value={planFilter} onValueChange={setPlanFilter}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="All plans" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All plans</SelectItem>
+                                <SelectItem value="starter">Starter</SelectItem>
+                                <SelectItem value="growth">Growth</SelectItem>
+                                <SelectItem value="enterprise">Enterprise</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">CSM</Label>
+                            <Select value={csmFilter} onValueChange={setCsmFilter}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="All CSMs" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All CSMs</SelectItem>
+                                {csmOptions.map((name) => (
+                                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      }
+                      pinActive={pinOrg}
+                      onPinToggle={() => {
+                        setPinOrg((v) => {
+                          const next = !v;
+                          localStorage.setItem("customer-mgmt-pin-org", next ? "1" : "0");
+                          return next;
+                        });
+                      }}
+                      pinTitle={pinOrg ? "Unpin Organisation column" : "Pin Organisation column"}
+                      onExport={exportCustomers}
+                      onDownloadTemplate={downloadCustomerTemplate}
+                      onPaste={importUnavailable}
+                      onImport={importUnavailable}
+                      testId="customer-mgmt-toolbar"
+                    />
                     {filteredCustomers.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
                         <p className="text-sm text-muted-foreground mb-3">
@@ -903,105 +1055,45 @@ export default function CustomerManagementPage() {
                         </Button>
                       </div>
                     ) : (
-                    <ResponsiveTableWrap minWidthClass="min-w-[960px]">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Organisation</TableHead>
-                          <TableHead>Plan</TableHead>
-                          <TableHead>Health</TableHead>
-                          <TableHead>CSM</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>MRR</TableHead>
-                          <TableHead>Next action</TableHead>
-                          <TableHead />
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {customersPagination.paginatedItems.map((c) => (
-                          <TableRow key={c.id} className={rowHighlightClass(c.rowHighlight)}>
-                            <TableCell>
-                              <CustomerOrgCell customer={c} />
-                            </TableCell>
-                            <TableCell>
-                              <PlanBadge plan={c.plan} />
-                            </TableCell>
-                            <TableCell>
-                              <HealthBadge band={c.healthBand} score={c.healthScore} />
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1.5 text-xs">
-                                <OrgAvatar initials={c.csmInitials} color="#378ADD" size="sm" />
-                                {c.csmName}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "text-[10px]",
-                                  c.status === "trial" && "border-red-300 text-red-700",
-                                  c.status === "free_access" && "border-teal-300 text-teal-700",
-                                  c.status === "active" && "border-emerald-300 text-emerald-700",
-                                )}
-                              >
-                                {c.statusLabel}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <MrrCell pence={c.mrrPence} />
-                            </TableCell>
-                            <TableCell
-                              className={cn(
-                                "text-xs",
-                                c.nextActionUrgent && "text-red-600 font-semibold",
-                              )}
-                            >
-                              {c.trialDaysLeft != null && c.trialDaysLeft <= 7 ? (
-                                <Button
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  onClick={() =>
-                                    openGrant({
-                                      customerId: c.id,
-                                      customerSlug: c.slug,
-                                      customerName: c.name,
-                                      subtitle: `${c.statusLabel}`,
-                                    })
-                                  }
-                                >
-                                  Extend
-                                </Button>
-                              ) : (
-                                c.nextAction
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 text-xs"
-                                onClick={() => goDetail(c.slug)}
-                              >
-                                View
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    <TablePagination
-                      page={customersPagination.page}
-                      totalPages={customersPagination.totalPages}
-                      total={customersPagination.total}
-                      startIndex={customersPagination.startIndex}
-                      endIndex={customersPagination.endIndex}
-                      pageSize={customersPagination.pageSize}
-                      onPageChange={customersPagination.setPage}
-                      onPageSizeChange={customersPagination.setPageSize}
+                    <MondayBoardShell.Table
+                      columns={customerColumns}
+                      data={filteredCustomers}
+                      searchHighlightTerm={debouncedSearch}
+                      paginationResetKey={customersPaginationResetKey}
+                      totalCount={dashboard.overview.customers.length}
+                      columnWidthStorageKey="jiganto-customer-mgmt-col-widths"
+                      emptyMessage="No organisations match your filters."
+                      onOpenItem={(c) => goDetail(c.slug)}
+                      onCellEdit={(rowId, columnId, value) => {
+                        const row = filteredCustomers.find((c) => String(c.id) === String(rowId));
+                        if (!row) return;
+                        if (columnId === "plan") {
+                          apiRequest("PATCH", `/api/customer-mgmt/customers/${row.slug}/plan`, { plan: value })
+                            .then(() => queryClient.invalidateQueries({ queryKey: ["/api/customer-mgmt/dashboard"] }));
+                          return;
+                        }
+                        if (columnId === "organisation") {
+                          apiRequest("PATCH", `/api/customer-mgmt/customers/${row.slug}`, {
+                            name: value === "" ? undefined : value,
+                          }).then(() => queryClient.invalidateQueries({ queryKey: ["/api/customer-mgmt/dashboard"] }));
+                        }
+                      }}
+                      renderRowActions={(c) => (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            goDetail(c.slug);
+                          }}
+                        >
+                          View
+                        </Button>
+                      )}
                     />
-                    </ResponsiveTableWrap>
                     )}
+                    </MondayBoardShell.Legacy>
                   </SectionCard>
                 </>
               )}

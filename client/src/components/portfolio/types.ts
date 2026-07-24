@@ -138,4 +138,12 @@ export interface Report360Data {
   financialSummary: { budget: number; spent: number; remaining: number; forecast: number };
   resourceSummary: { name: string; role: string | null; allocation: number; risk: string | null }[];
   projectId: number;
+  /** Restored from latest saved snapshot when present */
+  sectionOverrides?: {
+    ragCommentary?: string;
+    indicators?: { id: string; label: string; pct: number; rag: RagLevel }[];
+    activeSection?: string;
+    decisions?: { id: string; text: string; owner: string }[];
+    actions?: { id: string; text: string; owner: string; due: string }[];
+  };
 }

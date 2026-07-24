@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +24,11 @@ interface Props {
 export function ClientDeleteDialog({ client, onClose }: Props) {
   const { toast } = useToast();
   const [confirmName, setConfirmName] = useState("");
+  const open = !!client;
+
+  useEffect(() => {
+    setConfirmName("");
+  }, [open, client?.id]);
 
   const deleteMut = useMutation({
     mutationFn: () =>
@@ -44,7 +49,7 @@ export function ClientDeleteDialog({ client, onClose }: Props) {
   const matches = confirmName === client?.name;
 
   return (
-    <AlertDialog open={!!client} onOpenChange={(v) => !v && onClose()}>
+    <AlertDialog open={open} onOpenChange={(v) => !v && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {client?.name}?</AlertDialogTitle>

@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { CONTRACT_TYPES, INVOICE_STATUSES } from "@shared/schema";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +10,6 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { FormDialogShell, FormSection, FieldGrid, FieldLabel, FormDivider } from "@/components/ui/form-dialog-shell";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus,
@@ -22,9 +18,13 @@ import {
   CreditCard,
   FileText
 } from "lucide-react";
-import { FinanceTableSkeleton, FinanceEmptyState, FinanceTableWrap, FinanceButtonSpinner } from "./FinanceUi";
-import { useTablePagination } from "@/hooks/use-table-pagination";
-import { TablePagination } from "@/components/TablePagination";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { Label } from "@/components/ui/label";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import { matchBoardFilterValue } from "@/lib/board-filters";
+import { useDebouncedValue, downloadBoardCsv, downloadImportTemplateCsv } from "@/lib/crm-monday-chrome";
+import { FinanceTableSkeleton, FinanceEmptyState, FinanceButtonSpinner } from "./FinanceUi";
 import type { FinanceInvoiceRow } from "./types";
 
 function invoiceStatusBadge(status: string) {
@@ -54,7 +54,13 @@ interface FinanceInvoicesTabProps {
 
 export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadingProp, searchTerm = "" }: FinanceInvoicesTabProps) {
   const { toast } = useToast();
+  const [localSearch, setLocalSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(searchTerm || localSearch);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [pinInvoice, setPinInvoice] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("finance-invoices-pin-number") !== "0";
+  });
   const [showCreate, setShowCreate] = useState(false);
   const [showPayment, setShowPayment] = useState<number | null>(null);
   const [showEmail, setShowEmail] = useState<number | null>(null);
@@ -70,6 +76,16 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
   const [formNotes, setFormNotes] = useState("");
   const [formTaxPct, setFormTaxPct] = useState("0");
   const [formLines, setFormLines] = useState([{ description: "", quantity: "1", unitRate: "", lineType: "fixed_fee" }]);
+
+  const resetCreateForm = () => {
+    setFormProjectId("");
+    setFormContractType("fixed_price");
+    setFormIssueDate(new Date().toISOString().slice(0, 10));
+    setFormDueDate("");
+    setFormNotes("");
+    setFormTaxPct("0");
+    setFormLines([{ description: "", quantity: "1", unitRate: "", lineType: "fixed_fee" }]);
+  };
 
   const { data: fetchedInvoices = [], isLoading: fetchLoading } = useQuery<FinanceInvoiceRow[]>({
     queryKey: ["/api/finance/invoices"],
@@ -99,6 +115,17 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      const manualLines = formLines
+        .filter((l) => l.description)
+        .map((l) => {
+          const quantity = Number(l.quantity);
+          const unitRate = Number(l.unitRate);
+          return { description: l.description, quantity, unitRate, amount: quantity * unitRate, lineType: l.lineType };
+        })
+        .filter((l) => Number.isFinite(l.quantity) && Number.isFinite(l.unitRate));
+      if (formLines.some((l) => l.description) && manualLines.length === 0) {
+        throw new Error("Invalid line quantities or rates");
+      }
       const res = await apiRequest("POST", "/api/finance/invoices", {
         projectId: Number(formProjectId),
         contractType: formContractType,
@@ -108,13 +135,7 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
         taxAmount: formTaxAmount || null,
         includeTimesheets: formContractType === "time_materials" || formContractType === "mixed",
         includeExpenses: formContractType === "time_materials" || formContractType === "mixed",
-        manualLines: formLines.filter((l) => l.description).map((l) => ({
-          description: l.description,
-          quantity: parseFloat(l.quantity || "1"),
-          unitRate: parseFloat(l.unitRate || "0"),
-          amount: parseFloat(l.quantity || "1") * parseFloat(l.unitRate || "0"),
-          lineType: l.lineType,
-        })),
+        manualLines,
       });
       return res.json();
     },
@@ -122,10 +143,12 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
       invalidate();
       toast({ title: "Invoice created" });
       setShowCreate(false);
-      setFormTaxPct("0");
-      setFormLines([{ description: "", quantity: "1", unitRate: "", lineType: "fixed_fee" }]);
+      resetCreateForm();
     },
-    onError: () => toast({ title: "Failed to create invoice", variant: "destructive" }),
+    onError: (err: Error) => toast({
+      title: err.message === "Invalid line quantities or rates" ? err.message : "Failed to create invoice",
+      variant: "destructive",
+    }),
   });
 
   const sendMutation = useMutation({
@@ -135,9 +158,19 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
   });
 
   const sendEmailMutation = useMutation({
-    mutationFn: ({ id, email }: { id: number; email: string }) =>
-      apiRequest("POST", `/api/finance/invoices/${id}/send-email`, { email }),
-    onSuccess: () => {
+    mutationFn: async ({ id, email }: { id: number; email: string }) => {
+      const res = await apiRequest("POST", `/api/finance/invoices/${id}/send-email`, { email });
+      return res.json() as Promise<{ emailSent?: boolean; emailError?: string }>;
+    },
+    onSuccess: (data) => {
+      if (data.emailSent === false) {
+        toast({
+          title: "Invoice email failed to send",
+          description: data.emailError,
+          variant: "destructive",
+        });
+        return;
+      }
       invalidate();
       toast({ title: "Invoice sent by email" });
       setShowEmail(null);
@@ -156,7 +189,7 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
     mutationFn: async (invoiceId: number) => {
       return apiRequest("POST", `/api/finance/invoices/${invoiceId}/payments`, {
         paymentDate,
-        amount: paymentAmount,
+        amount: Number(paymentAmount),
         paymentMethod: "bank_transfer",
       });
     },
@@ -189,39 +222,169 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
   };
 
   const filtered = useMemo(() => {
-    const q = searchTerm.toLowerCase();
+    const q = debouncedSearch.toLowerCase();
     return invoices.filter((inv) => {
       if (statusFilter !== "all" && inv.status !== statusFilter) return false;
       if (q && !`${inv.invoiceNumber} ${inv.projectName ?? ""} ${inv.clientName ?? ""}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [invoices, searchTerm, statusFilter]);
+  }, [invoices, debouncedSearch, statusFilter]);
 
-  const pagination = useTablePagination(filtered, {
-    resetKey: `${searchTerm}-${statusFilter}`,
+  const mondayColumns: MondayColumnDef<FinanceInvoiceRow>[] = useMemo(() => [
+    {
+      id: "invoiceNumber",
+      header: "Invoice #",
+      type: "text",
+      accessor: "invoiceNumber",
+      width: "130px",
+      sticky: pinInvoice,
+      editable: false,
+      render: (inv) => <span className="font-medium">{inv.invoiceNumber}</span>,
+    },
+    {
+      id: "project",
+      header: "Project",
+      type: "text",
+      accessor: (row) => row.projectName,
+      width: "180px",
+      editable: false,
+      render: (inv) => <span className="text-sm">{inv.projectName ?? `Project #${inv.projectId}`}</span>,
+    },
+    {
+      id: "client",
+      header: "Client",
+      type: "text",
+      accessor: (row) => row.clientName || "",
+      width: "160px",
+      editable: false,
+      render: (inv) => <span className="text-sm">{inv.clientName ?? "—"}</span>,
+    },
+    {
+      id: "type",
+      header: "Type",
+      type: "status",
+      accessor: "contractType",
+      width: "120px",
+      editable: true,
+      options: [
+        { value: "fixed_price", label: "Fixed price", color: "bg-[#579bfc] text-white" },
+        { value: "time_materials", label: "Time & materials", color: "bg-[#00c875] text-white" },
+        { value: "retainer", label: "Retainer", color: "bg-[#a25ddc] text-white" },
+        { value: "mixed", label: "Mixed", color: "bg-[#fdab3d] text-white" },
+      ],
+      render: (inv) => <Badge variant="outline" className="capitalize">{inv.contractType.replace(/_/g, " ")}</Badge>,
+    },
+    {
+      id: "dueDate",
+      header: "Due",
+      type: "date",
+      accessor: "dueDate",
+      width: "110px",
+      editable: true,
+      render: (inv) => <span className="text-sm">{inv.dueDate}</span>,
+    },
+    {
+      id: "total",
+      header: "Total",
+      type: "currency",
+      accessor: "total",
+      width: "120px",
+      editable: false,
+      render: (inv) => <span className="text-sm tabular-nums">{formatCurrency(inv.total, inv.currency)}</span>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      type: "status",
+      accessor: "status",
+      width: "130px",
+      editable: false,
+      render: (inv) => invoiceStatusBadge(inv.status),
+    },
+  ], [pinInvoice]);
+
+  const updateInvoiceMut = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
+      apiRequest("PUT", `/api/finance/invoices/${id}`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/dashboard"] });
+    },
+    onError: (e: Error) => toast({ title: "Update failed", description: e.message, variant: "destructive" }),
   });
+
+  const paginationResetKey = `${debouncedSearch}|${statusFilter}`;
+
+  const INVOICE_CSV_HEADERS = ["Invoice #", "Project", "Client", "Type", "Due", "Total", "Status"];
+
+  const exportInvoices = () => {
+    const rows = filtered.map((inv) => [
+      inv.invoiceNumber || "",
+      inv.projectName ?? `Project #${inv.projectId}`,
+      inv.clientName ?? "",
+      inv.contractType.replace(/_/g, " "),
+      inv.dueDate || "",
+      String(inv.total ?? ""),
+      inv.status || "",
+    ]);
+    downloadBoardCsv(`invoices-${new Date().toISOString().split("T")[0]}.csv`, INVOICE_CSV_HEADERS, rows);
+    toast({ title: "Invoices exported to CSV" });
+  };
+
+  const downloadInvoicesTemplate = () => {
+    downloadImportTemplateCsv("invoices-import-template.csv", INVOICE_CSV_HEADERS, INVOICE_CSV_HEADERS.map(() => ""));
+    toast({ title: "Import template downloaded" });
+  };
+
+  const importUnavailable = () => toast({ title: "Import is not available for this table yet" });
 
   return (
     <div className="space-y-4" data-testid="finance-invoices-tab">
-      <div className="flex flex-wrap items-center gap-3">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[160px]" data-testid="filter-invoice-status">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {INVOICE_STATUSES.map((s) => (
-              <SelectItem key={s} value={s} className="capitalize">{s.replace(/_/g, " ")}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {invoices.length > 0 && (
-        <Button onClick={() => setShowCreate(true)} className="sm:ml-auto w-full sm:w-auto" data-testid="button-create-invoice">
-          <Plus className="h-4 w-4 mr-1" />
-          Create Invoice
-        </Button>
-        )}
-      </div>
+      <MondayBoardShell.Legacy
+        storageKey="jiganto-finance-invoices"
+        entityType="finance_invoice"
+        stateHook={useMondayBoardShellState}
+        filterMatcher={matchBoardFilterValue}
+      >
+      <MondayBoardShell.Toolbar
+        newLabel="Create Invoice"
+        onNew={() => setShowCreate(true)}
+        newTestId="button-create-invoice"
+        searchValue={localSearch || searchTerm}
+        onSearchChange={setLocalSearch}
+        filterActive={statusFilter !== "all"}
+        filterCount={statusFilter !== "all" ? 1 : 0}
+        filterContent={
+          <div className="space-y-1.5">
+            <Label className="text-xs">Status</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-8 text-xs" data-testid="filter-invoice-status">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {INVOICE_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s} className="capitalize">{s.replace(/_/g, " ")}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        }
+        pinActive={pinInvoice}
+        onPinToggle={() => {
+          setPinInvoice((v) => {
+            const next = !v;
+            localStorage.setItem("finance-invoices-pin-number", next ? "1" : "0");
+            return next;
+          });
+        }}
+        pinTitle={pinInvoice ? "Unpin Invoice # column" : "Pin Invoice # column"}
+        onExport={exportInvoices}
+        onDownloadTemplate={downloadInvoicesTemplate}
+        onPaste={importUnavailable}
+        onImport={importUnavailable}
+        testId="finance-invoices-toolbar"
+      />
 
       {isLoading ? (
         <FinanceTableSkeleton rows={7} cols={8} />
@@ -235,106 +398,101 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
           ) : undefined}
         />
       ) : (
-        <Card className="rounded-xl border-border/50 overflow-hidden shadow-sm">
-          <FinanceTableWrap>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Invoice #</TableHead>
-                  <TableHead>Project</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Due</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pagination.paginatedItems.map((inv) => (
-                  <TableRow key={inv.id} data-testid={`invoice-row-${inv.id}`}>
-                    <TableCell className="font-medium">{inv.invoiceNumber}</TableCell>
-                    <TableCell>{inv.projectName ?? `Project #${inv.projectId}`}</TableCell>
-                    <TableCell>{inv.clientName ?? "—"}</TableCell>
-                    <TableCell><Badge variant="outline" className="capitalize">{inv.contractType.replace(/_/g, " ")}</Badge></TableCell>
-                    <TableCell>{inv.dueDate}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatCurrency(inv.total, inv.currency)}</TableCell>
-                    <TableCell>{invoiceStatusBadge(inv.status)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => downloadPdf(inv.id, inv.invoiceNumber)}
-                          title="Download PDF"
-                          disabled={downloadingPdfId === inv.id}
-                        >
-                          {downloadingPdfId === inv.id ? <FinanceButtonSpinner className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
-                        </Button>
-                        {inv.status === "draft" && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => sendMutation.mutate(inv.id)}
-                              title="Mark sent"
-                              disabled={sendMutation.isPending && sendMutation.variables === inv.id}
-                            >
-                              {sendMutation.isPending && sendMutation.variables === inv.id
-                                ? <FinanceButtonSpinner className="h-3.5 w-3.5" />
-                                : <Send className="h-3.5 w-3.5" />}
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => setShowEmail(inv.id)} title="Send email">
-                              <Send className="h-3.5 w-3.5 text-blue-500" />
-                            </Button>
-                          </>
-                        )}
-                        {inv.status !== "void" && inv.status !== "credit_note" && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => creditNoteMutation.mutate(inv.id)}
-                            title="Credit note"
-                            disabled={creditNoteMutation.isPending && creditNoteMutation.variables === inv.id}
-                          >
-                            {creditNoteMutation.isPending && creditNoteMutation.variables === inv.id
-                              ? <FinanceButtonSpinner className="h-3.5 w-3.5" />
-                              : "CN"}
-                          </Button>
-                        )}
-                        {inv.status !== "paid" && inv.status !== "void" && (
-                          <Button size="sm" variant="ghost" onClick={() => { setShowPayment(inv.id); setPaymentAmount(String(inv.total)); }} title="Record payment">
-                            <CreditCard className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </FinanceTableWrap>
-          <TablePagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            total={pagination.total}
-            startIndex={pagination.startIndex}
-            endIndex={pagination.endIndex}
-            pageSize={pagination.pageSize}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
-          />
-        </Card>
+        <MondayBoardShell.Table
+          columns={mondayColumns}
+          data={filtered}
+          emptyMessage="No invoices match your current filters."
+          addItemLabel="Create Invoice"
+          onAddItem={() => setShowCreate(true)}
+          onCellEdit={(rowId, columnId, value) => {
+            const inv = filtered.find((i) => String(i.id) === String(rowId));
+            if (inv && inv.status !== "draft") {
+              toast({ title: "Only draft invoices can be edited", variant: "destructive" });
+              return;
+            }
+            const field = columnId === "type" ? "contractType" : columnId;
+            updateInvoiceMut.mutate({
+              id: Number(rowId),
+              payload: { [field]: value === "" ? null : value },
+            });
+          }}
+          searchHighlightTerm={debouncedSearch}
+          columnWidthStorageKey="jiganto-finance-invoices-col-widths"
+          paginationResetKey={paginationResetKey}
+          totalCount={invoices.length}
+          renderRowActions={(inv) => (
+            <div className="flex justify-end gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => downloadPdf(inv.id, inv.invoiceNumber)}
+                title="Download PDF"
+                disabled={downloadingPdfId === inv.id}
+              >
+                {downloadingPdfId === inv.id ? <FinanceButtonSpinner className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
+              </Button>
+              {inv.status === "draft" && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => sendMutation.mutate(inv.id)}
+                    title="Mark sent"
+                    disabled={sendMutation.isPending && sendMutation.variables === inv.id}
+                  >
+                    {sendMutation.isPending && sendMutation.variables === inv.id
+                      ? <FinanceButtonSpinner className="h-3.5 w-3.5" />
+                      : <Send className="h-3.5 w-3.5" />}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowEmail(inv.id)} title="Send email">
+                    <Send className="h-3.5 w-3.5 text-blue-500" />
+                  </Button>
+                </>
+              )}
+              {inv.status !== "void" && inv.status !== "credit_note" && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => creditNoteMutation.mutate(inv.id)}
+                  title="Credit note"
+                  disabled={creditNoteMutation.isPending && creditNoteMutation.variables === inv.id}
+                >
+                  {creditNoteMutation.isPending && creditNoteMutation.variables === inv.id
+                    ? <FinanceButtonSpinner className="h-3.5 w-3.5" />
+                    : "CN"}
+                </Button>
+              )}
+              {inv.status !== "paid" && inv.status !== "void" && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    const outstanding = Math.max(0, parseFloat(String(inv.total ?? 0)) - parseFloat(String(inv.amountPaid ?? 0)));
+                    setShowPayment(inv.id);
+                    setPaymentAmount(String(Number.isFinite(outstanding) ? outstanding : 0));
+                  }}
+                  title="Record payment"
+                >
+                  <CreditCard className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          )}
+        />
       )}
+      </MondayBoardShell.Legacy>
 
       <FormDialogShell
         open={showCreate}
-        onOpenChange={setShowCreate}
+        onOpenChange={(open) => {
+          setShowCreate(open);
+          if (!open) resetCreateForm();
+        }}
         title="Create invoice"
         subtitle="Bill a project with line items and due dates"
         meta="Invoice will be created as draft"
         saveLabel="Create invoice"
-        onCancel={() => setShowCreate(false)}
+        onCancel={() => { setShowCreate(false); resetCreateForm(); }}
         onSubmit={() => createMutation.mutate()}
         saving={createMutation.isPending}
         disabled={!formProjectId}
@@ -396,6 +554,9 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
               </div>
               <div className="col-span-2">
                 <Input
+                  type="number"
+                  min="0"
+                  step="any"
                   placeholder="Qty"
                   value={line.quantity}
                   onChange={(e) => {
@@ -407,6 +568,9 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
               </div>
               <div className="col-span-3">
                 <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
                   placeholder="Rate"
                   value={line.unitRate}
                   onChange={(e) => {
@@ -471,10 +635,15 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
 
       <FormDialogShell
         open={showEmail != null}
-        onOpenChange={(open) => !open && setShowEmail(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowEmail(null);
+            setEmailTo("");
+          }
+        }}
         title="Send Invoice by Email"
         saveLabel="Send"
-        onCancel={() => setShowEmail(null)}
+        onCancel={() => { setShowEmail(null); setEmailTo(""); }}
         onSubmit={() => showEmail && sendEmailMutation.mutate({ id: showEmail, email: emailTo })}
         saving={sendEmailMutation.isPending}
         disabled={!emailTo}

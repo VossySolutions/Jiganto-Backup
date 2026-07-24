@@ -1,41 +1,61 @@
-import { useState, useMemo } from "react";
-import { useCrmPagination } from "@/hooks/use-crm-pagination";
-import { CrmTablePagination } from "./CrmTablePagination";
+import { useState, useMemo, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { FormDialogShell } from "@/components/ui/form-dialog-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MetricCard } from "@/components/ui/metric-card";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
 import {
-  Plus, Search, ArrowUpDown, Layers,
-  ChevronDown, X, Trash2, UserCheck, Paintbrush, Calendar,
-  MoreHorizontal, Pencil, Copy, Archive, Briefcase, Settings2, Users
+  Trash2, UserCheck,
+  MoreHorizontal, Pencil, Copy, Archive, Briefcase, Users, ChevronDown,
 } from "lucide-react";
 import { OpportunityFormDialog } from "@/components/crm/OpportunityFormDialog";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
-import { ConditionalFormattingPanel } from "@/components/ConditionalFormattingPanel";
-import { evaluateConditionalFormatting, type ConditionalFormatRule } from "@/lib/conditionalFormatting";
-import type { ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import { type ConditionalFormatRule } from "@/lib/conditionalFormatting";
+import { type ColumnDef as MondayColumnDef, type StatusOption } from "@/components/MondayTable";
+import { MondayBoardShell } from "@/components/board";
+import { useMondayBoardShellState } from "@/hooks/use-monday-board-shell-state";
+import {
+  matchBoardFilterValue,
+  type BoardFilterFieldDef,
+  type BoardSortFieldDef,
+} from "@/lib/board-filters";
 import { opportunityMatchesPipeline, stagesForActivePipeline } from "@/lib/crm-tab-counts";
-import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
-import { CrmCustomFieldTableCells } from "./CrmCustomFieldTableCells";
+import { type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
 import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
 import { findSegmentField, getSegmentColor, resolveAccountSegment } from "@/lib/crm-segment";
 import { useCrmUsers } from "./CrmUsersProvider";
 import type { CrmAccount, CrmPipeline, CrmOpportunity, CrmOpportunityStage, CrmContactPicklist } from "./types";
-import { CrmColumnVisibilityMenu } from "./CrmColumnVisibilityMenu";
-import { CrmInlineEditCell } from "./CrmInlineEditCell";
-import { CrmInlineEditDate, CrmInlineEditSelect } from "./CrmInlineEditSelect";
-import { loadColumnVisibility, saveColumnVisibility, type CrmColumnDef } from "@/lib/crm-list-columns";
+import {
+  useDebouncedValue,
+  buildCrmCustomFieldColumns,
+  recordToMondayGroups,
+  downloadBoardCsv,
+  downloadImportTemplateCsv,
+} from "@/lib/crm-monday-chrome";
+import type { CrmColumnDef } from "@/lib/crm-list-columns";
+
+const OPP_IMPORT_HEADERS = [
+  "name", "description", "amount", "probability", "expectedCloseDate",
+  "type", "source", "nextStep", "stageName", "accountName",
+] as const;
+
+const OPP_IMPORT_EXAMPLE: Record<string, string> = {
+  name: "Acme ERP Upgrade",
+  description: "Full ERP modernisation project",
+  amount: "125000",
+  probability: "60",
+  expectedCloseDate: "2026-09-30",
+  type: "new_business",
+  source: "Referral",
+  nextStep: "Technical workshop",
+  stageName: "Proposal",
+  accountName: "Acme Ltd",
+};
 
 const OPP_TABLE_COLUMNS: CrmColumnDef[] = [
   { id: "account", label: "Account" },
@@ -46,6 +66,24 @@ const OPP_TABLE_COLUMNS: CrmColumnDef[] = [
   { id: "owner", label: "Owner" },
   { id: "closeDate", label: "Close Date" },
   { id: "created", label: "Created" },
+];
+
+const OPP_FILTER_FIELDS: BoardFilterFieldDef[] = [
+  { field: "name", label: "Opportunity", textInput: true },
+  { field: "account", label: "Account", textInput: true },
+  { field: "stage", label: "Stage" },
+  { field: "owner", label: "Owner" },
+  { field: "amount", label: "Amount", textInput: true },
+  { field: "probability", label: "Probability", textInput: true },
+  { field: "closing", label: "Closing window" },
+];
+
+const OPP_SORT_FIELDS: BoardSortFieldDef[] = [
+  { field: "created", label: "Created" },
+  { field: "name", label: "Name" },
+  { field: "amount", label: "Amount" },
+  { field: "probability", label: "Probability" },
+  { field: "closeDate", label: "Close Date" },
 ];
 
 interface CrmOpportunitiesTabProps {
@@ -60,43 +98,14 @@ interface CrmOpportunitiesTabProps {
   onNavigateToResourcePlan?: (opportunityId: number, planId?: number | null) => void;
 }
 
-const VIBRANT_LOGO_COLORS = [
-  "#3b82f6", "#22c55e", "#f97316", "#8b5cf6",
-  "#ec4899", "#06b6d4", "#eab308", "#ef4444",
-  "#14b8a6", "#6366f1",
-];
-
-function getColorForName(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return VIBRANT_LOGO_COLORS[Math.abs(hash) % VIBRANT_LOGO_COLORS.length];
-}
-
-function getInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map(w => w[0])
-    .join("")
-    .toUpperCase();
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "—";
-  const date = new Date(dateStr);
-  return date.toLocaleString("en-US", { month: "short", day: "numeric" });
-}
-
-function formatCurrency(amount: string | null): string {
-  if (!amount) return "—";
-  const num = parseFloat(amount);
-  if (isNaN(num)) return "—";
-  if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `$${(num / 1000).toFixed(0)}K`;
-  return `$${num.toLocaleString()}`;
-}
+const STAGE_STATUS_COLORS: Record<string, string> = {
+  Prospect: "#3b82f6",
+  Qualification: "#06b6d4",
+  Proposal: "#f59e0b",
+  Negotiation: "#f97316",
+  "Closed Won": "#22c55e",
+  "Closed Lost": "#ef4444",
+};
 
 function OpportunityIcon({ className }: { className?: string }) {
   return (
@@ -139,61 +148,121 @@ function AvgDealIcon({ className }: { className?: string }) {
   );
 }
 
-function ProbabilityBar({ probability }: { probability: number }) {
-  const color = probability >= 75 ? "#22c55e" : probability >= 50 ? "#f59e0b" : probability >= 25 ? "#f97316" : "#ef4444";
-  return (
-    <div className="flex items-center gap-2">
-      <div className="w-20 h-2 bg-muted rounded-full overflow-hidden shrink-0">
-        <div
-          className="h-full rounded-full transition-all"
-          style={{ width: `${Math.min(probability, 100)}%`, backgroundColor: color }}
-        />
-      </div>
-      <span className="text-xs font-medium tabular-nums" style={{ color }}>{probability}%</span>
-    </div>
-  );
+function getOppFilterFieldValue(
+  opp: {
+    name: string;
+    accountName: string;
+    stageName: string;
+    ownerUserId: string | null;
+    amountNum: number;
+    probabilityNum: number;
+    expectedCloseDate: string | null;
+  },
+  field: string,
+): string {
+  switch (field) {
+    case "name":
+      return opp.name || "";
+    case "account":
+      return opp.accountName || "";
+    case "stage":
+      return opp.stageName || "";
+    case "owner":
+      return opp.ownerUserId || "__unassigned__";
+    case "amount":
+      return String(opp.amountNum ?? "");
+    case "probability":
+      return String(opp.probabilityNum ?? "");
+    case "closing":
+      return "";
+    default:
+      return "";
+  }
 }
 
-function StageBadge({ stage }: { stage: { name: string; color: string | null } | undefined }) {
-  if (!stage) return <span className="text-sm text-muted-foreground">—</span>;
-  const stageColors: Record<string, { bg: string; text: string; border: string }> = {
-    "Prospect": { bg: "bg-blue-50 dark:bg-blue-950/40", text: "text-blue-700 dark:text-blue-400", border: "border-blue-200 dark:border-blue-800" },
-    "Qualification": { bg: "bg-cyan-50 dark:bg-cyan-950/40", text: "text-cyan-700 dark:text-cyan-400", border: "border-cyan-200 dark:border-cyan-800" },
-    "Proposal": { bg: "bg-amber-50 dark:bg-amber-950/40", text: "text-amber-700 dark:text-amber-400", border: "border-amber-200 dark:border-amber-800" },
-    "Negotiation": { bg: "bg-orange-50 dark:bg-orange-950/40", text: "text-orange-700 dark:text-orange-400", border: "border-orange-200 dark:border-orange-800" },
-    "Closed Won": { bg: "bg-green-50 dark:bg-green-950/40", text: "text-green-700 dark:text-green-400", border: "border-green-200 dark:border-green-800" },
-    "Closed Lost": { bg: "bg-red-50 dark:bg-red-950/40", text: "text-red-700 dark:text-red-400", border: "border-red-200 dark:border-red-800" },
-  };
-  const colors = stageColors[stage.name] || { bg: "bg-gray-50 dark:bg-gray-900", text: "text-gray-700 dark:text-gray-400", border: "border-gray-200 dark:border-gray-700" };
-  return (
-    <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border", colors.bg, colors.text, colors.border)}>
-      {stage.name}
-    </span>
-  );
+function compareOppsByRules<T extends {
+  name: string;
+  amountNum: number;
+  probabilityNum: number;
+  expectedCloseDate: string | null;
+  createdAt: string;
+}>(a: T, b: T, rules: { field: string; dir: "asc" | "desc" }[]): number {
+  for (const rule of rules) {
+    const dir = rule.dir === "asc" ? 1 : -1;
+    let cmp = 0;
+    if (rule.field === "name") cmp = a.name.localeCompare(b.name);
+    else if (rule.field === "amount") cmp = a.amountNum - b.amountNum;
+    else if (rule.field === "probability") cmp = a.probabilityNum - b.probabilityNum;
+    else if (rule.field === "closeDate") {
+      const aDate = a.expectedCloseDate ? new Date(a.expectedCloseDate).getTime() : 0;
+      const bDate = b.expectedCloseDate ? new Date(b.expectedCloseDate).getTime() : 0;
+      cmp = aDate - bDate;
+    } else {
+      cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    }
+    if (cmp !== 0) return dir * cmp;
+  }
+  return 0;
 }
 
-export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines, contacts, searchTerm = "", onNavigateToTab, onOpenCustomFieldsSettings, onNavigateToResourcePlan }: CrmOpportunitiesTabProps) {
+export function CrmOpportunitiesTab({
+  opportunities,
+  stages,
+  accounts,
+  pipelines,
+  contacts,
+  searchTerm = "",
+  onNavigateToTab,
+  onOpenCustomFieldsSettings,
+  onNavigateToResourcePlan,
+}: CrmOpportunitiesTabProps) {
   const { users, resolveOwner } = useCrmUsers();
   const { fields: customFields } = useCrmCustomFields("opportunity");
   const { fields: accountCustomFields } = useCrmCustomFields("account");
   const segmentField = useMemo(() => findSegmentField(accountCustomFields), [accountCustomFields]);
-  const tableColSpan = 11 + customFields.length;
   const [formOpen, setFormOpen] = useState(false);
   const [editingOpportunity, setEditingOpportunity] = useState<CrmOpportunity | null>(null);
   const [isCreatePipelineOpen, setIsCreatePipelineOpen] = useState(false);
   const [selectedPipelineId, setSelectedPipelineId] = useState<number | null>(null);
   const [pipelineName, setPipelineName] = useState("");
-  const [stageFilter, setStageFilter] = useState<"all" | "closing-this-month">("all");
-  const [selectedStageId, setSelectedStageId] = useState<number | null>(null);
-  const [localSearch, setLocalSearch] = useState("");
-  const [sortField, setSortField] = useState<"name" | "amount" | "probability" | "closeDate" | "created">("created");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [groupBy, setGroupBy] = useState<"none" | "stage" | "account" | "probability" | "owner">("none");
-  const [formatPanelOpen, setFormatPanelOpen] = useState(false);
   const [formatRules, setFormatRules] = useState<ConditionalFormatRule[]>([]);
   const [importOpen, setImportOpen] = useState(false);
   const { toast } = useToast();
+
+  const shell = useMondayBoardShellState({
+    storageKey: "jiganto-crm-opportunities",
+    columnDefs: OPP_TABLE_COLUMNS,
+    defaultSortField: "created",
+    defaultGroupBy: "none",
+  });
+  const {
+    localSearch,
+    setLocalSearch,
+    filterRules,
+    setFilterRules,
+    filterOpen,
+    setFilterOpen,
+    sortRules,
+    onSortToggle,
+    onSortAdd,
+    onSortRemove,
+    groupBy,
+    setGroupBy,
+    ownerFilter,
+    setOwnerFilter,
+    viewMode,
+    setViewModePersist,
+    pinActive,
+    togglePin,
+    isColVisible,
+    setColVisible,
+    moveColumn,
+    columnMenuItems,
+    columnOrderIds,
+    viewSnapshot,
+    applyViewSnapshot,
+  } = shell;
+  const debouncedLocalSearch = useDebouncedValue(localSearch);
 
   const runOppAction = async (request: () => Promise<Response>, successTitle: string) => {
     try {
@@ -223,10 +292,6 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
     onError: () => toast({ title: "Import failed", variant: "destructive" }),
   });
 
-  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() =>
-    loadColumnVisibility("crm-opportunities", OPP_TABLE_COLUMNS),
-  );
-
   const updateOpportunityMutation = useMutation({
     mutationFn: ({ id, updates }: { id: number; updates: Partial<CrmOpportunity> }) =>
       apiRequest("PUT", `/api/crm/opportunities/${id}`, updates),
@@ -236,29 +301,37 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
     onError: () => toast({ title: "Failed to update opportunity", variant: "destructive" }),
   });
 
-  const isColVisible = (id: string) => columnVisibility[id] !== false;
-  const setColVisible = (id: string, visible: boolean) => {
-    setColumnVisibility((prev) => {
-      const next = { ...prev, [id]: visible };
-      saveColumnVisibility("crm-opportunities", next);
-      return next;
-    });
-  };
-
-  const activePipelineId = selectedPipelineId || pipelines.find(p => p.isDefault)?.id || pipelines[0]?.id || null;
+  const activePipelineId = selectedPipelineId || pipelines.find((p) => p.isDefault)?.id || pipelines[0]?.id || null;
   const pipelineStages = stagesForActivePipeline(stages, pipelines, activePipelineId);
   const formStages = pipelineStages;
 
-  const stageSelectOptions = useMemo(
-    () => pipelineStages.map((s) => ({ value: String(s.id), label: s.name })),
+  const stageStatusOptions: StatusOption[] = useMemo(
+    () =>
+      pipelineStages.map((s) => ({
+        value: String(s.id),
+        label: s.name,
+        color: s.color || STAGE_STATUS_COLORS[s.name] || "#64748b",
+      })),
     [pipelineStages],
   );
 
-  const ownerSelectOptions = useMemo(
+  const ownerSelectOptions: StatusOption[] = useMemo(
     () => [
-      { value: "", label: "Unassigned" },
-      ...users.map((u) => ({ value: u.id, label: resolveOwner(u.id).name })),
+      { value: "", label: "Unassigned", color: "#94a3b8" },
+      ...users.map((u) => {
+        const o = resolveOwner(u.id);
+        return { value: u.id, label: o.name, color: o.color };
+      }),
     ],
+    [users, resolveOwner],
+  );
+
+  const personUsers = useMemo(
+    () =>
+      users.map((u) => {
+        const o = resolveOwner(u.id);
+        return { id: u.id, name: o.name, initials: o.initials, color: o.color };
+      }),
     [users, resolveOwner],
   );
 
@@ -274,10 +347,9 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   });
 
   const bulkDeleteMutation = useMutation({
-    mutationFn: (ids: number[]) => Promise.all(ids.map(id => apiRequest("DELETE", `/api/crm/opportunities/${id}`))),
+    mutationFn: (ids: number[]) => Promise.all(ids.map((id) => apiRequest("DELETE", `/api/crm/opportunities/${id}`))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/opportunities"] });
-      setSelectedIds(new Set());
       toast({ title: "Opportunities deleted successfully" });
     },
     onError: () => toast({ title: "Failed to delete opportunities", variant: "destructive" }),
@@ -297,141 +369,113 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
     setFormOpen(true);
   };
 
-  const handleEdit = (opp: typeof enrichedOpportunities[0]) => {
-    setEditingOpportunity(opp as CrmOpportunity);
-    setFormOpen(true);
-  };
-
-  const toggleStageFilter = (filter: "all" | "closing-this-month") => {
-    setStageFilter(prev => prev === filter ? "all" : filter);
-  };
-
-  let pipelineOpportunities = opportunities.filter(o =>
-    opportunityMatchesPipeline(o, stages, pipelines, activePipelineId),
+  const pipelineOpportunities = useMemo(
+    () =>
+      opportunities.filter((o) =>
+        opportunityMatchesPipeline(o, stages, pipelines, activePipelineId),
+      ),
+    [opportunities, stages, pipelines, activePipelineId],
   );
 
-  if (stageFilter === "closing-this-month") {
-    const now = new Date();
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    pipelineOpportunities = pipelineOpportunities.filter(o => {
-      if (!o.expectedCloseDate) return false;
-      const closeDate = new Date(o.expectedCloseDate);
-      return closeDate >= now && closeDate <= endOfMonth;
-    });
-  }
-
-  if (selectedStageId !== null) {
-    pipelineOpportunities = pipelineOpportunities.filter(o => o.stageId === selectedStageId);
-  }
-
   const enrichedOpportunities = useMemo(() => {
-    let result = pipelineOpportunities.map(opp => {
-      const account = accounts.find(a => a.id === opp.accountId);
-      const stage = stages.find(s => s.id === opp.stageId);
+    let result = pipelineOpportunities.map((opp) => {
+      const account = accounts.find((a) => a.id === opp.accountId);
+      const stage = stages.find((s) => s.id === opp.stageId);
       return {
         ...opp,
-        accountName: account?.name || "—",
-        accountSegment: account ? resolveAccountSegment(account, segmentField) : "—",
+        accountName: account?.name || "?",
+        accountSegment: account ? resolveAccountSegment(account, segmentField) : "?",
         stage,
-        stageName: stage?.name || "—",
+        stageName: stage?.name || "?",
         amountNum: parseFloat(opp.amount || "0"),
         probabilityNum: opp.probability ?? stage?.probability ?? 0,
       };
     });
 
-    const effectiveSearch = searchTerm || localSearch;
+    const effectiveSearch = searchTerm || debouncedLocalSearch;
     if (effectiveSearch) {
       const s = effectiveSearch.toLowerCase();
-      result = result.filter(o =>
-        o.name.toLowerCase().includes(s) ||
-        o.accountName.toLowerCase().includes(s) ||
-        o.stageName.toLowerCase().includes(s)
+      result = result.filter(
+        (o) =>
+          o.name.toLowerCase().includes(s) ||
+          o.accountName.toLowerCase().includes(s) ||
+          o.stageName.toLowerCase().includes(s),
       );
     }
 
-    result.sort((a, b) => {
-      const dir = sortDir === "asc" ? 1 : -1;
-      if (sortField === "name") return dir * a.name.localeCompare(b.name);
-      if (sortField === "amount") return dir * (a.amountNum - b.amountNum);
-      if (sortField === "probability") return dir * (a.probabilityNum - b.probabilityNum);
-      if (sortField === "closeDate") {
-        const aDate = a.expectedCloseDate ? new Date(a.expectedCloseDate).getTime() : 0;
-        const bDate = b.expectedCloseDate ? new Date(b.expectedCloseDate).getTime() : 0;
-        return dir * (aDate - bDate);
+    if (ownerFilter === "__unassigned__") {
+      result = result.filter((o) => !o.ownerUserId);
+    } else if (ownerFilter !== "all") {
+      result = result.filter((o) => o.ownerUserId === ownerFilter);
+    }
+
+    for (const rule of filterRules) {
+      if ((rule.operator === "is" || rule.operator === "is_not" || rule.operator === "contains" || rule.operator === "not_contains" || rule.operator === "gt" || rule.operator === "lt") && !rule.value) {
+        continue;
       }
-      return dir * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    });
-
-    return result;
-  }, [pipelineOpportunities, accounts, stages, localSearch, searchTerm, sortField, sortDir, segmentField]);
-
-  const pagination = useCrmPagination(enrichedOpportunities, {
-    resetKey: `${searchTerm}|${localSearch}|${stageFilter}|${selectedStageId}|${sortField}|${sortDir}|${groupBy}|${activePipelineId}`,
-    enabled: groupBy === "none",
-  });
-
-  const formatColumns: MondayColumnDef<any>[] = [
-    { id: "name", header: "Opportunity", type: "text", accessor: "name" },
-    { id: "accountName", header: "Account", type: "text", accessor: "accountName" },
-    { id: "accountSegment", header: "Segment", type: "text", accessor: "accountSegment" },
-    { id: "stageName", header: "Stage", type: "text", accessor: "stageName" },
-    { id: "amount", header: "Amount", type: "currency", accessor: "amount" },
-    { id: "probabilityNum", header: "Probability", type: "number", accessor: (row: any) => row.probabilityNum },
-    { id: "expectedCloseDate", header: "Close Date", type: "date", accessor: "expectedCloseDate" },
-    { id: "createdAt", header: "Created", type: "date", accessor: "createdAt" },
-  ];
-
-  const cellFormatMap = useMemo(() => {
-    if (formatRules.length === 0) return {};
-    return evaluateConditionalFormatting(enrichedOpportunities as any[], formatColumns, formatRules);
-  }, [formatRules, enrichedOpportunities]);
-
-  function getCellStyle(rowId: number | string, columnId: string): Record<string, string> {
-    const rowFormat = cellFormatMap[rowId];
-    if (!rowFormat) return {};
-    const style: Record<string, string> = {};
-    if (rowFormat.row) {
-      if (rowFormat.row.bgColor) style.backgroundColor = rowFormat.row.bgColor;
-      if (rowFormat.row.textColor) style.color = rowFormat.row.textColor;
+      if (rule.field === "closing") {
+        if (rule.value === "this-month" && (rule.operator === "is" || !rule.operator)) {
+          const now = new Date();
+          const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          result = result.filter((o) => {
+            if (!o.expectedCloseDate) return false;
+            const closeDate = new Date(o.expectedCloseDate);
+            return closeDate >= now && closeDate <= endOfMonth;
+          });
+        }
+        continue;
+      }
+      result = result.filter((o) => {
+        const raw = getOppFilterFieldValue(o, rule.field);
+        const forEmpty = rule.field === "owner" ? o.ownerUserId || "" : raw;
+        const fieldVal =
+          rule.operator === "is_empty" || rule.operator === "is_not_empty" ? forEmpty : raw;
+        return matchBoardFilterValue(fieldVal, rule.operator, rule.value);
+      });
     }
-    const cellFormat = rowFormat.cells?.[columnId];
-    if (cellFormat) {
-      if (cellFormat.bgColor) style.backgroundColor = cellFormat.bgColor;
-      if (cellFormat.textColor) style.color = cellFormat.textColor;
-    }
-    return style;
-  }
 
-  function getCellClasses(rowId: number | string, columnId: string): string {
-    const rowFormat = cellFormatMap[rowId];
-    if (!rowFormat) return "";
-    const classes: string[] = [];
-    if (rowFormat.row?.bold || rowFormat.cells?.[columnId]?.bold) classes.push("font-bold");
-    if (rowFormat.row?.italic || rowFormat.cells?.[columnId]?.italic) classes.push("italic");
-    return classes.join(" ");
-  }
+    return [...result].sort((a, b) => compareOppsByRules(a, b, sortRules));
+  }, [
+    pipelineOpportunities,
+    accounts,
+    stages,
+    debouncedLocalSearch,
+    searchTerm,
+    segmentField,
+    ownerFilter,
+    filterRules,
+    sortRules,
+  ]);
+
+  type EnrichedOpp = (typeof enrichedOpportunities)[number];
+
+  const handleEdit = (opp: EnrichedOpp) => {
+    setEditingOpportunity(opp as CrmOpportunity);
+    setFormOpen(true);
+  };
 
   const totalValue = enrichedOpportunities.reduce((sum, o) => sum + o.amountNum, 0);
-  const weightedValue = enrichedOpportunities.reduce((sum, o) => sum + (o.amountNum * o.probabilityNum / 100), 0);
-  const avgDeal = enrichedOpportunities.length > 0 ? Math.round(totalValue / enrichedOpportunities.length) : 0;
+  const weightedValue = enrichedOpportunities.reduce(
+    (sum, o) => sum + (o.amountNum * o.probabilityNum) / 100,
+    0,
+  );
+  const avgDeal =
+    enrichedOpportunities.length > 0
+      ? Math.round(totalValue / enrichedOpportunities.length)
+      : 0;
 
   const groupedData = useMemo(() => {
     if (groupBy === "none") return null;
-    const groups: Record<string, typeof enrichedOpportunities> = {};
+    const groups: Record<string, EnrichedOpp[]> = {};
     for (const opp of enrichedOpportunities) {
       let key: string;
-      if (groupBy === "stage") {
-        key = opp.stageName;
-      } else if (groupBy === "account") {
-        key = opp.accountName;
-      } else if (groupBy === "owner") {
-        key = resolveOwner(opp.ownerUserId).name;
-      } else {
-        if (opp.probabilityNum >= 75) key = "High (75%+)";
-        else if (opp.probabilityNum >= 50) key = "Medium (50-74%)";
-        else if (opp.probabilityNum >= 25) key = "Low (25-49%)";
-        else key = "Very Low (<25%)";
-      }
+      if (groupBy === "stage") key = opp.stageName;
+      else if (groupBy === "account") key = opp.accountName;
+      else if (groupBy === "owner") key = resolveOwner(opp.ownerUserId).name;
+      else if (opp.probabilityNum >= 75) key = "High (75%+)";
+      else if (opp.probabilityNum >= 50) key = "Medium (50-74%)";
+      else if (opp.probabilityNum >= 25) key = "Low (25-49%)";
+      else key = "Very Low (<25%)";
       if (!groups[key]) groups[key] = [];
       groups[key].push(opp);
     }
@@ -439,242 +483,366 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
   }, [enrichedOpportunities, groupBy, resolveOwner]);
 
   const groupColors: Record<string, string> = {
-    "High (75%+)": "#22c55e", "Medium (50-74%)": "#f59e0b", "Low (25-49%)": "#f97316", "Very Low (<25%)": "#ef4444",
-    "Prospect": "#3b82f6", "Qualification": "#06b6d4", "Proposal": "#f59e0b", "Negotiation": "#f97316",
-    "Closed Won": "#22c55e", "Closed Lost": "#ef4444",
+    "High (75%+)": "#22c55e",
+    "Medium (50-74%)": "#f59e0b",
+    "Low (25-49%)": "#f97316",
+    "Very Low (<25%)": "#ef4444",
+    Prospect: "#3b82f6",
+    Qualification: "#06b6d4",
+    Proposal: "#f59e0b",
+    Negotiation: "#f97316",
+    "Closed Won": "#22c55e",
+    "Closed Lost": "#ef4444",
   };
 
-  const handleSort = (field: typeof sortField) => {
-    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortField(field); setSortDir("desc"); }
-  };
+  const mondayColumns: MondayColumnDef<EnrichedOpp>[] = useMemo(() => {
+    const byId: Record<string, MondayColumnDef<EnrichedOpp>> = {
+      name: {
+        id: "name",
+        header: "Opportunity",
+        type: "text",
+        accessor: "name",
+        width: "240px",
+        sticky: pinActive,
+        editable: true,
+        summary: "count",
+      },
+      account: {
+        id: "account",
+        header: "Account",
+        type: "text",
+        accessor: (row) => row.accountName,
+        width: "160px",
+        hidden: !isColVisible("account"),
+        editable: false,
+      },
+      segment: {
+        id: "segment",
+        header: "Segment",
+        type: "text",
+        accessor: (row) => row.accountSegment,
+        width: "120px",
+        hidden: !isColVisible("segment"),
+        editable: false,
+        render: (opp) => (
+          <span className="text-sm" style={{ color: getSegmentColor(opp.accountSegment) }}>
+            {opp.accountSegment}
+          </span>
+        ),
+      },
+      stage: {
+        id: "stage",
+        header: "Stage",
+        type: "status",
+        accessor: (row) => (row.stageId != null ? String(row.stageId) : ""),
+        width: "140px",
+        hidden: !isColVisible("stage"),
+        editable: true,
+        options: stageStatusOptions,
+      },
+      amount: {
+        id: "amount",
+        header: "Amount",
+        type: "currency",
+        accessor: "amount",
+        width: "120px",
+        hidden: !isColVisible("amount"),
+        editable: true,
+        summary: "sum",
+      },
+      probability: {
+        id: "probability",
+        header: "Probability",
+        type: "number",
+        accessor: (row) => row.probabilityNum,
+        width: "120px",
+        hidden: !isColVisible("probability"),
+        editable: true,
+        summary: "avg",
+      },
+      owner: {
+        id: "owner",
+        header: "Owner",
+        type: "select",
+        accessor: (row) => row.ownerUserId || "",
+        width: "160px",
+        hidden: !isColVisible("owner"),
+        editable: true,
+        options: ownerSelectOptions,
+      },
+      closeDate: {
+        id: "closeDate",
+        header: "Close Date",
+        type: "date",
+        accessor: "expectedCloseDate",
+        width: "130px",
+        hidden: !isColVisible("closeDate"),
+        editable: true,
+      },
+      created: {
+        id: "created",
+        header: "Created",
+        type: "date",
+        accessor: "createdAt",
+        width: "110px",
+        hidden: !isColVisible("created"),
+        editable: false,
+      },
+    };
+
+    const order = ["name", ...(columnOrderIds.length ? columnOrderIds : OPP_TABLE_COLUMNS.map((c) => c.id))];
+    const customCols = buildCrmCustomFieldColumns<EnrichedOpp>(customFields, (id) => isColVisible(id), {
+      editable: true,
+    });
+    for (const col of customCols) byId[col.id] = col;
+    const seen = new Set<string>();
+    const ordered: MondayColumnDef<EnrichedOpp>[] = [];
+    for (const id of order) {
+      if (seen.has(id) || !byId[id]) continue;
+      seen.add(id);
+      ordered.push(byId[id]);
+    }
+    for (const id of Object.keys(byId)) {
+      if (!seen.has(id)) ordered.push(byId[id]);
+    }
+
+    return ordered;
+  }, [
+    customFields,
+    isColVisible,
+    stageStatusOptions,
+    ownerSelectOptions,
+    pinActive,
+    columnOrderIds,
+  ]);
+
+  const tableGroups = useMemo(
+    () =>
+      recordToMondayGroups(
+        groupedData,
+        groupColors,
+        (items) => `$${items.reduce((s, o) => s + o.amountNum, 0).toLocaleString()}`,
+      ),
+    [groupedData],
+  );
+
+  const handleCellEdit = useCallback(
+    (rowId: number | string, columnId: string, value: unknown) => {
+      const id = typeof rowId === "string" ? Number(rowId) : rowId;
+      const updates: Partial<CrmOpportunity> & { customData?: Record<string, unknown> } = {};
+
+      switch (columnId) {
+        case "name":
+          updates.name = String(value || "") || "Untitled";
+          break;
+        case "stage": {
+          const stageId = value ? parseInt(String(value), 10) : null;
+          const stage = stages.find((s) => s.id === stageId);
+          updates.stageId = stageId;
+          if (stage?.probability != null) updates.probability = stage.probability;
+          break;
+        }
+        case "amount":
+          updates.amount =
+            value === "" || value == null ? null : String(value);
+          break;
+        case "probability":
+          updates.probability =
+            value === "" || value == null ? null : Number(value);
+          break;
+        case "owner":
+          updates.ownerUserId = String(value || "") || null;
+          break;
+        case "closeDate":
+          updates.expectedCloseDate = value ? String(value) : null;
+          break;
+        default: {
+          if (columnId.startsWith("custom_")) {
+            const fieldName = columnId.replace(/^custom_/, "");
+            const field = customFields.find((f) => f.fieldName === fieldName);
+            const opp = opportunities.find((o) => o.id === id);
+            const prev =
+              opp?.customData && typeof opp.customData === "object"
+                ? { ...opp.customData }
+                : {};
+            if (field?.fieldType === "number") {
+              const n = value === "" || value == null ? null : Number(value);
+              prev[fieldName] = Number.isFinite(n as number) ? n : null;
+            } else {
+              prev[fieldName] = value === "" || value == null ? null : String(value);
+            }
+            updates.customData = prev;
+            break;
+          }
+          return;
+        }
+      }
+
+      updateOpportunityMutation.mutate({ id, updates });
+    },
+    [updateOpportunityMutation, stages, customFields, opportunities],
+  );
+
+  const getFilterFieldOptions = useCallback(
+    (field: string) => {
+      switch (field) {
+        case "stage":
+          return pipelineStages.map((s) => ({ value: s.name, label: s.name }));
+        case "owner":
+          return [
+            { value: "__unassigned__", label: "Unassigned" },
+            ...users.map((u) => ({ value: u.id, label: resolveOwner(u.id).name })),
+          ];
+        case "closing":
+          return [{ value: "this-month", label: "Closing this month" }];
+        case "account":
+          return Array.from(new Set(enrichedOpportunities.map((o) => o.accountName).filter(Boolean))).map(
+            (v) => ({ value: v, label: v }),
+          );
+        default:
+          return [];
+      }
+    },
+    [pipelineStages, users, resolveOwner, enrichedOpportunities],
+  );
 
   const currentFilters = useMemo((): FilterConfig[] => {
-    const filters: FilterConfig[] = [];
-    if (selectedStageId !== null) filters.push({ columnId: "stage", operator: "equals", value: String(selectedStageId) });
-    if (stageFilter === "closing-this-month") filters.push({ columnId: "closing", operator: "equals", value: "this-month" });
-    if (activePipelineId) filters.push({ columnId: "pipeline", operator: "equals", value: String(activePipelineId) });
+    const filters: FilterConfig[] = filterRules.map((r) => ({
+      columnId: r.field,
+      operator: (r.operator === "contains" || r.operator === "not_contains"
+        ? "contains"
+        : r.operator === "gt"
+          ? "greaterThan"
+          : r.operator === "lt"
+            ? "lessThan"
+            : "equals") as FilterConfig["operator"],
+      value: r.value,
+    }));
+    if (activePipelineId) {
+      filters.push({ columnId: "pipeline", operator: "equals", value: String(activePipelineId) });
+    }
     return filters;
-  }, [selectedStageId, stageFilter, activePipelineId]);
+  }, [filterRules, activePipelineId]);
 
-  const currentSorts = useMemo((): SortConfig[] => (
-    [{ columnId: sortField, direction: sortDir }]
-  ), [sortField, sortDir]);
+  const currentSorts = useMemo(
+    (): SortConfig[] =>
+      sortRules.map((r) => ({ columnId: r.field, direction: r.dir })),
+    [sortRules],
+  );
 
-  const applySavedView = (filters: FilterConfig[], sorts?: SortConfig[]) => {
-    setSelectedStageId(null);
-    setStageFilter("all");
+  const applySavedView = (
+    filters: FilterConfig[],
+    sorts?: SortConfig[],
+    _columns?: unknown,
+    extras?: { viewMode?: string; groupBy?: string },
+  ) => {
     setSelectedPipelineId(null);
+    const nextRules = filters
+      .filter((f) => f.columnId !== "pipeline")
+      .map((f, i) => ({
+        id: `sv-${i}-${f.columnId}`,
+        field: f.columnId,
+        operator: (f.operator === "contains"
+          ? "contains"
+          : f.operator === "greaterThan"
+            ? "gt"
+            : f.operator === "lessThan"
+              ? "lt"
+              : "is") as "is" | "contains" | "gt" | "lt",
+        value: f.value,
+      }));
+    setFilterRules(nextRules);
     for (const f of filters) {
-      if (f.columnId === "stage") setSelectedStageId(parseInt(f.value));
-      if (f.columnId === "closing") setStageFilter("closing-this-month");
-      if (f.columnId === "pipeline") setSelectedPipelineId(parseInt(f.value));
+      if (f.columnId === "pipeline") setSelectedPipelineId(parseInt(f.value, 10));
     }
-    if (sorts?.[0]) {
-      setSortField(sorts[0].columnId as typeof sortField);
-      setSortDir(sorts[0].direction);
+    if (sorts?.length) {
+      applyViewSnapshot({
+        ...viewSnapshot,
+        filters: nextRules,
+        sorts: sorts.map((s) => ({ field: s.columnId, dir: s.direction })),
+        viewMode: extras?.viewMode || viewMode,
+        groupBy: extras?.groupBy || groupBy,
+      });
     }
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === enrichedOpportunities.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(enrichedOpportunities.map(o => o.id)));
-  };
-
-  const toggleSelectOne = (id: number) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+    if (extras?.viewMode) setViewModePersist(extras.viewMode as typeof viewMode);
+    if (extras?.groupBy) setGroupBy(extras.groupBy);
   };
 
   const exportToCSV = () => {
-    const headers = ["Name", "Account", "Stage", "Amount", "Probability", "Expected Close", "Created"];
-    const rows = enrichedOpportunities.map(o => [
-      o.name, o.accountName, o.stageName, o.amount || "", String(o.probabilityNum), o.expectedCloseDate || "", o.createdAt
-    ]);
-    const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${(c || "").replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `opportunities-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: "Opportunities exported to CSV" });
-  };
-
-  const renderRow = (opp: typeof enrichedOpportunities[0]) => {
-    const companyColor = getColorForName(opp.name);
-    const companyInitials = getInitials(opp.name);
-    const owner = resolveOwner(opp.ownerUserId);
-
-    return (
-      <tr
-        key={opp.id}
-        className={cn(
-          "border-b border-border/40 hover:bg-muted/30 transition-colors",
-          selectedIds.has(opp.id) && "bg-[#0ea5e9]/5"
-        )}
-        data-testid={`opp-row-${opp.id}`}
-      >
-        <td className="px-3 py-2.5 align-middle w-10">
-          <Checkbox
-            checked={selectedIds.has(opp.id)}
-            onCheckedChange={() => toggleSelectOne(opp.id)}
-            data-testid={`checkbox-opp-${opp.id}`}
-          />
-        </td>
-        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "name"))} style={getCellStyle(opp.id, "name")}>
-          <div className="flex items-center gap-3">
-            <div
-              className="h-9 w-9 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0"
-              style={{ backgroundColor: companyColor }}
-            >
-              {companyInitials}
-            </div>
-            <div className="min-w-0">
-              <CrmInlineEditCell
-                value={opp.name}
-                displayValue={opp.name}
-                onSave={(v) => updateOpportunityMutation.mutate({ id: opp.id, updates: { name: v } })}
-                className="text-sm font-semibold"
-                testId={`inline-opp-name-${opp.id}`}
-              />
-              <p className="text-xs text-muted-foreground">Opportunity</p>
-            </div>
-          </div>
-        </td>
-        {isColVisible("account") && (
-        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "accountName"))} style={getCellStyle(opp.id, "accountName")}>
-          <span className="text-sm">{opp.accountName}</span>
-        </td>
-        )}
-        {isColVisible("segment") && (
-        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "accountSegment"))} style={getCellStyle(opp.id, "accountSegment")}>
-          <span className="text-sm" style={{ color: getSegmentColor(opp.accountSegment) }}>{opp.accountSegment}</span>
-        </td>
-        )}
-        {isColVisible("stage") && (
-        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "stageName"))} style={getCellStyle(opp.id, "stageName")}>
-          <CrmInlineEditSelect
-            value={opp.stageId ? String(opp.stageId) : ""}
-            displayValue={<StageBadge stage={opp.stage} />}
-            options={stageSelectOptions}
-            onSave={(v) => {
-              const stage = stages.find((s) => String(s.id) === v);
-              updateOpportunityMutation.mutate({
-                id: opp.id,
-                updates: {
-                  stageId: v ? parseInt(v, 10) : null,
-                  probability: stage?.probability ?? opp.probability,
-                },
-              });
-            }}
-            testId={`inline-opp-stage-${opp.id}`}
-          />
-        </td>
-        )}
-        {isColVisible("amount") && (
-        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "amount"))} style={getCellStyle(opp.id, "amount")}>
-          <CrmInlineEditCell
-            value={opp.amount || ""}
-            displayValue={formatCurrency(opp.amount)}
-            type="number"
-            onSave={(v) => updateOpportunityMutation.mutate({ id: opp.id, updates: { amount: v || null } })}
-            className="text-sm font-semibold"
-            testId={`inline-opp-amount-${opp.id}`}
-          />
-        </td>
-        )}
-        {isColVisible("probability") && (
-        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "probabilityNum"))} style={getCellStyle(opp.id, "probabilityNum")}>
-          <CrmInlineEditCell
-            value={String(opp.probabilityNum ?? "")}
-            type="number"
-            displayValue={<ProbabilityBar probability={opp.probabilityNum} />}
-            onSave={(v) => updateOpportunityMutation.mutate({ id: opp.id, updates: { probability: v ? parseInt(v, 10) : null } })}
-            testId={`inline-opp-probability-${opp.id}`}
-          />
-        </td>
-        )}
-        {isColVisible("owner") && (
-        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-          <div className="flex items-center gap-2">
-            <div
-              className="h-7 w-7 rounded-full flex items-center justify-center text-white font-semibold text-[10px] shrink-0"
-              style={{ backgroundColor: owner.color }}
-            >
-              {owner.initials}
-            </div>
-            <CrmInlineEditSelect
-              value={opp.ownerUserId || ""}
-              displayValue={owner.name}
-              options={ownerSelectOptions}
-              onSave={(v) => updateOpportunityMutation.mutate({ id: opp.id, updates: { ownerUserId: v || null } })}
-              className="text-sm"
-              testId={`inline-opp-owner-${opp.id}`}
-            />
-          </div>
-        </td>
-        )}
-        {isColVisible("closeDate") && (
-        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "expectedCloseDate"))} style={getCellStyle(opp.id, "expectedCloseDate")}>
-          <CrmInlineEditDate
-            value={opp.expectedCloseDate ? opp.expectedCloseDate.slice(0, 10) : ""}
-            displayValue={formatDate(opp.expectedCloseDate)}
-            onSave={(v) => updateOpportunityMutation.mutate({ id: opp.id, updates: { expectedCloseDate: v || null } })}
-            className={cn("text-sm", opp.expectedCloseDate && new Date(opp.expectedCloseDate) < new Date() ? "text-red-500 font-medium" : "text-muted-foreground")}
-            testId={`inline-opp-close-${opp.id}`}
-          />
-        </td>
-        )}
-        {isColVisible("created") && (
-        <td className={cn("px-3 py-2.5 align-middle whitespace-nowrap", getCellClasses(opp.id, "createdAt"))} style={getCellStyle(opp.id, "createdAt")}>
-          <span className="text-sm text-muted-foreground">{formatDate(opp.createdAt)}</span>
-        </td>
-        )}
-        <CrmCustomFieldTableCells fields={customFields} customData={opp.customData} />
-        <td className="px-3 py-2.5 align-middle text-right whitespace-nowrap">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()} data-testid={`button-actions-opp-${opp.id}`}>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleEdit(opp)} data-testid={`action-edit-opp-${opp.id}`}>
-                <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  sessionStorage.setItem("crm-resource-plan-opp-id", String(opp.id));
-                  onNavigateToTab?.("resourceplan");
-                  onNavigateToResourcePlan?.(opp.id);
-                }}
-                data-testid={`action-resource-plan-opp-${opp.id}`}
-              >
-                <Users className="h-3.5 w-3.5 mr-2" /> Resource Plan
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => runOppAction(() => apiRequest("POST", `/api/crm/opportunities/${opp.id}/clone`), "Opportunity cloned")} data-testid={`action-clone-opp-${opp.id}`}>
-                <Copy className="h-3.5 w-3.5 mr-2" /> Clone
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => runOppAction(() => apiRequest("POST", `/api/crm/opportunities/${opp.id}/convert-to-project`), "Converted to project")} data-testid={`action-convert-opp-${opp.id}`}>
-                <Briefcase className="h-3.5 w-3.5 mr-2" /> Convert to Project
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => runOppAction(() => apiRequest("POST", `/api/crm/opportunities/${opp.id}/archive`), "Opportunity archived")} data-testid={`action-archive-opp-${opp.id}`}>
-                <Archive className="h-3.5 w-3.5 mr-2" /> Archive
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => deleteMutation.mutate(opp.id)} className="text-red-600 focus:text-red-700" data-testid={`action-delete-opp-${opp.id}`}>
-                <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </td>
-      </tr>
+    const headers = [...OPP_IMPORT_HEADERS];
+    const rows = enrichedOpportunities.map((o) => {
+      const raw = o as EnrichedOpp & {
+        description?: string | null;
+        type?: string | null;
+        source?: string | null;
+        nextStep?: string | null;
+      };
+      return headers.map((h) => {
+        switch (h) {
+          case "name":
+            return o.name || "";
+          case "description":
+            return raw.description || "";
+          case "amount":
+            return o.amount || "";
+          case "probability":
+            return String(o.probabilityNum ?? "");
+          case "expectedCloseDate":
+            return o.expectedCloseDate || "";
+          case "type":
+            return raw.type || "";
+          case "source":
+            return raw.source || "";
+          case "nextStep":
+            return raw.nextStep || "";
+          case "stageName":
+            return o.stageName || "";
+          case "accountName":
+            return o.accountName || "";
+          default:
+            return "";
+        }
+      });
+    });
+    downloadBoardCsv(
+      `opportunities-${new Date().toISOString().split("T")[0]}.csv`,
+      headers,
+      rows,
     );
+    toast({
+      title: "Opportunities exported to CSV",
+      description: "File uses the same columns as Import.",
+    });
   };
+
+  const downloadImportTemplate = () => {
+    downloadImportTemplateCsv(
+      "opportunities-import-template.csv",
+      [...OPP_IMPORT_HEADERS],
+      OPP_IMPORT_EXAMPLE,
+    );
+    toast({ title: "Import template downloaded" });
+  };
+
+  const groupContent = (
+    <>
+      <DropdownMenuItem onClick={() => setGroupBy("none")} data-testid="group-opp-none">
+        None
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("stage")} data-testid="group-opp-stage">
+        Stage
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("account")} data-testid="group-opp-account">
+        Account
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("probability")} data-testid="group-opp-probability">
+        Probability
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setGroupBy("owner")} data-testid="group-opp-owner">
+        Owner
+      </DropdownMenuItem>
+    </>
+  );
 
   return (
     <div className="space-y-4">
@@ -700,7 +868,7 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
         <MetricCard
           title="Weighted Value"
           value={`$${weightedValue.toLocaleString()}`}
-          subtitle="Amount × probability"
+          subtitle="Amount ? probability"
           helpText="Expected revenue: each deal amount multiplied by its win probability (from stage or deal field)."
           icon={WeightedIcon}
           borderColor="#8b5cf6"
@@ -718,394 +886,281 @@ export function CrmOpportunitiesTab({ opportunities, stages, accounts, pipelines
         />
       </div>
 
-      {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2.5 bg-[#0ea5e9]/10 border border-[#0ea5e9]/30 rounded-lg" data-testid="bulk-actions-bar-opp">
-          <span className="text-sm font-medium text-[#0ea5e9]">{selectedIds.size} selected</span>
-          <div className="h-4 w-px bg-[#0ea5e9]/30" />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" data-testid="button-bulk-stage">
-                <UserCheck className="h-3 w-3" />
-                Change Stage
-                <ChevronDown className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {pipelineStages.map(stage => (
-                <DropdownMenuItem key={stage.id} onClick={async () => {
-                  const ids = Array.from(selectedIds);
-                  try {
-                    const results = await Promise.all(ids.map(id => apiRequest("PUT", `/api/crm/opportunities/${id}`, { stageId: stage.id })));
-                    if (results.some(r => !r.ok)) throw new Error("Some updates failed");
-                    queryClient.invalidateQueries({ queryKey: ["/api/crm/opportunities"] });
-                    setSelectedIds(new Set());
-                    toast({ title: `${ids.length} opportunities moved to ${stage.name}` });
-                  } catch {
-                    toast({ title: "Failed to update stages", variant: "destructive" });
-                  }
-                }}>
-                  {stage.name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-            onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
-            disabled={bulkDeleteMutation.isPending}
-            data-testid="button-bulk-delete-opp"
+      <MondayBoardShell<EnrichedOpp>
+        storageKey="jiganto-crm-opportunities"
+        entityType="opportunity"
+        ownsCustomColumns
+        isColumnVisible={isColVisible}
+        testId="opp-board"
+        viewSnapshot={viewSnapshot}
+        onApplyViewSnapshot={applyViewSnapshot}
+        mainTableSorts={[{ field: "created", dir: "desc" }]}
+        newLabel="New Opportunity"
+        onNew={openCreateForm}
+        newTestId="button-add-opportunity-table"
+        afterNewSlot={
+          pipelines.length > 0 ? (
+            <Select
+              value={activePipelineId?.toString() || ""}
+              onValueChange={(v) => setSelectedPipelineId(parseInt(v, 10))}
+            >
+              <SelectTrigger className="h-8 w-[160px] text-xs" data-testid="select-pipeline-opp">
+                <SelectValue placeholder="Pipeline" />
+              </SelectTrigger>
+              <SelectContent>
+                {pipelines.map((pipeline) => (
+                  <SelectItem key={pipeline.id} value={pipeline.id.toString()}>
+                    {pipeline.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : undefined
+        }
+        searchValue={localSearch}
+        onSearchChange={setLocalSearch}
+        searchTestId="input-search-opp"
+        personUsers={personUsers}
+        personValue={ownerFilter}
+        onPersonChange={setOwnerFilter}
+        viewMode={viewMode}
+        onViewModeChange={setViewModePersist}
+        filterRules={filterRules}
+        onFilterRulesChange={setFilterRules}
+        filterFields={OPP_FILTER_FIELDS}
+        getFilterFieldOptions={getFilterFieldOptions}
+        filterOpen={filterOpen}
+        onFilterOpenChange={setFilterOpen}
+        sortRules={sortRules}
+        sortFields={OPP_SORT_FIELDS}
+        onSortToggle={onSortToggle}
+        onSortAdd={onSortAdd}
+        onSortRemove={onSortRemove}
+        defaultSortField="created"
+        groupContent={groupContent}
+        groupActive={groupBy !== "none"}
+        groupLabel={groupBy === "none" ? "Group by" : `Group by ${groupBy}`}
+        grouped={groupBy !== "none"}
+        pinActive={pinActive}
+        onPinToggle={togglePin}
+        pinTitle={pinActive ? "Unpin Opportunity column" : "Pin Opportunity column"}
+        columnMenuItems={columnMenuItems}
+        onColumnVisible={setColVisible}
+        onColumnMove={moveColumn}
+        savedViewFilters={currentFilters}
+        savedViewSorts={currentSorts}
+        onApplySavedViewDropdown={applySavedView}
+        onExport={exportToCSV}
+        onDownloadTemplate={downloadImportTemplate}
+        onPaste={() => setImportOpen(true)}
+        onImport={() => setImportOpen(true)}
+        moreMenuItems={
+          <DropdownMenuItem
+            onClick={() => setIsCreatePipelineOpen(true)}
+            data-testid="button-create-pipeline-opp"
           >
-            <Trash2 className="h-3 w-3" />
-            Delete
-          </Button>
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            className="text-xs text-muted-foreground hover:text-foreground ml-auto"
-            data-testid="button-clear-selection-opp"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2" data-testid="opp-toolbar">
-        <button
-          onClick={() => { toggleStageFilter("all"); setSelectedStageId(null); }}
-          className={cn(
-            "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-            stageFilter === "all" && selectedStageId === null
-              ? "bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400"
-              : "bg-background border-border text-foreground hover:bg-violet-50/50 dark:hover:bg-violet-950/20"
-          )}
-          data-testid="button-filter-all-stages"
-        >
-          <OpportunityIcon className="h-4 w-4" />
-          All Stages
-        </button>
-
-        <Select
-          value={selectedStageId?.toString() || "all"}
-          onValueChange={(val) => {
-            if (val === "all") {
-              setSelectedStageId(null);
+            Add pipeline?
+          </DropdownMenuItem>
+        }
+        tableProps={{
+          columns: mondayColumns,
+          data: enrichedOpportunities,
+          groups: tableGroups,
+          conditionalFormatRules: formatRules,
+          onConditionalFormatRulesChange: setFormatRules,
+          emptyMessage: "No opportunities found. Create your first deal to start tracking.",
+          addItemLabel: "New Opportunity",
+          onAddItem: () => openCreateForm(),
+          onEditItem: handleEdit,
+          onCellEdit: handleCellEdit,
+          onDeleteItems: (ids) => {
+            const n = ids.length;
+            if (
+              !window.confirm(
+                n === 1 ? "Delete this opportunity?" : `Delete ${n} opportunities?`,
+              )
+            )
+              return;
+            if (ids.length === 1) {
+              deleteMutation.mutate(Number(ids[0]));
             } else {
-              setSelectedStageId(parseInt(val));
-              setStageFilter("all");
+              bulkDeleteMutation.mutate(ids.map(Number));
             }
-          }}
-        >
-          <SelectTrigger
-            className={cn(
-              "h-9 w-auto min-w-[140px] rounded-lg text-sm font-medium border transition-colors gap-1.5",
-              selectedStageId !== null
-                ? "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400"
-                : "bg-background border-border text-foreground"
-            )}
-            data-testid="select-stage-filter"
-          >
-            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
-            <SelectValue placeholder="Stage" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Stages</SelectItem>
-            {pipelineStages.map(stage => (
-              <SelectItem key={stage.id} value={stage.id.toString()} data-testid={`stage-filter-${stage.id}`}>
-                {stage.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <button
-          onClick={() => toggleStageFilter("closing-this-month")}
-          className={cn(
-            "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-            stageFilter === "closing-this-month"
-              ? "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"
-              : "bg-background border-border text-foreground hover:bg-amber-50/50 dark:hover:bg-amber-950/20"
-          )}
-          data-testid="button-filter-closing-month"
-        >
-          <Calendar className="h-4 w-4" />
-          Closing This Month
-        </button>
-
-        {pipelines.length > 0 && (
-          <Select value={activePipelineId?.toString() || ""} onValueChange={(v) => setSelectedPipelineId(parseInt(v))}>
-            <SelectTrigger className="w-[180px] h-9 rounded-lg" data-testid="select-pipeline-opp">
-              <SelectValue placeholder="Select pipeline" />
-            </SelectTrigger>
-            <SelectContent>
-              {pipelines.map(pipeline => (
-                <SelectItem key={pipeline.id} value={pipeline.id.toString()}>{pipeline.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        <SavedViewsDropdown
-          entityType="opportunities"
-          currentFilters={currentFilters}
-          currentSorts={currentSorts}
-          onApplyView={applySavedView}
-        />
-
-        <div className="h-6 w-px bg-border mx-1" />
-
-        <CrmColumnVisibilityMenu
-          columns={OPP_TABLE_COLUMNS}
-          visibility={columnVisibility}
-          onChange={setColVisible}
-          testId="button-opp-fields"
-        />
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-background text-foreground hover:bg-muted transition-colors"
-              data-testid="button-sort-opp"
-            >
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              Sort: {sortField === "name" ? "Name" : sortField === "amount" ? "Amount" : sortField === "probability" ? "Probability" : sortField === "closeDate" ? "Close Date" : "Created"}
-              <ChevronDown className="h-3 w-3" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={() => handleSort("created")}>Created {sortField === "created" ? `(${sortDir})` : ""}</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSort("name")}>Name {sortField === "name" ? `(${sortDir})` : ""}</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSort("amount")}>Amount {sortField === "amount" ? `(${sortDir})` : ""}</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSort("probability")}>Probability {sortField === "probability" ? `(${sortDir})` : ""}</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSort("closeDate")}>Close Date {sortField === "closeDate" ? `(${sortDir})` : ""}</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className={cn(
-                "inline-flex items-center justify-center h-9 w-9 rounded-lg border transition-colors",
-                groupBy !== "none"
-                  ? "bg-[#0ea5e9]/10 border-[#0ea5e9]/30 text-[#0ea5e9]"
-                  : "border-border bg-background text-foreground hover:bg-muted"
-              )}
-              title={groupBy === "none" ? "Group" : `Grouped by ${groupBy}`}
-              aria-label={groupBy === "none" ? "Group opportunities" : `Grouped by ${groupBy}`}
-              data-testid="button-group-opp"
-            >
-              <Layers className="h-4 w-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={() => setGroupBy("none")} data-testid="group-opp-none">None</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setGroupBy("stage")} data-testid="group-opp-stage">Stage</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setGroupBy("account")} data-testid="group-opp-account">Account</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setGroupBy("probability")} data-testid="group-opp-probability">Probability</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setGroupBy("owner")} data-testid="group-opp-owner">Owner</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <button
-          onClick={() => setFormatPanelOpen(true)}
-          className={cn(
-            "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-            formatRules.length > 0
-              ? "bg-[#8b5cf6]/10 border-[#8b5cf6]/30 text-[#8b5cf6]"
-              : "border-border bg-background text-foreground hover:bg-muted"
-          )}
-          data-testid="button-format-painter"
-          title="Format Painter - Apply conditional formatting rules"
-        >
-          <Paintbrush className="h-3.5 w-3.5" />
-          Format{formatRules.length > 0 ? ` (${formatRules.length})` : ""}
-        </button>
-
-        <div className="flex-1" />
-
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search opportunities..."
-            value={localSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
-            className="pl-9 h-9 w-52 rounded-lg"
-            data-testid="input-search-opp"
-          />
-        </div>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-setup-opp">
-              <Settings2 className="h-3.5 w-3.5" />
-              Setup
-              <ChevronDown className="h-3 w-3" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setIsCreatePipelineOpen(true)} data-testid="button-create-pipeline-opp">
-              Add pipeline…
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={exportToCSV} data-testid="button-export-opportunities-menu">
-              Export CSV
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setImportOpen(true)} data-testid="button-import-opp-menu">
-              Import CSV
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-          <FormDialogShell
-            open={isCreatePipelineOpen}
-            onOpenChange={setIsCreatePipelineOpen}
-            title="Create New Pipeline"
-            subtitle="Add a pipeline for opportunity workflows"
-            saveLabel={createPipelineMutation.isPending ? "Creating..." : "Create Pipeline"}
-            onCancel={() => setIsCreatePipelineOpen(false)}
-            onSubmit={() => createPipelineMutation.mutate({ name: pipelineName })}
-            saving={createPipelineMutation.isPending}
-            disabled={!pipelineName}
-            saveTestId="button-save-pipeline-opp"
-            size="sm"
-          >
-            <div className="space-y-4 py-4">
-              <div>
-                <Label htmlFor="pipelineNameOpp">Pipeline Name *</Label>
-                <Input
-                  id="pipelineNameOpp"
-                  value={pipelineName}
-                  onChange={(e) => setPipelineName(e.target.value)}
-                  placeholder="e.g., Enterprise Sales, SMB Sales"
-                  data-testid="input-pipeline-name-opp"
-                />
-              </div>
-            </div>
-          </FormDialogShell>
-
-        {enrichedOpportunities.length > 0 && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button className="bg-[#0ea5e9] hover:bg-[#0ea5e9]/90 text-white gap-1.5" data-testid="button-add-opportunity-table" onClick={openCreateForm}>
-              <Plus className="h-4 w-4" />
-              New Opportunity
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-xs text-xs">
-            Create a new sales deal. Pipelines and stages are configured under Setup.
-          </TooltipContent>
-        </Tooltip>
-        )}
-        <ImportModal
-          isOpen={importOpen}
-          onClose={() => setImportOpen(false)}
-          entityName="Opportunities"
-          templateHeaders={["name","description","amount","probability","expectedCloseDate","type","source","nextStep","stageName","accountName"]}
-          exampleRow={{ name:"Acme ERP Upgrade",description:"Full ERP modernisation project",amount:"125000",probability:"60",expectedCloseDate:"2026-09-30",type:"new_business",source:"Referral",nextStep:"Technical workshop",stageName:"Proposal",accountName:"Acme Ltd" }}
-          currentCount={opportunities.length}
-          onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
-        />
-      </div>
-
-      <div className="rounded-xl border border-border/60 bg-card overflow-x-auto w-full" data-testid="opp-table">
-        <table className="w-full text-sm text-gray-700 dark:text-foreground">
-          <thead>
-            <tr className="bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground border-b border-border/60">
-              <th className="px-3 py-2.5 align-middle w-10">
-                <Checkbox
-                  checked={enrichedOpportunities.length > 0 && selectedIds.size === enrichedOpportunities.length}
-                  onCheckedChange={toggleSelectAll}
-                  data-testid="checkbox-select-all-opp"
-                />
-              </th>
-              <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Opportunity</th>
-              {isColVisible("account") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Account</th>}
-              {isColVisible("segment") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Segment</th>}
-              {isColVisible("stage") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Stage</th>}
-              {isColVisible("amount") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Amount</th>}
-              {isColVisible("probability") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Probability</th>}
-              {isColVisible("owner") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Owner</th>}
-              {isColVisible("closeDate") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Close Date</th>}
-              {isColVisible("created") && <th className="px-3 py-2.5 text-left align-middle font-semibold whitespace-nowrap">Created</th>}
-              <th className="px-3 py-2.5 text-right align-middle font-semibold whitespace-nowrap">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {enrichedOpportunities.length === 0 ? (
-              <tr>
-                <td colSpan={tableColSpan} className="text-center py-16 text-muted-foreground">
-                  <div className="flex flex-col items-center gap-2">
-                    <OpportunityIcon className="h-10 w-10 opacity-30" />
-                    <p className="text-sm">No opportunities found. Create your first deal to start tracking.</p>
-                    <Button
-                      size="sm"
-                      className="mt-2 bg-[#0ea5e9] hover:bg-[#0ea5e9]/90"
-                      onClick={openCreateForm}
+          },
+          searchHighlightTerm: searchTerm || debouncedLocalSearch,
+          columnWidthStorageKey: "jiganto-crm-opportunities-col-widths",
+          paginationResetKey: `${searchTerm}|${debouncedLocalSearch}|${ownerFilter}|${JSON.stringify(filterRules)}|${JSON.stringify(sortRules)}|${groupBy}|${activePipelineId}`,
+          totalCount: opportunities.length,
+          renderRowActions: (opp) => (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={(e) => e.stopPropagation()}
+                  data-testid={`button-actions-opp-${opp.id}`}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => handleEdit(opp)}
+                  data-testid={`action-edit-opp-${opp.id}`}
+                >
+                  <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    sessionStorage.setItem("crm-resource-plan-opp-id", String(opp.id));
+                    onNavigateToTab?.("resourceplan");
+                    onNavigateToResourcePlan?.(opp.id);
+                  }}
+                  data-testid={`action-resource-plan-opp-${opp.id}`}
+                >
+                  <Users className="h-3.5 w-3.5 mr-2" /> Resource Plan
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    runOppAction(
+                      () => apiRequest("POST", `/api/crm/opportunities/${opp.id}/clone`),
+                      "Opportunity cloned",
+                    )
+                  }
+                  data-testid={`action-clone-opp-${opp.id}`}
+                >
+                  <Copy className="h-3.5 w-3.5 mr-2" /> Clone
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    runOppAction(
+                      () =>
+                        apiRequest("POST", `/api/crm/opportunities/${opp.id}/convert-to-project`),
+                      "Converted to project",
+                    )
+                  }
+                  data-testid={`action-convert-opp-${opp.id}`}
+                >
+                  <Briefcase className="h-3.5 w-3.5 mr-2" /> Convert to Project
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    runOppAction(
+                      () => apiRequest("POST", `/api/crm/opportunities/${opp.id}/archive`),
+                      "Opportunity archived",
+                    )
+                  }
+                  data-testid={`action-archive-opp-${opp.id}`}
+                >
+                  <Archive className="h-3.5 w-3.5 mr-2" /> Archive
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (!window.confirm("Delete this opportunity?")) return;
+                    deleteMutation.mutate(opp.id);
+                  }}
+                  className="text-red-600 focus:text-red-700"
+                  data-testid={`action-delete-opp-${opp.id}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ),
+          renderBulkActions: (ids) => (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 h-7 text-xs"
+                    data-testid="button-bulk-stage"
+                  >
+                    <UserCheck className="h-3 w-3" />
+                    Change Stage
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  {pipelineStages.map((stage) => (
+                    <DropdownMenuItem
+                      key={stage.id}
+                      onClick={async () => {
+                        try {
+                          const results = await Promise.all(
+                            ids.map((id) =>
+                              apiRequest("PUT", `/api/crm/opportunities/${id}`, {
+                                stageId: stage.id,
+                              }),
+                            ),
+                          );
+                          if (results.some((r) => !r.ok)) throw new Error("Some updates failed");
+                          queryClient.invalidateQueries({ queryKey: ["/api/crm/opportunities"] });
+                          toast({
+                            title: `${ids.length} opportunities moved to ${stage.name}`,
+                          });
+                        } catch {
+                          toast({ title: "Failed to update stages", variant: "destructive" });
+                        }
+                      }}
                     >
-                      <Plus className="h-4 w-4 mr-1" />
-                      New Opportunity
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ) : groupedData ? (
-              Object.entries(groupedData).flatMap(([groupName, groupOpps]) => [
-                <tr key={`group-header-${groupName}`} className="bg-muted/40 border-b border-border/40" data-testid={`group-opp-${groupName}`}>
-                  <td colSpan={tableColSpan} className="px-4 py-2">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="h-2.5 w-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: groupColors[groupName] || "#6b7280" }}
-                      />
-                      <span className="text-sm font-semibold">{groupName}</span>
-                      <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-                        {groupOpps.length}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground ml-2">
-                        ${groupOpps.reduce((s, o) => s + o.amountNum, 0).toLocaleString()}
-                      </span>
-                    </div>
-                  </td>
-                </tr>,
-                ...groupOpps.map(renderRow)
-              ])
-            ) : (
-              pagination.paginatedItems.map(renderRow)
-            )}
-          </tbody>
-        </table>
-        {groupBy !== "none" && enrichedOpportunities.length > 0 && (
-          <div className="px-4 py-2.5 border-t border-border/40 bg-muted/20 text-xs text-muted-foreground" data-testid="opp-count-footer">
-            {enrichedOpportunities.length} of {opportunities.length} opportunities
-            {selectedIds.size > 0 && <span className="ml-2 text-[#0ea5e9]">({selectedIds.size} selected)</span>}
-          </div>
-        )}
-        {groupBy === "none" && (
-          <CrmTablePagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            total={pagination.total}
-            startIndex={pagination.startIndex}
-            endIndex={pagination.endIndex}
-            pageSize={pagination.pageSize}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
-            extra={selectedIds.size > 0 ? <span className="text-[#0ea5e9]">({selectedIds.size} selected)</span> : undefined}
-          />
-        )}
-      </div>
+                      {stage.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ),
+        }}
+      />
 
-      <ConditionalFormattingPanel
-        open={formatPanelOpen}
-        onOpenChange={setFormatPanelOpen}
-        rules={formatRules}
-        onRulesChange={setFormatRules}
-        columns={formatColumns}
-        data={enrichedOpportunities as any[]}
+      <FormDialogShell
+        open={isCreatePipelineOpen}
+        onOpenChange={setIsCreatePipelineOpen}
+        title="Create New Pipeline"
+        subtitle="Add a pipeline for opportunity workflows"
+        saveLabel={createPipelineMutation.isPending ? "Creating..." : "Create Pipeline"}
+        onCancel={() => setIsCreatePipelineOpen(false)}
+        onSubmit={() => createPipelineMutation.mutate({ name: pipelineName })}
+        saving={createPipelineMutation.isPending}
+        disabled={!pipelineName}
+        saveTestId="button-save-pipeline-opp"
+        size="sm"
+      >
+        <div className="space-y-4 py-4">
+          <div>
+            <Label htmlFor="pipelineNameOpp">Pipeline Name *</Label>
+            <Input
+              id="pipelineNameOpp"
+              value={pipelineName}
+              onChange={(e) => setPipelineName(e.target.value)}
+              placeholder="e.g., Enterprise Sales, SMB Sales"
+              data-testid="input-pipeline-name-opp"
+            />
+          </div>
+        </div>
+      </FormDialogShell>
+
+      <ImportModal
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
+        entityName="Opportunities"
+        templateHeaders={[...OPP_IMPORT_HEADERS]}
+        exampleRow={{ ...OPP_IMPORT_EXAMPLE }}
+        currentCount={opportunities.length}
+        onImport={async (rows, mode) => {
+          await importMutation.mutateAsync({ rows, mode });
+        }}
       />
 
       <OpportunityFormDialog
         open={formOpen}
-        onClose={() => { setFormOpen(false); setEditingOpportunity(null); }}
+        onClose={() => {
+          setFormOpen(false);
+          setEditingOpportunity(null);
+        }}
         editing={editingOpportunity}
         stages={formStages}
         accounts={accounts}

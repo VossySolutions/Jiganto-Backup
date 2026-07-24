@@ -73,6 +73,13 @@ import { AppKanbanBoard } from "@/components/kanban";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfWeek, addDays } from "date-fns";
 import { useTablePagination } from "@/hooks/use-table-pagination";
 import { TablePagination } from "@/components/TablePagination";
+import { type ColumnDef as MondayColumnDef } from "@/components/MondayTable";
+import {
+  MondayBoardProvider,
+  MondayBoardTable,
+  MondayBoardChromeControls,
+} from "@/components/MondayBoardTable";
+import { useDebouncedValue, recordToMondayGroups, CRM_SEARCH_INPUT_CLASS, CRM_TOOLBAR_CLASS } from "@/lib/crm-monday-chrome";
 
 export type ViewType = 
   | "table" 
@@ -1426,7 +1433,7 @@ const MemoizedTableRow = memo(function TableRowComponent<T extends { id: number 
   hasAddColumn?: boolean;
 }) => JSX.Element;
 
-function TableView<T extends { id: number | string }>({
+export function TableView<T extends { id: number | string }>({
   columns,
   data,
   onRowDoubleClick,
@@ -2206,8 +2213,10 @@ export function UniversalViewSystem<T extends { id: number | string }>({
   onAddItem,
   onInlineAddItem,
   onDeleteItems,
-  onColumnsChange,
-  onAddColumn,
+  onDuplicateItem,
+  onArchiveItem,
+  onColumnsChange: _onColumnsChange,
+  onAddColumn: _onAddColumn,
   savedViews = [],
   onSaveView,
   dateField,
@@ -2230,7 +2239,7 @@ export function UniversalViewSystem<T extends { id: number | string }>({
     initialGroupColumnId ? [{ columnId: initialGroupColumnId }] : [],
   );
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedIds, setSelectedIds] = useState<Set<number | string>>(new Set());
+  const debouncedSearch = useDebouncedValue(searchTerm);
 
   // Sync columns state when initialColumns prop changes
   useEffect(() => {
@@ -2240,11 +2249,11 @@ export function UniversalViewSystem<T extends { id: number | string }>({
   const filteredData = useMemo(() => {
     let result = [...rawData];
     
-    if (searchTerm) {
+    if (debouncedSearch) {
       result = result.filter(item => {
         return columns.some(col => {
           const val = getCellValue(item, col.accessor);
-          return String(val || "").toLowerCase().includes(searchTerm.toLowerCase());
+          return String(val || "").toLowerCase().includes(debouncedSearch.toLowerCase());
         });
       });
     }
@@ -2282,20 +2291,27 @@ export function UniversalViewSystem<T extends { id: number | string }>({
     });
 
     return result;
-  }, [rawData, searchTerm, filters, sorts, columns]);
-
-  const handleAddColumn = (column: ColumnDef<T>) => {
-    const newColumns = [...columns, column];
-    setColumns(newColumns);
-    onColumnsChange?.(newColumns);
-    onAddColumn?.(column);
-  };
+  }, [rawData, debouncedSearch, filters, sorts, columns]);
 
   const handleSaveView = (view: SavedView) => {
     onSaveView?.(view);
   };
 
   const visibleColumns = columns.filter(c => !c.hidden);
+
+  const mondayGroups = useMemo(() => {
+    if (!groups.length || currentView !== "table") return undefined;
+    const groupCol = groups[0]?.columnId;
+    const column = columns.find((c) => c.id === groupCol);
+    if (!column) return undefined;
+    const grouped: Record<string, T[]> = {};
+    filteredData.forEach((item) => {
+      const key = String(getCellValue(item, column.accessor) || "Other");
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(item);
+    });
+    return recordToMondayGroups(grouped);
+  }, [filteredData, groups, columns, currentView]);
 
   if (loading) {
     return (
@@ -2306,11 +2322,12 @@ export function UniversalViewSystem<T extends { id: number | string }>({
   }
 
   return (
+    <MondayBoardProvider storageKey="jiganto-universal-view-table">
     <div className={cn("space-y-4", className)}>
       {/* Toolbar - Left: View, Filter, Group, Sort, Search | Right: Import, Customise, Export */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className={cn(CRM_TOOLBAR_CLASS, "flex-wrap")}>
         {/* Left side controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {showViewSwitcher && (
             <ViewSwitcher
               currentView={currentView}
@@ -2322,6 +2339,7 @@ export function UniversalViewSystem<T extends { id: number | string }>({
           <FilterBar columns={columns} filters={filters} onFiltersChange={setFilters} />
           <GroupBar columns={columns} groups={groups} onGroupsChange={setGroups} />
           <SortBar columns={columns} sorts={sorts} onSortsChange={setSorts} />
+          {currentView === "table" && <MondayBoardChromeControls grouped={groups.length > 0} />}
           
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -2329,7 +2347,7 @@ export function UniversalViewSystem<T extends { id: number | string }>({
               placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-8 w-40 pl-8"
+              className={CRM_SEARCH_INPUT_CLASS}
               data-testid="input-search"
             />
           </div>
@@ -2409,17 +2427,24 @@ export function UniversalViewSystem<T extends { id: number | string }>({
       ) : (
         <>
           {currentView === "table" && (
-            <TableView
-              columns={columns}
+            <MondayBoardTable
+              columns={visibleColumns as MondayColumnDef<T>[]}
               data={filteredData}
+              groups={mondayGroups}
+              onRowClick={onRowClick}
               onRowDoubleClick={onRowDoubleClick || onRowClick}
               onCellEdit={onCellEdit}
-              onInlineAddItem={onInlineAddItem}
               onDeleteItems={onDeleteItems}
-              selectedIds={selectedIds}
-              onSelectIds={setSelectedIds}
-              onAddColumn={handleAddColumn}
-              groups={groups}
+              onDuplicateItem={onDuplicateItem}
+              onArchiveItem={onArchiveItem}
+              onAddItem={onAddItem}
+              addItemLabel={addItemLabel}
+              selectable
+              gridLines
+              emptyMessage={emptyMessage}
+              searchHighlightTerm={debouncedSearch}
+              paginationResetKey={`${debouncedSearch}-${JSON.stringify(filters)}-${JSON.stringify(sorts)}-${JSON.stringify(groups)}`}
+              columnWidthStorageKey="jiganto-universal-view-table-col-widths"
             />
           )}
           {currentView === "kanban" && (
@@ -2471,6 +2496,7 @@ export function UniversalViewSystem<T extends { id: number | string }>({
         </>
       )}
     </div>
+    </MondayBoardProvider>
   );
 }
 
