@@ -153,8 +153,16 @@ export interface MondayTableProps<T extends { id: number | string }> {
   collapseAllSignal?: number;
   /** Enable drag-handle row reorder (Infinity table). */
   reorderable?: boolean;
-  /** Called with the new full order of visible item ids after a row drag. */
-  onRowReorder?: (orderedIds: (number | string)[]) => void;
+  /** Called with the new full order of visible item ids after a row drag.
+   *  When grouped, meta.targetGroupId is the group the row was dropped into. */
+  onRowReorder?: (
+    orderedIds: (number | string)[],
+    meta?: {
+      draggedId: number | string;
+      targetId: number | string;
+      targetGroupId?: string;
+    },
+  ) => void;
   /** Show per-column summary footer (Infinity Summarize). Default true when any column has summary. */
   showColumnSummary?: boolean;
 }
@@ -1557,23 +1565,43 @@ export function MondayTable<T extends { id: number | string }>({
     );
   };
 
-  const handleRowDropReorder = (targetId: number | string) => {
+  const findGroupIdForItem = useCallback((itemId: number | string) => {
+    if (!groups?.length) return undefined;
+    const key = String(itemId);
+    for (const g of groups) {
+      if (g.items.some((i) => String(i.id) === key)) return g.id;
+    }
+    return undefined;
+  }, [groups]);
+
+  const handleRowDropReorder = (targetId: number | string, targetGroupId?: string) => {
     if (!onRowReorder || !dragRowId) return;
     const ids = allItems.map((i) => i.id);
     const from = ids.findIndex((id) => String(id) === dragRowId);
     const to = ids.findIndex((id) => id === targetId);
     if (from < 0 || to < 0 || from === to) {
-      setDragRowId(null);
-      return;
+      // Still allow group membership change when dropping onto same visual slot in another group is rare;
+      // if from===to but group changed, handle via meta below when ids differ only by group
+      if (from < 0 || to < 0) {
+        setDragRowId(null);
+        return;
+      }
     }
     const next = [...ids];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    onRowReorder(next);
+    if (from !== to) {
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+    }
+    const resolvedGroup = targetGroupId ?? findGroupIdForItem(targetId);
+    onRowReorder(next, {
+      draggedId: dragRowId.match(/^\d+$/) ? Number(dragRowId) : dragRowId,
+      targetId,
+      targetGroupId: resolvedGroup,
+    });
     setDragRowId(null);
   };
 
-  const renderRow = (item: T, _idx: number) => {
+  const renderRow = (item: T, _idx: number, groupId?: string) => {
     const isSelected = selectedIds.has(item.id);
     const rowId = String(item.id);
     const rowFormat = formatMap[rowId]?.row;
@@ -1605,7 +1633,7 @@ export function MondayTable<T extends { id: number | string }>({
           e.preventDefault();
           e.stopPropagation();
           if (dragRowId && onRowReorder) {
-            handleRowDropReorder(item.id);
+            handleRowDropReorder(item.id, groupId);
             return;
           }
           if (onRowFilesDrop) {
@@ -1825,13 +1853,42 @@ export function MondayTable<T extends { id: number | string }>({
         
         {!isCollapsed && (
           <div className="mt-1">
-            {pageItems.map((item, idx) => renderRow(item, idx))}
+            {pageItems.map((item, idx) => renderRow(item, idx, group.id))}
             {renderSummaryRow(pageItems, group.id)}
             {onAddItem && (
               <button
                 onClick={() => onAddItem(group.id)}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors"
                 data-testid={`add-item-${group.id}`}
+                onDragOver={onRowReorder ? (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (dragRowId) e.dataTransfer.dropEffect = "move";
+                } : undefined}
+                onDrop={onRowReorder ? (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!dragRowId) return;
+                  // Drop onto empty area / add-row of a group → move into that group
+                  const ids = allItems.map((i) => i.id);
+                  const from = ids.findIndex((id) => String(id) === dragRowId);
+                  if (from < 0) { setDragRowId(null); return; }
+                  const next = [...ids];
+                  const [moved] = next.splice(from, 1);
+                  // Append within overall order at end of this group's items
+                  const lastInGroup = group.items[group.items.length - 1];
+                  let insertAt = lastInGroup
+                    ? next.findIndex((id) => String(id) === String(lastInGroup.id)) + 1
+                    : next.length;
+                  if (insertAt < 0) insertAt = next.length;
+                  next.splice(insertAt, 0, moved);
+                  onRowReorder(next, {
+                    draggedId: dragRowId.match(/^\d+$/) ? Number(dragRowId) : dragRowId,
+                    targetId: lastInGroup?.id ?? moved,
+                    targetGroupId: group.id,
+                  });
+                  setDragRowId(null);
+                } : undefined}
               >
                 <Plus className="h-4 w-4" />
                 {addItemLabel}

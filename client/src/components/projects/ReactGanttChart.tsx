@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getSupabaseAccessToken } from "@/lib/supabase-session";
+import { supabaseAuthEnabled } from "@/lib/supabase";
 import type {
   PmProject,
   PmTask,
@@ -354,9 +355,9 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
     <button type="button" class="btn-icon btn-icon-import" onclick="openImportExport('import')" title="Import" aria-label="Import">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9"/><path d="M7 14l5-5 5 5"/><path d="M5 3h14"/></svg>
     </button>
-    <div class="view-group" title="Click Gantt or List to show/hide each pane. Both on = side-by-side.">
-      <button type="button" class="vb on" id="viewGanttBtn" onclick="toggleViewPane('gantt')" title="Timeline chart — click to show or hide" aria-pressed="true">Gantt</button>
+    <div class="view-group" title="Click List or Gantt to show/hide each pane. Both on = side-by-side.">
       <button type="button" class="vb on" id="viewListBtn" onclick="toggleViewPane('list')" title="Task list — click to show or hide" aria-pressed="true">List</button>
+      <button type="button" class="vb on" id="viewGanttBtn" onclick="toggleViewPane('gantt')" title="Timeline chart — click to show or hide" aria-pressed="true">Gantt</button>
     </div>
   </div>
 </div>`;
@@ -610,7 +611,7 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${projectName.replace(/</g, "&lt;")} — Gantt</title>
-<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260724t">
+<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260724ab">
 </head>
 <body>
 <div class="main">
@@ -629,7 +630,7 @@ ${ganttBodyHTML}
 </div>
 ${modalsHTML}
 <script>window.GANTT_INIT_DATA = ${dataJson};</script>
-<script src="/gantt-v4-engine.js?v=20260724t"></script>
+<script src="/gantt-v4-engine.js?v=20260724ab"></script>
 </body>
 </html>`;
 }
@@ -677,6 +678,21 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === "gantt-auth-token-request" && e.data?.requestId) {
+        const requestId = String(e.data.requestId);
+        const source = e.source as Window | null;
+        void getSupabaseAccessToken().then((token) => {
+          try {
+            source?.postMessage(
+              { type: "gantt-auth-token", requestId, token: token || "" },
+              "*",
+            );
+          } catch {
+            /* iframe may be gone */
+          }
+        });
+        return;
+      }
       if (e.data?.type === "gantt-saved" && e.data?.projectId === projectId) {
         if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
         refreshTimerRef.current = setTimeout(() => {
@@ -715,7 +731,9 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
   });
 
   const authReady = authToken !== undefined;
-  const isLoading = pjL || tkL || tmL || !authReady;
+  // When Supabase auth is on, wait for a real bearer token before mounting the iframe
+  const authTokenReady = !supabaseAuthEnabled || Boolean(authToken);
+  const isLoading = pjL || tkL || tmL || !authReady || !authTokenReady;
 
   // Reset bootstrap when switching projects
   useEffect(() => {
@@ -727,7 +745,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
   // Build iframe once per project — later query updates must NOT rebuild srcDoc.
   // versionReloadKey forces a remount after activating a plan version.
   useEffect(() => {
-    if (isLoading || !project || !authReady) return;
+    if (isLoading || !project || !authReady || !authTokenReady) return;
     const bootKey = `${projectId}:${versionReloadKey}`;
     if (bootstrappedKeyRef.current === bootKey) return;
     bootstrappedKeyRef.current = bootKey;
@@ -737,7 +755,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
     };
     setSrcDoc(buildSrcDoc(data, project.name));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot bootstrap per projectId (+ version remount)
-  }, [isLoading, authReady, projectId, project, versionReloadKey]);
+  }, [isLoading, authReady, authTokenReady, projectId, project, versionReloadKey]);
 
   if (isLoading || !srcDoc) {
     return (

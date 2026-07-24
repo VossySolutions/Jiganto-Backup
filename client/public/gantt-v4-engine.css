@@ -253,11 +253,14 @@ body.gantt-col-resizing *{cursor:col-resize!important;}
 .tp-scroll::-webkit-scrollbar-thumb{background:#bdbdbd;border-radius:5px;border:2px solid #fff;}
 .tp-scroll::-webkit-scrollbar-track{background:#f5f5f5;}
 
-/* GRID ROWS — zebra striping like DHTMLX; height locked to timeline rows */
-.task-row{height:var(--row-h);min-height:var(--row-h);max-height:var(--row-h);flex-shrink:0;display:flex;align-items:stretch;border-bottom:1px solid var(--dhx-border-light);cursor:pointer;position:relative;background:var(--dhx-grid-even);overflow:visible;box-sizing:border-box;width:max-content;min-width:100%;}
-.task-row:nth-child(odd){background:var(--dhx-grid-odd);}
-.task-row:hover{background:#e3f2fd!important;z-index:4;}
-.task-row.selected{background:#bbdefb!important;z-index:4;}
+/* GRID ROWS — zebra via .is-odd (insert bands sit between rows) */
+.task-row{height:var(--row-h);min-height:var(--row-h);flex-shrink:0;display:flex;align-items:stretch;border-bottom:1px solid var(--dhx-border-light);cursor:pointer;position:relative;z-index:0;background:var(--dhx-grid-even);overflow:visible;box-sizing:border-box;width:max-content;min-width:100%;}
+.task-row.is-odd{background:var(--dhx-grid-odd);}
+.task-row:hover,
+.task-row:focus-within{background:#e3f2fd!important;z-index:2;}
+.task-row.selected{background:#bbdefb!important;z-index:1;}
+.task-row.selected:hover,
+.task-row.selected:focus-within{z-index:2;}
 .task-row.flash-hier{animation:ganttFlashHier .9s ease;}
 @keyframes ganttFlashHier{
   0%{background:#fff9c4!important;}
@@ -280,24 +283,36 @@ body.gantt-col-resizing *{cursor:col-resize!important;}
   align-self:stretch;display:flex;align-items:center;min-height:0;box-sizing:border-box;
 }
 
-/* Hover + between rows — insert sibling below */
+/* Between-row + — sibling band so the next row cannot cover the hit target */
+.row-insert-between{
+  position:relative;height:0;z-index:1;overflow:visible;pointer-events:none;
+}
 .row-insert-hit{
-  position:absolute;left:0;right:0;bottom:-8px;height:16px;z-index:30;
-  display:flex;align-items:center;justify-content:flex-start;padding-left:calc(var(--sel-w) + var(--wbs-w) + 8px);
+  position:absolute;left:0;right:0;top:-10px;height:20px;z-index:5;
+  display:flex;align-items:center;justify-content:flex-start;
+  /* Start of name / hierarchy connect column */
+  padding-left:calc(var(--sel-w) + var(--wbs-w) + 4px);
   opacity:0;pointer-events:none;transition:opacity .12s;
 }
 .row-insert-hit::before{
   content:'';position:absolute;left:0;right:0;top:50%;height:2px;margin-top:-1px;
-  background:var(--dhx-primary);opacity:.85;
+  background:var(--dhx-primary);opacity:.85;pointer-events:none;
 }
-.task-row:hover .row-insert-hit,
-.row-insert-hit:hover,
-.row-insert-hit:focus-within{opacity:1;pointer-events:auto;}
+.task-row:hover + .row-insert-between,
+.row-insert-between:hover,
+.row-insert-between:focus-within{
+  z-index:90;pointer-events:none;
+}
+.task-row:hover + .row-insert-between .row-insert-hit,
+.row-insert-between:hover .row-insert-hit,
+.row-insert-between:focus-within .row-insert-hit{
+  opacity:1;pointer-events:auto;
+}
 .row-insert-btn{
-  position:relative;z-index:1;width:20px;height:20px;border-radius:50%;border:none;
+  position:relative;z-index:2;width:22px;height:22px;border-radius:50%;border:none;
   background:var(--dhx-primary);color:#fff;font-family:var(--font);font-size:16px;font-weight:700;
   line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
-  box-shadow:0 1px 4px rgba(2,136,209,.35);padding:0;
+  box-shadow:0 1px 4px rgba(2,136,209,.35);padding:0;pointer-events:auto;
 }
 .row-insert-btn:hover{background:var(--dhx-primary-dark);transform:scale(1.08);}
 .row-insert-gap.is-empty{display:flex;align-items:center;justify-content:center;padding:16px;gap:8px;}

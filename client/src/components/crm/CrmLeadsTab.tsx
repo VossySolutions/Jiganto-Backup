@@ -18,14 +18,13 @@ import {
   SlidersHorizontal, ArrowUpDown, Layers,
   UserCheck, ChevronDown,   Maximize2, Minimize2,
   Columns3, Table2, List, Calendar, Settings2, GanttChart, FileText,
-  MessageSquare, Paperclip, ListTodo, Sparkles, FolderPlus, X,
+  MessageSquare, Paperclip, ListTodo, FolderPlus, X,
   ChevronsUpDown, ChevronsDownUp, Pin, ClipboardPaste,
   BarChart3, LayoutDashboard, Clock, FormInput,
 } from "lucide-react";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { useCrmUsers } from "./CrmUsersProvider";
 import { useCrmCustomFields } from "@/hooks/use-crm-custom-fields";
-import { CrmColumnVisibilityMenu } from "./CrmColumnVisibilityMenu";
 import { CrmLeadLabelEditorDialog } from "./CrmLeadLabelEditorDialog";
 import {
   CrmLeadListView,
@@ -71,12 +70,6 @@ import MondayTable, {
   type GroupDef,
   type StatusOption,
 } from "@/components/MondayTable";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 /** Infinity-style field customize checklist (standard columns) */
 const LEAD_TABLE_COLUMNS: CrmColumnDef[] = [
@@ -107,7 +100,7 @@ import {
   type LeadFilterOperator,
   type LeadFilterRule,
 } from "@/lib/crm-lead-filters";
-import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
+import { type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
 
 type LeadAttachmentSummaryRow = { id: number; entityId: number };
 type LeadTaskSummaryRow = { id: number; leadId: number | null; status?: string | null; completedAt?: string | null };
@@ -459,8 +452,11 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     setFormOpen(true);
   };
 
+  const [createDefaults, setCreateDefaults] = useState<Partial<{ status: string }> | undefined>();
   const openCreateForm = () => {
     setEditingLead(null);
+    const pendingStatus = sessionStorage.getItem("crm-leads-pending-status");
+    setCreateDefaults(pendingStatus ? { status: pendingStatus } : undefined);
     setFormOpen(true);
   };
 
@@ -649,13 +645,13 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   ), [sortRules]);
 
   const savedViewColumns = useMemo(() => (
-    LEAD_TABLE_COLUMNS.map((c, idx) => ({
+    allAddableColumns.map((c, idx) => ({
       id: c.id,
       header: c.label,
       visible: isColVisible(c.id),
       order: columnOrderIds.indexOf(c.id) >= 0 ? columnOrderIds.indexOf(c.id) : idx,
     }))
-  ), [columnVisibility, columnOrderIds]);
+  ), [allAddableColumns, columnVisibility, columnOrderIds]);
 
   const applySavedView = (filters: FilterConfig[], sorts?: SortConfig[], columns?: { id: string; visible: boolean; order: number }[], extras?: { viewMode?: string; groupBy?: string }) => {
     const nextRules: LeadFilterRule[] = filters.map((f, i) => {
@@ -715,10 +711,78 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     });
   };
 
-  const persistRowOrder = (ids: (number | string)[]) => {
+  const persistRowOrder = (
+    ids: (number | string)[],
+    meta?: { draggedId: number | string; targetId: number | string; targetGroupId?: string },
+  ) => {
     const nums = ids.map((id) => (typeof id === "string" ? Number(id) : id)).filter((n) => Number.isFinite(n));
     setRowOrderIds(nums);
     localStorage.setItem("crm-leads-row-order", JSON.stringify(nums));
+
+    if (!meta?.targetGroupId || meta.draggedId == null) return;
+    const leadId = typeof meta.draggedId === "string" ? Number(meta.draggedId) : meta.draggedId;
+    if (!Number.isFinite(leadId)) return;
+    const targetGroupId = meta.targetGroupId;
+
+    // Manual groups: update membership
+    if (groupBy === "manual") {
+      if (targetGroupId === "ungrouped") {
+        persistManualGroups(ungroupLeads(manualGroups, [leadId]));
+      } else if (manualGroups.some((g) => g.id === targetGroupId)) {
+        persistManualGroups(moveLeadsToGroup(manualGroups, targetGroupId, [leadId]));
+      }
+      return;
+    }
+
+    // Field-based groups: update the underlying field so the row stays in the drop group
+    if (groupBy === "status") {
+      const opt = statusOptions.find(
+        (o) => o.value === targetGroupId || o.label === targetGroupId,
+      );
+      const status =
+        opt?.value ||
+        (statusOptions.some((o) => o.value === targetGroupId.toLowerCase())
+          ? targetGroupId.toLowerCase()
+          : null);
+      if (status && status !== "converted") {
+        void updateLeadMutation.mutateAsync({ id: leadId, updates: { status } });
+      }
+      return;
+    }
+
+    if (groupBy === "owner") {
+      if (targetGroupId === "Unassigned" || targetGroupId === "—") {
+        void updateLeadMutation.mutateAsync({ id: leadId, updates: { ownerUserId: null } });
+        return;
+      }
+      const user = users.find((u) => {
+        const name = resolveOwner(u.id).name;
+        return name === targetGroupId;
+      });
+      if (user) {
+        void updateLeadMutation.mutateAsync({ id: leadId, updates: { ownerUserId: user.id } });
+      }
+      return;
+    }
+
+    if (groupBy === "source") {
+      const sourceOpt = sourceSelectOptions.find(
+        (o) => o.label === targetGroupId || o.value === targetGroupId,
+      );
+      const source =
+        sourceOpt?.value ||
+        (targetGroupId === "Unknown" ? null : targetGroupId.toLowerCase().replace(/\s+/g, "_"));
+      void updateLeadMutation.mutateAsync({ id: leadId, updates: { source } });
+      return;
+    }
+
+    if (groupBy === "rating") {
+      const rating =
+        targetGroupId === "No Rating"
+          ? null
+          : targetGroupId.toLowerCase();
+      void updateLeadMutation.mutateAsync({ id: leadId, updates: { rating } });
+    }
   };
 
   const clearRowOrder = () => {
@@ -1314,7 +1378,11 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
           <Button
           className="h-8 bg-[#0073ea] hover:bg-[#0060b9] text-white gap-1.5 rounded-md text-[13px] font-medium shadow-none px-3"
           data-testid="button-add-lead"
-          onClick={openCreateForm}
+          onClick={() => {
+            sessionStorage.removeItem("crm-leads-pending-status");
+            sessionStorage.removeItem("crm-leads-pending-group");
+            openCreateForm();
+          }}
         >
           <Plus className="h-4 w-4" />
           New Lead
@@ -1638,41 +1706,6 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
           </button>
         )}
 
-        <SavedViewsDropdown
-          entityType="lead"
-          currentFilters={currentFilters}
-          currentSorts={currentSorts}
-          columns={savedViewColumns}
-          onApplyView={applySavedView}
-          onColumnsChange={(cols) => {
-            const vis: Record<string, boolean> = { ...columnVisibility };
-            for (const c of cols) vis[c.id] = c.visible;
-            setColumnVisibility(vis);
-            saveColumnVisibility("crm-leads", vis);
-            const ordered = [...cols].sort((a, b) => a.order - b.order).map((c) => c.id);
-            setColumnOrderIds(ordered);
-            localStorage.setItem("crm-leads-column-order", JSON.stringify(ordered));
-          }}
-          onSortChange={(sorts) => {
-            clearRowOrder();
-            if (!sorts.length) {
-              setSortRules([{ field: "date", dir: "desc" }]);
-              return;
-            }
-            const next = sorts
-              .filter((s) => LEAD_SORT_FIELDS.some((f) => f.field === s.columnId))
-              .map((s) => ({ field: s.columnId as LeadSortField, dir: s.direction }));
-            if (next.length) setSortRules(next);
-          }}
-        />
-
-        <CrmColumnVisibilityMenu
-          columns={allAddableColumns}
-          visibility={columnVisibility}
-          onChange={setColVisible}
-          testId="button-lead-fields"
-        />
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -1792,22 +1825,6 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
           </button>
         )}
 
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className={cn(toolBtn(), "opacity-50 cursor-not-allowed px-2")}
-                data-testid="button-ai-leads"
-                aria-label="AI assistant coming soon"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>AI assistant — coming later</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-
         <div className="flex-1" />
 
         <button type="button" onClick={exportToCSV} className={toolBtn()} data-testid="button-export-leads">
@@ -1889,6 +1906,18 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
               } else {
                 sessionStorage.removeItem("crm-leads-pending-group");
               }
+              // When grouped by status, prefill create form with that column's status
+              if (groupBy === "status" && groupId) {
+                const opt = statusOptions.find((o) => o.value === groupId || o.label === groupId);
+                const status = opt?.value || groupId.toLowerCase();
+                if (status && status !== "converted") {
+                  sessionStorage.setItem("crm-leads-pending-status", status);
+                } else {
+                  sessionStorage.removeItem("crm-leads-pending-status");
+                }
+              } else {
+                sessionStorage.removeItem("crm-leads-pending-status");
+              }
               openCreateForm();
             }}
             onRowClick={(lead) => {
@@ -1898,11 +1927,14 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             onCellEdit={handleCellEdit}
             onEditItem={handleEdit}
             onDeleteItems={(ids) => {
+              const n = ids.length;
+              if (!window.confirm(n === 1 ? "Delete this lead?" : `Delete ${n} leads?`)) return;
               if (ids.length === 1) {
                 deleteMutation.mutate(typeof ids[0] === "string" ? Number(ids[0]) : ids[0]);
               } else {
                 bulkDeleteMutation.mutate(ids);
               }
+              setSelectedLeadIds([]);
             }}
             searchHighlightTerm={effectiveSearch}
             columnWidthStorageKey="jiganto-crm-leads-col-widths"
@@ -2030,7 +2062,6 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             resolveOwner={resolveOwner}
             onOpenLead={setViewingLead}
             onConvert={handleConvert}
-            onAddLead={openCreateForm}
           />
         )}
 
@@ -2041,7 +2072,14 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             resolveOwner={resolveOwner}
             onOpenLead={setViewingLead}
             onConvert={handleConvert}
-            onAddLead={openCreateForm}
+            onAddLead={(status) => {
+              if (status && status !== "converted") {
+                sessionStorage.setItem("crm-leads-pending-status", status);
+              } else {
+                sessionStorage.removeItem("crm-leads-pending-status");
+              }
+              openCreateForm();
+            }}
             onStatusChange={async (leadId, status) => {
               try {
                 await updateLeadMutation.mutateAsync({ id: leadId, updates: { status } });
@@ -2058,9 +2096,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
           <CrmLeadCalendarView
             leads={filteredLeads}
             statusOptions={statusOptions}
-            resolveOwner={resolveOwner}
             onOpenLead={setViewingLead}
-            onConvert={handleConvert}
             onAddLead={openCreateForm}
           />
         )}
@@ -2266,7 +2302,6 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
           }
         }}
         saving={convertMutation.isPending}
-        disabled={false}
         saveTestId="button-confirm-convert"
         size="md"
       >
@@ -2364,7 +2399,13 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
 
       <LeadFormDialog
         open={formOpen}
-        onClose={() => { setFormOpen(false); setEditingLead(null); }}
+        onClose={() => {
+          setFormOpen(false);
+          setEditingLead(null);
+          setCreateDefaults(undefined);
+          sessionStorage.removeItem("crm-leads-pending-status");
+        }}
+        initialValues={editingLead ? undefined : createDefaults}
         editing={editingLead ? {
           id: editingLead.id,
           firstName: editingLead.firstName,

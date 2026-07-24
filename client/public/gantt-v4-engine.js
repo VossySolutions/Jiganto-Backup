@@ -1953,8 +1953,9 @@ function renderTaskPanel(){
     scroll.innerHTML='<div class="gantt-empty">'+esc(msg)+'</div>'+
       '<div class="row-insert-gap is-empty"><button type="button" class="row-insert-btn" onclick="event.stopPropagation();addNewItem()" title="Add a new item" aria-label="Add row">+</button></div>';
   } else {
-  scroll.innerHTML=visible.map(t=>buildTaskRowHTML(t)).join('');
+  scroll.innerHTML=visible.map((t,i)=>buildTaskRowHTML(t,i)+buildRowInsertBetween(t.id)).join('');
   bindCustomCellClicks();
+  bindRowInsertClicks(scroll);
   }
   if(selectedTaskId!=null){
     const r=document.getElementById('tr-'+selectedTaskId);
@@ -1986,7 +1987,7 @@ function getDepth(t){
 }
 
 // Build inline-editable task row HTML
-function buildTaskRowHTML(t){
+function buildTaskRowHTML(t,index){
   const depth=getDepth(t);
   const indentPx=depth*18;
   const hasKids=tasks.some(c=>c.parent===t.id);
@@ -1994,6 +1995,7 @@ function buildTaskRowHTML(t){
   const progC=t.prog>=70?'#059669':t.prog>=40?'#d97706':'#dc2626';
   const ragC=RAG_COL[t.rag]||'#94a3b8';
   const isCrit=showCP&&criticalIds.has(t.id);
+  const oddClass=((index||0)%2===0)?' is-odd':'';
   const customCells=customCols.map(col=>{
     const raw=t.customData?.[col.id];
     let display='—';
@@ -2011,7 +2013,7 @@ function buildTaskRowHTML(t){
   const typeHint=hasKids?'Folder · dates roll up from children · drag bar to move group':'Click to change type';
   const isChecked=checkedRowIds.has(t.id);
   const canCheck=!(t.type===1||t.id===1);
-  return '<div class="task-row '+(isCrit?'critical':'')+(hasKids?' is-folder':'')+(isChecked?' is-checked':'')+'" data-id="'+t.id+'" data-level="'+effectiveType(t)+'" id="tr-'+t.id+'" onclick="selectTask('+t.id+')">'+
+  return '<div class="task-row'+oddClass+(isCrit?' critical':'')+(hasKids?' is-folder':'')+(isChecked?' is-checked':'')+'" data-id="'+t.id+'" data-level="'+effectiveType(t)+'" id="tr-'+t.id+'" onclick="selectTask('+t.id+')">'+
     '<div class="task-sel-col" onclick="event.stopPropagation()">'+
       (canCheck
         ?'<input type="checkbox" class="task-sel-cb" '+(isChecked?'checked ':'')+'onclick="event.stopPropagation();toggleRowCheck('+t.id+',this.checked)" aria-label="Select row">'
@@ -2053,18 +2055,39 @@ function buildTaskRowHTML(t){
     customCells+
     '<div class="task-row-add-col" aria-hidden="true"></div>'+
     '<div class="grid-filler"></div>'+
-    '<div class="row-insert-hit" onclick="event.stopPropagation()">'+
-      '<button type="button" class="row-insert-btn" onclick="event.stopPropagation();insertRowAfter('+t.id+')" title="Insert row below" aria-label="Insert row">+</button>'+
+  '</div>';
+}
+
+/** Between-row insert band (sibling — next row cannot steal clicks). */
+function buildRowInsertBetween(afterId){
+  return '<div class="row-insert-between" data-after-id="'+afterId+'">'+
+    '<div class="row-insert-hit">'+
+      '<button type="button" class="row-insert-btn" data-insert-after="'+afterId+'" title="Insert row below" aria-label="Insert row">+</button>'+
     '</div>'+
   '</div>';
 }
 
+function bindRowInsertClicks(scroll){
+  if(!scroll||scroll._rowInsertBound) return;
+  scroll._rowInsertBound=true;
+  scroll.addEventListener('pointerdown',function(e){
+    const btn=e.target&&e.target.closest?e.target.closest('[data-insert-after]'):null;
+    if(!btn||!scroll.contains(btn)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+    const id=Number(btn.getAttribute('data-insert-after'));
+    if(Number.isFinite(id)) insertRowAfter(id);
+  },true);
+}
+
 /** Insert a new sibling row after the given task (same parent). */
 function insertRowAfter(afterId){
-  const after=tasks.find(x=>x.id===afterId);
+  const after=tasks.find(x=>x.id===Number(afterId));
   if(!after){ addNewItem(); return; }
   quickAddTask(after.parent, after.id);
 }
+window.insertRowAfter=insertRowAfter;
 
 function editName(id){ beginCellEdit(id,'name'); }
 function saveName(id,el){ /* legacy no-op — handled by beginCellEdit */ }
@@ -2663,9 +2686,9 @@ function renderDeps(visible,start){
     const raw=t.depType||'FS';
     const depType=raw==='EE'?'FF':raw;
     const isCrit=showCP&&criticalIds.has(t.id)&&criticalIds.has(fromT.id);
-    const color=isCrit?'#e53935':'#9e9e9e';
+    const color=isCrit?'#e53935':'#78909c';
     const arrowSize=isCrit?8:7;
-    const strokeW=isCrit?1.8:1.15;
+    const strokeW=isCrit?2:1.35;
 
     let x1,y1,tipX,tipY,dirX,dirY;
     if(depType==='SS'){
@@ -2689,11 +2712,7 @@ function renderDeps(visible,start){
     const sameRow=Math.abs(tipY-y1)<2;
 
     if(sameRow){
-      if(Math.abs(pathEndX-x1)<1){
-        d='M'+x1+','+y1+' H'+pathEndX;
-      } else {
-        d='M'+x1+','+y1+' H'+pathEndX;
-      }
+      d='M'+x1+','+y1+' H'+pathEndX;
       labelX=(x1+tipX)/2; labelY=y1-10;
     } else if(depType==='FF'){
       const elbowX=Math.max(x1,tipX)+stub;
@@ -2703,29 +2722,43 @@ function renderDeps(visible,start){
         ' H'+pathEndX.toFixed(1);
       labelX=elbowX; labelY=(y1+tipY)/2;
     } else if(depType==='SS'){
-      const elbowX=Math.min(x1,tipX)-stub;
-      d='M'+x1.toFixed(1)+','+y1.toFixed(1)+
-        ' H'+elbowX.toFixed(1)+
-        ' V'+pathEndY.toFixed(1)+
-        ' H'+pathEndX.toFixed(1);
-      labelX=elbowX; labelY=(y1+tipY)/2;
-    } else {
-      // FS staircase (DHTMLX) — final approach ALWAYS from the left of succ
-      // so the line never strikethroughs the target bar.
+      // Prefer short paths — never drag a long horizontal across empty chart to the left
+      // and never run through the target bar at midY.
       const approachX=tipX-stub;
-      if(pathEndX>=x1+stub-0.5){
-        // Clear gap: stub right from pred → vertical → into left
-        const exitX=x1+stub;
+      if(tipX>=x1-stub){
+        const elbowX=x1-stub;
         d='M'+x1.toFixed(1)+','+y1.toFixed(1)+
-          ' H'+exitX.toFixed(1)+
+          ' H'+elbowX.toFixed(1)+
           ' V'+pathEndY.toFixed(1)+
           ' H'+pathEndX.toFixed(1);
-        labelX=exitX; labelY=(y1+tipY)/2;
+        labelX=elbowX; labelY=(y1+tipY)/2;
       } else {
-        // Overlap / succ starts at or before pred finish:
-        // drop into the row gutter, run left to outside succ, then into tip
-        const railY=y1+(tipY>y1?1:-1)*(ROW_H/2);
+        const railY=y1+(tipY>y1?1:-1)*(ROW_H*0.5);
         d='M'+x1.toFixed(1)+','+y1.toFixed(1)+
+          ' V'+railY.toFixed(1)+
+          ' H'+approachX.toFixed(1)+
+          ' V'+pathEndY.toFixed(1)+
+          ' H'+pathEndX.toFixed(1);
+        labelX=approachX; labelY=railY;
+      }
+    } else {
+      // FS — leave pred RIGHT, enter succ LEFT. Final approach must be from the left
+      // so the line never strikethroughs the target bar.
+      const approachX=tipX-stub;
+      if(tipX>=x1+stub*2){
+        // Clear gap between bars: mid-lane drop
+        const laneX=Math.max(x1+stub, Math.min((x1+tipX)/2, approachX));
+        d='M'+x1.toFixed(1)+','+y1.toFixed(1)+
+          ' H'+laneX.toFixed(1)+
+          ' V'+pathEndY.toFixed(1)+
+          ' H'+pathEndX.toFixed(1);
+        labelX=laneX; labelY=(y1+tipY)/2;
+      } else {
+        // Overlap / succ under or left of pred end: stub → between-row rail → left of tip → in
+        const exitX=x1+stub;
+        const railY=y1+(tipY>y1?1:-1)*(ROW_H*0.5);
+        d='M'+x1.toFixed(1)+','+y1.toFixed(1)+
+          ' H'+exitX.toFixed(1)+
           ' V'+railY.toFixed(1)+
           ' H'+approachX.toFixed(1)+
           ' V'+pathEndY.toFixed(1)+
@@ -3303,6 +3336,7 @@ function quickAddTask(parentId, afterId){
       else tasks.push(newTask);
     }
   }
+  invalidateTaskIndex();
   selectedTaskId=newTask.id;
   const parentPromoted=parent&&promoteToContainerIfNeeded(parent);
   calcWBS();
@@ -3378,6 +3412,7 @@ function saveItem(){
     } else {
       tasks.push(newTask);
     }
+    invalidateTaskIndex();
     insertAfterId=null;
     closeModal('modalEdit');
     renderAll();
@@ -4175,6 +4210,7 @@ async function applyImportedRows(rows,sourceLabel){
     });
     if(importMode==='overwrite') tasks=tasks.filter(t=>t.id===1);
     tasks=[...tasks,...imported];
+    invalidateTaskIndex();
     calcWBS();
     if(autoSchedule) applyAutoSchedule();
     showImportResult('success','✅ Imported '+imported.length+' items from '+sourceLabel+'.'+(errors>0?' ('+errors+' rows skipped)':''));
@@ -4190,7 +4226,7 @@ async function persistBulkImport(rows,mode){
   try{
     const res=await fetch('/api/pm/projects/'+projectId+'/gantt/import',{
       method:'POST',credentials:'include',
-      headers:apiAuthHeaders(true),
+      headers:await apiAuthHeaders(true),
       body:JSON.stringify({mode:mode||'append',items:rows}),
     });
     if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.message||'Import failed');}
@@ -5403,10 +5439,58 @@ function ganttMeta(){
   const d=window.GANTT_INIT_DATA||{};
   return {projectId:d.projectId,tenantId:d.tenantId};
 }
-function apiAuthHeaders(json){
+
+/** Ask parent React app for a fresh Supabase token (baked srcdoc token can expire). */
+var _ganttAuthTokenCache={token:'',at:0};
+function requestAuthTokenFromParent(){
+  return new Promise(function(resolve){
+    var cached=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.authToken)||'';
+    var now=Date.now();
+    if(_ganttAuthTokenCache.token&&(now-_ganttAuthTokenCache.at)<45000){
+      resolve(_ganttAuthTokenCache.token);
+      return;
+    }
+    if(!window.parent||window.parent===window){
+      resolve(cached);
+      return;
+    }
+    var requestId='gauth-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);
+    var done=false;
+    var finish=function(token){
+      if(done) return;
+      done=true;
+      window.removeEventListener('message',onMsg);
+      clearTimeout(timer);
+      var next=(token!=null&&token!=='')?String(token):cached;
+      if(next){
+        _ganttAuthTokenCache={token:next,at:Date.now()};
+        if(window.GANTT_INIT_DATA) window.GANTT_INIT_DATA.authToken=next;
+      }
+      resolve(next||'');
+    };
+    var onMsg=function(e){
+      if(!e.data||e.data.type!=='gantt-auth-token'||e.data.requestId!==requestId) return;
+      finish(e.data.token||'');
+    };
+    window.addEventListener('message',onMsg);
+    try{
+      window.parent.postMessage({type:'gantt-auth-token-request',requestId:requestId},'*');
+    }catch(err){
+      finish(cached);
+      return;
+    }
+    var timer=setTimeout(function(){ finish(cached); },2500);
+  });
+}
+
+async function apiAuthHeaders(json){
   const h={};
   if(json) h['Content-Type']='application/json';
-  const token=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.authToken)||'';
+  let token=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.authToken)||'';
+  try{
+    const fresh=await requestAuthTokenFromParent();
+    if(fresh) token=fresh;
+  }catch(e){ /* keep baked token */ }
   if(token) h['Authorization']='Bearer '+token;
   return h;
 }
@@ -5453,7 +5537,7 @@ async function persistCreate(t,opts){
   if(createInFlight.has(t)) return createInFlight.get(t);
   const run=(async()=>{
   // No full-screen hourglass — row is already on screen; save in the background
-  const h=apiAuthHeaders(true);
+  const h=await apiAuthHeaders(true);
   const post=async (url,body)=>{
     const res=await fetch(url,{method:'POST',credentials:'include',headers:h,body:JSON.stringify(body)});
     if(!res.ok) throw new Error((await res.text().catch(()=>''))||('HTTP '+res.status));
@@ -5499,6 +5583,7 @@ async function persistCreate(t,opts){
           checkedRowIds.delete(oldId);
           checkedRowIds.add(t.id);
         }
+        invalidateTaskIndex();
         calcWBS();
         if(wasEditing){
           // Keep typing — surgical id remap, no full chart rebuild
@@ -5524,7 +5609,7 @@ async function persistCreate(t,opts){
 async function persistDelete(t,silent){
   if(!t||t.type===1||t.id===1) return false;
   if(isLocalOnly(t)) return true;
-  const h=apiAuthHeaders();
+  const h=await apiAuthHeaders();
   try{
     const res=await fetch('/api/pm/tasks/'+t.id,{method:'DELETE',credentials:'include',headers:h});
     if(!res.ok) throw new Error('HTTP '+res.status);
@@ -5568,7 +5653,7 @@ async function persistSave(t){
   if(!t||t.type===1||t.id===1){
     const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
     if(!projectId) return false;
-  const h=apiAuthHeaders(true);
+  const h=await apiAuthHeaders(true);
     try{
       const res=await fetch('/api/pm/projects/'+projectId,{
         method:'PUT',credentials:'include',headers:h,
@@ -5593,7 +5678,7 @@ async function persistSave(t){
     await persistCreate(t);
     return true;
   }
-  const h=apiAuthHeaders(true);
+  const h=await apiAuthHeaders(true);
   const put=async (url,body)=>{
     const res=await fetch(url,{method:'PUT',credentials:'include',headers:h,body:JSON.stringify(body)});
     if(!res.ok){
@@ -5708,7 +5793,7 @@ async function loadActivePlanVersion(){
   const {projectId}=ganttMeta();
   if(!projectId) return;
   try{
-    const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions/active',{credentials:'include',headers:apiAuthHeaders(false)});
+    const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions/active',{credentials:'include',headers:await apiAuthHeaders(false)});
     if(!res.ok) return;
     const data=await res.json();
     activePlanVersion=data&&data.id?data:null;
@@ -5727,7 +5812,7 @@ async function fetchVersionsList(){
   versionsListCacheProjectId=projectId;
   versionsListFetchInflight=(async()=>{
     try{
-      const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions',{credentials:'include',headers:apiAuthHeaders(false)});
+      const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions',{credentials:'include',headers:await apiAuthHeaders(false)});
       const ct=(res.headers.get('content-type')||'');
       if(!ct.includes('application/json')) return {error:'unavailable'};
       const list=await res.json();
@@ -5960,7 +6045,7 @@ async function updateActivePlanVersion(nameOrNull){
   showLoading('Updating version…');
   try{
     const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions/'+activePlanVersion.id,{
-      method:'PATCH',credentials:'include',headers:apiAuthHeaders(true),
+      method:'PATCH',credentials:'include',headers:await apiAuthHeaders(true),
       body:JSON.stringify(body),
     });
     const ct=(res.headers.get('content-type')||'');
@@ -5997,7 +6082,7 @@ async function savePlanVersion(name,opts){
   showLoading(activate?'Saving version…':'Saving copy…');
   try{
     const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions',{
-      method:'POST',credentials:'include',headers:apiAuthHeaders(true),
+      method:'POST',credentials:'include',headers:await apiAuthHeaders(true),
       body:JSON.stringify({name,snapshot,activate}),
     });
     const ct=(res.headers.get('content-type')||'');
@@ -6122,7 +6207,7 @@ async function activatePlanVersion(vid){
       showLoading('Restoring version…');
       try{
         const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions/'+vid+'/activate',{
-          method:'POST',credentials:'include',headers:apiAuthHeaders(true),body:'{}',
+          method:'POST',credentials:'include',headers:await apiAuthHeaders(true),body:'{}',
         });
         const data=await res.json().catch(()=>({}));
         hideLoading();
@@ -6152,7 +6237,7 @@ async function copyPlanVersion(vid){
       showLoading('Copying…');
       try{
         const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions/'+vid+'/copy',{
-          method:'POST',credentials:'include',headers:apiAuthHeaders(true),
+          method:'POST',credentials:'include',headers:await apiAuthHeaders(true),
           body:JSON.stringify({name}),
         });
         const data=await res.json().catch(()=>({}));
@@ -6180,7 +6265,7 @@ async function renamePlanVersion(vid){
       const {projectId}=ganttMeta();
       try{
         const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions/'+vid,{
-          method:'PATCH',credentials:'include',headers:apiAuthHeaders(true),
+          method:'PATCH',credentials:'include',headers:await apiAuthHeaders(true),
           body:JSON.stringify({name}),
         });
         const data=await res.json().catch(()=>({}));
@@ -6209,7 +6294,7 @@ async function deletePlanVersion(vid){
       const {projectId}=ganttMeta();
       try{
         const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions/'+vid,{
-          method:'DELETE',credentials:'include',headers:apiAuthHeaders(false),
+          method:'DELETE',credentials:'include',headers:await apiAuthHeaders(false),
         });
         if(!res.ok){
           const data=await res.json().catch(()=>({}));

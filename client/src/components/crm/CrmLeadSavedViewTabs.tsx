@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,23 @@ type CrmLeadSavedViewTabsProps = {
   onApply: (snapshot: LeadViewSnapshot) => void;
 };
 
+function snapshotFromSavedView(view: SavedView): LeadViewSnapshot {
+  const filtersRaw = view.filters as any;
+  let filters: FilterConfig[] = [];
+  let viewMode = "table";
+  let groupBy = "none";
+  if (filtersRaw && typeof filtersRaw === "object" && !Array.isArray(filtersRaw) && filtersRaw.__leadViewV2) {
+    filters = Array.isArray(filtersRaw.rules) ? filtersRaw.rules : [];
+    viewMode = filtersRaw.viewMode || "table";
+    groupBy = filtersRaw.groupBy || "none";
+  } else if (Array.isArray(filtersRaw)) {
+    filters = filtersRaw;
+  }
+  const sorts = Array.isArray(view.sorts) ? (view.sorts as SortConfig[]) : [];
+  const columns = Array.isArray(view.columns) ? (view.columns as ColumnConfig[]) : [];
+  return { filters, sorts, columns, viewMode, groupBy };
+}
+
 export function CrmLeadSavedViewTabs({
   entityType = "lead",
   current,
@@ -43,10 +60,22 @@ export function CrmLeadSavedViewTabs({
   const [name, setName] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const { toast } = useToast();
+  const defaultAppliedRef = useRef(false);
 
   const { data: savedViews = [] } = useQuery<SavedView[]>({
     queryKey: [`/api/crm/saved-views?entityType=${entityType}`],
   });
+
+  // Auto-apply default view once on load (ignore onApply identity churn)
+  useEffect(() => {
+    if (defaultAppliedRef.current || !savedViews.length) return;
+    const def = savedViews.find((v) => v.isDefault);
+    defaultAppliedRef.current = true;
+    if (!def) return;
+    setActiveId(def.id);
+    onApply(snapshotFromSavedView(def));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply once when views first load
+  }, [savedViews]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -86,20 +115,7 @@ export function CrmLeadSavedViewTabs({
 
   const applyView = (view: SavedView) => {
     setActiveId(view.id);
-    const filtersRaw = view.filters as any;
-    let filters: FilterConfig[] = [];
-    let viewMode = "table";
-    let groupBy = "none";
-    if (filtersRaw && typeof filtersRaw === "object" && !Array.isArray(filtersRaw) && filtersRaw.__leadViewV2) {
-      filters = Array.isArray(filtersRaw.rules) ? filtersRaw.rules : [];
-      viewMode = filtersRaw.viewMode || "table";
-      groupBy = filtersRaw.groupBy || "none";
-    } else if (Array.isArray(filtersRaw)) {
-      filters = filtersRaw;
-    }
-    const sorts = Array.isArray(view.sorts) ? (view.sorts as SortConfig[]) : [];
-    const columns = Array.isArray(view.columns) ? (view.columns as ColumnConfig[]) : [];
-    onApply({ filters, sorts, columns, viewMode, groupBy });
+    onApply(snapshotFromSavedView(view));
   };
 
   return (
@@ -121,7 +137,7 @@ export function CrmLeadSavedViewTabs({
             onApply({
               filters: [],
               sorts: [{ columnId: "date", direction: "desc" }],
-              columns: current.columns.map((c) => ({ ...c, visible: true })),
+              columns: current.columns,
               viewMode: "table",
               groupBy: "none",
             });

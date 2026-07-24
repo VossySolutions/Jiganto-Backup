@@ -21,7 +21,6 @@ import {
   CrmFieldLabel,
   CrmFormDivider,
   CrmFormSection,
-  CrmRatingPills,
   CrmScoreBar,
   formatCrmRecordMeta,
   MONDAY_FIELD_CONTROL,
@@ -29,7 +28,7 @@ import {
 import { Building2, Clock, Settings2, StickyNote, Target, UserRound } from "lucide-react";
 import { AccountDetailFormOverlay } from "./AccountDetailFormOverlay";
 import { Button } from "@/components/ui/button";
-import { loadLeadStatusOptions } from "@/lib/crm-lead-labels";
+import { loadLeadStatusOptions, loadLeadSourceOptions, loadLeadRatingOptions } from "@/lib/crm-lead-labels";
 
 export type LeadFormData = {
   firstName: string;
@@ -64,17 +63,6 @@ const EMPTY_FORM: LeadFormData = {
   rating: "",
   ownerUserId: "",
 };
-
-const SOURCE_OPTIONS = [
-  { value: "referral", label: "Referral" },
-  { value: "website", label: "Website" },
-  { value: "event", label: "Event" },
-  { value: "cold_call", label: "Cold call" },
-  { value: "partner", label: "Partner" },
-  { value: "linkedin", label: "LinkedIn" },
-  { value: "inbound", label: "Inbound" },
-  { value: "other", label: "Other" },
-];
 
 interface Props {
   open: boolean;
@@ -229,7 +217,21 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
           <CrmFieldGrid cols={3} className="mb-3">
             <div className="space-y-1">
               <CrmFieldLabel>Rating</CrmFieldLabel>
-              <CrmRatingPills value={form.rating} onChange={(r) => setForm((f) => ({ ...f, rating: r }))} />
+              <Select value={form.rating || "none"} onValueChange={(v) => setForm((f) => ({ ...f, rating: v === "none" ? "" : v }))}>
+                <SelectTrigger className={cn(MONDAY_FIELD_CONTROL, "w-full")} data-testid="select-lead-rating">
+                  <SelectValue placeholder="Select rating…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No rating</SelectItem>
+                  {loadLeadRatingOptions().map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      <span className={cn("inline-flex min-h-[22px] px-2 rounded-[4px] text-[12px] font-medium", o.color)}>
+                        {o.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <CrmFieldLabel>Lead score</CrmFieldLabel>
@@ -262,7 +264,7 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
                 <SelectTrigger className={cn(MONDAY_FIELD_CONTROL, "w-full")} data-testid="select-lead-source"><SelectValue placeholder="Select source…" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Select source…</SelectItem>
-                  {SOURCE_OPTIONS.map((o) => (
+                  {loadLeadSourceOptions().map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                   ))}
                 </SelectContent>

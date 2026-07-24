@@ -20,7 +20,7 @@ type SharedProps = {
   resolveOwner: (userId: string | null | undefined) => OwnerInfo;
   onOpenLead: (lead: CrmLead) => void;
   onConvert?: (lead: CrmLead) => void;
-  onAddLead?: () => void;
+  onAddLead?: (status?: string) => void;
 };
 
 export function CrmLeadListView({
@@ -29,7 +29,7 @@ export function CrmLeadListView({
   resolveOwner,
   onOpenLead,
   onConvert,
-}: SharedProps) {
+}: Omit<SharedProps, "onAddLead">) {
   const statusMap = useMemo(
     () => Object.fromEntries(statusOptions.map((o) => [o.value, o])),
     [statusOptions],
@@ -198,7 +198,7 @@ export function CrmLeadBoardView({
             variant="ghost"
             size="sm"
             className="w-full justify-start text-muted-foreground h-8"
-            onClick={onAddLead}
+            onClick={() => onAddLead(opt.value)}
           >
             <Plus className="h-3.5 w-3.5 mr-1" />
             Add lead
@@ -343,7 +343,7 @@ export function CrmLeadCalendarView({
   statusOptions,
   onOpenLead,
   onAddLead,
-}: SharedProps) {
+}: Pick<SharedProps, "leads" | "statusOptions" | "onOpenLead" | "onAddLead">) {
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const statusMap = useMemo(
     () => Object.fromEntries(statusOptions.map((o) => [o.value, o])),
