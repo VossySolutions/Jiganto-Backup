@@ -1,5 +1,5 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
-import { AGILE_PALETTE as C, statusBg, statusColor } from "./palette";
+import { useAgilePalette, statusBg, statusColor } from "./palette";
 import type { BurndownPoint, Sprint, Story, Workstream } from "./types";
 import { AgileBadge, AgileBtn, AgileModal, AgileProgressBar, BurndownChart, ConfirmDelete, FormField, inputStyle } from "./ui-primitives";
 
@@ -14,6 +14,7 @@ export function SprintsView({ sprints, stories, setSprints, ws, onAddSprint, bur
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   function handleAdd(data: any) {
+  const C = useAgilePalette();
     if (onAddSprint) {
       onAddSprint(data);
       setShowAdd(false);
@@ -52,10 +53,10 @@ export function SprintsView({ sprints, stories, setSprints, ws, onAddSprint, bur
           const spStories = stories.filter(s => s.sprint === sp.name);
           const pct = sp.points ? (sp.done / sp.points) * 100 : 0;
           return (
-            <div key={sp.id} data-testid={`sprint-card-${sp.id}`} style={{ flex: "1 1 220px", background: C.white, border: `1.5px solid ${statusColor(sp.status)}33`, borderTop: `4px solid ${statusColor(sp.status)}`, borderRadius: 10, padding: 16 }}>
+            <div key={sp.id} data-testid={`sprint-card-${sp.id}`} style={{ flex: "1 1 220px", background: C.white, border: `1.5px solid ${statusColor(sp.status, C)}33`, borderTop: `4px solid ${statusColor(sp.status, C)}`, borderRadius: 10, padding: 16 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 15, color: C.grey800 }}>{sp.name}</span>
-                <AgileBadge label={sp.status} color={statusBg(sp.status)} textColor={statusColor(sp.status)} dot small />
+                <AgileBadge label={sp.status} color={statusBg(sp.status, C)} textColor={statusColor(sp.status, C)} dot small />
               </div>
               {sp.goal && <div style={{ fontSize: 12, color: C.grey500, marginBottom: 8, fontStyle: "italic" }}>{sp.goal}</div>}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
@@ -65,10 +66,10 @@ export function SprintsView({ sprints, stories, setSprints, ws, onAddSprint, bur
                 </div>
                 <div>
                   <div style={{ fontSize: 10, color: C.grey400 }}>Points</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: statusColor(sp.status) }}>{sp.done}/{sp.points}</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: statusColor(sp.status, C) }}>{sp.done}/{sp.points}</div>
                 </div>
               </div>
-              <AgileProgressBar pct={pct} color={statusColor(sp.status)} height={6} />
+              <AgileProgressBar pct={pct} color={statusColor(sp.status, C)} height={6} />
               <div style={{ fontSize: 10, color: C.grey400, marginTop: 6 }}>{spStories.length} stories assigned</div>
               <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
                 {sp.status !== "Active" && sp.status !== "Closed" && (

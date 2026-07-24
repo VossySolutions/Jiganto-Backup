@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { Bookmark, Plus, Trash2, Star, ChevronDown } from "lucide-react";
 
 type SavedView = {
@@ -60,6 +61,8 @@ interface SavedViewsDropdownProps {
     columns?: ColumnConfig[],
     extras?: { viewMode?: string; groupBy?: string },
   ) => void;
+  /** Optional trigger button class (defaults to outline sm). */
+  triggerClassName?: string;
 }
 
 export function SavedViewsDropdown({
@@ -68,6 +71,7 @@ export function SavedViewsDropdown({
   currentSorts,
   columns = [],
   onApplyView,
+  triggerClassName,
 }: SavedViewsDropdownProps) {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [viewName, setViewName] = useState("");
@@ -163,8 +167,13 @@ export function SavedViewsDropdown({
       <div className="flex items-center gap-1">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1" data-testid="dropdown-saved-views">
-              <Bookmark className="h-4 w-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn("gap-1 h-8", triggerClassName)}
+              data-testid="dropdown-saved-views"
+            >
+              <Bookmark className="h-3.5 w-3.5" />
               Views
               <ChevronDown className="h-3 w-3" />
             </Button>

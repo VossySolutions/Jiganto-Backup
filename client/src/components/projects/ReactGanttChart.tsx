@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getSupabaseAccessToken } from "@/lib/supabase-session";
 import { supabaseAuthEnabled } from "@/lib/supabase";
+import { useTheme } from "@/hooks/use-theme";
 import type {
   PmProject,
   PmTask,
@@ -248,7 +249,7 @@ function buildGanttData(
   };
 }
 
-function buildSrcDoc(data: GanttInitData, projectName: string): string {
+function buildSrcDoc(data: GanttInitData, projectName: string, isDark = false): string {
   const dataJson = JSON.stringify(data);
 
   const toolbarHTML = `
@@ -606,12 +607,12 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
 </div>`;
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en"${isDark ? ' class="dark"' : ""}>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${projectName.replace(/</g, "&lt;")} — Gantt</title>
-<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260724ab">
+<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260724dark">
 </head>
 <body>
 <div class="main">
@@ -630,7 +631,7 @@ ${ganttBodyHTML}
 </div>
 ${modalsHTML}
 <script>window.GANTT_INIT_DATA = ${dataJson};</script>
-<script src="/gantt-v4-engine.js?v=20260724ab"></script>
+<script src="/gantt-v4-engine.js?v=20260724dark"></script>
 </body>
 </html>`;
 }
@@ -643,11 +644,14 @@ interface ReactGanttChartProps {
 
 export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
   const queryClient = useQueryClient();
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   const [authToken, setAuthToken] = useState<string | undefined>(undefined);
   const [srcDoc, setSrcDoc] = useState<string | null>(null);
   const [versionReloadKey, setVersionReloadKey] = useState(0);
   const bootstrappedKeyRef = useRef<string | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -746,16 +750,23 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
   // versionReloadKey forces a remount after activating a plan version.
   useEffect(() => {
     if (isLoading || !project || !authReady || !authTokenReady) return;
-    const bootKey = `${projectId}:${versionReloadKey}`;
+    const bootKey = `${projectId}:${versionReloadKey}:${isDark ? "dark" : "light"}`;
     if (bootstrappedKeyRef.current === bootKey) return;
     bootstrappedKeyRef.current = bootKey;
     const data: GanttInitData = {
       ...buildGanttData(project, dbTasks as PmTask[], team as TeamMember[]),
       authToken: authToken || undefined,
     };
-    setSrcDoc(buildSrcDoc(data, project.name));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot bootstrap per projectId (+ version remount)
-  }, [isLoading, authReady, authTokenReady, projectId, project, versionReloadKey]);
+    setSrcDoc(buildSrcDoc(data, project.name, isDark));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot bootstrap per projectId (+ version/theme remount)
+  }, [isLoading, authReady, authTokenReady, projectId, project, versionReloadKey, isDark]);
+
+  // Keep iframe dark class in sync if theme flips without a full remount race
+  useEffect(() => {
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc?.documentElement) return;
+    doc.documentElement.classList.toggle("dark", isDark);
+  }, [isDark, srcDoc]);
 
   if (isLoading || !srcDoc) {
     return (
@@ -777,7 +788,8 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
 
   return (
     <iframe
-      key={`gantt-${projectId}-v20260724t-${versionReloadKey}`}
+      ref={iframeRef}
+      key={`gantt-${projectId}-v20260724dark-${versionReloadKey}-${isDark ? "d" : "l"}`}
       title={`Gantt — ${project.name}`}
       srcDoc={srcDoc}
       className="block h-full w-full border-0"

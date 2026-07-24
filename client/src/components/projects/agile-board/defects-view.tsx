@@ -1,5 +1,5 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
-import { AGILE_PALETTE as C, priorityBg, priorityColor, statusBg, statusColor } from "./palette";
+import { useAgilePalette, priorityBg, priorityColor, statusBg, statusColor } from "./palette";
 import type { Defect, Story, Workstream } from "./types";
 import { AgileAvatar, AgileBadge, AgileBtn, AgileModal, AgileSelect, ConfirmDelete, FormField, inputStyle } from "./ui-primitives";
 
@@ -25,6 +25,7 @@ export function DefectsView({ defects, stories, setDefects, ws, onAddDefect, onU
   const envColor = (e: string) => ({ Dev: C.blue, SIT: C.purple, UAT: C.amber, Prod: C.red } as Record<string, string>)[e] || C.grey500;
 
   function handleAdd(data: any) {
+  const C = useAgilePalette();
     if (onAddDefect) {
       onAddDefect(data);
       setShowAdd(false);
@@ -97,8 +98,8 @@ export function DefectsView({ defects, stories, setDefects, ws, onAddDefect, onU
               </div>
               <span style={{ fontSize: 11, color: C.grey500 }}>{d.storyId || "—"}</span>
               <AgileBadge label={d.severity} color={sevBg(d.severity)} textColor={sevColor(d.severity)} small dot />
-              <AgileBadge label={d.priority} color={priorityBg(d.priority)} textColor={priorityColor(d.priority)} small />
-              <AgileBadge label={d.status} color={statusBg(d.status)} textColor={statusColor(d.status)} dot small />
+              <AgileBadge label={d.priority} color={priorityBg(d.priority, C)} textColor={priorityColor(d.priority, C)} small />
+              <AgileBadge label={d.status} color={statusBg(d.status, C)} textColor={statusColor(d.status, C)} dot small />
               <span style={{ fontSize: 11, fontWeight: 700, color: envColor(d.environment) }}>{d.environment}</span>
               <AgileAvatar name={d.assignee} size={22} />
               <div style={{ display: "flex", gap: 3 }}>

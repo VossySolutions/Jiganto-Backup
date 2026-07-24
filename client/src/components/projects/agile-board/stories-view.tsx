@@ -1,5 +1,5 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
-import { AGILE_PALETTE as C, priorityBg, priorityColor, statusBg, statusColor } from "./palette";
+import { useAgilePalette, priorityBg, priorityColor, statusBg, statusColor } from "./palette";
 import type { Epic, Story, Workstream } from "./types";
 import { AddStoryForm } from "./story-form";
 import { AgileAvatar, AgileBadge, AgileBtn, AgileModal, AgileSelect, ConfirmDelete, inputStyle } from "./ui-primitives";
@@ -22,6 +22,7 @@ export function StoriesView({ stories, epics, onSelect, setStories, ws, onAddSto
   );
 
   function handleAdd(data: any) {
+  const C = useAgilePalette();
     if (onAddStory) {
       onAddStory(data);
       setShowAdd(false);
@@ -82,9 +83,9 @@ export function StoriesView({ stories, epics, onSelect, setStories, ws, onAddSto
                 <div style={{ fontSize: 13, fontWeight: 500, color: C.grey800 }}>{s.title.length > 65 ? `${s.title.slice(0, 65)}...` : s.title}</div>
               </div>
               <div style={{ fontSize: 11, color: epic?.color || C.grey500, fontWeight: 600 }}>{epic?.title?.split(" ").slice(0, 2).join(" ")}</div>
-              <AgileBadge label={s.status} color={statusBg(s.status)} textColor={statusColor(s.status)} dot small />
+              <AgileBadge label={s.status} color={statusBg(s.status, C)} textColor={statusColor(s.status, C)} dot small />
               <span style={{ fontWeight: 700, fontSize: 12, color: C.grey700 }}>{s.points || <span style={{ color: C.grey300 }}>{"—"}</span>}</span>
-              <AgileBadge label={s.priority} color={priorityBg(s.priority)} textColor={priorityColor(s.priority)} small />
+              <AgileBadge label={s.priority} color={priorityBg(s.priority, C)} textColor={priorityColor(s.priority, C)} small />
               <span style={{ fontSize: 11, color: C.grey500 }}>{s.sprint || <span style={{ color: C.grey300 }}>{"—"}</span>}</span>
               <AgileAvatar name={s.assignee} size={22} />
               <div style={{ display: "flex", gap: 3 }}>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AGILE_PALETTE as C, priorityBg, priorityColor, statusBg, statusColor, tshirtBg, tshirtColor } from "./palette";
+import { useAgilePalette, priorityBg, priorityColor, statusBg, statusColor, tshirtBg, tshirtColor } from "./palette";
 import type { Epic, Sprint, Story } from "./types";
 import { AgileBadge, AgileBtn, AgileModal, AgileProgressBar, FormField, inputStyle } from "./ui-primitives";
 
@@ -8,6 +8,7 @@ export function StoryDetailPanel({ story, epics, sprints, onClose, onUpdate }: {
   onClose: () => void;
   onUpdate?: (id: string, data: Record<string, unknown>) => void | Promise<void>;
 }) {
+  const C = useAgilePalette();
   const [editing, setEditing] = useState(false);
   const epic = epics.find(e => e.id === story.epicId);
 
@@ -34,9 +35,9 @@ export function StoryDetailPanel({ story, epics, sprints, onClose, onUpdate }: {
         <div className="agile-modal-main">
           <div style={{ fontSize: 16, fontWeight: 700, color: C.grey800, marginBottom: 12, lineHeight: 1.4 }}>{story.title}</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-            <AgileBadge label={story.status} color={statusBg(story.status)} textColor={statusColor(story.status)} dot />
-            <AgileBadge label={story.priority} color={priorityBg(story.priority)} textColor={priorityColor(story.priority)} />
-            <span style={{ background: tshirtBg(story.tshirt), color: tshirtColor(story.tshirt), borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{story.tshirt}</span>
+            <AgileBadge label={story.status} color={statusBg(story.status, C)} textColor={statusColor(story.status, C)} dot />
+            <AgileBadge label={story.priority} color={priorityBg(story.priority, C)} textColor={priorityColor(story.priority, C)} />
+            <span style={{ background: tshirtBg(story.tshirt, C), color: tshirtColor(story.tshirt, C), borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{story.tshirt}</span>
             {story.points && <AgileBadge label={`${story.points} pts`} color={C.blueLight} textColor={C.blue} />}
           </div>
           {story.ac.length > 0 && (

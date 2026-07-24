@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -20,7 +20,8 @@ import {
   Columns3, Table2, List, Calendar, Settings2, GanttChart, FileText,
   MessageSquare, Paperclip, ListTodo, FolderPlus, X,
   ChevronsUpDown, ChevronsDownUp, Pin, ClipboardPaste,
-  BarChart3, LayoutDashboard, Clock, FormInput,
+  BarChart3, LayoutDashboard, Clock, FormInput, Paintbrush, ChevronUp, GripVertical,
+  MoreHorizontal, UserRound,
 } from "lucide-react";
 import { ImportModal, type ImportMode } from "@/components/ImportModal";
 import { useCrmUsers } from "./CrmUsersProvider";
@@ -71,6 +72,54 @@ import MondayTable, {
   type StatusOption,
 } from "@/components/MondayTable";
 
+/** Columns accepted by POST /api/crm/leads/bulk-import (and blank template). */
+const LEAD_IMPORT_HEADERS = [
+  "firstName",
+  "lastName",
+  "email",
+  "phone",
+  "company",
+  "title",
+  "source",
+  "status",
+  "rating",
+  "score",
+  "industry",
+  "website",
+  "description",
+] as const;
+
+const LEAD_IMPORT_EXAMPLE: Record<(typeof LEAD_IMPORT_HEADERS)[number], string> = {
+  firstName: "Jane",
+  lastName: "Smith",
+  email: "jane@acme.com",
+  phone: "+44 7700 123456",
+  company: "Acme Ltd",
+  title: "VP Sales",
+  source: "Website",
+  status: "new",
+  rating: "hot",
+  score: "75",
+  industry: "Technology",
+  website: "https://acme.com",
+  description: "Inbound enquiry via contact form",
+};
+
+function downloadLeadsCsv(filename: string, headers: readonly string[], rows: string[][]) {
+  const escape = (v: string) =>
+    /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  const csv = [headers.join(","), ...rows.map((r) => r.map((c) => escape(c ?? "")).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 /** Infinity-style field customize checklist (standard columns) */
 const LEAD_TABLE_COLUMNS: CrmColumnDef[] = [
   { id: "contact", label: "Contact" },
@@ -100,7 +149,7 @@ import {
   type LeadFilterOperator,
   type LeadFilterRule,
 } from "@/lib/crm-lead-filters";
-import { type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
+import { SavedViewsDropdown, type FilterConfig, type SortConfig } from "./SavedViewsDropdown";
 
 type LeadAttachmentSummaryRow = { id: number; entityId: number };
 type LeadTaskSummaryRow = { id: number; leadId: number | null; status?: string | null; completedAt?: string | null };
@@ -303,11 +352,13 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterRules, setFilterRules] = useState<LeadFilterRule[]>([]);
   const [localSearch, setLocalSearch] = useState("");
+  const [debouncedLocalSearch, setDebouncedLocalSearch] = useState("");
   const [sortRules, setSortRules] = useState<LeadSortRule[]>([{ field: "date", dir: "desc" }]);
   const [groupBy, setGroupBy] = useState<LeadGroupBy>("none");
   const [manualGroups, setManualGroups] = useState<ManualLeadGroup[]>(() => loadManualLeadGroups());
   const [selectedLeadIds, setSelectedLeadIds] = useState<(number | string)[]>([]);
   const [density, setDensity] = useState<TableDensity>("comfortable");
+  const [formatPanelOpen, setFormatPanelOpen] = useState(false);
   const [expandAllSignal, setExpandAllSignal] = useState(0);
   const [collapseAllSignal, setCollapseAllSignal] = useState(0);
   const [pinCompany, setPinCompany] = useState(() => {
@@ -473,7 +524,12 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     setIsConvertOpen(true);
   };
 
-  const effectiveSearch = searchTerm || localSearch;
+  const effectiveSearch = searchTerm || debouncedLocalSearch;
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedLocalSearch(localSearch), 200);
+    return () => window.clearTimeout(t);
+  }, [localSearch]);
 
   const leadSources = useMemo(
     () => Array.from(new Set(leads.map(l => l.source).filter((s): s is string => !!s))),
@@ -590,12 +646,15 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   };
 
   const filteredLeads = useMemo(() => {
+    const needle = effectiveSearch.trim().toLowerCase();
     let result = leads.filter((l) => {
-      const matchesSearch =
-        `${l.firstName} ${l.lastName}`.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
-        l.company?.toLowerCase().includes(effectiveSearch.toLowerCase()) ||
-        l.email?.toLowerCase().includes(effectiveSearch.toLowerCase());
-      if (!matchesSearch) return false;
+      if (needle) {
+        const matchesSearch =
+          `${l.firstName} ${l.lastName}`.toLowerCase().includes(needle) ||
+          (l.company?.toLowerCase().includes(needle) ?? false) ||
+          (l.email?.toLowerCase().includes(needle) ?? false);
+        if (!matchesSearch) return false;
+      }
       for (const rule of filterRules) {
         const op = (rule.operator || "is") as LeadFilterOperator;
         const opMeta = FILTER_OPERATORS.find((o) => o.value === op);
@@ -890,7 +949,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
               onClick={(e) => { e.stopPropagation(); openLeadExtras(row, "files"); }}
               className={cn(
                 "w-full h-full min-h-[28px] flex items-center justify-center gap-1 rounded-[4px] text-[12px] font-medium transition-colors",
-                count > 0 ? "text-[#323338] hover:bg-[#dcdfec]/50" : "text-[#c4c4c4] hover:bg-[#dcdfec]/50",
+                count > 0 ? "text-foreground hover:bg-muted" : "text-muted-foreground/50 hover:bg-muted",
               )}
               data-testid={`cell-files-lead-${row.id}`}
             >
@@ -1012,7 +1071,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
               onClick={(e) => { e.stopPropagation(); openLeadExtras(row, "subtasks"); }}
               className={cn(
                 "w-full h-full min-h-[28px] flex items-center justify-center gap-1 rounded-[4px] text-[12px] font-medium transition-colors",
-                total > 0 ? "text-[#323338] hover:bg-[#dcdfec]/50" : "text-[#c4c4c4] hover:bg-[#dcdfec]/50",
+                total > 0 ? "text-foreground hover:bg-muted" : "text-muted-foreground/50 hover:bg-muted",
               )}
               data-testid={`cell-subtasks-lead-${row.id}`}
             >
@@ -1109,18 +1168,66 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     });
   };
 
+  const columnsMenuItems = useMemo(() => {
+    const standard = LEAD_TABLE_COLUMNS.map((c) => ({ id: c.id, label: c.label, kind: "standard" as const }));
+    const custom = customFields.map((f) => ({
+      id: `custom_${f.fieldName}`,
+      label: f.fieldLabel,
+      kind: "custom" as const,
+    }));
+    const all = [...standard, ...custom];
+    if (columnOrderIds.length === 0) return all;
+    const orderMap = new Map(columnOrderIds.map((id, idx) => [id, idx]));
+    return [...all].sort((a, b) => {
+      const ai = orderMap.has(a.id) ? (orderMap.get(a.id) as number) : Number.MAX_SAFE_INTEGER;
+      const bi = orderMap.has(b.id) ? (orderMap.get(b.id) as number) : Number.MAX_SAFE_INTEGER;
+      if (ai !== bi) return ai - bi;
+      return 0;
+    });
+  }, [customFields, columnOrderIds]);
+
+  const moveColumnInMenu = (columnId: string, dir: -1 | 1) => {
+    setColumnOrderIds((prev) => {
+      const base = prev.length > 0 ? [...prev] : columnsMenuItems.map((c) => c.id);
+      const ids = [...base];
+      for (const c of columnsMenuItems) {
+        if (!ids.includes(c.id)) ids.push(c.id);
+      }
+      const idx = ids.indexOf(columnId);
+      if (idx < 0) return prev;
+      const next = idx + dir;
+      if (next < 0 || next >= ids.length) return prev;
+      const swap = ids[idx];
+      ids[idx] = ids[next];
+      ids[next] = swap;
+      localStorage.setItem("crm-leads-column-order", JSON.stringify(ids));
+      return ids;
+    });
+  };
+
   const tableGroups: GroupDef<CrmLead>[] | undefined = useMemo(() => {
     if (groupBy === "none") return undefined;
 
     if (groupBy === "manual") {
-      const assigned = new Set(manualGroups.flatMap((g) => g.leadIds));
-      const groups: GroupDef<CrmLead>[] = manualGroups.map((g) => ({
-        id: g.id,
-        title: g.title,
-        color: g.color,
-        items: filteredLeads.filter((l) => g.leadIds.includes(l.id)),
-        count: filteredLeads.filter((l) => g.leadIds.includes(l.id)).length,
-      }));
+      const byId = new Map(filteredLeads.map((l) => [l.id, l]));
+      const assigned = new Set<number>();
+      const groups: GroupDef<CrmLead>[] = manualGroups.map((g) => {
+        const items: CrmLead[] = [];
+        for (const id of g.leadIds) {
+          const lead = byId.get(id);
+          if (lead) {
+            items.push(lead);
+            assigned.add(id);
+          }
+        }
+        return {
+          id: g.id,
+          title: g.title,
+          color: g.color,
+          items,
+          count: items.length,
+        };
+      });
       const ungrouped = filteredLeads.filter((l) => !assigned.has(l.id));
       if (ungrouped.length > 0) {
         groups.push({
@@ -1296,20 +1403,50 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   };
 
   const exportToCSV = () => {
-    const headers = ["Company", "Contact", "Status", "Score", "Temperature", "Source", "Created"];
-    const rows = filteredLeads.map(l => [
-      l.company || "", `${l.firstName} ${l.lastName}`, l.status || "", String(l.score || ""),
-      getTemperature(l.score), l.source || "", new Date(l.createdAt).toLocaleDateString()
-    ]);
-    const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${(c || "").replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `leads-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: "Leads exported to CSV" });
+    const headers = [...LEAD_IMPORT_HEADERS];
+    const rows = filteredLeads.map((l) =>
+      headers.map((h) => {
+        switch (h) {
+          case "firstName":
+            return l.firstName || "";
+          case "lastName":
+            return l.lastName || "";
+          case "email":
+            return l.email || "";
+          case "phone":
+            return l.phone || "";
+          case "company":
+            return l.company || "";
+          case "title":
+            return l.title || "";
+          case "source":
+            return l.source || "";
+          case "status":
+            return l.status || "";
+          case "rating":
+            return l.rating || "";
+          case "score":
+            return l.score != null ? String(l.score) : "";
+          case "industry":
+            return l.industry || "";
+          case "website":
+            return l.website || "";
+          case "description":
+            return l.description || "";
+          default:
+            return "";
+        }
+      }),
+    );
+    downloadLeadsCsv(`leads-${new Date().toISOString().split("T")[0]}.csv`, headers, rows);
+    toast({ title: "Leads exported to CSV", description: "File uses the same columns as Import." });
+  };
+
+  const downloadImportTemplate = () => {
+    const headers = [...LEAD_IMPORT_HEADERS];
+    const example = headers.map((h) => LEAD_IMPORT_EXAMPLE[h] ?? "");
+    downloadLeadsCsv("leads-import-template.csv", headers, [example]);
+    toast({ title: "Import template downloaded" });
   };
 
   const handleSortToggle = (field: LeadSortField) => {
@@ -1354,10 +1491,19 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   /** monday.com board toolbar control */
   const toolBtn = (active = false) =>
     cn(
-      "inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[13px] font-medium transition-colors",
-      "text-[#323338] hover:bg-[#dcdfec]/60",
-      active && "bg-[#cce5ff] text-[#0073ea] hover:bg-[#cce5ff]",
+      "inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[13px] font-medium transition-colors whitespace-nowrap",
+      "text-foreground hover:bg-muted",
+      active && "bg-primary/15 text-primary hover:bg-primary/15",
     );
+  const iconBtn = (active = false) =>
+    cn(
+      "inline-flex items-center justify-center h-8 w-8 rounded-md transition-colors",
+      "text-muted-foreground hover:bg-muted hover:text-foreground",
+      active && "bg-primary/15 text-primary hover:bg-primary/15",
+    );
+  const toolbarDivider = (
+    <div className="h-5 w-px shrink-0 bg-border mx-0.5" aria-hidden />
+  );
 
   return (
     <div className="space-y-3">
@@ -1374,94 +1520,130 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
       />
 
       {/* monday.com-style board toolbar */}
-      <div className="flex flex-wrap items-center gap-1.5" data-testid="filter-temperature-bar">
+      <div
+        className="flex items-center gap-1 min-w-0 overflow-x-auto overscroll-x-contain rounded-lg border border-border bg-muted/80 px-2 py-1.5 [-ms-overflow-style:none] [scrollbar-width:thin]"
+        data-testid="filter-temperature-bar"
+      >
+        <div className="flex items-center gap-1 shrink-0">
           <Button
-          className="h-8 bg-[#0073ea] hover:bg-[#0060b9] text-white gap-1.5 rounded-md text-[13px] font-medium shadow-none px-3"
-          data-testid="button-add-lead"
-          onClick={() => {
-            sessionStorage.removeItem("crm-leads-pending-status");
-            sessionStorage.removeItem("crm-leads-pending-group");
-            openCreateForm();
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          New Lead
+            className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 rounded-md text-[13px] font-medium shadow-none px-3"
+            data-testid="button-add-lead"
+            onClick={() => {
+              sessionStorage.removeItem("crm-leads-pending-status");
+              sessionStorage.removeItem("crm-leads-pending-group");
+              openCreateForm();
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            New Lead
           </Button>
 
-        <div className="relative ml-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#676879]" />
-          <Input
-            placeholder="Search / Filter Board"
-            value={localSearch}
-            onChange={(e) => setLocalSearch(e.target.value)}
-            className="pl-8 h-8 w-48 rounded-md border-[#c5c7d0] text-[13px] bg-white focus-visible:ring-[#0073ea]"
-            data-testid="input-search-leads"
-          />
-        </div>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search / Filter Board"
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              className="pl-8 h-8 w-[200px] rounded-md border-border text-[13px] bg-background shadow-none focus-visible:ring-primary"
+              data-testid="input-search-leads"
+            />
+          </div>
 
-        <div className="h-5 w-px bg-[#d0d4e4] mx-1" />
+          {toolbarDivider}
 
-        <div className="flex items-center gap-1" data-testid="owner-avatar-filter">
-        <button
-            type="button"
-            onClick={() => setOwnerFilter("all")}
-            className={toolBtn(ownerFilter === "all")}
-            title="All people"
-          >
-            Person
-        </button>
-        <button
-            type="button"
-            onClick={() => setOwnerFilter(ownerFilter === "__unassigned__" ? "all" : "__unassigned__")}
-          className={cn(
-              "h-7 w-7 rounded-full border text-[10px] font-semibold transition-colors",
-              ownerFilter === "__unassigned__"
-                ? "ring-2 ring-[#0073ea] border-[#0073ea]"
-                : "border-[#c5c7d0] bg-[#f5f6f8] text-[#676879]",
-            )}
-            title="Unassigned"
-          >
-            —
-        </button>
-          {users.slice(0, 12).map((user) => {
-            const owner = resolveOwner(user.id);
-            const active = ownerFilter === user.id;
-            return (
-        <button
-                key={user.id}
-                type="button"
-                title={owner.name}
-                onClick={() => setOwnerFilter(active ? "all" : user.id)}
-          className={cn(
-                  "h-7 w-7 rounded-full text-white text-[10px] font-semibold transition-transform",
-                  active && "ring-2 ring-offset-1 ring-[#0073ea] scale-105",
-                )}
-                style={{ backgroundColor: owner.color }}
-                data-testid={`filter-owner-avatar-${user.id}`}
-              >
-                {owner.initials}
-        </button>
-            );
-          })}
-        </div>
-
-        <div className="h-5 w-px bg-[#d0d4e4] mx-1" />
-
-        <Popover open={filterOpen} onOpenChange={setFilterOpen}>
-          <PopoverTrigger asChild>
+          <div className="flex items-center gap-0.5" data-testid="owner-avatar-filter">
             <button
-              className={toolBtn(activeFilterCount > 0)}
-              data-testid="button-filter"
+              type="button"
+              onClick={() => setOwnerFilter("all")}
+              className={toolBtn(ownerFilter === "all" || !ownerFilter)}
+              title="All people"
             >
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              Filter
-              {activeFilterCount > 0 && (
-                <span className="h-4 min-w-4 px-1 rounded-full bg-[#0073ea] text-white text-[10px] flex items-center justify-center">
-                  {activeFilterCount}
-                </span>
-              )}
+              <UserRound className="h-3.5 w-3.5" />
+              Person
             </button>
-          </PopoverTrigger>
+            <button
+              type="button"
+              onClick={() => setOwnerFilter(ownerFilter === "__unassigned__" ? "all" : "__unassigned__")}
+              className={cn(
+                "h-7 w-7 rounded-full border text-[10px] font-semibold transition-colors",
+                ownerFilter === "__unassigned__"
+                  ? "ring-2 ring-primary border-primary"
+                  : "border-border bg-background text-muted-foreground hover:bg-muted",
+              )}
+              title="Unassigned"
+            >
+              —
+            </button>
+            {users.slice(0, 12).map((user) => {
+              const owner = resolveOwner(user.id);
+              const active = ownerFilter === user.id;
+              return (
+                <button
+                  key={user.id}
+                  type="button"
+                  title={owner.name}
+                  onClick={() => setOwnerFilter(active ? "all" : user.id)}
+                  className={cn(
+                    "h-7 w-7 rounded-full text-white text-[10px] font-semibold transition-transform",
+                    active && "ring-2 ring-offset-1 ring-offset-background ring-primary scale-105",
+                  )}
+                  style={{ backgroundColor: owner.color }}
+                  data-testid={`filter-owner-avatar-${user.id}`}
+                >
+                  {owner.initials}
+                </button>
+              );
+            })}
+          </div>
+
+          {toolbarDivider}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={toolBtn()} data-testid="view-switcher-leads">
+                {(() => {
+                  const current = VIEW_OPTIONS.find((v) => v.id === viewMode) || VIEW_OPTIONS[0];
+                  const Icon = current.icon;
+                  return (
+                    <>
+                      <Icon className="h-3.5 w-3.5" />
+                      {current.label}
+                      <ChevronDown className="h-3 w-3 opacity-60" />
+                    </>
+                  );
+                })()}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              {VIEW_OPTIONS.map((view) => (
+                <DropdownMenuItem
+                  key={view.id}
+                  onClick={() => setViewModePersist(view.id)}
+                  className="gap-2"
+                  data-testid={`view-leads-${view.id}`}
+                >
+                  <view.icon className="h-4 w-4" />
+                  {view.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className={toolBtn(activeFilterCount > 0)}
+                data-testid="button-filter"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Filter
+                {activeFilterCount > 0 && (
+                  <span className="h-4 min-w-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            </PopoverTrigger>
           <PopoverContent align="start" className="w-[520px] space-y-2 p-3">
             {filterRules.length === 0 ? (
               <p className="text-xs text-muted-foreground px-1">No filters applied.</p>
@@ -1480,7 +1662,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
                     rule.field === "industry";
                   return (
                   <div key={rule.id} className="flex items-center gap-1.5" data-testid={`filter-rule-${idx}`}>
-                    <span className="text-xs text-[#676879] w-9 shrink-0">{idx === 0 ? "Where" : "and"}</span>
+                    <span className="text-xs text-muted-foreground w-9 shrink-0">{idx === 0 ? "Where" : "and"}</span>
                     <Select value={rule.field} onValueChange={(v) => updateFilterRule(rule.id, { field: v as LeadFilterField })}>
                       <SelectTrigger className="h-8 w-[100px] text-xs shrink-0" data-testid={`filter-rule-field-${idx}`}>
                   <SelectValue />
@@ -1543,7 +1725,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             <Button
               variant="ghost"
               size="sm"
-              className="text-[#0073ea] hover:text-[#0073ea] hover:bg-[#cce5ff]/40 gap-1 h-7 px-1.5"
+              className="text-primary hover:text-primary hover:bg-primary/10 gap-1 h-7 px-1.5"
               onClick={addFilterRule}
               data-testid="button-new-filter"
             >
@@ -1620,7 +1802,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
               data-testid="button-group"
             >
                 <Layers className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{groupByLabel}</span>
+                {groupByLabel}
                 <ChevronDown className="h-3 w-3 opacity-60" />
             </button>
           </DropdownMenuTrigger>
@@ -1666,23 +1848,21 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
           <>
             <button
               type="button"
-              className={toolBtn()}
+              className={iconBtn()}
               title="Expand all groups"
               onClick={() => setExpandAllSignal((n) => n + 1)}
               data-testid="button-expand-all-groups"
             >
               <ChevronsUpDown className="h-3.5 w-3.5" />
-              <span className="hidden lg:inline">Expand</span>
             </button>
             <button
               type="button"
-              className={toolBtn()}
+              className={iconBtn()}
               title="Collapse all groups"
               onClick={() => setCollapseAllSignal((n) => n + 1)}
               data-testid="button-collapse-all-groups"
             >
               <ChevronsDownUp className="h-3.5 w-3.5" />
-              <span className="hidden lg:inline">Collapse</span>
             </button>
           </>
         )}
@@ -1702,9 +1882,11 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             data-testid="button-pin-company"
           >
             <Pin className="h-3.5 w-3.5" />
-            <span className="hidden lg:inline">Pin</span>
+            Pin
           </button>
         )}
+
+        {toolbarDivider}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -1715,46 +1897,17 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
               <Plus className="h-3.5 w-3.5" />
               Columns
               {hiddenAddableCount > 0 && (
-                <span className="h-4 min-w-4 px-1 rounded-full bg-[#0073ea] text-white text-[10px] flex items-center justify-center">
+                <span className="h-4 min-w-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
                   {hiddenAddableCount}
                 </span>
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56 max-h-80 overflow-y-auto">
-            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Standard columns</div>
-            {LEAD_TABLE_COLUMNS.map((col) => (
-              <DropdownMenuCheckboxItem
-                key={col.id}
-                checked={isColVisible(col.id)}
-                onCheckedChange={(checked) => setColVisible(col.id, checked === true)}
-                onSelect={(e) => e.preventDefault()}
-                data-testid={`add-column-${col.id}`}
-              >
-                {col.label}
-              </DropdownMenuCheckboxItem>
-            ))}
-            {customFields.length > 0 && (
-              <>
-                <DropdownMenuSeparator />
-                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Custom fields</div>
-                {customFields.map((f) => {
-                  const id = `custom_${f.fieldName}`;
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={id}
-                      checked={isColVisible(id)}
-                      onCheckedChange={(checked) => setColVisible(id, checked === true)}
-                      onSelect={(e) => e.preventDefault()}
-                      data-testid={`add-column-${id}`}
-                    >
-                      {f.fieldLabel}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
-              </>
-            )}
-            <DropdownMenuSeparator />
+          <DropdownMenuContent
+            align="start"
+            className="w-72 max-h-[min(75vh,560px)] overflow-y-auto"
+          >
+            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Add column</div>
             <DropdownMenuItem
               onClick={() => setAddColumnOpen(true)}
               data-testid="button-add-column-type"
@@ -1778,36 +1931,62 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             <DropdownMenuItem onClick={() => setLabelEditor("source")} data-testid="button-edit-source-labels-menu">
               Edit source labels…
             </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className={toolBtn()} data-testid="view-switcher-leads">
-              {(() => {
-                const current = VIEW_OPTIONS.find((v) => v.id === viewMode) || VIEW_OPTIONS[0];
-                const Icon = current.icon;
-                return (
-                  <>
-                    <Icon className="h-3.5 w-3.5" />
-                    {current.label}
-                    <ChevronDown className="h-3 w-3 opacity-60" />
-                  </>
-                );
-              })()}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-48">
-            {VIEW_OPTIONS.map((view) => (
-              <DropdownMenuItem
-                key={view.id}
-                onClick={() => setViewModePersist(view.id)}
-                className="gap-2"
-                data-testid={`view-leads-${view.id}`}
+            <DropdownMenuSeparator />
+            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+              Columns · use arrows to reorder headers
+            </div>
+            {columnsMenuItems.map((col, idx) => (
+              <div
+                key={col.id}
+                className="flex items-center gap-0.5 px-1.5 py-0.5 hover:bg-accent/60 rounded-sm"
+                data-testid={`column-menu-row-${col.id}`}
               >
-                <view.icon className="h-4 w-4" />
-                {view.label}
-              </DropdownMenuItem>
+                <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
+                <button
+                  type="button"
+                  className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-muted disabled:opacity-30"
+                  disabled={idx === 0}
+                  title="Move column left / earlier"
+                  aria-label={`Move ${col.label} earlier`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    moveColumnInMenu(col.id, -1);
+                  }}
+                  data-testid={`column-move-up-${col.id}`}
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-muted disabled:opacity-30"
+                  disabled={idx >= columnsMenuItems.length - 1}
+                  title="Move column right / later"
+                  aria-label={`Move ${col.label} later`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    moveColumnInMenu(col.id, 1);
+                  }}
+                  data-testid={`column-move-down-${col.id}`}
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+                <label className="flex flex-1 items-center gap-2 min-w-0 cursor-pointer px-1 py-1 text-sm">
+                  <Checkbox
+                    checked={isColVisible(col.id)}
+                    onCheckedChange={(checked) => setColVisible(col.id, checked === true)}
+                    data-testid={`add-column-${col.id}`}
+                  />
+                  <span className="truncate">
+                    {col.label}
+                    {col.kind === "custom" ? (
+                      <span className="text-[10px] text-muted-foreground ml-1">custom</span>
+                    ) : null}
+                  </span>
+                </label>
+              </div>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -1816,7 +1995,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
           <button
             type="button"
             onClick={cycleDensity}
-            className={cn(toolBtn(), "px-2")}
+            className={iconBtn()}
             title={`Density: ${density}`}
             aria-label={`Table density ${density}`}
             data-testid="button-density"
@@ -1824,30 +2003,76 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             {density === "compact" ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
           </button>
         )}
+        </div>
 
-        <div className="flex-1" />
+        <div className="flex items-center gap-0.5 shrink-0 ml-auto pl-1.5">
+          {toolbarDivider}
+          <SavedViewsDropdown
+            entityType="lead"
+            currentFilters={currentFilters}
+            currentSorts={currentSorts}
+            columns={savedViewColumns}
+            onApplyView={applySavedView}
+            triggerClassName="border-transparent bg-transparent text-foreground hover:bg-muted shadow-none h-8 px-2.5 rounded-md"
+          />
 
-        <button type="button" onClick={exportToCSV} className={toolBtn()} data-testid="button-export-leads">
-          <Download className="h-3.5 w-3.5" />
-          Export
-        </button>
-        <button type="button" className={toolBtn()} onClick={() => setPasteOpen(true)} data-testid="button-paste-leads">
-          <ClipboardPaste className="h-3.5 w-3.5" />
-          Paste
-        </button>
-        <button type="button" className={toolBtn()} onClick={() => setImportOpen(true)} data-testid="button-import-leads">
-          <Upload className="h-3.5 w-3.5" />
-          Import
-        </button>
-        <ImportModal
-          isOpen={importOpen}
-          onClose={() => setImportOpen(false)}
-          entityName="Leads"
-          templateHeaders={["firstName","lastName","email","phone","company","title","source","status","rating","industry","website","description"]}
-          exampleRow={{ firstName:"Jane",lastName:"Smith",email:"jane@acme.com",phone:"+44 7700 123456",company:"Acme Ltd",title:"VP Sales",source:"Website",status:"new",rating:"hot",industry:"Technology",website:"https://acme.com",description:"Inbound enquiry via contact form" }}
-          currentCount={leads.length}
-          onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
-        />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={iconBtn(formatPanelOpen)}
+                title="More actions"
+                aria-label="More actions"
+                data-testid="button-leads-more"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              {viewMode === "table" && (
+                <DropdownMenuItem
+                  className="gap-2"
+                  onSelect={() => setFormatPanelOpen(true)}
+                  data-testid="button-conditional-formatting"
+                >
+                  <Paintbrush className="h-3.5 w-3.5" />
+                  Format
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem className="gap-2" onSelect={exportToCSV} data-testid="button-export-leads">
+                <Download className="h-3.5 w-3.5" />
+                Export CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2"
+                onSelect={downloadImportTemplate}
+                data-testid="button-download-import-template"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Download import template
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="gap-2" onSelect={() => setPasteOpen(true)} data-testid="button-paste-leads">
+                <ClipboardPaste className="h-3.5 w-3.5" />
+                Paste
+              </DropdownMenuItem>
+              <DropdownMenuItem className="gap-2" onSelect={() => setImportOpen(true)} data-testid="button-import-leads">
+                <Upload className="h-3.5 w-3.5" />
+                Import
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <ImportModal
+            isOpen={importOpen}
+            onClose={() => setImportOpen(false)}
+            entityName="Leads"
+            templateHeaders={[...LEAD_IMPORT_HEADERS]}
+            exampleRow={{ ...LEAD_IMPORT_EXAMPLE }}
+            currentCount={leads.length}
+            onImport={async (rows, mode) => { await importMutation.mutateAsync({ rows, mode }); }}
+          />
+        </div>
       </div>
 
       <div data-testid="leads-table">
@@ -1860,6 +2085,9 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             gridLines
             density={density}
             reorderable
+            hideFormatToolbar={true}
+            formatPanelOpen={formatPanelOpen}
+            onFormatPanelOpenChange={setFormatPanelOpen}
             onRowReorder={persistRowOrder}
             onColumnReorder={handleColumnReorder}
             expandAllSignal={expandAllSignal}
@@ -1891,7 +2119,6 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
                 });
                 queryClient.invalidateQueries({ queryKey: ["/api/crm/attachments?entityType=lead"] });
                 toast({ title: `${files.length} file(s) attached` });
-                openLeadExtras(lead, "files");
               } catch {
                 toast({
                   title: "Upload failed",
@@ -1920,7 +2147,11 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
               }
               openCreateForm();
             }}
-            onRowClick={(lead) => {
+            onRowDoubleClick={(lead) => {
+              setExtrasTab("comments");
+              setViewingLead(lead);
+            }}
+            onOpenItem={(lead) => {
               setExtrasTab("comments");
               setViewingLead(lead);
             }}
@@ -1938,11 +2169,10 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             }}
             searchHighlightTerm={effectiveSearch}
             columnWidthStorageKey="jiganto-crm-leads-col-widths"
-            pagination={
-              groupBy === "none"
-                ? { defaultPageSize: 25, resetKey: `${effectiveSearch}|${JSON.stringify(filterRules)}|${ownerFilter}|${JSON.stringify(sortRules)}` }
-                : false
-            }
+            pagination={{
+              defaultPageSize: 25,
+              resetKey: `${effectiveSearch}|${JSON.stringify(filterRules)}|${ownerFilter}|${JSON.stringify(sortRules)}|${groupBy}`,
+            }}
             totalCount={leads.length}
             className="border rounded-xl border-border/60"
             alwaysShowRowActions
@@ -1994,7 +2224,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
                     variant="ghost"
                       size="sm"
                     onClick={(e) => { e.stopPropagation(); handleConvert(lead); }}
-                    className="text-[#0073ea] hover:text-[#0060b9] hover:bg-[#cce5ff]/40 h-7 px-2 shrink-0"
+                    className="text-primary hover:text-primary hover:bg-primary/10 h-7 px-2 shrink-0"
                     data-testid={`button-convert-lead-${lead.id}`}
                     >
                     <ArrowUpRight className="h-3.5 w-3.5 mr-1" />
@@ -2307,7 +2537,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
       >
           {selectedLead && (
             <div className="space-y-4 py-4">
-              <div className="p-3 bg-[#f5f6f8] border border-[#d0d4e4] rounded-md flex items-center gap-3">
+              <div className="p-3 bg-muted border border-border rounded-md flex items-center gap-3">
                 <div
                   className="h-10 w-10 rounded-md flex items-center justify-center text-white font-bold text-sm shrink-0"
                   style={{ backgroundColor: getColorForName(selectedLead.company || selectedLead.firstName) }}

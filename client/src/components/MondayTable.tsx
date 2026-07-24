@@ -27,6 +27,7 @@ import {
   Archive,
   Trash2,
   Edit,
+  Eye,
   Paintbrush,
   Paperclip,
   ListTodo,
@@ -115,6 +116,8 @@ export interface MondayTableProps<T extends { id: number | string }> {
   data: T[];
   groups?: GroupDef<T>[];
   onRowClick?: (row: T) => void;
+  /** Prefer this for detail panels — cell edits won't accidentally open them. */
+  onRowDoubleClick?: (row: T) => void;
   onRowSelect?: (selectedIds: (number | string)[]) => void;
   onCellEdit?: (rowId: number | string, columnId: string, value: unknown) => void;
   onAddItem?: (groupId?: string) => void;
@@ -122,6 +125,8 @@ export interface MondayTableProps<T extends { id: number | string }> {
   onDuplicateItem?: (id: number | string) => void;
   onArchiveItem?: (id: number | string) => void;
   onEditItem?: (row: T) => void;
+  /** Opens item detail from the row ⋮ menu (does not fire on cell edit). */
+  onOpenItem?: (row: T) => void;
   renderRowActions?: (row: T) => React.ReactNode;
   renderBulkActions?: (selectedIds: (number | string)[]) => React.ReactNode;
   alwaysShowRowActions?: boolean;
@@ -140,6 +145,11 @@ export interface MondayTableProps<T extends { id: number | string }> {
   conditionalFormatRules?: ConditionalFormatRule[];
   defaultConditionalFormatRules?: ConditionalFormatRule[];
   onConditionalFormatRulesChange?: (rules: ConditionalFormatRule[]) => void;
+  /** Hide the built-in Format toolbar strip (parent can host the Format control). */
+  hideFormatToolbar?: boolean;
+  /** Controlled Format panel open state (optional). */
+  formatPanelOpen?: boolean;
+  onFormatPanelOpenChange?: (open: boolean) => void;
   /** Client-side pagination (default: enabled). Pass false to show all rows. */
   pagination?: boolean | { defaultPageSize?: number; resetKey?: string | number };
   /** Highlights matching text in read-only text cells (case-insensitive). */
@@ -186,6 +196,20 @@ const columnTypeIcons: Record<ColumnType, typeof Text> = {
   checklist: ListTodo,
   formula: Hash,
 };
+
+/** Theme-aware Monday table chrome (light + dark). Prefer tokens over light-only hex. */
+const mtBorder = "border-border";
+const mtHeaderBg = "bg-muted";
+const mtHeaderSticky = "sticky z-[25] bg-muted";
+const mtSummaryBg = "bg-muted border-t border-border text-[12px] text-muted-foreground";
+/** Sticky data cells inherit the row background — never paint their own grey fill. */
+const mtStickyCell = "sticky z-[16] bg-inherit";
+const mtGridLine = "border-r border-border/80";
+const mtRowHover = "hover:bg-muted/80";
+const mtRowSelected = "bg-primary/10 dark:bg-primary/20";
+const mtFocusCell = "bg-primary/15 dark:bg-primary/20 border-b-2 border-b-primary";
+const CHROME_COL_PX = 48;
+const MIN_COL_WIDTH_PX = 72;
 
 export const defaultStatusColors: Record<string, string> = {
   not_started: "bg-[#c4c4c4] text-white",
@@ -255,23 +279,35 @@ function StatusCell({
   onChange?: (value: string) => void;
   onEditLabels?: () => void;
 }) {
+  const isEmpty = value == null || String(value).trim() === "";
+
   const getColor = () => {
+    if (isEmpty) return "bg-transparent text-muted-foreground/50 hover:bg-muted/60";
     if (options) {
-      const option = options.find(o => o.value === value);
-      return option?.color || defaultStatusColors[value] || defaultStatusColors.not_started;
+      const raw = String(value);
+      const option =
+        options.find((o) => o.value === raw) ||
+        options.find((o) => o.value.toLowerCase() === raw.toLowerCase()) ||
+        options.find((o) => o.label.toLowerCase() === raw.toLowerCase());
+      return option?.color || defaultStatusColors[raw] || defaultStatusColors[raw.toLowerCase()] || defaultStatusColors.not_started;
     }
-    return defaultStatusColors[value] || defaultStatusColors.not_started;
+    return defaultStatusColors[value] || defaultStatusColors[String(value).toLowerCase()] || defaultStatusColors.not_started;
   };
 
   const getLabel = () => {
+    if (isEmpty) return "";
     if (options) {
-      const option = options.find(o => o.value === value);
-      return option?.label || value?.replace(/_/g, " ");
+      const raw = String(value);
+      const option =
+        options.find((o) => o.value === raw) ||
+        options.find((o) => o.value.toLowerCase() === raw.toLowerCase()) ||
+        options.find((o) => o.label.toLowerCase() === raw.toLowerCase());
+      return option?.label || raw.replace(/_/g, " ");
     }
-    return value?.replace(/_/g, " ") || "—";
+    return String(value).replace(/_/g, " ") || "";
   };
 
-  // monday.com: status fills the cell as a saturated rectangle (not a small pill)
+  // monday.com: status fills the cell when set; empty stays clear (no grey block)
   const mondayCellClass = cn(
     "w-full min-h-[32px] px-2 flex items-center justify-center",
     "rounded-[4px] text-[13px] font-medium capitalize text-center leading-tight",
@@ -291,6 +327,15 @@ function StatusCell({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[180px] p-1">
+        <DropdownMenuItem
+          onClick={() => onChange("")}
+          className="p-1 focus:bg-transparent"
+        >
+          <span className="w-full min-h-[28px] px-2 rounded-[4px] text-[13px] font-medium flex items-center justify-center text-muted-foreground hover:bg-muted">
+            Clear
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         {(options || Object.keys(defaultStatusColors).slice(0, 6)).map((opt) => {
           const optValue = typeof opt === "string" ? opt : opt.value;
           const optLabel = typeof opt === "string" ? opt.replace(/_/g, " ") : opt.label;
@@ -854,7 +899,7 @@ function CellRenderer<T>({
   if (column.type === "formula") {
     const computed = column.formula ? column.formula(row) : value;
     return (
-      <span className="text-[13px] tabular-nums text-[#323338]">
+      <span className="text-[13px] tabular-nums text-foreground">
         {computed == null || computed === "" ? "—" : String(computed)}
       </span>
     );
@@ -971,6 +1016,7 @@ export function MondayTable<T extends { id: number | string }>({
   data,
   groups,
   onRowClick,
+  onRowDoubleClick,
   onRowSelect,
   onCellEdit,
   onAddItem,
@@ -978,6 +1024,7 @@ export function MondayTable<T extends { id: number | string }>({
   onDuplicateItem,
   onArchiveItem,
   onEditItem,
+  onOpenItem,
   renderRowActions,
   renderBulkActions,
   alwaysShowRowActions = false,
@@ -995,6 +1042,9 @@ export function MondayTable<T extends { id: number | string }>({
   conditionalFormatRules: controlledRules,
   defaultConditionalFormatRules,
   onConditionalFormatRulesChange,
+  hideFormatToolbar = false,
+  formatPanelOpen: controlledFormatPanelOpen,
+  onFormatPanelOpenChange,
   pagination = true,
   searchHighlightTerm,
   density = "comfortable",
@@ -1016,7 +1066,16 @@ export function MondayTable<T extends { id: number | string }>({
     if (columnWidthStorageKey) {
       try {
         const stored = localStorage.getItem(columnWidthStorageKey);
-        if (stored) return JSON.parse(stored);
+        if (stored) {
+          const parsed = JSON.parse(stored) as Record<string, number>;
+          const clamped: Record<string, number> = {};
+          for (const [k, v] of Object.entries(parsed)) {
+            if (typeof v === "number" && Number.isFinite(v)) {
+              clamped[k] = Math.max(MIN_COL_WIDTH_PX, Math.min(v, 640));
+            }
+          }
+          return clamped;
+        }
       } catch {}
     }
     return {};
@@ -1026,7 +1085,12 @@ export function MondayTable<T extends { id: number | string }>({
   const [dragOverHeaderId, setDragOverHeaderId] = useState<string | null>(null);
   const [internalColumnOrder, setInternalColumnOrder] = useState<string[]>([]);
   const [internalCfRules, setInternalCfRules] = useState<ConditionalFormatRule[]>(defaultConditionalFormatRules || []);
-  const [cfPanelOpen, setCfPanelOpen] = useState(false);
+  const [internalCfPanelOpen, setInternalCfPanelOpen] = useState(false);
+  const cfPanelOpen = controlledFormatPanelOpen ?? internalCfPanelOpen;
+  const setCfPanelOpen = (open: boolean) => {
+    if (controlledFormatPanelOpen === undefined) setInternalCfPanelOpen(open);
+    onFormatPanelOpenChange?.(open);
+  };
   const [focusedCell, setFocusedCell] = useState<{ rowId: number | string; columnId: string } | null>(null);
   const [editingCell, setEditingCell] = useState<{ rowId: number | string; columnId: string } | null>(null);
   const focusedCellRef = useRef(focusedCell);
@@ -1074,7 +1138,9 @@ export function MondayTable<T extends { id: number | string }>({
       if (!hasExisting) return initial;
       const merged = { ...initial };
       for (const key of Object.keys(prev)) {
-        if (prev[key]) merged[key] = prev[key];
+        if (typeof prev[key] === "number" && Number.isFinite(prev[key])) {
+          merged[key] = Math.max(MIN_COL_WIDTH_PX, Math.min(prev[key], 640));
+        }
       }
       return merged;
     });
@@ -1086,13 +1152,15 @@ export function MondayTable<T extends { id: number | string }>({
     rowActionsWidth || (alwaysShowRowActions ? "minmax(132px, max-content)" : "40px");
   const rowActionsMinPx = alwaysShowRowActions ? 132 : 40;
 
+  const showRowChrome = reorderable || selectable;
+  const chromeColWidth = showRowChrome ? `${CHROME_COL_PX}px` : null;
+
   const gridTemplateColumns = useMemo(() => {
     const parts: string[] = [];
-    if (reorderable) parts.push("28px");
-    if (selectable) parts.push("40px");
+    if (chromeColWidth) parts.push(chromeColWidth);
     visibleColumns.forEach((col, idx) => {
       if (hasResizedWidths && columnWidths[col.id]) {
-        parts.push(`${columnWidths[col.id]}px`);
+        parts.push(`${Math.max(MIN_COL_WIDTH_PX, columnWidths[col.id])}px`);
       } else if (col.width) {
         parts.push(col.width);
       } else if (idx === 0) {
@@ -1104,15 +1172,14 @@ export function MondayTable<T extends { id: number | string }>({
     if (renderRowActions) parts.push(resolvedRowActionsWidth);
     parts.push("40px");
     return parts.join(" ");
-  }, [visibleColumns, selectable, renderRowActions, columnWidths, hasResizedWidths, resolvedRowActionsWidth, reorderable]);
+  }, [visibleColumns, chromeColWidth, renderRowActions, columnWidths, hasResizedWidths, resolvedRowActionsWidth]);
 
   const totalMinWidth = useMemo(() => {
     let total = 0;
-    if (reorderable) total += 28;
-    if (selectable) total += 40;
+    if (showRowChrome) total += CHROME_COL_PX;
     visibleColumns.forEach((col, idx) => {
       if (hasResizedWidths && columnWidths[col.id]) {
-        total += columnWidths[col.id];
+        total += Math.max(MIN_COL_WIDTH_PX, columnWidths[col.id]);
       } else if (col.width) {
         const px = parseInt(col.width, 10);
         if (!isNaN(px) && col.width.includes("px")) {
@@ -1129,7 +1196,7 @@ export function MondayTable<T extends { id: number | string }>({
     if (renderRowActions) total += rowActionsMinPx;
     total += 40;
     return Math.max(total, 640);
-  }, [visibleColumns, selectable, renderRowActions, columnWidths, hasResizedWidths, rowActionsMinPx, reorderable]);
+  }, [visibleColumns, showRowChrome, renderRowActions, columnWidths, hasResizedWidths, rowActionsMinPx]);
 
   const handleResizeStart = useCallback((e: React.MouseEvent, columnId: string) => {
     e.preventDefault();
@@ -1145,7 +1212,7 @@ export function MondayTable<T extends { id: number | string }>({
     if (!tableContainerRef.current) return;
     const colIndex = visibleColumns.findIndex(c => c.id === columnId);
     if (colIndex < 0) return;
-    const cellIndex = colIndex + (selectable ? 1 : 0);
+    const cellIndex = colIndex + (showRowChrome ? 1 : 0);
     const rows = tableContainerRef.current.querySelectorAll('[style*="grid-template-columns"]');
     let maxWidth = 60;
     rows.forEach(row => {
@@ -1163,7 +1230,7 @@ export function MondayTable<T extends { id: number | string }>({
         if (contentWidth > maxWidth) maxWidth = contentWidth;
       }
     });
-    maxWidth = Math.min(maxWidth, 600);
+    maxWidth = Math.min(Math.max(maxWidth, MIN_COL_WIDTH_PX), 600);
     setColumnWidths(prev => {
       const next = { ...prev, [columnId]: maxWidth };
       if (columnWidthStorageKey) {
@@ -1172,14 +1239,14 @@ export function MondayTable<T extends { id: number | string }>({
       return next;
     });
     onColumnResize?.(columnId, maxWidth);
-  }, [visibleColumns, selectable, onColumnResize, columnWidthStorageKey]);
+  }, [visibleColumns, showRowChrome, onColumnResize, columnWidthStorageKey]);
 
   useEffect(() => {
     if (!resizingColumn) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       const diff = e.clientX - resizeStartX.current;
-      const newWidth = Math.max(60, resizeStartWidth.current + diff);
+      const newWidth = Math.max(MIN_COL_WIDTH_PX, resizeStartWidth.current + diff);
       setColumnWidths(prev => ({ ...prev, [resizingColumn]: newWidth }));
     };
 
@@ -1256,19 +1323,16 @@ export function MondayTable<T extends { id: number | string }>({
 
   const stickyLeftById = useMemo(() => {
     const map = new Map<string, number>();
-    let left = 0;
-    if (reorderable) left += 28;
-    if (selectable) left += 40;
+    let left = showRowChrome ? CHROME_COL_PX : 0;
     visibleColumns.forEach((col, idx) => {
       if (!col.sticky) return;
       map.set(col.id, left);
       left += resolveColWidthPx(col, idx);
     });
     return map;
-  }, [visibleColumns, selectable, reorderable, resolveColWidthPx]);
+  }, [visibleColumns, showRowChrome, resolveColWidthPx]);
 
   const hasStickyColumns = stickyLeftById.size > 0;
-  const checkboxStickyLeft = reorderable ? 28 : 0;
 
   const allItems = useMemo(() => {
     if (groups) {
@@ -1296,8 +1360,12 @@ export function MondayTable<T extends { id: number | string }>({
   const isSomeSelected = selectedIds.size > 0 && selectedIds.size < allItems.length;
 
   const formatMap = useMemo(
-    () => evaluateConditionalFormatting(allItems, columns, cfRules),
-    [allItems, columns, cfRules]
+    () => evaluateConditionalFormatting(
+      paginationEnabled ? tablePagination.paginatedItems : allItems,
+      columns,
+      cfRules,
+    ),
+    [paginationEnabled, tablePagination.paginatedItems, allItems, columns, cfRules]
   );
 
   const flatRowIds = useMemo(() => {
@@ -1526,15 +1594,14 @@ export function MondayTable<T extends { id: number | string }>({
     return (
       <div
         key={`summary-${keySuffix}`}
-        className={cn("grid items-center bg-[#f5f6f8] border-t border-[#d0d4e4] text-[12px] text-[#676879]", rowMinHeight)}
+        className={cn("grid items-center text-[12px] text-muted-foreground", mtSummaryBg, rowMinHeight)}
         style={{ gridTemplateColumns }}
         data-testid={`table-summary-${keySuffix}`}
       >
-        {reorderable && <div />}
-        {selectable && (
+        {showRowChrome && (
           <div
-            className={cn(hasStickyColumns && "sticky z-[15] bg-[#f5f6f8]")}
-            style={hasStickyColumns ? { left: checkboxStickyLeft } : undefined}
+            className={cn(hasStickyColumns && mtHeaderSticky)}
+            style={hasStickyColumns ? { left: 0 } : undefined}
           />
         )}
         {visibleColumns.map((column) => {
@@ -1551,7 +1618,7 @@ export function MondayTable<T extends { id: number | string }>({
               key={column.id}
               className={cn(
                 "px-3 py-1 tabular-nums truncate",
-                left != null && "sticky z-[15] bg-[#f5f6f8] shadow-[2px_0_4px_rgba(0,0,0,0.04)]",
+                left != null && `${mtHeaderSticky} shadow-[2px_0_4px_rgba(0,0,0,0.04)]`,
               )}
               style={left != null ? { left } : undefined}
             >
@@ -1612,17 +1679,21 @@ export function MondayTable<T extends { id: number | string }>({
       <div
         key={item.id}
         className={cn(
-          "grid items-center transition-colors group",
+          "grid items-center transition-colors group bg-card",
           rowMinHeight,
-          "hover:bg-[#f5f6f8]",
-          isSelected && "bg-[#cce5ff]/35",
-          onRowClick && "cursor-pointer",
-          "border-b border-[#d0d4e4]/70",
+          mtRowHover,
+          isSelected && mtRowSelected,
+          (onRowClick || onRowDoubleClick) && "cursor-pointer",
+          "border-b border-border/70",
           dragRowId === rowId && "opacity-60",
           rowStyle?.className
         )}
         style={{ gridTemplateColumns, ...rowStyle?.inlineStyle }}
         onClick={() => onRowClick?.(item)}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onRowDoubleClick?.(item);
+        }}
         onDragOver={onRowFilesDrop || onRowReorder ? (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -1643,44 +1714,45 @@ export function MondayTable<T extends { id: number | string }>({
         }}
         data-testid={`table-row-${item.id}`}
       >
-        {reorderable && (
+        {showRowChrome && (
           <div
             className={cn(
-              "flex items-center justify-center text-[#c5c7d0] hover:text-[#676879] cursor-grab active:cursor-grabbing",
-              hasStickyColumns && "sticky z-[16] bg-white group-hover:bg-[#f5f6f8]",
-              isSelected && hasStickyColumns && "bg-[#cce5ff]/35",
+              "relative flex items-center justify-center gap-0 min-w-0 h-full overflow-hidden",
+              hasStickyColumns && mtStickyCell,
             )}
             style={hasStickyColumns ? { left: 0 } : undefined}
-            draggable
-            onDragStart={(e) => {
-              e.stopPropagation();
-              setDragRowId(rowId);
-              e.dataTransfer.effectAllowed = "move";
-            }}
-            onDragEnd={() => setDragRowId(null)}
             onClick={(e) => e.stopPropagation()}
-            title="Drag to reorder"
-            data-testid={`row-drag-${item.id}`}
+            onDoubleClick={(e) => e.stopPropagation()}
           >
-            <GripVertical className="h-3.5 w-3.5" />
-          </div>
-        )}
-        {selectable && (
-          <div className={cn(
-            "flex items-center justify-center px-2",
-            gridLines && "border-r border-[#d0d4e4]/80",
-            hasStickyColumns && "sticky z-[16] bg-white group-hover:bg-[#f5f6f8]",
-            isSelected && hasStickyColumns && "bg-[#cce5ff]/35",
-          )}
-            style={hasStickyColumns ? { left: checkboxStickyLeft } : undefined}
-          >
-            <Checkbox
-              checked={isSelected}
-              onCheckedChange={(checked) => handleSelectRow(item.id, checked as boolean)}
-              onClick={(e) => e.stopPropagation()}
-              className="opacity-0 group-hover:opacity-100 data-[state=checked]:opacity-100 transition-opacity"
-              data-testid={`checkbox-row-${item.id}`}
-            />
+            {reorderable && (
+              <div
+                className="absolute left-0 inset-y-0 w-4 flex items-center justify-center text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing"
+                draggable
+                onDragStart={(e) => {
+                  e.stopPropagation();
+                  setDragRowId(rowId);
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragEnd={() => setDragRowId(null)}
+                title="Drag to reorder"
+                data-testid={`row-drag-${item.id}`}
+              >
+                <GripVertical className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            )}
+            {selectable && (
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={(checked) => handleSelectRow(item.id, checked as boolean)}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  "h-3.5 w-3.5 rounded-[3px] border-muted-foreground/50 bg-transparent shadow-none",
+                  "opacity-0 group-hover:opacity-100 data-[state=checked]:opacity-100 transition-opacity",
+                  "data-[state=checked]:bg-primary data-[state=checked]:border-primary",
+                )}
+                data-testid={`checkbox-row-${item.id}`}
+              />
+            )}
           </div>
         )}
         
@@ -1709,21 +1781,25 @@ export function MondayTable<T extends { id: number | string }>({
                   ? "px-1 py-1"
                   : "px-3 py-2",
                 colIdx === 0 && "font-medium",
-                gridLines && !isLastCol && "border-r border-[#d0d4e4]/80",
-                isCellFocused && !isCellEditing && "bg-[#cce5ff]/40 border-b-2 border-b-[#0073ea]",
-                isCellEditing && "bg-[#cce5ff]/30",
-                stickyLeft != null && "sticky z-[16] bg-white group-hover:bg-[#f5f6f8] shadow-[2px_0_4px_rgba(0,0,0,0.04)]",
-                isSelected && stickyLeft != null && "bg-[#cce5ff]/35",
+                gridLines && !isLastCol && mtGridLine,
+                isCellFocused && !isCellEditing && mtFocusCell,
+                isCellEditing && "bg-primary/10 dark:bg-primary/15",
+                stickyLeft != null && `${mtStickyCell} shadow-[2px_0_4px_rgba(0,0,0,0.06)]`,
                 cellStyle?.className
               )}
               style={{
                 ...(cellStyle?.inlineStyle || {}),
                 ...(stickyLeft != null ? { left: stickyLeft } : {}),
               }}
-              onClick={() => {
+              onClick={(e) => {
+                // Keep cell edits / focus from bubbling to row click (detail panel).
+                e.stopPropagation();
                 if (isEditable) {
                   handleCellStartEdit(item.id, column.id);
                 }
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
               }}
               onFocus={() => {
                 if (isEditable) {
@@ -1758,15 +1834,23 @@ export function MondayTable<T extends { id: number | string }>({
         })}
 
         {renderRowActions && (
-          <div className={cn(
-            "px-1.5 flex items-center justify-end gap-0.5 overflow-visible shrink-0 transition-opacity",
-            alwaysShowRowActions ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-          )}>
+          <div
+            className={cn(
+              "px-1.5 flex items-center justify-end gap-0.5 overflow-visible shrink-0 transition-opacity",
+              alwaysShowRowActions ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            )}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
             {renderRowActions(item)}
           </div>
         )}
 
-        <div className="flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <div
+          className="flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+        >
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`row-menu-${item.id}`}>
@@ -1774,6 +1858,11 @@ export function MondayTable<T extends { id: number | string }>({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {onOpenItem && (
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onOpenItem(item); }}>
+                  <Eye className="h-4 w-4 mr-2" /> Open
+                </DropdownMenuItem>
+              )}
               {onEditItem && (
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEditItem(item); }}>
                   <Edit className="h-4 w-4 mr-2" /> Edit
@@ -1789,7 +1878,7 @@ export function MondayTable<T extends { id: number | string }>({
                   <Archive className="h-4 w-4 mr-2" /> Archive
                 </DropdownMenuItem>
               )}
-              {(onEditItem || onDuplicateItem || onArchiveItem) && onDeleteItems && <DropdownMenuSeparator />}
+              {(onOpenItem || onEditItem || onDuplicateItem || onArchiveItem) && onDeleteItems && <DropdownMenuSeparator />}
               {onDeleteItems && (
                 <DropdownMenuItem 
                   className="text-destructive"
@@ -1824,8 +1913,8 @@ export function MondayTable<T extends { id: number | string }>({
           onClick={() => toggleGroup(group.id)}
           className={cn(
             "flex items-center gap-2 w-full px-2 py-1.5 font-bold text-sm tracking-tight",
-            "hover:bg-black/[0.02] transition-colors text-left",
-            !isRawColor && (group.color || "text-[#323338]")
+            "hover:bg-muted/50 dark:hover:bg-white/[0.04] transition-colors text-left",
+            !isRawColor && (group.color || "text-foreground")
           )}
           style={
             isRawColor
@@ -1842,12 +1931,12 @@ export function MondayTable<T extends { id: number | string }>({
             className="h-6 w-1.5 rounded-full shrink-0"
             style={isRawColor ? { backgroundColor: colorValue } : undefined}
           />
-          <span className={cn(!isRawColor && "text-[#323338]")}>{group.title}</span>
-          <span className="text-xs font-normal text-[#676879] ml-1">
-            {visibleItemIds ? pageItems.length : (group.count ?? group.items.length)}
+          <span className={cn(!isRawColor && "text-foreground")}>{group.title}</span>
+          <span className="text-xs font-normal text-muted-foreground ml-1">
+            {group.count ?? group.items.length}
           </span>
           {group.summary && (
-            <span className="text-[#676879] ml-auto text-xs font-normal">{group.summary}</span>
+            <span className="text-muted-foreground ml-auto text-xs font-normal">{group.summary}</span>
           )}
         </button>
         
@@ -1911,12 +2000,14 @@ export function MondayTable<T extends { id: number | string }>({
   }
 
   const activeCfRuleCount = cfRules.filter(r => r.enabled).length;
+  // When parent owns Format (toolbar), never render the in-table Format strip
+  const showInlineFormatToolbar = !hideFormatToolbar && onFormatPanelOpenChange == null;
 
   return (
-    <div className={cn("rounded-lg border border-[#d0d4e4] bg-white w-full max-w-full min-w-0 shadow-[0_4px_8px_rgba(0,0,0,0.04)]", className)}>
+    <div className={cn(`rounded-lg border ${mtBorder} bg-card w-full max-w-full min-w-0 shadow-[0_4px_8px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_8px_rgba(0,0,0,0.25)]`, className)}>
       {selectedIds.size > 0 ? (
-        <div className="flex items-center gap-3 px-4 py-2 bg-[#cce5ff]/50 border-b border-[#d0d4e4]">
-          <span className="text-sm font-medium text-[#323338]">{selectedIds.size} selected</span>
+        <div className={cn("flex items-center gap-3 px-4 py-2", "bg-primary/10 dark:bg-primary/20 border-b border-border")}>
+          <span className="text-sm font-medium text-foreground">{selectedIds.size} selected</span>
           {renderBulkActions && renderBulkActions(Array.from(selectedIds))}
           {onDeleteItems && (
             <Button 
@@ -1932,8 +2023,8 @@ export function MondayTable<T extends { id: number | string }>({
             Clear Selection
           </Button>
         </div>
-      ) : (
-        <div className="flex items-center justify-end px-2 py-1 border-b border-[#d0d4e4]/80">
+      ) : showInlineFormatToolbar ? (
+        <div className="flex items-center justify-end px-2 py-1 border-b border-border/80">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -1941,8 +2032,8 @@ export function MondayTable<T extends { id: number | string }>({
                 size="sm"
                 onClick={() => setCfPanelOpen(true)}
                 className={cn(
-                  "text-[#676879] hover:text-[#323338] hover:bg-[#f5f6f8]",
-                  activeCfRuleCount > 0 && "text-[#0073ea]",
+                  "text-muted-foreground hover:text-foreground hover:bg-muted",
+                  activeCfRuleCount > 0 && "text-primary",
                 )}
                 data-testid="button-conditional-formatting"
               >
@@ -1958,41 +2049,41 @@ export function MondayTable<T extends { id: number | string }>({
             <TooltipContent>Conditional Formatting</TooltipContent>
           </Tooltip>
         </div>
-      )}
+      ) : null}
 
       <div
-        className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)] overscroll-x-contain touch-pan-x [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#c5c7d0]"
+        className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)] overscroll-x-contain touch-pan-x [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30"
         ref={tableContainerRef}
       >
         <div style={{ minWidth: `${totalMinWidth}px` }}>
           <div
             className={cn(
-              "grid items-center bg-[#f5f6f8] text-[13px] font-medium text-[#676879] sticky top-0 z-20",
+              "grid items-center text-[13px] font-medium text-muted-foreground sticky top-0 z-20",
+              mtHeaderBg,
               headerMinHeight,
-              "border-b border-[#d0d4e4]",
+              "border-b border-border",
             )}
             style={{ gridTemplateColumns }}
           >
-            {reorderable && (
+            {showRowChrome && (
               <div
-                className={cn(hasStickyColumns && "sticky z-[25] bg-[#f5f6f8]")}
+                className={cn(
+                  "flex items-center justify-center min-w-0 overflow-hidden",
+                  hasStickyColumns && mtHeaderSticky,
+                )}
                 style={hasStickyColumns ? { left: 0 } : undefined}
-              />
-            )}
-            {selectable && (
-              <div className={cn(
-                "flex items-center justify-center px-2",
-                gridLines && "border-r border-[#d0d4e4]/80",
-                hasStickyColumns && "sticky z-[25] bg-[#f5f6f8]",
-              )}
-                style={hasStickyColumns ? { left: checkboxStickyLeft } : undefined}
               >
-                <Checkbox
-                  checked={isAllSelected}
-                  onCheckedChange={handleSelectAll}
-                  className={cn(!isAllSelected && !isSomeSelected && "opacity-50")}
-                  data-testid="checkbox-select-all"
-                />
+                {selectable ? (
+                  <Checkbox
+                    checked={isAllSelected}
+                    onCheckedChange={handleSelectAll}
+                    className={cn(
+                      "h-3.5 w-3.5 rounded-[3px] border-muted-foreground/50 bg-transparent shadow-none",
+                      !isAllSelected && !isSomeSelected && "opacity-40",
+                    )}
+                    data-testid="checkbox-select-all"
+                  />
+                ) : null}
               </div>
             )}
             
@@ -2008,10 +2099,10 @@ export function MondayTable<T extends { id: number | string }>({
                   key={column.id}
                   className={cn(
                     "px-3 py-2 flex items-center gap-1.5 relative select-none cursor-grab",
-                    gridLines && !isLastCol && "border-r border-[#d0d4e4]/80",
+                    gridLines && !isLastCol && mtGridLine,
                     isDragSource && "opacity-40",
-                    isDragOver && "bg-[#cce5ff]/60",
-                    stickyLeft != null && "sticky z-[25] bg-[#f5f6f8] shadow-[2px_0_4px_rgba(0,0,0,0.04)]",
+                    isDragOver && "bg-primary/20",
+                    stickyLeft != null && `${mtHeaderSticky} shadow-[2px_0_4px_rgba(0,0,0,0.04)]`,
                   )}
                   style={stickyLeft != null ? { left: stickyLeft } : undefined}
                   draggable
@@ -2058,16 +2149,16 @@ export function MondayTable<T extends { id: number | string }>({
                     {column.header}
                   </span>
                   {column.sticky && (
-                    <Pin className="h-3 w-3 text-[#0073ea] shrink-0" aria-label="Pinned" />
+                    <Pin className="h-3 w-3 text-primary shrink-0" aria-label="Pinned" />
                   )}
                   {isDragOver && (
-                    <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#0073ea] z-10" />
+                    <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary z-10" />
                   )}
                   <div
                     className={cn(
                       "absolute right-0 top-0 bottom-0 w-1 cursor-col-resize",
-                      "bg-transparent hover:bg-[#0073ea]/30 transition-colors",
-                      resizingColumn === column.id && "bg-[#0073ea]/50"
+                      "bg-transparent hover:bg-primary/30 transition-colors",
+                      resizingColumn === column.id && "bg-primary/50"
                     )}
                     onMouseDown={(e) => {
                       e.stopPropagation();
@@ -2105,7 +2196,7 @@ export function MondayTable<T extends { id: number | string }>({
               {onAddItem && (
                 <button
                   onClick={() => onAddItem()}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#676879] hover:text-[#0073ea] hover:bg-[#f5f6f8] transition-colors border-t border-[#d0d4e4]/80"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-muted-foreground hover:text-primary hover:bg-muted transition-colors border-t border-border/80"
                   data-testid="button-add-item"
                 >
                   <Plus className="h-4 w-4" />

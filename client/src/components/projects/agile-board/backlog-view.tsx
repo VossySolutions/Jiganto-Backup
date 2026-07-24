@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
-import { AGILE_PALETTE as C, priorityBg, priorityColor, statusBg, statusColor, tshirtBg, tshirtColor } from "./palette";
+import { useAgilePalette, priorityBg, priorityColor, statusBg, statusColor, tshirtBg, tshirtColor } from "./palette";
 import type { Epic, Sprint, Story, Workstream } from "./types";
 import { AddStoryForm } from "./story-form";
 import { AgileAvatar, AgileBadge, AgileBtn, AgileModal, AgileProgressBar, AgileSelect, ConfirmDelete } from "./ui-primitives";
@@ -24,6 +24,7 @@ export function BacklogView({ stories, epics, onSelectStory, setStories, activeS
   const sprintItems = stories.filter(s => s.sprint === activeSprint?.name);
 
   function handleBacklogDragEnd(result: DropResult) {
+  const C = useAgilePalette();
     if (!result.destination) return;
     if (result.source.droppableId !== "backlog-list" || result.destination.droppableId !== "sprint-drop") return;
     if (!activeSprint) return;
@@ -95,8 +96,8 @@ export function BacklogView({ stories, epics, onSelectStory, setStories, activeS
                             <div style={{ fontSize: 13, fontWeight: 600, color: C.grey800, lineHeight: 1.3 }}>{s.title.length > 85 ? s.title.slice(0, 85) + "…" : s.title}</div>
                           </div>
                           <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                            <AgileBadge label={s.priority} color={priorityBg(s.priority)} textColor={priorityColor(s.priority)} small />
-                            <span style={{ background: tshirtBg(s.tshirt), color: tshirtColor(s.tshirt), borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>{s.tshirt}</span>
+                            <AgileBadge label={s.priority} color={priorityBg(s.priority, C)} textColor={priorityColor(s.priority, C)} small />
+                            <span style={{ background: tshirtBg(s.tshirt, C), color: tshirtColor(s.tshirt, C), borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>{s.tshirt}</span>
                             {s.points && <span style={{ background: C.grey100, color: C.grey600, borderRadius: 4, padding: "1px 6px", fontSize: 10 }}>{s.points}pt</span>}
                             <AgileAvatar name={s.assignee} size={22} />
                             <AgileBtn label="✎" variant="ghost" small onClick={() => onSelectStory(s)} testId={`button-edit-${s.id}`} />
@@ -124,7 +125,7 @@ export function BacklogView({ stories, epics, onSelectStory, setStories, activeS
               <div
                 ref={provided.innerRef}
                 {...provided.droppableProps}
-                style={{ minHeight: 180, background: snapshot.isDraggingOver ? "#EFF6FF" : C.grey50, border: `2px dashed ${snapshot.isDraggingOver ? C.blue : C.grey300}`, borderRadius: 10, padding: 12, transition: "all 0.15s", marginBottom: 12 }}
+                style={{ minHeight: 180, background: snapshot.isDraggingOver ? C.blueLight : C.grey50, border: `2px dashed ${snapshot.isDraggingOver ? C.blue : C.grey300}`, borderRadius: 10, padding: 12, transition: "all 0.15s", marginBottom: 12 }}
               >
                 <div style={{ textAlign: "center", fontSize: 11, color: snapshot.isDraggingOver ? C.blue : C.grey300, fontWeight: 600, marginBottom: 10 }}>{snapshot.isDraggingOver ? "Drop to add →" : "⬅ Drag stories here"}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -132,7 +133,7 @@ export function BacklogView({ stories, epics, onSelectStory, setStories, activeS
                     <div key={s.id} style={{ background: C.white, border: `1px solid ${C.grey200}`, borderRadius: 6, padding: "6px 10px", fontSize: 11 }}>
                       <div style={{ fontWeight: 600, color: C.grey700 }}>{s.title.slice(0, 55)}{s.title.length > 55 ? "…" : ""}</div>
                       <div style={{ display: "flex", gap: 5, marginTop: 4, alignItems: "center" }}>
-                        <AgileBadge label={s.status} color={statusBg(s.status)} textColor={statusColor(s.status)} dot small />
+                        <AgileBadge label={s.status} color={statusBg(s.status, C)} textColor={statusColor(s.status, C)} dot small />
                         {s.points && <span style={{ fontSize: 9, color: C.grey400 }}>{s.points}pt</span>}
                         <AgileAvatar name={s.assignee} size={16} />
                       </div>

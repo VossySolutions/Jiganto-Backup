@@ -1,8 +1,9 @@
-import { AGILE_PALETTE as C, priorityBg, priorityColor, statusBg, statusColor, tshirtBg, tshirtColor } from "./palette";
+import { useAgilePalette, priorityBg, priorityColor, statusBg, statusColor, tshirtBg, tshirtColor } from "./palette";
 import type { Epic, Story } from "./types";
 import { AgileBadge, AgileBtn, AgileProgressBar } from "./ui-primitives";
 
 export function EpicDetailPanel({ epic, stories, onClose, onEdit }: { epic: Epic; stories: Story[]; onClose: () => void; onEdit: () => void }) {
+  const C = useAgilePalette();
   const epicStories = stories.filter(s => s.epicId === epic.id);
   const done = epicStories.filter(s => s.status === "Done").length;
   const inProgress = epicStories.filter(s => s.status === "In Progress").length;
@@ -21,9 +22,9 @@ export function EpicDetailPanel({ epic, stories, onClose, onEdit }: { epic: Epic
 
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-          <AgileBadge label={epic.status} color={statusBg(epic.status)} textColor={statusColor(epic.status)} dot />
-          <AgileBadge label={epic.priority} color={priorityBg(epic.priority)} textColor={priorityColor(epic.priority)} />
-          <span style={{ background: tshirtBg(epic.tshirt), color: tshirtColor(epic.tshirt), borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{epic.tshirt}</span>
+          <AgileBadge label={epic.status} color={statusBg(epic.status, C)} textColor={statusColor(epic.status, C)} dot />
+          <AgileBadge label={epic.priority} color={priorityBg(epic.priority, C)} textColor={priorityColor(epic.priority, C)} />
+          <span style={{ background: tshirtBg(epic.tshirt, C), color: tshirtColor(epic.tshirt, C), borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{epic.tshirt}</span>
         </div>
 
         <div style={{ fontSize: 13, color: C.grey600, lineHeight: 1.6, marginBottom: 20 }}>{epic.description}</div>
@@ -78,7 +79,7 @@ export function EpicDetailPanel({ epic, stories, onClose, onEdit }: { epic: Epic
           <div style={{ fontSize: 11, fontWeight: 700, color: C.grey400, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Stories ({epicStories.length})</div>
           {epicStories.map(s => (
             <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 6, border: `1px solid ${C.grey100}`, marginBottom: 6, background: C.white }}>
-              <AgileBadge label={s.status} color={statusBg(s.status)} textColor={statusColor(s.status)} dot small />
+              <AgileBadge label={s.status} color={statusBg(s.status, C)} textColor={statusColor(s.status, C)} dot small />
               <span style={{ fontSize: 11, color: C.grey400, fontWeight: 600, flexShrink: 0 }}>{s.id}</span>
               <span style={{ fontSize: 12, color: C.grey700, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</span>
               {s.points && <span style={{ fontSize: 10, fontWeight: 700, color: C.blue, background: C.blueLight, borderRadius: 4, padding: "1px 5px" }}>{s.points}</span>}

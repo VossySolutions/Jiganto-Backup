@@ -164,14 +164,23 @@ export function ImportModal({ isOpen, onClose, entityName, templateHeaders, exam
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <button
-            onClick={() => downloadTemplate(entityName, templateHeaders, exampleRow)}
-            className="flex items-center gap-2 text-sm text-primary hover:underline"
-            data-testid="button-download-template"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Download blank template (.csv)
-          </button>
+          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+            <button
+              type="button"
+              onClick={() => downloadTemplate(entityName, templateHeaders, exampleRow)}
+              className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+              data-testid="button-download-template"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download blank template (.csv)
+            </button>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Use these exact header names (first row). Export CSV from the board uses the same columns so you can edit and re-import.
+            </p>
+            <p className="text-[11px] font-mono text-muted-foreground break-all">
+              {templateHeaders.join(", ")}
+            </p>
+          </div>
 
           <div
             className={cn(

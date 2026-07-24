@@ -121,7 +121,7 @@ export function CrmLeadSavedViewTabs({
   return (
     <>
       <div
-        className="flex items-center gap-0.5 overflow-x-auto border-b border-[#d0d4e4] pb-0"
+        className="flex items-center gap-0.5 overflow-x-auto border-b border-border pb-0"
         data-testid="leads-saved-view-tabs"
       >
         <button
@@ -129,8 +129,8 @@ export function CrmLeadSavedViewTabs({
           className={cn(
             "inline-flex items-center gap-1.5 h-8 px-3 text-[13px] font-medium border-b-2 -mb-px whitespace-nowrap transition-colors",
             activeId === null
-              ? "border-[#0073ea] text-[#0073ea]"
-              : "border-transparent text-[#676879] hover:text-[#323338]",
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground",
           )}
           onClick={() => {
             setActiveId(null);
@@ -152,14 +152,14 @@ export function CrmLeadSavedViewTabs({
             key={view.id}
             className={cn(
               "group inline-flex items-center gap-0.5 h-8 border-b-2 -mb-px whitespace-nowrap",
-              activeId === view.id ? "border-[#0073ea]" : "border-transparent",
+              activeId === view.id ? "border-primary" : "border-transparent",
             )}
           >
             <button
               type="button"
               className={cn(
                 "px-2.5 text-[13px] font-medium",
-                activeId === view.id ? "text-[#0073ea]" : "text-[#676879] hover:text-[#323338]",
+                activeId === view.id ? "text-primary" : "text-muted-foreground hover:text-foreground",
               )}
               onClick={() => applyView(view)}
               data-testid={`leads-view-tab-${view.id}`}
@@ -168,7 +168,7 @@ export function CrmLeadSavedViewTabs({
             </button>
             <button
               type="button"
-              className="opacity-0 group-hover:opacity-100 h-5 w-5 inline-flex items-center justify-center rounded text-[#676879] hover:bg-[#dcdfec]/60"
+              className="opacity-0 group-hover:opacity-100 h-5 w-5 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-muted"
               title="Delete view"
               onClick={(e) => {
                 e.stopPropagation();
@@ -181,7 +181,7 @@ export function CrmLeadSavedViewTabs({
         ))}
         <button
           type="button"
-          className="inline-flex items-center gap-1 h-8 px-2.5 text-[13px] font-medium text-[#0073ea] hover:bg-[#cce5ff]/40 rounded-md ml-1"
+          className="inline-flex items-center gap-1 h-8 px-2.5 text-[13px] font-medium text-primary hover:bg-primary/10 rounded-md ml-1"
           onClick={() => setSaveOpen(true)}
           data-testid="button-add-view-tab"
         >

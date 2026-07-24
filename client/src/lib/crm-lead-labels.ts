@@ -113,9 +113,13 @@ export function mergeSourceOptionsWithData(
   sourcesOnLeads: string[],
 ): StatusOption[] {
   const byValue = new Map(catalog.map((o) => [o.value, o]));
+  const byValueLower = new Map(catalog.map((o) => [o.value.toLowerCase(), o]));
   for (const raw of sourcesOnLeads) {
     const value = raw.trim();
-    if (!value || byValue.has(value)) continue;
+    if (!value) continue;
+    if (byValue.has(value)) continue;
+    // "Referral" should reuse catalog "referral" instead of a dead grey duplicate
+    if (byValueLower.has(value.toLowerCase())) continue;
     byValue.set(value, {
       value,
       label: value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),

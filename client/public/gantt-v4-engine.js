@@ -2520,25 +2520,25 @@ function renderTimeline(start,end,totalW){
 }
 
 function drawTaskBar(t,rangeStart,rows,rowTop){
-  const row=document.getElementById('gr-'+t.id);
-  if(!row) return;
+    const row=document.getElementById('gr-'+t.id);
+    if(!row) return;
   // Prefer deterministic Y from caller; never trust offsetTop after DOM mutations
   if(rowTop==null||!Number.isFinite(rowTop)) rowTop=row.offsetTop||0;
   const hasKids=getChildren(t.id).length>0;
   const eff=getEffectiveDates(t);
-  const isCrit=showCP&&criticalIds.has(t.id);
+    const isCrit=showCP&&criticalIds.has(t.id);
 
-  if(t.type===6){
+    if(t.type===6){
     const offsetDays=daysBetween(rangeStart,D(eff.start));
-    const left=offsetDays*colW;
-    const el=document.createElement('div');
+      const left=offsetDays*colW;
+      const el=document.createElement('div');
     el.className='milestone-diamond'+(isCrit?' critical':'');
     el.dataset.id=String(t.id);
     const msTop=rowTop+(ROW_H-12)/2;
     el.style.cssText='left:'+(left-6)+'px;top:'+msTop+'px;width:12px;height:12px;';
     el.title=t.name+' · '+fmtDisp(D(eff.start))+(isCrit?' · Critical':'');
     el.onclick=(e)=>{ e.stopPropagation(); openEdit(t.id); };
-    rows.appendChild(el);
+      rows.appendChild(el);
     const msLbl=document.createElement('div');
     msLbl.className='bar-label-outside bar-label-milestone';
     msLbl.textContent=t.name;
@@ -2546,24 +2546,24 @@ function drawTaskBar(t,rangeStart,rows,rowTop){
     rows.appendChild(msLbl);
     // Center of diamond — required for dependency routing
     registerBar(t.id,left-6,msTop,12,12);
-  } else {
+    } else {
     const s=D(eff.start),e=D(eff.end);
     const left=daysBetween(rangeStart,s)*colW;
     const width=Math.max((taskDurationDays(eff.start,eff.end)+1)*colW,colW);
     const barH=Math.max(22,Math.round(ROW_H*0.7));
     const barTop=rowTop+(ROW_H-barH)/2;
-    const el=document.createElement('div');
+      const el=document.createElement('div');
     el.className='gantt-bar '+getTaskBarClass(t,hasKids,isCrit);
-    el.id='bar-'+t.id;
+      el.id='bar-'+t.id;
     el.style.cssText='left:'+left+'px;top:'+barTop+'px;width:'+width+'px;height:'+barH+'px;';
     const typeNm=typeLabel(t);
     el.title=hasKids
       ?(t.name+'\n'+fmtDisp(s)+' → '+fmtDisp(e)+'\n'+typeNm+' (folder) · Drag to move this group and all children')
       :(t.name+'\n'+fmtDisp(s)+' → '+fmtDisp(e)+'\n'+t.prog+'% · '+typeNm);
-    const pf=document.createElement('div');
-    pf.className='bar-prog-fill';
+      const pf=document.createElement('div');
+      pf.className='bar-prog-fill';
     pf.style.width=t.prog+'%';
-    el.appendChild(pf);
+      el.appendChild(pf);
     const labelFitsInside=width>=80;
     if(hasKids||labelFitsInside){
       const lbl=document.createElement('div');
@@ -2571,8 +2571,8 @@ function drawTaskBar(t,rangeStart,rows,rowTop){
       lbl.textContent=t.name;
       el.appendChild(lbl);
     }
-    const rl=document.createElement('div');rl.className='bar-resize-l';
-    const rr=document.createElement('div');rr.className='bar-resize-r';
+      const rl=document.createElement('div');rl.className='bar-resize-l';
+      const rr=document.createElement('div');rr.className='bar-resize-r';
     if(!hasKids){ el.appendChild(rl); el.appendChild(rr); }
     if(!hasKids&&t.type!==1&&t.id!==1){
       const connL=document.createElement('div');
@@ -2587,16 +2587,16 @@ function drawTaskBar(t,rangeStart,rows,rowTop){
       connR.addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();startConnectorDrag(t.id,'end',e);});
       connL.addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();startConnectorDrag(t.id,'start',e);});
     }
-    registerBar(t.id,left,barTop,width,barH);
-    el.onclick=(e2)=>{
-      e2.stopPropagation();
+      registerBar(t.id,left,barTop,width,barH);
+      el.onclick=(e2)=>{
+        e2.stopPropagation();
       if(e2.target.closest('.bar-dep-handle')) return;
-      selectTask(t.id);
-    };
+        selectTask(t.id);
+      };
     el.ondblclick=(e2)=>{e2.stopPropagation();if(!depLinkDragging)openEdit(t.id);};
     if(hasKids) setupSummaryMove(el,t,rangeStart);
     else setupDrag(el,t,rangeStart,rl,rr);
-    rows.appendChild(el);
+      rows.appendChild(el);
     if(!hasKids&&!labelFitsInside){
       const extLbl=document.createElement('div');
       extLbl.className='bar-label-outside';
@@ -2790,16 +2790,16 @@ function renderDeps(visible,start){
 
     if(depType!=='FS'){
       const tag=depType;
-      const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
       bg.setAttribute('x',labelX-10); bg.setAttribute('y',labelY-7);
       bg.setAttribute('width',20); bg.setAttribute('height',14);
       bg.setAttribute('rx',3); bg.setAttribute('fill','#fff');
       bg.setAttribute('stroke',color); bg.setAttribute('stroke-width','0.8');
-      const lbl=document.createElementNS('http://www.w3.org/2000/svg','text');
+    const lbl=document.createElementNS('http://www.w3.org/2000/svg','text');
       lbl.setAttribute('x',labelX); lbl.setAttribute('y',labelY+1);
-      lbl.setAttribute('text-anchor','middle');
-      lbl.setAttribute('dominant-baseline','middle');
-      lbl.setAttribute('font-size','8');
+    lbl.setAttribute('text-anchor','middle');
+    lbl.setAttribute('dominant-baseline','middle');
+    lbl.setAttribute('font-size','8');
       lbl.setAttribute('font-family','Inter,sans-serif');
       lbl.setAttribute('fill',color); lbl.setAttribute('font-weight','600');
       lbl.textContent=tag;
@@ -5368,8 +5368,8 @@ function createDepLink(fromId,toId,depType){
   }
   if(datesMoved) renderAll();
   else softRefreshAfterDepChange(toId);
-  return true;
-}
+    return true;
+  }
 function removeDepLink(succId){
   const t=tasks.find(x=>x.id===succId);
   if(!t||!t.predId) return;
@@ -5584,7 +5584,7 @@ async function persistCreate(t,opts){
           checkedRowIds.add(t.id);
         }
         invalidateTaskIndex();
-        calcWBS();
+    calcWBS();
         if(wasEditing){
           // Keep typing — surgical id remap, no full chart rebuild
           if(draft!=null) t.name=(draft.trim()||t.name);
@@ -5592,7 +5592,7 @@ async function persistCreate(t,opts){
           updateUndoRedoButtons();
           updateSelectionBar();
         } else {
-          renderAll();
+    renderAll();
         }
       }
     if(!silent) showSaveIndicator();
@@ -5615,7 +5615,7 @@ async function persistDelete(t,silent){
     if(!res.ok) throw new Error('HTTP '+res.status);
     if(!silent){
       showToast('✓ Deleted','ok');
-      notifyGanttParent();
+    notifyGanttParent();
     }
     return true;
   } catch(e){
@@ -5651,7 +5651,7 @@ async function persistDeletes(removed,predCleared){
 
 async function persistSave(t){
   if(!t||t.type===1||t.id===1){
-    const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
+  const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
     if(!projectId) return false;
   const h=await apiAuthHeaders(true);
     try{
@@ -5696,7 +5696,7 @@ async function persistSave(t){
     const parentTaskId=(t.parent&&t.parent!==1)?ganttIdToDbTaskId(t.parent):null;
     let predIds=predecessorIdsForSave(t.predId);
     if(t.predId&&predIds===null){ t.predId=null; predIds=[]; }
-    const assigneeId=t.owner?ownerMap[t.owner]||null:null;
+      const assigneeId=t.owner?ownerMap[t.owner]||null:null;
     await put('/api/pm/tasks/'+t.id,{
       name:t.name,
       plannedStartDate:t.start||null,

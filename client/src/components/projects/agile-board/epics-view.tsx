@@ -1,6 +1,6 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { computeBurnUp } from "@/lib/pm-agile-mappers";
-import { AGILE_PALETTE as C, priorityBg, priorityColor, statusBg, statusColor, tshirtBg, tshirtColor } from "./palette";
+import { useAgilePalette, priorityBg, priorityColor, statusBg, statusColor, tshirtBg, tshirtColor } from "./palette";
 import type { Epic, Story, Workstream } from "./types";
 import { AgileAvatar, AgileBadge, AgileBtn, AgileModal, AgileProgressBar, AgileSelect, BurnUpChart, ConfirmDelete, FormField, inputStyle, textareaStyle } from "./ui-primitives";
 
@@ -22,6 +22,7 @@ export function EpicsView({ epics, stories, onSelect, setEpics, ws, onAddEpic, o
   );
 
   function handleSave(data: any) {
+  const C = useAgilePalette();
     if (editEpic) {
       if (onUpdateEpic) {
         onUpdateEpic(editEpic.id, {
@@ -91,7 +92,7 @@ export function EpicsView({ epics, stories, onSelect, setEpics, ws, onAddEpic, o
                     <div style={{ fontSize: 11, color: C.grey400 }}>{epic.id} {"·"} {epic.initiative}</div>
                     <div style={{ fontWeight: 700, fontSize: 15, color: C.grey800 }}>{epic.title}</div>
                   </div>
-                  <AgileBadge label={epic.status} color={statusBg(epic.status)} textColor={statusColor(epic.status)} dot small />
+                  <AgileBadge label={epic.status} color={statusBg(epic.status, C)} textColor={statusColor(epic.status, C)} dot small />
                   <div style={{ display: "flex", gap: 4 }}>
                     <AgileBtn label="✎" variant="ghost" small onClick={() => setEditEpic(epic)} testId={`button-edit-${epic.id}`} />
                     <AgileBtn label="✕" danger small onClick={() => setDeleteId(epic.id)} testId={`button-delete-${epic.id}`} />
@@ -99,8 +100,8 @@ export function EpicsView({ epics, stories, onSelect, setEpics, ws, onAddEpic, o
                 </div>
                 <div style={{ fontSize: 12.5, color: C.grey500, marginBottom: 10, lineHeight: 1.5 }}>{epic.description}</div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-                  <AgileBadge label={epic.priority} color={priorityBg(epic.priority)} textColor={priorityColor(epic.priority)} small />
-                  <span style={{ background: tshirtBg(epic.tshirt), color: tshirtColor(epic.tshirt), borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>{epic.tshirt}</span>
+                  <AgileBadge label={epic.priority} color={priorityBg(epic.priority, C)} textColor={priorityColor(epic.priority, C)} small />
+                  <span style={{ background: tshirtBg(epic.tshirt, C), color: tshirtColor(epic.tshirt, C), borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>{epic.tshirt}</span>
                   {epic.tags.map(t => <AgileBadge key={t} label={t} color={C.grey100} textColor={C.grey600} small />)}
                 </div>
                 <div style={{ marginBottom: 8 }}>

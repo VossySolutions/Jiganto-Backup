@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
 import { GripVertical } from "lucide-react";
 import { AppKanbanBoard, type KanbanColumnDef } from "@/components/kanban";
-import { AGILE_BOARD_COLUMNS, AGILE_PALETTE as C, priorityBg, priorityColor, statusColor, tshirtBg, tshirtColor } from "./palette";
+import { AGILE_BOARD_COLUMNS, useAgilePalette, priorityBg, priorityColor, statusColor, tshirtBg, tshirtColor } from "./palette";
 import type { BurndownPoint, Epic, Sprint, Story } from "./types";
 import { AgileAvatar, AgileBadge, AgileBtn, AgileProgressBar, AgileSelect, BurndownChart } from "./ui-primitives";
 
@@ -13,6 +13,7 @@ export function BoardView({ stories, epics, activeSprint, onSelectStory, burndow
   boardMode?: "sprint" | "scrum" | "kanban";
   onStoryStatusChange: (storyId: string, status: string) => void | Promise<void>;
 }) {
+  const C = useAgilePalette();
   const isKanban = boardMode === "kanban";
   const boardTitle = isKanban ? "Kanban Board" : boardMode === "scrum" ? "Scrum Board" : (activeSprint?.name || "Sprint Board");
   const [showChart, setShowChart] = useState(true);
@@ -43,7 +44,7 @@ export function BoardView({ stories, epics, activeSprint, onSelectStory, burndow
       header: (
         <div style={{ padding: "10px 12px", borderBottom: `1px solid ${C.grey200}`, display: "flex", alignItems: "center", justifyContent: "space-between", background: C.grey50, borderRadius: "10px 10px 0 0" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor(col) }} />
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor(col, C) }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: C.grey700 }}>{col}</span>
           </div>
           <span style={{ background: C.grey200, borderRadius: 10, padding: "0 6px", fontSize: 10, fontWeight: 700, color: C.grey500 }}>{count}</span>
@@ -188,8 +189,8 @@ function BoardCard({
       </div>
       <div style={{ fontSize: 12.5, fontWeight: 600, color: C.grey800, lineHeight: 1.4, marginBottom: 7 }}>{story.title.length > 75 ? story.title.slice(0, 75) + "…" : story.title}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-        <AgileBadge label={story.priority} color={priorityBg(story.priority)} textColor={priorityColor(story.priority)} small />
-        <span style={{ background: tshirtBg(story.tshirt), color: tshirtColor(story.tshirt), borderRadius: 3, padding: "1px 5px", fontSize: 9, fontWeight: 700 }}>{story.tshirt}</span>
+        <AgileBadge label={story.priority} color={priorityBg(story.priority, C)} textColor={priorityColor(story.priority, C)} small />
+        <span style={{ background: tshirtBg(story.tshirt, C), color: tshirtColor(story.tshirt, C), borderRadius: 3, padding: "1px 5px", fontSize: 9, fontWeight: 700 }}>{story.tshirt}</span>
         {story.points && <span style={{ background: C.grey100, color: C.grey600, borderRadius: 3, padding: "1px 5px", fontSize: 9, fontWeight: 700 }}>{story.points}pt</span>}
         <div style={{ flex: 1 }} />
         <AgileAvatar name={story.assignee} size={20} />

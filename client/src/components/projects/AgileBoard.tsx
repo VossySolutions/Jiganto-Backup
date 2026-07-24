@@ -13,7 +13,7 @@ import {
   buildSprintMap, computeBurndown, isNumericId,
 } from "@/lib/pm-agile-mappers";
 import {
-  AGILE_PALETTE as C,
+  useAgilePalette,
   AgileBtn,
   AgileModal,
   FormField,
@@ -47,6 +47,7 @@ interface AgileBoardProps {
 }
 
 export default function AgileBoard({ initialTab = "board", view, boardMode = "sprint", projectId }: AgileBoardProps) {
+  const C = useAgilePalette();
   const isDbMode = !!projectId;
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState(initialTab);

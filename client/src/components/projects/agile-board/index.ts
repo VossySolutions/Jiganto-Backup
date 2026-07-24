@@ -1,5 +1,9 @@
 export {
   AGILE_PALETTE,
+  AGILE_PALETTE_LIGHT,
+  AGILE_PALETTE_DARK,
+  useAgilePalette,
+  getAgilePalette,
   AGILE_BOARD_COLUMNS,
   priorityColor,
   priorityBg,
@@ -8,6 +12,7 @@ export {
   tshirtBg,
   tshirtColor,
 } from "./palette";
+export type { AgilePalette } from "./palette";
 export type { Workstream, Epic, Story, Defect, Sprint, BurndownPoint, BurnUpPoint } from "./types";
 export { AgileAvatar, AgileBadge, AgileProgressBar, AgileBtn, AgileSelect, AgileModal, FormField, ConfirmDelete, BurndownChart, BurnUpChart, inputStyle, textareaStyle } from "./ui-primitives";
 export { AddStoryForm } from "./story-form";

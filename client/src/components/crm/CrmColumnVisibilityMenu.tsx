@@ -1,4 +1,4 @@
-import { Columns3 } from "lucide-react";
+import { Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -15,6 +15,7 @@ type CrmColumnVisibilityMenuProps = {
   visibility: Record<string, boolean>;
   onChange: (columnId: string, visible: boolean) => void;
   testId?: string;
+  className?: string;
 };
 
 export function CrmColumnVisibilityMenu({
@@ -22,6 +23,7 @@ export function CrmColumnVisibilityMenu({
   visibility,
   onChange,
   testId = "button-column-visibility",
+  className,
 }: CrmColumnVisibilityMenuProps) {
   const hiddenCount = columns.filter((c) => visibility[c.id] === false).length;
   const active = hiddenCount > 0;
@@ -33,22 +35,23 @@ export function CrmColumnVisibilityMenu({
           type="button"
           className={cn(
             "inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[13px] font-medium transition-colors",
-            "text-[#323338] hover:bg-[#dcdfec]/60",
-            active && "bg-[#cce5ff] text-[#0073ea] hover:bg-[#cce5ff]",
+            "text-foreground hover:bg-muted",
+            active && "bg-primary/15 text-primary hover:bg-primary/15",
+            className,
           )}
           data-testid={testId}
         >
-          <Columns3 className="h-3.5 w-3.5" />
-          Fields
+          <Eye className="h-3.5 w-3.5" />
+          Hide
           {active && (
-            <span className="h-4 min-w-4 px-1 rounded-full bg-[#0073ea] text-white text-[10px] flex items-center justify-center">
+            <span className="h-4 min-w-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
               {hiddenCount}
             </span>
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52">
-        <DropdownMenuLabel>Show / hide fields</DropdownMenuLabel>
+      <DropdownMenuContent align="start" className="w-52 max-h-[min(70vh,420px)] overflow-y-auto">
+        <DropdownMenuLabel>Show / hide columns</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {columns.map((col) => (
           <DropdownMenuCheckboxItem

@@ -1,5 +1,8 @@
 /** Shared palette and status helpers for PM Agile board views. */
-export const AGILE_PALETTE = {
+import { useMemo } from "react";
+import { useTheme } from "@/hooks/use-theme";
+
+export const AGILE_PALETTE_LIGHT = {
   navy: "#1B3A6B", blue: "#2563EB", blueMid: "#3B82F6", blueLight: "#DBEAFE",
   teal: "#0EA5E9", tealLight: "#E0F2FE", purple: "#7C3AED", purpleLight: "#EDE9FE",
   green: "#16A34A", greenLight: "#DCFCE7", amber: "#D97706", amberLight: "#FEF3C7",
@@ -9,34 +12,61 @@ export const AGILE_PALETTE = {
   grey800: "#1E293B", white: "#FFFFFF",
 } as const;
 
+/** Dark-mode surfaces aligned with app slate theme */
+export const AGILE_PALETTE_DARK = {
+  navy: "#0F172A", blue: "#60A5FA", blueMid: "#3B82F6", blueLight: "#1E3A5F",
+  teal: "#38BDF8", tealLight: "#0C4A6E", purple: "#A78BFA", purpleLight: "#3B0764",
+  green: "#4ADE80", greenLight: "#052E16", amber: "#FBBF24", amberLight: "#451A03",
+  red: "#F87171", redLight: "#450A0A",
+  grey50: "#0F172A", grey100: "#1E293B", grey200: "#334155", grey300: "#475569",
+  grey400: "#64748B", grey500: "#94A3B8", grey600: "#CBD5E1", grey700: "#E2E8F0",
+  grey800: "#F1F5F9", white: "#1E293B",
+} as const;
+
+export type AgilePalette = typeof AGILE_PALETTE_LIGHT;
+
+/** @deprecated Prefer useAgilePalette() for theme-aware colors */
+export const AGILE_PALETTE = AGILE_PALETTE_LIGHT;
+
+export function getAgilePalette(dark: boolean): AgilePalette {
+  return dark ? AGILE_PALETTE_DARK : AGILE_PALETTE_LIGHT;
+}
+
+export function useAgilePalette(): AgilePalette {
+  const { resolvedTheme } = useTheme();
+  return useMemo(() => getAgilePalette(resolvedTheme === "dark"), [resolvedTheme]);
+}
+
 export const AGILE_BOARD_COLUMNS = ["To Do", "In Progress", "Review", "Testing", "Done"] as const;
 
-export const priorityColor = (p: string) =>
-  ({ Critical: AGILE_PALETTE.red, High: AGILE_PALETTE.amber, Medium: AGILE_PALETTE.blue, Low: AGILE_PALETTE.grey400 } as Record<string, string>)[p] || AGILE_PALETTE.grey400;
+export const priorityColor = (p: string, C: AgilePalette = AGILE_PALETTE_LIGHT) =>
+  ({ Critical: C.red, High: C.amber, Medium: C.blue, Low: C.grey400 } as Record<string, string>)[p] || C.grey400;
 
-export const priorityBg = (p: string) =>
-  ({ Critical: AGILE_PALETTE.redLight, High: AGILE_PALETTE.amberLight, Medium: AGILE_PALETTE.blueLight, Low: AGILE_PALETTE.grey100 } as Record<string, string>)[p] || AGILE_PALETTE.grey100;
+export const priorityBg = (p: string, C: AgilePalette = AGILE_PALETTE_LIGHT) =>
+  ({ Critical: C.redLight, High: C.amberLight, Medium: C.blueLight, Low: C.grey100 } as Record<string, string>)[p] || C.grey100;
 
-export const statusColor = (s: string) =>
+export const statusColor = (s: string, C: AgilePalette = AGILE_PALETTE_LIGHT) =>
   ({
-    Done: AGILE_PALETTE.green, "In Progress": AGILE_PALETTE.blue, "To Do": AGILE_PALETTE.grey500,
-    Backlog: AGILE_PALETTE.grey400, Review: AGILE_PALETTE.purple, Testing: AGILE_PALETTE.teal,
-    Active: AGILE_PALETTE.green, Planning: AGILE_PALETTE.amber, Closed: AGILE_PALETTE.grey500,
-    Planned: AGILE_PALETTE.teal, Fixed: AGILE_PALETTE.teal, New: AGILE_PALETTE.amber,
-    Triaged: AGILE_PALETTE.blue, Verified: AGILE_PALETTE.green,
-  } as Record<string, string>)[s] || AGILE_PALETTE.grey400;
+    Done: C.green, "In Progress": C.blue, "To Do": C.grey500,
+    Backlog: C.grey400, Review: C.purple, Testing: C.teal,
+    Active: C.green, Planning: C.amber, Closed: C.grey500,
+    Planned: C.teal, Fixed: C.teal, New: C.amber,
+    Triaged: C.blue, Verified: C.green,
+  } as Record<string, string>)[s] || C.grey400;
 
-export const statusBg = (s: string) =>
+export const statusBg = (s: string, C: AgilePalette = AGILE_PALETTE_LIGHT) =>
   ({
-    Done: AGILE_PALETTE.greenLight, "In Progress": AGILE_PALETTE.blueLight, "To Do": AGILE_PALETTE.grey100,
-    Backlog: AGILE_PALETTE.grey100, Review: AGILE_PALETTE.purpleLight, Testing: AGILE_PALETTE.tealLight,
-    Active: AGILE_PALETTE.greenLight, Planning: AGILE_PALETTE.amberLight, Closed: AGILE_PALETTE.grey100,
-    Planned: AGILE_PALETTE.tealLight, Fixed: AGILE_PALETTE.tealLight, New: AGILE_PALETTE.amberLight,
-    Triaged: AGILE_PALETTE.blueLight, Verified: AGILE_PALETTE.greenLight,
-  } as Record<string, string>)[s] || AGILE_PALETTE.grey100;
+    Done: C.greenLight, "In Progress": C.blueLight, "To Do": C.grey100,
+    Backlog: C.grey100, Review: C.purpleLight, Testing: C.tealLight,
+    Active: C.greenLight, Planning: C.amberLight, Closed: C.grey100,
+    Planned: C.tealLight, Fixed: C.tealLight, New: C.amberLight,
+    Triaged: C.blueLight, Verified: C.greenLight,
+  } as Record<string, string>)[s] || C.grey100;
 
-export const tshirtBg = (t: string) =>
-  ({ XS: "#F0FDF4", S: "#DCFCE7", M: "#DBEAFE", L: "#FEF3C7", XL: "#FEE2E2", XXL: "#FCE7F3" } as Record<string, string>)[t] || AGILE_PALETTE.grey100;
+export const tshirtBg = (t: string, C: AgilePalette = AGILE_PALETTE_LIGHT) =>
+  ({
+    XS: C.greenLight, S: C.greenLight, M: C.blueLight, L: C.amberLight, XL: C.redLight, XXL: C.purpleLight,
+  } as Record<string, string>)[t] || C.grey100;
 
-export const tshirtColor = (t: string) =>
-  ({ XS: AGILE_PALETTE.green, S: AGILE_PALETTE.green, M: AGILE_PALETTE.blue, L: AGILE_PALETTE.amber, XL: AGILE_PALETTE.red, XXL: "#9D174D" } as Record<string, string>)[t] || AGILE_PALETTE.grey700;
+export const tshirtColor = (t: string, C: AgilePalette = AGILE_PALETTE_LIGHT) =>
+  ({ XS: C.green, S: C.green, M: C.blue, L: C.amber, XL: C.red, XXL: C.purple } as Record<string, string>)[t] || C.grey700;
