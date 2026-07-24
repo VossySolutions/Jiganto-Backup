@@ -433,36 +433,36 @@ function ProjectDetailView({
           </div>
         </div>
 
-        <SaveAsPlatformTemplateDialog
-          open={showSaveTemplate}
-          onOpenChange={setShowSaveTemplate}
-          endpoint={`/api/pm/projects/${projectId}/save-as-template`}
-          defaultName={project.name}
-          defaultDescription={project.description ?? ""}
-        />
+      <SaveAsPlatformTemplateDialog
+        open={showSaveTemplate}
+        onOpenChange={setShowSaveTemplate}
+        endpoint={`/api/pm/projects/${projectId}/save-as-template`}
+        defaultName={project.name}
+        defaultDescription={project.description ?? ""}
+      />
 
-        {showSettings ? (
-          <ProjectSettingsPanel
-            project={project}
-            updateProjectMutation={updateProjectMutation}
-            toast={toast}
-            onClose={() => setShowSettings(false)}
-          />
-        ) : (
-          <div
-            className={cn(
+      {showSettings ? (
+        <ProjectSettingsPanel
+          project={project}
+          updateProjectMutation={updateProjectMutation}
+          toast={toast}
+          onClose={() => setShowSettings(false)}
+        />
+      ) : (
+        <div
+          className={cn(
               "flex-1 min-h-0",
               currentActiveTool === "gantt_chart" ||
               currentActiveTool === "agile" ||
               currentActiveTool === "tracking_board" ||
               LEGACY_AGILE_TOOL_ID_SET.has(currentActiveTool)
                 ? "overflow-hidden flex flex-col p-4"
-                : "overflow-y-auto overflow-x-hidden p-4"
-            )}
-            style={{ minWidth: 0 }}
-            data-testid="tool-content-area"
-          >
-            {currentActiveTool ? (
+              : "overflow-y-auto overflow-x-hidden p-4"
+          )}
+          style={{ minWidth: 0 }}
+          data-testid="tool-content-area"
+        >
+          {currentActiveTool ? (
               <>
                 {[
                   ...new Set([
@@ -499,18 +499,18 @@ function ProjectDetailView({
                   />
                 )}
               </>
-            ) : (
-              <div className="text-center text-muted-foreground py-16">
+          ) : (
+            <div className="text-center text-muted-foreground py-16">
                 {toolsLoading ? (
                   <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin opacity-50" />
                 ) : (
-                  <PmProjectIcon className="h-12 w-12 mx-auto mb-4 opacity-30" />
+              <PmProjectIcon className="h-12 w-12 mx-auto mb-4 opacity-30" />
                 )}
                 <p className="text-sm">{toolsLoading ? "Loading tools…" : "Select or add a tool to get started"}</p>
-              </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
+      )}
       </div>
     </div>
   );
@@ -1047,33 +1047,33 @@ export default function ProjectsManagementPage() {
 
   return (
     <ModuleShell className={modulePageShellClass} mainClassName={modulePageMainClass}>
-      {currentView === "dashboard" && (
+            {currentView === "dashboard" && (
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
           <ProjectsLandingView
-            projects={projects}
-            isLoading={isLoading}
-            onOpenProject={handleOpenProject}
-            onNewProject={() => setCurrentView("new")}
-          />
+                projects={projects}
+                isLoading={isLoading}
+                onOpenProject={handleOpenProject}
+                onNewProject={() => setCurrentView("new")}
+              />
         </div>
-      )}
+            )}
 
-      {currentView === "new" && (
+            {currentView === "new" && (
         <div className="flex-1 min-h-0 h-full overflow-hidden flex flex-col">
           <CreateWorkItemWizard
-            onCancel={() => setCurrentView("dashboard")}
-            onComplete={() => setCurrentView("dashboard")}
-          />
+                onCancel={() => setCurrentView("dashboard")}
+                onComplete={() => setCurrentView("dashboard")}
+              />
         </div>
-      )}
+            )}
 
-      {currentView === "project" && selectedProjectId && (
+            {currentView === "project" && selectedProjectId && (
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-          <ProjectDetailView
-            projectId={selectedProjectId}
-            onBack={handleBackFromProject}
-          />
-        </div>
+              <ProjectDetailView
+                projectId={selectedProjectId}
+                onBack={handleBackFromProject}
+              />
+          </div>
       )}
     </ModuleShell>
   );

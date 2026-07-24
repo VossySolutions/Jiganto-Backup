@@ -168,7 +168,7 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
   const canSubmit = !!form.firstName.trim() && !!form.lastName.trim();
   const subtitle = [form.firstName, form.lastName].filter(Boolean).join(" ") + (form.company ? ` · ${form.company}` : "");
   const numericScore = form.score ? Math.min(100, Math.max(0, parseInt(form.score, 10) || 0)) : 0;
-  const nextFollowUp = String(customData._nextFollowUpDate || "");
+  const nextFollowUp = String(customData._followUpDate || customData._nextFollowUpDate || "");
   const nextStep = String(customData._nextStep || "");
 
   const handleSubmit = () => {
@@ -357,7 +357,22 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
                 Next follow-up{" "}
                 <span className="ml-1 text-[10px] font-medium text-white bg-[#0073ea] px-1.5 py-0.5 rounded-[3px]">Recommended</span>
               </CrmFieldLabel>
-              <Input type="date" className={MONDAY_FIELD_CONTROL} value={nextFollowUp} onChange={(e) => setCustom("_nextFollowUpDate", e.target.value || undefined)} />
+              <Input
+                type="date"
+                className={MONDAY_FIELD_CONTROL}
+                value={nextFollowUp}
+                onChange={(e) => {
+                  const v = e.target.value || undefined;
+                  setCustomData((prev) => {
+                    const next = { ...prev };
+                    if (v) next._followUpDate = v;
+                    else delete next._followUpDate;
+                    // Migrate away from legacy key so table/board/gantt stay in sync
+                    delete next._nextFollowUpDate;
+                    return next;
+                  });
+                }}
+              />
             </div>
             <div className="flex-1 space-y-1">
               <CrmFieldLabel>Next step</CrmFieldLabel>

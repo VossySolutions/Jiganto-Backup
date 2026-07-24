@@ -62,7 +62,12 @@ interface SavedViewsDropdownProps {
   currentFilters: FilterConfig[];
   currentSorts?: SortConfig[];
   columns?: ColumnConfig[];
-  onApplyView: (filters: FilterConfig[], sorts?: SortConfig[], columns?: ColumnConfig[]) => void;
+  onApplyView: (
+    filters: FilterConfig[],
+    sorts?: SortConfig[],
+    columns?: ColumnConfig[],
+    extras?: { viewMode?: string; groupBy?: string },
+  ) => void;
   onColumnsChange?: (columns: ColumnConfig[]) => void;
   onSortChange?: (sorts: SortConfig[]) => void;
   onFilterChange?: (filters: FilterConfig[]) => void;
@@ -140,10 +145,21 @@ export function SavedViewsDropdown({
   };
 
   const handleApplyView = (view: SavedView) => {
-    const filters = Array.isArray(view.filters) ? view.filters : [];
-    const sorts = Array.isArray(view.sorts) ? view.sorts : [];
-    const cols = Array.isArray(view.columns) ? view.columns : undefined;
-    onApplyView(filters, sorts, cols);
+    const filtersRaw = view.filters as unknown;
+    let filters: FilterConfig[] = [];
+    let viewMode: string | undefined;
+    let groupBy: string | undefined;
+    if (filtersRaw && typeof filtersRaw === "object" && !Array.isArray(filtersRaw) && (filtersRaw as { __leadViewV2?: boolean }).__leadViewV2) {
+      const v2 = filtersRaw as { rules?: FilterConfig[]; viewMode?: string; groupBy?: string };
+      filters = Array.isArray(v2.rules) ? v2.rules : [];
+      viewMode = v2.viewMode;
+      groupBy = v2.groupBy;
+    } else if (Array.isArray(filtersRaw)) {
+      filters = filtersRaw as FilterConfig[];
+    }
+    const sorts = Array.isArray(view.sorts) ? (view.sorts as SortConfig[]) : [];
+    const cols = Array.isArray(view.columns) ? (view.columns as ColumnConfig[]) : undefined;
+    onApplyView(filters, sorts, cols, { viewMode, groupBy });
     toast({ title: `Applied view: ${view.name}` });
   };
 

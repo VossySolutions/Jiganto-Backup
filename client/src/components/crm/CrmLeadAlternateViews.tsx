@@ -139,9 +139,25 @@ export function CrmLeadBoardView({
     [leads, statusOverride],
   );
 
+  const boardStatusOptions = useMemo(() => {
+    const known = new Set(statusOptions.map((o) => o.value));
+    const extras: StatusOption[] = [];
+    for (const lead of boardLeads) {
+      if (!known.has(lead.status)) {
+        known.add(lead.status);
+        extras.push({
+          value: lead.status,
+          label: lead.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+          color: "bg-[#c4c4c4] text-white",
+        });
+      }
+    }
+    return extras.length ? [...statusOptions, ...extras] : statusOptions;
+  }, [statusOptions, boardLeads]);
+
   const statusMap = useMemo(
-    () => Object.fromEntries(statusOptions.map((o) => [o.value, o])),
-    [statusOptions],
+    () => Object.fromEntries(boardStatusOptions.map((o) => [o.value, o])),
+    [boardStatusOptions],
   );
 
   const changeStatus = async (lead: CrmLead, nextStatus: string) => {
@@ -161,7 +177,7 @@ export function CrmLeadBoardView({
 
   const columns = useMemo(
     () =>
-      statusOptions.map((opt) => ({
+      boardStatusOptions.map((opt) => ({
         id: opt.value,
         title: (
           <div className="flex items-center gap-2">
@@ -189,7 +205,7 @@ export function CrmLeadBoardView({
           </Button>
         ) : undefined,
       })),
-    [statusOptions, boardLeads, onAddLead],
+    [boardStatusOptions, boardLeads, onAddLead],
   );
 
   return (
@@ -256,7 +272,7 @@ export function CrmLeadBoardView({
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="min-w-[160px] p-1">
-                        {statusOptions
+                        {boardStatusOptions
                           .filter((opt) => opt.value !== "converted")
                           .map((opt) => (
                             <DropdownMenuItem

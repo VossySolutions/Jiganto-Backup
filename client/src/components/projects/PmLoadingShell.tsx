@@ -33,23 +33,6 @@ export function PmAgileSkeleton() {
   );
 }
 
-export function PmDashboardSkeleton() {
-  return (
-    <div className="flex flex-col gap-4 p-4 md:p-5" data-testid="agile-dashboard-skeleton">
-      <Skeleton className="h-10 w-64 rounded-lg" />
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <Skeleton key={i} className="h-[88px] rounded-xl" />
-        ))}
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Skeleton className="h-[220px] rounded-xl" />
-        <Skeleton className="h-[220px] rounded-xl" />
-      </div>
-    </div>
-  );
-}
-
 export function PmErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-16 px-4 text-center" data-testid="pm-error">

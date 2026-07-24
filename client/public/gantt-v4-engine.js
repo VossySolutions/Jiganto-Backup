@@ -31,6 +31,7 @@ function normalizeTaskRags(t){
   if(!t.ragSch) t.ragSch=r;
   if(!t.ragScp) t.ragScp=r;
   t.rag=t.ragScp||r;
+  if(!t.depType) t.depType='FS';
   return t;
 }
 function buildRagPillCell(t,id,dim){
@@ -54,34 +55,56 @@ let currentDep='FS';
 let zoom='week';
 let colW=28;
 let showCP=false;
-let mainView='gantt';
+let mainView='gantt'; // 'gantt' (chart container) | 'list' (list-only page)
+/** Independent panes — both on = combined (list columns + timeline). */
+let viewShowList=true;
+let viewShowGantt=true;
 let criticalIds=new Set();
 let importMode='append';
 let customCols=[];
 let ccNextId=1;
 /** Built-in field visibility — Type is optional (off by default) */
 const BUILTIN_FIELDS=[
-  {id:'wbs',label:'#',locked:true,defaultOn:true,widthKey:'--wbs-w',widthFb:48},
-  {id:'name',label:'Task name',locked:true,defaultOn:true,widthKey:'--name-w',widthFb:200},
-  {id:'type',label:'Type',locked:false,defaultOn:false,widthKey:'--type-w',widthFb:96},
-  {id:'owner',label:'Owner',locked:false,defaultOn:true,widthKey:'--owner-w',widthFb:56},
-  {id:'start',label:'Start',locked:false,defaultOn:true,widthFb:88},
-  {id:'end',label:'End',locked:false,defaultOn:true,widthFb:88},
-  {id:'duration',label:'Duration',locked:false,defaultOn:true,widthFb:56},
-  {id:'pred',label:'Pred',locked:false,defaultOn:true,widthKey:'--pred-w',widthFb:72},
-  {id:'prog',label:'%',locked:false,defaultOn:true,widthKey:'--prog-w',widthFb:48},
-  {id:'budget',label:'Budget',locked:false,defaultOn:true,widthKey:'--rag-pill-w',widthFb:90},
-  {id:'sched',label:'Sched',locked:false,defaultOn:true,widthKey:'--rag-pill-w',widthFb:90},
-  {id:'scope',label:'Scope',locked:false,defaultOn:true,widthKey:'--rag-pill-w',widthFb:90},
+  {id:'wbs',label:'#',locked:true,defaultOn:true,widthKey:'--wbs-w',widthFb:48,minW:36},
+  {id:'name',label:'Task name',locked:true,defaultOn:true,widthKey:'--name-w',widthFb:200,minW:120},
+  {id:'type',label:'Type',locked:false,defaultOn:true,widthKey:'--type-w',widthFb:110,minW:64},
+  {id:'owner',label:'Owner',locked:false,defaultOn:true,widthKey:'--owner-w',widthFb:56,minW:40},
+  {id:'start',label:'Start',locked:false,defaultOn:true,widthKey:'--start-w',widthFb:88,minW:72},
+  {id:'end',label:'End',locked:false,defaultOn:true,widthKey:'--end-w',widthFb:88,minW:72},
+  {id:'duration',label:'Duration',locked:false,defaultOn:true,widthKey:'--dur-w',widthFb:56,minW:40},
+  {id:'pred',label:'Pred',locked:false,defaultOn:true,widthKey:'--pred-w',widthFb:72,minW:48},
+  {id:'prog',label:'%',locked:false,defaultOn:true,widthKey:'--prog-w',widthFb:72,minW:56},
+  {id:'budget',label:'Budget',locked:false,defaultOn:true,widthKey:'--budget-w',widthFb:90,minW:64},
+  {id:'sched',label:'Sched',locked:false,defaultOn:true,widthKey:'--sched-w',widthFb:90,minW:64},
+  {id:'scope',label:'Scope',locked:false,defaultOn:true,widthKey:'--scope-w',widthFb:90,minW:64},
 ];
 let fieldVisibility={}; // id -> boolean
+/** Per-column pixel widths (field id or custom:id) — overrides CSS defaults when set */
+let columnWidths={};
 /** Selected type numbers for filter; empty Set = show all types */
 let levelFilterTypes=new Set();
 const LEVEL_FILTER_ORDER=[0,1,7,2,3,4,5,6];
+/** Selected owner names for filter; empty Set = show all owners */
+let ownerFilterOwners=new Set();
+/** Selected RAG keys `dim:val` (e.g. bgt:g); empty Set = show all */
+let ragFilterKeys=new Set();
+const RAG_FILTER_OPTS=[
+  {sec:'Budget',dim:'bgt',val:'g',label:'Budget · Green',dot:'🟢'},
+  {sec:'Budget',dim:'bgt',val:'a',label:'Budget · Amber',dot:'🟡'},
+  {sec:'Budget',dim:'bgt',val:'r',label:'Budget · Red',dot:'🔴'},
+  {sec:'Schedule',dim:'sch',val:'g',label:'Schedule · Green',dot:'🟢'},
+  {sec:'Schedule',dim:'sch',val:'a',label:'Schedule · Amber',dot:'🟡'},
+  {sec:'Schedule',dim:'sch',val:'r',label:'Schedule · Red',dot:'🔴'},
+  {sec:'Scope',dim:'scp',val:'g',label:'Scope · Green',dot:'🟢'},
+  {sec:'Scope',dim:'scp',val:'a',label:'Scope · Amber',dot:'🟡'},
+  {sec:'Scope',dim:'scp',val:'r',label:'Scope · Red',dot:'🔴'},
+];
 let depDrawMode=false;
 let depSourceId=null;
 let suppressNextDepClick=false;
 let selectedTaskId=null;
+/** Checked rows for bulk actions (CRM-style selection bar) */
+const checkedRowIds=new Set();
 let insertAfterId=null;
 let pendingCellEdit=null; // {id, field} — resume edit after render (Tab nav)
 let pendingCellEditValue=null; // optional draft to restore after remount
@@ -97,6 +120,35 @@ const ROW_H=36;
 const history=[];
 let historyIdx=-1;
 const MAX_HISTORY=50;
+/** Invalidated whenever `tasks` structure changes — speeds getChildren / lookups */
+let taskById=new Map();
+let childrenByParent=new Map();
+let taskIndexDirty=true;
+
+function invalidateTaskIndex(){ taskIndexDirty=true; }
+function rebuildTaskIndex(){
+  taskById=new Map();
+  childrenByParent=new Map();
+  for(let i=0;i<tasks.length;i++){
+    const t=tasks[i];
+    taskById.set(t.id,t);
+    const p=t.parent;
+    let arr=childrenByParent.get(p);
+    if(!arr){ arr=[]; childrenByParent.set(p,arr); }
+    arr.push(t);
+  }
+  taskIndexDirty=false;
+}
+function ensureTaskIndex(){
+  if(taskIndexDirty) rebuildTaskIndex();
+}
+function getTaskById(id){
+  ensureTaskIndex();
+  return taskById.get(id);
+}
+function historyCap(){
+  return tasks.length>400?15:(tasks.length>150?25:MAX_HISTORY);
+}
 
 // ── UTILS ────────────────────────────────────────────────────
 const D=(s)=>{ const dt=new Date(s+'T00:00:00'); return dt; };
@@ -137,23 +189,18 @@ function toggleCP(fromSwitch){
   }
   const btn=document.getElementById('cpBtn');
   if(btn) btn.classList.toggle('on',showCP);
-  showLoading(showCP?'Computing critical path…':'Updating view…');
-  try{
-    renderAll();
-    updateCpBanner();
-    if(showCP){
-      if(!tasks.some(t=>t.predId)){
-        showToast('Add links in the Pred column (or Edit → Predecessor)','info',4200);
-        pulsePredColumn();
-      } else if(!criticalIds.size){
-        showToast('No critical path found for current dependencies','info',3000);
-      } else {
-        showToast('Critical path: '+criticalIds.size+' item'+(criticalIds.size===1?'':'s')+' highlighted','ok',2200);
-        focusFirstCritical();
-      }
+  renderAll();
+  updateCpBanner();
+  if(showCP){
+    if(!tasks.some(t=>t.predId)){
+      showToast('Add links in the Pred column (or Edit → Predecessor)','info',4200);
+      pulsePredColumn();
+    } else if(!criticalIds.size){
+      showToast('No critical path found for current dependencies','info',3000);
+    } else {
+      showToast('Critical path: '+criticalIds.size+' item'+(criticalIds.size===1?'':'s')+' highlighted','ok',2200);
+      focusFirstCritical();
     }
-  } finally {
-    hideLoading();
   }
 }
 function updateCpBanner(){
@@ -216,15 +263,13 @@ function toggleAutoSchedule(fromSwitch){
     if(sw) sw.checked=autoSchedule;
   }
   if(autoSchedule){
-    showLoading('Auto-scheduling…');
     try{
       pushHistory();
       applyAutoSchedule();
       renderAll();
-      void persistScheduleChanges().finally(()=>hideLoading());
+      void persistScheduleChanges();
       showToast('✓ Auto schedule applied','ok');
     }catch(e){
-      hideLoading();
       showToast('Auto schedule failed','err',2800);
     }
   }
@@ -241,25 +286,21 @@ function toggleZoomFit(fromSwitch){
   const sw=document.getElementById('switchZoomFit');
   const on=fromSwitch===true?!!(sw&&sw.checked):!zoomFitActive;
   if(sw) sw.checked=on;
-  showLoading(on?'Zooming to fit…':'Restoring zoom…');
-  try{
-    if(on){
-      zoomBeforeFit={zoom,colW};
-      zoomFitActive=true;
-      zoomToFit();
-    } else {
-      zoomFitActive=false;
-      zoom=zoomBeforeFit.zoom||'week';
-      colW=zoomBeforeFit.colW||28;
-      const sel=document.getElementById('zoomToSelect');
-      if(sel) sel.value=zoom;
-      renderAll();
-    }
-  } finally {
-    hideLoading();
+  if(on){
+    zoomBeforeFit={zoom,colW};
+    zoomFitActive=true;
+    zoomToFit();
+  } else {
+    zoomFitActive=false;
+    zoom=zoomBeforeFit.zoom||'week';
+    colW=zoomBeforeFit.colW||28;
+    const sel=document.getElementById('zoomToSelect');
+    if(sel) sel.value=zoom;
+    renderAll();
   }
 }
 function applyAutoSchedule(){
+  let anyChanged=false;
   let changed=true,iter=0;
   while(changed&&iter<120){
     changed=false; iter++;
@@ -280,10 +321,11 @@ function applyAutoSchedule(){
         if(newEnd<predEnd){ newEnd=new Date(predEnd); newStart=addDays(newEnd,-dur); changed=true; }
       }
       const ns=fmt(newStart),ne=fmt(newEnd);
-      if(ns!==t.start||ne!==t.end){ t.start=ns; t.end=ne; changed=true; }
+      if(ns!==t.start||ne!==t.end){ t.start=ns; t.end=ne; changed=true; anyChanged=true; }
     });
   }
   rollupParentDates();
+  return anyChanged;
 }
 function rollupParentDates(){
   [...tasks].sort((a,b)=>getDepth(b)-getDepth(a)).forEach(t=>{
@@ -313,7 +355,50 @@ async function persistScheduleChanges(primary){
     if(t) await persistSave(t);
   }
 }
-function getChildren(id){ return tasks.filter(c=>c.parent===id); }
+function getChildren(id){
+  ensureTaskIndex();
+  return childrenByParent.get(id)||[];
+}
+function getSubtreeTasks(rootId){
+  const out=[];
+  function walk(id){
+    const t=tasks.find(x=>x.id===id);
+    if(t) out.push(t);
+    getChildren(id).forEach(c=>walk(c.id));
+  }
+  walk(rootId);
+  return out;
+}
+/** Container type when a Task/Milestone gains children (must not stay labeled Task). */
+function suggestedContainerType(t){
+  const p=t&&t.parent!=null?tasks.find(x=>x.id===t.parent):null;
+  if(!p||p.type===0||p.type===1||p.type===7) return 2; // Phase under program/project/release
+  if(p.type===2) return 4; // Activity under phase
+  if(p.type===3) return 4; // Activity under workstream
+  return 4;
+}
+function effectiveType(t){
+  if(!t) return 5;
+  if(getChildren(t.id).length&&(t.type===5||t.type===6)) return suggestedContainerType(t);
+  return t.type;
+}
+function typeLabel(t){ return LEVELS[effectiveType(t)]||'Task'; }
+function typeColorOf(t){ return LEVEL_COLORS[effectiveType(t)]||'#64748b'; }
+/** Persistable promote: Task/Milestone with children → Phase/Activity. */
+function promoteToContainerIfNeeded(t){
+  if(!t||!getChildren(t.id).length) return false;
+  if(t.type!==5&&t.type!==6) return false;
+  const next=suggestedContainerType(t);
+  if(t.type===next) return false;
+  t.type=next;
+  t.color=LEVEL_COLORS[next]||t.color;
+  return true;
+}
+function normalizeContainerTypes(){
+  let n=0;
+  tasks.forEach(t=>{ if(promoteToContainerIfNeeded(t)) n++; });
+  return n;
+}
 function getEffectiveDates(t){
   const kids=getChildren(t.id);
   if(!kids.length) return {start:t.start,end:t.end};
@@ -333,7 +418,8 @@ function pushHistory(){
   if(historyIdx>=0&&history[historyIdx]===snap) return;
   history.splice(historyIdx+1);
   history.push(snap);
-  if(history.length>MAX_HISTORY){
+  const cap=historyCap();
+  if(history.length>cap){
     history.shift();
     if(historyIdx>0) historyIdx--;
   }
@@ -344,38 +430,31 @@ function restoreHistory(idx){
   if(idx<0||idx>=history.length) return;
   historyIdx=idx;
   tasks=JSON.parse(history[historyIdx]);
+  invalidateTaskIndex();
   updateUndoRedoButtons();
   renderAll();
   if(selectedTaskId!=null) selectTask(selectedTaskId);
 }
 function undo(){
   if(historyIdx<0||!history.length) return;
-  showLoading('Undoing…');
-  try{
-    const live=snapshotTasks();
-    // Live mutated past tip (e.g. drag) — stash live for Redo, then restore tip
-    if(live!==history[historyIdx]){
-      history.splice(historyIdx+1);
-      history.push(live);
-      if(history.length>MAX_HISTORY){
-        history.shift();
-        // tip index moves left by 1 after shift
-        historyIdx=Math.max(0,historyIdx-1);
-      }
-      restoreHistory(historyIdx);
-      return;
+  const live=snapshotTasks();
+  // Live mutated past tip (e.g. drag) — stash live for Redo, then restore tip
+  if(live!==history[historyIdx]){
+    history.splice(historyIdx+1);
+    history.push(live);
+    if(history.length>MAX_HISTORY){
+      history.shift();
+      historyIdx=Math.max(0,historyIdx-1);
     }
-    if(historyIdx<=0) return;
-    restoreHistory(historyIdx-1);
-  } finally {
-    hideLoading();
+    restoreHistory(historyIdx);
+    return;
   }
+  if(historyIdx<=0) return;
+  restoreHistory(historyIdx-1);
 }
 function redo(){
   if(historyIdx>=history.length-1) return;
-  showLoading('Redoing…');
-  try{ restoreHistory(historyIdx+1); }
-  finally{ hideLoading(); }
+  restoreHistory(historyIdx+1);
 }
 function updateUndoRedoButtons(){
   const u=document.getElementById('undoBtn');
@@ -445,6 +524,133 @@ function loadFieldVisibility(){
 function saveFieldVisibility(){
   try{ localStorage.setItem(fieldVisibilityKey(),JSON.stringify(fieldVisibility)); }catch(e){}
 }
+function columnWidthsKey(){
+  const pid=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||0;
+  return 'gantt-col-widths-'+pid;
+}
+function getBuiltinField(id){ return BUILTIN_FIELDS.find(f=>f.id===id)||null; }
+function getColumnMinWidth(id){
+  if(String(id).startsWith('custom:')) return 60;
+  const f=getBuiltinField(id);
+  return (f&&f.minW)||40;
+}
+function getColumnWidth(id){
+  if(Object.prototype.hasOwnProperty.call(columnWidths,id)&&Number.isFinite(columnWidths[id])){
+    return columnWidths[id];
+  }
+  if(String(id).startsWith('custom:')){
+    const colId=Number(String(id).slice(7));
+    const c=(customCols||[]).find(x=>Number(x.id)===colId);
+    return Number(c&&c.width)||110;
+  }
+  const f=getBuiltinField(id);
+  if(!f) return 80;
+  if(f.widthKey){
+    const n=parseFloat(getComputedStyle(document.documentElement).getPropertyValue(f.widthKey));
+    if(Number.isFinite(n)&&n>0) return n;
+  }
+  return f.widthFb||80;
+}
+function setColumnWidth(id,px,opts){
+  const minW=getColumnMinWidth(id);
+  const maxW=720;
+  const w=Math.max(minW,Math.min(maxW,Math.round(Number(px)||minW)));
+  columnWidths[id]=w;
+  if(String(id).startsWith('custom:')){
+    const colId=Number(String(id).slice(7));
+    const c=(customCols||[]).find(x=>Number(x.id)===colId);
+    if(c){
+      c.width=w;
+      const th=document.querySelector('#tpHeader .th-custom-col[data-col="'+colId+'"]');
+      if(th){ th.style.width=w+'px'; th.style.minWidth=w+'px'; }
+      document.querySelectorAll('.task-custom-col[data-col="'+colId+'"]').forEach(el=>{
+        el.style.minWidth=w+'px';
+        el.style.maxWidth=w+'px';
+        el.style.width=w+'px';
+      });
+      if(!(opts&&opts.skipSave)) saveCustomCols();
+    }
+  } else {
+    const f=getBuiltinField(id);
+    if(f&&f.widthKey){
+      document.documentElement.style.setProperty(f.widthKey,w+'px');
+    }
+  }
+  if(!(opts&&opts.skipSave)){
+    try{ localStorage.setItem(columnWidthsKey(),JSON.stringify(columnWidths)); }catch(e){}
+  }
+  if(!(opts&&opts.skipSync)) syncTaskPanelToContent(true);
+  return w;
+}
+function loadColumnWidths(){
+  columnWidths={};
+  try{
+    const raw=localStorage.getItem(columnWidthsKey());
+    if(raw){
+      const saved=JSON.parse(raw)||{};
+      Object.keys(saved).forEach(k=>{
+        const n=Number(saved[k]);
+        if(Number.isFinite(n)&&n>0) columnWidths[k]=n;
+      });
+    }
+  }catch(e){ columnWidths={}; }
+  BUILTIN_FIELDS.forEach(f=>{
+    if(!f.widthKey) return;
+    const w=columnWidths[f.id]!=null?columnWidths[f.id]:f.widthFb;
+    document.documentElement.style.setProperty(f.widthKey,(w||f.widthFb)+'px');
+  });
+  (customCols||[]).forEach(c=>{
+    const key='custom:'+c.id;
+    if(columnWidths[key]!=null) c.width=columnWidths[key];
+  });
+}
+function ensureColumnResizeHandles(){
+  const header=document.getElementById('tpHeader');
+  if(!header) return;
+  header.querySelectorAll('.th-cell[data-field], .th-custom-col[data-col]').forEach(th=>{
+    if(th.classList.contains('th-add-col')||th.classList.contains('th-sel')||th.classList.contains('grid-filler')) return;
+    if(th.getAttribute('data-field')==='sel') return;
+    let handle=null;
+    for(let i=0;i<th.children.length;i++){
+      if(th.children[i].classList&&th.children[i].classList.contains('th-resize-handle')){
+        handle=th.children[i]; break;
+      }
+    }
+    if(!handle){
+      handle=document.createElement('div');
+      handle.className='th-resize-handle';
+      handle.title='Drag to resize column';
+      handle.setAttribute('aria-label','Resize column');
+      th.appendChild(handle);
+      handle.addEventListener('mousedown',e=>startColumnResize(e,th));
+    }
+  });
+}
+function startColumnResize(e,th){
+  e.preventDefault();
+  e.stopPropagation();
+  const field=th.getAttribute('data-field');
+  const colAttr=th.getAttribute('data-col');
+  const id=field||(colAttr!=null?'custom:'+colAttr:null);
+  if(!id) return;
+  const startX=e.clientX;
+  const startW=th.getBoundingClientRect().width||getColumnWidth(id);
+  th.classList.add('is-resizing');
+  document.body.classList.add('gantt-col-resizing');
+  const move=e2=>{
+    const dx=e2.clientX-startX;
+    setColumnWidth(id,startW+dx,{skipSave:true,skipSync:false});
+  };
+  const up=()=>{
+    document.removeEventListener('mousemove',move);
+    document.removeEventListener('mouseup',up);
+    th.classList.remove('is-resizing');
+    document.body.classList.remove('gantt-col-resizing');
+    setColumnWidth(id,getColumnWidth(id)); // persist + final sync
+  };
+  document.addEventListener('mousemove',move);
+  document.addEventListener('mouseup',up);
+}
 function setFieldVisible(id,on){
   const builtin=BUILTIN_FIELDS.find(f=>f.id===id);
   if(builtin&&builtin.locked) return;
@@ -452,6 +658,10 @@ function setFieldVisible(id,on){
   saveFieldVisibility();
   applyFieldVisibility();
   syncTaskPanelToContent(true);
+  updateColumnsBtn();
+  // Keep open menu checkboxes in sync if still visible
+  const menu=document.getElementById('fieldsMenu');
+  if(menu&&!menu.hasAttribute('hidden')) renderFieldsMenu();
 }
 function applyFieldVisibility(){
   const panel=document.getElementById('taskPanel');
@@ -465,6 +675,59 @@ function applyFieldVisibility(){
     el.classList.toggle('is-field-hidden', !isFieldVisible(key));
   });
 }
+/** Toggleable column ids (built-in + custom), excluding locked # / Task name. */
+function getToggleableColumnIds(){
+  const ids=BUILTIN_FIELDS.filter(f=>!f.locked).map(f=>f.id);
+  (customCols||[]).forEach(c=>ids.push('custom:'+c.id));
+  return ids;
+}
+function countVisibleToggleableColumns(){
+  const ids=getToggleableColumnIds();
+  let on=0;
+  ids.forEach(id=>{ if(isFieldVisible(id)) on++; });
+  return {on,total:ids.length};
+}
+function updateColumnsBtn(){
+  const btn=document.getElementById('fieldsMenuBtn');
+  if(!btn) return;
+  const {on,total}=countVisibleToggleableColumns();
+  const filtered=total>0&&on<total;
+  btn.classList.toggle('is-filtered',filtered);
+  const caret=' <span class="type-filter-caret" aria-hidden="true">▾</span>';
+  if(filtered){
+    btn.innerHTML='Columns · '+on+'/'+total+caret;
+    btn.title='Showing '+on+' of '+total+' optional columns — click to choose';
+  } else {
+    btn.innerHTML='Columns'+caret;
+    btn.title='Choose which table columns are visible';
+  }
+}
+function showAllColumns(){
+  getToggleableColumnIds().forEach(id=>{ fieldVisibility[id]=true; });
+  BUILTIN_FIELDS.forEach(f=>{ if(f.locked) fieldVisibility[f.id]=true; });
+  saveFieldVisibility();
+  applyFieldVisibility();
+  syncTaskPanelToContent(true);
+  updateColumnsBtn();
+  renderFieldsMenu();
+  showToast('All columns shown','ok',1600);
+}
+/** Keep # + Task name + Start + End; hide the rest. */
+function showEssentialColumnsOnly(){
+  const keep=new Set(['wbs','name','start','end']);
+  BUILTIN_FIELDS.forEach(f=>{
+    fieldVisibility[f.id]=keep.has(f.id)||!!f.locked;
+  });
+  (customCols||[]).forEach(c=>{ fieldVisibility['custom:'+c.id]=false; });
+  saveFieldVisibility();
+  applyFieldVisibility();
+  syncTaskPanelToContent(true);
+  updateColumnsBtn();
+  renderFieldsMenu();
+  showToast('Essential columns only (#, name, dates)','ok',2000);
+}
+window.showAllColumns=showAllColumns;
+window.showEssentialColumnsOnly=showEssentialColumnsOnly;
 function toggleFieldsMenu(e){
   if(e){e.preventDefault();e.stopPropagation();}
   const menu=document.getElementById('fieldsMenu');
@@ -472,44 +735,60 @@ function toggleFieldsMenu(e){
   if(!menu||!btn) return;
   const open=menu.hasAttribute('hidden');
   if(open){
+    // Close other filter menus
+    ['ownerFilterMenu','ragFilterMenu','typeFilterMenu','versionMenu'].forEach(id=>{
+      const m=document.getElementById(id);
+      if(m) m.setAttribute('hidden','');
+    });
     renderFieldsMenu();
     if(menu.parentElement!==document.body) document.body.appendChild(menu);
     const r=btn.getBoundingClientRect();
     menu.style.top=(r.bottom+4)+'px';
-    menu.style.left=Math.max(8,Math.min(r.left, window.innerWidth-220))+'px';
+    menu.style.left=Math.max(8,Math.min(r.left, window.innerWidth-260))+'px';
     menu.removeAttribute('hidden');
+    btn.setAttribute('aria-expanded','true');
     const close=(ev)=>{
       if(ev.target.closest&&(ev.target.closest('#fieldsMenuBtn')||ev.target.closest('#fieldsMenu'))) return;
       menu.setAttribute('hidden','');
+      btn.setAttribute('aria-expanded','false');
       document.removeEventListener('mousedown',close,true);
     };
     setTimeout(()=>document.addEventListener('mousedown',close,true),0);
   } else {
     menu.setAttribute('hidden','');
+    btn.setAttribute('aria-expanded','false');
   }
 }
 function renderFieldsMenu(){
   const menu=document.getElementById('fieldsMenu');
   if(!menu) return;
-  let html='<div class="fields-menu-title">Show fields</div>';
+  const {on,total}=countVisibleToggleableColumns();
+  let html=
+    '<div class="fields-menu-title">Columns</div>'+
+    '<p class="fields-menu-hint">Tick columns to show in the table. # and Task name stay on.</p>'+
+    '<div class="type-filter-actions">'+
+      '<button type="button" class="type-filter-link" onclick="event.stopPropagation();showAllColumns()">Show all</button>'+
+      '<button type="button" class="type-filter-link" onclick="event.stopPropagation();showEssentialColumnsOnly()">Essential only</button>'+
+    '</div>'+
+    '<div class="fields-menu-count">'+on+' of '+total+' optional columns on</div>';
   BUILTIN_FIELDS.forEach(f=>{
-    const on=isFieldVisible(f.id);
+    const visible=isFieldVisible(f.id);
     const locked=!!f.locked;
     html+=
-      '<label class="fields-menu-opt'+(locked?' is-locked':'')+'" role="menuitemcheckbox" aria-checked="'+(on?'true':'false')+'">'+
-        '<input type="checkbox" '+(on?'checked':'')+' '+(locked?'disabled':'')+
+      '<label class="fields-menu-opt'+(locked?' is-locked':'')+(visible?' is-on':'')+'" role="menuitemcheckbox" aria-checked="'+(visible?'true':'false')+'">'+
+        '<input type="checkbox" '+(visible?'checked':'')+' '+(locked?'disabled':'')+
           ' onchange="setFieldVisible(\''+f.id+'\',this.checked)">'+
-        '<span>'+esc(f.label)+(f.id==='type'?' <span style="opacity:.6">(optional)</span>':'')+'</span>'+
+        '<span>'+esc(f.label)+(locked?' <span class="fields-locked-tag">always on</span>':'')+'</span>'+
       '</label>';
   });
   if(customCols.length){
     html+='<div class="fields-menu-sep"></div><div class="fields-menu-title">Custom</div>';
     customCols.forEach(c=>{
       const key='custom:'+c.id;
-      const on=isFieldVisible(key);
+      const visible=isFieldVisible(key);
       html+=
-        '<label class="fields-menu-opt" role="menuitemcheckbox" aria-checked="'+(on?'true':'false')+'">'+
-          '<input type="checkbox" '+(on?'checked':'')+
+        '<label class="fields-menu-opt'+(visible?' is-on':'')+'" role="menuitemcheckbox" aria-checked="'+(visible?'true':'false')+'">'+
+          '<input type="checkbox" '+(visible?'checked':'')+
             ' onchange="setFieldVisible(\''+key+'\',this.checked)">'+
           '<span>'+esc(c.name)+'</span>'+
         '</label>';
@@ -524,11 +803,13 @@ function renderCustomHeaders(){
   const el=document.getElementById('tpCustomHeaders');
   if(!el) return;
   const typeLabel={text:'Text',number:'Number',date:'Date',select:'Dropdown',checkbox:'Checkbox'};
-  el.innerHTML=customCols.map(c=>
-    '<div class="th-cell th-custom-col'+(isFieldVisible('custom:'+c.id)?'':' is-field-hidden')+'" data-col="'+c.id+'" style="width:'+c.width+'px;min-width:'+c.width+'px;" title="'+esc(c.name)+' · '+(typeLabel[c.type]||c.type||'Text')+'">'+
+  el.innerHTML=customCols.map(c=>{
+    const w=getColumnWidth('custom:'+c.id);
+    return '<div class="th-cell th-custom-col'+(isFieldVisible('custom:'+c.id)?'':' is-field-hidden')+'" data-col="'+c.id+'" style="width:'+w+'px;min-width:'+w+'px;" title="'+esc(c.name)+' · '+(typeLabel[c.type]||c.type||'Text')+'">'+
       esc(c.name)+' <span class="th-col-rm" onclick="event.stopPropagation();removeCustomColumn('+c.id+')" title="Remove column">×</span>'+
-    '</div>'
-  ).join('');
+    '</div>';
+  }).join('');
+  ensureColumnResizeHandles();
 }
 
 function ensureAddColumnModal(){
@@ -681,6 +962,7 @@ function confirmAddColumn(){
   renderAll();
   syncTaskPanelToContent(true);
   applyFieldVisibility();
+  updateColumnsBtn();
   showToast('Column "'+name+'" added','ok',2200);
 }
 window.promptAddColumn=promptAddColumn;
@@ -703,6 +985,7 @@ function removeCustomColumn(id){
   renderAll();
   syncTaskPanelToContent(true);
   applyFieldVisibility();
+  updateColumnsBtn();
 }
 function updateTaskDateCells(taskId,startStr,endStr){
   const row=document.getElementById('tr-'+taskId);
@@ -854,18 +1137,24 @@ function getRange(){
 
 // ── VISIBLE TASKS ────────────────────────────────────────────
 function getOrderedTasks(){
+  ensureTaskIndex();
   const result=[];
   const seen=new Set();
   function walk(parentId){
-    tasks.filter(t=>t.parent===parentId).forEach(t=>{
-      if(seen.has(t.id)) return;
+    const kids=childrenByParent.get(parentId)||[];
+    for(let i=0;i<kids.length;i++){
+      const t=kids[i];
+      if(seen.has(t.id)) continue;
       seen.add(t.id);
       result.push(t);
       walk(t.id);
-    });
+    }
   }
   walk(null);
-  tasks.forEach(t=>{ if(!seen.has(t.id)){ seen.add(t.id); result.push(t); } });
+  for(let i=0;i<tasks.length;i++){
+    const t=tasks[i];
+    if(!seen.has(t.id)){ seen.add(t.id); result.push(t); }
+  }
   return result;
 }
 function hasLevelFilter(){
@@ -905,6 +1194,12 @@ function toggleTypeFilterMenu(e){
     if(fieldsMenu) fieldsMenu.setAttribute('hidden','');
     const ragMenu=document.getElementById('ragFilterMenu');
     if(ragMenu) ragMenu.setAttribute('hidden','');
+    const ragBtn=document.getElementById('ragFilterBtn');
+    if(ragBtn) ragBtn.setAttribute('aria-expanded','false');
+    const ownerMenu=document.getElementById('ownerFilterMenu');
+    if(ownerMenu) ownerMenu.setAttribute('hidden','');
+    const ownerBtn=document.getElementById('ownerFilterBtn');
+    if(ownerBtn) ownerBtn.setAttribute('aria-expanded','false');
     renderTypeFilterMenu();
     if(menu.parentElement!==document.body) document.body.appendChild(menu);
     const r=btn.getBoundingClientRect();
@@ -973,7 +1268,7 @@ function setTypeFilter(typeNum,on){
       }
     }
   }
-  renderAll();
+  refreshVisibleStructure();
 }
 function clearTypeFilter(e){
   if(e){e.preventDefault();e.stopPropagation();}
@@ -986,7 +1281,7 @@ function clearTypeFilter(e){
     renderTypeFilterMenu();
     if(btn) btn.setAttribute('aria-expanded','true');
   }
-  renderAll();
+  refreshVisibleStructure();
 }
 function selectAllTypeFilters(e){
   if(e){e.preventDefault();e.stopPropagation();}
@@ -998,12 +1293,153 @@ window.setTypeFilter=setTypeFilter;
 window.clearTypeFilter=clearTypeFilter;
 window.selectAllTypeFilters=selectAllTypeFilters;
 
+function hasOwnerFilter(){
+  return ownerFilterOwners.size>0;
+}
+function syncOwnerFilterHidden(){
+  const el=document.getElementById('f-owner');
+  if(!el) return;
+  if(!ownerFilterOwners.size){ el.value=''; return; }
+  el.value=Array.from(ownerFilterOwners).join('\u0001');
+}
+function updateOwnerFilterBtn(){
+  const btn=document.getElementById('ownerFilterBtn');
+  if(!btn) return;
+  if(!ownerFilterOwners.size){
+    btn.innerHTML='All owners <span class="type-filter-caret" aria-hidden="true">▾</span>';
+    btn.classList.remove('is-filtered');
+    btn.title='Filter by owner — tick one or more to show only those';
+    btn.setAttribute('aria-expanded','false');
+    return;
+  }
+  const labels=OWNERS.filter(o=>ownerFilterOwners.has(o));
+  const text=labels.length<=2?labels.join(', '):(labels[0]+' +'+(labels.length-1));
+  btn.innerHTML=esc(text)+' <span class="type-filter-caret" aria-hidden="true">▾</span>';
+  btn.classList.add('is-filtered');
+  btn.title='Showing: '+labels.join(', ')+' — click to change';
+}
+function toggleOwnerFilterMenu(e){
+  if(e){e.preventDefault();e.stopPropagation();}
+  const menu=document.getElementById('ownerFilterMenu');
+  const btn=document.getElementById('ownerFilterBtn');
+  if(!menu||!btn) return;
+  const open=menu.hasAttribute('hidden');
+  if(open){
+    const fieldsMenu=document.getElementById('fieldsMenu');
+    if(fieldsMenu) fieldsMenu.setAttribute('hidden','');
+    const ragMenu=document.getElementById('ragFilterMenu');
+    if(ragMenu) ragMenu.setAttribute('hidden','');
+    const ragBtn=document.getElementById('ragFilterBtn');
+    if(ragBtn) ragBtn.setAttribute('aria-expanded','false');
+    const typeMenu=document.getElementById('typeFilterMenu');
+    if(typeMenu) typeMenu.setAttribute('hidden','');
+    const typeBtn=document.getElementById('typeFilterBtn');
+    if(typeBtn) typeBtn.setAttribute('aria-expanded','false');
+    renderOwnerFilterMenu();
+    if(menu.parentElement!==document.body) document.body.appendChild(menu);
+    const r=btn.getBoundingClientRect();
+    menu.style.top=(r.bottom+4)+'px';
+    menu.style.left=Math.max(8,Math.min(r.left, window.innerWidth-240))+'px';
+    menu.removeAttribute('hidden');
+    btn.setAttribute('aria-expanded','true');
+    const close=(ev)=>{
+      if(ev.target.closest&&(ev.target.closest('#ownerFilterBtn')||ev.target.closest('#ownerFilterMenu'))) return;
+      menu.setAttribute('hidden','');
+      btn.setAttribute('aria-expanded','false');
+      document.removeEventListener('mousedown',close,true);
+    };
+    setTimeout(()=>document.addEventListener('mousedown',close,true),0);
+  } else {
+    menu.setAttribute('hidden','');
+    btn.setAttribute('aria-expanded','false');
+  }
+}
+function renderOwnerFilterMenu(){
+  const menu=document.getElementById('ownerFilterMenu');
+  if(!menu) return;
+  const nSel=ownerFilterOwners.size;
+  let html='<div class="fields-menu-title">Show owners</div>';
+  html+='<div class="type-filter-hint">'+(nSel?nSel+' selected — tick more to combine':'Tick any combination (empty = all)')+'</div>';
+  html+='<div class="type-filter-actions">'+
+    '<button type="button" class="type-filter-link" onclick="selectAllOwnerFilters(event)">Show all</button>'+
+    '<button type="button" class="type-filter-link" onclick="clearOwnerFilter(event)">Clear</button>'+
+  '</div>';
+  if(!OWNERS.length){
+    html+='<div class="type-filter-hint">No owners on this plan yet</div>';
+  } else {
+    OWNERS.forEach((o,i)=>{
+      const on=ownerFilterOwners.has(o);
+      const safe=esc(o);
+      html+=
+        '<label class="fields-menu-opt'+(on?' is-on':'')+'" data-owner="'+i+'" role="menuitemcheckbox" aria-checked="'+(on?'true':'false')+'">'+
+          '<input type="checkbox" '+(on?'checked':'')+
+            ' onchange="setOwnerFilterByIndex('+i+',this.checked)">'+
+          '<span><span class="av type-filter-av" style="background:'+avC(o)+'" aria-hidden="true">'+esc(avInits(o))+'</span> '+safe+'</span>'+
+        '</label>';
+    });
+  }
+  menu.innerHTML=html;
+}
+function setOwnerFilterByIndex(idx,on){
+  const o=OWNERS[Number(idx)];
+  if(o==null) return;
+  setOwnerFilter(o,on);
+}
+function setOwnerFilter(owner,on){
+  if(on) ownerFilterOwners.add(owner);
+  else ownerFilterOwners.delete(owner);
+  if(OWNERS.length&&ownerFilterOwners.size===OWNERS.length) ownerFilterOwners.clear();
+  syncOwnerFilterHidden();
+  updateOwnerFilterBtn();
+  const menu=document.getElementById('ownerFilterMenu');
+  if(menu&&!menu.hasAttribute('hidden')){
+    if(!ownerFilterOwners.size){
+      renderOwnerFilterMenu();
+    } else {
+      const nSel=ownerFilterOwners.size;
+      const hint=menu.querySelector('.type-filter-hint');
+      if(hint) hint.textContent=nSel?nSel+' selected — tick more to combine':'Tick any combination (empty = all)';
+      const i=OWNERS.indexOf(owner);
+      const lab=i>=0?menu.querySelector('.fields-menu-opt[data-owner="'+i+'"]'):null;
+      if(lab){
+        lab.classList.toggle('is-on',!!on);
+        lab.setAttribute('aria-checked',on?'true':'false');
+        const inp=lab.querySelector('input');
+        if(inp) inp.checked=!!on;
+      }
+    }
+  }
+  refreshVisibleStructure();
+}
+function clearOwnerFilter(e){
+  if(e){e.preventDefault();e.stopPropagation();}
+  ownerFilterOwners.clear();
+  syncOwnerFilterHidden();
+  updateOwnerFilterBtn();
+  const menu=document.getElementById('ownerFilterMenu');
+  const btn=document.getElementById('ownerFilterBtn');
+  if(menu&&!menu.hasAttribute('hidden')){
+    renderOwnerFilterMenu();
+    if(btn) btn.setAttribute('aria-expanded','true');
+  }
+  refreshVisibleStructure();
+}
+function selectAllOwnerFilters(e){
+  if(e){e.preventDefault();e.stopPropagation();}
+  clearOwnerFilter(e);
+}
+window.toggleOwnerFilterMenu=toggleOwnerFilterMenu;
+window.setOwnerFilter=setOwnerFilter;
+window.setOwnerFilterByIndex=setOwnerFilterByIndex;
+window.clearOwnerFilter=clearOwnerFilter;
+window.selectAllOwnerFilters=selectAllOwnerFilters;
+
 function getVisible(){
-  const fo=document.getElementById('f-owner')?.value||'';
-  const frDim=document.getElementById('f-rag-dim')?.value||'';
-  const fr=document.getElementById('f-rag')?.value||'';
   const fq=(document.getElementById('f-search')?.value||'').trim().toLowerCase();
   const filteringTypes=hasLevelFilter();
+  const filteringOwners=hasOwnerFilter();
+  const filteringRag=hasRagFilter();
+  ensureTaskIndex();
   return getOrderedTasks().filter(t=>{
     // When type-filtering, still show matching rows even if an ancestor folder is collapsed
     // (otherwise "Milestones only" looks empty). Otherwise respect collapse.
@@ -1014,23 +1450,54 @@ function getVisible(){
         if(seen.has(p)||p===t.id) break;
         seen.add(p);
         if(collapsed[p]) return false;
-        const pt=tasks.find(x=>x.id===p);
+        const pt=taskById.get(p);
         if(!pt||pt.parent===pt.id) break;
         p=pt.parent;
       }
     }
     if(filteringTypes&&!levelFilterTypes.has(Number(t.type))) return false;
-    if(fo&&t.owner!==fo) return false;
-    if(fr){
-      if(frDim){
-        if(ragField(t,frDim)!==fr) return false;
-      } else if(ragField(t,'bgt')!==fr&&ragField(t,'sch')!==fr&&ragField(t,'scp')!==fr){
-        return false;
+    if(filteringOwners&&!ownerFilterOwners.has(t.owner||'')) return false;
+    if(filteringRag){
+      let ok=false;
+      for(const key of ragFilterKeys){
+        const i=key.indexOf(':');
+        if(i<0) continue;
+        const dim=key.slice(0,i);
+        const val=key.slice(i+1);
+        if(ragField(t,dim)===val){ ok=true; break; }
       }
+      if(!ok) return false;
     }
     if(fq&&!(t.name||'').toLowerCase().includes(fq)&&!(t.wbs||'').toLowerCase().includes(fq)) return false;
     return true;
   });
+}
+
+let ganttSearchTimer=null;
+function onGanttSearchInput(){
+  if(ganttSearchTimer) clearTimeout(ganttSearchTimer);
+  ganttSearchTimer=setTimeout(()=>{
+    ganttSearchTimer=null;
+    refreshVisibleStructure();
+  },200);
+}
+/** Collapse / search / filter — rebuild visible rows without WBS/CP full pass when possible */
+function refreshVisibleStructure(){
+  const snap=captureGanttScroll();
+  if(mainView==='list'){
+    renderListView();
+    updateCpBanner();
+    restoreGanttScroll(snap);
+    return;
+  }
+  const {start,end}=getRange();
+  const totalW=daysBetween(start,end)*colW;
+  renderTaskPanel();
+  renderTimeline(start,end,totalW);
+  positionTodayLine(start);
+  if(selectedTaskId!=null) selectTask(selectedTaskId);
+  restoreGanttScroll(snap);
+  updateCpBanner();
 }
 
 /** Place task in the array immediately after its parent (and parent's subtree) for clear hierarchy */
@@ -1040,11 +1507,12 @@ function moveTaskAfterParent(task){
   tasks.splice(from,1);
   if(task.parent===null){
     tasks.push(task);
+    invalidateTaskIndex();
     return;
   }
   // Find end of parent's subtree in current array
   let insertAt=tasks.findIndex(x=>x.id===task.parent);
-  if(insertAt<0){ tasks.push(task); return; }
+  if(insertAt<0){ tasks.push(task); invalidateTaskIndex(); return; }
   insertAt++;
   while(insertAt<tasks.length){
     const cur=tasks[insertAt];
@@ -1060,6 +1528,7 @@ function moveTaskAfterParent(task){
     insertAt++;
   }
   tasks.splice(insertAt,0,task);
+  invalidateTaskIndex();
 }
 
 function flashTaskRow(id){
@@ -1076,38 +1545,145 @@ function toggleRagFilterMenu(e){
   if(!menu||!btn) return;
   const open=menu.hasAttribute('hidden');
   if(open){
+    const typeMenu=document.getElementById('typeFilterMenu');
+    if(typeMenu) typeMenu.setAttribute('hidden','');
+    const typeBtn=document.getElementById('typeFilterBtn');
+    if(typeBtn) typeBtn.setAttribute('aria-expanded','false');
+    const ownerMenu=document.getElementById('ownerFilterMenu');
+    if(ownerMenu) ownerMenu.setAttribute('hidden','');
+    const ownerBtn=document.getElementById('ownerFilterBtn');
+    if(ownerBtn) ownerBtn.setAttribute('aria-expanded','false');
+    renderRagFilterMenu();
     if(menu.parentElement!==document.body) document.body.appendChild(menu);
     const r=btn.getBoundingClientRect();
     menu.style.top=(r.bottom+4)+'px';
-    menu.style.left=Math.max(8,r.left)+'px';
+    menu.style.left=Math.max(8,Math.min(r.left, window.innerWidth-260))+'px';
     menu.removeAttribute('hidden');
+    btn.setAttribute('aria-expanded','true');
     const close=(ev)=>{
       if(ev.target.closest&&(ev.target.closest('#ragFilterBtn')||ev.target.closest('#ragFilterMenu'))) return;
       menu.setAttribute('hidden','');
+      btn.setAttribute('aria-expanded','false');
       document.removeEventListener('mousedown',close,true);
     };
     setTimeout(()=>document.addEventListener('mousedown',close,true),0);
   } else {
     menu.setAttribute('hidden','');
+    btn.setAttribute('aria-expanded','false');
   }
 }
-function setRagFilter(dim,val,el){
+function hasRagFilter(){
+  return ragFilterKeys.size>0;
+}
+function syncRagFilterHidden(){
   const dimEl=document.getElementById('f-rag-dim');
   const hidden=document.getElementById('f-rag');
-  if(dimEl) dimEl.value=dim||'';
-  if(hidden) hidden.value=val||'';
-  const key=(dim&&val)?(dim+':'+val):'';
-  document.querySelectorAll('#ragFilterMenu .tb-filter-opt').forEach(b=>{
-    b.classList.toggle('on',(b.getAttribute('data-rag-key')||'')===key);
-  });
+  if(!ragFilterKeys.size){
+    if(dimEl) dimEl.value='';
+    if(hidden) hidden.value='';
+    return;
+  }
+  // Keep first key in hiddens for any legacy readers; filtering uses ragFilterKeys
+  const first=Array.from(ragFilterKeys)[0];
+  const i=first.indexOf(':');
+  if(dimEl) dimEl.value=i>=0?first.slice(0,i):'';
+  if(hidden) hidden.value=i>=0?first.slice(i+1):'';
+}
+function updateRagFilterBtn(){
   const btn=document.getElementById('ragFilterBtn');
-  if(btn) btn.classList.toggle('active',!!val);
+  if(!btn) return;
+  const on=hasRagFilter();
+  btn.classList.toggle('active',on);
+  btn.classList.toggle('is-filtered',on);
+  btn.title=on
+    ?('RAG filter: '+ragFilterKeys.size+' selected — click to change')
+    :'Filter by Budget / Schedule / Scope RAG — tick one or more';
+}
+function renderRagFilterMenu(){
   const menu=document.getElementById('ragFilterMenu');
-  if(menu) menu.setAttribute('hidden','');
-  renderAll();
+  if(!menu) return;
+  const nSel=ragFilterKeys.size;
+  let html='<div class="fields-menu-title">Show RAG</div>';
+  html+='<div class="type-filter-hint">'+(nSel?nSel+' selected — tick more to combine':'Tick any combination (empty = all)')+'</div>';
+  html+='<div class="type-filter-actions">'+
+    '<button type="button" class="type-filter-link" onclick="selectAllRagFilters(event)">Show all</button>'+
+    '<button type="button" class="type-filter-link" onclick="clearRagFilter(event)">Clear</button>'+
+  '</div>';
+  let lastSec='';
+  RAG_FILTER_OPTS.forEach(opt=>{
+    if(opt.sec!==lastSec){
+      html+='<div class="rag-filter-sec">'+esc(opt.sec)+'</div>';
+      lastSec=opt.sec;
+    }
+    const key=opt.dim+':'+opt.val;
+    const on=ragFilterKeys.has(key);
+    html+=
+      '<label class="fields-menu-opt'+(on?' is-on':'')+'" data-rag-key="'+key+'" role="menuitemcheckbox" aria-checked="'+(on?'true':'false')+'">'+
+        '<input type="checkbox" '+(on?'checked':'')+
+          ' onchange="setRagFilterKey(\''+key+'\',this.checked)">'+
+        '<span>'+opt.dot+' '+esc(opt.label)+'</span>'+
+      '</label>';
+  });
+  menu.innerHTML=html;
+}
+function setRagFilterKey(key,on){
+  if(on) ragFilterKeys.add(key);
+  else ragFilterKeys.delete(key);
+  if(ragFilterKeys.size===RAG_FILTER_OPTS.length) ragFilterKeys.clear();
+  syncRagFilterHidden();
+  updateRagFilterBtn();
+  const menu=document.getElementById('ragFilterMenu');
+  if(menu&&!menu.hasAttribute('hidden')){
+    if(!ragFilterKeys.size){
+      renderRagFilterMenu();
+    } else {
+      const nSel=ragFilterKeys.size;
+      const hint=menu.querySelector('.type-filter-hint');
+      if(hint) hint.textContent=nSel?nSel+' selected — tick more to combine':'Tick any combination (empty = all)';
+      const lab=menu.querySelector('.fields-menu-opt[data-rag-key="'+key+'"]');
+      if(lab){
+        const stillOn=ragFilterKeys.has(key);
+        lab.classList.toggle('is-on',stillOn);
+        lab.setAttribute('aria-checked',stillOn?'true':'false');
+        const inp=lab.querySelector('input');
+        if(inp) inp.checked=stillOn;
+      }
+    }
+  }
+  refreshVisibleStructure();
+}
+/** Legacy single-select API — maps to checkbox set */
+function setRagFilter(dim,val){
+  ragFilterKeys.clear();
+  if(dim&&val) ragFilterKeys.add(dim+':'+val);
+  syncRagFilterHidden();
+  updateRagFilterBtn();
+  const menu=document.getElementById('ragFilterMenu');
+  if(menu&&!menu.hasAttribute('hidden')) renderRagFilterMenu();
+  refreshVisibleStructure();
+}
+function clearRagFilter(e){
+  if(e){e.preventDefault();e.stopPropagation();}
+  ragFilterKeys.clear();
+  syncRagFilterHidden();
+  updateRagFilterBtn();
+  const menu=document.getElementById('ragFilterMenu');
+  const btn=document.getElementById('ragFilterBtn');
+  if(menu&&!menu.hasAttribute('hidden')){
+    renderRagFilterMenu();
+    if(btn) btn.setAttribute('aria-expanded','true');
+  }
+  refreshVisibleStructure();
+}
+function selectAllRagFilters(e){
+  if(e){e.preventDefault();e.stopPropagation();}
+  clearRagFilter(e);
 }
 window.toggleRagFilterMenu=toggleRagFilterMenu;
 window.setRagFilter=setRagFilter;
+window.setRagFilterKey=setRagFilterKey;
+window.clearRagFilter=clearRagFilter;
+window.selectAllRagFilters=selectAllRagFilters;
 
 // ── ZOOM ─────────────────────────────────────────────────────
 function setZoom(z){
@@ -1133,44 +1709,142 @@ function zoomToFit(){
   wrap.scrollLeft=0;
 }
 
-// ── VIEW ─────────────────────────────────────────────────────
-function setView(v,el){
-  try{
-    if(v!=='gantt'&&v!=='list') return;
-    showLoading(v==='list'?'Loading list view…':'Loading Gantt view…');
-    mainView=v;
-    document.querySelectorAll('.vb').forEach(b=>b.classList.remove('on'));
-    if(el) el.classList.add('on');
-    const gBtn=document.getElementById('viewGanttBtn');
-    const lBtn=document.getElementById('viewListBtn');
-    if(v==='gantt'&&gBtn) gBtn.classList.add('on');
-    if(v==='list'&&lBtn) lBtn.classList.add('on');
-
-    const gv=document.getElementById('ganttView');
-    const lv=document.getElementById('listView');
-
-    if(v==='list'){
-      if(gv){ gv.hidden=true; gv.style.display='none'; }
-      if(lv){ lv.hidden=false; lv.style.display='block'; }
-      renderListView();
-      return;
-    }
-
-    if(lv){ lv.hidden=true; lv.style.display='none'; }
-    if(gv){ gv.hidden=false; gv.style.display='flex'; }
-    renderAll();
-  }catch(err){
-    console.error('setView failed',err);
-  } finally {
-    hideLoading();
+// ── VIEW (Gantt / List are independent toggles) ──────────────
+function syncViewButtons(){
+  const gBtn=document.getElementById('viewGanttBtn');
+  const lBtn=document.getElementById('viewListBtn');
+  if(gBtn){
+    gBtn.classList.toggle('on',viewShowGantt);
+    gBtn.setAttribute('aria-pressed',viewShowGantt?'true':'false');
+  }
+  if(lBtn){
+    lBtn.classList.toggle('on',viewShowList);
+    lBtn.setAttribute('aria-pressed',viewShowList?'true':'false');
   }
 }
+
+function applyViewPanes(){
+  syncViewButtons();
+  const gv=document.getElementById('ganttView');
+  const lv=document.getElementById('listView');
+  const taskPanel=document.getElementById('taskPanel');
+  const splitter=document.getElementById('panelSplitter');
+
+  // List only — dedicated full list page
+  if(viewShowList&&!viewShowGantt){
+    mainView='list';
+    if(gv){ gv.hidden=true; gv.style.display='none'; gv.classList.remove('timeline-only','list-only-panel'); }
+    if(lv){ lv.hidden=false; lv.style.display='block'; }
+    renderListView();
+    updateCpBanner();
+    return;
+  }
+
+  // Chart container (timeline ± left list panel)
+  mainView='gantt';
+  if(lv){ lv.hidden=true; lv.style.display='none'; }
+  if(gv){
+    gv.hidden=false;
+    gv.style.display='flex';
+    gv.classList.toggle('timeline-only',viewShowGantt&&!viewShowList);
+    gv.classList.remove('list-only-panel');
+  }
+  if(taskPanel){
+    taskPanel.hidden=!viewShowList;
+    taskPanel.style.display=viewShowList?'':'none';
+  }
+  if(splitter){
+    splitter.hidden=!viewShowList;
+    splitter.style.display=viewShowList?'':'none';
+  }
+  renderAll();
+}
+
+/** Click Gantt or List to toggle that pane on/off (at least one stays on). */
+function toggleViewPane(which){
+  try{
+    if(which==='list'){
+      if(viewShowList&&!viewShowGantt){
+        showToast('Turn on Gantt to hide the list','info',1800);
+        return;
+      }
+      viewShowList=!viewShowList;
+    } else if(which==='gantt'){
+      if(viewShowGantt&&!viewShowList){
+        showToast('Turn on List to hide the chart','info',1800);
+        return;
+      }
+      viewShowGantt=!viewShowGantt;
+    } else return;
+
+    const label=
+      viewShowList&&viewShowGantt?'Both panes':
+      viewShowGantt?'Gantt chart only':'List only';
+    applyViewPanes();
+    showToast(label,'ok',1400);
+  }catch(err){
+    console.error('toggleViewPane failed',err);
+  }
+}
+
+/** Legacy single-mode API (keeps older callers working). */
+function setView(v,el){
+  try{
+    if(v==='list'){
+      viewShowList=true;
+      viewShowGantt=false;
+    } else if(v==='gantt'||v==='both'||v==='combined'){
+      viewShowList=true;
+      viewShowGantt=true;
+    } else if(v==='timeline'||v==='chart'){
+      viewShowList=false;
+      viewShowGantt=true;
+    } else return;
+    applyViewPanes();
+  }catch(err){
+    console.error('setView failed',err);
+  }
+}
+window.toggleViewPane=toggleViewPane;
 window.setView=setView;
 
 // ═══════════════════════════════════════════════════════════════
 // MAIN RENDER
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// MAIN RENDER
+// ═══════════════════════════════════════════════════════════════
+function captureGanttScroll(){
+  const ts=document.getElementById('taskScroll');
+  const tw=document.getElementById('tlWrap');
+  const gx=document.getElementById('tpGridX');
+  return {
+    top:ts?ts.scrollTop:0,
+    left:tw?tw.scrollLeft:0,
+    gridLeft:gx?gx.scrollLeft:0,
+  };
+}
+function restoreGanttScroll(s){
+  if(!s) return;
+  const ts=document.getElementById('taskScroll');
+  const tw=document.getElementById('tlWrap');
+  const gx=document.getElementById('tpGridX');
+  const th=document.getElementById('tlHeader');
+  if(ts) ts.scrollTop=s.top;
+  if(tw){ tw.scrollTop=s.top; tw.scrollLeft=s.left; }
+  if(gx) gx.scrollLeft=s.gridLeft;
+  if(th&&tw) th.style.transform='translateX('+(-tw.scrollLeft)+'px)';
+}
+function focusNoScroll(el,doSelect){
+  if(!el) return;
+  try{ el.focus({preventScroll:true}); }
+  catch(e){ try{ el.focus(); }catch(e2){} }
+  if(doSelect&&typeof el.select==='function'){
+    try{ el.select(); }catch(e){}
+  }
+}
 function renderAll(){
+  ensureTaskIndex();
   calcWBS();
   // Drop illegal folder/project predecessors (mouse used to allow these)
   tasks.forEach(t=>{
@@ -1179,7 +1853,7 @@ function renderAll(){
       t.predId=null; t.depType='FS';
       return;
     }
-    const p=tasks.find(x=>x.id===t.predId);
+    const p=getTaskById(t.predId);
     if(!p||!canBePredecessor(p)){ t.predId=null; t.depType='FS'; }
   });
   computeCriticalPath();
@@ -1195,7 +1869,7 @@ function renderAll(){
   const ts=document.getElementById('taskScroll');
   const tw=document.getElementById('tlWrap');
   if(!ts||!tw){ updateCpBanner(); return; }
-  const prevScrollTop=ts.scrollTop||0;
+  const snap=captureGanttScroll();
   const {start,end}=getRange();
   const totalDays=daysBetween(start,end);
   const totalW=totalDays*colW;
@@ -1203,17 +1877,60 @@ function renderAll(){
   renderCustomHeaders();
   renderTimeline(start,end,totalW);
   positionTodayLine(start);
+  syncHeaderHeights();
   if(selectedTaskId!=null) selectTask(selectedTaskId);
+  restoreGanttScroll(snap);
   if(!scrollSyncing){
     scrollSyncing=true;
-    ts.scrollTop=prevScrollTop;
-    tw.scrollTop=prevScrollTop;
-    const th=document.getElementById('tlHeader');
-    if(th) th.style.transform='translateX('+(-tw.scrollLeft)+'px)';
-    requestAnimationFrame(()=>{scrollSyncing=false;});
+    requestAnimationFrame(()=>{
+      restoreGanttScroll(snap);
+      requestAnimationFrame(()=>{
+        restoreGanttScroll(snap);
+        scrollSyncing=false;
+      });
+    });
   }
   updateCpBanner();
   flushPendingCellEdit();
+  // Focusing an input must not jump the timeline/panel
+  restoreGanttScroll(snap);
+  requestAnimationFrame(()=>restoreGanttScroll(snap));
+}
+
+/** Soft UI update after linking/unlinking deps — no full chart rebuild (avoids flash / “reload”). */
+function softRefreshAfterDepChange(focusId){
+  const snap=captureGanttScroll();
+  computeCriticalPath();
+  const updatePredCell=(id)=>{
+    const t=tasks.find(x=>x.id===id);
+    if(!t) return;
+    const predTxt=formatPred(t);
+    const cell=document.querySelector('#tr-'+id+' .pred-val');
+    if(cell) cell.textContent=predTxt;
+    const listPred=document.querySelector('.list-tr[data-id="'+id+'"] [data-field="pred"]');
+    if(listPred) listPred.textContent=predTxt;
+  };
+  if(focusId!=null) updatePredCell(focusId);
+  else tasks.forEach(t=>updatePredCell(t.id));
+
+  const visible=getVisible();
+  visible.forEach(t=>{
+    const hasKids=getChildren(t.id).length>0;
+    const isCrit=showCP&&criticalIds.has(t.id);
+    const bar=document.getElementById('bar-'+t.id);
+    if(bar) bar.className='gantt-bar '+getTaskBarClass(t,hasKids,isCrit);
+    const ms=document.querySelector('.milestone-diamond[data-id="'+t.id+'"]');
+    if(ms) ms.classList.toggle('critical',isCrit);
+    const row=document.getElementById('tr-'+t.id);
+    if(row) row.classList.toggle('critical',isCrit);
+    const gr=document.getElementById('gr-'+t.id);
+    if(gr) gr.classList.toggle('critical',isCrit);
+  });
+  const {start}=getRange();
+  renderDeps(visible,start);
+  updateCpBanner();
+  if(focusId!=null) selectTask(focusId);
+  restoreGanttScroll(snap);
 }
 
 // ── TASK PANEL ───────────────────────────────────────────────
@@ -1224,8 +1941,8 @@ function renderTaskPanel(){
   if(!visible.length){
     const hasFilters=!!(
       hasLevelFilter()||
-      (document.getElementById('f-owner')?.value)||
-      (document.getElementById('f-rag')?.value)||
+      hasOwnerFilter()||
+      hasRagFilter()||
       ((document.getElementById('f-search')?.value||'').trim())
     );
     const msg=tasks.length
@@ -1236,8 +1953,8 @@ function renderTaskPanel(){
     scroll.innerHTML='<div class="gantt-empty">'+esc(msg)+'</div>'+
       '<div class="row-insert-gap is-empty"><button type="button" class="row-insert-btn" onclick="event.stopPropagation();addNewItem()" title="Add a new item" aria-label="Add row">+</button></div>';
   } else {
-    scroll.innerHTML=visible.map(t=>buildTaskRowHTML(t)).join('');
-    bindCustomCellClicks();
+  scroll.innerHTML=visible.map(t=>buildTaskRowHTML(t)).join('');
+  bindCustomCellClicks();
   }
   if(selectedTaskId!=null){
     const r=document.getElementById('tr-'+selectedTaskId);
@@ -1247,6 +1964,7 @@ function renderTaskPanel(){
   syncTaskPanelToContent(false);
   applyFieldVisibility();
   flushPendingCellEdit();
+  updateSelectionBar();
 }
 
 function getDepth(t){
@@ -1284,20 +2002,29 @@ function buildTaskRowHTML(t){
     } else if(raw!=null&&String(raw).trim()!==''){
       display=String(raw);
     }
+    const w=getColumnWidth('custom:'+col.id);
     const hidden=isFieldVisible('custom:'+col.id)?'':' is-field-hidden';
-    return '<div class="task-custom-col ie-cell'+hidden+'" data-ie-field="custom:'+col.id+'" data-col="'+col.id+'" style="min-width:'+col.width+'px;max-width:'+col.width+'px;" data-id="'+t.id+'" title="Click to edit · Tab to next">'+esc(display||'—')+'</div>';
+    return '<div class="task-custom-col ie-cell'+hidden+'" data-ie-field="custom:'+col.id+'" data-col="'+col.id+'" style="width:'+w+'px;min-width:'+w+'px;max-width:'+w+'px;" data-id="'+t.id+'" title="Click to edit · Tab to next">'+esc(display||'—')+'</div>';
   }).join('');
-  const typeName=LEVELS[t.type]||'Task';
-  const typeColor=LEVEL_COLORS[t.type]||'#64748b';
-  return '<div class="task-row '+(isCrit?'critical':'')+'" data-id="'+t.id+'" data-level="'+t.type+'" id="tr-'+t.id+'" onclick="selectTask('+t.id+')">'+
+  const typeName=typeLabel(t);
+  const typeColor=typeColorOf(t);
+  const typeHint=hasKids?'Folder · dates roll up from children · drag bar to move group':'Click to change type';
+  const isChecked=checkedRowIds.has(t.id);
+  const canCheck=!(t.type===1||t.id===1);
+  return '<div class="task-row '+(isCrit?'critical':'')+(hasKids?' is-folder':'')+(isChecked?' is-checked':'')+'" data-id="'+t.id+'" data-level="'+effectiveType(t)+'" id="tr-'+t.id+'" onclick="selectTask('+t.id+')">'+
+    '<div class="task-sel-col" onclick="event.stopPropagation()">'+
+      (canCheck
+        ?'<input type="checkbox" class="task-sel-cb" '+(isChecked?'checked ':'')+'onclick="event.stopPropagation();toggleRowCheck('+t.id+',this.checked)" aria-label="Select row">'
+        :'<span class="task-sel-spacer" aria-hidden="true"></span>')+
+    '</div>'+
     '<div class="task-wbs" title="'+esc(typeName)+'">'+esc(t.wbs||'')+'</div>'+
     '<div class="task-name-col">'+
       '<div class="task-indent" style="width:'+indentPx+'px;"></div>'+
       '<div class="task-toggle '+(hasKids?(isCollapsed?'collapsed':'expanded'):'leaf')+'" onclick="event.stopPropagation();toggleCollapse('+t.id+')"></div>'+
-      '<div class="task-name ie-cell" data-ie-field="name" data-level="'+t.type+'" id="tn-'+t.id+'" onclick="event.stopPropagation();beginCellEdit('+t.id+',\'name\')" title="Click to edit · Tab to next">'+esc(t.name)+'</div>'+
-    '</div>'+
-    '<div class="task-type-col" title="'+esc(typeName)+'">'+
-      '<span class="task-type-badge" style="background:'+typeColor+'22;color:'+typeColor+';">'+esc(typeName)+'</span>'+
+      '<div class="task-name ie-cell" data-ie-field="name" data-level="'+effectiveType(t)+'" id="tn-'+t.id+'" onclick="event.stopPropagation();beginCellEdit('+t.id+',\'name\')" title="Click to edit · Tab to next">'+esc(t.name)+'</div>'+
+      '</div>'+
+    '<div class="task-type-col ie-cell" data-ie-field="type" onclick="event.stopPropagation();beginCellEdit('+t.id+',\'type\')" title="'+esc(typeHint)+'">'+
+      '<span class="task-type-badge" style="background:'+typeColor+'22;color:'+typeColor+';">'+esc(typeName)+(hasKids?' · folder':'')+'</span>'+
     '</div>'+
     '<div class="task-owner-col ie-cell" data-ie-field="owner" onclick="event.stopPropagation();beginCellEdit('+t.id+',\'owner\')" title="Click to change owner · Tab to next">'+
       '<div class="av" style="background:'+avC(t.owner)+';">'+avInits(t.owner)+'</div>'+
@@ -1314,9 +2041,11 @@ function buildTaskRowHTML(t){
     '<div class="task-pred-col ie-cell" data-ie-field="pred" onclick="event.stopPropagation();beginCellEdit('+t.id+',\'pred\')" title="Click to set predecessor · Tab to next">'+
       '<span class="pred-val">'+esc(formatPred(t))+'</span>'+
     '</div>'+
-    '<div class="task-prog-col ie-cell ie-prog-cell" data-ie-field="prog" onclick="event.stopPropagation();beginCellEdit('+t.id+',\'prog\')" title="Click to update progress · Tab to next">'+
-      '<div class="prog-track"><div class="prog-fill" style="width:'+t.prog+'%;background:'+progC+';"></div></div>'+
-      '<div class="prog-pct">'+t.prog+'%</div>'+
+    '<div class="task-prog-col ie-cell ie-prog-cell" data-ie-field="prog" title="Drag the bar to set % · Click the number to type">'+
+      '<div class="prog-track" data-prog-drag="'+t.id+'" onpointerdown="event.stopPropagation();startProgBarDrag(event,'+t.id+')">'+
+        '<div class="prog-fill" style="width:'+(Number(t.prog)||0)+'%;background:'+progC+';"></div>'+
+      '</div>'+
+      '<button type="button" class="prog-pct" onclick="event.stopPropagation();beginCellEdit('+t.id+',\'prog\')">'+(Number(t.prog)||0)+'%</button>'+
     '</div>'+
     buildRagPillCell(t,t.id,'bgt')+
     buildRagPillCell(t,t.id,'sch')+
@@ -1358,7 +2087,7 @@ function getSelectedTask(){
 function toggleCollapse(id){
   if(collapsed[id]) collapsed[id]=false;
   else collapsed[id]=true;
-  renderAll();
+  refreshVisibleStructure();
 }
 function collapseSubtree(id){
   const kids=tasks.filter(c=>c.parent===id);
@@ -1382,30 +2111,24 @@ function expandSubtree(id){
  * @param {boolean} [forceAll] when true (bottom switch), always collapse everything
  */
 function collapseAll(forceAll){
-  showLoading('Collapsing…');
-  try{
-    const selected=!forceAll?getSelectedTask():null;
-    if(selected){
-      const hasKids=tasks.some(c=>c.parent===selected.id);
-      if(!hasKids){
-        showToast('Select a folder (row with children), or clear selection to collapse all','info',2800);
-        return;
-      }
-      collapseSubtree(selected.id);
-      // Keep selection so user can expand the same folder again
-      selectTask(selected.id);
-      showToast('Collapsed "'+selected.name+'" and subfolders','ok',2000);
-    } else {
-      collapsed={};
-      tasks.forEach(t=>{ if(tasks.some(c=>c.parent===t.id)) collapsed[t.id]=true; });
-      const sw=document.getElementById('switchCollapse');
-      if(sw) sw.checked=true;
-      showToast('Collapsed all folders','ok',1800);
+  const selected=!forceAll?getSelectedTask():null;
+  if(selected){
+    const hasKids=tasks.some(c=>c.parent===selected.id);
+    if(!hasKids){
+      showToast('Select a folder (row with children), or clear selection to collapse all','info',2800);
+      return;
     }
-    renderAll();
-  } finally {
-    hideLoading();
+    collapseSubtree(selected.id);
+    selectTask(selected.id);
+    showToast('Collapsed "'+selected.name+'" and subfolders','ok',2000);
+  } else {
+    collapsed={};
+    tasks.forEach(t=>{ if(getChildren(t.id).length) collapsed[t.id]=true; });
+    const sw=document.getElementById('switchCollapse');
+    if(sw) sw.checked=true;
+    showToast('Collapsed all folders','ok',1800);
   }
+  refreshVisibleStructure();
 }
 /**
  * Toolbar Expand:
@@ -1413,23 +2136,18 @@ function collapseAll(forceAll){
  * - No selection → expand entire structure
  */
 function expandAll(forceAll){
-  showLoading('Expanding…');
-  try{
-    const selected=!forceAll?getSelectedTask():null;
-    if(selected){
-      expandSubtree(selected.id);
-      selectTask(selected.id);
-      showToast('Expanded "'+selected.name+'" and subfolders','ok',1800);
-    } else {
-      collapsed={};
-      const sw=document.getElementById('switchCollapse');
-      if(sw) sw.checked=false;
-      showToast('Expanded all','ok',1600);
-    }
-    renderAll();
-  } finally {
-    hideLoading();
+  const selected=!forceAll?getSelectedTask():null;
+  if(selected){
+    expandSubtree(selected.id);
+    selectTask(selected.id);
+    showToast('Expanded "'+selected.name+'" and subfolders','ok',1800);
+  } else {
+    collapsed={};
+    const sw=document.getElementById('switchCollapse');
+    if(sw) sw.checked=false;
+    showToast('Expanded all','ok',1600);
   }
+  refreshVisibleStructure();
 }
 function indentTask(){
   const t=getSelectedTask();
@@ -1459,12 +2177,18 @@ function indentTask(){
   t.parent=newParent.id;
   if(collapsed[newParent.id]) collapsed[newParent.id]=false;
   moveTaskAfterParent(t);
+  const promoted=promoteToContainerIfNeeded(newParent);
   calcWBS();
   pushHistory(); // after-state so Redo works
   renderAll();
   selectTask(t.id);
   flashTaskRow(t.id);
-  showToast('Indented under "'+newParent.name+'"','ok',2200);
+  if(promoted){
+    showToast('"'+newParent.name+'" is now a '+typeLabel(newParent)+' (folder)','ok',2800);
+    if(!isUnsavedLocal(newParent)) void persistSave(newParent);
+  } else {
+    showToast('Indented under "'+newParent.name+'"','ok',2200);
+  }
   void persistSave(t);
 }
 function outdentTask(){
@@ -1486,20 +2210,14 @@ function outdentTask(){
   void persistSave(t);
 }
 function calcTaskGridContentWidth(){
-  const css=getComputedStyle(document.documentElement);
-  const num=(v,fb)=>{
-    const n=parseFloat(css.getPropertyValue(v));
-    return Number.isFinite(n)?n:fb;
-  };
-  let w=num('--add-col-w',36);
+  let w=36+36; // select-col + add-col
   BUILTIN_FIELDS.forEach(f=>{
     if(!isFieldVisible(f.id)) return;
-    if(f.widthKey) w+=num(f.widthKey,f.widthFb);
-    else w+=f.widthFb||0;
+    w+=getColumnWidth(f.id);
   });
   (customCols||[]).forEach(c=>{
     if(!isFieldVisible('custom:'+c.id)) return;
-    w+=Number(c.width)||110;
+    w+=getColumnWidth('custom:'+c.id);
   });
   return Math.ceil(w);
 }
@@ -1614,10 +2332,19 @@ function syncHeaderHeights(){
   const tlh=document.getElementById('tlHeader');
   const tph=document.querySelector('.tp-header');
   if(!tlh||!tph) return;
-  const h=tlh.offsetHeight;
+  // Match list header to timeline scale header so row 0 lines up
+  tph.style.height='';
+  tph.style.minHeight='';
+  const h=Math.max(tlh.offsetHeight, tph.offsetHeight, 48);
   if(h>0){
     tph.style.height=h+'px';
     tph.style.minHeight=h+'px';
+    tph.style.maxHeight=h+'px';
+    const wrap=document.getElementById('tlHeaderWrap');
+    if(wrap){
+      wrap.style.height=h+'px';
+      wrap.style.minHeight=h+'px';
+    }
   }
 }
 
@@ -1698,62 +2425,82 @@ function buildTimelineHeader(start,end,totalW){
     else if(zoom==='week') lbl=dt.toLocaleDateString('en-GB',{weekday:'short'}).toUpperCase().slice(0,3);
     else if(zoom==='month'&&dt.getDate()%5===0) lbl=String(dt.getDate());
     else if(zoom==='quarter'&&dt.getDate()===1) lbl=dt.toLocaleDateString('en-GB',{month:'short'});
-  dHTML+='<div class="tl-day-cell '+(isWE?'weekend':'')+' '+(isT?'today-col':'')+'" style="width:'+colW+'px;">'+lbl+'</div>';
+    dHTML+='<div class="tl-day-cell '+(isWE?'weekend':'')+' '+(isT?'today-col':'')+'" style="width:'+colW+'px;">'+lbl+'</div>';
   });
   dHTML+='</div>';
   html+=dHTML;
   return html;
 }
 
+function buildTimelineStripeBg(rangeStart){
+  // Repeating 7-day weekend pattern — O(1) vs O(days) gradient stops
+  const startDow=rangeStart.getDay();
+  const parts=[];
+  for(let d=0;d<7;d++){
+    const dow=(startDow+d)%7;
+    const isWE=dow===0||dow===6;
+    const color=isWE?'var(--dhx-weekend)':'transparent';
+    parts.push(color+' '+(d*colW)+'px, '+color+' '+((d+1)*colW)+'px');
+  }
+  return 'repeating-linear-gradient(to right, '+parts.join(', ')+')';
+}
+
 function renderTimeline(start,end,totalW){
   const header=document.getElementById('tlHeader');
   const rows=document.getElementById('tlRows');
+  const barsLayer=document.getElementById('tlBars')||rows;
   if(!header||!rows) return;
   const totalDays=daysBetween(start,end);
-  const days=[];
-  for(let i=0;i<totalDays;i++) days.push(addDays(start,i));
 
   header.innerHTML=buildTimelineHeader(start,end,totalW);
   header.style.width=totalW+'px';
 
   const visible=getVisible();
-  const today=new Date();today.setHours(0,0,0,0);
+  const stripeBg=buildTimelineStripeBg(start);
   let rHTML='';
-  visible.forEach(t=>{
-    let cells='';
-    days.forEach(dt=>{
-      const isWE=dt.getDay()===0||dt.getDay()===6;
-      const isT=dt.getTime()===today.getTime();
-      cells+='<div class="tl-cell '+(isWE?'weekend':'')+' '+(isT?'today-col':'')+'" style="width:'+colW+'px;" data-date="'+fmt(dt)+'"></div>';
-    });
-    rHTML+='<div class="tl-grid-row" id="gr-'+t.id+'" data-level="'+t.type+'" data-task-id="'+t.id+'" style="width:'+totalW+'px;">'+cells+'</div>';
-  });
+  for(let i=0;i<visible.length;i++){
+    const t=visible[i];
+    rHTML+='<div class="tl-grid-row" id="gr-'+t.id+'" data-level="'+t.type+'" data-task-id="'+t.id+'" style="width:'+totalW+'px;height:'+ROW_H+'px;min-height:'+ROW_H+'px;max-height:'+ROW_H+'px;" title="Click empty area to add a task on that date"></div>';
+  }
   rows.innerHTML=rHTML;
+  if(barsLayer&&barsLayer!==rows) barsLayer.innerHTML='';
 
   Object.keys(barPos).forEach(k=>delete barPos[k]);
 
-  requestAnimationFrame(()=>{
-    visible.forEach(t=>{
-      drawTaskBar(t,start,rows);
-    });
-    const totalH=visible.length*ROW_H;
-    document.getElementById('tlInner').style.width=totalW+'px';
-    document.getElementById('depSvg').setAttribute('width',totalW);
-    document.getElementById('depSvg').setAttribute('height',totalH+'px');
-    renderDeps(visible,start);
-    document.getElementById('tlInner').style.minHeight=totalH+'px';
-    syncHeaderHeights();
-    const tw=document.getElementById('tlWrap');
-    const th=document.getElementById('tlHeader');
-    if(tw&&th) th.style.transform='translateX('+(-tw.scrollLeft)+'px)';
-    bindTimelineClicks(start);
-  });
+  // Draw bars at deterministic Y = index * ROW_H (avoids offsetTop drift after undo/create)
+  void rows.offsetHeight;
+  visible.forEach((t,i)=>{ drawTaskBar(t,start,barsLayer,i*ROW_H); });
+  const totalH=visible.length*ROW_H;
+  const tlInner=document.getElementById('tlInner');
+  if(tlInner){
+    tlInner.style.width=totalW+'px';
+    tlInner.style.minHeight=totalH+'px';
+    tlInner.style.backgroundImage=stripeBg;
+    tlInner.style.backgroundRepeat='repeat';
+    tlInner.style.backgroundSize=(7*colW)+'px 100%';
+  }
+  if(barsLayer){
+    barsLayer.style.width=totalW+'px';
+    barsLayer.style.height=totalH+'px';
+  }
+  const depSvg=document.getElementById('depSvg');
+  if(depSvg){
+    depSvg.setAttribute('width',totalW);
+    depSvg.setAttribute('height',totalH+'px');
+  }
+  renderDeps(visible,start);
+  syncHeaderHeights();
+  const tw=document.getElementById('tlWrap');
+  const th=document.getElementById('tlHeader');
+  if(tw&&th) th.style.transform='translateX('+(-tw.scrollLeft)+'px)';
+  bindTimelineClicks(start);
 }
 
-function drawTaskBar(t,rangeStart,rows){
+function drawTaskBar(t,rangeStart,rows,rowTop){
   const row=document.getElementById('gr-'+t.id);
   if(!row) return;
-  const rowTop=row.offsetTop;
+  // Prefer deterministic Y from caller; never trust offsetTop after DOM mutations
+  if(rowTop==null||!Number.isFinite(rowTop)) rowTop=row.offsetTop||0;
   const hasKids=getChildren(t.id).length>0;
   const eff=getEffectiveDates(t);
   const isCrit=showCP&&criticalIds.has(t.id);
@@ -1764,7 +2511,8 @@ function drawTaskBar(t,rangeStart,rows){
     const el=document.createElement('div');
     el.className='milestone-diamond'+(isCrit?' critical':'');
     el.dataset.id=String(t.id);
-    el.style.cssText='left:'+(left-6)+'px;top:'+(rowTop+(ROW_H-12)/2)+'px;width:12px;height:12px;';
+    const msTop=rowTop+(ROW_H-12)/2;
+    el.style.cssText='left:'+(left-6)+'px;top:'+msTop+'px;width:12px;height:12px;';
     el.title=t.name+' · '+fmtDisp(D(eff.start))+(isCrit?' · Critical':'');
     el.onclick=(e)=>{ e.stopPropagation(); openEdit(t.id); };
     rows.appendChild(el);
@@ -1773,23 +2521,28 @@ function drawTaskBar(t,rangeStart,rows){
     msLbl.textContent=t.name;
     msLbl.style.cssText='left:'+(left+10)+'px;top:'+(rowTop+(ROW_H-14)/2)+'px;';
     rows.appendChild(msLbl);
+    // Center of diamond — required for dependency routing
+    registerBar(t.id,left-6,msTop,12,12);
   } else {
     const s=D(eff.start),e=D(eff.end);
     const left=daysBetween(rangeStart,s)*colW;
     const width=Math.max((taskDurationDays(eff.start,eff.end)+1)*colW,colW);
-    const barH = Math.max(22, Math.round(ROW_H * 0.7));
+    const barH=Math.max(22,Math.round(ROW_H*0.7));
     const barTop=rowTop+(ROW_H-barH)/2;
     const el=document.createElement('div');
     el.className='gantt-bar '+getTaskBarClass(t,hasKids,isCrit);
     el.id='bar-'+t.id;
     el.style.cssText='left:'+left+'px;top:'+barTop+'px;width:'+width+'px;height:'+barH+'px;';
-    el.title=t.name+'\n'+fmtDisp(s)+' → '+fmtDisp(e)+'\n'+t.prog+'% · '+(LEVELS[t.type]||'');
+    const typeNm=typeLabel(t);
+    el.title=hasKids
+      ?(t.name+'\n'+fmtDisp(s)+' → '+fmtDisp(e)+'\n'+typeNm+' (folder) · Drag to move this group and all children')
+      :(t.name+'\n'+fmtDisp(s)+' → '+fmtDisp(e)+'\n'+t.prog+'% · '+typeNm);
     const pf=document.createElement('div');
     pf.className='bar-prog-fill';
     pf.style.width=t.prog+'%';
     el.appendChild(pf);
-    const labelFitsInside = width >= 80;
-    if(hasKids || labelFitsInside){
+    const labelFitsInside=width>=80;
+    if(hasKids||labelFitsInside){
       const lbl=document.createElement('div');
       lbl.className='bar-label';
       lbl.textContent=t.name;
@@ -1797,9 +2550,8 @@ function drawTaskBar(t,rangeStart,rows){
     }
     const rl=document.createElement('div');rl.className='bar-resize-l';
     const rr=document.createElement('div');rr.className='bar-resize-r';
-    el.appendChild(rl);el.appendChild(rr);
-    // ClickUp / monday-style connector handles — leaf tasks only (folders can’t have deps)
-    if(!hasKids && t.type!==1 && t.id!==1){
+    if(!hasKids){ el.appendChild(rl); el.appendChild(rr); }
+    if(!hasKids&&t.type!==1&&t.id!==1){
       const connL=document.createElement('div');
       connL.className='bar-dep-handle bar-dep-handle-l';
       connL.title='Drag from start → drop on another bar’s start (SS) or end (SF)';
@@ -1819,9 +2571,10 @@ function drawTaskBar(t,rangeStart,rows){
       selectTask(t.id);
     };
     el.ondblclick=(e2)=>{e2.stopPropagation();if(!depLinkDragging)openEdit(t.id);};
-    if(!hasKids) setupDrag(el,t,rangeStart,rl,rr);
+    if(hasKids) setupSummaryMove(el,t,rangeStart);
+    else setupDrag(el,t,rangeStart,rl,rr);
     rows.appendChild(el);
-    if(!hasKids && !labelFitsInside){
+    if(!hasKids&&!labelFitsInside){
       const extLbl=document.createElement('div');
       extLbl.className='bar-label-outside';
       extLbl.textContent=t.name;
@@ -1833,19 +2586,17 @@ function drawTaskBar(t,rangeStart,rows){
 
 function bindTimelineClicks(rangeStart){
   document.querySelectorAll('.tl-grid-row').forEach(row=>{
-    row.querySelectorAll('.tl-cell').forEach(cell=>{
-      cell.style.cursor='cell';
-      cell.title='Click to add a task on this date';
-      cell.onclick=(e)=>{
-        if(depDrawMode||e.target.closest('.gantt-bar')||e.target.closest('.milestone-diamond')) return;
-        e.stopPropagation();
-        const dateStr=cell.dataset.date;
-        if(!dateStr) return;
-        const taskId=parseInt(row.dataset.taskId,10);
-        const rowTask=tasks.find(x=>x.id===taskId);
-        addTaskOnTimeline(dateStr,rowTask);
-      };
-    });
+    row.onclick=(e)=>{
+      if(depDrawMode||e.target.closest('.gantt-bar')||e.target.closest('.milestone-diamond')||e.target.closest('.bar-label-outside')) return;
+      e.stopPropagation();
+      const rect=row.getBoundingClientRect();
+      const x=e.clientX-rect.left;
+      const dayIndex=Math.max(0,Math.floor(x/colW));
+      const dateStr=fmt(addDays(rangeStart,dayIndex));
+      const taskId=parseInt(row.dataset.taskId,10);
+      const rowTask=getTaskById(taskId);
+      addTaskOnTimeline(dateStr,rowTask||null);
+    };
   });
 }
 function addTaskOnTimeline(dateStr,rowTask){
@@ -1859,21 +2610,23 @@ function addTaskOnTimeline(dateStr,rowTask){
     color:LEVEL_COLORS[5],wbs:''
   };
   tasks.push(newTask);
+  invalidateTaskIndex();
+  if(rowTask&&promoteToContainerIfNeeded(rowTask)&&!isUnsavedLocal(rowTask)) void persistSave(rowTask);
   selectedTaskId=newTask.id;
   queueCellEdit(newTask.id,'name');
   renderAll();
   void persistCreate(newTask,{silent:true});
 }
 
-// ── DEPENDENCY ARROWS ────────────────────────────────────────
-/** monday-style triangle: tip flush on bar edge, line ends at arrow base */
+// ── DEPENDENCY ARROWS (DHTMLX / monday-style) ────────────────
+/** Filled triangle: tip flush on bar edge, path stops at arrow base */
 function appendDepArrow(svg,tipX,tipY,dirX,dirY,color,size){
   const len=Math.hypot(dirX,dirY)||1;
   const ux=dirX/len, uy=dirY/len;
-  const s=Math.max(size||9, 8);
+  const s=Math.max(size||7, 6);
   const bx=tipX-ux*s, by=tipY-uy*s;
   const px=-uy, py=ux;
-  const w=s*0.55;
+  const w=s*0.5;
   const poly=document.createElementNS('http://www.w3.org/2000/svg','polygon');
   poly.setAttribute('points',
     tipX.toFixed(1)+','+tipY.toFixed(1)+' '+
@@ -1881,29 +2634,28 @@ function appendDepArrow(svg,tipX,tipY,dirX,dirY,color,size){
     (bx-px*w).toFixed(1)+','+(by-py*w).toFixed(1)
   );
   poly.setAttribute('fill',color);
-  poly.setAttribute('stroke',color);
-  poly.setAttribute('stroke-width','0.5');
-  poly.setAttribute('stroke-linejoin','miter');
+  poly.setAttribute('stroke','none');
   poly.style.pointerEvents='none';
   svg.appendChild(poly);
   return {baseX:bx, baseY:by, size:s, ux, uy};
 }
+
 /**
- * Orthogonal routing like monday / ClickUp:
- * - Never draw through the middle of a bar
+ * DHTMLX-style orthogonal links (see reference):
+ * - Solid thin grey stroke (not dashed)
  * - FS/SS tip on target LEFT; FF tip on target RIGHT
- * - Wrap routes go around the outside of bars
+ * - Clear gap: right stub → vertical → into left
+ * - Overlap: drop from pred end → left into succ start (no wrap past succ right)
  */
 function renderDeps(visible,start){
   const svg=document.getElementById('depSvg');
   if(!svg) return;
   svg.innerHTML='';
-  const stub=14;
+  const stub=10;
   visible.forEach(t=>{
     if(!t.predId) return;
-    // Folders / project row cannot have predecessors (same as Pred column)
     if(!canHavePredecessor(t)) return;
-    const fromT=tasks.find(x=>x.id===t.predId);
+    const fromT=getTaskById(t.predId)||tasks.find(x=>x.id===t.predId);
     if(!fromT||!canBePredecessor(fromT)) return;
     const fp=barPos[fromT.id];
     const tp=barPos[t.id];
@@ -1911,8 +2663,9 @@ function renderDeps(visible,start){
     const raw=t.depType||'FS';
     const depType=raw==='EE'?'FF':raw;
     const isCrit=showCP&&criticalIds.has(t.id)&&criticalIds.has(fromT.id);
-    const color=isCrit?'#c62828':'#676879';
-    const arrowSize=isCrit?10:9;
+    const color=isCrit?'#e53935':'#9e9e9e';
+    const arrowSize=isCrit?8:7;
+    const strokeW=isCrit?1.8:1.15;
 
     let x1,y1,tipX,tipY,dirX,dirY;
     if(depType==='SS'){
@@ -1924,7 +2677,7 @@ function renderDeps(visible,start){
       tipX=tp.left+tp.width; tipY=tp.midY;
       dirX=-1; dirY=0;
     } else {
-      // FS (default) — and SF treated as FS visually for now
+      // FS: leave RIGHT of pred → enter LEFT of succ
       x1=fp.left+fp.width; y1=fp.midY;
       tipX=tp.left; tipY=tp.midY;
       dirX=1; dirY=0;
@@ -1936,27 +2689,48 @@ function renderDeps(visible,start){
     const sameRow=Math.abs(tipY-y1)<2;
 
     if(sameRow){
-      d='M'+x1+','+y1+' H'+pathEndX;
+      if(Math.abs(pathEndX-x1)<1){
+        d='M'+x1+','+y1+' H'+pathEndX;
+      } else {
+        d='M'+x1+','+y1+' H'+pathEndX;
+      }
       labelX=(x1+tipX)/2; labelY=y1-10;
     } else if(depType==='FF'){
-      const elbowX=Math.max(x1, tipX)+stub;
-      d='M'+x1+','+y1+' H'+elbowX+' V'+pathEndY+' H'+pathEndX;
+      const elbowX=Math.max(x1,tipX)+stub;
+      d='M'+x1.toFixed(1)+','+y1.toFixed(1)+
+        ' H'+elbowX.toFixed(1)+
+        ' V'+pathEndY.toFixed(1)+
+        ' H'+pathEndX.toFixed(1);
       labelX=elbowX; labelY=(y1+tipY)/2;
     } else if(depType==='SS'){
-      const elbowX=Math.min(x1, tipX)-stub;
-      d='M'+x1+','+y1+' H'+elbowX+' V'+pathEndY+' H'+pathEndX;
+      const elbowX=Math.min(x1,tipX)-stub;
+      d='M'+x1.toFixed(1)+','+y1.toFixed(1)+
+        ' H'+elbowX.toFixed(1)+
+        ' V'+pathEndY.toFixed(1)+
+        ' H'+pathEndX.toFixed(1);
       labelX=elbowX; labelY=(y1+tipY)/2;
     } else {
-      // FS: exit right of pred → into LEFT of succ
-      // When overlapping, go around the RIGHT then left under the bars (SVG is behind bars)
-      const exitX=x1+stub;
-      if(pathEndX>=exitX){
-        d='M'+x1+','+y1+' H'+exitX+' V'+pathEndY+' H'+pathEndX;
+      // FS staircase (DHTMLX) — final approach ALWAYS from the left of succ
+      // so the line never strikethroughs the target bar.
+      const approachX=tipX-stub;
+      if(pathEndX>=x1+stub-0.5){
+        // Clear gap: stub right from pred → vertical → into left
+        const exitX=x1+stub;
+        d='M'+x1.toFixed(1)+','+y1.toFixed(1)+
+          ' H'+exitX.toFixed(1)+
+          ' V'+pathEndY.toFixed(1)+
+          ' H'+pathEndX.toFixed(1);
         labelX=exitX; labelY=(y1+tipY)/2;
       } else {
-        const aroundX=Math.max(x1, tp.left+tp.width)+stub;
-        d='M'+x1+','+y1+' H'+aroundX+' V'+pathEndY+' H'+pathEndX;
-        labelX=aroundX; labelY=(y1+tipY)/2;
+        // Overlap / succ starts at or before pred finish:
+        // drop into the row gutter, run left to outside succ, then into tip
+        const railY=y1+(tipY>y1?1:-1)*(ROW_H/2);
+        d='M'+x1.toFixed(1)+','+y1.toFixed(1)+
+          ' V'+railY.toFixed(1)+
+          ' H'+approachX.toFixed(1)+
+          ' V'+pathEndY.toFixed(1)+
+          ' H'+pathEndX.toFixed(1);
+        labelX=approachX; labelY=railY;
       }
     }
 
@@ -1964,10 +2738,10 @@ function renderDeps(visible,start){
     path.setAttribute('d',d);
     path.setAttribute('fill','none');
     path.setAttribute('stroke',color);
-    path.setAttribute('stroke-width',isCrit?'2.25':'1.4');
+    path.setAttribute('stroke-width',String(strokeW));
     path.setAttribute('stroke-linejoin','round');
     path.setAttribute('stroke-linecap','butt');
-    if(!isCrit) path.setAttribute('stroke-dasharray','5 3.5');
+    // Solid like DHTMLX reference — dashed looked unfinished
     path.style.pointerEvents='stroke';
     path.style.cursor='pointer';
     path.setAttribute('data-succ-id',String(t.id));
@@ -2026,6 +2800,68 @@ function jumpToToday(){
 }
 
 // ── DRAG & DROP ──────────────────────────────────────────────
+/** Move a folder/summary bar — shifts the whole subtree by the same day delta. */
+function setupSummaryMove(el,task,rangeStart){
+  let startX=0,dragging=false,lastDelta=0;
+  el.addEventListener('mousedown',e=>{
+    if(depDrawMode) return;
+    if(e.target.closest('.bar-dep-handle')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const subtree=getSubtreeTasks(task.id);
+    const snaps=subtree.map(t=>({
+      t,
+      start:t.start,
+      end:t.end,
+      bar:document.getElementById('bar-'+t.id),
+      diamond:document.querySelector('.milestone-diamond[data-id="'+t.id+'"]'),
+      barLeft:0,
+      diaLeft:0
+    }));
+    snaps.forEach(s=>{
+      if(s.bar) s.barLeft=parseInt(s.bar.style.left)||0;
+      if(s.diamond) s.diaLeft=parseInt(s.diamond.style.left)||0;
+    });
+    if(!dragging){ pushHistory(); dragging=true; }
+    startX=e.clientX;
+    lastDelta=0;
+    const move=e2=>{
+      const snap=Math.round((e2.clientX-startX)/colW)*colW;
+      lastDelta=Math.round(snap/colW);
+      snaps.forEach(s=>{
+        if(s.bar) s.bar.style.left=(s.barLeft+snap)+'px';
+        if(s.diamond) s.diamond.style.left=(s.diaLeft+snap)+'px';
+        if(s.start) s.t.start=fmt(addDays(D(s.start),lastDelta));
+        if(s.end) s.t.end=fmt(addDays(D(s.end),lastDelta));
+        updateTaskDateCells(s.t.id,s.t.start,s.t.end);
+      });
+      const eff=getEffectiveDates(task);
+      el.title=task.name+'\n'+fmtDisp(D(eff.start))+' → '+fmtDisp(D(eff.end))+'\n'+typeLabel(task)+' (folder) · Drag moves all children';
+    };
+    const up=()=>{
+      document.removeEventListener('mousemove',move);
+      document.removeEventListener('mouseup',up);
+      dragging=false;
+      if(!lastDelta){
+        updateUndoRedoButtons();
+        return;
+      }
+      rollupParentDates();
+      if(autoSchedule) applyAutoSchedule();
+      pushHistory();
+      renderAll();
+      selectTask(task.id);
+      updateUndoRedoButtons();
+      snaps.forEach(s=>{
+        if(!isUnsavedLocal(s.t)) void persistSave(s.t);
+      });
+      if(autoSchedule) void persistScheduleChanges(task);
+      showToast('Moved folder + '+Math.max(0,subtree.length-1)+' child item(s)','ok',2200);
+    };
+    document.addEventListener('mousemove',move);
+    document.addEventListener('mouseup',up);
+  });
+}
 function setupDrag(el,task,rangeStart,rl,rr){
   let startX=0,origL=0,origW=0,mode=null,dragging=false;
   function applyDates(newL,newW){
@@ -2036,12 +2872,11 @@ function setupDrag(el,task,rangeStart,rl,rr){
     task.start=fmt(ns);
     task.end=fmt(ne);
     updateTaskDateCells(task.id,task.start,task.end);
-    el.title=task.name+'\n'+fmtDisp(ns)+' → '+fmtDisp(ne)+'\n'+task.prog+'% · '+(LEVELS[task.type]||'');
+    el.title=task.name+'\n'+fmtDisp(ns)+' → '+fmtDisp(ne)+'\n'+task.prog+'% · '+typeLabel(task);
   }
   function down(e,m){
     if(depDrawMode) return;
     e.preventDefault();
-    if(getChildren(task.id).length) return;
     const startSnapshot=task.start;
     const endSnapshot=task.end;
     if(!dragging){ pushHistory(); dragging=true; }
@@ -2075,7 +2910,7 @@ function setupDrag(el,task,rangeStart,rl,rr){
       selectTask(task.id);
       updateUndoRedoButtons();
       if(!isUnsavedLocal(task)){
-        persistSave(task);
+      persistSave(task);
         if(autoSchedule) void persistScheduleChanges(task);
       }
     };
@@ -2103,9 +2938,9 @@ function renderListView(){
         '<td class="list-td mono">'+esc(t.wbs||'')+'</td>'+
         '<td class="list-td list-td-edit" data-field="name" data-id="'+t.id+'" title="Click to edit name">'+
           '<div class="list-name" style="padding-left:'+(getDepth(t)*18)+'px;">'+
-            '<span class="list-type">'+(TYPE_ICONS[t.type]||'☑')+'</span>'+
-            '<span class="list-title'+(t.type<=2?' bold':'')+'">'+esc(t.name)+'</span>'+
-            '<span class="list-badge" style="background:'+(LEVEL_COLORS[t.type]||'#64748b')+'22;color:'+(LEVEL_COLORS[t.type]||'#64748b')+';">'+(LEVELS[t.type]||'')+'</span>'+
+            '<span class="list-type">'+(TYPE_ICONS[effectiveType(t)]||'☑')+'</span>'+
+            '<span class="list-title'+(effectiveType(t)<=2?' bold':'')+'">'+esc(t.name)+'</span>'+
+            '<span class="list-badge" style="background:'+typeColorOf(t)+'22;color:'+typeColorOf(t)+';">'+typeLabel(t)+(getChildren(t.id).length?' · folder':'')+'</span>'+
           '</div>'+
         '</td>'+
         '<td class="list-td list-td-edit" data-field="owner" data-id="'+t.id+'" title="Click to edit owner">'+esc(t.owner||'—')+'</td>'+
@@ -2469,6 +3304,7 @@ function quickAddTask(parentId, afterId){
     }
   }
   selectedTaskId=newTask.id;
+  const parentPromoted=parent&&promoteToContainerIfNeeded(parent);
   calcWBS();
   if(mainView==='list'){
     renderListView();
@@ -2479,6 +3315,7 @@ function quickAddTask(parentId, afterId){
     renderAll();
   }
   void persistCreate(newTask,{silent:true});
+  if(parentPromoted&&!isUnsavedLocal(parent)) void persistSave(parent);
 }
 
 function saveItem(){
@@ -2506,6 +3343,11 @@ function saveItem(){
       t.predId=predVal?parseInt(predVal):null;
       if(t.predId&&predecessorIdsForSave(t.predId)===null){ showToast('Invalid predecessor','err',3000); t.predId=null; }
       t.depType=t.predId?(currentDep||'FS'):'FS';
+      if(t.parent!=null){
+        const p=tasks.find(x=>x.id===t.parent);
+        if(p&&promoteToContainerIfNeeded(p)&&!isUnsavedLocal(p)) void persistSave(p);
+      }
+      promoteToContainerIfNeeded(t);
       closeModal('modalEdit');
       if(t.predId||autoSchedule) applyAutoSchedule();
       renderAll();
@@ -2543,20 +3385,144 @@ function saveItem(){
   }
 }
 
+function collectDescendantIds(rootId){
+  const out=[];
+  const stack=[rootId];
+  const seen=new Set();
+  while(stack.length){
+    const id=stack.pop();
+    if(seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    tasks.filter(t=>t.parent===id).forEach(c=>stack.push(c.id));
+  }
+  return out;
+}
+
+function removeTasksByIds(ids){
+  const kill=new Set(ids);
+  // Capture depth before removal — getDepth walks live parents
+  const removed=tasks
+    .filter(t=>kill.has(t.id))
+    .map(t=>({t, depth:getDepth(t)}))
+    .sort((a,b)=>b.depth-a.depth)
+    .map(x=>x.t);
+  const predCleared=[];
+  tasks.forEach(t=>{
+    if(kill.has(t.id)) return;
+    if(t.predId!=null&&kill.has(t.predId)){
+      t.predId=null;
+      t.depType='FS';
+      predCleared.push(t);
+    }
+  });
+  tasks=tasks.filter(t=>!kill.has(t.id));
+  invalidateTaskIndex();
+  ids.forEach(id=>{
+    checkedRowIds.delete(id);
+    delete collapsed[id];
+    if(selectedTaskId===id) selectedTaskId=null;
+    if(editingId===id) editingId=null;
+  });
+  return {removed, predCleared};
+}
+
 function deleteItem(){
   if(!editingId) return;
+  if(editingId===1){ showToast('Cannot delete the project row','info',2200); return; }
   if(!confirm('Delete this item and all its children?')) return;
   pushHistory();
-  const target=tasks.find(t=>t.id===editingId);
-  function removeWithChildren(id){
-    tasks=tasks.filter(t=>t.id!==id);
-    tasks.filter(t=>t.parent===id).forEach(c=>removeWithChildren(c.id));
-  }
-  removeWithChildren(editingId);
-  if(target) persistDelete(target);
-  if(selectedTaskId===editingId) selectedTaskId=null;
+  const ids=collectDescendantIds(editingId);
+  const {removed, predCleared}=removeTasksByIds(ids);
   closeModal('modalEdit');
   renderAll();
+  void persistDeletes(removed,predCleared);
+}
+
+function updateSelectionBar(){
+  const bar=document.getElementById('ganttSelBar');
+  const countEl=document.getElementById('ganttSelCount');
+  const selAll=document.getElementById('selAllCb');
+  // Drop ids that no longer exist
+  Array.from(checkedRowIds).forEach(id=>{
+    if(!tasks.some(t=>t.id===id)) checkedRowIds.delete(id);
+  });
+  const n=checkedRowIds.size;
+  if(bar) bar.classList.toggle('is-on',n>0);
+  if(countEl) countEl.textContent=n+' selected';
+  const visible=getVisible().filter(t=>!(t.type===1||t.id===1));
+  const visChecked=visible.filter(t=>checkedRowIds.has(t.id)).length;
+  if(selAll){
+    selAll.checked=visible.length>0&&visChecked===visible.length;
+    selAll.indeterminate=visChecked>0&&visChecked<visible.length;
+  }
+}
+
+function toggleRowCheck(id,checked){
+  const t=tasks.find(x=>x.id===id);
+  if(!t||t.type===1||t.id===1) return;
+  if(checked) checkedRowIds.add(id);
+  else checkedRowIds.delete(id);
+  const row=document.getElementById('tr-'+id);
+  if(row){
+    row.classList.toggle('is-checked',checked);
+    const cb=row.querySelector('.task-sel-cb');
+    if(cb) cb.checked=!!checked;
+  }
+  updateSelectionBar();
+}
+
+function toggleSelectAllVisible(checked){
+  getVisible().forEach(t=>{
+    if(t.type===1||t.id===1) return;
+    if(checked) checkedRowIds.add(t.id);
+    else checkedRowIds.delete(t.id);
+  });
+  document.querySelectorAll('.task-row').forEach(row=>{
+    const id=Number(row.dataset.id);
+    if(!Number.isFinite(id)||id===1) return;
+    const on=checkedRowIds.has(id);
+    row.classList.toggle('is-checked',on);
+    const cb=row.querySelector('.task-sel-cb');
+    if(cb) cb.checked=on;
+  });
+  updateSelectionBar();
+}
+
+function clearRowSelection(){
+  checkedRowIds.clear();
+  document.querySelectorAll('.task-row.is-checked').forEach(row=>{
+    row.classList.remove('is-checked');
+    const cb=row.querySelector('.task-sel-cb');
+    if(cb) cb.checked=false;
+  });
+  updateSelectionBar();
+}
+
+function deleteSelectedRows(){
+  if(!checkedRowIds.size) return;
+  const roots=Array.from(checkedRowIds).filter(id=>{
+    const t=tasks.find(x=>x.id===id);
+    return t&&t.type!==1&&t.id!==1;
+  });
+  if(!roots.length){
+    showToast('Cannot delete the project row','info',2200);
+    clearRowSelection();
+    return;
+  }
+  const kill=new Set();
+  roots.forEach(id=>collectDescendantIds(id).forEach(x=>kill.add(x)));
+  kill.delete(1);
+  const n=kill.size;
+  const msg=n===1
+    ?'Delete this line and any children under it?'
+    :'Delete '+n+' lines (including any children under selected folders)?';
+  if(!confirm(msg)) return;
+  pushHistory();
+  const {removed, predCleared}=removeTasksByIds(Array.from(kill));
+  checkedRowIds.clear();
+  renderAll();
+  void persistDeletes(removed,predCleared);
 }
 
 function closeModal(id){
@@ -2606,8 +3572,8 @@ function openImportExport(mode){
   if(mode==='export'){
     body.innerHTML='<div class="ie-section">'+
       '<div class="ie-section-title">📥 Export project plan</div>'+
-      '<p style="font-size:12px;color:var(--g500);margin-bottom:10px;">Download a sample template or export the live plan as Excel (.xlsx) / CSV for offline editing and re-import.</p>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+      '<p class="ie-hint">Download a sample template or export the live plan as Excel (.xlsx) / CSV for offline editing and re-import.</p>'+
+      '<div class="ie-actions">'+
         '<button class="btn btn-excel" onclick="downloadSampleTemplate(event,\'xlsx\')">↓ Sample Excel template</button>'+
         '<button class="btn btn-ghost" onclick="downloadSampleTemplate(event,\'csv\')">↓ Sample CSV</button>'+
         '<button class="btn btn-excel" onclick="downloadCurrentPlan(event,\'xlsx\')">↓ Export current plan (Excel)</button>'+
@@ -2617,7 +3583,7 @@ function openImportExport(mode){
         '<button class="btn btn-ghost" onclick="exportGanttPDF(event)">↓ Export PDF</button>'+
       '</div></div>'+
       '<div class="ie-section" style="margin-bottom:0;"><div class="ie-section-title">📋 Column reference (project plan template)</div>'+
-      '<table style="width:100%;font-size:11px;border-collapse:collapse;">'+
+      '<table class="ie-col-ref">'+
         [['WBS','Hierarchy code (e.g. 1, 1.1, 1.1.1, 1.1.1.M)'],
          ['Level*','Program, Project, Release, Phase, Workstream, Activity, Task, or Milestone'],
          ['Name*','Work item name'],
@@ -2628,33 +3594,33 @@ function openImportExport(mode){
          ['End','End date (or use DurationDays)'],
          ['DurationDays','Inclusive duration in days'],
          ['Notes','Free text']
-        ].map(([col,desc])=>'<tr style="border-bottom:1px solid var(--g100);"><td style="padding:5px 8px;font-family:var(--mono);font-weight:600;color:var(--p);">'+col+'</td><td style="padding:5px 8px;color:var(--g500);">'+desc+'</td></tr>').join('')+
+        ].map(([col,desc])=>'<tr><td>'+col+'</td><td>'+desc+'</td></tr>').join('')+
       '</table>'+
-      '<p style="font-size:11px;color:var(--g500);margin-top:8px;">Legacy Jiganto columns (Type as 0–7, Parent_WBS, Predecessor_WBS) are still accepted on import.</p>'+
+      '<p class="ie-hint-sm">Legacy Jiganto columns (Type as 0–7, Parent_WBS, Predecessor_WBS) are still accepted on import.</p>'+
       '</div>';
   } else {
     body.innerHTML='<div class="ie-section">'+
       '<div class="ie-section-title">📥 Sample template</div>'+
-      '<p style="font-size:12px;color:var(--g500);margin-bottom:10px;">Download a filled sample (Program → 2 Projects → Phases / Tasks / Milestones) in the standard column layout, then edit and re-upload.</p>'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+      '<p class="ie-hint">Download a filled sample (Program → 2 Projects → Phases / Tasks / Milestones) in the standard column layout, then edit and re-upload.</p>'+
+      '<div class="ie-actions">'+
         '<button class="btn btn-excel" onclick="downloadSampleTemplate(event,\'xlsx\')" title="Excel workbook matching the project plan template">↓ Sample Excel (.xlsx)</button>'+
         '<button class="btn btn-ghost" onclick="downloadSampleTemplate(event,\'csv\')" title="CSV version of the same template">↓ Sample CSV</button>'+
       '</div>'+
     '</div>'+
     '<div class="ie-section" style="margin-bottom:0;">'+
       '<div class="ie-section-title">📤 Import project plan</div>'+
-      '<p style="font-size:12px;color:var(--g500);margin-bottom:10px;">Upload <strong>.xlsx</strong> / <strong>.csv</strong> (project plan template) or <strong>.xml</strong> (MS Project). Level names (Project, Phase, Milestone…) map automatically.</p>'+
-      '<div style="display:flex;gap:8px;margin-bottom:10px;">'+
+      '<p class="ie-hint">Upload <strong>.xlsx</strong> / <strong>.csv</strong> (project plan template) or <strong>.xml</strong> (MS Project). Level names (Project, Phase, Milestone…) map automatically.</p>'+
+      '<div class="ie-actions" style="margin-bottom:10px;">'+
         '<button class="btn '+(importMode==='append'?'btn-p':'btn-ghost')+'" onclick="setImportMode(\'append\')">⊕ Append</button>'+
         '<button class="btn '+(importMode==='overwrite'?'btn-p':'btn-ghost')+'" onclick="setImportMode(\'overwrite\')">↺ Overwrite</button>'+
       '</div>'+
-      (importMode==='overwrite'?'<div style="font-size:11px;color:var(--amber);background:var(--amber-l);border:1px solid #fcd34d;border-radius:5px;padding:6px 10px;margin-bottom:10px;">⚠ Overwrite will replace your entire project plan.</div>':'')+
+      (importMode==='overwrite'?'<div style="font-size:11px;color:var(--amber);background:var(--amber-l);border:1px solid #fcd34d;border-radius:5px;padding:6px 10px;margin-bottom:10px;text-align:left;">⚠ Overwrite will replace your entire project plan.</div>':'')+
       '<div class="drop-zone" id="dropZone" onclick="document.getElementById(\'fileInput\').click()">'+
-        '<div style="font-size:22px;margin-bottom:6px;">📁</div>'+
+        '<div class="drop-zone-ico">📁</div>'+
         '<div class="drop-zone-text">Click or drag <strong>.xlsx</strong>, <strong>.csv</strong>, or <strong>.xml</strong> here</div>'+
       '</div>'+
       '<input type="file" id="fileInput" accept=".csv,.txt,.xlsx,.xls,.xml" style="display:none;" onchange="handleFileSelect(this)">'+
-      '<div id="importResult" style="margin-top:8px;font-size:12px;"></div>'+
+      '<div id="importResult" style="margin-top:8px;font-size:12px;text-align:left;"></div>'+
     '</div>';
     setupDropZone();
   }
@@ -2690,6 +3656,26 @@ function samplePlanToCsv(){
     return s;
   }).join(',')).join('\n')+'\n';
 }
+/** Convert AoA → sheet with all values as text so Excel left-aligns (numbers otherwise right-align). */
+function aoaToLeftAlignedSheet(XLSX,aoa){
+  const textAoa=(aoa||[]).map(row=>(row||[]).map(cell=>cell==null?'':String(cell)));
+  const ws=XLSX.utils.aoa_to_sheet(textAoa);
+  if(!ws||!ws['!ref']) return ws;
+  const range=XLSX.utils.decode_range(ws['!ref']);
+  for(let R=range.s.r;R<=range.e.r;R++){
+    for(let C=range.s.c;C<=range.e.c;C++){
+      const addr=XLSX.utils.encode_cell({r:R,c:C});
+      const cell=ws[addr];
+      if(!cell) continue;
+      cell.t='s';
+      cell.v=cell.v==null?'':String(cell.v);
+      if(cell.w!=null) delete cell.w;
+      // Best-effort style (honoured by styled SheetJS builds; ignored otherwise)
+      cell.s={alignment:{horizontal:'left',vertical:'center',wrapText:false}};
+    }
+  }
+  return ws;
+}
 function downloadTemplate(ev){
   downloadSampleTemplate(ev,'csv');
 }
@@ -2701,8 +3687,7 @@ async function downloadSampleTemplate(ev,format){
     if(kind==='xlsx'){
       try{
         const XLSX=await loadSheetJS();
-        const aoa=getSamplePlanAoA();
-        const ws=XLSX.utils.aoa_to_sheet(aoa);
+        const ws=aoaToLeftAlignedSheet(XLSX,getSamplePlanAoA());
         ws['!cols']=[{wch:10},{wch:12},{wch:36},{wch:12},{wch:8},{wch:14},{wch:12},{wch:12},{wch:12},{wch:40}];
         const wb=XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb,ws,'Project Plan');
@@ -2771,8 +3756,7 @@ async function downloadCurrentPlan(ev,format){
     if(kind==='xlsx'){
       try{
         const XLSX=await loadSheetJS();
-        const aoa=getCurrentPlanAoA();
-        const ws=XLSX.utils.aoa_to_sheet(aoa);
+        const ws=aoaToLeftAlignedSheet(XLSX,getCurrentPlanAoA());
         ws['!cols']=[{wch:10},{wch:12},{wch:36},{wch:12},{wch:8},{wch:14},{wch:12},{wch:12},{wch:12},{wch:40}];
         const wb=XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb,ws,'Project Plan');
@@ -3110,7 +4094,7 @@ function parseMSProjectXML(text){
   parsed.forEach((pt,idx)=>{
     while(stack.length&&stack[stack.length-1].outlineLevel>=pt.outlineLevel) stack.pop();
     const parentWbs=stack.length?stack[stack.length-1].wbs:null;
-    rows.push({
+      rows.push({
       wbs:pt.wbs||String(idx+1),
       name:pt.name,
       type:pt.type,
@@ -3156,7 +4140,7 @@ function parseMSProjectFile(file){
 }
 async function applyImportedRows(rows,sourceLabel){
   let errors=0;
-  const {projectId}=ganttMeta();
+    const {projectId}=ganttMeta();
   showLoading('Importing '+rows.length+' items…');
   try{
     if(projectId){
@@ -3487,13 +4471,13 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ══════════════════════════════════════════════════════════════
 // INLINE CELL EDITING — fast click + Tab / Shift+Tab navigation
 // ══════════════════════════════════════════════════════════════
-const IE_BASE_FIELDS=['name','owner','start','end','duration','pred','prog'];
+const IE_BASE_FIELDS=['name','type','owner','start','end','duration','pred','prog'];
 
 function getIeFields(){
   const fields=[];
   // name always in tab order when visible (locked on)
   if(isFieldVisible('name')) fields.push('name');
-  ['owner','start','end','duration','pred','prog'].forEach(f=>{
+  ['type','owner','start','end','duration','pred','prog'].forEach(f=>{
     if(isFieldVisible(f)) fields.push(f);
   });
   customCols.forEach(c=>{
@@ -3512,15 +4496,18 @@ function flushPendingCellEdit(){
   const draft=pendingCellEditValue;
   pendingCellEdit=null;
   pendingCellEditValue=null;
+  const snap=captureGanttScroll();
   requestAnimationFrame(()=>{
     beginCellEdit(next.id,next.field);
     if(draft!=null){
       const inp=document.querySelector('#tr-'+next.id+' .ie-cell.editing input, #tr-'+next.id+' .ie-cell.editing select');
       if(inp&&inp.tagName==='INPUT'){
         inp.value=draft;
-        try{ inp.focus(); inp.select(); }catch(e){}
+        focusNoScroll(inp,true);
       }
     }
+    restoreGanttScroll(snap);
+    requestAnimationFrame(()=>restoreGanttScroll(snap));
   });
 }
 function resolveNextIeCell(id,field,dir){
@@ -3546,13 +4533,17 @@ function findIeCell(id,field){
 /** Finish edit: optional navigate via Tab; avoids double-commit races */
 function finishInlineEdit(opts){
   const navigate=opts&&opts.navigate;
-  const light=opts&&opts.light;
+  // Default to light panel-only refresh unless caller opts into a full chart rebuild
+  const light=!(opts&&opts.light===false);
   if(navigate) queueCellEdit(navigate.id,navigate.field);
+  const snap=captureGanttScroll();
   if(light){
     renderTaskPanel();
   } else {
     renderAll();
   }
+  restoreGanttScroll(snap);
+  requestAnimationFrame(()=>restoreGanttScroll(snap));
 }
 function bindIeKeys(el,id,field,commit,cancel){
   el.addEventListener('keydown',e=>{
@@ -3587,6 +4578,7 @@ function beginCellEdit(id,field){
   if(cell.classList.contains('editing')) return;
 
   if(field==='name') return ieEditName(id,cell);
+  if(field==='type') return ieEditType(id,cell);
   if(field==='owner') return ieEditOwner(id,cell);
   if(field==='start'||field==='end') return ieEditDate(id,field,cell);
   if(field==='duration') return ieEditDuration(id,cell);
@@ -3605,8 +4597,7 @@ function ieEditName(id,cell){
   inp.value=original;
   cell.textContent='';
   cell.appendChild(inp);
-  inp.focus();
-  inp.select();
+  focusNoScroll(inp,true);
   let done=false;
   const cancel=()=>{
     if(done) return;
@@ -3628,6 +4619,46 @@ function ieEditName(id,cell){
   };
   bindIeKeys(inp,id,'name',commit,cancel);
   inp.addEventListener('blur',()=>{ if(!done) commit(null); });
+}
+
+function ieEditType(id,cell){
+  const t=tasks.find(x=>x.id===id); if(!t) return;
+  if(t.type===1||t.id===1){ showToast('Project type is fixed','info',2200); return; }
+  cell.classList.add('editing');
+  const hasKids=getChildren(t.id).length>0;
+  const original=t.type;
+  const sel=document.createElement('select');
+  sel.className='ie-select';
+  // Folders: Task/Milestone are not valid — offer container types
+  const opts=hasKids
+    ?[[2,'Phase'],[3,'Workstream'],[4,'Activity'],[0,'Program'],[7,'Release']]
+    :[[2,'Phase'],[3,'Workstream'],[4,'Activity'],[5,'Task'],[6,'Milestone'],[0,'Program'],[7,'Release']];
+  const cur=effectiveType(t);
+  opts.forEach(([val,label])=>{
+    const opt=document.createElement('option');
+    opt.value=String(val); opt.textContent=label;
+    if(val===cur) opt.selected=true;
+    sel.appendChild(opt);
+  });
+  cell.innerHTML=''; cell.appendChild(sel); sel.focus();
+  let done=false;
+  const commit=(navigate)=>{
+    if(done) return;
+    done=true;
+    let next=parseInt(sel.value,10);
+    if(hasKids&&(next===5||next===6)) next=suggestedContainerType(t);
+    if(next!==original){
+      pushHistory();
+      t.type=next;
+      t.color=LEVEL_COLORS[next]||t.color;
+      void persistSave(t);
+    }
+    finishInlineEdit({navigate, light:false});
+  };
+  const cancel=()=>{ if(done) return; done=true; finishInlineEdit({light:true}); };
+  bindIeKeys(sel,id,'type',commit,cancel);
+  sel.addEventListener('change',()=>{ if(!done) commit(null); });
+  sel.addEventListener('blur',()=>{ if(!done) commit(null); });
 }
 
 function ieEditOwner(id,cell){
@@ -3680,10 +4711,12 @@ function ieEditDate(id,field,cell){
       if(autoSchedule) applyAutoSchedule();
       void persistSave(t);
       if(autoSchedule) void persistScheduleChanges(t);
+      finishInlineEdit({navigate, light:false});
+      return;
     }
-    finishInlineEdit({navigate});
+    finishInlineEdit({navigate, light:true});
   };
-  const cancel=()=>{ if(done) return; done=true; finishInlineEdit({}); };
+  const cancel=()=>{ if(done) return; done=true; finishInlineEdit({light:true}); };
   bindIeKeys(inp,id,field,commit,cancel);
   inp.addEventListener('change',()=>{ /* wait for blur/tab */ });
   inp.addEventListener('blur',()=>{ if(!done) commit(null); });
@@ -3724,7 +4757,7 @@ function ieEditDuration(id,cell){
     }
     finishInlineEdit({navigate});
   };
-  const cancel=()=>{ if(done) return; done=true; finishInlineEdit({}); };
+  const cancel=()=>{ if(done) return; done=true; finishInlineEdit({light:true}); };
   bindIeKeys(inp,id,'duration',commitSafe,cancel);
   inp.addEventListener('blur',()=>{ if(!done) commitSafe(null); });
 }
@@ -3763,17 +4796,30 @@ function ieEditPred(id,cell){
     done=true;
     const v=sel.value?parseInt(sel.value,10):null;
     const changed=v!==t.predId;
+    let datesMoved=false;
     if(changed){
       pushHistory();
       t.predId=v;
       if(v&&!t.depType) t.depType='FS';
       if(!v) t.depType='FS';
-      if(autoSchedule) applyAutoSchedule();
+      if(autoSchedule) datesMoved=!!applyAutoSchedule();
       void persistSave(t);
       if(autoSchedule) void persistScheduleChanges(t);
     }
-    finishInlineEdit({navigate});
-    if(changed&&showCP){
+    if(navigate) queueCellEdit(navigate.id,navigate.field);
+    if(!changed){
+      finishInlineEdit({navigate, light:true});
+      return;
+    }
+    if(datesMoved){
+      renderAll();
+    } else {
+      cell.classList.remove('editing');
+      cell.innerHTML='<span class="pred-val">'+esc(formatPred(t))+'</span>';
+      softRefreshAfterDepChange(id);
+      flushPendingCellEdit();
+    }
+    if(showCP){
       if(v&&criticalIds.size) showToast('Critical path updated ('+criticalIds.size+')','ok',2000);
       else if(v) showToast('Predecessor saved','ok',1800);
       else showToast('Predecessor cleared','info',1800);
@@ -3786,25 +4832,150 @@ function ieEditPred(id,cell){
 
 function ieEditProg(id,cell){
   const t=tasks.find(x=>x.id===id); if(!t) return;
-  cell.classList.add('editing');
-  const original=t.prog||0;
+  cell.classList.add('editing','editing-prog');
+  const original=Number(t.prog)||0;
+  const wrap=document.createElement('div');
+  wrap.className='ie-prog-editor';
+  const range=document.createElement('input');
+  range.type='range'; range.min='0'; range.max='100'; range.step='1';
+  range.className='ie-prog-range';
+  range.value=String(original);
+  range.title='Drag to set progress';
   const inp=document.createElement('input');
-  inp.type='number'; inp.min=0; inp.max=100; inp.step=5;
-  inp.className='ie-input';
+  inp.type='number'; inp.min='0'; inp.max='100'; inp.step='1';
+  inp.className='ie-input ie-prog-num';
   inp.value=String(original);
-  cell.innerHTML=''; cell.appendChild(inp); inp.focus(); inp.select();
+  inp.setAttribute('aria-label','Progress percent');
+  const suffix=document.createElement('span');
+  suffix.className='ie-prog-suffix';
+  suffix.textContent='%';
+  wrap.appendChild(range);
+  wrap.appendChild(inp);
+  wrap.appendChild(suffix);
+  cell.innerHTML='';
+  cell.appendChild(wrap);
+  const syncUi=(v)=>{
+    range.value=String(v);
+    inp.value=String(v);
+    paintProgVisuals(id,v);
+  };
+  range.addEventListener('input',()=>{
+    const v=Math.max(0,Math.min(100,parseInt(range.value,10)||0));
+    syncUi(v);
+  });
+  inp.addEventListener('input',()=>{
+    const raw=inp.value;
+    if(raw===''||raw==='-') return;
+    const v=Math.max(0,Math.min(100,parseInt(raw,10)||0));
+    syncUi(v);
+  });
+  inp.focus();
+  inp.select();
   let done=false;
   const commit=(navigate)=>{
     if(done) return;
     done=true;
     const next=Math.max(0,Math.min(100,parseInt(inp.value,10)||0));
-    if(next!==original){ pushHistory(); t.prog=next; void persistSave(t); }
+    if(next!==original){
+      pushHistory();
+      t.prog=next;
+      void persistSave(t);
+    } else {
+      paintProgVisuals(id,next);
+    }
     finishInlineEdit({navigate, light:true});
   };
-  const cancel=()=>{ if(done) return; done=true; finishInlineEdit({light:true}); };
+  const cancel=()=>{
+    if(done) return;
+    done=true;
+    t.prog=original;
+    paintProgVisuals(id,original);
+    finishInlineEdit({light:true});
+  };
   bindIeKeys(inp,id,'prog',commit,cancel);
-  inp.addEventListener('blur',()=>{ if(!done) commit(null); });
+  bindIeKeys(range,id,'prog',commit,cancel);
+  const onBlur=(e)=>{
+    if(done) return;
+    const next=e&&e.relatedTarget;
+    if(next&&wrap.contains(next)) return;
+    // Defer so a click on another cell can start first
+    setTimeout(()=>{ if(!done) commit(null); },0);
+  };
+  inp.addEventListener('blur',onBlur);
+  range.addEventListener('blur',onBlur);
 }
+
+function progColor(p){
+  const v=Number(p)||0;
+  return v>=70?'#059669':v>=40?'#d97706':'#dc2626';
+}
+
+function paintProgVisuals(id,pct){
+  const v=Math.max(0,Math.min(100,Math.round(Number(pct)||0)));
+  const cell=findIeCell(id,'prog');
+  if(cell&&!cell.classList.contains('editing')){
+    const fill=cell.querySelector('.prog-fill');
+    const label=cell.querySelector('.prog-pct');
+    if(fill){
+      fill.style.width=v+'%';
+      fill.style.background=progColor(v);
+    }
+    if(label) label.textContent=v+'%';
+  }
+  const barFill=document.querySelector('#bar-'+id+' .bar-prog-fill');
+  if(barFill) barFill.style.width=v+'%';
+}
+
+function startProgBarDrag(e,id){
+  if(!e||e.button!=null&&e.button!==0) return;
+  const t=tasks.find(x=>x.id===id);
+  if(!t) return;
+  const cell=findIeCell(id,'prog');
+  if(!cell||cell.classList.contains('editing')) return;
+  e.preventDefault();
+  selectTask(id);
+  const track=cell.querySelector('.prog-track')||cell;
+  const original=Number(t.prog)||0;
+  let latest=original;
+  let moved=false;
+  let historyPushed=false;
+  const startX=e.clientX;
+  const apply=(clientX)=>{
+    const r=track.getBoundingClientRect();
+    const pct=((clientX-r.left)/Math.max(1,r.width))*100;
+    const next=Math.max(0,Math.min(100,Math.round(pct)));
+    if(next===latest&&moved) return;
+    if(next!==original){
+      if(!historyPushed){ pushHistory(); historyPushed=true; }
+      moved=true;
+    }
+    latest=next;
+    t.prog=latest;
+    paintProgVisuals(id,latest);
+  };
+  apply(e.clientX);
+  const onMove=(ev)=>{
+    if(Math.abs(ev.clientX-startX)>3) moved=true;
+    apply(ev.clientX);
+  };
+  const onUp=()=>{
+    document.removeEventListener('pointermove',onMove,true);
+    document.removeEventListener('pointerup',onUp,true);
+    document.removeEventListener('pointercancel',onUp,true);
+    if(!moved||latest===original){
+      t.prog=original;
+      paintProgVisuals(id,original);
+      beginCellEdit(id,'prog');
+      return;
+    }
+    void persistSave(t);
+    showToast('Progress '+latest+'%','ok',1400);
+  };
+  document.addEventListener('pointermove',onMove,true);
+  document.addEventListener('pointerup',onUp,true);
+  document.addEventListener('pointercancel',onUp,true);
+}
+window.startProgBarDrag=startProgBarDrag;
 
 function ieEditCustom(id,colId,cell){
   const t=tasks.find(x=>x.id===id); if(!t) return;
@@ -4039,7 +5210,7 @@ function canHavePredecessor(t){
   if(!t) return false;
   if(t.type===1||t.id===1) return false;
   if(getChildren(t.id).length) return false;
-  return true;
+    return true;
 }
 function canBePredecessor(t){
   return canHavePredecessor(t);
@@ -4056,24 +5227,36 @@ function depLinkRejectReason(fromId,toId){
 }
 function resolveDropTarget(clientX,clientY,excludeId){
   const el=document.elementFromPoint(clientX,clientY);
-  const bar=el&&el.closest?el.closest('.gantt-bar'):null;
+  if(!el||!el.closest) return null;
+  const handle=el.closest('.bar-dep-handle');
+  const bar=el.closest('.gantt-bar');
   if(!bar||!bar.id||!bar.id.startsWith('bar-')) return null;
   const id=parseInt(bar.id.slice(4),10);
   if(!Number.isFinite(id)||id===excludeId) return null;
-  const rect=bar.getBoundingClientRect();
-  const side=(clientX-rect.left)<rect.width/2?'start':'end';
-  return {id,el:bar,side};
-}
-/** Map connector handles → dependency type (ClickUp / monday style) */
-function depTypeFromHandles(fromSide,toSide){
-  if(fromSide==='end'&&toSide==='start') return 'FS';
-  if(fromSide==='end'&&toSide==='end') return 'EE'; // Finish-to-Finish
-  if(fromSide==='start'&&toSide==='start') return 'SS';
-  return 'FS'; // start→end ≈ SF; store as FS for schedule engine
+  // Default: enter the LEFT (start) of the target — standard Finish-to-Start.
+  // Only treat as RIGHT (end) when the cursor is on the target’s end connector •
+  let side='start';
+  if(handle&&handle.classList.contains('bar-dep-handle-r')&&bar.contains(handle)){
+    side='end';
+  } else if(handle&&handle.classList.contains('bar-dep-handle-l')&&bar.contains(handle)){
+    side='start';
+  }
+  return {id,el:bar,side,onHandle:!!handle};
 }
 /**
- * Drag from a connector handle on the predecessor to a bar (start/end half).
- * Drop side picks FS / FF / SS — same as monday & ClickUp.
+ * Connector drag → dependency type (monday.com defaults).
+ * End handle → always Finish-to-Start (leave right, enter left).
+ * Start handle → Start-to-Start.
+ * Finish-to-Finish is set via the edit modal, not by dropping on a bar half.
+ */
+function depTypeFromHandles(fromSide,toSide){
+  if(fromSide==='start') return 'SS';
+  return 'FS';
+}
+/**
+ * Drag from a connector handle on the predecessor onto another bar.
+ * Dropping on the bar body always creates FS (arrow into the left).
+ * Drop on the target end • for FF; drag from start • onto bar for SS.
  */
 function startConnectorDrag(taskId,fromSide,e){
   if(!canBePredecessor(tasks.find(x=>x.id===taskId))){
@@ -4086,8 +5269,8 @@ function startConnectorDrag(taskId,fromSide,e){
   if(srcEl) srcEl.classList.add('dep-source');
   const startX=e.clientX, startY=e.clientY;
   showDepToast(fromSide==='end'
-    ? 'Drop on a task start = FS · Drop on end = FF (folders not allowed)'
-    : 'Drop on a task start = SS · Drop on end = FS (folders not allowed)');
+    ? 'Drop on a bar to link Finish→Start (arrow into the left)'
+    : 'Drop on a bar to link Start→Start');
 
   const onMove=(ev)=>{
     const hit=resolveDropTarget(ev.clientX,ev.clientY,taskId);
@@ -4131,21 +5314,24 @@ function createDepLink(fromId,toId,depType){
   }
   const targetTask=tasks.find(x=>x.id===toId);
   if(!targetTask) return false;
-  const type=depType||currentDep||'FS';
+  // Connector links: FS (leave right → enter left) or SS only — never FF from drag
+  let type=(depType||'FS').toUpperCase();
+  if(type==='FF'||type==='EE') type='FS';
+  if(type!=='SS') type='FS';
   pushHistory();
   targetTask.predId=fromId;
   targetTask.depType=type;
-  if(autoSchedule) applyAutoSchedule();
+  let datesMoved=false;
+  if(autoSchedule) datesMoved=!!applyAutoSchedule();
   pushHistory();
   const fromName=(tasks.find(x=>x.id===fromId)||{}).name||('#'+fromId);
-  const label=type==='EE'?'FF':type;
-  showDepToast('Linked ('+label+'): “'+fromName+'” → “'+targetTask.name+'”');
+  showDepToast('Linked ('+type+'): “'+fromName+'” → “'+targetTask.name+'”');
   if(!isUnsavedLocal(targetTask)){
-    persistSave(targetTask);
+    void persistSave(targetTask);
     if(autoSchedule) void persistScheduleChanges(targetTask);
   }
-  renderAll();
-  if(showCP) updateCpBanner();
+  if(datesMoved) renderAll();
+  else softRefreshAfterDepChange(toId);
   return true;
 }
 function removeDepLink(succId){
@@ -4156,9 +5342,8 @@ function removeDepLink(succId){
   t.depType='FS';
   pushHistory();
   showDepToast('Dependency removed');
-  if(!isUnsavedLocal(t)) persistSave(t);
-  renderAll();
-  if(showCP) updateCpBanner();
+  if(!isUnsavedLocal(t)) void persistSave(t);
+  softRefreshAfterDepChange(succId);
 }
 // Legacy stubs (toolbar Link bars removed — connectors are always available)
 function toggleDepDraw(){ showDepToast('Hover a bar and drag the • dots on either end to link tasks'); }
@@ -4179,7 +5364,39 @@ function taskStatusFromGantt(t){
 }
 function notifyGanttParent(){
   const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
-  try{ window.parent.postMessage({type:'gantt-saved',projectId},'*'); }catch(e){}
+  try{ window.parent.postMessage({type:'gantt-saved',projectId,soft:true},'*'); }catch(e){}
+}
+
+/** Update DOM ids after server assigns a real task id — avoids full chart rebuild mid-edit. */
+function remapTaskDomIds(oldId,newId){
+  if(oldId==null||newId==null||oldId===newId) return;
+  if(checkedRowIds.has(oldId)){
+    checkedRowIds.delete(oldId);
+    checkedRowIds.add(newId);
+  }
+  ['tr-','tn-','bar-','gr-'].forEach(prefix=>{
+    const el=document.getElementById(prefix+oldId);
+    if(el) el.id=prefix+newId;
+  });
+  document.querySelectorAll('[data-id="'+oldId+'"]').forEach(el=>{
+    el.setAttribute('data-id',String(newId));
+  });
+  document.querySelectorAll('[data-task-id="'+oldId+'"]').forEach(el=>{
+    el.setAttribute('data-task-id',String(newId));
+  });
+  document.querySelectorAll('[data-prog-drag="'+oldId+'"]').forEach(el=>{
+    el.setAttribute('data-prog-drag',String(newId));
+  });
+  // Inline onclick handlers embed the numeric id — refresh checkbox handler
+  const row=document.getElementById('tr-'+newId);
+  if(row){
+    const cb=row.querySelector('.task-sel-cb');
+    if(cb) cb.setAttribute('onclick',"event.stopPropagation();toggleRowCheck("+newId+",this.checked)");
+  }
+  if(barPos[oldId]){
+    barPos[newId]=barPos[oldId];
+    delete barPos[oldId];
+  }
 }
 
 function ganttMeta(){
@@ -4201,14 +5418,16 @@ function isLocalOnly(t){
   if(!t) return true;
   return t.id>=LOCAL_ID_BASE || t.id===1;
 }
-function engineTypeToGanttFields(type){
+function engineTypeToGanttFields(type,hasKids){
   if(type===0) return {ganttType:'program',isSummary:true};
   if(type===1) return {ganttType:'project',isSummary:true};
   if(type===2) return {ganttType:'phase',isSummary:true};
   if(type===3) return {ganttType:'workstream',isSummary:true};
   if(type===4) return {ganttType:'activity',isSummary:true};
-  if(type===6) return {ganttType:'milestone',isSummary:false};
+  if(type===6) return {ganttType:'milestone',isSummary:!!hasKids};
   if(type===7) return {ganttType:'release',isSummary:true};
+  // Task with children is treated as a summary until type is promoted
+  if(hasKids) return {ganttType:'activity',isSummary:true};
   return {ganttType:'task',isSummary:false};
 }
 function ganttIdToDbTaskId(ganttId){
@@ -4242,7 +5461,7 @@ async function persistCreate(t,opts){
   };
   const ownerMap=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.ownerIdMap)||{};
   const assigneeId=t.owner?ownerMap[t.owner]||null:null;
-  const gt=engineTypeToGanttFields(t.type);
+  const gt=engineTypeToGanttFields(t.type,getChildren(t.id).length>0);
   try{
     const parentTaskId=(t.parent&&t.parent!==1)?ganttIdToDbTaskId(t.parent):null;
     const predIds=predecessorIdsForSave(t.predId)||[];
@@ -4262,28 +5481,35 @@ async function persistCreate(t,opts){
       assigneeId:assigneeId||null,
       order:tasks.filter(x=>x.type!==1).length,
     });
-    if(created?.id){
-      const oldId=t.id;
-      let draft=null;
-      const nameInp=document.querySelector('#tn-'+oldId+' input, #tr-'+oldId+' .task-name.editing input');
-      if(nameInp) draft=nameInp.value;
-      t.id=created.id;
-      // Remap children/preds that pointed at the temp local id — never rewrite this row onto itself
-      tasks.filter(x=>x.id!==t.id&&(x.parent===oldId||x.predId===oldId)).forEach(c=>{
-        if(c.parent===oldId) c.parent=t.id;
-        if(c.predId===oldId) c.predId=t.id;
-      });
-      if(t.parent===oldId||t.parent===t.id) t.parent=null;
-      if(selectedTaskId===oldId) selectedTaskId=t.id;
-      calcWBS();
-      // Quiet remount — keep typing if user was naming the row
-      const wasEditing=draft!=null||!!document.querySelector('#tr-'+oldId+' .ie-cell.editing');
-      if(wasEditing){
-        if(draft!=null) t.name=(draft.trim()||t.name);
-        queueCellEdit(t.id,'name',draft);
+      if(created?.id){
+        const oldId=t.id;
+        let draft=null;
+        const nameInp=document.querySelector('#tn-'+oldId+' input, #tr-'+oldId+' .task-name.editing input');
+        if(nameInp) draft=nameInp.value;
+        const wasEditing=draft!=null||!!document.querySelector('#tr-'+oldId+' .ie-cell.editing');
+        t.id=created.id;
+        // Remap children/preds that pointed at the temp local id — never rewrite this row onto itself
+        tasks.filter(x=>x.id!==t.id&&(x.parent===oldId||x.predId===oldId)).forEach(c=>{
+          if(c.parent===oldId) c.parent=t.id;
+          if(c.predId===oldId) c.predId=t.id;
+        });
+        if(t.parent===oldId||t.parent===t.id) t.parent=null;
+        if(selectedTaskId===oldId) selectedTaskId=t.id;
+        if(checkedRowIds.has(oldId)){
+          checkedRowIds.delete(oldId);
+          checkedRowIds.add(t.id);
+        }
+        calcWBS();
+        if(wasEditing){
+          // Keep typing — surgical id remap, no full chart rebuild
+          if(draft!=null) t.name=(draft.trim()||t.name);
+          remapTaskDomIds(oldId,t.id);
+          updateUndoRedoButtons();
+          updateSelectionBar();
+        } else {
+          renderAll();
+        }
       }
-      renderAll();
-    }
     if(!silent) showSaveIndicator();
     notifyGanttParent();
   } catch(e){
@@ -4295,29 +5521,54 @@ async function persistCreate(t,opts){
   try{ await run; } finally { createInFlight.delete(t); }
 }
 
-async function persistDelete(t){
-  if(!t||t.type===1||t.id===1) return;
-  if(isLocalOnly(t)) return;
-  showLoading('Deleting…');
+async function persistDelete(t,silent){
+  if(!t||t.type===1||t.id===1) return false;
+  if(isLocalOnly(t)) return true;
   const h=apiAuthHeaders();
   try{
     const res=await fetch('/api/pm/tasks/'+t.id,{method:'DELETE',credentials:'include',headers:h});
     if(!res.ok) throw new Error('HTTP '+res.status);
-    showToast('✓ Deleted','ok');
-    notifyGanttParent();
+    if(!silent){
+      showToast('✓ Deleted','ok');
+      notifyGanttParent();
+    }
+    return true;
   } catch(e){
     console.error('Gantt delete failed:',e);
-    showToast('Delete failed','err',2800);
-  } finally {
-    hideLoading();
+    if(!silent) showToast('Delete failed','err',2800);
+    return false;
   }
+}
+
+async function persistDeletes(removed,predCleared){
+  // `removed` is already deepest-first from removeTasksByIds
+  const list=(removed||[]).filter(t=>t&&t.type!==1&&t.id!==1&&!isLocalOnly(t));
+  let ok=0,fail=0;
+  for(const t of list){
+    const r=await persistDelete(t,true);
+    if(r) ok++; else fail++;
+  }
+  const predList=(predCleared||[]).filter(t=>t&&!isUnsavedLocal(t));
+  for(const t of predList){
+    try{ await persistSave(t); }catch(e){ console.error('Gantt pred clear save failed:',e); }
+  }
+  if(!list.length&&!predList.length){
+    notifyGanttParent();
+    return;
+  }
+  if(list.length){
+    if(fail&&!ok) showToast('Delete failed','err',2800);
+    else if(fail) showToast('Deleted '+ok+', '+fail+' failed','err',3200);
+    else showToast(ok===1?'✓ Deleted':'✓ Deleted '+ok+' lines','ok');
+  }
+  notifyGanttParent();
 }
 
 async function persistSave(t){
   if(!t||t.type===1||t.id===1){
     const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
     if(!projectId) return false;
-    const h=apiAuthHeaders(true);
+  const h=apiAuthHeaders(true);
     try{
       const res=await fetch('/api/pm/projects/'+projectId,{
         method:'PUT',credentials:'include',headers:h,
@@ -4355,7 +5606,7 @@ async function persistSave(t){
   };
   const ownerMap=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.ownerIdMap)||{};
   const projectId=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||null;
-  const gt=engineTypeToGanttFields(t.type);
+  const gt=engineTypeToGanttFields(t.type,getChildren(t.id).length>0);
   try{
     const parentTaskId=(t.parent&&t.parent!==1)?ganttIdToDbTaskId(t.parent):null;
     let predIds=predecessorIdsForSave(t.predId);
@@ -4393,6 +5644,10 @@ async function persistSave(t){
 let activePlanVersion=null; // {id,name,versionNumber,isActive}
 let versionNameModalCb=null; // async (name)=>void
 let versionConfirmModalCb=null; // async ()=>void
+/** Cached lightweight version list (no snapshots) — keeps Plan chip / modal snappy */
+let versionsListCache=null;
+let versionsListFetchInflight=null;
+let versionsListCacheProjectId=null;
 
 function escAttr(s){
   return String(s||'')
@@ -4415,6 +5670,7 @@ function serializeSnapshot(){
 function restoreSnapshot(snapshot){
   if(!snapshot||!Array.isArray(snapshot.tasks)) return false;
   tasks=snapshot.tasks.map(t=>normalizeTaskRags(Object.assign({},t)));
+  invalidateTaskIndex();
   const ids=tasks.map(t=>Number(t.id)||0);
   nextId=Math.max(100000,...ids)+1;
   if(Array.isArray(snapshot.customCols)){
@@ -4458,6 +5714,58 @@ async function loadActivePlanVersion(){
     activePlanVersion=data&&data.id?data:null;
     updatePlanChip();
   }catch(e){ /* ignore */ }
+  // Warm the versions list so Plan chip / modal opens instantly
+  void prefetchVersionsList();
+}
+
+async function fetchVersionsList(){
+  const {projectId}=ganttMeta();
+  if(!projectId) return {list:[]};
+  if(versionsListFetchInflight&&versionsListCacheProjectId===projectId){
+    return versionsListFetchInflight;
+  }
+  versionsListCacheProjectId=projectId;
+  versionsListFetchInflight=(async()=>{
+    try{
+      const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions',{credentials:'include',headers:apiAuthHeaders(false)});
+      const ct=(res.headers.get('content-type')||'');
+      if(!ct.includes('application/json')) return {error:'unavailable'};
+      const list=await res.json();
+      if(!res.ok) return {error:(list&&list.message)||'failed'};
+      if(!Array.isArray(list)) return {error:'invalid'};
+      versionsListCache=list;
+      const active=list.find(v=>v.isActive);
+      if(active){
+        activePlanVersion=active;
+        updatePlanChip();
+      }
+      return {list};
+    }catch(e){
+      return {error:'network'};
+    }finally{
+      versionsListFetchInflight=null;
+    }
+  })();
+  return versionsListFetchInflight;
+}
+
+function prefetchVersionsList(){
+  void fetchVersionsList();
+}
+
+async function nextVersionDefaultName(){
+  let n=1;
+  if(Array.isArray(versionsListCache)&&versionsListCache.length){
+    n=Math.max(...versionsListCache.map(v=>Number(v.versionNumber)||0))+1;
+  } else if(activePlanVersion&&activePlanVersion.versionNumber!=null){
+    n=Number(activePlanVersion.versionNumber)+1;
+  } else {
+    const result=await fetchVersionsList();
+    if(result&&Array.isArray(result.list)&&result.list.length){
+      n=Math.max(...result.list.map(v=>Number(v.versionNumber)||0))+1;
+    }
+  }
+  return n===1?'Baseline v1':('Version '+n);
 }
 
 function toggleVersionMenu(e){
@@ -4491,21 +5799,6 @@ function closeVersionMenu(){
   const btn=document.getElementById('versionMenuBtn');
   if(menu) menu.setAttribute('hidden','');
   if(btn) btn.classList.remove('active');
-}
-
-async function nextVersionDefaultName(){
-  const {projectId}=ganttMeta();
-  let n=1;
-  try{
-    const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions',{credentials:'include',headers:apiAuthHeaders(false)});
-    if(res.ok){
-      const list=await res.json();
-      if(Array.isArray(list)&&list.length){
-        n=Math.max(...list.map(v=>Number(v.versionNumber)||0))+1;
-      }
-    }
-  }catch(e){}
-  return n===1?'Baseline v1':('Version '+n);
 }
 
 function formatVersionDate(iso){
@@ -4735,73 +6028,78 @@ async function savePlanVersion(name,opts){
 
 async function openVersionsModal(){
   closeVersionMenu();
-  await refreshVersionsList();
   const el=document.getElementById('modalVersions');
+  // Open immediately — never wait on network before showing the dialog
   if(el) el.classList.add('open');
+  if(Array.isArray(versionsListCache)){
+    renderVersionsListHtml(versionsListCache);
+  } else {
+    const listEl=document.getElementById('versionsList');
+    if(listEl) listEl.innerHTML='<div class="versions-empty">Loading…</div>';
+  }
+  await refreshVersionsList({soft:Array.isArray(versionsListCache)});
 }
 
-async function refreshVersionsList(){
-  const {projectId}=ganttMeta();
+function renderVersionsListHtml(list){
   const el=document.getElementById('versionsList');
-  if(!el||!projectId) return;
-  el.innerHTML='<div class="versions-empty">Loading…</div>';
-  try{
-    const res=await fetch('/api/pm/projects/'+projectId+'/gantt/versions',{credentials:'include',headers:apiAuthHeaders(false)});
-    const ct=(res.headers.get('content-type')||'');
-    if(!ct.includes('application/json')){
-      el.innerHTML='<div class="versions-empty">'+
-        '<div class="versions-empty-title">Versions API unavailable</div>'+
-        '<div>Refresh the page (or restart the app server) and try again.</div>'+
-      '</div>';
-      return;
-    }
-    const list=await res.json();
-    if(!res.ok){
-      el.innerHTML='<div class="versions-empty">'+(list&&list.message?esc(list.message):'Could not load versions')+'</div>';
-      return;
-    }
-    if(!Array.isArray(list)){
-      el.innerHTML='<div class="versions-empty">Could not load versions</div>';
-      return;
-    }
-    if(!list.length){
-      el.innerHTML='<div class="versions-empty">'+
-        '<div class="versions-empty-title">No saved versions yet</div>'+
-        '<div>Save a snapshot of the current plan to compare baselines later.</div>'+
-        '<button type="button" class="btn btn-p" style="margin-top:12px;" onclick="promptSaveVersion(\'update\')">Save first version</button>'+
-      '</div>';
-      return;
-    }
-    const active=list.find(v=>v.isActive);
-    if(active){
-      activePlanVersion=active;
-      updatePlanChip();
-    }
-    el.innerHTML=list.map(v=>{
-      const date=formatVersionDate(v.date||v.createdAt);
-      const activeBadge=v.isActive?' <span class="ver-active-badge">Active</span>':'';
-      return '<div class="ver-row'+(v.isActive?' is-active':'')+'" data-vid="'+v.id+'" data-name="'+escAttr(v.name)+'">'+
-        '<div class="ver-main">'+
-          '<div class="ver-title">'+esc(v.name)+activeBadge+'</div>'+
-          '<div class="ver-meta">v'+v.versionNumber+(date?' · '+esc(date):'')+'</div>'+
-        '</div>'+
-        '<div class="ver-actions">'+
-          (v.isActive
-            ?'<button type="button" class="btn btn-ghost btn-xs" onclick="confirmUpdateActiveSnapshot()" title="Overwrite this snapshot with the live schedule (name stays the same)">Update schedule</button>'
-            :'<button type="button" class="btn btn-p btn-xs" onclick="activatePlanVersion('+v.id+')">Activate</button>')+
-          '<button type="button" class="btn btn-ghost btn-xs" onclick="copyPlanVersion('+v.id+')">Copy</button>'+
-          '<button type="button" class="btn btn-ghost btn-xs" onclick="renamePlanVersion('+v.id+')" title="Change the display name only">Rename</button>'+
-          (v.isActive?'':'<button type="button" class="btn btn-danger btn-xs" onclick="deletePlanVersion('+v.id+')">Delete</button>')+
-        '</div>'+
-      '</div>';
-    }).join('');
-  }catch(e){
-    console.error('refreshVersionsList',e);
+  if(!el) return;
+  if(!list.length){
     el.innerHTML='<div class="versions-empty">'+
-      '<div class="versions-empty-title">Could not load versions</div>'+
-      '<div>Check your connection and refresh the page.</div>'+
+      '<div class="versions-empty-title">No saved versions yet</div>'+
+      '<div>Save a snapshot of the current plan to compare baselines later.</div>'+
+      '<button type="button" class="btn btn-p" style="margin-top:12px;" onclick="promptSaveVersion(\'update\')">Save first version</button>'+
     '</div>';
+    return;
   }
+  const active=list.find(v=>v.isActive);
+  if(active){
+    activePlanVersion=active;
+    updatePlanChip();
+  }
+  el.innerHTML=list.map(v=>{
+    const date=formatVersionDate(v.date||v.createdAt);
+    const activeBadge=v.isActive?' <span class="ver-active-badge">Active</span>':'';
+    return '<div class="ver-row'+(v.isActive?' is-active':'')+'" data-vid="'+v.id+'" data-name="'+escAttr(v.name)+'">'+
+      '<div class="ver-main">'+
+        '<div class="ver-title">'+esc(v.name)+activeBadge+'</div>'+
+        '<div class="ver-meta">v'+v.versionNumber+(date?' · '+esc(date):'')+'</div>'+
+      '</div>'+
+      '<div class="ver-actions">'+
+        (v.isActive
+          ?'<button type="button" class="btn btn-ghost btn-xs" onclick="confirmUpdateActiveSnapshot()" title="Overwrite this snapshot with the live schedule (name stays the same)">Update schedule</button>'
+          :'<button type="button" class="btn btn-p btn-xs" onclick="activatePlanVersion('+v.id+')">Activate</button>')+
+        '<button type="button" class="btn btn-ghost btn-xs" onclick="copyPlanVersion('+v.id+')">Copy</button>'+
+        '<button type="button" class="btn btn-ghost btn-xs" onclick="renamePlanVersion('+v.id+')" title="Change the display name only">Rename</button>'+
+        (v.isActive?'':'<button type="button" class="btn btn-danger btn-xs" onclick="deletePlanVersion('+v.id+')">Delete</button>')+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+async function refreshVersionsList(opts){
+  const soft=!!(opts&&opts.soft);
+  const el=document.getElementById('versionsList');
+  if(!el) return;
+  if(!soft) el.innerHTML='<div class="versions-empty">Loading…</div>';
+  const result=await fetchVersionsList();
+  if(result&&result.error==='unavailable'){
+    el.innerHTML='<div class="versions-empty">'+
+      '<div class="versions-empty-title">Versions API unavailable</div>'+
+      '<div>Refresh the page (or restart the app server) and try again.</div>'+
+    '</div>';
+    return;
+  }
+  if(result&&result.error){
+    if(!soft||!Array.isArray(versionsListCache)){
+      el.innerHTML='<div class="versions-empty">'+
+        '<div class="versions-empty-title">Could not load versions</div>'+
+        '<div>Check your connection and refresh the page.</div>'+
+      '</div>';
+    }
+    return;
+  }
+  const list=(result&&result.list)||versionsListCache||[];
+  renderVersionsListHtml(list);
 }
 
 function versionRowName(vid){
@@ -4942,20 +6240,48 @@ window.addEventListener('message',function(e){
 // ══════════════════════════════════════════════════════════════
 // DATA INIT — reads window.GANTT_INIT_DATA injected by React
 // ══════════════════════════════════════════════════════════════
+/** One-time: old drop logic saved Finish-to-Finish when dropping on the right half of a bar. */
+function migrateLegacyRightRightDeps(){
+  const pid=(window.GANTT_INIT_DATA&&window.GANTT_INIT_DATA.projectId)||0;
+  // v2: also fixes links that looked right→right due to wrap-around routing
+  const key='gantt-dep-fs-migrate-v2-'+pid;
+  try{ if(localStorage.getItem(key)) return; }catch(e){}
+  const touched=[];
+  tasks.forEach(t=>{
+    if(!t.predId) return;
+    if(t.depType!=='EE'&&t.depType!=='FF') return;
+    t.depType='FS';
+    touched.push(t);
+  });
+  try{ localStorage.setItem(key,'1'); }catch(e){}
+  if(!touched.length) return;
+  touched.forEach(t=>{ if(!isUnsavedLocal(t)) void persistSave(t); });
+  setTimeout(()=>showToast('Updated '+touched.length+' link(s) to Finish→Start (into the left)','ok',3200),600);
+}
 function loadFromInitData(){
   const d=window.GANTT_INIT_DATA;
   if(!d||!Array.isArray(d.tasks)){tasks=[];nextId=100000;return;}
   tasks=d.tasks.map(t=>normalizeTaskRags(Object.assign({},t)));
   nextId=d.nextId||100000;
+  invalidateTaskIndex();
+  checkedRowIds.clear();
+  selectedTaskId=null;
+  normalizeContainerTypes();
+  migrateLegacyRightRightDeps();
   // Populate OWNERS
   OWNERS.length=0;
   (d.owners||[]).forEach(o=>OWNERS.push(o));
-  // Repopulate owner filter dropdown
-  const fo=document.getElementById('f-owner');
-  if(fo){
-    fo.innerHTML='<option value="">All owners</option>';
-    OWNERS.forEach(o=>{const opt=document.createElement('option');opt.value=o;opt.textContent=o;fo.appendChild(opt);});
+  // Reset version list cache when init data reloads (project / version switch)
+  versionsListCache=null;
+  versionsListCacheProjectId=null;
+  versionsListFetchInflight=null;
+  // Drop owner filter picks that no longer exist
+  if(ownerFilterOwners.size){
+    const keep=new Set(OWNERS);
+    ownerFilterOwners=new Set(Array.from(ownerFilterOwners).filter(o=>keep.has(o)));
   }
+  syncOwnerFilterHidden();
+  updateOwnerFilterBtn();
   // Update modal owner select
   const mo=document.getElementById('m-owner');
   if(mo&&OWNERS.length){
@@ -4964,8 +6290,11 @@ function loadFromInitData(){
   }
   loadCustomCols();
   loadFieldVisibility();
+  loadColumnWidths();
   renderCustomHeaders();
   applyFieldVisibility();
+  ensureColumnResizeHandles();
+  updateColumnsBtn();
 }
 
 // ── INIT ─────────────────────────────────────────────────────
@@ -4973,7 +6302,9 @@ loadFromInitData();
 pushHistory();
 setupScrollSync();
 setupPanelSplitter();
+ensureColumnResizeHandles();
 ensureAddColumnModal();
+updateColumnsBtn();
 renderAll();
 updateUndoRedoButtons();
 updatePlanChip();
@@ -5002,6 +6333,11 @@ document.addEventListener('keydown',e=>{
     if(fieldsMenu&&!fieldsMenu.hasAttribute('hidden')){fieldsMenu.setAttribute('hidden','');return;}
     const typeMenu=document.getElementById('typeFilterMenu');
     if(typeMenu&&!typeMenu.hasAttribute('hidden')){typeMenu.setAttribute('hidden','');return;}
+    const ownerMenu=document.getElementById('ownerFilterMenu');
+    if(ownerMenu&&!ownerMenu.hasAttribute('hidden')){ownerMenu.setAttribute('hidden','');return;}
+    const ragMenu=document.getElementById('ragFilterMenu');
+    if(ragMenu&&!ragMenu.hasAttribute('hidden')){ragMenu.setAttribute('hidden','');return;}
+    if(checkedRowIds.size){clearRowSelection();return;}
     closeVersionMenu();
   }
 });

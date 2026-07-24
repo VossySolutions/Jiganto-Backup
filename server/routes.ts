@@ -7721,8 +7721,10 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       let snap = snapshot;
       if (!snap && fromActive) {
         const active = await storage.getActivePmGanttVersion(projectId);
-        if (!active?.snapshot) return res.status(400).json({ message: "No active version snapshot to copy from" });
-        snap = active.snapshot as typeof snap;
+        if (!active?.id) return res.status(400).json({ message: "No active version snapshot to copy from" });
+        const full = await storage.getPmGanttVersionWithSnapshot(active.id);
+        if (!full?.snapshot) return res.status(400).json({ message: "No active version snapshot to copy from" });
+        snap = full.snapshot as typeof snap;
       }
       if (!snap || !Array.isArray(snap.tasks)) {
         return res.status(400).json({ message: "snapshot with tasks array is required" });
@@ -7784,7 +7786,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
       if (!name || typeof name !== "string" || !name.trim()) {
         return res.status(400).json({ message: "name is required" });
       }
-      const source = await storage.getPmGanttVersion(versionId);
+      const source = await storage.getPmGanttVersionWithSnapshot(versionId);
       if (!source || source.projectId !== Number(req.params.projectId)) {
         return res.status(404).json({ message: "Version not found" });
       }

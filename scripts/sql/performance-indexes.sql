@@ -19,10 +19,28 @@ CREATE INDEX IF NOT EXISTS idx_tasks_tenant_client ON tasks (tenant_id, client_i
 CREATE INDEX IF NOT EXISTS idx_pm_projects_tenant ON pm_projects (tenant_id);
 CREATE INDEX IF NOT EXISTS idx_pm_projects_client ON pm_projects (client_id);
 
+-- Gantt / task tree hot path
+CREATE INDEX IF NOT EXISTS idx_pm_tasks_project_order ON pm_tasks (project_id, "order", id);
+CREATE INDEX IF NOT EXISTS idx_pm_tasks_parent ON pm_tasks (parent_task_id);
+CREATE INDEX IF NOT EXISTS idx_pm_tasks_tenant_project ON pm_tasks (tenant_id, project_id);
+CREATE INDEX IF NOT EXISTS idx_pm_gantt_versions_project ON pm_gantt_versions (project_id);
+CREATE INDEX IF NOT EXISTS idx_pm_gantt_versions_project_active ON pm_gantt_versions (project_id, is_active);
+
+CREATE INDEX IF NOT EXISTS idx_pm_agile_workstreams_project ON pm_agile_workstreams (project_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_pm_epics_workstream ON pm_epics (agile_workstream_id);
+CREATE INDEX IF NOT EXISTS idx_pm_epics_project ON pm_epics (project_id);
 CREATE INDEX IF NOT EXISTS idx_pm_agile_stories_workstream ON pm_agile_stories (agile_workstream_id);
+CREATE INDEX IF NOT EXISTS idx_pm_agile_stories_project ON pm_agile_stories (project_id);
 CREATE INDEX IF NOT EXISTS idx_pm_agile_sprints_workstream ON pm_agile_sprints (agile_workstream_id);
 CREATE INDEX IF NOT EXISTS idx_pm_agile_defects_workstream ON pm_agile_defects (agile_workstream_id);
+CREATE INDEX IF NOT EXISTS idx_pm_agile_defects_project ON pm_agile_defects (project_id);
+
+CREATE INDEX IF NOT EXISTS idx_pm_raidd_project ON pm_raidd_items (project_id);
+CREATE INDEX IF NOT EXISTS idx_pm_raidd_project_type ON pm_raidd_items (project_id, type);
+CREATE INDEX IF NOT EXISTS idx_pm_team_members_project ON pm_team_members (project_id);
+CREATE INDEX IF NOT EXISTS idx_pm_deliverables_project ON pm_deliverables (project_id);
+CREATE INDEX IF NOT EXISTS idx_pm_milestones_project ON pm_milestones (project_id);
+CREATE INDEX IF NOT EXISTS idx_pm_phases_project ON pm_project_phases (project_id);
 
 CREATE INDEX IF NOT EXISTS idx_crm_accounts_tenant_client ON crm_accounts (tenant_id, client_id);
 CREATE INDEX IF NOT EXISTS idx_rate_card_items_card ON rate_card_items (rate_card_id);

@@ -127,7 +127,7 @@ export function BoardView({ stories, epics, activeSprint, onSelectStory, burndow
           testIdPrefix="agile-board"
           className="agile-kanban-scroll"
           columnWidthClass="w-full min-w-[200px] md:w-[280px]"
-          columnBodyClass="max-h-none min-h-[240px] overflow-y-auto bg-white dark:bg-card border border-t-0 rounded-b-xl p-2"
+          columnBodyClass="max-h-[min(70vh,560px)] min-h-[240px] overflow-y-auto bg-white dark:bg-card border border-t-0 rounded-b-xl p-2"
           renderCard={(story, { dragHandleProps, isDragging, isSaving }) => (
             <BoardCard
               story={story}

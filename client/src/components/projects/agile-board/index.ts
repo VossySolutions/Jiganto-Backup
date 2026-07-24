@@ -17,7 +17,5 @@ export { EpicsView, EpicForm } from "./epics-view";
 export { StoriesView } from "./stories-view";
 export { SprintsView, SprintForm } from "./sprints-view";
 export { DefectsView, DefectForm } from "./defects-view";
-export { RoadmapView } from "./roadmap-view";
-export { BestPracticeView } from "./best-practice-view";
 export { EpicDetailPanel } from "./epic-detail-panel";
 export { StoryDetailPanel, StoryEditForm } from "./story-detail-panel";

@@ -1162,6 +1162,8 @@ export interface IStorage {
   getPmGanttVersionSummaries(projectId: number): Promise<Array<Omit<PmGanttVersion, "snapshot">>>;
   countPmGanttVersions(projectId: number): Promise<number>;
   getPmGanttVersion(id: number): Promise<PmGanttVersion | undefined>;
+  /** Full row including snapshot jsonb — activate / copy only. */
+  getPmGanttVersionWithSnapshot(id: number): Promise<PmGanttVersion | undefined>;
   getActivePmGanttVersion(projectId: number): Promise<PmGanttVersion | undefined>;
   createPmGanttVersion(data: InsertPmGanttVersion): Promise<PmGanttVersion>;
   updatePmGanttVersion(id: number, updates: Partial<InsertPmGanttVersion>): Promise<PmGanttVersion | undefined>;
@@ -6319,20 +6321,28 @@ export class DatabaseStorage implements IStorage {
   async getPmTasks(projectId: number, filters?: { phaseId?: number; status?: string; assigneeId?: string; ganttType?: string }): Promise<PmTask[]> {
     const { ensureProjectUnifiedWorkItems } = await import("./lib/unified-work-items");
     await ensureProjectUnifiedWorkItems(projectId);
-    // Heal self-parent rows (infinite hierarchy loops freeze the Gantt iframe)
-    await db.execute(sql`
-      UPDATE pm_tasks
-      SET parent_task_id = NULL, updated_at = NOW()
-      WHERE project_id = ${projectId}
-        AND parent_task_id IS NOT NULL
-        AND parent_task_id = id
-    `);
     const conditions = [eq(pmTasks.projectId, projectId)];
     if (filters?.phaseId) conditions.push(eq(pmTasks.phaseId, filters.phaseId));
     if (filters?.status) conditions.push(eq(pmTasks.status, filters.status));
     if (filters?.assigneeId) conditions.push(eq(pmTasks.assigneeId, filters.assigneeId));
     if (filters?.ganttType) conditions.push(eq(pmTasks.ganttType, filters.ganttType));
-    return await db.select().from(pmTasks).where(and(...conditions)).orderBy(pmTasks.order, pmTasks.id);
+    const rows = await db.select().from(pmTasks).where(and(...conditions)).orderBy(pmTasks.order, pmTasks.id);
+    // Heal self-parent loops in-memory (avoids write-on-every-read). Persist async once if found.
+    const healIds: number[] = [];
+    for (const row of rows) {
+      if (row.parentTaskId != null && row.parentTaskId === row.id) {
+        (row as { parentTaskId: number | null }).parentTaskId = null;
+        healIds.push(row.id);
+      }
+    }
+    if (healIds.length) {
+      void db
+        .update(pmTasks)
+        .set({ parentTaskId: null, updatedAt: new Date() })
+        .where(and(eq(pmTasks.projectId, projectId), inArray(pmTasks.id, healIds), sql`${pmTasks.parentTaskId} = ${pmTasks.id}`))
+        .catch((err) => console.error("pm_tasks self-parent heal failed:", err));
+    }
+    return rows;
   }
 
   async getPmTask(id: number): Promise<PmTask | undefined> {
@@ -6371,16 +6381,36 @@ export class DatabaseStorage implements IStorage {
 
     const idMap = new Map<string, number>();
     const results: { tempId: string; dbId: number }[] = [];
+    const pending = [...tasks];
+    const BATCH = 80;
 
-    for (const t of tasks) {
-      const parentDbId = t.parentTempId ? idMap.get(t.parentTempId) ?? null : null;
-      const [created] = await db.insert(pmTasks).values({
-        ...t.data,
-        projectId,
-        parentTaskId: parentDbId,
-      }).returning();
-      idMap.set(t.tempId, created.id);
-      results.push({ tempId: t.tempId, dbId: created.id });
+    while (pending.length) {
+      const wave: typeof pending = [];
+      const rest: typeof pending = [];
+      for (const t of pending) {
+        if (!t.parentTempId || idMap.has(t.parentTempId)) wave.push(t);
+        else rest.push(t);
+      }
+      if (!wave.length) {
+        // Cycle / missing parent — insert remaining with null parent to avoid infinite loop
+        wave.push(...rest.splice(0, rest.length));
+      }
+      for (let i = 0; i < wave.length; i += BATCH) {
+        const chunk = wave.slice(i, i + BATCH);
+        const values = chunk.map((t) => ({
+          ...t.data,
+          projectId,
+          parentTaskId: t.parentTempId ? idMap.get(t.parentTempId) ?? null : null,
+        }));
+        const created = await db.insert(pmTasks).values(values).returning();
+        created.forEach((row, idx) => {
+          const tempId = chunk[idx].tempId;
+          idMap.set(tempId, row.id);
+          results.push({ tempId, dbId: row.id });
+        });
+      }
+      pending.length = 0;
+      pending.push(...rest);
     }
 
     return results;
@@ -6395,14 +6425,11 @@ export class DatabaseStorage implements IStorage {
     const ragMap: Record<string, string> = { g: "green", a: "amber", r: "red", green: "green", amber: "amber", red: "red" };
     if (mode === "overwrite") {
       await this.deleteAllPmTasksByProject(projectId);
-      // Clear legacy tables so shims stay consistent
+      // Clear legacy tables so shims stay consistent (single DELETE per table)
       try {
-        const milestones = await db.select().from(pmMilestones).where(eq(pmMilestones.projectId, projectId));
-        for (const m of milestones) await this.deletePmMilestone(m.id);
-        const workstreams = await db.select().from(pmWorkstreams).where(eq(pmWorkstreams.projectId, projectId));
-        for (const w of workstreams) await this.deletePmWorkstream(w.id);
-        const phases = await db.select().from(pmProjectPhases).where(eq(pmProjectPhases.projectId, projectId));
-        for (const p of phases) await this.deletePmProjectPhase(p.id);
+        await db.delete(pmMilestones).where(eq(pmMilestones.projectId, projectId));
+        await db.delete(pmWorkstreams).where(eq(pmWorkstreams.projectId, projectId));
+        await db.delete(pmProjectPhases).where(eq(pmProjectPhases.projectId, projectId));
       } catch (e) {
         console.warn("legacy clear during gantt import", e);
       }
@@ -6508,16 +6535,47 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPmGanttVersion(id: number): Promise<PmGanttVersion | undefined> {
-    const [result] = await db.select().from(pmGanttVersions).where(eq(pmGanttVersions.id, id));
-    return result;
+    // Metadata only — avoid pulling snapshot jsonb for existence/rename/delete checks.
+    const [result] = await db
+      .select({
+        id: pmGanttVersions.id,
+        tenantId: pmGanttVersions.tenantId,
+        projectId: pmGanttVersions.projectId,
+        name: pmGanttVersions.name,
+        versionNumber: pmGanttVersions.versionNumber,
+        isActive: pmGanttVersions.isActive,
+        createdBy: pmGanttVersions.createdBy,
+        createdAt: pmGanttVersions.createdAt,
+        updatedAt: pmGanttVersions.updatedAt,
+      })
+      .from(pmGanttVersions)
+      .where(eq(pmGanttVersions.id, id));
+    return result ? ({ ...result, snapshot: null } as PmGanttVersion) : undefined;
   }
 
   async getActivePmGanttVersion(projectId: number): Promise<PmGanttVersion | undefined> {
+    // Do not SELECT snapshot jsonb — active chip / metadata only (snapshots are huge).
     const [result] = await db
-      .select()
+      .select({
+        id: pmGanttVersions.id,
+        tenantId: pmGanttVersions.tenantId,
+        projectId: pmGanttVersions.projectId,
+        name: pmGanttVersions.name,
+        versionNumber: pmGanttVersions.versionNumber,
+        isActive: pmGanttVersions.isActive,
+        createdBy: pmGanttVersions.createdBy,
+        createdAt: pmGanttVersions.createdAt,
+        updatedAt: pmGanttVersions.updatedAt,
+      })
       .from(pmGanttVersions)
       .where(and(eq(pmGanttVersions.projectId, projectId), eq(pmGanttVersions.isActive, true)))
       .limit(1);
+    return result ? ({ ...result, snapshot: null } as PmGanttVersion) : undefined;
+  }
+
+  /** Full row including snapshot — only for activate/copy/restore. */
+  async getPmGanttVersionWithSnapshot(id: number): Promise<PmGanttVersion | undefined> {
+    const [result] = await db.select().from(pmGanttVersions).where(eq(pmGanttVersions.id, id));
     return result;
   }
 
@@ -6542,8 +6600,18 @@ export class DatabaseStorage implements IStorage {
         versionNumber: data.versionNumber ?? nextNum,
         isActive: makeActive,
       })
-      .returning();
-    return result;
+      .returning({
+        id: pmGanttVersions.id,
+        tenantId: pmGanttVersions.tenantId,
+        projectId: pmGanttVersions.projectId,
+        name: pmGanttVersions.name,
+        versionNumber: pmGanttVersions.versionNumber,
+        isActive: pmGanttVersions.isActive,
+        createdBy: pmGanttVersions.createdBy,
+        createdAt: pmGanttVersions.createdAt,
+        updatedAt: pmGanttVersions.updatedAt,
+      });
+    return { ...result, snapshot: null } as PmGanttVersion;
   }
 
   async updatePmGanttVersion(id: number, updates: Partial<InsertPmGanttVersion>): Promise<PmGanttVersion | undefined> {
@@ -6551,8 +6619,18 @@ export class DatabaseStorage implements IStorage {
       .update(pmGanttVersions)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(pmGanttVersions.id, id))
-      .returning();
-    return result;
+      .returning({
+        id: pmGanttVersions.id,
+        tenantId: pmGanttVersions.tenantId,
+        projectId: pmGanttVersions.projectId,
+        name: pmGanttVersions.name,
+        versionNumber: pmGanttVersions.versionNumber,
+        isActive: pmGanttVersions.isActive,
+        createdBy: pmGanttVersions.createdBy,
+        createdAt: pmGanttVersions.createdAt,
+        updatedAt: pmGanttVersions.updatedAt,
+      });
+    return result ? ({ ...result, snapshot: null } as PmGanttVersion) : undefined;
   }
 
   async deletePmGanttVersion(id: number): Promise<void> {
@@ -6560,7 +6638,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async copyPmGanttVersion(id: number, name: string, createdBy?: string | null): Promise<PmGanttVersion> {
-    const source = await this.getPmGanttVersion(id);
+    const source = await this.getPmGanttVersionWithSnapshot(id);
     if (!source) throw new Error("Version not found");
     return this.createPmGanttVersion({
       tenantId: source.tenantId,
@@ -6611,7 +6689,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async activatePmGanttVersion(projectId: number, versionId: number, tenantId: number): Promise<PmGanttVersion> {
-    const version = await this.getPmGanttVersion(versionId);
+    const version = await this.getPmGanttVersionWithSnapshot(versionId);
     if (!version || version.projectId !== projectId) throw new Error("Version not found");
     const snap = version.snapshot as { tasks?: unknown[] };
     const rawCount = Array.isArray(snap?.tasks) ? snap.tasks.length : 0;
@@ -6628,8 +6706,18 @@ export class DatabaseStorage implements IStorage {
       .update(pmGanttVersions)
       .set({ isActive: true, updatedAt: new Date() })
       .where(eq(pmGanttVersions.id, versionId))
-      .returning();
-    return activated;
+      .returning({
+        id: pmGanttVersions.id,
+        tenantId: pmGanttVersions.tenantId,
+        projectId: pmGanttVersions.projectId,
+        name: pmGanttVersions.name,
+        versionNumber: pmGanttVersions.versionNumber,
+        isActive: pmGanttVersions.isActive,
+        createdBy: pmGanttVersions.createdBy,
+        createdAt: pmGanttVersions.createdAt,
+        updatedAt: pmGanttVersions.updatedAt,
+      });
+    return { ...activated, snapshot: null } as PmGanttVersion;
   }
 
   // Projects Module - Team Members

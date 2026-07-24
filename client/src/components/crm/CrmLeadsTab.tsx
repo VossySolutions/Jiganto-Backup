@@ -680,7 +680,10 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
       const nextSorts = sorts
         .filter((s) => LEAD_SORT_FIELDS.some((f) => f.field === s.columnId))
         .map((s) => ({ field: s.columnId as LeadSortField, dir: s.direction }));
-      if (nextSorts.length) setSortRules(nextSorts);
+      if (nextSorts.length) {
+        clearRowOrder();
+        setSortRules(nextSorts);
+      }
     }
     if (columns && columns.length > 0) {
       const vis: Record<string, boolean> = { ...columnVisibility };
@@ -716,6 +719,11 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
     const nums = ids.map((id) => (typeof id === "string" ? Number(id) : id)).filter((n) => Number.isFinite(n));
     setRowOrderIds(nums);
     localStorage.setItem("crm-leads-row-order", JSON.stringify(nums));
+  };
+
+  const clearRowOrder = () => {
+    setRowOrderIds([]);
+    localStorage.removeItem("crm-leads-row-order");
   };
 
   const { data: allLeadAttachments = [] } = useQuery<LeadAttachmentSummaryRow[]>({
@@ -1241,6 +1249,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   };
 
   const handleSortToggle = (field: LeadSortField) => {
+    clearRowOrder();
     setSortRules((prev) => {
       const existing = prev.find((r) => r.field === field);
       if (existing) {
@@ -1254,6 +1263,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   };
 
   const addSortRule = (field: LeadSortField) => {
+    clearRowOrder();
     setSortRules((prev) => {
       if (prev.some((r) => r.field === field)) return prev;
       return [...prev, { field, dir: "desc" }];
@@ -1261,6 +1271,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
   };
 
   const removeSortRule = (field: LeadSortField) => {
+    clearRowOrder();
     setSortRules((prev) => {
       const next = prev.filter((r) => r.field !== field);
       return next.length ? next : [{ field: "date", dir: "desc" }];
@@ -1643,6 +1654,7 @@ export function CrmLeadsTab({ leads, searchTerm, onNavigateToTab, onOpenCustomFi
             localStorage.setItem("crm-leads-column-order", JSON.stringify(ordered));
           }}
           onSortChange={(sorts) => {
+            clearRowOrder();
             if (!sorts.length) {
               setSortRules([{ field: "date", dir: "desc" }]);
               return;

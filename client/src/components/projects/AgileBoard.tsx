@@ -25,8 +25,6 @@ import {
   StoriesView,
   SprintsView,
   DefectsView,
-  RoadmapView,
-  BestPracticeView,
   EpicDetailPanel,
   StoryDetailPanel,
 } from "./agile-board";
@@ -39,13 +37,11 @@ const TABS = [
   { id:"stories", label:"Stories" },
   { id:"sprints", label:"Sprints" },
   { id:"defects", label:"Defects" },
-  { id:"roadmap", label:"Roadmap" },
-  { id:"bestpractice", label:"Best Practice" },
 ];
 
 interface AgileBoardProps {
   initialTab?: string;
-  view?: "board" | "backlog" | "epics" | "stories" | "sprints" | "defects" | "roadmap" | "bestpractice";
+  view?: "board" | "backlog" | "epics" | "stories" | "sprints" | "defects";
   boardMode?: "sprint" | "scrum" | "kanban";
   projectId?: number;
 }
@@ -229,13 +225,11 @@ export default function AgileBoard({ initialTab = "board", view, boardMode = "sp
   const renderView = () => {
     switch (currentView) {
       case "board": return <BoardView stories={wsStories} epics={wsEpics} activeSprint={activeSprint} onSelectStory={setSelectedStory} burndownData={liveBurndown} onCompleteSprint={handleCompleteSprint} boardMode={boardMode} onStoryStatusChange={handleStoryStatusChange}/>;
-      case "backlog": return <BacklogView stories={wsStories} epics={wsEpics} onSelectStory={setSelectedStory} sprints={wsSprints} setStories={setStories} activeSprint={activeSprint} ws={ws} onAddStory={handleAddStory} onDeleteStory={(id) => mutations.deleteStory(id)} onAssignToSprint={(id, sp) => mutations.assignStoryToSprint(id, sp)}/>;
-      case "epics": return <EpicsView epics={wsEpics} stories={wsStories} onSelect={setSelectedEpic as any} setEpics={setEpics} ws={ws} onAddEpic={handleAddEpic} onUpdateEpic={(id, d) => mutations.updateEpic(id, d)} onDeleteEpic={(id) => mutations.deleteEpic(id)}/>;
-      case "stories": return <StoriesView stories={wsStories} epics={wsEpics} onSelect={setSelectedStory} setStories={setStories} ws={ws} onAddStory={handleAddStory} onDeleteStory={(id) => mutations.deleteStory(id)}/>;
-      case "sprints": return <SprintsView sprints={wsSprints} stories={wsStories} setSprints={setSprints} ws={ws} onAddSprint={handleAddSprint} burndownData={liveBurndown} onActivateSprint={(id, all) => mutations.activateSprint(id, all)} onDeleteSprint={(id) => mutations.deleteSprint(id)}/>;
-      case "defects": return <DefectsView defects={defects.filter(d=>d.wsId===activeWs)} stories={wsStories} setDefects={setDefects} ws={ws} onAddDefect={handleAddDefect} onUpdateDefect={(id, d) => mutations.updateDefect(id, d)} onDeleteDefect={(id) => mutations.deleteDefect(id)}/>;
-      case "roadmap": return <RoadmapView epics={wsEpics} sprints={wsSprints}/>;
-      case "bestpractice": return <BestPracticeView/>;
+      case "backlog": return <BacklogView stories={wsStories} epics={wsEpics} onSelectStory={setSelectedStory} sprints={wsSprints} setStories={setStories} activeSprint={activeSprint} ws={ws} onAddStory={handleAddStory} onDeleteStory={async (id) => { setStories((p) => p.filter((s) => s.id !== id)); await mutations.deleteStory(id); }} onAssignToSprint={(id, sp) => mutations.assignStoryToSprint(id, sp)}/>;
+      case "epics": return <EpicsView epics={wsEpics} stories={wsStories} onSelect={setSelectedEpic as any} setEpics={setEpics} ws={ws} onAddEpic={handleAddEpic} onUpdateEpic={(id, d) => mutations.updateEpic(id, d)} onDeleteEpic={async (id) => { setEpics((p) => p.filter((e) => e.id !== id)); await mutations.deleteEpic(id); }}/>;
+      case "stories": return <StoriesView stories={wsStories} epics={wsEpics} onSelect={setSelectedStory} setStories={setStories} ws={ws} onAddStory={handleAddStory} onDeleteStory={async (id) => { setStories((p) => p.filter((s) => s.id !== id)); await mutations.deleteStory(id); }}/>;
+      case "sprints": return <SprintsView sprints={wsSprints} stories={wsStories} setSprints={setSprints} ws={ws} onAddSprint={handleAddSprint} burndownData={liveBurndown} onActivateSprint={(id, all) => mutations.activateSprint(id, all)} onDeleteSprint={async (id) => { setSprints((p) => p.filter((s) => s.id !== id)); await mutations.deleteSprint(id); }}/>;
+      case "defects": return <DefectsView defects={defects.filter(d=>d.wsId===activeWs)} stories={wsStories} setDefects={setDefects} ws={ws} onAddDefect={handleAddDefect} onUpdateDefect={(id, d) => mutations.updateDefect(id, d)} onDeleteDefect={async (id) => { setDefects((p) => p.filter((d) => d.id !== id)); await mutations.deleteDefect(id); }}/>;
       default: return null;
     }
   };
@@ -324,8 +318,14 @@ export default function AgileBoard({ initialTab = "board", view, boardMode = "sp
     }
     return (
       <div className="agile-content" style={{ position:"relative", minHeight:200 }}>
-        {wsDetailFetching && <PmLoadingOverlay label="Refreshing workstream data…" />}
-        {renderView()}
+        {wsDetailLoading ? (
+          <PmAgileSkeleton />
+        ) : (
+          <>
+            {wsDetailFetching && <PmLoadingOverlay label="Refreshing workstream data…" />}
+            {renderView()}
+          </>
+        )}
       </div>
     );
   };

@@ -269,35 +269,25 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
     <div class="tb-filter-menu type-filter-menu" id="typeFilterMenu" hidden role="menu"></div>
   </div>
   <input type="hidden" id="f-level" value="">
-  <select class="tb-select" id="f-owner" onchange="renderAll()">
-    <option value="">All owners</option>
-  </select>
+  <div class="tb-filter-wrap" id="ownerFilterWrap">
+    <button type="button" class="tb-select type-filter-btn" id="ownerFilterBtn" onclick="toggleOwnerFilterMenu(event)" title="Filter by owner — tick one or more to show only those" aria-label="Filter by owner" aria-haspopup="menu" aria-expanded="false">
+      All owners <span class="type-filter-caret" aria-hidden="true">▾</span>
+    </button>
+    <div class="tb-filter-menu type-filter-menu" id="ownerFilterMenu" hidden role="menu"></div>
+  </div>
+  <input type="hidden" id="f-owner" value="">
   <div class="tb-filter-wrap" id="ragFilterWrap">
-    <button type="button" class="tb-filter-btn" id="ragFilterBtn" onclick="toggleRagFilterMenu(event)" title="Filter by Budget / Schedule / Scope RAG" aria-label="Filter by RAG">
+    <button type="button" class="tb-filter-btn" id="ragFilterBtn" onclick="toggleRagFilterMenu(event)" title="Filter by Budget / Schedule / Scope RAG — tick one or more" aria-label="Filter by RAG" aria-haspopup="menu" aria-expanded="false">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
     </button>
-    <div class="tb-filter-menu rag-filter-menu" id="ragFilterMenu" hidden>
-      <button type="button" class="tb-filter-opt on" data-rag-key="" onclick="setRagFilter('','',this)">All RAG</button>
-      <div class="rag-filter-sec">Budget</div>
-      <button type="button" class="tb-filter-opt" data-rag-key="bgt:g" onclick="setRagFilter('bgt','g',this)">🟢 Budget · Green</button>
-      <button type="button" class="tb-filter-opt" data-rag-key="bgt:a" onclick="setRagFilter('bgt','a',this)">🟡 Budget · Amber</button>
-      <button type="button" class="tb-filter-opt" data-rag-key="bgt:r" onclick="setRagFilter('bgt','r',this)">🔴 Budget · Red</button>
-      <div class="rag-filter-sec">Schedule</div>
-      <button type="button" class="tb-filter-opt" data-rag-key="sch:g" onclick="setRagFilter('sch','g',this)">🟢 Schedule · Green</button>
-      <button type="button" class="tb-filter-opt" data-rag-key="sch:a" onclick="setRagFilter('sch','a',this)">🟡 Schedule · Amber</button>
-      <button type="button" class="tb-filter-opt" data-rag-key="sch:r" onclick="setRagFilter('sch','r',this)">🔴 Schedule · Red</button>
-      <div class="rag-filter-sec">Scope</div>
-      <button type="button" class="tb-filter-opt" data-rag-key="scp:g" onclick="setRagFilter('scp','g',this)">🟢 Scope · Green</button>
-      <button type="button" class="tb-filter-opt" data-rag-key="scp:a" onclick="setRagFilter('scp','a',this)">🟡 Scope · Amber</button>
-      <button type="button" class="tb-filter-opt" data-rag-key="scp:r" onclick="setRagFilter('scp','r',this)">🔴 Scope · Red</button>
-    </div>
+    <div class="tb-filter-menu rag-filter-menu type-filter-menu" id="ragFilterMenu" hidden role="menu"></div>
   </div>
   <input type="hidden" id="f-rag-dim" value="">
   <input type="hidden" id="f-rag" value="">
-  <input class="tb-search" id="f-search" placeholder="Search tasks…" oninput="renderAll()">
+  <input class="tb-search" id="f-search" placeholder="Search tasks…" oninput="onGanttSearchInput()" autocomplete="off">
   <div class="tb-filter-wrap" id="fieldsMenuWrap">
-    <button type="button" class="tb-filter-btn" id="fieldsMenuBtn" onclick="toggleFieldsMenu(event)" title="Show or hide table fields" aria-label="Fields" aria-haspopup="menu">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h14"/><rect x="16" y="10" width="4" height="4" rx="0.5"/></svg>
+    <button type="button" class="tb-select type-filter-btn" id="fieldsMenuBtn" onclick="toggleFieldsMenu(event)" title="Choose which table columns are visible" aria-label="Columns" aria-haspopup="menu" aria-expanded="false">
+      Columns <span class="type-filter-caret" aria-hidden="true">▾</span>
     </button>
     <div class="tb-filter-menu fields-menu" id="fieldsMenu" hidden role="menu"></div>
   </div>
@@ -309,8 +299,8 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
     <svg class="plan-chip-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
   </div>
   <div class="tb-filter-wrap" id="versionMenuWrap">
-    <button type="button" class="tb-filter-btn" id="versionMenuBtn" onclick="toggleVersionMenu(event)" title="Plan versions" aria-label="Plan versions" aria-haspopup="menu">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>
+    <button type="button" class="tb-filter-btn" id="versionMenuBtn" onclick="toggleVersionMenu(event)" title="Save / plan versions" aria-label="Save plan versions" aria-haspopup="menu">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
     </button>
     <div class="tb-filter-menu version-menu" id="versionMenu" hidden role="menu">
       <button type="button" class="tb-filter-opt" role="menuitem" onclick="promptSaveVersion('update')">
@@ -364,9 +354,9 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
     <button type="button" class="btn-icon btn-icon-import" onclick="openImportExport('import')" title="Import" aria-label="Import">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9"/><path d="M7 14l5-5 5 5"/><path d="M5 3h14"/></svg>
     </button>
-    <div class="view-group">
-      <button type="button" class="vb on" id="viewGanttBtn" onclick="setView('gantt',this)">Gantt</button>
-      <button type="button" class="vb" id="viewListBtn" onclick="setView('list',this)">List</button>
+    <div class="view-group" title="Click Gantt or List to show/hide each pane. Both on = side-by-side.">
+      <button type="button" class="vb on" id="viewGanttBtn" onclick="toggleViewPane('gantt')" title="Timeline chart — click to show or hide" aria-pressed="true">Gantt</button>
+      <button type="button" class="vb on" id="viewListBtn" onclick="toggleViewPane('list')" title="Task list — click to show or hide" aria-pressed="true">List</button>
     </div>
   </div>
 </div>`;
@@ -377,6 +367,9 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
     <div class="task-panel" id="taskPanel">
       <div class="tp-grid-x" id="tpGridX">
         <div class="tp-header" id="tpHeader">
+          <div class="th-cell th-sel" data-field="sel" title="Select all visible rows">
+            <input type="checkbox" class="th-sel-cb" id="selAllCb" onclick="event.stopPropagation();toggleSelectAllVisible(this.checked)" aria-label="Select all visible">
+          </div>
           <div class="th-cell th-wbs" data-field="wbs">#</div>
           <div class="th-cell th-name" data-field="name">Task name</div>
           <div class="th-cell th-type" data-field="type" title="Line / field type (Phase, Task, Milestone…)">Type</div>
@@ -405,6 +398,7 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
       <div class="tl-scroll-wrap" id="tlWrap">
         <div class="tl-inner" id="tlInner">
           <div class="tl-rows" id="tlRows"></div>
+          <div class="tl-bars" id="tlBars"></div>
           <div class="today-line" id="todayLine" style="display:none;">
             <div class="today-marker"></div>
           </div>
@@ -616,16 +610,26 @@ function buildSrcDoc(data: GanttInitData, projectName: string): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${projectName.replace(/</g, "&lt;")} — Gantt</title>
-<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260723y">
+<link rel="stylesheet" href="/gantt-v4-engine.css?v=20260724t">
 </head>
 <body>
 <div class="main">
 ${toolbarHTML}
+<div class="gantt-sel-bar" id="ganttSelBar" role="toolbar" aria-label="Selection actions">
+  <span class="gantt-sel-count" id="ganttSelCount">0 selected</span>
+  <div class="gantt-sel-actions">
+    <button type="button" class="gantt-sel-btn gantt-sel-delete" id="ganttSelDeleteBtn" onclick="deleteSelectedRows()" title="Delete selected lines">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+      Delete
+    </button>
+  </div>
+  <button type="button" class="gantt-sel-clear" onclick="clearRowSelection()">Clear Selection</button>
+</div>
 ${ganttBodyHTML}
 </div>
 ${modalsHTML}
 <script>window.GANTT_INIT_DATA = ${dataJson};</script>
-<script src="/gantt-v4-engine.js?v=20260723y"></script>
+<script src="/gantt-v4-engine.js?v=20260724t"></script>
 </body>
 </html>`;
 }
@@ -680,22 +684,11 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
         }, 800);
       }
       if (e.data?.type === "gantt-version-activated" && e.data?.projectId === projectId) {
-        // Controlled remount only for plan version switch — refetch then rebuild iframe
+        // Controlled remount only for plan version switch — refetch tasks then rebuild iframe
         setSrcDoc(null);
         bootstrappedKeyRef.current = null;
         void queryClient
-          .refetchQueries({
-            predicate: (q) => {
-              const key = q.queryKey;
-              if (!Array.isArray(key) || key.length === 0) return false;
-              const s = key.map(String).join("|");
-              return (
-                s.includes(`/api/pm/projects/${projectId}`) ||
-                s.includes(`/api/pm/projects|${projectId}`) ||
-                s.includes(`/api/pm/projects/${projectId}/tasks`)
-              );
-            },
-          })
+          .refetchQueries({ queryKey: ["/api/pm/projects", projectId, "tasks"] })
           .then(() => {
             setVersionReloadKey((k) => k + 1);
           });
@@ -766,7 +759,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
 
   return (
     <iframe
-      key={`gantt-${projectId}-v20260723y-${versionReloadKey}`}
+      key={`gantt-${projectId}-v20260724t-${versionReloadKey}`}
       title={`Gantt — ${project.name}`}
       srcDoc={srcDoc}
       className="block h-full w-full border-0"

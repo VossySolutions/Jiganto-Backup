@@ -306,12 +306,12 @@ export function ProjectWorkspaceSidebar({
       >
         <button
           type="button"
-          className="mb-3 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground hover:bg-muted"
+          className="mb-3 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md hover:bg-indigo-50 hover:text-indigo-700"
           onClick={() => setCollapsed(false)}
           title="Expand project tools"
           aria-label="Expand project tools"
         >
-          <ChevronRight className="h-3.5 w-3.5" />
+          <ChevronRight className="h-4 w-4" />
         </button>
         <button
           type="button"
@@ -355,12 +355,12 @@ export function ProjectWorkspaceSidebar({
     >
       <button
         type="button"
-        className="absolute -right-2.5 top-1/2 z-20 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-[10px] text-muted-foreground shadow-sm hover:bg-indigo-50 hover:text-indigo-700"
+        className="absolute -right-3.5 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md hover:bg-indigo-50 hover:text-indigo-700"
         onClick={() => setCollapsed(true)}
         title="Collapse sidebar"
         aria-label="Collapse project sidebar"
       >
-        ‹
+        <ChevronLeft className="h-4 w-4" />
       </button>
 
       <div className="flex-shrink-0 bg-gradient-to-b from-[#1E1B4B] to-[#1e1458] px-3.5 pb-3 pt-3.5 text-white">

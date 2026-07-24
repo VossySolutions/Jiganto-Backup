@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
+import { useEffect, useMemo, useRef, useState, lazy, Suspense, useDeferredValue } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -949,6 +949,7 @@ export function ProjectsLandingView({
   const [healthFilter, setHealthFilter] = useState<string>("all");
   const [mineFilter, setMineFilter] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearch = useDeferredValue(searchQuery);
   const [visibleCols, setVisibleCols] = useState<Record<ColumnId, boolean>>(loadVisibleColumns);
   const [selected, setSelected] = useState<LandingProject | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -1016,17 +1017,17 @@ export function ProjectsLandingView({
           return false;
         }
       }
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
+      if (deferredSearch) {
+        const q = deferredSearch.toLowerCase();
         const hay = `${p.name || ""} ${p.description || ""} ${p.code || ""} ${p.customer || ""} ${leadOf(p) || ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [projects, statusFilter, typeFilter, customerFilter, portfolioFilter, healthFilter, searchQuery, mineFilter, user]);
+  }, [projects, statusFilter, typeFilter, customerFilter, portfolioFilter, healthFilter, deferredSearch, mineFilter, user]);
 
   const pagination = useTablePagination(filtered, {
-    resetKey: `${statusFilter}-${typeFilter}-${customerFilter}-${portfolioFilter}-${healthFilter}-${searchQuery}-${mineFilter}-${viewMode}`,
+    resetKey: `${statusFilter}-${typeFilter}-${customerFilter}-${portfolioFilter}-${healthFilter}-${deferredSearch}-${mineFilter}-${viewMode}`,
     enabled: viewMode !== "kanban",
   });
 
