@@ -248,7 +248,7 @@ function getCellValueByColumnId<T>(
 }
 
 export function evaluateConditionalFormatting<T extends { id: number | string }>(
-  rows: T[],
+  rows: readonly T[],
   columns: ColumnDef<T>[],
   rules: ConditionalFormatRule[]
 ): CellFormatMap {

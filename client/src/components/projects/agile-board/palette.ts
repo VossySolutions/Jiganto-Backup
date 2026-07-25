@@ -23,7 +23,7 @@ export const AGILE_PALETTE_DARK = {
   grey800: "#F1F5F9", white: "#1E293B",
 } as const;
 
-export type AgilePalette = typeof AGILE_PALETTE_LIGHT;
+export type AgilePalette = Record<keyof typeof AGILE_PALETTE_LIGHT, string>;
 
 /** @deprecated Prefer useAgilePalette() for theme-aware colors */
 export const AGILE_PALETTE = AGILE_PALETTE_LIGHT;

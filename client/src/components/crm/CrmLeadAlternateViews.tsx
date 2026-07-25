@@ -406,7 +406,7 @@ export function CrmLeadCalendarView({
           </Button>
         </div>
         {onAddLead && (
-          <Button size="sm" variant="outline" onClick={onAddLead} className="gap-1">
+          <Button size="sm" variant="outline" onClick={() => onAddLead()} className="gap-1">
             <Plus className="h-3.5 w-3.5" />
             New Lead
           </Button>

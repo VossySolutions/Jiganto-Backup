@@ -10,6 +10,7 @@ export function EpicsView({ epics, stories, onSelect, setEpics, ws, onAddEpic, o
   onAddEpic?: (data: any) => void; onUpdateEpic?: (id: string, data: any) => void | Promise<void>;
   onDeleteEpic?: (id: string) => void | Promise<void>;
 }) {
+  const C = useAgilePalette();
   const [showAdd, setShowAdd] = useState(false);
   const [editEpic, setEditEpic] = useState<Epic | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -22,7 +23,6 @@ export function EpicsView({ epics, stories, onSelect, setEpics, ws, onAddEpic, o
   );
 
   function handleSave(data: any) {
-  const C = useAgilePalette();
     if (editEpic) {
       if (onUpdateEpic) {
         onUpdateEpic(editEpic.id, {

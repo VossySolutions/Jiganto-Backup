@@ -160,6 +160,7 @@ function BoardCard({
   isDragging: boolean;
   isSaving: boolean;
 }) {
+  const C = useAgilePalette();
   const epic = epics.find(e => e.id === story.epicId);
   return (
     <div onClick={onClick} data-testid={`board-card-${story.id}`}

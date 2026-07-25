@@ -594,7 +594,6 @@ export function CrmCustomersTab({ accounts, opportunities = [], contracts = [], 
         type: "text",
         accessor: "name",
         width: "240px",
-        sticky: pinActive,
         editable: true,
       },
       segment: {

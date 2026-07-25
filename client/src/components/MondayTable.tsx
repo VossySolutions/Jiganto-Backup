@@ -68,7 +68,7 @@ export type ColumnSummaryKind = "sum" | "avg" | "count" | "filled";
 export interface StatusOption {
   value: string;
   label: string;
-  color: string;
+  color?: string;
 }
 
 export interface PersonValue {
@@ -203,7 +203,7 @@ const mtHeaderBg = "bg-muted";
 const mtHeaderSticky = "sticky z-[25] bg-muted";
 const mtSummaryBg = "bg-muted border-t border-border text-[12px] text-muted-foreground";
 /** Sticky data cells inherit the row background — never paint their own grey fill. */
-const mtStickyCell = "sticky z-[16] bg-inherit";
+const mtStickyCell = "sticky z-[16] bg-card group-hover:bg-muted/80";
 const mtGridLine = "border-r border-border/80";
 const mtRowHover = "hover:bg-muted/80";
 const mtRowSelected = "bg-primary/10 dark:bg-primary/20";
@@ -1372,11 +1372,13 @@ export function MondayTable<T extends { id: number | string }>({
   const stickyLeftById = useMemo(() => {
     const map = new Map<string, number>();
     let left = showRowChrome ? CHROME_COL_PX : 0;
-    visibleColumns.forEach((col, idx) => {
-      if (!col.sticky) return;
+    // Only a leading sticky prefix (checkbox chrome + identity column) pins while scrolling.
+    for (let idx = 0; idx < visibleColumns.length; idx++) {
+      const col = visibleColumns[idx];
+      if (!col.sticky) break;
       map.set(col.id, left);
       left += resolveColWidthPx(col, idx);
-    });
+    }
     return map;
   }, [visibleColumns, showRowChrome, resolveColWidthPx]);
 
@@ -1766,7 +1768,9 @@ export function MondayTable<T extends { id: number | string }>({
           <div
             className={cn(
               "relative flex items-center justify-center gap-0 min-w-0 h-full overflow-hidden",
+              gridLines && mtGridLine,
               hasStickyColumns && mtStickyCell,
+              hasStickyColumns && isSelected && mtRowSelected,
             )}
             style={hasStickyColumns ? { left: 0 } : undefined}
             onClick={(e) => e.stopPropagation()}
@@ -1833,6 +1837,7 @@ export function MondayTable<T extends { id: number | string }>({
                 isCellFocused && !isCellEditing && mtFocusCell,
                 isCellEditing && "bg-primary/10 dark:bg-primary/15",
                 stickyLeft != null && `${mtStickyCell} shadow-[2px_0_4px_rgba(0,0,0,0.06)]`,
+                stickyLeft != null && isSelected && mtRowSelected,
                 cellStyle?.className
               )}
               style={{
@@ -2117,6 +2122,7 @@ export function MondayTable<T extends { id: number | string }>({
               <div
                 className={cn(
                   "flex items-center justify-center min-w-0 overflow-hidden",
+                  gridLines && mtGridLine,
                   hasStickyColumns && mtHeaderSticky,
                 )}
                 style={hasStickyColumns ? { left: 0 } : undefined}

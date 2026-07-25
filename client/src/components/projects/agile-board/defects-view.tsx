@@ -9,6 +9,7 @@ export function DefectsView({ defects, stories, setDefects, ws, onAddDefect, onU
   onAddDefect?: (data: any) => void; onUpdateDefect?: (id: string, data: any) => void | Promise<void>;
   onDeleteDefect?: (id: string) => void | Promise<void>;
 }) {
+  const C = useAgilePalette();
   const [sevFilter, setSevFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [showAdd, setShowAdd] = useState(false);
@@ -25,7 +26,6 @@ export function DefectsView({ defects, stories, setDefects, ws, onAddDefect, onU
   const envColor = (e: string) => ({ Dev: C.blue, SIT: C.purple, UAT: C.amber, Prod: C.red } as Record<string, string>)[e] || C.grey500;
 
   function handleAdd(data: any) {
-  const C = useAgilePalette();
     if (onAddDefect) {
       onAddDefect(data);
       setShowAdd(false);

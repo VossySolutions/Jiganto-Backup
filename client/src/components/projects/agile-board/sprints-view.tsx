@@ -10,11 +10,11 @@ export function SprintsView({ sprints, stories, setSprints, ws, onAddSprint, bur
   onActivateSprint?: (id: string, allIds: string[]) => void | Promise<void>;
   onDeleteSprint?: (id: string) => void | Promise<void>;
 }) {
+  const C = useAgilePalette();
   const [showAdd, setShowAdd] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   function handleAdd(data: any) {
-  const C = useAgilePalette();
     if (onAddSprint) {
       onAddSprint(data);
       setShowAdd(false);

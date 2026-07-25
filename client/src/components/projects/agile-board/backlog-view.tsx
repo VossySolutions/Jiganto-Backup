@@ -11,6 +11,7 @@ export function BacklogView({ stories, epics, onSelectStory, setStories, activeS
   onAddStory?: (data: any) => void; onDeleteStory?: (id: string) => void | Promise<void>;
   onAssignToSprint?: (storyId: string, sprint: Sprint | null) => void | Promise<void>;
 }) {
+  const C = useAgilePalette();
   const [epicFilter, setEpicFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("Backlog");
   const [showAdd, setShowAdd] = useState(false);
@@ -24,7 +25,6 @@ export function BacklogView({ stories, epics, onSelectStory, setStories, activeS
   const sprintItems = stories.filter(s => s.sprint === activeSprint?.name);
 
   function handleBacklogDragEnd(result: DropResult) {
-  const C = useAgilePalette();
     if (!result.destination) return;
     if (result.source.droppableId !== "backlog-list" || result.destination.droppableId !== "sprint-drop") return;
     if (!activeSprint) return;

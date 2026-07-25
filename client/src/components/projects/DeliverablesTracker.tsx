@@ -785,7 +785,6 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
       },
     },
     {
-    {
       id: "status",
       header: "Status",
       type: "status",

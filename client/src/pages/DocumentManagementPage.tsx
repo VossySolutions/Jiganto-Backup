@@ -210,18 +210,6 @@ function ExplorerLoadingSkeleton() {
   );
 }
 
-function DocumentsPageSkeleton() {
-  return (
-    <div className="flex-1 flex flex-col min-h-0 p-4 gap-4" data-testid="documents-page-loading">
-      <Skeleton className="h-16 w-full rounded-lg" />
-      <div className="flex-1 flex gap-4 min-h-0">
-        <Skeleton className="w-64 shrink-0 rounded-lg" />
-        <Skeleton className="flex-1 rounded-lg" />
-      </div>
-    </div>
-  );
-}
-
 export default function DocumentManagementPage() {
   const { toast } = useToast();
   const { isMobile } = useShellLayout();

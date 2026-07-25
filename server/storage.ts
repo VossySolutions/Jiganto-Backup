@@ -497,6 +497,9 @@ export type GlobalSearchHit = {
   href: string;
 };
 
+/** Gantt version row without the snapshot jsonb — it is huge, so metadata reads never select it. */
+export type PmGanttVersionMeta = Omit<PmGanttVersion, "snapshot"> & { snapshot: null };
+
 export interface IStorage {
   // Tenants
   getTenants(): Promise<Tenant[]>;
@@ -1161,15 +1164,15 @@ export interface IStorage {
   /** Lightweight list without snapshot jsonb — use for version pickers / badges. */
   getPmGanttVersionSummaries(projectId: number): Promise<Array<Omit<PmGanttVersion, "snapshot">>>;
   countPmGanttVersions(projectId: number): Promise<number>;
-  getPmGanttVersion(id: number): Promise<PmGanttVersion | undefined>;
+  getPmGanttVersion(id: number): Promise<PmGanttVersionMeta | undefined>;
   /** Full row including snapshot jsonb — activate / copy only. */
   getPmGanttVersionWithSnapshot(id: number): Promise<PmGanttVersion | undefined>;
-  getActivePmGanttVersion(projectId: number): Promise<PmGanttVersion | undefined>;
-  createPmGanttVersion(data: InsertPmGanttVersion): Promise<PmGanttVersion>;
-  updatePmGanttVersion(id: number, updates: Partial<InsertPmGanttVersion>): Promise<PmGanttVersion | undefined>;
+  getActivePmGanttVersion(projectId: number): Promise<PmGanttVersionMeta | undefined>;
+  createPmGanttVersion(data: InsertPmGanttVersion): Promise<PmGanttVersionMeta>;
+  updatePmGanttVersion(id: number, updates: Partial<InsertPmGanttVersion>): Promise<PmGanttVersionMeta | undefined>;
   deletePmGanttVersion(id: number): Promise<void>;
-  copyPmGanttVersion(id: number, name: string, createdBy?: string | null): Promise<PmGanttVersion>;
-  activatePmGanttVersion(projectId: number, versionId: number, tenantId: number): Promise<PmGanttVersion>;
+  copyPmGanttVersion(id: number, name: string, createdBy?: string | null): Promise<PmGanttVersionMeta>;
+  activatePmGanttVersion(projectId: number, versionId: number, tenantId: number): Promise<PmGanttVersionMeta>;
 
   // Projects Module - Team Members
   getPmTeamMembers(projectId: number): Promise<(PmTeamMember & { user: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]>;
@@ -6534,7 +6537,7 @@ export class DatabaseStorage implements IStorage {
     return Number(row?.n ?? 0);
   }
 
-  async getPmGanttVersion(id: number): Promise<PmGanttVersion | undefined> {
+  async getPmGanttVersion(id: number): Promise<PmGanttVersionMeta | undefined> {
     // Metadata only — avoid pulling snapshot jsonb for existence/rename/delete checks.
     const [result] = await db
       .select({
@@ -6550,10 +6553,10 @@ export class DatabaseStorage implements IStorage {
       })
       .from(pmGanttVersions)
       .where(eq(pmGanttVersions.id, id));
-    return result ? ({ ...result, snapshot: null } as PmGanttVersion) : undefined;
+    return result ? { ...result, snapshot: null } : undefined;
   }
 
-  async getActivePmGanttVersion(projectId: number): Promise<PmGanttVersion | undefined> {
+  async getActivePmGanttVersion(projectId: number): Promise<PmGanttVersionMeta | undefined> {
     // Do not SELECT snapshot jsonb — active chip / metadata only (snapshots are huge).
     const [result] = await db
       .select({
@@ -6570,7 +6573,7 @@ export class DatabaseStorage implements IStorage {
       .from(pmGanttVersions)
       .where(and(eq(pmGanttVersions.projectId, projectId), eq(pmGanttVersions.isActive, true)))
       .limit(1);
-    return result ? ({ ...result, snapshot: null } as PmGanttVersion) : undefined;
+    return result ? { ...result, snapshot: null } : undefined;
   }
 
   /** Full row including snapshot — only for activate/copy/restore. */
@@ -6579,7 +6582,7 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async createPmGanttVersion(data: InsertPmGanttVersion): Promise<PmGanttVersion> {
+  async createPmGanttVersion(data: InsertPmGanttVersion): Promise<PmGanttVersionMeta> {
     const [maxRow] = await db
       .select({ maxNum: sql<number>`coalesce(max(${pmGanttVersions.versionNumber}), 0)::int` })
       .from(pmGanttVersions)
@@ -6611,10 +6614,10 @@ export class DatabaseStorage implements IStorage {
         createdAt: pmGanttVersions.createdAt,
         updatedAt: pmGanttVersions.updatedAt,
       });
-    return { ...result, snapshot: null } as PmGanttVersion;
+    return { ...result, snapshot: null };
   }
 
-  async updatePmGanttVersion(id: number, updates: Partial<InsertPmGanttVersion>): Promise<PmGanttVersion | undefined> {
+  async updatePmGanttVersion(id: number, updates: Partial<InsertPmGanttVersion>): Promise<PmGanttVersionMeta | undefined> {
     const [result] = await db
       .update(pmGanttVersions)
       .set({ ...updates, updatedAt: new Date() })
@@ -6630,14 +6633,14 @@ export class DatabaseStorage implements IStorage {
         createdAt: pmGanttVersions.createdAt,
         updatedAt: pmGanttVersions.updatedAt,
       });
-    return result ? ({ ...result, snapshot: null } as PmGanttVersion) : undefined;
+    return result ? { ...result, snapshot: null } : undefined;
   }
 
   async deletePmGanttVersion(id: number): Promise<void> {
     await db.delete(pmGanttVersions).where(eq(pmGanttVersions.id, id));
   }
 
-  async copyPmGanttVersion(id: number, name: string, createdBy?: string | null): Promise<PmGanttVersion> {
+  async copyPmGanttVersion(id: number, name: string, createdBy?: string | null): Promise<PmGanttVersionMeta> {
     const source = await this.getPmGanttVersionWithSnapshot(id);
     if (!source) throw new Error("Version not found");
     return this.createPmGanttVersion({
@@ -6688,7 +6691,7 @@ export class DatabaseStorage implements IStorage {
       });
   }
 
-  async activatePmGanttVersion(projectId: number, versionId: number, tenantId: number): Promise<PmGanttVersion> {
+  async activatePmGanttVersion(projectId: number, versionId: number, tenantId: number): Promise<PmGanttVersionMeta> {
     const version = await this.getPmGanttVersionWithSnapshot(versionId);
     if (!version || version.projectId !== projectId) throw new Error("Version not found");
     const snap = version.snapshot as { tasks?: unknown[] };
@@ -6717,7 +6720,7 @@ export class DatabaseStorage implements IStorage {
         createdAt: pmGanttVersions.createdAt,
         updatedAt: pmGanttVersions.updatedAt,
       });
-    return { ...activated, snapshot: null } as PmGanttVersion;
+    return { ...activated, snapshot: null };
   }
 
   // Projects Module - Team Members

@@ -155,7 +155,24 @@ function MondayBoardShellRoot<T extends { id: number | string }>(props: MondayBo
   const tableProps = props.tableProps
     ? {
         ...props.tableProps,
-        columns: extras.decorateColumns(props.tableProps.columns, props.tableProps.data),
+        columns: (() => {
+          const decorated = extras.decorateColumns(
+            props.tableProps.columns,
+            props.tableProps.data,
+          );
+          // Pin freezes checkbox chrome + the first visible (identity) column.
+          if (!props.pinActive) return decorated;
+          const identityIds = new Set(
+            decorated
+              .filter((column) => !column.hidden)
+              .slice(0, 1)
+              .map((column) => column.id),
+          );
+          return decorated.map((column) => ({
+            ...column,
+            sticky: identityIds.has(column.id),
+          }));
+        })(),
         onCellEdit: (rowId: number | string, columnId: string, value: unknown) => {
           if (extras.interceptCellEdit(rowId, columnId, value)) return;
           props.tableProps?.onCellEdit?.(rowId, columnId, value);
@@ -170,6 +187,7 @@ function MondayBoardShellRoot<T extends { id: number | string }>(props: MondayBo
         current={props.viewSnapshot}
         onApply={props.onApplyViewSnapshot}
         mainTableSorts={props.mainTableSorts}
+        viewModes={props.viewModes}
       />
 
       <MondayBoardProvider storageKey={props.storageKey}>
@@ -547,7 +565,7 @@ function LegacyMondayBoardTable<T extends { id: number | string }>(
   const orderedIds = shell.columnOrderIds.length
     ? shell.columnOrderIds
     : decorated.map((column) => column.id);
-  const orderedColumns = [
+  const orderedWithVisibility = [
     ...orderedIds.map((id) => columnsById.get(id)).filter(Boolean),
     ...decorated.filter((column) => !orderedIds.includes(column.id)),
   ].map((column) => ({
@@ -555,7 +573,19 @@ function LegacyMondayBoardTable<T extends { id: number | string }>(
     hidden:
       column!.hidden ||
       (!context.extras.isCustomColumn(column!.id) && !shell.isColVisible(column!.id)),
-    sticky: column!.sticky ?? (column!.id === decorated[0]?.id && shell.pinActive),
+  }));
+  // Pin freezes checkbox chrome + the first visible (identity) column.
+  const identityColumnIds = new Set(
+    orderedWithVisibility
+      .filter((column) => !column.hidden)
+      .slice(0, 1)
+      .map((column) => column.id),
+  );
+  const orderedColumns = orderedWithVisibility.map((column) => ({
+    ...column,
+    sticky: shell.pinActive
+      ? identityColumnIds.has(column.id)
+      : (column.sticky ?? false),
   }));
 
   let data = props.data.filter((row) =>

@@ -201,7 +201,7 @@ export function CrmLeadDashboardView({
                     <span className="text-[#676879]">{s.count} ({pct}%)</span>
                   </div>
                   <div className="h-2 rounded-full bg-[#f0f1f5] overflow-hidden">
-                    <div className={cn("h-full rounded-full", s.color.split(" ")[0])} style={{ width: `${pct}%` }} />
+                    <div className={cn("h-full rounded-full", s.color?.split(" ")[0])} style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               );

@@ -150,7 +150,7 @@ export function usePmAgileMutations(projectId?: number, activeWs?: string) {
 
   const activateSprint = useCallback(async (sprintId: string, allSprintIds: string[]) => {
     if (!isDbMode || !isNumericId(sprintId)) return;
-    queryClient.setQueryData(sprintsKey as unknown[], (old: unknown) => {
+    queryClient.setQueryData(sprintsKey, (old: unknown) => {
       if (!Array.isArray(old)) return old;
       return old.map((row: { id?: number | string; status?: string }) => {
         const id = String(row.id);

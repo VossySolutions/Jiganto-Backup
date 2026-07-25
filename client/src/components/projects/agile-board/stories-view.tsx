@@ -9,6 +9,7 @@ export function StoriesView({ stories, epics, onSelect, setStories, ws, onAddSto
   setStories: Dispatch<SetStateAction<Story[]>>; ws: Workstream;
   onAddStory?: (data: any) => void; onDeleteStory?: (id: string) => void | Promise<void>;
 }) {
+  const C = useAgilePalette();
   const [epicFilter, setEpicFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [search, setSearch] = useState("");
@@ -22,7 +23,6 @@ export function StoriesView({ stories, epics, onSelect, setStories, ws, onAddSto
   );
 
   function handleAdd(data: any) {
-  const C = useAgilePalette();
     if (onAddStory) {
       onAddStory(data);
       setShowAdd(false);

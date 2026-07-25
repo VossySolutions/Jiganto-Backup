@@ -2926,10 +2926,20 @@ export async function registerRoutes(
   const handleUpdateSavedView = async (req: any, res: any) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const { sorts: _sorts, ...updates } = req.body || {};
-    const view = await storage.updateCrmSavedView(Number(req.params.id), updates);
-    if (!view) return res.status(404).json({ message: "Saved view not found" });
-    res.json(view);
+    try {
+      const body = { ...(req.body || {}) };
+      // Persist sorts inside filters blob (no separate sorts column) — same as create
+      if (body.sorts && body.filters && typeof body.filters === "object" && !Array.isArray(body.filters)) {
+        body.filters = { ...body.filters, sorts: body.sorts };
+      }
+      const { sorts: _sorts, snapshot: _snapshot, ...updates } = body;
+      const view = await storage.updateCrmSavedView(Number(req.params.id), updates);
+      if (!view) return res.status(404).json({ message: "Saved view not found" });
+      res.json({ ...view, sorts: body.sorts || [] });
+    } catch (err) {
+      console.error("Failed to update saved view:", err);
+      res.status(400).json({ message: "Failed to update saved view" });
+    }
   };
 
   const handleDeleteSavedView = async (req: any, res: any) => {
@@ -4098,7 +4108,7 @@ export async function registerRoutes(
         ...normalizeCrmContractBody(req.body as Record<string, unknown>),
         tenantId,
         ownerUserId: req.body.ownerUserId || userId,
-      });
+      } as Parameters<typeof storage.createCrmContract>[0]);
       res.status(201).json(contract);
     } catch (err) {
       console.error("Failed to create contract:", err);
@@ -7832,7 +7842,7 @@ Focus on: RAG status deteriorations, overdue items, cascade risks (red strategy 
         if (!active?.id) return res.status(400).json({ message: "No active version snapshot to copy from" });
         const full = await storage.getPmGanttVersionWithSnapshot(active.id);
         if (!full?.snapshot) return res.status(400).json({ message: "No active version snapshot to copy from" });
-        snap = full.snapshot as typeof snap;
+        snap = full.snapshot as { tasks: unknown[]; customCols?: unknown[]; savedAt?: string };
       }
       if (!snap || !Array.isArray(snap.tasks)) {
         return res.status(400).json({ message: "snapshot with tasks array is required" });

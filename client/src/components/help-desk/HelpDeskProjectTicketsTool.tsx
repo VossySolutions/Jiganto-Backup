@@ -10,7 +10,7 @@ import {
   Ticket
 } from "lucide-react";
 import { TYPE_LABELS, slaBadgeClass, type SlaState } from "../service-desk/types";
-import { HelpDeskEmptyState, HelpDeskTableSkeleton, HelpDeskTableWrap, HD_ACCENT } from "./HelpDeskUi";
+import { HelpDeskEmptyState, HelpDeskTableSkeleton, HelpDeskTableWrap } from "./HelpDeskUi";
 
 interface TicketRow {
   id: number;

@@ -500,7 +500,6 @@ export function CrmContractsTab({ contracts, accounts, searchTerm, initialContra
         type: "text",
         accessor: "name",
         width: "220px",
-        sticky: pinActive,
         editable: true,
         summary: "count",
       },
