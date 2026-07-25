@@ -7,6 +7,19 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+    <script>
+      // Must run before first paint, otherwise dark-mode users see a white flash.
+      (function () {
+        try {
+          var saved = localStorage.getItem("jiganto-theme") || "light";
+          var dark =
+            saved === "dark" ||
+            (saved === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

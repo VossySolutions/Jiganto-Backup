@@ -42,9 +42,10 @@ function fmtDate(d?: string | null): string {
 
 function ragClass(rag?: string | null): string {
   const v = (rag || "").toLowerCase();
-  if (v === "red" || v === "r") return "bg-red-100 text-red-800";
-  if (v === "amber" || v === "a" || v === "yellow") return "bg-amber-100 text-amber-800";
-  return "bg-emerald-100 text-emerald-800";
+  if (v === "red" || v === "r") return "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300";
+  if (v === "amber" || v === "a" || v === "yellow")
+    return "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300";
+  return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300";
 }
 
 function ragDot(rag?: string | null): string {
@@ -320,8 +321,8 @@ export default function ProjectOverview({
                     className={cn(
                       "mt-0.5 rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase",
                       String(r.itemType || r.type || "").toLowerCase().includes("issue")
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-red-100 text-red-800",
+                        ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                        : "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300",
                     )}
                   >
                     {String(r.itemType || r.type || "Risk").slice(0, 4)}
@@ -428,10 +429,10 @@ function StatCard({
   const deltaTone = (delta?.tone || "").toLowerCase();
   const deltaCls =
     deltaTone === "red" || deltaTone === "r"
-      ? "bg-red-100 text-red-800"
+      ? "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300"
       : deltaTone === "amber" || deltaTone === "a" || deltaTone === "yellow"
-        ? "bg-amber-100 text-amber-800"
-        : "bg-emerald-100 text-emerald-800";
+        ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+        : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300";
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-border bg-card p-3.5">

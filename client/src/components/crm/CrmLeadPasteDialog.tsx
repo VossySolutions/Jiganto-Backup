@@ -163,22 +163,22 @@ export function CrmLeadPasteDialog({ open, onOpenChange }: CrmLeadPasteDialogPro
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs text-[#676879]">
+          <p className="text-xs text-[#676879] dark:text-muted-foreground">
             Review inferred attribute settings. Unmapped columns become custom fields on Leads.
           </p>
-          <div className="rounded-md border border-[#d0d4e4] max-h-[320px] overflow-auto">
+          <div className="rounded-md border border-[#d0d4e4] dark:border-border max-h-[320px] overflow-auto">
             <table className="w-full text-[12px]">
-              <thead className="bg-[#f5f6f8] sticky top-0">
+              <thead className="bg-[#f5f6f8] dark:bg-muted sticky top-0">
                 <tr>
-                  <th className="text-left px-2 py-1.5 font-medium text-[#676879]">Header</th>
-                  <th className="text-left px-2 py-1.5 font-medium text-[#676879]">Maps to</th>
-                  <th className="text-left px-2 py-1.5 font-medium text-[#676879]">Type</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-[#676879] dark:text-muted-foreground">Header</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-[#676879] dark:text-muted-foreground">Maps to</th>
+                  <th className="text-left px-2 py-1.5 font-medium text-[#676879] dark:text-muted-foreground">Type</th>
                 </tr>
               </thead>
               <tbody>
                 {columns.map((col, idx) => (
-                  <tr key={`${col.header}-${idx}`} className="border-t border-[#d0d4e4]/80">
-                    <td className="px-2 py-1.5 text-[#323338]">{col.header}</td>
+                  <tr key={`${col.header}-${idx}`} className="border-t border-[#d0d4e4]/80 dark:border-border/80">
+                    <td className="px-2 py-1.5 text-[#323338] dark:text-foreground">{col.header}</td>
                     <td className="px-2 py-1.5">
                       <Select
                         value={col.builtin || "__custom__"}

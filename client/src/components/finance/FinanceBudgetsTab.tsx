@@ -581,7 +581,7 @@ export function FinanceBudgetsTab({ budgets: budgetsProp, isLoading: isLoadingPr
         saving={createMutation.isPending}
         disabled={!newProjectId}
       >
-        <FormSection icon={<Wallet className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Budget setup">
+        <FormSection icon={<Wallet className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Budget setup">
           <div className="space-y-1.5 mb-3.5">
             <FieldLabel required>Project</FieldLabel>
             <Select value={newProjectId} onValueChange={setNewProjectId}>

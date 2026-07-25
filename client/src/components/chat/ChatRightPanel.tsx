@@ -153,7 +153,7 @@ function ThreadPanel({
         </Button>
         {threadSummary && (
           <div className="rounded-lg border bg-violet-500/10 border-violet-500/20 px-3 py-2 text-xs text-foreground/90 leading-relaxed">
-            <p className={cn("font-semibold text-violet-600 mb-1 flex items-center gap-1", chatFont.badge)}>
+            <p className={cn("font-semibold text-violet-600 dark:text-violet-300 mb-1 flex items-center gap-1", chatFont.badge)}>
               <Sparkles className="h-3 w-3" /> AI Summary
             </p>
             {threadSummary}

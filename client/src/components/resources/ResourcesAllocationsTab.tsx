@@ -199,7 +199,7 @@ export function ResourcesAllocationsTab({
 
         <FormDivider />
 
-        <FormSection icon={<Calendar className="h-3.5 w-3.5 text-violet-600" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Schedule">
+        <FormSection icon={<Calendar className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Schedule">
           <FieldGrid className="mb-3.5">
             <div className="space-y-1.5"><FieldLabel required>Start</FieldLabel><Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
             <div className="space-y-1.5"><FieldLabel required>End</FieldLabel><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   Bar,
   BarChart,
@@ -46,6 +46,15 @@ function getTemperature(score: number | null): "hot" | "warm" | "cold" {
 
 const CHART_COLORS = ["#0073ea", "#00c875", "#fdab3d", "#e2445c", "#a25ddc", "#579bfc", "#c4c4c4", "#0086c0"];
 
+/** Recharts renders the tooltip with inline light-only styles, so re-map it onto theme tokens. */
+const CHART_TOOLTIP_STYLE: CSSProperties = {
+  backgroundColor: "hsl(var(--popover))",
+  borderColor: "hsl(var(--border))",
+  borderRadius: 8,
+  color: "hsl(var(--popover-foreground))",
+  fontSize: 12,
+};
+
 export function CrmLeadChartView({ leads, statusOptions, ratingOptions = [], sourceOptions = [] }: SharedProps) {
   const [metric, setMetric] = useState<"status" | "source" | "rating" | "temperature">("status");
 
@@ -71,9 +80,9 @@ export function CrmLeadChartView({ leads, statusOptions, ratingOptions = [], sou
   }, [leads, metric, statusOptions, ratingOptions, sourceOptions]);
 
   return (
-    <div className="rounded-xl border border-[#d0d4e4] bg-white p-4 space-y-4" data-testid="leads-chart-view">
+    <div className="rounded-xl border border-[#d0d4e4] dark:border-border bg-white dark:bg-card p-4 space-y-4" data-testid="leads-chart-view">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h3 className="text-[14px] font-semibold text-[#323338]">Lead distribution</h3>
+        <h3 className="text-[14px] font-semibold text-[#323338] dark:text-foreground">Lead distribution</h3>
         <Select value={metric} onValueChange={(v) => setMetric(v as typeof metric)}>
           <SelectTrigger className="h-8 w-40 text-xs" data-testid="select-chart-metric">
             <SelectValue />
@@ -87,16 +96,29 @@ export function CrmLeadChartView({ leads, statusOptions, ratingOptions = [], sou
         </Select>
       </div>
       {leads.length === 0 ? (
-        <p className="text-sm text-[#676879] py-12 text-center">No leads to chart.</p>
+        <p className="text-sm text-[#676879] dark:text-muted-foreground py-12 text-center">No leads to chart.</p>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#d0d4e4" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="name"
+                  className="text-muted-foreground"
+                  stroke="currentColor"
+                  tick={{ fontSize: 11, fill: "currentColor" }}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  className="text-muted-foreground"
+                  stroke="currentColor"
+                  tick={{ fontSize: 11, fill: "currentColor" }}
+                />
+                <Tooltip
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                  cursor={{ fill: "hsl(var(--muted) / 0.4)" }}
+                />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                   {data.map((_, i) => (
                     <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
@@ -113,7 +135,10 @@ export function CrmLeadChartView({ leads, statusOptions, ratingOptions = [], sou
                     <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                  cursor={{ fill: "hsl(var(--muted) / 0.4)" }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -169,7 +194,7 @@ export function CrmLeadDashboardView({
   return (
     <div className="space-y-4" data-testid="leads-dashboard-view">
       <div className="flex items-center justify-between">
-        <h3 className="text-[14px] font-semibold text-[#323338] flex items-center gap-1.5">
+        <h3 className="text-[14px] font-semibold text-[#323338] dark:text-foreground flex items-center gap-1.5">
           <LayoutDashboard className="h-4 w-4 text-[#0073ea]" />
           Leads dashboard
         </h3>
@@ -182,15 +207,15 @@ export function CrmLeadDashboardView({
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
         {cards.map((c) => (
-          <div key={c.label} className="rounded-lg border border-[#d0d4e4] bg-white p-3">
-            <p className="text-[11px] text-[#676879]">{c.label}</p>
+          <div key={c.label} className="rounded-lg border border-[#d0d4e4] dark:border-border bg-white dark:bg-card p-3">
+            <p className="text-[11px] text-[#676879] dark:text-muted-foreground">{c.label}</p>
             <p className="text-2xl font-semibold mt-1" style={{ color: c.color }}>{c.value}</p>
           </div>
         ))}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="rounded-xl border border-[#d0d4e4] bg-white p-4">
-          <p className="text-[13px] font-semibold text-[#323338] mb-3">Pipeline by status</p>
+        <div className="rounded-xl border border-[#d0d4e4] dark:border-border bg-white dark:bg-card p-4">
+          <p className="text-[13px] font-semibold text-[#323338] dark:text-foreground mb-3">Pipeline by status</p>
           <div className="space-y-2">
             {byStatus.map((s) => {
               const pct = leads.length ? Math.round((s.count / leads.length) * 100) : 0;
@@ -198,9 +223,9 @@ export function CrmLeadDashboardView({
                 <div key={s.label}>
                   <div className="flex justify-between text-[12px] mb-1">
                     <span>{s.label}</span>
-                    <span className="text-[#676879]">{s.count} ({pct}%)</span>
+                    <span className="text-[#676879] dark:text-muted-foreground">{s.count} ({pct}%)</span>
                   </div>
-                  <div className="h-2 rounded-full bg-[#f0f1f5] overflow-hidden">
+                  <div className="h-2 rounded-full bg-[#f0f1f5] dark:bg-muted overflow-hidden">
                     <div className={cn("h-full rounded-full", s.color?.split(" ")[0])} style={{ width: `${pct}%` }} />
                   </div>
                 </div>
@@ -208,21 +233,21 @@ export function CrmLeadDashboardView({
             })}
           </div>
         </div>
-        <div className="rounded-xl border border-[#d0d4e4] bg-white p-4">
-          <p className="text-[13px] font-semibold text-[#323338] mb-3">Recently added</p>
-          <div className="divide-y divide-[#d0d4e4]/80">
+        <div className="rounded-xl border border-[#d0d4e4] dark:border-border bg-white dark:bg-card p-4">
+          <p className="text-[13px] font-semibold text-[#323338] dark:text-foreground mb-3">Recently added</p>
+          <div className="divide-y divide-[#d0d4e4]/80 dark:divide-border">
             {recent.map((lead) => {
               const owner = resolveOwner(lead.ownerUserId);
               return (
                 <button
                   key={lead.id}
                   type="button"
-                  className="w-full flex items-center gap-2 py-2 text-left hover:bg-[#f5f6f8] px-1 rounded"
+                  className="w-full flex items-center gap-2 py-2 text-left hover:bg-[#f5f6f8] dark:hover:bg-muted px-1 rounded"
                   onClick={() => onOpenLead(lead)}
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-medium truncate">{leadTitle(lead)}</p>
-                    <p className="text-[11px] text-[#676879]">{new Date(lead.createdAt).toLocaleDateString()}</p>
+                    <p className="text-[11px] text-[#676879] dark:text-muted-foreground">{new Date(lead.createdAt).toLocaleDateString()}</p>
                   </div>
                   <div
                     className="h-6 w-6 rounded-full text-white text-[9px] flex items-center justify-center"
@@ -233,7 +258,7 @@ export function CrmLeadDashboardView({
                 </button>
               );
             })}
-            {recent.length === 0 && <p className="text-sm text-[#676879] py-6 text-center">No leads yet.</p>}
+            {recent.length === 0 && <p className="text-sm text-[#676879] dark:text-muted-foreground py-6 text-center">No leads yet.</p>}
           </div>
         </div>
       </div>
@@ -279,11 +304,11 @@ export function CrmLeadTimesheetView({
 
   return (
     <div
-      className="rounded-xl border border-[#d0d4e4] bg-white overflow-hidden grid grid-cols-1 md:grid-cols-[240px_1fr] min-h-[420px]"
+      className="rounded-xl border border-[#d0d4e4] dark:border-border bg-white dark:bg-card overflow-hidden grid grid-cols-1 md:grid-cols-[240px_1fr] min-h-[420px]"
       data-testid="leads-timesheet-view"
     >
-      <div className="border-r border-[#d0d4e4] bg-[#f5f6f8]">
-        <div className="px-3 py-2 border-b border-[#d0d4e4] text-[12px] font-semibold text-[#676879] flex items-center gap-1">
+      <div className="border-r border-[#d0d4e4] dark:border-border bg-[#f5f6f8] dark:bg-muted/40">
+        <div className="px-3 py-2 border-b border-[#d0d4e4] dark:border-border text-[12px] font-semibold text-[#676879] dark:text-muted-foreground flex items-center gap-1">
           <Clock className="h-3.5 w-3.5" />
           Timesheet
         </div>
@@ -296,12 +321,14 @@ export function CrmLeadTimesheetView({
                 type="button"
                 onClick={() => selectLead(lead)}
                 className={cn(
-                  "w-full text-left px-3 py-2.5 text-[13px] border-b border-[#d0d4e4]/60",
-                  selectedId === lead.id ? "bg-[#cce5ff] text-[#0073ea]" : "hover:bg-white",
+                  "w-full text-left px-3 py-2.5 text-[13px] border-b border-[#d0d4e4]/60 dark:border-border/60",
+                  selectedId === lead.id
+                    ? "bg-[#cce5ff] dark:bg-primary/25 text-[#0073ea] dark:text-primary"
+                    : "hover:bg-white dark:hover:bg-card",
                 )}
               >
                 <div className="truncate font-medium">{leadTitle(lead)}</div>
-                <div className="text-[11px] text-[#676879]">{hrs}h logged</div>
+                <div className="text-[11px] text-[#676879] dark:text-muted-foreground">{hrs}h logged</div>
               </button>
             );
           })}
@@ -314,7 +341,7 @@ export function CrmLeadTimesheetView({
               <button type="button" className="text-[15px] font-semibold hover:text-[#0073ea]" onClick={() => onOpenLead(selected)}>
                 {leadTitle(selected)}
               </button>
-              <span className="text-[13px] text-[#676879]">Total: <strong className="text-[#323338]">{totalHours}h</strong></span>
+              <span className="text-[13px] text-[#676879] dark:text-muted-foreground">Total: <strong className="text-[#323338] dark:text-foreground">{totalHours}h</strong></span>
             </div>
             <div className="space-y-2">
               {entries.map((entry, idx) => (
@@ -399,7 +426,7 @@ export function CrmLeadTimesheetView({
             </div>
           </>
         ) : (
-          <p className="text-sm text-[#676879] py-12 text-center">Select a lead to log time.</p>
+          <p className="text-sm text-[#676879] dark:text-muted-foreground py-12 text-center">Select a lead to log time.</p>
         )}
       </div>
     </div>
@@ -473,9 +500,9 @@ export function CrmLeadFormView({
   const set = (key: keyof typeof form, value: string) => setForm((p) => ({ ...p, [key]: value }));
 
   return (
-    <div className="rounded-xl border border-[#d0d4e4] bg-white overflow-hidden" data-testid="leads-form-view">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#d0d4e4] bg-[#f5f6f8]">
-        <h3 className="text-[14px] font-semibold text-[#323338]">
+    <div className="rounded-xl border border-[#d0d4e4] dark:border-border bg-white dark:bg-card overflow-hidden" data-testid="leads-form-view">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#d0d4e4] dark:border-border bg-[#f5f6f8] dark:bg-muted/40">
+        <h3 className="text-[14px] font-semibold text-[#323338] dark:text-foreground">
           {seed ? `Edit: ${leadTitle(seed)}` : "New lead form"}
         </h3>
         <div className="flex gap-2">
@@ -563,12 +590,12 @@ export function CrmLeadFormView({
           </div>
         )}
         {leads.length > 0 && (
-          <div className="md:col-span-2 border-t border-[#d0d4e4] pt-3">
-            <p className="text-[12px] text-[#676879] mb-2">Or pick an existing lead to edit in this form:</p>
+          <div className="md:col-span-2 border-t border-[#d0d4e4] dark:border-border pt-3">
+            <p className="text-[12px] text-[#676879] dark:text-muted-foreground mb-2">Or pick an existing lead to edit in this form:</p>
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
-                className="text-[12px] px-2 py-1 rounded border border-[#0073ea] text-[#0073ea] hover:bg-[#cce5ff]/40"
+                className="text-[12px] px-2 py-1 rounded border border-[#0073ea] text-[#0073ea] hover:bg-[#cce5ff]/40 dark:hover:bg-primary/20"
                 onClick={() => onOpenLead({} as CrmLead)}
               >
                 + New blank form
@@ -577,7 +604,7 @@ export function CrmLeadFormView({
                 <button
                   key={l.id}
                   type="button"
-                  className="text-[12px] px-2 py-1 rounded border border-[#d0d4e4] hover:bg-[#cce5ff]/40"
+                  className="text-[12px] px-2 py-1 rounded border border-[#d0d4e4] dark:border-border hover:bg-[#cce5ff]/40 dark:hover:bg-primary/20"
                   onClick={() => onOpenLead(l)}
                 >
                   {leadTitle(l)}

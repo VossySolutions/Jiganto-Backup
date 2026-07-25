@@ -306,7 +306,7 @@ export function ProjectWorkspaceSidebar({
       >
         <button
           type="button"
-          className="mb-3 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md hover:bg-indigo-50 hover:text-indigo-700"
+          className="mb-3 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-300"
           onClick={() => setCollapsed(false)}
           title="Expand project tools"
           aria-label="Expand project tools"
@@ -355,7 +355,7 @@ export function ProjectWorkspaceSidebar({
     >
       <button
         type="button"
-        className="absolute -right-3.5 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md hover:bg-indigo-50 hover:text-indigo-700"
+        className="absolute -right-3.5 top-1/2 z-20 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-md hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-300"
         onClick={() => setCollapsed(true)}
         title="Collapse sidebar"
         aria-label="Collapse project sidebar"

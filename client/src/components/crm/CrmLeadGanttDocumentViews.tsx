@@ -130,13 +130,13 @@ export function CrmLeadGanttView({
   };
 
   return (
-    <div className="rounded-xl border border-[#d0d4e4] bg-white overflow-hidden" data-testid="leads-gantt-view">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-[#d0d4e4] bg-[#f5f6f8]">
+    <div className="rounded-xl border border-[#d0d4e4] dark:border-border bg-white dark:bg-card overflow-hidden" data-testid="leads-gantt-view">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-[#d0d4e4] dark:border-border bg-[#f5f6f8] dark:bg-muted/40">
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftWeeks(-2)} aria-label="Earlier">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-[13px] font-medium text-[#323338] min-w-[180px] text-center">{monthLabel}</span>
+          <span className="text-[13px] font-medium text-[#323338] dark:text-foreground min-w-[180px] text-center">{monthLabel}</span>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => shiftWeeks(2)} aria-label="Later">
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -148,7 +148,7 @@ export function CrmLeadGanttView({
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-[#676879]">Drag bars to set follow-up date</span>
+          <span className="text-[11px] text-[#676879] dark:text-muted-foreground">Drag bars to set follow-up date</span>
           {onAddLead && (
             <Button size="sm" className="h-7 bg-[#0073ea] hover:bg-[#0060b9] text-white gap-1" onClick={onAddLead}>
               <Plus className="h-3.5 w-3.5" />
@@ -158,18 +158,18 @@ export function CrmLeadGanttView({
         </div>
       </div>
       {sorted.length === 0 ? (
-        <div className="p-10 text-center text-sm text-[#676879]">No leads to show on the timeline.</div>
+        <div className="p-10 text-center text-sm text-[#676879] dark:text-muted-foreground">No leads to show on the timeline.</div>
       ) : (
         <div className="flex overflow-auto max-h-[min(72vh,680px)]">
-          <div className="w-56 shrink-0 sticky left-0 z-10 bg-white border-r border-[#d0d4e4]">
-            <div className="h-10 px-3 flex items-center text-[12px] font-medium text-[#676879] bg-[#f5f6f8] border-b border-[#d0d4e4]">
+          <div className="w-56 shrink-0 sticky left-0 z-10 bg-white dark:bg-card border-r border-[#d0d4e4] dark:border-border">
+            <div className="h-10 px-3 flex items-center text-[12px] font-medium text-[#676879] dark:text-muted-foreground bg-[#f5f6f8] dark:bg-muted/40 border-b border-[#d0d4e4] dark:border-border">
               Lead
             </div>
             {sorted.map((lead) => (
               <button
                 key={lead.id}
                 type="button"
-                className="h-10 w-full px-3 text-left text-[13px] truncate border-b border-[#d0d4e4]/80 hover:bg-[#cce5ff]/30 text-[#323338]"
+                className="h-10 w-full px-3 text-left text-[13px] truncate border-b border-[#d0d4e4]/80 dark:border-border/80 hover:bg-[#cce5ff]/30 dark:hover:bg-primary/20 text-[#323338] dark:text-foreground"
                 onClick={() => onOpenLead(lead)}
               >
                 {leadTitle(lead)}
@@ -177,14 +177,15 @@ export function CrmLeadGanttView({
             ))}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex h-10 bg-[#f5f6f8] border-b border-[#d0d4e4] sticky top-0 z-[5]">
+            <div className="flex h-10 bg-[#f5f6f8] dark:bg-muted/40 border-b border-[#d0d4e4] dark:border-border sticky top-0 z-[5]">
               {days.map((day) => (
                 <div
                   key={day.toISOString()}
                   className={cn(
-                    "shrink-0 text-center text-[10px] py-1.5 border-r border-[#d0d4e4]/60 text-[#676879]",
-                    day.getDay() === 0 || day.getDay() === 6 ? "bg-[#f0f1f5]" : "",
-                    day.toDateString() === new Date().toDateString() && "bg-[#cce5ff]/50 font-semibold text-[#0073ea]",
+                    "shrink-0 text-center text-[10px] py-1.5 border-r border-[#d0d4e4]/60 dark:border-border/60 text-[#676879] dark:text-muted-foreground",
+                    day.getDay() === 0 || day.getDay() === 6 ? "bg-[#f0f1f5] dark:bg-muted/70" : "",
+                    day.toDateString() === new Date().toDateString() &&
+                      "bg-[#cce5ff]/50 dark:bg-primary/25 font-semibold text-[#0073ea] dark:text-primary",
                   )}
                   style={{ width: dayWidth }}
                 >
@@ -202,11 +203,11 @@ export function CrmLeadGanttView({
               const barColor = extractBg(status?.color);
               const visible = dayIndex > -durationDays && dayIndex < dayCount;
               return (
-                <div key={lead.id} className="relative flex h-10 border-b border-[#d0d4e4]/80">
+                <div key={lead.id} className="relative flex h-10 border-b border-[#d0d4e4]/80 dark:border-border/80">
                   {days.map((_, idx) => (
                     <div
                       key={idx}
-                      className="shrink-0 border-r border-[#d0d4e4]/40"
+                      className="shrink-0 border-r border-[#d0d4e4]/40 dark:border-border/40"
                       style={{ width: dayWidth }}
                     />
                   ))}
@@ -310,12 +311,12 @@ export function CrmLeadDocumentView({
 
   return (
     <div
-      className="rounded-xl border border-[#d0d4e4] bg-white overflow-hidden grid grid-cols-1 md:grid-cols-[260px_1fr] min-h-[480px]"
+      className="rounded-xl border border-[#d0d4e4] dark:border-border bg-white dark:bg-card overflow-hidden grid grid-cols-1 md:grid-cols-[260px_1fr] min-h-[480px]"
       data-testid="leads-document-view"
     >
-      <div className="border-r border-[#d0d4e4] bg-[#f5f6f8]">
-        <div className="flex items-center justify-between px-3 py-2 border-b border-[#d0d4e4]">
-          <span className="text-[12px] font-semibold text-[#676879] flex items-center gap-1">
+      <div className="border-r border-[#d0d4e4] dark:border-border bg-[#f5f6f8] dark:bg-muted/40">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-[#d0d4e4] dark:border-border">
+          <span className="text-[12px] font-semibold text-[#676879] dark:text-muted-foreground flex items-center gap-1">
             <FileText className="h-3.5 w-3.5" />
             Documents
           </span>
@@ -327,7 +328,7 @@ export function CrmLeadDocumentView({
         </div>
         <div className="max-h-[520px] overflow-y-auto">
           {leads.length === 0 ? (
-            <p className="p-4 text-xs text-[#676879]">No leads yet.</p>
+            <p className="p-4 text-xs text-[#676879] dark:text-muted-foreground">No leads yet.</p>
           ) : (
             leads.map((lead) => (
               <button
@@ -335,12 +336,14 @@ export function CrmLeadDocumentView({
                 type="button"
                 onClick={() => selectLead(lead)}
                 className={cn(
-                  "w-full text-left px-3 py-2.5 text-[13px] border-b border-[#d0d4e4]/60",
-                  selectedId === lead.id ? "bg-[#cce5ff] text-[#0073ea]" : "hover:bg-white text-[#323338]",
+                  "w-full text-left px-3 py-2.5 text-[13px] border-b border-[#d0d4e4]/60 dark:border-border/60",
+                  selectedId === lead.id
+                    ? "bg-[#cce5ff] dark:bg-primary/25 text-[#0073ea] dark:text-primary"
+                    : "hover:bg-white dark:hover:bg-card text-[#323338] dark:text-foreground",
                 )}
               >
                 <div className="truncate font-medium">{leadTitle(lead)}</div>
-                <div className="text-[11px] text-[#676879] truncate mt-0.5">
+                <div className="text-[11px] text-[#676879] dark:text-muted-foreground truncate mt-0.5">
                   {(lead.description || "").slice(0, 60) || "Empty document"}
                 </div>
               </button>
@@ -348,7 +351,7 @@ export function CrmLeadDocumentView({
           )}
         </div>
       </div>
-      <div className="flex flex-col p-4 gap-3 bg-[#fafbfc]">
+      <div className="flex flex-col p-4 gap-3 bg-[#fafbfc] dark:bg-background">
         {selected ? (
           <>
             <Input
@@ -358,7 +361,7 @@ export function CrmLeadDocumentView({
               onClick={() => onOpenLead(selected)}
             />
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] text-[#676879]">
+              <p className="text-[11px] text-[#676879] dark:text-muted-foreground">
                 Updated {selected.updatedAt ? new Date(selected.updatedAt).toLocaleString() : "—"}
               </p>
               {onSaveDescription && (
@@ -377,16 +380,16 @@ export function CrmLeadDocumentView({
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="# Meeting notes&#10;&#10;- Next steps&#10;- Decisions&#10;- Risks"
-              className="flex-1 min-h-[300px] text-[14px] leading-relaxed border-[#c5c7d0] bg-white resize-none font-sans"
+              className="flex-1 min-h-[300px] text-[14px] leading-relaxed border-[#c5c7d0] dark:border-border bg-white dark:bg-card resize-none font-sans"
               data-testid="input-lead-doc-body"
             />
-            <div className="border-t border-[#d0d4e4] pt-3">
-              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[#676879] mb-2">
+            <div className="border-t border-[#d0d4e4] dark:border-border pt-3">
+              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[#676879] dark:text-muted-foreground mb-2">
                 <Paperclip className="h-3.5 w-3.5" />
                 Attachments ({attachments.length})
               </div>
               {attachments.length === 0 ? (
-                <p className="text-[12px] text-[#676879]">Drop files on a table row, or open the lead to attach files.</p>
+                <p className="text-[12px] text-[#676879] dark:text-muted-foreground">Drop files on a table row, or open the lead to attach files.</p>
               ) : (
                 <ul className="space-y-1">
                   {attachments.map((a) => (
@@ -406,7 +409,7 @@ export function CrmLeadDocumentView({
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-sm text-[#676879]">
+          <div className="flex-1 flex items-center justify-center text-sm text-[#676879] dark:text-muted-foreground">
             Select a lead to open its document.
           </div>
         )}

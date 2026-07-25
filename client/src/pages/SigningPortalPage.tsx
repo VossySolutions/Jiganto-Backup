@@ -468,20 +468,20 @@ export default function SigningPortalPage() {
                 </div>
               </div>
               {request.deadline && (
-                <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3 w-fit">
+                <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mt-3 w-fit">
                   <Clock className="h-3.5 w-3.5" /> Sign-off deadline: {fmtDate(request.deadline)}
                 </div>
               )}
             </div>
 
             {request.message && (
-              <div className="px-6 py-4 bg-blue-50 border-b border-blue-100 text-sm text-blue-800">
+              <div className="px-6 py-4 bg-blue-50 dark:bg-blue-950/30 border-b border-blue-100 dark:border-blue-900 text-sm text-blue-800 dark:text-blue-200">
                 <span className="font-medium">Message from sender:</span> {request.message}
               </div>
             )}
 
             {request.requireReadToBottom && !scrolledToBottom && (
-              <div className="px-6 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-800 flex items-center gap-2">
+              <div className="px-6 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-2">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 Please scroll to the bottom of the document before signing.
               </div>

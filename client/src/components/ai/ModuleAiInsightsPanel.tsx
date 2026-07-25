@@ -50,11 +50,11 @@ function insightBg(type: string) {
 function severityBadge(severity: string) {
   const cls =
     severity === "high"
-      ? "bg-red-100 text-red-700"
+      ? "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300"
       : severity === "medium"
-        ? "bg-amber-100 text-amber-700"
+        ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
         : severity === "low"
-          ? "bg-blue-100 text-blue-700"
+          ? "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
           : "bg-muted text-muted-foreground";
   return (
     <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide", cls)}>
@@ -158,7 +158,7 @@ export function ModuleAiInsightsPanel({
                     {data.insights.length} insight{data.insights.length !== 1 ? "s" : ""}
                   </Badge>
                   {data.source === "ai" && (
-                    <Badge variant="outline" className="text-xs text-violet-600">
+                    <Badge variant="outline" className="text-xs text-violet-600 dark:text-violet-300">
                       <Sparkles className="h-2.5 w-2.5 mr-1" />
                       AI
                     </Badge>

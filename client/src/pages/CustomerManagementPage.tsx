@@ -854,8 +854,10 @@ export default function CustomerManagementPage() {
                         variant="secondary"
                         className={cn(
                           "ml-0.5 h-5 px-1.5 text-[10px] font-medium",
-                          item.badgeVariant === "danger" && "bg-red-100 text-red-700",
-                          item.badgeVariant === "warn" && "bg-amber-100 text-amber-700",
+                          item.badgeVariant === "danger" &&
+                            "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300",
+                          item.badgeVariant === "warn" &&
+                            "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
                         )}
                       >
                         {item.badge}
@@ -1223,7 +1225,7 @@ export default function CustomerManagementPage() {
                         <SectionCard
                           title="Health score"
                           action={
-                            <Badge className="bg-emerald-100 text-emerald-800">
+                            <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
                               {detail.healthScore} / 100
                             </Badge>
                           }
@@ -1275,7 +1277,7 @@ export default function CustomerManagementPage() {
                     <SectionCard
                       title="Health score"
                       action={
-                        <Badge className="bg-emerald-100 text-emerald-800">
+                        <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
                           {detail.healthScore} / 100
                         </Badge>
                       }
@@ -1954,7 +1956,7 @@ export default function CustomerManagementPage() {
                         <div className="flex items-center gap-2 mb-1">
                           <p className="font-bold">{p.name}</p>
                           {p.popular && (
-                            <Badge className="text-[9px] bg-purple-100 text-purple-800">
+                            <Badge className="text-[9px] bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300">
                               Most popular
                             </Badge>
                           )}

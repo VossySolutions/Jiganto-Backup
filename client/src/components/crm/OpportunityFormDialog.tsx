@@ -311,7 +311,7 @@ export function OpportunityFormDialog({
 
             <CrmForecastZone>
               <div className="flex items-center gap-2 mb-3.5">
-                <div className="w-[22px] h-[22px] rounded-md bg-white/70 flex items-center justify-center">
+                <div className="w-[22px] h-[22px] rounded-md bg-white/70 dark:bg-background/40 flex items-center justify-center">
                   <BarChart3 className="h-3.5 w-3.5 text-blue-700" />
                 </div>
                 <h3 className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">Deal forecast</h3>
@@ -392,7 +392,7 @@ export function OpportunityFormDialog({
             {dealMode === "subscription" && (
               <>
                 <CrmFormDivider />
-                <CrmFormSection icon={<Target className="h-3.5 w-3.5 text-violet-600" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Subscription details">
+                <CrmFormSection icon={<Target className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Subscription details">
                   <CrmFieldGrid>
                     <div className="space-y-1.5">
                       <CrmFieldLabel>Recurring amount</CrmFieldLabel>

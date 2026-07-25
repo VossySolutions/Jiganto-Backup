@@ -357,7 +357,7 @@ export function MessageThread({
                     {!isOwn && showHeader ? (
                       <Avatar className="h-8 w-8 shrink-0 mt-1">
                         <AvatarImage src={message.user.profileImageUrl || undefined} />
-                        <AvatarFallback className={cn("bg-indigo-100 text-indigo-600", chatFont.badge)}>
+                        <AvatarFallback className={cn("bg-indigo-100 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-300", chatFont.badge)}>
                           {getUserInitials(message.user.firstName, message.user.lastName)}
                         </AvatarFallback>
                       </Avatar>
@@ -388,7 +388,7 @@ export function MessageThread({
                           )}
                         >
                           {message.authorSource === "jiganto" && !isOwn && (
-                            <span className={cn("font-semibold text-violet-600 block mb-1", chatFont.badge)}>Jiganto AI</span>
+                            <span className={cn("font-semibold text-violet-600 dark:text-violet-300 block mb-1", chatFont.badge)}>Jiganto AI</span>
                           )}
                           {renderChatMessageContent(message.content)}
                           {message.attachments?.length > 0 && (
@@ -417,7 +417,7 @@ export function MessageThread({
                               type="button"
                               className={cn(
                                 "text-xs rounded-full border px-2 py-0.5 hover:bg-muted/60 transition-colors",
-                                r.reactedByMe && "border-indigo-500 bg-indigo-100",
+                                r.reactedByMe && "border-indigo-500 bg-indigo-100 dark:bg-indigo-950/40",
                               )}
                               onClick={() =>
                                 react.mutate({
@@ -437,7 +437,7 @@ export function MessageThread({
                       {message.threadReplyCount > 0 && (
                         <button
                           type="button"
-                          className={cn("hover:underline mt-1 px-1 text-left text-indigo-600", chatFont.badge)}
+                          className={cn("hover:underline mt-1 px-1 text-left text-indigo-600 dark:text-indigo-300", chatFont.badge)}
                           onClick={() => onOpenThread(message.id)}
                         >
                           {message.threadReplyCount} repl{message.threadReplyCount === 1 ? "y" : "ies"}

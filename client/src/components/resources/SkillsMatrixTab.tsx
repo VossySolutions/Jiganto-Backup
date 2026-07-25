@@ -410,8 +410,8 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
                       const dim = highlightIds && !highlightIds.includes(r.id);
                       const hl = highlightIds && highlightIds.includes(r.id);
                       return (
-                        <tr key={r.id} className={cn("border-b hover:bg-muted/30", hl && "bg-emerald-50/60", dim && "opacity-30")}>
-                          <td className={cn("sticky left-0 z-10 border-r bg-background", hl && "bg-emerald-50/60")}>
+                        <tr key={r.id} className={cn("border-b hover:bg-muted/30", hl && "bg-emerald-50/60 dark:bg-emerald-950/25", dim && "opacity-30")}>
+                          <td className={cn("sticky left-0 z-10 border-r bg-background", hl && "bg-emerald-50/60 dark:bg-emerald-950/25")}>
                             <button type="button" className="flex w-full items-center gap-2.5 p-3 text-left hover:bg-muted/50" onClick={() => onOpenProfile(r)}>
                               <PersonAvatar r={r} className="h-8 w-8" />
                               <span>

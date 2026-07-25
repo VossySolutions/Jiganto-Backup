@@ -55,7 +55,7 @@ function ConversationRow({
       onKeyDown={(e) => e.key === "Enter" && onSelect()}
       className={cn(
         "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors cursor-pointer group",
-        selected ? "bg-indigo-100 text-indigo-600" : "hover:bg-muted/60 text-foreground/90",
+        selected ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-300" : "hover:bg-muted/60 text-foreground/90",
         item.unreadCount > 0 && !selected && "font-medium",
       )}
       data-testid={`conversation-${item.channelId}`}
@@ -147,7 +147,7 @@ function TeamFolderRow({
         {icon}
         <span className="truncate">{name}</span>
         {collapsed && unread > 0 && (
-          <Badge className={cn("ml-auto h-5 bg-indigo-100 text-indigo-600 border-0 shrink-0", chatFont.badge)}>
+          <Badge className={cn("ml-auto h-5 bg-indigo-100 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-300 border-0 shrink-0", chatFont.badge)}>
             {unread}
           </Badge>
         )}
@@ -218,7 +218,7 @@ function SectionHeader({
         <span className="[&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
         {label}
         {!expanded && unreadTotal > 0 && (
-          <Badge className={cn("h-5 bg-indigo-100 text-indigo-600 border-0", chatFont.badge)}>{unreadTotal}</Badge>
+          <Badge className={cn("h-5 bg-indigo-100 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-300 border-0", chatFont.badge)}>{unreadTotal}</Badge>
         )}
         {expanded && count > 0 && (
           <Badge variant="secondary" className={cn("ml-auto h-5", chatFont.badge)}>

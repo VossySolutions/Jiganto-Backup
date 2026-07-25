@@ -225,12 +225,12 @@ export function CostAlertBanner({
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:ml-auto shrink-0">
         {percent != null && (
-          <Badge className="bg-amber-100 text-amber-800 border-amber-300">
+          <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-200 dark:border-amber-800">
             {percent}% of MRR
           </Badge>
         )}
         {actionLabel && onAction && (
-          <Button size="sm" variant="outline" className="border-amber-400 text-amber-800" onClick={onAction}>
+          <Button size="sm" variant="outline" className="border-amber-400 text-amber-800 dark:border-amber-700 dark:text-amber-200" onClick={onAction}>
             {actionLabel}
           </Button>
         )}

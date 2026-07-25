@@ -769,7 +769,7 @@ function AddStrategyButton({ onSave, isCreating }: {
             <div className="flex items-center justify-between">
               <Label className="text-xs font-semibold">Description</Label>
               <Button
-                type="button" variant="ghost" size="sm" className="h-6 gap-1 text-[10px] text-violet-600 hover:text-violet-700 hover:bg-violet-50 px-2"
+                type="button" variant="ghost" size="sm" className="h-6 gap-1 text-[10px] text-violet-600 dark:text-violet-300 hover:text-violet-700 dark:hover:text-violet-200 hover:bg-violet-50 dark:hover:bg-violet-950/30 px-2"
                 onClick={suggestWithAI} disabled={aiLoading}
                 data-testid="button-ai-assist-description"
               >

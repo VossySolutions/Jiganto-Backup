@@ -103,7 +103,7 @@ const STATUS_CLASS: Record<string, string> = {
   in_progress:"bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
   completed:"bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
   draft:   "bg-muted text-muted-foreground",
-  active_project:"bg-blue-100 text-blue-700",
+  active_project:"bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
 };
 
 const PRIORITY_CLASS: Record<string, string> = {

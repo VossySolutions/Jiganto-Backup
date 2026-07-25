@@ -178,7 +178,7 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
 
   const formBody = (
     <div className="space-y-0 [&_input]:h-9 [&_button[role=combobox]]:h-9">
-        <CrmFormSection title="Contact" icon={<UserRound className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] text-[#676879]">
+        <CrmFormSection title="Contact" icon={<UserRound className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] dark:bg-muted text-[#676879] dark:text-muted-foreground">
           <CrmFieldGrid className="mb-3">
             <div className="space-y-1">
               <CrmFieldLabel required>First name</CrmFieldLabel>
@@ -213,7 +213,7 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
 
         <CrmFormDivider />
 
-        <CrmFormSection title="Qualification" icon={<Target className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] text-[#676879]">
+        <CrmFormSection title="Qualification" icon={<Target className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] dark:bg-muted text-[#676879] dark:text-muted-foreground">
           <CrmFieldGrid cols={3} className="mb-3">
             <div className="space-y-1">
               <CrmFieldLabel>Rating</CrmFieldLabel>
@@ -284,7 +284,7 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
 
         <CrmFormDivider />
 
-        <CrmFormSection title="Company details" icon={<Building2 className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] text-[#676879]">
+        <CrmFormSection title="Company details" icon={<Building2 className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] dark:bg-muted text-[#676879] dark:text-muted-foreground">
           <CrmFieldGrid className="mb-3">
             <div className="space-y-1">
               <CrmFieldLabel>Industry</CrmFieldLabel>
@@ -328,7 +328,7 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
 
         <CrmFormDivider />
 
-        <CrmFormSection title="Ownership & follow-up" icon={<Clock className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] text-[#676879]">
+        <CrmFormSection title="Ownership & follow-up" icon={<Clock className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] dark:bg-muted text-[#676879] dark:text-muted-foreground">
           <CrmFieldGrid className="mb-3">
             <div className="space-y-1">
               <CrmOwnerSelect
@@ -353,7 +353,7 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
               />
             </div>
           </CrmFieldGrid>
-          <div className="rounded-[4px] border border-[#d0d4e4] bg-[#f5f6f8] p-3 flex flex-col sm:flex-row gap-3 sm:items-end">
+          <div className="rounded-[4px] border border-[#d0d4e4] dark:border-border bg-[#f5f6f8] dark:bg-muted/40 p-3 flex flex-col sm:flex-row gap-3 sm:items-end">
             <div className="flex-1 space-y-1">
               <CrmFieldLabel>
                 Next follow-up{" "}
@@ -385,14 +385,14 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
 
         <CrmFormDivider />
 
-        <CrmFormSection title="Notes" icon={<StickyNote className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] text-[#676879]">
+        <CrmFormSection title="Notes" icon={<StickyNote className="h-3 w-3" />} iconClassName="bg-[#f5f6f8] dark:bg-muted text-[#676879] dark:text-muted-foreground">
           <Textarea
             id="description"
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             rows={4}
             placeholder="Context, next steps, or relationship history…"
-            className="rounded-[4px] border-[#c5c7d0] text-[14px] focus-visible:ring-1 focus-visible:ring-[#0073ea] focus-visible:border-[#0073ea]"
+            className="rounded-[4px] border-[#c5c7d0] dark:border-border text-[14px] focus-visible:ring-1 focus-visible:ring-[#0073ea] focus-visible:border-[#0073ea]"
             data-testid="input-lead-description"
           />
         </CrmFormSection>
@@ -402,17 +402,17 @@ export function LeadFormDialog({ open, onClose, editing, onOpenCustomFieldsSetti
         <CrmFormSection
           title="Custom fields"
           icon={<Settings2 className="h-3 w-3" />}
-          iconClassName="bg-[#f5f6f8] text-[#676879]"
+          iconClassName="bg-[#f5f6f8] dark:bg-muted text-[#676879] dark:text-muted-foreground"
           tag={customFields.length > 0 ? `${customFields.filter((f) => customData[f.fieldName] != null && customData[f.fieldName] !== "").length} of ${customFields.length} used` : undefined}
         >
           {customFields.length === 0 ? (
-            <div className="rounded-[4px] border border-dashed border-[#c5c7d0] bg-[#f5f6f8] p-5 text-center">
-              <p className="text-[14px] font-medium text-[#323338] mb-1">No custom fields yet</p>
-              <p className="text-[13px] text-[#676879] mb-3 max-w-sm mx-auto">
+            <div className="rounded-[4px] border border-dashed border-[#c5c7d0] dark:border-border bg-[#f5f6f8] dark:bg-muted/40 p-5 text-center">
+              <p className="text-[14px] font-medium text-[#323338] dark:text-foreground mb-1">No custom fields yet</p>
+              <p className="text-[13px] text-[#676879] dark:text-muted-foreground mb-3 max-w-sm mx-auto">
                 Add user-defined fields for leads in Settings → CRM Fields.
               </p>
               {onOpenCustomFieldsSettings && (
-                <Button type="button" variant="outline" size="sm" className="gap-1.5 h-8 border-[#c5c7d0] text-[#0073ea]" onClick={onOpenCustomFieldsSettings}>
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 h-8 border-[#c5c7d0] dark:border-border text-[#0073ea]" onClick={onOpenCustomFieldsSettings}>
                   <Settings2 className="h-3.5 w-3.5" />
                   Open CRM field settings
                 </Button>

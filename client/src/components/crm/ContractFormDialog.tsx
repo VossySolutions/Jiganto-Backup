@@ -252,7 +252,7 @@ export function ContractFormDialog({ open, onClose, editing, accounts }: Props) 
 
         <CrmFormDivider />
 
-        <CrmFormSection icon={<Calendar className="h-3.5 w-3.5 text-violet-600" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Dates & value">
+        <CrmFormSection icon={<Calendar className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Dates & value">
           <CrmFieldGrid className="mb-3.5">
             <div className="space-y-1.5">
               <CrmFieldLabel>Start date</CrmFieldLabel>

@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import type { PmDeliverablePhase, PmDeliverable } from "@shared/models/projects";
 import { type ColumnDef as MondayColumnDef, type GroupDef } from "@/components/MondayTable";
 import { MondayBoardShell } from "@/components/board";
@@ -293,6 +294,7 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
   const [importRows, setImportRows] = useState<any[]>([]);
   const [importTab, setImportTab] = useState<"upload" | "template">("upload");
   const [importStatus, setImportStatus] = useState<{ msg: string; type: "ok" | "err" | "" }>({ msg: "", type: "" });
+  const [importDragOver, setImportDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Derived data
@@ -1286,7 +1288,7 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
                     type="button"
                     key={t.key}
                     className={`px-3 py-1.5 rounded-full border text-xs font-semibold cursor-pointer transition ${
-                      selectedTemplate === t.key ? "border-blue-500 text-blue-600 bg-blue-50" : "border-border text-muted-foreground bg-muted/50 hover:border-blue-400 hover:text-blue-500"
+                      selectedTemplate === t.key ? "border-blue-500 text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30" : "border-border text-muted-foreground bg-muted/50 hover:border-blue-400 hover:text-blue-500"
                     }`}
                     onClick={() => applyTemplate(t.key)}
                     data-testid={`template-${t.key}`}
@@ -1359,13 +1361,18 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
             {importTab === "upload" && (
               <div>
                 <div
-                  className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition hover:border-blue-500 hover:bg-blue-50/50"
+                  className={cn(
+                    "border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition",
+                    importDragOver
+                      ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20"
+                      : "hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/20",
+                  )}
                   onClick={() => fileInputRef.current?.click()}
-                  onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add("border-blue-500", "bg-blue-50/50"); }}
-                  onDragLeave={e => { e.currentTarget.classList.remove("border-blue-500", "bg-blue-50/50"); }}
+                  onDragOver={e => { e.preventDefault(); setImportDragOver(true); }}
+                  onDragLeave={() => setImportDragOver(false)}
                   onDrop={e => {
                     e.preventDefault();
-                    e.currentTarget.classList.remove("border-blue-500", "bg-blue-50/50");
+                    setImportDragOver(false);
                     const file = e.dataTransfer.files[0];
                     if (file) parseCSVFile(file);
                   }}
@@ -1379,7 +1386,9 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
 
                 {importStatus.msg && (
                   <div className={`mt-3 p-2.5 rounded-lg text-[13px] flex items-center gap-2 border ${
-                    importStatus.type === "ok" ? "bg-green-50 text-green-800 border-green-300" : "bg-red-50 text-red-800 border-red-300"
+                    importStatus.type === "ok"
+                      ? "bg-green-50 text-green-800 border-green-300 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800"
+                      : "bg-red-50 text-red-800 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
                   }`}>
                     {importStatus.msg}
                   </div>
@@ -1432,7 +1441,7 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
                       { label: "RAG" }, { label: "Progress %" }, { label: "Notes" },
                     ].map(f => (
                       <span key={f.label} className={`px-2.5 py-0.5 rounded-full border text-xs font-semibold ${
-                        f.req ? "border-blue-400 text-blue-600 bg-blue-50" : "border-border text-muted-foreground"
+                        f.req ? "border-blue-400 text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30" : "border-border text-muted-foreground"
                       }`}>{f.label}</span>
                     ))}
                   </div>

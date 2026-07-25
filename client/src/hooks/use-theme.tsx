@@ -10,16 +10,24 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
+const STORAGE_KEY = "jiganto-theme";
+
 function getSystemTheme(): "light" | "dark" {
   if (typeof window === "undefined") return "light";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+/** Storage throws in private mode and when cookies are blocked, which would take the whole app down. */
+function readStoredTheme(): Theme | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY) as Theme | null;
+  } catch {
+    return null;
+  }
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    const saved = localStorage.getItem("jiganto-theme") as Theme | null;
-    return saved || "light";
-  });
+  const [theme, setThemeState] = useState<Theme>(() => readStoredTheme() || "light");
 
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {
     if (theme === "system") return getSystemTheme();
@@ -58,7 +66,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
-    localStorage.setItem("jiganto-theme", newTheme);
+    try {
+      localStorage.setItem(STORAGE_KEY, newTheme);
+    } catch {
+      /* non-persistent session — keep the in-memory theme */
+    }
   };
 
   return (

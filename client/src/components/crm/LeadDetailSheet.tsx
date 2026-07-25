@@ -15,9 +15,9 @@ export type { CrmLead };
 
 function DetailRow({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="grid grid-cols-[120px_1fr] gap-3 py-2.5 border-b border-[#e6e9ef] last:border-0 items-start">
-      <span className="text-[13px] text-[#676879] shrink-0 pt-0.5">{label}</span>
-      <span className="text-[14px] font-medium text-[#323338] break-words min-h-[20px]">
+    <div className="grid grid-cols-[120px_1fr] gap-3 py-2.5 border-b border-[#e6e9ef] dark:border-border last:border-0 items-start">
+      <span className="text-[13px] text-[#676879] dark:text-muted-foreground shrink-0 pt-0.5">{label}</span>
+      <span className="text-[14px] font-medium text-[#323338] dark:text-foreground break-words min-h-[20px]">
         {value?.trim() || "—"}
       </span>
     </div>
@@ -60,11 +60,11 @@ export function LeadDetailSheet({
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent
         className={cn(
-          "w-full sm:max-w-md overflow-y-auto p-0 border-l border-[#d0d4e4]",
+          "w-full sm:max-w-md overflow-y-auto p-0 border-l border-[#d0d4e4] dark:border-border",
           "[&>button]:hidden",
         )}
       >
-        <div className="px-5 pt-4 pb-4 border-b border-[#d0d4e4] bg-white sticky top-0 z-10">
+        <div className="px-5 pt-4 pb-4 border-b border-[#d0d4e4] dark:border-border bg-white dark:bg-card sticky top-0 z-10">
           <SheetHeader className="text-left space-y-3">
             <div className="flex items-start gap-3">
               <div
@@ -74,10 +74,10 @@ export function LeadDetailSheet({
                 {companyInitials}
               </div>
               <div className="min-w-0 flex-1">
-                <SheetTitle className="text-[18px] font-medium leading-tight text-[#323338]">
+                <SheetTitle className="text-[18px] font-medium leading-tight text-[#323338] dark:text-foreground">
                   {companyName}
                 </SheetTitle>
-                <SheetDescription className="mt-0.5 text-[13px] text-[#676879]">
+                <SheetDescription className="mt-0.5 text-[13px] text-[#676879] dark:text-muted-foreground">
                   {lead.firstName} {lead.lastName}
                   {lead.title ? ` · ${lead.title}` : ""}
                 </SheetDescription>
@@ -85,7 +85,7 @@ export function LeadDetailSheet({
               <button
                 type="button"
                 onClick={onClose}
-                className="h-8 w-8 rounded-[4px] flex items-center justify-center text-[#676879] hover:bg-[#dcdfec]/60 shrink-0"
+                className="h-8 w-8 rounded-[4px] flex items-center justify-center text-[#676879] dark:text-muted-foreground hover:bg-[#dcdfec]/60 dark:hover:bg-muted shrink-0"
                 aria-label="Close"
               >
                 <X className="h-4 w-4" />
@@ -95,7 +95,7 @@ export function LeadDetailSheet({
               {statusLabel}
               {temperatureLabel}
               {lead.rating && (
-                <span className="text-[12px] font-medium min-h-[22px] px-2 rounded-[4px] bg-[#f5f6f8] text-[#323338] capitalize inline-flex items-center">
+                <span className="text-[12px] font-medium min-h-[22px] px-2 rounded-[4px] bg-[#f5f6f8] dark:bg-muted text-[#323338] dark:text-foreground capitalize inline-flex items-center">
                   {lead.rating}
                 </span>
               )}
@@ -106,7 +106,7 @@ export function LeadDetailSheet({
                 variant="outline"
                 onClick={() => onEdit(lead)}
                 data-testid="button-edit-lead-sheet"
-                className="h-8 border-[#c5c7d0] text-[#323338] hover:bg-[#dcdfec]/60"
+                className="h-8 border-[#c5c7d0] dark:border-border text-[#323338] dark:text-foreground hover:bg-[#dcdfec]/60 dark:hover:bg-muted"
               >
                 <Pencil className="h-3.5 w-3.5 mr-1" />
                 Edit
@@ -126,7 +126,7 @@ export function LeadDetailSheet({
         </div>
 
         <div className="px-5 py-3">
-          <p className="text-[12px] font-medium text-[#676879] uppercase tracking-wide mb-1">Columns</p>
+          <p className="text-[12px] font-medium text-[#676879] dark:text-muted-foreground uppercase tracking-wide mb-1">Columns</p>
           <DetailRow label="Email" value={lead.email} />
           <DetailRow label="Phone" value={lead.phone} />
           <DetailRow label="Company" value={lead.company} />

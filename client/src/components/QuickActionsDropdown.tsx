@@ -45,7 +45,7 @@ function ShortcutBadge({ hotkey }: { hotkey: string }) {
     return (
       <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
         <kbd style={kbdStyle}>{prefix.toUpperCase()}</kbd>
-        <span style={{ fontSize: 10, color: "#9C9890" }}>then</span>
+        <span style={{ fontSize: 10, color: "hsl(var(--muted-foreground))" }}>then</span>
         <kbd style={kbdStyle}>{key.toUpperCase()}</kbd>
       </div>
     );
@@ -56,11 +56,11 @@ function ShortcutBadge({ hotkey }: { hotkey: string }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
         <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
-          <span style={{ fontSize: 9, color: "#9C9890" }}>Win</span>
+          <span style={{ fontSize: 9, color: "hsl(var(--muted-foreground))" }}>Win</span>
           <kbd style={kbdStyle}>Ctrl+{rest}</kbd>
         </div>
         <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
-          <span style={{ fontSize: 9, color: "#9C9890" }}>Mac</span>
+          <span style={{ fontSize: 9, color: "hsl(var(--muted-foreground))" }}>Mac</span>
           <kbd style={kbdStyle}>⌘{rest}</kbd>
         </div>
       </div>
@@ -72,7 +72,8 @@ function ShortcutBadge({ hotkey }: { hotkey: string }) {
 const kbdStyle: React.CSSProperties = {
   display: "inline-flex", alignItems: "center", justifyContent: "center",
   padding: "1px 5px", borderRadius: 4, fontSize: 10, fontFamily: "monospace",
-  background: "#F2F0EB", border: "1px solid #DDD9D0", color: "#2E2C28",
+  background: "hsl(var(--muted))", border: "1px solid hsl(var(--border))",
+  color: "hsl(var(--foreground))",
   fontWeight: 600, lineHeight: 1.5,
 };
 
@@ -123,12 +124,12 @@ export function QuickActionsDropdown() {
         <div style={{ padding: "8px 0 4px" }}>
           <div style={{
             padding: "3px 14px 6px", fontSize: 10, fontWeight: 700,
-            textTransform: "uppercase", letterSpacing: ".09em", color: "#9C9890",
+            textTransform: "uppercase", letterSpacing: ".09em", color: "hsl(var(--muted-foreground))",
             display: "flex", alignItems: "center", gap: 6,
           }}>
             <LayoutDashboard style={{ width: 10, height: 10 }} />
             Navigate to
-            <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "#CBC7BC" }}>
+            <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "hsl(var(--muted-foreground) / 0.7)" }}>
               · press G then a letter
             </span>
           </div>
@@ -144,7 +145,7 @@ export function QuickActionsDropdown() {
                 <div className="flex items-center gap-2.5">
                   <div style={{
                     width: 26, height: 26, borderRadius: 6,
-                    background: "#F2F0EB", display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "hsl(var(--muted))", display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
                     <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                   </div>
@@ -162,12 +163,12 @@ export function QuickActionsDropdown() {
         {createActions.length > 0 && <div style={{ padding: "4px 0 8px" }}>
           <div style={{
             padding: "3px 14px 6px", fontSize: 10, fontWeight: 700,
-            textTransform: "uppercase", letterSpacing: ".09em", color: "#9C9890",
+            textTransform: "uppercase", letterSpacing: ".09em", color: "hsl(var(--muted-foreground))",
             display: "flex", alignItems: "center", gap: 6,
           }}>
             <Plus style={{ width: 10, height: 10 }} />
             Create new
-            <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "#CBC7BC" }}>
+            <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "hsl(var(--muted-foreground) / 0.7)" }}>
               · press N then a letter
             </span>
           </div>
@@ -183,9 +184,9 @@ export function QuickActionsDropdown() {
                 <div className="flex items-center gap-2.5">
                   <div style={{
                     width: 26, height: 26, borderRadius: 6,
-                    background: "#E4F2EE", display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "hsl(var(--status-green))", display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
-                    <Icon className="h-3.5 w-3.5" style={{ color: "#1A6B5A" }} />
+                    <Icon className="h-3.5 w-3.5" style={{ color: "hsl(var(--status-green-foreground))" }} />
                   </div>
                   <span className="text-sm font-medium">{action.name}</span>
                 </div>
@@ -199,7 +200,7 @@ export function QuickActionsDropdown() {
 
         {/* Shortcut reference footer */}
         <div style={{ padding: "8px 14px 10px" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "#9C9890", marginBottom: 6 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "hsl(var(--muted-foreground))", marginBottom: 6 }}>
             Keyboard reference
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 12px" }}>
@@ -210,14 +211,14 @@ export function QuickActionsDropdown() {
               { label: "Search all", win: "Ctrl+/", mac: "⌘/" },
             ].map(row => (
               <div key={row.label} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ fontSize: 10, color: "#5C5952", fontWeight: 500 }}>{row.label}</span>
+                <span style={{ fontSize: 10, color: "hsl(var(--muted-foreground))", fontWeight: 500 }}>{row.label}</span>
                 <div style={{ display: "flex", gap: 4 }}>
                   <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
-                    <span style={{ fontSize: 9, color: "#9C9890" }}>Win</span>
+                    <span style={{ fontSize: 9, color: "hsl(var(--muted-foreground))" }}>Win</span>
                     <kbd style={kbdStyle}>{row.win}</kbd>
                   </div>
                   <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
-                    <span style={{ fontSize: 9, color: "#9C9890" }}>Mac</span>
+                    <span style={{ fontSize: 9, color: "hsl(var(--muted-foreground))" }}>Mac</span>
                     <kbd style={kbdStyle}>{row.mac}</kbd>
                   </div>
                 </div>

@@ -89,8 +89,8 @@ export function PollCard({ pollId }: { pollId: number }) {
               disabled={!canClick}
               className={cn(
                 "w-full text-left rounded-lg border px-3 py-2 text-sm transition-all relative overflow-hidden",
-                canClick ? "hover:border-indigo-500 hover:bg-indigo-50 cursor-pointer" : "cursor-default",
-                isMyVote ? "border-indigo-500 bg-indigo-100 font-medium" : "border-border bg-background",
+                canClick ? "hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 cursor-pointer" : "cursor-default",
+                isMyVote ? "border-indigo-500 bg-indigo-100 dark:bg-indigo-950/40 font-medium" : "border-border bg-background",
               )}
               data-testid={`poll-option-${pollId}-${i}`}
             >
@@ -98,7 +98,7 @@ export function PollCard({ pollId }: { pollId: number }) {
                 <div
                   className={cn(
                     "absolute inset-y-0 left-0 rounded-lg transition-all duration-700",
-                    isMyVote ? "bg-indigo-100" : "bg-muted/60",
+                    isMyVote ? "bg-indigo-100 dark:bg-indigo-950/40" : "bg-muted/60",
                   )}
                   style={{ width: `${pct}%` }}
                 />

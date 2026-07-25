@@ -324,7 +324,7 @@ export function ContactFormDialog({
       {editing && (
         <>
           <CrmFormDivider />
-          <CrmFormSection icon={<Users className="h-3.5 w-3.5 text-violet-600" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Relationships">
+          <CrmFormSection icon={<Users className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Relationships">
             <p className="text-xs text-muted-foreground mb-3">
               Reporting lines and stakeholder links must stay within the same account.
             </p>

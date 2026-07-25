@@ -283,7 +283,7 @@ function RagPill({
 
 function HealthScore({ score }: { score: number | null | undefined }) {
   if (score == null) {
-    return <span className="inline-flex items-center justify-center w-8 h-8 rounded-full text-[10px] font-extrabold border-2 border-slate-200 text-slate-400">—</span>;
+    return <span className="inline-flex items-center justify-center w-8 h-8 rounded-full text-[10px] font-extrabold border-2 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500">—</span>;
   }
   const s = Math.max(0, Math.min(100, score));
   const tone = s >= 80 ? "border-green-500 text-green-700 bg-green-50 dark:bg-green-900/20 dark:text-green-300"
@@ -301,7 +301,7 @@ function ProgressBar({ value, completed }: { value: number; completed?: boolean 
   const fill = completed || clamped >= 100 ? "#0D9488" : clamped >= 80 ? "#059669" : clamped >= 40 ? "#D97706" : "#4338CA";
   return (
     <div className="flex items-center gap-1.5 min-w-[72px]">
-      <div className="h-[5px] w-[52px] bg-[#F1F5F9] rounded-[3px] overflow-hidden">
+      <div className="h-[5px] w-[52px] bg-[#F1F5F9] dark:bg-muted rounded-[3px] overflow-hidden">
         <div className="h-full rounded-[3px]" style={{ width: `${clamped}%`, backgroundColor: fill }} />
       </div>
       <span className="text-[10px] font-bold text-muted-foreground font-mono w-7">{clamped}%</span>
@@ -357,7 +357,7 @@ function TeamAvatars({ team }: { team?: LandingProject["team"] }) {
             key={m.id + i}
             title={label}
             className={cn(
-              "inline-flex h-5 w-5 items-center justify-center rounded-full border-2 border-white text-[8px] font-bold text-white",
+              "inline-flex h-5 w-5 items-center justify-center rounded-full border-2 border-white dark:border-card text-[8px] font-bold text-white",
               i > 0 && "-ml-1.5",
             )}
             style={{ backgroundColor: avatarColor(label) }}
@@ -367,7 +367,7 @@ function TeamAvatars({ team }: { team?: LandingProject["team"] }) {
         );
       })}
       {overflow > 0 && (
-        <span className="-ml-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-[#F1F5F9] text-[7px] font-extrabold text-[#64748B]">
+        <span className="-ml-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full border-2 border-white dark:border-card bg-[#F1F5F9] dark:bg-muted text-[7px] font-extrabold text-[#64748B] dark:text-muted-foreground">
           +{overflow}
         </span>
       )}
@@ -756,14 +756,14 @@ function ProjectCards({
           <div
             key={p.id}
             className={cn(
-              "overflow-hidden cursor-pointer rounded-xl border border-[#E2E8F0] bg-white dark:bg-card border-l-4 transition-all",
+              "overflow-hidden cursor-pointer rounded-xl border border-[#E2E8F0] dark:border-border bg-white dark:bg-card border-l-4 transition-all",
               "hover:border-[#818CF8] hover:shadow-[0_4px_16px_rgba(67,56,202,0.1)] hover:-translate-y-px",
               edge,
             )}
             onClick={() => onOpenWorkspace(p.id)}
             data-testid={`card-project-${p.id}`}
           >
-            <div className="px-4 py-3.5 border-b border-[#F1F5F9]">
+            <div className="px-4 py-3.5 border-b border-[#F1F5F9] dark:border-border">
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="min-w-0">
                   <div className="text-[13px] font-extrabold text-[#0F172A] dark:text-foreground leading-snug">{p.name}</div>
@@ -792,18 +792,18 @@ function ProjectCards({
               {p.endDate && (
                 <div className="flex items-center gap-1.5 text-[11px]">
                   <span className="text-[#94A3B8] min-w-[56px] font-semibold text-[10px]">Due</span>
-                  <span className="font-semibold text-[#334155] inline-flex items-center gap-1">
+                  <span className="font-semibold text-[#334155] dark:text-foreground inline-flex items-center gap-1">
                     <Calendar className="h-3 w-3" /> {formatDate(p.endDate)}
                   </span>
                 </div>
               )}
             </div>
-            <div className="px-4 py-2.5 bg-[#F1F5F9] dark:bg-muted/40 border-t border-[#F1F5F9] flex items-center gap-2 flex-wrap">
+            <div className="px-4 py-2.5 bg-[#F1F5F9] dark:bg-muted/40 border-t border-[#F1F5F9] dark:border-border flex items-center gap-2 flex-wrap">
               <RagPill rag={p.financialRag} dimension="budget" />
               <RagPill rag={p.scheduleRag} dimension="schedule" />
               <RagPill rag={p.ragStatus} dimension="scope" />
             </div>
-            <div className="px-4 py-2.5 border-t border-[#F1F5F9] flex items-center justify-between gap-2">
+            <div className="px-4 py-2.5 border-t border-[#F1F5F9] dark:border-border flex items-center justify-between gap-2">
               <TeamAvatars team={p.team} />
               <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                 <Button
@@ -872,7 +872,7 @@ function ProjectKanbanCard({
         }
       }}
       className={cn(
-        "w-full rounded-lg border border-[#E2E8F0] bg-white dark:bg-card p-3 text-left transition-all",
+        "w-full rounded-lg border border-[#E2E8F0] dark:border-border bg-white dark:bg-card p-3 text-left transition-all",
         "hover:border-[#818CF8] hover:shadow-[0_2px_8px_rgba(67,56,202,0.08)] cursor-grab active:cursor-grabbing",
         isDragging && "opacity-90 shadow-lg ring-2 ring-[#4338CA]/25",
         project.attention && "border-l-4 border-l-red-500",
@@ -885,7 +885,7 @@ function ProjectKanbanCard({
         </span>
         <div className="flex-1 min-w-0">
           <div className="text-[12px] font-bold text-[#0F172A] dark:text-foreground leading-snug mb-1.5">{project.name}</div>
-          <div className="flex flex-col gap-[3px] text-[10px] text-[#64748B]">
+          <div className="flex flex-col gap-[3px] text-[10px] text-[#64748B] dark:text-muted-foreground">
             <span><TypeBadge type={project.workType || project.projectType} /></span>
             <span className="mt-0.5">👤 {lead || "Unassigned"}</span>
             <span>🏢 {project.customer || "—"}</span>
@@ -937,7 +937,7 @@ function ProjectKanban({
           id: col.status,
           title: col.title,
           accentColor: col.color,
-          className: "min-w-0 bg-[#F1F5F9] rounded-xl overflow-hidden",
+          className: "min-w-0 bg-[#F1F5F9] dark:bg-muted/40 rounded-xl overflow-hidden",
           header: (
             <div
               className="px-3 pt-3 pb-2.5 shrink-0"

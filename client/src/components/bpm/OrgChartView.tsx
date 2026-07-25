@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useMemo, useEffect, memo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/hooks/use-theme";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -745,6 +746,7 @@ function OrgChartEditorInner({
   onBack: () => void;
 }) {
   const { toast } = useToast();
+  const { resolvedTheme } = useTheme();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const edgeReconnectSuccessful = useRef(true);
   const { fitView } = useReactFlow();
@@ -1735,14 +1737,16 @@ function OrgChartEditorInner({
               nodesDraggable={!presentationMode}
               nodesConnectable={!presentationMode}
               elementsSelectable={!presentationMode}
+              colorMode={resolvedTheme}
               className="bg-background"
             >
-              <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-              <Controls />
+              <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="hsl(var(--muted-foreground) / 0.2)" />
+              <Controls className="!bg-card !border !shadow-sm" />
               <MiniMap
                 nodeStrokeColor="hsl(var(--border))"
                 nodeColor="hsl(var(--card))"
                 maskColor="hsl(var(--background) / 0.7)"
+                className="!bg-card !border !shadow-sm"
               />
             </ReactFlow>
             {contextMenu && (

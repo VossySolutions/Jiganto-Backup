@@ -35,6 +35,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import { nodeTypes, NODE_DEFAULTS, BpmAttrVisibilityProvider, NodeUpdateProvider, SequenceNumberProvider, DiagramNavigateProvider, type PointerPosition } from "@/components/bpm/BpmNodeTypes";
 import BpmTableView, { generateCsvTemplate, generateBlankTemplate, parseCsvContent, buildDiagramFromRows, nodesToRows, type ParsedProcessRow } from "@/components/bpm/BpmTableView";
@@ -1426,6 +1427,7 @@ function CanvasEditorInner({
   onNavigateToDiagram?: (diagramId: number) => void;
 }) {
   const { toast } = useToast();
+  const { resolvedTheme } = useTheme();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
 
@@ -2608,6 +2610,7 @@ function CanvasEditorInner({
               selectionOnDrag
               panOnDrag={[1]}
               deleteKeyCode={["Backspace", "Delete"]}
+              colorMode={resolvedTheme}
               className="bg-background"
               data-testid="canvas-react-flow"
             >

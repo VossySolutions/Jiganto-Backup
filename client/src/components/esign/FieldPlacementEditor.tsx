@@ -127,7 +127,7 @@ export function FieldPlacementEditor({ signers, fields, onChange, pdfPreviewUrl 
       )}
 
       {!pdfPreviewUrl && fields.length > 0 && (
-        <p className={cn("text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2")}>
+        <p className={cn("text-xs text-amber-700 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-2")}>
           Upload a PDF in step 1 to preview field positions.
         </p>
       )}

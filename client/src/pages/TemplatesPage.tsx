@@ -155,7 +155,7 @@ function TemplateCard({
             {moduleLabel(template.module)}
           </Badge>
           {template.isAiGenerated && (
-            <Badge variant="outline" className="text-[10px] border-violet-300 text-violet-600">AI</Badge>
+            <Badge variant="outline" className="text-[10px] border-violet-300 text-violet-600 dark:text-violet-300">AI</Badge>
           )}
         </div>
         <p className="text-xs text-muted-foreground line-clamp-2 flex-1">
@@ -922,7 +922,7 @@ export default function TemplatesPage() {
         testId="ai-generate-dialog"
         saveTestId="ai-generate-submit"
       >
-        <FormSection icon={<Sparkles className="h-3.5 w-3.5 text-violet-600" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="AI generation">
+        <FormSection icon={<Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="AI generation">
           <div className="space-y-1.5 mb-3.5">
             <FieldLabel>Module</FieldLabel>
             <Select value={aiModule} onValueChange={setAiModule}>

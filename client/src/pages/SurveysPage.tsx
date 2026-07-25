@@ -880,7 +880,7 @@ function NewSurveyWizard({ onClose, onCreated }: { onClose: () => void; onCreate
                   {aiGenerating ? "✨ Generating…" : "✨ Generate Questions"}
                 </button>
               </div>
-              {aiError && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12, padding: "8px 12px", background: "#fef2f2", borderRadius: 8 }}>{aiError}</div>}
+              {aiError && <div style={{ color: "hsl(var(--status-red-foreground))", fontSize: 13, marginBottom: 12, padding: "8px 12px", background: "hsl(var(--status-red))", borderRadius: 8 }}>{aiError}</div>}
               {aiGenerating && (
                 <div style={{ padding: "24px 0", textAlign: "center" as const, color: C.ink3 }}>
                   <div style={{ fontSize: 28, marginBottom: 8, animation: "spin 1.5s linear infinite" }}>✨</div>
@@ -1067,7 +1067,7 @@ function ResponseModal({ response, survey, idx, total, onNav, onClose }: {
                     })}
                   </div>
                 ) : (
-                  <div style={{ fontSize: 13, background: C.tealL, border: `1px solid #b0d9ce`, borderRadius: 8, padding: "9px 13px", color: C.teal, fontWeight: 500 }}>{display}</div>
+                  <div style={{ fontSize: 13, background: C.tealL, border: `1px solid ${C.tealM}`, borderRadius: 8, padding: "9px 13px", color: C.teal, fontWeight: 500 }}>{display}</div>
                 )}
               </div>
             );
@@ -1818,7 +1818,7 @@ export default function SurveysPage() {
                   <>
                     <button onClick={() => setShareModal(activeSurvey)} style={btnSecondary}>🔗 Share</button>
                     <button onClick={() => openBuilder(activeSurvey)} style={btnSecondary}>✏ Edit</button>
-                    <button onClick={() => closeMut.mutate(activeSurvey.id)} style={{ ...btnGhost, color: C.rose, borderColor: "#f0b8b8" }}>Close</button>
+                    <button onClick={() => closeMut.mutate(activeSurvey.id)} style={{ ...btnGhost, color: C.rose, borderColor: C.rose }}>Close</button>
                   </>
                 )}
                 {safeResponses.length > 0 && (
@@ -1986,7 +1986,7 @@ export default function SurveysPage() {
                         <button onClick={() => setShareModal(activeSurvey)} style={{ ...btnSecondary, justifyContent: "flex-start" }}>🔗 Share survey link</button>
                       )}
                       {activeSurvey.status === "active" && (
-                        <button onClick={() => closeMut.mutate(activeSurvey.id)} style={{ ...btnGhost, justifyContent: "flex-start", color: C.rose, borderColor: "#f0b8b8" }}>⬛ Close survey</button>
+                        <button onClick={() => closeMut.mutate(activeSurvey.id)} style={{ ...btnGhost, justifyContent: "flex-start", color: C.rose, borderColor: C.rose }}>⬛ Close survey</button>
                       )}
                     </div>
                   </div>

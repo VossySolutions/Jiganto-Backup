@@ -499,7 +499,7 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
         size="lg"
         testId="invoice-create-dialog"
       >
-        <FormSection icon={<FileText className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Invoice details">
+        <FormSection icon={<FileText className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Invoice details">
           <FieldGrid className="mb-3.5">
             <div className="space-y-1.5">
               <FieldLabel required>Project</FieldLabel>
@@ -667,7 +667,7 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
         disabled={!paymentAmount}
         testId="invoice-payment-dialog"
       >
-        <FormSection icon={<FileText className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Payment details">
+        <FormSection icon={<FileText className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Payment details">
           <FieldGrid>
             <div className="space-y-1.5">
               <FieldLabel>Payment date</FieldLabel>

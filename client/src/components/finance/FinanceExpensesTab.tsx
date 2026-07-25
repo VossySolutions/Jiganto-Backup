@@ -487,7 +487,7 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
         disabled={!formName || !formProjectId || !hasValidLines}
         testId="expense-create-dialog"
       >
-        <FormSection icon={<Receipt className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Report details">
+        <FormSection icon={<Receipt className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Report details">
           <div className="space-y-1.5 mb-3.5">
             <FieldLabel required>Report name</FieldLabel>
             <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g. Client visit — March" />

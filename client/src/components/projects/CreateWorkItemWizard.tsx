@@ -530,12 +530,12 @@ function FormSection({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-[#E2E8F0] bg-white dark:bg-card overflow-hidden mb-3.5">
-      <div className="flex items-center gap-3 px-[18px] py-[13px] border-b border-[#F1F5F9] bg-[#F1F5F9] dark:bg-muted/40">
+    <div className="rounded-xl border border-[#E2E8F0] dark:border-border bg-white dark:bg-card overflow-hidden mb-3.5">
+      <div className="flex items-center gap-3 px-[18px] py-[13px] border-b border-[#F1F5F9] dark:border-border bg-[#F1F5F9] dark:bg-muted/40">
         <div className={cn("h-[34px] w-[34px] rounded-lg flex items-center justify-center text-base shrink-0", iconClass)}>{icon}</div>
         <div>
           <div className="text-[13px] font-extrabold">{title}</div>
-          <div className="text-[11px] text-[#64748B] mt-0.5">{subtitle}</div>
+          <div className="text-[11px] text-[#64748B] dark:text-muted-foreground mt-0.5">{subtitle}</div>
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 px-[18px] py-[18px]">{children}</div>
@@ -647,9 +647,9 @@ function ChipInput({
   return (
     <div className="rounded-lg border border-[#818CF8] bg-white dark:bg-card min-h-[38px] px-2.5 py-1.5 flex flex-wrap items-center gap-1.5">
       {values.map((v) => (
-        <span key={v} className="inline-flex items-center gap-1 rounded-full bg-[#CCFBF1] text-[#0F766E] px-2.5 py-0.5 text-[11px] font-bold">
+        <span key={v} className="inline-flex items-center gap-1 rounded-full bg-[#CCFBF1] dark:bg-teal-950/50 text-[#0F766E] dark:text-teal-200 px-2.5 py-0.5 text-[11px] font-bold">
           {v}
-          <button type="button" className="text-[#0D9488] font-extrabold" onClick={() => onChange(values.filter((x) => x !== v))}>✕</button>
+          <button type="button" className="text-[#0D9488] dark:text-teal-300 font-extrabold" onClick={() => onChange(values.filter((x) => x !== v))}>✕</button>
         </span>
       ))}
       <Input
@@ -1543,13 +1543,13 @@ function normalizeSelectedTools(ids: string[]): string[] {
                 </div>
                 <div className="space-y-1 md:col-span-2">
                   <FieldLabel>Team members</FieldLabel>
-                  <div className="rounded-lg border border-[#E2E8F0] p-2.5 space-y-2 bg-white dark:bg-card">
+                  <div className="rounded-lg border border-[#E2E8F0] dark:border-border p-2.5 space-y-2 bg-white dark:bg-card">
                     {wizardData.teamMemberIds.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pb-1.5 border-b border-[#F1F5F9]">
+                      <div className="flex flex-wrap gap-1.5 pb-1.5 border-b border-[#F1F5F9] dark:border-border">
                         {wizardData.teamMemberIds.map((id) => {
                           const label = userLabel(id);
                           return (
-                            <span key={id} className="inline-flex items-center gap-1.5 rounded-full bg-[#EEF2FF] border border-[#818CF8] px-2.5 py-0.5 text-[11px] font-bold text-[#1E1B4B]">
+                            <span key={id} className="inline-flex items-center gap-1.5 rounded-full bg-[#EEF2FF] dark:bg-indigo-950/50 border border-[#818CF8] px-2.5 py-0.5 text-[11px] font-bold text-[#1E1B4B] dark:text-indigo-200">
                               <span
                                 className="h-4 w-4 rounded-full text-[7px] font-bold text-white flex items-center justify-center"
                                 style={{ backgroundColor: chipColor(label) }}
@@ -1818,7 +1818,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                       className={cn(
                         "relative text-center rounded-xl border-2 p-3.5 bg-white dark:bg-card transition-colors",
                         selected && "border-[#4338CA] bg-[#EEF2FF] dark:bg-indigo-950/30",
-                        !selected && !preset.custom && "border-[#E2E8F0] hover:border-[#818CF8]",
+                        !selected && !preset.custom && "border-[#E2E8F0] dark:border-border hover:border-[#818CF8]",
                         preset.custom && !selected && "border-violet-400 bg-violet-50/50 dark:bg-violet-950/20",
                         preset.custom && selected && "border-violet-600",
                         errors.methodologyId && !selected && "border-red-300",
@@ -1833,24 +1833,24 @@ function normalizeSelectedTools(ids: string[]): string[] {
                       )}
                       <div className="text-xl mb-1.5">{preset.icon}</div>
                       <div className={cn("text-[11px] font-extrabold", selected ? "text-[#1E1B4B] dark:text-indigo-200" : "text-foreground")}>{preset.name}</div>
-                      <div className="text-[9px] text-[#64748B] mt-1 leading-snug">{preset.desc}</div>
+                      <div className="text-[9px] text-[#64748B] dark:text-muted-foreground mt-1 leading-snug">{preset.desc}</div>
                       {preset.custom && <div className="mt-1.5 inline-block text-[8px] font-extrabold text-violet-800 bg-violet-100 dark:bg-violet-900/40 rounded px-1.5 py-0.5">+ Build your own</div>}
                     </button>
                   );
                 })}
               </div>
 
-              <div className="rounded-xl border border-[#E2E8F0] bg-white dark:bg-card p-5">
+              <div className="rounded-xl border border-[#E2E8F0] dark:border-border bg-white dark:bg-card p-5">
                 <div className="flex items-start justify-between gap-3 mb-4">
                   <div>
                     <div className="text-sm font-extrabold">Phases for {activePreset.name}</div>
-                    <div className="text-[11px] text-[#64748B] mt-0.5">Pre-configured by Jiganto · Add, remove or rename phases</div>
+                    <div className="text-[11px] text-[#64748B] dark:text-muted-foreground mt-0.5">Pre-configured by Jiganto · Add, remove or rename phases</div>
                   </div>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-8 text-[11px] font-bold border-[#818CF8] text-[#1E1B4B]"
+                    className="h-8 text-[11px] font-bold border-[#818CF8] text-[#1E1B4B] dark:text-indigo-200"
                     onClick={() => {
                       const el = document.querySelector("[data-testid='wizard-step-3-content']");
                       el?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1874,12 +1874,12 @@ function normalizeSelectedTools(ids: string[]): string[] {
                         <Input
                           value={phase.duration}
                           onChange={(e) => setPhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, duration: e.target.value } : p))}
-                          className="h-6 text-[9px] text-center border-0 bg-transparent p-0 text-[#64748B] shadow-none focus-visible:ring-0"
+                          className="h-6 text-[9px] text-center border-0 bg-transparent p-0 text-[#64748B] dark:text-muted-foreground shadow-none focus-visible:ring-0"
                         />
                         <div className="text-[9px] bg-[#4338CA] text-white rounded-full px-1.5 py-0.5 mt-1 inline-block font-bold">{phase.docs.length} docs</div>
                         <button
                           type="button"
-                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-white border text-[10px]"
+                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-white dark:bg-card border text-[10px]"
                           onClick={() => setPhases((prev) => prev.filter((p) => p.id !== phase.id))}
                         >✕</button>
                       </div>
@@ -1890,7 +1890,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                   ))}
                   <button
                     type="button"
-                    className="min-w-[90px] rounded-lg border border-dashed border-[#E2E8F0] text-[11px] font-bold text-[#64748B] px-2"
+                    className="min-w-[90px] rounded-lg border border-dashed border-[#E2E8F0] dark:border-border text-[11px] font-bold text-[#64748B] dark:text-muted-foreground px-2"
                     onClick={() => setPhases((prev) => [...prev, { id: uid(), name: "New phase", duration: "TBC", docs: [] }])}
                     data-testid="button-add-phase"
                   >
@@ -1899,19 +1899,19 @@ function normalizeSelectedTools(ids: string[]): string[] {
                 </div>
 
                 <div className="text-[13px] font-extrabold mb-1">Documentation template</div>
-                <div className="text-[11px] text-[#64748B] mb-3">Documents pre-configured by the methodology. Add or remove items. All documents appear in the project workspace once created.</div>
+                <div className="text-[11px] text-[#64748B] dark:text-muted-foreground mb-3">Documents pre-configured by the methodology. Add or remove items. All documents appear in the project workspace once created.</div>
                 <div className="space-y-2">
                   {docGroups.map((group) => (
                     <div key={group.label} className="rounded-lg bg-[#F1F5F9] dark:bg-muted/50 p-2.5 px-3.5">
-                      <div className="text-[10px] font-extrabold uppercase tracking-wide text-[#64748B] mb-1.5">{group.label}</div>
+                      <div className="text-[10px] font-extrabold uppercase tracking-wide text-[#64748B] dark:text-muted-foreground mb-1.5">{group.label}</div>
                       <div className="flex flex-wrap gap-1.5">
                         {group.phases.flatMap((phase) =>
                           phase.docs.map((doc) => (
                             <span
                               key={`${phase.id}-${doc.id}`}
                               className={cn(
-                                "inline-flex items-center gap-1 rounded-full bg-white dark:bg-background border border-[#E2E8F0] px-2.5 py-1 text-[11px] font-semibold",
-                                doc.optional && "border-dashed text-[#64748B]",
+                                "inline-flex items-center gap-1 rounded-full bg-white dark:bg-background border border-[#E2E8F0] dark:border-border px-2.5 py-1 text-[11px] font-semibold",
+                                doc.optional && "border-dashed text-[#64748B] dark:text-muted-foreground",
                               )}
                             >
                               📄 {doc.name}
@@ -1942,7 +1942,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                     </div>
                   ))}
                   {phases.length === 0 && (
-                    <p className="text-xs text-[#64748B]">No phases yet — add a phase or pick a methodology above.</p>
+                    <p className="text-xs text-[#64748B] dark:text-muted-foreground">No phases yet — add a phase or pick a methodology above.</p>
                   )}
                 </div>
 
@@ -1977,7 +1977,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                   <strong>{wizardData.selectedTools.length}</strong> currently selected
                 </div>
                 <Button size="sm" className="h-[30px] text-[11px] font-bold bg-[#4338CA] hover:bg-[#3730A3] text-white" onClick={acceptSuggested} data-testid="button-accept-suggested">✓ Accept all suggested</Button>
-                <Button size="sm" variant="outline" className="h-[30px] text-[11px] font-bold border-[#818CF8] text-[#1E1B4B]" onClick={clearTools} data-testid="button-clear-tools">Clear all</Button>
+                <Button size="sm" variant="outline" className="h-[30px] text-[11px] font-bold border-[#818CF8] text-[#1E1B4B] dark:text-indigo-200" onClick={clearTools} data-testid="button-clear-tools">Clear all</Button>
               </div>
 
               {Object.entries(TOOL_DEFINITIONS).map(([catKey, cat]) => {
@@ -2008,7 +2008,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                               always && "border-[#065F46] bg-[#D1FAE5] dark:bg-emerald-950/30",
                               !always && selected && "border-[#4338CA] bg-[#EEF2FF] dark:bg-indigo-950/30",
                               suggested && "border-[#818CF8] bg-[rgba(129,140,248,0.05)]",
-                              !always && !selected && !suggested && "border-[#E2E8F0] hover:bg-[#F8FAFC]",
+                              !always && !selected && !suggested && "border-[#E2E8F0] dark:border-border hover:bg-[#F8FAFC] dark:hover:bg-muted",
                               tool.crossModule && "border-dashed",
                             )}
                             onClick={() => toggleTool(tool.id)}
@@ -2020,12 +2020,12 @@ function normalizeSelectedTools(ids: string[]): string[] {
                               <span className="absolute top-2 right-2 h-4 w-4 rounded-full bg-[#4338CA] text-white flex items-center justify-center"><Check className="h-2.5 w-2.5" /></span>
                             )}
                             <div className="flex items-start gap-2.5">
-                              <ToolIcon className={cn("h-[18px] w-[18px] mt-0.5 shrink-0", selected ? "text-[#1E1B4B]" : "text-[#64748B]")} />
+                              <ToolIcon className={cn("h-[18px] w-[18px] mt-0.5 shrink-0", selected ? "text-[#1E1B4B] dark:text-indigo-200" : "text-[#64748B] dark:text-muted-foreground")} />
                               <div className="min-w-0 flex-1">
-                                <div className={cn("text-[12px] font-bold leading-snug", always ? "text-[#065F46]" : selected ? "text-[#1E1B4B] dark:text-indigo-200" : "text-foreground")}>
-                                  {tool.name}{always && <span className="text-[9px] text-[#065F46] ml-1">✓ Included</span>}
+                                <div className={cn("text-[12px] font-bold leading-snug", always ? "text-[#065F46] dark:text-emerald-200" : selected ? "text-[#1E1B4B] dark:text-indigo-200" : "text-foreground")}>
+                                  {tool.name}{always && <span className="text-[9px] text-[#065F46] dark:text-emerald-300 ml-1">✓ Included</span>}
                                 </div>
-                                <div className="text-[10px] text-[#64748B] mt-0.5 leading-snug">{tool.hint}</div>
+                                <div className="text-[10px] text-[#64748B] dark:text-muted-foreground mt-0.5 leading-snug">{tool.hint}</div>
                                 {tool.crossModule && <div className="text-[9px] font-bold text-[#94A3B8] mt-1">🔗 Data in: {tool.crossModule}</div>}
                               </div>
                             </div>

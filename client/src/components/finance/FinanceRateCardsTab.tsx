@@ -294,7 +294,7 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
             onRowClick={(card) => setExpandedId(expandedId === card.id ? null : card.id)}
             renderRowActions={(card) => (
               <>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40" onClick={(e) => { e.stopPropagation(); startEdit(card); }}>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40" onClick={(e) => { e.stopPropagation(); startEdit(card); }}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" onClick={(e) => { e.stopPropagation(); deleteCardMutation.mutate(card.id); }}>
@@ -389,7 +389,7 @@ export function FinanceRateCardsTab({ rateCards: rateCardsProp, isLoading: isLoa
         disabled={!formName.trim()}
         testId="rate-card-form-dialog"
       >
-        <FormSection icon={<CreditCard className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Rate card details">
+        <FormSection icon={<CreditCard className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Rate card details">
           <div className="space-y-1.5 mb-3.5">
             <FieldLabel required>Name</FieldLabel>
             <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="e.g. Standard consulting rates" />

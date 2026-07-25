@@ -172,6 +172,13 @@
   * {
     @apply border-border;
   }
+  /* Keeps native scrollbars, date pickers and form controls in step with the theme. */
+  :root {
+    color-scheme: light;
+  }
+  .dark {
+    color-scheme: dark;
+  }
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);

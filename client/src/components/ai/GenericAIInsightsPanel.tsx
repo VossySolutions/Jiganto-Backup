@@ -163,7 +163,7 @@ export function GenericAIInsightsPanel({
             {copy.tips.map((tip) => (
               <div key={tip.title} className="flex items-start gap-3 p-3 rounded-xl border bg-card">
                 <div className="h-8 w-8 rounded-md bg-violet-500/10 flex items-center justify-center shrink-0">
-                  <tip.icon className="h-4 w-4 text-violet-600" />
+                  <tip.icon className="h-4 w-4 text-violet-600 dark:text-violet-300" />
                 </div>
                 <div>
                   <p className="text-sm font-medium">{tip.title}</p>

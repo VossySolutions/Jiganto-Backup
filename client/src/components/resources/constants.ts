@@ -12,11 +12,11 @@ export const PROFICIENCY_LEVELS: ProficiencyConfig[] = SKILL_LEVELS.map((s) => (
   label: s.label,
   level: s.level,
   color:
-    s.level <= 1 ? "bg-slate-200 text-slate-700" :
-    s.level === 2 ? "bg-blue-100 text-blue-800" :
-    s.level === 3 ? "bg-emerald-100 text-emerald-800" :
-    s.level === 4 ? "bg-amber-100 text-amber-800" :
-    "bg-purple-100 text-purple-800",
+    s.level <= 1 ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200" :
+    s.level === 2 ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200" :
+    s.level === 3 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200" :
+    s.level === 4 ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200" :
+    "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200",
 }));
 
 /* ── PERSON TYPES ─────────────────────────────────────────────

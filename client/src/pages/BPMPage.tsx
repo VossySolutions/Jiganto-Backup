@@ -73,6 +73,7 @@ import { BpmDeltaReportTable } from "@/components/bpm/BpmDeltaReportTable";
 import { BpmTemplatePipeline } from "@/components/bpm/BpmTemplatePipeline";
 import { SaveAsPlatformTemplateDialog } from "@/components/templates/SaveAsPlatformTemplateDialog";
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/hooks/use-theme";
 import { BpmLoadingState, BpmCardGridSkeleton } from "@/components/bpm/BpmLoadingState";
 import { bpmFetchJson } from "@/lib/bpm-api";
 import { ModuleTrackingBoard } from "@/components/workspaces/ModuleTrackingBoard";
@@ -2173,6 +2174,7 @@ function applyCompareStyleToEdges(edges: any[], statuses: Map<string, CompareSta
 }
 
 function DiagramCompareView({ asIsId, toBeId, onBack }: { asIsId: number; toBeId: number; onBack: () => void }) {
+  const { resolvedTheme } = useTheme();
   const { data: asIsDiagram } = useQuery<BpmDiagram>({ queryKey: ["/api/bpm/diagrams", asIsId], staleTime: BPM_QUERY_STALE_MS });
   const { data: toBeDiagram } = useQuery<BpmDiagram>({ queryKey: ["/api/bpm/diagrams", toBeId], staleTime: BPM_QUERY_STALE_MS });
 
@@ -2259,11 +2261,13 @@ function DiagramCompareView({ asIsId, toBeId, onBack }: { asIsId: number; toBeId
                 panOnDrag
                 zoomOnScroll
                 fitView
+                colorMode={resolvedTheme}
                 proOptions={{ hideAttribution: true }}
+                className="bg-background"
                 data-testid="reactflow-as-is"
               >
-                <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-                <Controls showInteractive={false} />
+                <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="hsl(var(--muted-foreground) / 0.2)" />
+                <Controls showInteractive={false} className="!bg-card !border !shadow-sm" />
               </ReactFlow>
             </ReactFlowProvider>
           </div>
@@ -2284,11 +2288,13 @@ function DiagramCompareView({ asIsId, toBeId, onBack }: { asIsId: number; toBeId
                 panOnDrag
                 zoomOnScroll
                 fitView
+                colorMode={resolvedTheme}
                 proOptions={{ hideAttribution: true }}
+                className="bg-background"
                 data-testid="reactflow-to-be"
               >
-                <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-                <Controls showInteractive={false} />
+                <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="hsl(var(--muted-foreground) / 0.2)" />
+                <Controls showInteractive={false} className="!bg-card !border !shadow-sm" />
               </ReactFlow>
             </ReactFlowProvider>
           </div>
@@ -2348,6 +2354,7 @@ const BPM_PORTAL_TABS = ["library", "diagrams"] as const;
 
 function ProcessPortal() {
   const { user } = useAuth();
+  const { resolvedTheme } = useTheme();
   const [activeTab, setActiveTab] = useModuleTabUrl(BPM_PORTAL_TABS, "library");
   const [selectedLibrary, setSelectedLibrary] = useState<number | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
@@ -2852,11 +2859,13 @@ function ProcessPortal() {
               panOnDrag
               zoomOnScroll
               fitView
+              colorMode={resolvedTheme}
               proOptions={{ hideAttribution: true }}
+              className="bg-background"
               data-testid="reactflow-portal-viewer"
             >
-              <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-              <Controls showInteractive={false} />
+              <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="hsl(var(--muted-foreground) / 0.2)" />
+              <Controls showInteractive={false} className="!bg-card !border !shadow-sm" />
             </ReactFlow>
           </ReactFlowProvider>
         </div>

@@ -1242,7 +1242,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
                 }} data-testid="button-bulk-close">
                   <CheckCircle2 className="h-3 w-3" /> Close Items
                 </Button>
-                <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => {
+                <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => {
                   const n = ids.length;
                   if (!window.confirm(n === 1 ? "Archive this item?" : `Archive ${n} items?`)) return;
                   ids.forEach((id) => handleArchive(Number(id)));
@@ -1309,7 +1309,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
                     [1, 2, 3, 4, 5].map(imp => {
                       const score = p * imp;
                       const count = items.filter(i => !i.archived && i.score === score).length;
-                      const bg = score >= 15 ? "bg-red-400 text-white" : score >= 10 ? "bg-orange-400 text-white" : score >= 5 ? "bg-amber-200 text-amber-800" : "bg-green-100 text-green-700";
+                      const bg = score >= 15 ? "bg-red-400 text-white" : score >= 10 ? "bg-orange-400 text-white" : score >= 5 ? "bg-amber-200 text-amber-800 dark:bg-amber-700/60 dark:text-amber-100" : "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300";
                       return (
                         <div key={`${p}-${imp}`} className={`rounded flex items-center justify-center text-[11px] font-semibold cursor-pointer hover:opacity-80 transition-opacity ${bg}`} onClick={() => setStatFilter(`score_${score}`)} data-testid={`heatmap-cell-${p}-${imp}`}>
                           {count > 0 ? <span className="bg-white/80 dark:bg-card/80 text-gray-800 dark:text-gray-200 rounded-full w-[18px] h-[18px] flex items-center justify-center text-[9px] font-bold">{count}</span> : score}
@@ -1366,7 +1366,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
                   </button>
                 )}
                 {!drawerItem.archived ? (
-                  <button className="flex items-center gap-1 px-2.5 py-1 rounded text-[11.5px] font-medium border border-red-500/30 text-red-500 hover:bg-red-50" onClick={() => setArchiveTargetId(drawerItem.id)} data-testid="button-drawer-archive">
+                  <button className="flex items-center gap-1 px-2.5 py-1 rounded text-[11.5px] font-medium border border-red-500/30 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => setArchiveTargetId(drawerItem.id)} data-testid="button-drawer-archive">
                     <Archive className="w-3 h-3" /> Archive
                   </button>
                 ) : (

@@ -223,7 +223,7 @@ export function LeadExtrasPanel({
               className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
                 tab === t.id
-                  ? "bg-[#cce5ff] text-[#0073ea]"
+                  ? "bg-[#cce5ff] dark:bg-primary/25 text-[#0073ea] dark:text-primary"
                   : "text-muted-foreground hover:bg-muted",
               )}
               data-testid={`lead-extras-tab-${t.id}`}
@@ -293,7 +293,7 @@ export function LeadExtrasPanel({
             <div
               className={cn(
                 "rounded-xl border-2 border-dashed p-6 text-center transition-colors",
-                dragging ? "border-[#0073ea] bg-[#cce5ff]/40" : "border-border/60 bg-muted/10",
+                dragging ? "border-[#0073ea] bg-[#cce5ff]/40 dark:bg-primary/20" : "border-border/60 bg-muted/10",
               )}
               onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}

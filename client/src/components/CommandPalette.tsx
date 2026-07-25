@@ -28,7 +28,8 @@ const isMac = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(na
 const kbdStyle: React.CSSProperties = {
   display: "inline-flex", alignItems: "center", justifyContent: "center",
   padding: "1px 5px", borderRadius: 4, fontSize: 10, fontFamily: "monospace",
-  background: "#F2F0EB", border: "1px solid #DDD9D0", color: "#2E2C28",
+  background: "hsl(var(--muted))", border: "1px solid hsl(var(--border))",
+  color: "hsl(var(--foreground))",
   fontWeight: 600, lineHeight: 1.5, whiteSpace: "nowrap",
 };
 
@@ -40,7 +41,7 @@ function ShortcutDisplay({ hotkey }: { hotkey: string }) {
     return (
       <div style={{ display: "flex", gap: 3, alignItems: "center", flexShrink: 0 }}>
         <kbd style={kbdStyle}>{prefix.toUpperCase()}</kbd>
-        <span style={{ fontSize: 10, color: "#9C9890" }}>→</span>
+        <span style={{ fontSize: 10, color: "hsl(var(--muted-foreground))" }}>→</span>
         <kbd style={kbdStyle}>{key.toUpperCase()}</kbd>
       </div>
     );
@@ -53,11 +54,11 @@ function ShortcutDisplay({ hotkey }: { hotkey: string }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end", flexShrink: 0 }}>
         <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
-          <span style={{ fontSize: 9, color: "#9C9890" }}>Win</span>
+          <span style={{ fontSize: 9, color: "hsl(var(--muted-foreground))" }}>Win</span>
           <kbd style={kbdStyle}>{winLabel}</kbd>
         </div>
         <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
-          <span style={{ fontSize: 9, color: "#9C9890" }}>Mac</span>
+          <span style={{ fontSize: 9, color: "hsl(var(--muted-foreground))" }}>Mac</span>
           <kbd style={kbdStyle}>{macLabel}</kbd>
         </div>
       </div>
@@ -166,23 +167,23 @@ export function CommandPalette() {
         {!searchQuery && (
           <div style={{
             display: "flex", gap: 16, padding: "7px 14px",
-            background: "#F2F0EB", borderBottom: "1px solid #DDD9D0",
-            fontSize: 11, color: "#5C5952", alignItems: "center", flexWrap: "wrap",
+            background: "hsl(var(--muted))", borderBottom: "1px solid hsl(var(--border))",
+            fontSize: 11, color: "hsl(var(--muted-foreground))", alignItems: "center", flexWrap: "wrap",
           }}>
-            <span style={{ fontWeight: 600, color: "#2E2C28" }}>Shortcuts:</span>
+            <span style={{ fontWeight: 600, color: "hsl(var(--foreground))" }}>Shortcuts:</span>
             <span style={{ display: "flex", gap: 4, alignItems: "center" }}>
               <kbd style={kbdStyle}>G</kbd>
-              <span style={{ color: "#9C9890" }}>→</span>
+              <span style={{ color: "hsl(var(--muted-foreground))" }}>→</span>
               <kbd style={kbdStyle}>key</kbd>
               Navigate
             </span>
             <span style={{ display: "flex", gap: 4, alignItems: "center" }}>
               <kbd style={kbdStyle}>N</kbd>
-              <span style={{ color: "#9C9890" }}>→</span>
+              <span style={{ color: "hsl(var(--muted-foreground))" }}>→</span>
               <kbd style={kbdStyle}>key</kbd>
               Create new
             </span>
-            <span style={{ color: "#DDD9D0" }}>|</span>
+            <span style={{ color: "hsl(var(--border))" }}>|</span>
             <span style={{ display: "flex", gap: 4, alignItems: "center" }}>
               <kbd style={kbdStyle}>↑↓</kbd> navigate
               <kbd style={kbdStyle}>↵</kbd> select
@@ -202,7 +203,7 @@ export function CommandPalette() {
               <div key={group.category}>
                 <div style={{
                   padding: "4px 14px 5px", fontSize: 10, fontWeight: 700,
-                  textTransform: "uppercase", letterSpacing: ".09em", color: "#9C9890",
+                  textTransform: "uppercase", letterSpacing: ".09em", color: "hsl(var(--muted-foreground))",
                   display: "flex", alignItems: "center", gap: 5,
                 }}>
                   {categoryIcons[group.category]}
@@ -229,13 +230,17 @@ export function CommandPalette() {
                       {/* Icon */}
                       <div style={{
                         width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                        background: action.category === "create" ? "#E4F2EE" : "#F2F0EB",
-                        border: "1px solid #DDD9D0",
+                        background: action.category === "create"
+                          ? "hsl(var(--status-green))"
+                          : "hsl(var(--muted))",
+                        border: "1px solid hsl(var(--border))",
                         display: "flex", alignItems: "center", justifyContent: "center",
                       }}>
                         <Icon style={{
                           width: 15, height: 15,
-                          color: action.category === "create" ? "#1A6B5A" : "#5C5952",
+                          color: action.category === "create"
+                            ? "hsl(var(--status-green-foreground))"
+                            : "hsl(var(--muted-foreground))",
                         }} />
                       </div>
 
@@ -261,15 +266,19 @@ export function CommandPalette() {
                         title={action.pinned ? "Unpin from Quick Actions" : "Pin to Quick Actions"}
                         style={{
                           width: 22, height: 22, borderRadius: 5, flexShrink: 0,
-                          background: action.pinned ? "#FDF0E4" : "transparent",
-                          border: `1px solid ${action.pinned ? "#B85C0A" : "#DDD9D0"}`,
+                          background: action.pinned ? "hsl(var(--status-amber))" : "transparent",
+                          border: `1px solid ${
+                            action.pinned ? "hsl(var(--status-amber-foreground))" : "hsl(var(--border))"
+                          }`,
                           cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
                         }}
                       >
                         <Star style={{
                           width: 10, height: 10,
-                          color: action.pinned ? "#B85C0A" : "#9C9890",
-                          fill: action.pinned ? "#B85C0A" : "none",
+                          color: action.pinned
+                            ? "hsl(var(--status-amber-foreground))"
+                            : "hsl(var(--muted-foreground))",
+                          fill: action.pinned ? "hsl(var(--status-amber-foreground))" : "none",
                         }} />
                       </button>
                     </button>
@@ -282,10 +291,10 @@ export function CommandPalette() {
 
         {/* Footer: platform-specific reference */}
         <div style={{
-          borderTop: "1px solid #DDD9D0", padding: "8px 14px",
+          borderTop: "1px solid hsl(var(--border))", padding: "8px 14px",
           display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
-          <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#9C9890" }}>
+          <div style={{ display: "flex", gap: 12, fontSize: 11, color: "hsl(var(--muted-foreground))" }}>
             <span style={{ display: "flex", gap: 3, alignItems: "center" }}>
               <kbd style={kbdStyle}>↑↓</kbd> navigate
             </span>
@@ -296,7 +305,7 @@ export function CommandPalette() {
               <kbd style={kbdStyle}>Esc</kbd> close
             </span>
           </div>
-          <div style={{ display: "flex", gap: 6, fontSize: 10, color: "#9C9890", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 6, fontSize: 10, color: "hsl(var(--muted-foreground))", alignItems: "center" }}>
             <span>Click ★ to pin to Quick Actions</span>
           </div>
         </div>

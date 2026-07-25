@@ -361,7 +361,7 @@ export function NotificationBell() {
             <div className="flex items-center justify-between p-2 border-b">
               <h3 className="text-sm font-medium text-muted-foreground">Awaiting My Sign-off</h3>
               {pendingActionCount > 0 && (
-                <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">
+                <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800 text-[10px]">
                   {pendingActionCount} pending
                 </Badge>
               )}

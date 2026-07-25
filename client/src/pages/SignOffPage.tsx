@@ -892,7 +892,7 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
                 </button>
                 {canVoid && (
                   <button onClick={() => { setVoidTargetId(r.id); setVoidDialogOpen(true); }}
-                    className="px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-1.5">
+                    className="px-3 py-1.5 text-sm border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-1.5">
                     <Ban className="h-3.5 w-3.5" /> Void
                   </button>
                 )}
@@ -985,7 +985,7 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
                 )}
 
                 {r.message && (
-                  <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+                  <div className="mt-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-200">
                     <span className="font-medium">Message from sender:</span> {r.message}
                   </div>
                 )}
@@ -1113,7 +1113,7 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
                 </button>
                 {(r.status === "draft" || r.status === "pending") && (
                   <button onClick={() => handleDelete(r.id)} disabled={deleteMut.isPending}
-                    className="w-full py-2.5 text-sm border border-red-200 text-red-600 rounded-xl hover:bg-red-50 flex items-center justify-center gap-2 disabled:opacity-50">
+                    className="w-full py-2.5 text-sm border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center justify-center gap-2 disabled:opacity-50">
                     {deleteMut.isPending && deleteMut.variables === r.id ? <EsignButtonSpinner /> : <Trash2 className="h-4 w-4" />}
                     Delete Request
                   </button>
@@ -1287,13 +1287,13 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
                     <input ref={fileInputRef} type="file" accept={ACCEPT_UPLOAD} className="hidden" onChange={handleFileChange} />
                   </div>
                 ) : (
-                  <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-4">
+                  <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-5 flex items-center gap-4">
                     <div className="bg-green-100 dark:bg-green-900/30 rounded-lg p-3">{FILE_ICON[uploadedFile.type] || <FileText className="h-6 w-6 text-green-600 dark:text-green-400" />}</div>
                     <div className="flex-1">
-                      <div className="font-semibold text-green-800">{uploadedFile.name}</div>
-                      <div className="text-sm text-green-600">{uploadedFile.type.toUpperCase()} · Ready</div>
+                      <div className="font-semibold text-green-800 dark:text-green-200">{uploadedFile.name}</div>
+                      <div className="text-sm text-green-600 dark:text-green-400">{uploadedFile.type.toUpperCase()} · Ready</div>
                     </div>
-                    <button onClick={() => setUploadedFile(null)} className="text-green-600 hover:text-green-800"><X className="h-5 w-5" /></button>
+                    <button onClick={() => setUploadedFile(null)} className="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200"><X className="h-5 w-5" /></button>
                   </div>
                 )
               )}
@@ -1599,12 +1599,12 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
                       <div className="text-sm font-medium">{s.name}</div>
                       <div className="text-xs text-muted-foreground">{s.email}</div>
                     </div>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">Order {i + 1}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900 font-medium">Order {i + 1}</span>
                   </div>
                 ))}
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 flex items-start gap-2">
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-200 flex items-start gap-2">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>You're about to send sign-off emails to <strong>{signerList.length} signer{signerList.length !== 1 ? "s" : ""}</strong>. Each will receive a secure signing link.</span>
               </div>

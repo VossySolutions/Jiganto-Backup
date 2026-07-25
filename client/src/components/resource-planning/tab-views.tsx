@@ -265,8 +265,8 @@ export function HeatMapTab() {
       </RpTabToolbar>
       <div className="flex flex-wrap gap-3 mb-3 text-[11px]">
         {[
-          { c: "bg-emerald-100 border-emerald-500", l: "Available (0–49%)" },
-          { c: "bg-amber-100 border-amber-500", l: "Partially allocated (50–79%)" },
+          { c: "bg-emerald-100 border-emerald-500 dark:bg-emerald-900/30 dark:border-emerald-600", l: "Available (0–49%)" },
+          { c: "bg-amber-100 border-amber-500 dark:bg-amber-900/30 dark:border-amber-600", l: "Partially allocated (50–79%)" },
           { c: "bg-red-100 border-red-500 dark:bg-red-900/30 dark:border-red-600", l: "Fully allocated (80–100%)" },
           { c: "bg-muted border-border", l: "Leave / unavailable" },
           { c: "bg-blue-100 border-blue-400 border-dashed dark:bg-blue-900/30 dark:border-blue-600", l: "Soft booking (pipeline)" },
@@ -656,7 +656,7 @@ export function PipelineDemandTab({ onNavigate }: { onNavigate: TabNav }) {
               <div className="border-t pt-2">
                 {opp.roles.map((role) => (
                   <div key={role.role} className="flex items-center gap-2 text-[11px] py-0.5">
-                    <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[9px] font-bold shrink-0">{role.count}</span>
+                    <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 flex items-center justify-center text-[9px] font-bold shrink-0">{role.count}</span>
                     <span className="flex-1">{role.role}</span>
                     <RpStatusPill variant={role.availVariant as "destructive" | "success"}>{role.avail}</RpStatusPill>
                   </div>
@@ -682,7 +682,7 @@ export function PipelineDemandTab({ onNavigate }: { onNavigate: TabNav }) {
             <RpScenarioTabs options={["Expected", "Best Case", "Worst Case"]} value={scenarioLabel} onChange={(v) => setScenario(v === "Best Case" ? "best" : v === "Worst Case" ? "worst" : "expected")} className="w-full mb-3" />
             <div className="flex flex-col gap-2">
               {data.probabilityModel.map((m) => (
-                <div key={m.label} className={cn("flex justify-between p-2 rounded-md border-l-[3px]", m.severity === "critical" ? "border-red-500 bg-red-50/50" : m.severity === "warning" ? "border-amber-500 bg-amber-50/50" : "border-emerald-500 bg-emerald-50/50")}>
+                <div key={m.label} className={cn("flex justify-between p-2 rounded-md border-l-[3px]", m.severity === "critical" ? "border-red-500 bg-red-50/50 dark:bg-red-950/20" : m.severity === "warning" ? "border-amber-500 bg-amber-50/50 dark:bg-amber-950/20" : "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20")}>
                   <span className="text-xs font-bold">{m.label}</span>
                   <span className="text-sm font-extrabold">{m.value}</span>
                 </div>
@@ -994,7 +994,7 @@ export function ScenarioPlanningTab() {
         <RpSectionCard title={`Recommended Actions (${active})`}>
           <div className="flex flex-col gap-2.5">
             {(scenario?.actions ?? []).map((a) => (
-              <div key={a.title} className={cn("rounded-md border-l-[3px] p-2.5", a.severity === "critical" && "border-red-500 bg-red-50/50", a.severity === "warning" && "border-amber-500 bg-amber-50/50", a.severity === "info" && "border-blue-500 bg-blue-50/50", a.severity === "success" && "border-emerald-500 bg-emerald-50/50")}>
+              <div key={a.title} className={cn("rounded-md border-l-[3px] p-2.5", a.severity === "critical" && "border-red-500 bg-red-50/50 dark:bg-red-950/20", a.severity === "warning" && "border-amber-500 bg-amber-50/50 dark:bg-amber-950/20", a.severity === "info" && "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20", a.severity === "success" && "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20")}>
                 <p className="text-xs font-bold">{a.title}</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">{a.detail}</p>
               </div>

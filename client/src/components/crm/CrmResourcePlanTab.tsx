@@ -1862,7 +1862,7 @@ function TimelineView({ rows, weekStarts, monthGroups, onOpenPopover, onOpenBrea
                             className={cn("mx-0.5 my-0.5 h-7 rounded flex items-center justify-center text-[11px] font-bold font-mono transition-all cursor-pointer",
                               pc.bg, pc.text, "hover:brightness-90 hover:shadow-sm",
                               override !== undefined && "border-2 border-dashed opacity-80",
-                              daysVal === 0 && "!bg-slate-100 dark:!bg-slate-800 !text-slate-400 border-2 border-dashed border-slate-300"
+                              daysVal === 0 && "!bg-slate-100 dark:!bg-slate-800 !text-slate-400 border-2 border-dashed border-slate-300 dark:border-slate-600"
                             )}>
                             {daysVal === 0 ? "off" : `${daysVal}d`}
                           </button>

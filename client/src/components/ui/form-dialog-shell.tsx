@@ -30,7 +30,7 @@ const SIZE_CLASS: Record<FormDialogSize, string> = {
 };
 
 export const FORM_DIALOG_SHELL_CLASS =
-  "w-[calc(100vw-1.5rem)] max-h-[92vh] flex flex-col gap-0 overflow-hidden p-0 border border-[#d0d4e4] shadow-[0_6px_20px_rgba(0,0,0,0.14)] rounded-[8px] bg-white [&>button.absolute]:hidden";
+  "w-[calc(100vw-1.5rem)] max-h-[92vh] flex flex-col gap-0 overflow-hidden p-0 border border-[#d0d4e4] dark:border-border shadow-[0_6px_20px_rgba(0,0,0,0.14)] dark:shadow-[0_6px_20px_rgba(0,0,0,0.5)] rounded-[8px] bg-white dark:bg-card [&>button.absolute]:hidden";
 
 type FormDialogShellProps = {
   open: boolean;
@@ -140,7 +140,7 @@ export function FormDialogViewShell({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 max-h-[74vh]">{children}</div>
         {footer ? (
-          <div className="px-6 py-3.5 border-t border-[#d0d4e4] bg-[#f5f6f8] rounded-b-lg shrink-0">
+          <div className="px-6 py-3.5 border-t border-[#d0d4e4] dark:border-border bg-[#f5f6f8] dark:bg-muted/40 rounded-b-lg shrink-0">
             {footer}
           </div>
         ) : null}

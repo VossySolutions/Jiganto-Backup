@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, type CSSProperties } from "react";
 import {
   Bar,
   BarChart,
@@ -48,6 +48,15 @@ export type BoardViewItem = {
 };
 
 const CHART_COLORS = ["#0073ea", "#00c875", "#fdab3d", "#e2445c", "#a25ddc", "#579bfc", "#c4c4c4", "#0086c0"];
+
+/** Recharts renders the tooltip with inline light-only styles, so re-map it onto theme tokens. */
+const CHART_TOOLTIP_STYLE: CSSProperties = {
+  backgroundColor: "hsl(var(--popover))",
+  borderColor: "hsl(var(--border))",
+  borderRadius: 8,
+  color: "hsl(var(--popover-foreground))",
+  fontSize: 12,
+};
 const STATUS_FALLBACK_COLORS = [
   "bg-[#0073ea] text-white",
   "bg-[#00c875] text-white",
@@ -561,10 +570,23 @@ function BoardChartView({ items, entityLabel }: GenericViewsProps) {
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#d0d4e4" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="name"
+                  className="text-muted-foreground"
+                  stroke="currentColor"
+                  tick={{ fontSize: 11, fill: "currentColor" }}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  className="text-muted-foreground"
+                  stroke="currentColor"
+                  tick={{ fontSize: 11, fill: "currentColor" }}
+                />
+                <Tooltip
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                  cursor={{ fill: "hsl(var(--muted) / 0.4)" }}
+                />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                   {data.map((_, i) => (
                     <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
@@ -581,7 +603,10 @@ function BoardChartView({ items, entityLabel }: GenericViewsProps) {
                     <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                  cursor={{ fill: "hsl(var(--muted) / 0.4)" }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>

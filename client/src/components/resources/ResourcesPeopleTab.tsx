@@ -821,7 +821,7 @@ export function ResourcesPeopleTab({
 
         <FormDivider />
 
-        <FormSection icon={<Clock className="h-3.5 w-3.5 text-violet-600" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Dates & notes">
+        <FormSection icon={<Clock className="h-3.5 w-3.5 text-violet-600 dark:text-violet-300" />} iconClassName="bg-violet-50 dark:bg-violet-950/40" title="Dates & notes">
           <FieldGrid className="mb-3.5">
             <div className="space-y-1.5"><FieldLabel>Start date</FieldLabel><Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
             <div className="space-y-1.5"><FieldLabel>End / expiry date</FieldLabel><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></div>

@@ -1729,7 +1729,7 @@ function KanbanView<T extends { id: number | string }>({
 }) {
   const statusColumn = columns.find(c => c.id === statusField || c.type === "status");
   const statusOptions = statusColumn?.options || [
-    { value: "not_started", label: "Not Started", color: "bg-slate-200" },
+    { value: "not_started", label: "Not Started", color: "bg-slate-200 dark:bg-slate-700" },
     { value: "in_progress", label: "In Progress", color: "bg-status-blue" },
     { value: "complete", label: "Complete", color: "bg-status-green" },
   ];
