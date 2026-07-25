@@ -115,25 +115,40 @@ function writeTabOrder(entityType: string, ids: number[]) {
   }
 }
 
+/** Normalize API / blob sorts ({field,dir} or {columnId,direction}) to BoardSortRule. */
+function normalizeSorts(raw: unknown): BoardSortRule[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((s) => {
+      const row = s as {
+        field?: string;
+        columnId?: string;
+        dir?: string;
+        direction?: string;
+      };
+      const field = row.field || row.columnId;
+      if (!field) return null;
+      const dir = (row.dir || row.direction || "desc") === "asc" ? "asc" : "desc";
+      return { field, dir } as BoardSortRule;
+    })
+    .filter(Boolean) as BoardSortRule[];
+}
+
 function snapshotFromSavedView(view: SavedView): BoardViewSnapshot {
   const decoded = decodeBoardViewFilters(view.filters);
-  const sortsFromCol = Array.isArray(view.sorts)
-    ? (view.sorts as { columnId?: string; field?: string; direction?: string; dir?: string }[]).map(
-        (s) => ({
-          field: s.field || s.columnId || "created",
-          dir: (s.dir || s.direction || "desc") as "asc" | "desc",
-        }),
-      )
-    : [];
+  const sorts =
+    normalizeSorts(decoded.sorts).length > 0
+      ? normalizeSorts(decoded.sorts)
+      : normalizeSorts(view.sorts);
   const columns = Array.isArray(view.columns)
     ? (view.columns as BoardViewSnapshot["columns"])
     : [];
   return {
     filters: decoded.rules as BoardFilterRule[],
-    sorts: decoded.sorts.length ? decoded.sorts : sortsFromCol,
+    sorts,
     columns,
-    viewMode: decoded.viewMode,
-    groupBy: decoded.groupBy,
+    viewMode: decoded.viewMode || "table",
+    groupBy: decoded.groupBy || "none",
   };
 }
 
@@ -143,7 +158,7 @@ function buildPayload(
   snapshot: BoardViewSnapshot,
   isDefault: boolean,
 ) {
-  const sorts = snapshot.sorts || [];
+  const sorts = normalizeSorts(snapshot.sorts || []);
   return {
     entityType,
     name: name.trim(),
@@ -153,7 +168,8 @@ function buildPayload(
       groupBy: snapshot.groupBy || "none",
       sorts,
     }),
-    sorts: sorts.map((s) => ({ columnId: s.field, direction: s.dir })),
+    // Keep field/dir so decode + snapshotKey stay stable (avoid autosave loops).
+    sorts: sorts.map((s) => ({ field: s.field, dir: s.dir, columnId: s.field, direction: s.dir })),
     columns: snapshot.columns || [],
     isDefault,
     isShared: false,
@@ -162,9 +178,9 @@ function buildPayload(
 
 function snapshotKey(snapshot: BoardViewSnapshot) {
   return JSON.stringify({
-    filters: snapshot.filters,
-    sorts: snapshot.sorts,
-    columns: snapshot.columns,
+    filters: snapshot.filters || [],
+    sorts: normalizeSorts(snapshot.sorts || []),
+    columns: snapshot.columns || [],
     viewMode: snapshot.viewMode || "table",
     groupBy: snapshot.groupBy || "none",
   });
@@ -193,15 +209,17 @@ export function BoardSavedViewTabs({
   const [tabOrder, setTabOrder] = useState<number[]>(() => readTabOrder(entityType));
   const [dragTabId, setDragTabId] = useState<number | null>(null);
   const [dragOverTabId, setDragOverTabId] = useState<number | null>(null);
+  const [autosaving, setAutosaving] = useState(false);
   const { toast } = useToast();
   const defaultAppliedRef = useRef(false);
-  const applyingRef = useRef(false);
-  const skipAutosaveRef = useRef(false);
+  const skipAutosaveUntilRef = useRef(0);
+  const lastSavedKeyRef = useRef<string>("");
   const listUrl = `${apiBase}?entityType=${entityType}`;
 
-  const { data: savedViews = [], isLoading: viewsLoading, isFetching: viewsFetching } = useQuery<SavedView[]>({
-    queryKey: [listUrl],
-  });
+  const { data: savedViews = [], isLoading: viewsLoading, isError: viewsError, refetch: refetchViews } =
+    useQuery<SavedView[]>({
+      queryKey: [listUrl],
+    });
 
   const orderedViews = useMemo(() => {
     if (!savedViews.length) return [];
@@ -225,6 +243,7 @@ export function BoardSavedViewTabs({
     setTabOrder(readTabOrder(entityType));
     defaultAppliedRef.current = false;
     setActiveId(null);
+    lastSavedKeyRef.current = "";
   }, [entityType]);
 
   useEffect(() => {
@@ -242,16 +261,9 @@ export function BoardSavedViewTabs({
 
   const applySnapshot = useCallback(
     (snapshot: BoardViewSnapshot) => {
-      applyingRef.current = true;
-      skipAutosaveRef.current = true;
+      skipAutosaveUntilRef.current = Date.now() + 400;
+      lastSavedKeyRef.current = snapshotKey(snapshot);
       onApply(snapshot);
-      // Allow React to flush applied state before autosave watches `current`
-      requestAnimationFrame(() => {
-        applyingRef.current = false;
-        setTimeout(() => {
-          skipAutosaveRef.current = false;
-        }, 50);
-      });
     },
     [onApply],
   );
@@ -265,7 +277,16 @@ export function BoardSavedViewTabs({
     applySnapshot(snapshotFromSavedView(def));
   }, [savedViews, applySnapshot]);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: [listUrl] });
+  const patchCache = (view: SavedView) => {
+    queryClient.setQueryData<SavedView[]>([listUrl], (old) => {
+      if (!Array.isArray(old)) return old;
+      const idx = old.findIndex((v) => v.id === view.id);
+      if (idx < 0) return [...old, view];
+      const next = [...old];
+      next[idx] = { ...old[idx], ...view };
+      return next;
+    });
+  };
 
   const createMutation = useMutation({
     mutationFn: async (payload: ReturnType<typeof buildPayload>) => {
@@ -273,11 +294,8 @@ export function BoardSavedViewTabs({
       return (await res.json()) as SavedView;
     },
     onSuccess: (created) => {
-      invalidate();
-      setCreateOpen(false);
-      setName("");
-      setIsDefault(false);
       if (created?.id) {
+        patchCache(created);
         setTabOrder((prev) => {
           const next = [...prev.filter((id) => id !== created.id), created.id];
           writeTabOrder(entityType, next);
@@ -286,24 +304,58 @@ export function BoardSavedViewTabs({
         setActiveId(created.id);
         applySnapshot(snapshotFromSavedView(created));
       }
+      setCreateOpen(false);
+      setName("");
+      setIsDefault(false);
       toast({ title: "Tab created" });
     },
     onError: () => toast({ title: "Failed to create tab", variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, body }: { id: number; body: Record<string, unknown> }) => {
+    mutationFn: async ({
+      id,
+      body,
+      mode,
+    }: {
+      id: number;
+      body: Record<string, unknown>;
+      mode: "autosave" | "rename";
+    }) => {
       const res = await apiRequest("PUT", `${apiBase}/${id}`, body);
-      return (await res.json()) as SavedView;
+      const updated = (await res.json()) as SavedView;
+      return { updated, mode };
     },
-    onSuccess: () => invalidate(),
-    onError: () => toast({ title: "Failed to update tab", variant: "destructive" }),
+    onMutate: ({ mode }) => {
+      if (mode === "autosave") setAutosaving(true);
+    },
+    onSuccess: ({ updated, mode }) => {
+      patchCache(updated);
+      if (mode === "rename") {
+        setRenameOpen(false);
+        setRenameId(null);
+        toast({ title: "Tab renamed" });
+      } else {
+        lastSavedKeyRef.current = snapshotKey(snapshotFromSavedView(updated));
+      }
+    },
+    onError: (_err, vars) => {
+      toast({
+        title: vars.mode === "rename" ? "Failed to rename tab" : "Failed to save tab",
+        variant: "destructive",
+      });
+    },
+    onSettled: (_data, _err, vars) => {
+      if (vars.mode === "autosave") setAutosaving(false);
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `${apiBase}/${id}`),
     onSuccess: (_, id) => {
-      invalidate();
+      queryClient.setQueryData<SavedView[]>([listUrl], (old) =>
+        Array.isArray(old) ? old.filter((v) => v.id !== id) : old,
+      );
       setTabOrder((prev) => {
         const next = prev.filter((x) => x !== id);
         writeTabOrder(entityType, next);
@@ -324,29 +376,38 @@ export function BoardSavedViewTabs({
     onError: () => toast({ title: "Failed to delete tab", variant: "destructive" }),
   });
 
+  // Blocking busy: only create / rename / delete — never autosave (that was locking the tab bar).
   const busyCreating = createMutation.isPending;
-  const busyUpdating = updateMutation.isPending;
+  const busyRenaming = updateMutation.isPending && updateMutation.variables?.mode === "rename";
   const busyDeleting = deleteMutation.isPending;
-  const tabsBusy = busyCreating || busyUpdating || busyDeleting;
+  const tabsBusy = busyCreating || busyRenaming || busyDeleting;
 
   // Infinity: preferences on the active tab persist when you change filter/sort/view/etc.
   useEffect(() => {
-    if (activeId == null || skipAutosaveRef.current || applyingRef.current) return;
+    if (activeId == null) return;
+    if (Date.now() < skipAutosaveUntilRef.current) return;
+    if (updateMutation.isPending || createMutation.isPending) return;
+
     const view = savedViews.find((v) => v.id === activeId);
     if (!view) return;
+
     const nextKey = snapshotKey(current);
-    const prevKey = snapshotKey(snapshotFromSavedView(view));
-    if (nextKey === prevKey) return;
+    const baseline =
+      lastSavedKeyRef.current || snapshotKey(snapshotFromSavedView(view));
+    if (nextKey === baseline) return;
 
     const timer = window.setTimeout(() => {
-      if (skipAutosaveRef.current || applyingRef.current) return;
+      if (Date.now() < skipAutosaveUntilRef.current) return;
+      if (updateMutation.isPending) return;
+      lastSavedKeyRef.current = nextKey;
       updateMutation.mutate({
         id: activeId,
         body: buildPayload(entityType, view.name, current, !!view.isDefault),
+        mode: "autosave",
       });
     }, 700);
     return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to current/activeId
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, activeId, entityType, savedViews]);
 
   const openCreate = (mode: BoardViewMode) => {
@@ -361,7 +422,7 @@ export function BoardSavedViewTabs({
       toast({ title: "Enter a tab name", variant: "destructive" });
       return;
     }
-    // New tab starts from master data (no filters) with the chosen view type — Infinity behaviour.
+    if (busyCreating) return;
     const snapshot: BoardViewSnapshot = {
       filters: [],
       sorts: mainTableSorts,
@@ -383,23 +444,18 @@ export function BoardSavedViewTabs({
       toast({ title: "Enter a tab name", variant: "destructive" });
       return;
     }
-    updateMutation.mutate(
-      { id: renameId, body: { name: renameName.trim() } },
-      {
-        onSuccess: () => {
-          setRenameOpen(false);
-          setRenameId(null);
-          toast({ title: "Tab renamed" });
-        },
-      },
-    );
+    if (busyRenaming) return;
+    updateMutation.mutate({
+      id: renameId,
+      body: { name: renameName.trim() },
+      mode: "rename",
+    });
   };
 
   const duplicateView = (view: SavedView) => {
+    if (tabsBusy) return;
     const snap = snapshotFromSavedView(view);
-    createMutation.mutate(
-      buildPayload(entityType, `${view.name} copy`, snap, false),
-    );
+    createMutation.mutate(buildPayload(entityType, `${view.name} copy`, snap, false));
   };
 
   const reorderTabs = (fromId: number, toId: number) => {
@@ -422,7 +478,7 @@ export function BoardSavedViewTabs({
       <div
         className="flex items-center gap-0.5 overflow-x-auto border-b border-border pb-0"
         data-testid="board-saved-view-tabs"
-        aria-busy={viewsLoading || tabsBusy || undefined}
+        aria-busy={viewsLoading || tabsBusy || autosaving || undefined}
       >
         <button
           type="button"
@@ -431,6 +487,7 @@ export function BoardSavedViewTabs({
             activeId === null
               ? "border-primary text-primary"
               : "border-transparent text-muted-foreground hover:text-foreground",
+            tabsBusy && "opacity-60",
           )}
           disabled={tabsBusy}
           onClick={() => {
@@ -456,122 +513,138 @@ export function BoardSavedViewTabs({
           >
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Loading views…
-            <span className="inline-flex gap-1.5 ml-1">
+            <span className="inline-flex gap-1.5 ml-1" aria-hidden>
               <span className="h-5 w-16 rounded bg-muted animate-pulse" />
               <span className="h-5 w-14 rounded bg-muted animate-pulse" />
             </span>
           </div>
+        ) : viewsError ? (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 h-8 px-2 text-[12px] text-destructive hover:underline"
+            onClick={() => refetchViews()}
+            data-testid="board-view-tabs-retry"
+          >
+            Failed to load views — Retry
+          </button>
         ) : (
           orderedViews.map((view) => {
-          const snap = snapshotFromSavedView(view);
-          const mode = (snap.viewMode as BoardViewMode) || "table";
-          const Icon = VIEW_ICONS[mode] || Table2;
-          const isActive = activeId === view.id;
-          return (
-            <div
-              key={view.id}
-              draggable={!tabsBusy}
-              onDragStart={(e) => {
-                if (tabsBusy) return;
-                setDragTabId(view.id);
-                e.dataTransfer.effectAllowed = "move";
-                e.dataTransfer.setData("text/plain", String(view.id));
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                if (dragTabId != null && dragTabId !== view.id) setDragOverTabId(view.id);
-              }}
-              onDragLeave={() => {
-                if (dragOverTabId === view.id) setDragOverTabId(null);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                const from = Number(e.dataTransfer.getData("text/plain") || dragTabId);
-                if (Number.isFinite(from)) reorderTabs(from, view.id);
-                setDragTabId(null);
-                setDragOverTabId(null);
-              }}
-              onDragEnd={() => {
-                setDragTabId(null);
-                setDragOverTabId(null);
-              }}
-              className={cn(
-                "group inline-flex items-center gap-0.5 h-8 border-b-2 -mb-px whitespace-nowrap",
-                isActive ? "border-primary" : "border-transparent",
-                dragOverTabId === view.id && "bg-primary/10",
-                dragTabId === view.id && "opacity-50",
-                tabsBusy && "opacity-70",
-              )}
-            >
-              <GripVertical className="h-3 w-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 cursor-grab shrink-0 ml-0.5" />
-              <button
-                type="button"
-                className={cn(
-                  "inline-flex items-center gap-1.5 px-1.5 text-[13px] font-medium",
-                  isActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
-                )}
-                disabled={tabsBusy}
-                onClick={() => {
-                  setActiveId(view.id);
-                  applySnapshot(snap);
+            const snap = snapshotFromSavedView(view);
+            const mode = (snap.viewMode as BoardViewMode) || "table";
+            const Icon = VIEW_ICONS[mode] || Table2;
+            const isActive = activeId === view.id;
+            return (
+              <div
+                key={view.id}
+                draggable={!tabsBusy}
+                onDragStart={(e) => {
+                  if (tabsBusy) return;
+                  setDragTabId(view.id);
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData("text/plain", String(view.id));
                 }}
-                data-testid={`board-view-tab-${view.id}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (dragTabId != null && dragTabId !== view.id) setDragOverTabId(view.id);
+                }}
+                onDragLeave={() => {
+                  if (dragOverTabId === view.id) setDragOverTabId(null);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const from = Number(e.dataTransfer.getData("text/plain") || dragTabId);
+                  if (Number.isFinite(from)) reorderTabs(from, view.id);
+                  setDragTabId(null);
+                  setDragOverTabId(null);
+                }}
+                onDragEnd={() => {
+                  setDragTabId(null);
+                  setDragOverTabId(null);
+                }}
+                className={cn(
+                  "group inline-flex items-center gap-0.5 h-8 border-b-2 -mb-px whitespace-nowrap",
+                  isActive ? "border-primary" : "border-transparent",
+                  dragOverTabId === view.id && "bg-primary/10",
+                  dragTabId === view.id && "opacity-50",
+                )}
               >
-                <Icon className="h-3.5 w-3.5 opacity-70" />
-                {view.name}
-              </button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    disabled={tabsBusy}
-                    className="opacity-0 group-hover:opacity-100 h-5 w-5 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-muted mr-0.5 disabled:opacity-40"
-                    title="Tab options"
-                    data-testid={`board-view-tab-menu-${view.id}`}
-                  >
-                    <MoreHorizontal className="h-3.5 w-3.5" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-40">
-                  <DropdownMenuItem className="gap-2" disabled={tabsBusy} onClick={() => openRename(view)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                    Rename
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="gap-2" disabled={tabsBusy} onClick={() => duplicateView(view)}>
-                    {busyCreating ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Copy className="h-3.5 w-3.5" />
-                    )}
-                    Duplicate
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="gap-2 text-destructive focus:text-destructive"
-                    disabled={tabsBusy}
-                    onClick={() => deleteMutation.mutate(view.id)}
-                  >
-                    {busyDeleting ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3.5 w-3.5" />
-                    )}
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          );
-        })
+                <GripVertical className="h-3 w-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 cursor-grab shrink-0 ml-0.5" />
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-1.5 text-[13px] font-medium",
+                    isActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
+                  )}
+                  disabled={tabsBusy}
+                  onClick={() => {
+                    setActiveId(view.id);
+                    applySnapshot(snap);
+                  }}
+                  data-testid={`board-view-tab-${view.id}`}
+                >
+                  <Icon className="h-3.5 w-3.5 opacity-70" />
+                  {view.name}
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={tabsBusy}
+                      className="opacity-0 group-hover:opacity-100 h-5 w-5 inline-flex items-center justify-center rounded text-muted-foreground hover:bg-muted mr-0.5 disabled:opacity-40"
+                      title="Tab options"
+                      data-testid={`board-view-tab-menu-${view.id}`}
+                    >
+                      <MoreHorizontal className="h-3.5 w-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-40">
+                    <DropdownMenuItem
+                      className="gap-2"
+                      disabled={tabsBusy}
+                      onClick={() => openRename(view)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="gap-2"
+                      disabled={tabsBusy}
+                      onClick={() => duplicateView(view)}
+                    >
+                      {busyCreating ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                      Duplicate
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="gap-2 text-destructive focus:text-destructive"
+                      disabled={tabsBusy}
+                      onClick={() => deleteMutation.mutate(view.id)}
+                    >
+                      {busyDeleting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            );
+          })
         )}
 
-        {(busyUpdating || (viewsFetching && !viewsLoading)) && (
+        {autosaving && (
           <span
             className="inline-flex items-center gap-1 h-8 px-2 text-[11px] text-muted-foreground whitespace-nowrap"
             data-testid="board-view-tabs-saving"
           >
             <Loader2 className="h-3 w-3 animate-spin" />
-            {busyUpdating ? "Saving…" : "Updating…"}
+            Saving…
           </span>
         )}
 
@@ -614,18 +687,18 @@ export function BoardSavedViewTabs({
       <FormDialogShell
         open={createOpen}
         onOpenChange={(open) => {
-          if (createMutation.isPending) return;
+          if (busyCreating) return;
           setCreateOpen(open);
         }}
         title="New tab"
         subtitle={`Creates a ${VIEW_LABELS[createViewMode] || createViewMode} tab on the master table`}
-        saveLabel="Create"
+        saveLabel={busyCreating ? "Creating…" : "Create"}
         onCancel={() => {
-          if (createMutation.isPending) return;
+          if (busyCreating) return;
           setCreateOpen(false);
         }}
         onSubmit={submitCreate}
-        saving={createMutation.isPending}
+        saving={busyCreating}
         disabled={!name.trim()}
         size="sm"
         saveTestId="button-confirm-save-view-tab"
@@ -638,14 +711,20 @@ export function BoardSavedViewTabs({
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. High priority"
               autoFocus
+              disabled={busyCreating}
               data-testid="input-view-tab-name"
             />
           </div>
           <div className="text-[12px] text-muted-foreground">
-            View type: <span className="font-medium text-foreground">{VIEW_LABELS[createViewMode]}</span>
+            View type:{" "}
+            <span className="font-medium text-foreground">{VIEW_LABELS[createViewMode]}</span>
           </div>
           <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={isDefault} onCheckedChange={(v) => setIsDefault(v === true)} />
+            <Checkbox
+              checked={isDefault}
+              disabled={busyCreating}
+              onCheckedChange={(v) => setIsDefault(v === true)}
+            />
             Set as default
           </label>
         </div>
@@ -653,12 +732,18 @@ export function BoardSavedViewTabs({
 
       <FormDialogShell
         open={renameOpen}
-        onOpenChange={setRenameOpen}
+        onOpenChange={(open) => {
+          if (busyRenaming) return;
+          setRenameOpen(open);
+        }}
         title="Rename tab"
-        saveLabel="Save"
-        onCancel={() => setRenameOpen(false)}
+        saveLabel={busyRenaming ? "Saving…" : "Save"}
+        onCancel={() => {
+          if (busyRenaming) return;
+          setRenameOpen(false);
+        }}
         onSubmit={submitRename}
-        saving={updateMutation.isPending}
+        saving={busyRenaming}
         disabled={!renameName.trim()}
         size="sm"
         saveTestId="button-confirm-rename-view-tab"
@@ -669,6 +754,7 @@ export function BoardSavedViewTabs({
             value={renameName}
             onChange={(e) => setRenameName(e.target.value)}
             autoFocus
+            disabled={busyRenaming}
             data-testid="input-rename-view-tab"
           />
         </div>

@@ -237,7 +237,11 @@ export function CrmFormFooter({
           className="h-8 px-3 text-[13px] font-medium bg-[#0073ea] hover:bg-[#0060b9] text-white shadow-none"
           data-testid={saveTestId}
         >
-          {saving ? "Saving…" : saveLabel}
+          {saving
+            ? /\b(Creating|Saving|Updating|Deleting|Renaming)…?$/i.test(saveLabel)
+              ? saveLabel
+              : "Saving…"
+            : saveLabel}
         </Button>
       </div>
     </div>
