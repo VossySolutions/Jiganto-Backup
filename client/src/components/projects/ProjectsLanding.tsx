@@ -498,47 +498,45 @@ function ProjectTable({
       // drill-down on the left (rename via Edit / detail panel).
       editable: false,
       render: (p) => (
-        <div className="flex items-start gap-2 min-w-0 w-full">
-          <span className={cn("mt-2 h-1.5 w-1.5 rounded-full shrink-0", STATUS_COLORS[normalizeStatus(p.status)]?.dot || "bg-slate-400")} />
+        <div className="flex items-center gap-2 min-w-0 w-full">
+          <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", STATUS_COLORS[normalizeStatus(p.status)]?.dot || "bg-slate-400")} />
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <button
-                type="button"
-                className="min-w-0 text-left rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenWorkspace(p.id);
-                }}
-                title="Open project workspace"
-                data-testid={`link-open-project-${p.id}`}
-              >
-                <span className="block font-semibold truncate text-sm text-primary hover:underline underline-offset-2">
-                  {p.name}
-                </span>
-              </button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-6 shrink-0 px-1.5 text-[10px] font-semibold gap-0.5 text-primary border-primary/30 hover:bg-primary/10 hover:text-primary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenWorkspace(p.id);
-                }}
-                title="Open project workspace"
-                data-testid={`button-open-project-name-${p.id}`}
-              >
-                Open
-                <ArrowRight className="h-3 w-3" />
-              </Button>
-            </div>
-            {p.code && <p className="truncate text-xs text-muted-foreground font-mono">{p.code}</p>}
+            <button
+              type="button"
+              className="min-w-0 max-w-full text-left rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenWorkspace(p.id);
+              }}
+              title="Open project workspace"
+              data-testid={`link-open-project-${p.id}`}
+            >
+              <span className="block font-semibold truncate text-sm text-primary hover:underline underline-offset-2">
+                {p.name}
+              </span>
+            </button>
+            {p.code && <p className="truncate text-xs text-muted-foreground font-mono leading-tight">{p.code}</p>}
             {p.attention && (
               <p className="inline-flex items-center gap-1 mt-0.5 text-[10px] font-bold text-red-700">
                 <AlertTriangle className="h-2.5 w-2.5" /> Needs attention
               </p>
             )}
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 shrink-0 px-2 text-[10px] font-semibold gap-0.5 text-primary border-primary/30 hover:bg-primary/10 hover:text-primary"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenWorkspace(p.id);
+            }}
+            title="Open project workspace"
+            data-testid={`button-open-project-name-${p.id}`}
+          >
+            Open
+            <ArrowRight className="h-3 w-3" />
+          </Button>
         </div>
       ),
     },
