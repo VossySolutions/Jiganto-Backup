@@ -1,7 +1,7 @@
 import { escapeHtml, openReportPrintWindow, ragBadge } from "@/lib/report-print";
 
 /** Minimal shape needed for print — avoids circular imports with the React component. */
-export type WeeklyPrintDraft = {
+type WeeklyPrintDraft = {
   weekCommencing: string;
   status: string;
   progressPct: number;

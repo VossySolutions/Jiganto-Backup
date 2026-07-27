@@ -18,12 +18,11 @@ import { printWeeklyStatusReport } from "@/lib/print-weekly-status";
 type Rag = "green" | "amber" | "red" | "blue";
 type VariantId = "standard" | "expanded" | "exec" | "financial" | "agile";
 
-export type WeeklyStatusReport = {
+type WeeklyStatusReport = {
   id: string;
   title?: string;
   weekCommencing: string;
   status: "draft" | "submitted";
-  author?: string;
   summary?: string;
   date?: string;
   overallRag: Rag;
@@ -156,7 +155,6 @@ function emptyReport(project: any, raidd: any[], milestones: any[]): WeeklyStatu
     weekCommencing: wc,
     status: "draft",
     date: new Date().toISOString().slice(0, 10),
-    author: "Current User",
     summary: "",
     overallRag: overall,
     lastWeekOverallRag: "green",
@@ -300,7 +298,6 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
         title: r.title,
         summary: r.summary,
         date: r.date,
-        author: r.author,
         commentary: r.summary || "",
         weekCommencing: r.date || mondayOf(),
         status: "submitted" as const,

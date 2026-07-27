@@ -492,14 +492,46 @@ function ProjectTable({
       header: "Project name",
       type: "text",
       accessor: "name",
-      width: "240px",
+      width: "300px",
       sticky: pinFirstColumn,
-      editable: true,
+      // Not inline-editable: cell clicks stop row navigation, and users need a clear
+      // drill-down on the left (rename via Edit / detail panel).
+      editable: false,
       render: (p) => (
-        <div className="flex items-start gap-2.5 min-w-0">
-          <span className={cn("mt-1.5 h-1.5 w-1.5 rounded-full shrink-0", STATUS_COLORS[normalizeStatus(p.status)]?.dot || "bg-slate-400")} />
-          <div className="min-w-0">
-            <p className="font-semibold truncate text-sm">{p.name}</p>
+        <div className="flex items-start gap-2 min-w-0 w-full">
+          <span className={cn("mt-2 h-1.5 w-1.5 rounded-full shrink-0", STATUS_COLORS[normalizeStatus(p.status)]?.dot || "bg-slate-400")} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <button
+                type="button"
+                className="min-w-0 text-left rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenWorkspace(p.id);
+                }}
+                title="Open project workspace"
+                data-testid={`link-open-project-${p.id}`}
+              >
+                <span className="block font-semibold truncate text-sm text-primary hover:underline underline-offset-2">
+                  {p.name}
+                </span>
+              </button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-6 shrink-0 px-1.5 text-[10px] font-semibold gap-0.5 text-primary border-primary/30 hover:bg-primary/10 hover:text-primary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenWorkspace(p.id);
+                }}
+                title="Open project workspace"
+                data-testid={`button-open-project-name-${p.id}`}
+              >
+                Open
+                <ArrowRight className="h-3 w-3" />
+              </Button>
+            </div>
             {p.code && <p className="truncate text-xs text-muted-foreground font-mono">{p.code}</p>}
             {p.attention && (
               <p className="inline-flex items-center gap-1 mt-0.5 text-[10px] font-bold text-red-700">
@@ -668,7 +700,7 @@ function ProjectTable({
       editable: false,
       render: (p) => <HealthScore score={p.healthScore} />,
     },
-  ], [visible, pinFirstColumn]);
+  ], [visible, pinFirstColumn, onOpenWorkspace]);
 
   const PROJECT_COL_FIELD: Record<string, string> = {
     start: "startDate",
@@ -1031,7 +1063,8 @@ export function ProjectsLandingView({
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [pinName, setPinName] = useState(() => {
     if (typeof window === "undefined") return true;
-    return localStorage.getItem("projects-landing-pin-name") !== "0";
+    // Same key as MondayBoardShell Legacy (`${storageKey}-pin`) so toolbar + ProjectTable stay in sync.
+    return localStorage.getItem("jiganto-projects-landing-pin") !== "0";
   });
   const { toast } = useToast();
 
@@ -1389,7 +1422,7 @@ export function ProjectsLandingView({
               onPinToggle={() => {
                 setPinName((v) => {
                   const next = !v;
-                  localStorage.setItem("projects-landing-pin-name", next ? "1" : "0");
+                  localStorage.setItem("jiganto-projects-landing-pin", next ? "1" : "0");
                   return next;
                 });
               }}

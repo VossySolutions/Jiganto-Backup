@@ -11,6 +11,7 @@ import {
   getProgrammeDetail,
   getRoadmapData,
   getHealthMatrix,
+  saveProjectReport360Meta,
   generate360Report,
   saveReportSnapshot,
   getLatestReportSnapshot,
@@ -40,6 +41,7 @@ import {
   getAvailableFields,
 } from "./custom-reports";
 import { build360ReportPptx, map360ReportToPptxInput } from "./pptx-export";
+import { sync360PlansToDb } from "./sync-360-plans";
 
 function getUserId(req: Request): string | null {
   return effectiveUserId(req);
@@ -229,15 +231,45 @@ export function registerPortfolioRoutes(app: Express): void {
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const tenantId = requireApiTenantId(req, res);
       if (tenantId == null) return;
+    const projectId = Number(req.params.projectId);
     const narrative = typeof req.body?.narrative === "string" ? req.body.narrative : undefined;
     const sectionOverrides =
       req.body?.sectionOverrides && typeof req.body.sectionOverrides === "object"
-        ? req.body.sectionOverrides
+        ? req.body.sectionOverrides as Record<string, unknown>
         : undefined;
-    const report = await generate360Report(tenantId, Number(req.params.projectId), narrative);
+    if (sectionOverrides) {
+      await saveProjectReport360Meta(tenantId, projectId, {
+        narrative: narrative || sectionOverrides.ragCommentary,
+        ragCommentary: sectionOverrides.ragCommentary,
+        ragComments: sectionOverrides.ragComments,
+        indicators: sectionOverrides.indicators,
+        highlights: sectionOverrides.highlights,
+        lowlights: sectionOverrides.lowlights,
+        lastWeekRag: sectionOverrides.lastWeekRag,
+        level1PlanRows: sectionOverrides.level1PlanRows,
+        activityPlan: sectionOverrides.activityPlan,
+        readinessItems: sectionOverrides.readinessItems,
+        activityLibrary: sectionOverrides.activityLibrary,
+        activeSection: sectionOverrides.activeSection,
+      });
+      const syncResult = await sync360PlansToDb(tenantId, projectId, {
+        level1PlanRows: sectionOverrides.level1PlanRows,
+        activityPlan: sectionOverrides.activityPlan,
+      });
+      // Persist linked workstream IDs so the next save updates instead of inserting duplicates.
+      if (syncResult.activityPlan) {
+        sectionOverrides.activityPlan = syncResult.activityPlan;
+        await saveProjectReport360Meta(tenantId, projectId, {
+          activityPlan: syncResult.activityPlan,
+        });
+      }
+    } else if (narrative) {
+      await saveProjectReport360Meta(tenantId, projectId, { narrative });
+    }
+    const report = await generate360Report(tenantId, projectId, narrative);
     if (!report) return res.status(404).json({ message: "Project not found" });
     const content = sectionOverrides ? { ...report, sectionOverrides } : report;
-    const snapshot = await saveReportSnapshot(tenantId, "360_report", content, userId, Number(req.params.projectId));
+    const snapshot = await saveReportSnapshot(tenantId, "360_report", content, userId, projectId);
     res.status(201).json({ report: content, snapshotId: snapshot.id });
   });
 

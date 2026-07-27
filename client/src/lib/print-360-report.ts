@@ -4,6 +4,53 @@ import { escapeHtml, openReportPrintWindow, ragBadge } from "@/lib/report-print"
 type Indicator = { label: string; pct: number; rag: string };
 type Decision = { id: string; text: string; owner: string };
 type Action = { id: string; text: string; owner: string; due: string };
+type Level1Row = {
+  id: string;
+  kind: string;
+  name: string;
+  status?: string;
+  startWeek?: number;
+  endWeek?: number;
+  week?: number;
+};
+type ActivityRelease = {
+  name: string;
+  lanes: { name: string; cells: string[] }[];
+};
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function level1PrintTable(rows: Level1Row[]): string {
+  if (!rows.length) return `<tr><td colspan="4">No Level 1 plan rows</td></tr>`;
+  return rows.map((r) => {
+    if (r.kind === "release") {
+      return `<tr style="background:#0F0F1A;color:#fff;"><td colspan="4"><strong>${escapeHtml(r.name)}</strong></td></tr>`;
+    }
+    if (r.kind === "milestone") {
+      return `<tr><td>◆ ${escapeHtml(r.name)}</td><td>Milestone</td><td>W${(r.week ?? 0) + 1}</td><td>—</td></tr>`;
+    }
+    return `<tr><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.status || "—")}</td><td>W${(r.startWeek ?? 0) + 1}</td><td>W${(r.endWeek ?? 0) + 1}</td></tr>`;
+  }).join("");
+}
+
+function activityPrintTable(releases: ActivityRelease[]): string {
+  if (!releases.length) return `<p>No activity plan data</p>`;
+  const parts: string[] = [];
+  for (const rel of releases) {
+    parts.push(`<h3 style="margin:12px 0 6px;font-size:12px;">${escapeHtml(rel.name)}</h3>`);
+    parts.push(`<table><thead><tr><th>Lane</th>${MONTHS.map((m) => `<th colspan="4">${m}</th>`).join("")}</tr></thead><tbody>`);
+    for (const lane of rel.lanes) {
+      parts.push(`<tr><td>${escapeHtml(lane.name)}</td>`);
+      for (let w = 0; w < 48; w++) {
+        const code = lane.cells[w] || "";
+        parts.push(`<td style="font-size:8px;text-align:center;${code ? "background:#4338CA;color:#fff;" : ""}">${escapeHtml(code)}</td>`);
+      }
+      parts.push(`</tr>`);
+    }
+    parts.push(`</tbody></table>`);
+  }
+  return parts.join("");
+}
 
 export function print360Report(opts: {
   data: Report360Data;
@@ -12,8 +59,17 @@ export function print360Report(opts: {
   indicators: Indicator[];
   decisions: Decision[];
   actions: Action[];
+  highlights?: string[];
+  lowlights?: string[];
+  readinessItems?: { phase: string; activity: string; criteria: string; rag: string; owner: string; commentary: string }[];
+  level1Rows?: Level1Row[];
+  activityReleases?: ActivityRelease[];
 }): void {
-  const { data, narrative, ragCommentary, indicators, decisions, actions } = opts;
+  const {
+    data, narrative, ragCommentary, indicators, decisions, actions,
+    highlights = [], lowlights = [], readinessItems = [],
+    level1Rows = [], activityReleases = [],
+  } = opts;
   const ex = data.executiveSummary;
   const raid = data.raidSummary;
   const health = data.healthDashboard;
@@ -62,24 +118,27 @@ export function print360Report(opts: {
     <div class="section">
       <h2>Executive summary</h2>
       <div class="box">${escapeHtml(narrative || "—")}</div>
+      ${highlights.filter(Boolean).length ? `
+        <h3 style="margin-top:12px;font-size:12px;">Highlights</h3>
+        <ul>${highlights.filter(Boolean).map((h) => `<li>${escapeHtml(h)}</li>`).join("")}</ul>
+      ` : ""}
+      ${lowlights.filter(Boolean).length ? `
+        <h3 style="margin-top:12px;font-size:12px;">Lowlights &amp; concerns</h3>
+        <ul>${lowlights.filter(Boolean).map((h) => `<li>${escapeHtml(h)}</li>`).join("")}</ul>
+      ` : ""}
     </div>
 
     <div class="section">
-      <h2>Project plan (Level 1)</h2>
+      <h2>Level 1 Plan</h2>
       <table>
-        <thead><tr><th>Phase</th><th>RAG</th><th>Progress</th><th>Start</th><th>End</th></tr></thead>
-        <tbody>
-          ${data.level1Plan.map((p) => `
-            <tr>
-              <td>${escapeHtml(p.name)}</td>
-              <td>${ragBadge(p.rag)}</td>
-              <td>${p.progress}%</td>
-              <td>${escapeHtml(p.plannedStart || "—")}</td>
-              <td>${escapeHtml(p.plannedEnd || "—")}</td>
-            </tr>
-          `).join("") || `<tr><td colspan="5">No plan phases</td></tr>`}
-        </tbody>
+        <thead><tr><th>Item</th><th>Status</th><th>Start</th><th>End</th></tr></thead>
+        <tbody>${level1PrintTable(level1Rows)}</tbody>
       </table>
+    </div>
+
+    <div class="section">
+      <h2>Activity Plan</h2>
+      ${activityPrintTable(activityReleases)}
     </div>
 
     <div class="section">
@@ -200,26 +259,62 @@ export function print360Report(opts: {
     </div>
 
     <div class="section">
-      <h2>Team &amp; budget</h2>
-      <div class="meta">
-        <div><span>Budget</span><strong>${escapeHtml(String(fin.budget))}</strong></div>
-        <div><span>Spent</span><strong>${escapeHtml(String(fin.spent))}</strong></div>
-        <div><span>Remaining</span><strong>${escapeHtml(String(fin.remaining))}</strong></div>
-        <div><span>Forecast</span><strong>${escapeHtml(String(fin.forecast))}</strong></div>
-      </div>
+      <h2>Team</h2>
       <table>
-        <thead><tr><th>Name</th><th>Role</th><th>Allocation</th></tr></thead>
+        <thead><tr><th>Name</th><th>Role</th><th>Allocation</th><th>Start</th><th>End</th></tr></thead>
         <tbody>
           ${data.resourceSummary.map((r) => `
             <tr>
               <td>${escapeHtml(r.name)}</td>
               <td>${escapeHtml(r.role || "—")}</td>
               <td>${r.allocation}%</td>
+              <td>${escapeHtml(r.startDate || "—")}</td>
+              <td>${escapeHtml(r.endDate || "—")}</td>
             </tr>
-          `).join("") || `<tr><td colspan="3">No team members</td></tr>`}
+          `).join("") || `<tr><td colspan="5">No team members</td></tr>`}
         </tbody>
       </table>
     </div>
+
+    <div class="section">
+      <h2>Budget</h2>
+      <div class="meta">
+        <div><span>Budget</span><strong>${escapeHtml(String(fin.budget))}</strong></div>
+        <div><span>Spent</span><strong>${escapeHtml(String(fin.spent))}</strong></div>
+        <div><span>Remaining</span><strong>${escapeHtml(String(fin.remaining))}</strong></div>
+        <div><span>Forecast</span><strong>${escapeHtml(String(fin.forecast))}</strong></div>
+      </div>
+      ${(data.budgetBreakdown?.length ? `
+        <table>
+          <thead><tr><th>Category</th><th>Budgeted</th><th>Actual</th></tr></thead>
+          <tbody>
+            ${data.budgetBreakdown.map((b) => `
+              <tr><td>${escapeHtml(b.category)}</td><td>${b.budgeted}</td><td>${b.actual}</td></tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : "")}
+    </div>
+
+    ${readinessItems.length ? `
+    <div class="section">
+      <h2>Readiness board</h2>
+      <table>
+        <thead><tr><th>Phase</th><th>Activity</th><th>Criteria</th><th>RAG</th><th>Owner</th><th>Commentary</th></tr></thead>
+        <tbody>
+          ${readinessItems.map((r) => `
+            <tr>
+              <td>${escapeHtml(r.phase)}</td>
+              <td>${escapeHtml(r.activity)}</td>
+              <td>${escapeHtml(r.criteria)}</td>
+              <td>${ragBadge(r.rag)}</td>
+              <td>${escapeHtml(r.owner || "—")}</td>
+              <td>${escapeHtml(r.commentary || "—")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>` : ""}
 
     <div class="section">
       <h2>Milestones / deadlines</h2>

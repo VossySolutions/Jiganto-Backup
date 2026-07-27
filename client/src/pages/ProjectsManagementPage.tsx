@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, useSearch } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -130,6 +130,7 @@ function ProjectDetailView({
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const { toast } = useToast();
   const { setCollapsed, setLockCollapsed } = useSidebarState();
+  const searchString = useSearch();
 
   // Prefer icon-rail layout on project pages (stops ModuleShell from auto-expanding).
   // User can still expand/collapse via the sidebar chevron — toggle clears the lock.
@@ -254,6 +255,20 @@ function ProjectDetailView({
     },
     [projectId],
   );
+
+  // Deep-link from 360 report (and elsewhere): /modules/projects/:id?tool=issues_log
+  useEffect(() => {
+    const tool = new URLSearchParams(searchString).get("tool");
+    if (!tool) return;
+    selectTool(tool);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("tool");
+      window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    } catch {
+      /* ignore */
+    }
+  }, [projectId, selectTool, searchString]);
 
   const workspaceContentRef = useRef<HTMLDivElement>(null);
   const [isWorkspaceFullscreen, setIsWorkspaceFullscreen] = useState(false);

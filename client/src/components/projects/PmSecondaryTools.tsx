@@ -311,6 +311,7 @@ export function PmFinanceTrackerTool({ projectId, project }: ToolProps) {
     mutationFn: () => apiRequest("PUT", `/api/pm/projects/${projectId}`, { budget: budgetInput }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/portfolio/reports/360/${projectId}`] });
       toast({ title: "Budget updated" });
     },
   });

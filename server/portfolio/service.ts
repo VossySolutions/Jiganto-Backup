@@ -10,11 +10,67 @@ import {
   pmReportSchedules,
   pmReportSnapshots,
   pmTeamMembers,
+  pmHealthMatrixSnapshots,
+  projectBudgets,
+  budgetLabourLines,
+  budgetExpenseLines,
   type PmMilestone
 } from "@shared/schema";
 import { and, eq, inArray, sql, or, desc, isNull } from "drizzle-orm";
 import { resources } from "@shared/schema";
+import { users } from "@shared/models/auth";
 import { generate360ExecutiveNarrative } from "./ai-narrative";
+import { buildActivityPlan, buildLevel1PlanRows } from "./report-360-builders";
+
+function weekStartMonday(d = new Date()): string {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  return date.toISOString().split("T")[0];
+}
+
+function isoDate(v: unknown): string | null {
+  if (v == null || v === "") return null;
+  if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString().slice(0, 10);
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const parsed = new Date(s);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
+function looksLikeUserId(v?: string | null): boolean {
+  if (!v) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim());
+}
+
+async function resolveUserDisplayName(userId?: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const [u] = await db
+    .select({ firstName: users.firstName, lastName: users.lastName, email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!u) return null;
+  const name = [u.firstName || "", u.lastName || ""].join(" ").trim();
+  return name || u.email || null;
+}
+
+/** Prefer a human name; if the stored value is a user UUID, resolve it. */
+async function displayPersonName(...candidates: Array<string | null | undefined>): Promise<string | null> {
+  for (const c of candidates) {
+    if (!c || !String(c).trim()) continue;
+    const raw = String(c).trim();
+    if (looksLikeUserId(raw)) {
+      const resolved = await resolveUserDisplayName(raw);
+      if (resolved) return resolved;
+      continue;
+    }
+    return raw;
+  }
+  return null;
+}
 
 export type RagLevel = "green" | "amber" | "red";
 
@@ -649,29 +705,55 @@ export async function generate360Report(tenantId: number, projectId: number, nar
   const project = await storage.getPmProject(projectId);
   if (!project || project.tenantId !== tenantId) return null;
 
-  const [phases, milestones, workstreams, deliverables, team, clientRow] = await Promise.all([
+  const [phases, milestones, workstreams, deliverables, team, clientRow, raidRows, budgetRows, tasks] = await Promise.all([
     storage.getPmProjectPhases(projectId),
     storage.getPmMilestones(projectId),
     db.select().from(pmWorkstreams).where(eq(pmWorkstreams.projectId, projectId)),
     db.select().from(pmDeliverables).where(and(eq(pmDeliverables.projectId, projectId), or(eq(pmDeliverables.archived, false), isNull(pmDeliverables.archived)))),
     storage.getPmTeamMembers(projectId),
     project.clientId ? storage.getClientById(project.clientId, tenantId) : Promise.resolve(undefined),
+    db.select().from(pmRaiddItems).where(and(
+      eq(pmRaiddItems.projectId, projectId),
+      or(eq(pmRaiddItems.archived, false), isNull(pmRaiddItems.archived)),
+    )),
+    db.select().from(projectBudgets).where(and(eq(projectBudgets.tenantId, tenantId), eq(projectBudgets.projectId, projectId))).orderBy(desc(projectBudgets.updatedAt)).limit(1),
+    storage.getPmTasks(projectId),
   ]);
 
-  const risks = await db.select().from(pmRaiddItems).where(and(eq(pmRaiddItems.projectId, projectId), eq(pmRaiddItems.type, "risk"), eq(pmRaiddItems.status, "open")));
-  const issues = await db.select().from(pmRaiddItems).where(and(eq(pmRaiddItems.projectId, projectId), eq(pmRaiddItems.type, "issue"), eq(pmRaiddItems.status, "open")));
-  const assumptions = await db.select().from(pmRaiddItems).where(and(eq(pmRaiddItems.projectId, projectId), eq(pmRaiddItems.type, "assumption"), eq(pmRaiddItems.status, "open")));
-  const dependencies = await db.select().from(pmRaiddItems).where(and(eq(pmRaiddItems.projectId, projectId), eq(pmRaiddItems.type, "dependency"), or(eq(pmRaiddItems.status, "open"), eq(pmRaiddItems.status, "in_progress"))));
+  const openish = (status: string | null | undefined) => {
+    const s = (status || "open").toLowerCase();
+    return s !== "closed" && s !== "resolved" && s !== "cancelled" && s !== "done" && s !== "complete" && s !== "completed";
+  };
+
+  // Same non-archived rows as sidebar RAID logs (Risk / Issues / Dependencies / Decisions Log).
+  // Do not filter to open-only — Issues Log shows the full log by default.
+  const risks = raidRows.filter((r) => r.type === "risk");
+  const issues = raidRows.filter((r) => r.type === "issue");
+  const dependencies = raidRows.filter((r) => r.type === "dependency");
+  const decisions = raidRows.filter((r) => r.type === "decision");
+  const actions = raidRows.filter((r) =>
+    r.type === "action" || (r.type === "issue" && (r.issueType || "").toLowerCase() === "action"),
+  );
+  const openRisksCount = risks.filter((r) => openish(r.status)).length;
+  const openIssuesCount = issues.filter((r) => openish(r.status)).length;
 
   const topRisks = [...risks]
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-    .slice(0, 5)
     .map((r) => ({
+      id: r.id,
       ref: r.code,
       description: r.title,
       owner: r.ownerName || r.ownerId,
       severity: r.priority,
-      mitigation: r.mitigation ? "In place" : "Pending",
+      mitigation: r.mitigation || "",
+      category: r.category,
+      likelihood: r.likelihood,
+      impact: r.impact,
+      status: r.status,
+      due: isoDate(r.dueDate),
+      dateRaised: isoDate(r.createdAt),
+      contingency: r.contingency,
+      escalated: !!r.escalated,
     }));
 
   const topIssues = [...issues]
@@ -679,31 +761,87 @@ export async function generate360Report(tenantId: number, projectId: number, nar
       const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
       return (order[a.priority || "medium"] ?? 9) - (order[b.priority || "medium"] ?? 9);
     })
-    .slice(0, 5)
     .map((i) => ({
+      id: i.id,
       ref: i.code,
       description: i.title,
       owner: i.ownerName || i.ownerId,
       priority: i.priority,
-      targetResolution: i.resolutionTarget || i.dueDate,
+      targetResolution: isoDate(i.resolutionTarget) || isoDate(i.dueDate),
+      impact: i.impact || i.timelineImpact,
+      resolution: i.resolution || i.response,
+      status: i.status,
+      dateRaised: isoDate(i.createdAt),
     }));
 
-  const openAssumptions = assumptions.map((a) => ({
-    ref: a.code,
-    assumption: a.title,
-    owner: a.ownerName || a.ownerId,
-    validationDate: a.validationDueDate,
-  }));
-
-  const openDependencies = dependencies.map((d) => ({
+  const openDependencies = dependencies
+    .filter((d) => {
+      const s = (d.status || "").toLowerCase();
+      return openish(d.status) && !d.closed && s !== "met";
+    })
+    .map((d) => ({
+    id: d.id,
     ref: d.code,
     description: d.title,
     direction: d.dependentOn || "Inbound",
-    requiredBy: d.requiredByDate,
+    requiredBy: isoDate(d.requiredByDate),
+    status: d.status,
+    type: d.issueType || d.category || null,
+    source: d.workstream || d.basis || null,
+    impact: d.impact || d.timelineImpact,
+    owner: d.ownerName || d.ownerId,
+    dateIdentified: isoDate(d.createdAt),
+  }));
+
+  const decisionRows = decisions.map((d) => ({
+    id: d.id,
+    ref: d.code,
+    text: d.title,
+    owner: d.ownerName || d.ownerId || "",
+    decisionDate: d.decisionDate,
+    rationale: d.rationale || d.description || "",
+    forum: d.decisionBody,
+    impact: d.impact,
     status: d.status,
   }));
 
+  const actionRows = actions.map((a) => ({
+    id: a.id,
+    ref: a.code,
+    text: a.title,
+    owner: a.ownerName || a.ownerId || "",
+    due: isoDate(a.dueDate) || isoDate(a.resolutionTarget) || "",
+    status: a.status,
+    raisedFrom: a.linkedItemType || a.workstream || a.category,
+    raised: isoDate(a.createdAt),
+  }));
+
   const healthRow = (await getHealthMatrix(tenantId)).find((h) => h.projectId === projectId);
+
+  const thisWeek = weekStartMonday();
+  const prior = new Date(thisWeek + "T00:00:00");
+  prior.setDate(prior.getDate() - 7);
+  const priorWeek = prior.toISOString().split("T")[0];
+  const [lastWeekSnap] = await db
+    .select()
+    .from(pmHealthMatrixSnapshots)
+    .where(and(
+      eq(pmHealthMatrixSnapshots.tenantId, tenantId),
+      eq(pmHealthMatrixSnapshots.projectId, projectId),
+      eq(pmHealthMatrixSnapshots.snapshotWeek, priorWeek),
+    ))
+    .limit(1);
+
+  const lastWeekRag = lastWeekSnap
+    ? {
+        schedule: lastWeekSnap.schedule,
+        cost: lastWeekSnap.budget,
+        quality: lastWeekSnap.quality,
+        resources: lastWeekSnap.resources,
+        risk: lastWeekSnap.risk,
+        overall: lastWeekSnap.overall,
+      }
+    : null;
 
   const now = new Date();
   const todayStr = now.toISOString().split("T")[0];
@@ -714,36 +852,104 @@ export async function generate360Report(tenantId: number, projectId: number, nar
     ? Math.round((budgetNum(project.spentBudget) / budgetNum(project.budget)) * 100)
     : 0;
 
+  const meta = (project.metadata && typeof project.metadata === "object" ? project.metadata : {}) as Record<string, unknown>;
+  const report360Meta = (meta.report360 && typeof meta.report360 === "object" ? meta.report360 : {}) as Record<string, unknown>;
+
+  const savedNarrative = typeof report360Meta.narrative === "string" ? report360Meta.narrative : undefined;
   const { narrative: aiNarrative, source: narrativeSource } = narrativeOverride
     ? { narrative: narrativeOverride, source: "manual" as const }
-    : await generate360ExecutiveNarrative({
-        projectName: project.name,
-        client: clientRow?.name || project.customer || null,
-        pm: project.projectManager || project.managerId || null,
-        overallRag: project.ragStatus,
-        progress: project.progress ?? 0,
-        status: project.status,
-        openRisks: risks.length,
-        openIssues: issues.length,
-        overdueMilestones,
-        budgetUsedPct,
-      });
+    : savedNarrative
+      ? { narrative: savedNarrative, source: "manual" as const }
+      : await generate360ExecutiveNarrative({
+          projectName: project.name,
+          client: clientRow?.name || project.customer || null,
+          pm: await displayPersonName(project.projectManager, project.managerId),
+          overallRag: project.ragStatus,
+          progress: project.progress ?? 0,
+          status: project.status,
+          openRisks: openRisksCount,
+          openIssues: openIssuesCount,
+          overdueMilestones,
+          budgetUsedPct,
+        });
 
-  const now2 = new Date();
-  const in30 = new Date(now2);
-  in30.setDate(in30.getDate() + 30);
-  const deliverablesDue = deliverables.filter((d) => {
-    if (!d.dueDate) return false;
-    const dd = new Date(d.dueDate + "T00:00:00");
-    return dd <= in30;
-  });
+  let budgetBreakdown: { category: string; budgeted: number; actual: number }[] = [];
+  const finBudget = budgetRows[0];
+  if (finBudget) {
+    const [labour, expenses] = await Promise.all([
+      db.select().from(budgetLabourLines).where(eq(budgetLabourLines.budgetId, finBudget.id)),
+      db.select().from(budgetExpenseLines).where(eq(budgetExpenseLines.budgetId, finBudget.id)),
+    ]);
+    const labourBudgeted = labour.reduce((s, l) => s + budgetNum(l.budgetedCost), 0);
+    const labourActual = labour.reduce((s, l) => s + budgetNum(l.actualCost), 0);
+    if (labour.length) budgetBreakdown.push({ category: "Labour", budgeted: labourBudgeted, actual: labourActual });
+    for (const e of expenses) {
+      budgetBreakdown.push({
+        category: e.category,
+        budgeted: budgetNum(e.budgetedAmount),
+        actual: budgetNum(e.actualAmount),
+      });
+    }
+    if (!budgetBreakdown.length) {
+      budgetBreakdown = [
+        { category: "Labour", budgeted: budgetNum(finBudget.labourBudget), actual: 0 },
+        { category: "Expenses", budgeted: budgetNum(finBudget.expenseBudget), actual: budgetNum(finBudget.actualCost) },
+      ].filter((r) => r.budgeted > 0 || r.actual > 0);
+    }
+  }
+
+  const level1PlanRows = buildLevel1PlanRows(project.name, phases, milestones);
+  const savedActivity = Array.isArray(report360Meta.activityPlan) ? report360Meta.activityPlan : null;
+  const activityPlan = savedActivity?.length
+    ? savedActivity
+    : buildActivityPlan(project.name, workstreams, tasks);
+
+  const savedLevel1 = Array.isArray(report360Meta.level1PlanRows) ? report360Meta.level1PlanRows : null;
+  const level1Rows = savedLevel1?.length ? savedLevel1 : level1PlanRows;
+
+  const currentPhase =
+    phases.find((ph) => (ph.status || "").toLowerCase() === "in_progress")?.name
+    || phases.find((ph) => (ph.status || "").toLowerCase() !== "completed")?.name
+    || "";
+  const progressPct = project.progress ?? 0;
+  const healthScoreVal = healthRow
+    ? Math.round(
+      (
+        (["green", "amber", "red"].indexOf((healthRow.overall || "green").toLowerCase()) === 0 ? 100
+          : ["green", "amber", "red"].indexOf((healthRow.overall || "green").toLowerCase()) === 1 ? 60 : 20)
+        + (healthRow.schedule === "green" ? 100 : healthRow.schedule === "amber" ? 60 : 20)
+        + (healthRow.budget === "green" ? 100 : healthRow.budget === "amber" ? 60 : 20)
+        + (healthRow.quality === "green" ? 100 : healthRow.quality === "amber" ? 60 : 20)
+      ) / 4,
+    )
+    : progressPct;
+
+  const metaPmo = typeof meta.pmoName === "string" ? meta.pmoName
+    : typeof meta.leadPmo === "string" ? meta.leadPmo
+      : project.deliveryOwner || null;
+  const metaProgMgr = typeof meta.programmeManager === "string" ? meta.programmeManager
+    : project.executiveSponsor || project.businessOwner || null;
+
+  const [pmName, programmeManagerName, pmoName] = await Promise.all([
+    displayPersonName(project.projectManager, project.managerId),
+    displayPersonName(metaProgMgr),
+    displayPersonName(metaPmo),
+  ]);
 
   return {
     generatedAt: new Date().toISOString(),
     executiveSummary: {
       projectName: project.name,
       client: clientRow?.name || project.customer,
-      pm: project.projectManager || project.managerId,
+      pm: pmName,
+      programmeManager: programmeManagerName,
+      pmo: pmoName,
+      methodology: project.methodology,
+      framework: project.framework,
+      currentPhase: currentPhase || null,
+      progress: progressPct,
+      healthScore: healthScoreVal,
+      status: project.status,
       overallRag: project.ragStatus,
       narrative: aiNarrative,
       narrativeSource,
@@ -752,50 +958,131 @@ export async function generate360Report(tenantId: number, projectId: number, nar
       revisedEnd: project.baselineEndDate || project.endDate,
     },
     healthDashboard: healthRow || null,
+    lastWeekRag,
     level1Plan: phases.map((ph) => ({
+      id: ph.id,
       name: ph.name,
       rag: ph.ragStatus || ph.status,
       progress: ph.progress ?? 0,
       plannedStart: ph.plannedStartDate,
       plannedEnd: ph.plannedEndDate,
     })),
+    level1PlanRows: level1Rows,
+    activityPlan,
     milestones: milestones.map((m) => ({
+      id: m.id,
       name: m.name,
       targetDate: m.targetDate || m.dueDate,
       rag: m.ragStatus,
       status: m.status,
       overdue: (m.targetDate || m.dueDate || "") < todayStr && m.status !== "completed",
     })),
-    workstreamUpdates: workstreams.filter((w) => w.type === "workstream").map((w) => ({
-      name: w.name,
-      owner: w.ownerId,
-      rag: w.ragStatus || w.status,
-      progress: w.progress ?? 0,
-      note: w.description,
-    })),
-    raidSummary: { topRisks, topIssues, openAssumptions, openDependencies },
-    deliverablesTracker: deliverablesDue.map((d) => ({
-      name: d.name,
-      dueDate: d.dueDate,
-      owner: (d.owners as string[])?.[0],
-      status: d.status,
-    })),
-    nextPhasePreview: phases.find((ph) => ph.status === "in_progress" || ph.status === "not_started")?.name || "Next phase TBC",
-    financialSummary: {
-      budget: budgetNum(project.budget),
-      spent: budgetNum(project.spentBudget),
-      remaining: Math.max(0, budgetNum(project.budget) - budgetNum(project.spentBudget)),
-      forecast: budgetNum(project.forecastBudget),
+    workstreamUpdates: workstreams
+      .filter((w) => (w.type || "workstream") === "workstream")
+      .map((w) => ({
+        id: w.id,
+        name: w.name,
+        owner: w.ownerId,
+        rag: w.ragStatus || w.status,
+        progress: w.progress ?? 0,
+        note: w.description,
+        status: w.status,
+        updatedAt: isoDate(w.updatedAt),
+      })),
+    raidSummary: {
+      topRisks,
+      topIssues,
+      openDependencies,
+      decisions: decisionRows,
+      actions: actionRows,
     },
-    resourceSummary: team.map((t) => ({
-      name: t.user ? `${t.user.firstName || ""} ${t.user.lastName || ""}`.trim() || t.userId : t.userId,
-      role: t.role,
-      allocation: t.allocation ?? 100,
-      risk: null,
-    })),
+    deliverablesTracker: deliverables.map((d) => {
+      const owners = Array.isArray(d.owners) ? (d.owners as string[]) : [];
+      const approvers = Array.isArray(d.approvers) ? (d.approvers as string[]) : [];
+      return {
+        id: d.id,
+        name: d.name,
+        dueDate: d.dueDate,
+        owner: owners[0],
+        owners,
+        status: d.status,
+        phase: d.phaseName,
+        type: d.type,
+        approvalRequired: approvers.length > 0,
+        approver: approvers[0] || null,
+        approvers,
+      };
+    }),
+    nextPhasePreview: phases.find((ph) => ph.status === "in_progress" || ph.status === "not_started")?.name || "",
+    // Prefer pm_projects budget fields (same source as Finance Tracker); fall back to finance budget record.
+    financialSummary: {
+      budget: budgetNum(project.budget) || budgetNum(finBudget?.totalBudget),
+      spent: budgetNum(project.spentBudget) || budgetNum(finBudget?.actualCost) || budgetNum(finBudget?.billedToDate),
+      remaining: Math.max(
+        0,
+        (budgetNum(project.budget) || budgetNum(finBudget?.totalBudget)) -
+          (budgetNum(project.spentBudget) || budgetNum(finBudget?.actualCost) || budgetNum(finBudget?.billedToDate)),
+      ),
+      forecast: budgetNum(project.forecastBudget) || budgetNum(finBudget?.forecastCost),
+    },
+    budgetBreakdown,
+    resourceSummary: team.map((t) => {
+      const role = (t.role || "team_member").toLowerCase();
+      const memberType =
+        role.includes("customer") || role.includes("client") || role.includes("sponsor")
+          ? "Customer"
+          : role.includes("contractor") || role.includes("vendor") || role.includes("supplier")
+            ? "Contractor"
+            : "Employee";
+      return {
+        id: t.id,
+        name: t.user ? [t.user.firstName || "", t.user.lastName || ""].join(" ").trim() || t.userId : t.userId,
+        role: t.role,
+        allocation: t.allocation ?? 100,
+        risk: null as string | null,
+        startDate: t.startDate || null,
+        endDate: t.endDate || null,
+        isActive: t.isActive !== false,
+        userId: t.userId,
+        organisation: memberType === "Customer" ? (clientRow?.name || project.customer || "Customer") : "Internal",
+        memberType,
+        workstream: null as string | null,
+      };
+    }),
+    report360: {
+      highlights: Array.isArray(report360Meta.highlights) ? report360Meta.highlights as string[] : [],
+      lowlights: Array.isArray(report360Meta.lowlights) ? report360Meta.lowlights as string[] : [],
+      ragCommentary: typeof report360Meta.ragCommentary === "string" ? report360Meta.ragCommentary : "",
+      ragComments: (report360Meta.ragComments && typeof report360Meta.ragComments === "object"
+        ? report360Meta.ragComments
+        : {}) as { schedule?: string; cost?: string; qualityRisk?: string },
+      indicators: Array.isArray(report360Meta.indicators) ? report360Meta.indicators : null,
+      readinessItems: Array.isArray(report360Meta.readinessItems) ? report360Meta.readinessItems : [],
+      lastWeekRagOverride: (report360Meta.lastWeekRag && typeof report360Meta.lastWeekRag === "object"
+        ? report360Meta.lastWeekRag
+        : null) as Record<string, string> | null,
+    },
     projectId,
   };
 }
+
+/** Persist 360 presentation + plan overlays onto pm_projects.metadata.report360 */
+export async function saveProjectReport360Meta(
+  tenantId: number,
+  projectId: number,
+  patch: Record<string, unknown>,
+) {
+  const project = await storage.getPmProject(projectId);
+  if (!project || project.tenantId !== tenantId) return null;
+  const meta = (project.metadata && typeof project.metadata === "object" ? project.metadata : {}) as Record<string, unknown>;
+  const prev = (meta.report360 && typeof meta.report360 === "object" ? meta.report360 : {}) as Record<string, unknown>;
+  const next = { ...prev, ...patch, updatedAt: new Date().toISOString() };
+  await storage.updatePmProject(projectId, {
+    metadata: { ...meta, report360: next },
+  } as Parameters<typeof storage.updatePmProject>[1]);
+  return next;
+}
+
 
 export async function saveReportSnapshot(
   tenantId: number,

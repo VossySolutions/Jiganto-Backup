@@ -156,7 +156,8 @@ export default function ClientsPage() {
 
   const [pinClient, setPinClient] = useState(() => {
     if (typeof window === "undefined") return true;
-    return localStorage.getItem("clients-pin-name") !== "0";
+    // Same key as MondayBoardShell Legacy (`jiganto-clients-pin`).
+    return localStorage.getItem("jiganto-clients-pin") !== "0";
   });
 
   const [search, setSearch] = useState("");
@@ -694,7 +695,7 @@ export default function ClientsPage() {
               onPinToggle={() => {
                 setPinClient((v) => {
                   const next = !v;
-                  localStorage.setItem("clients-pin-name", next ? "1" : "0");
+                  localStorage.setItem("jiganto-clients-pin", next ? "1" : "0");
                   return next;
                 });
               }}

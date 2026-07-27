@@ -219,6 +219,7 @@ export default function DeliverablesTracker({ projectId }: { projectId: number }
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "deliverable-phases"] });
     queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "deliverables"] });
+    queryClient.invalidateQueries({ queryKey: [`/api/portfolio/reports/360/${projectId}`] });
   };
 
   const createPhaseMut = useMutation({

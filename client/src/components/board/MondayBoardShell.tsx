@@ -160,8 +160,12 @@ function MondayBoardShellRoot<T extends { id: number | string }>(props: MondayBo
             props.tableProps.columns,
             props.tableProps.data,
           );
-          // Pin freezes checkbox chrome + the first visible (identity) column.
-          if (!props.pinActive) return decorated;
+          // Controlled Pin (Leads parity): freeze checkbox chrome + first visible column only.
+          // When Pin is off, clear sticky so local column.sticky flags cannot leave a column stuck.
+          if (props.onPinToggle == null) return decorated;
+          if (!props.pinActive) {
+            return decorated.map((column) => ({ ...column, sticky: false }));
+          }
           const identityIds = new Set(
             decorated
               .filter((column) => !column.hidden)
@@ -422,6 +426,14 @@ function LegacyMondayBoardToolbar(props: MondayBoardToolbarProps) {
       (item) => !shell.columnMenuItems.some((existing) => existing.id === item.id),
     ),
   ];
+  const firstVisible = columns.find((column) => !column.hidden) || columns[0];
+  const firstLabel =
+    typeof firstVisible?.header === "string" && firstVisible.header.trim()
+      ? firstVisible.header
+      : "first";
+  const pinTitle = shell.pinActive
+    ? `Unpin ${firstLabel} column`
+    : `Pin ${firstLabel} column`;
 
   return (
     <MondayBoardToolbar
@@ -452,7 +464,16 @@ function LegacyMondayBoardToolbar(props: MondayBoardToolbarProps) {
         />
       }
       pinActive={shell.pinActive}
-      onPinToggle={shell.togglePin}
+      onPinToggle={
+        shell.viewMode === "table"
+          ? () => {
+              shell.togglePin();
+              // Keep local pin mirrors in sync (Projects/Clients custom tables, etc.).
+              props.onPinToggle?.();
+            }
+          : undefined
+      }
+      pinTitle={pinTitle}
       columnsHiddenCount={columnMenuItems.filter((column) => !column.visible).length}
       columnsContent={
         <BoardColumnsMenu
@@ -574,7 +595,8 @@ function LegacyMondayBoardTable<T extends { id: number | string }>(
       column!.hidden ||
       (!context.extras.isCustomColumn(column!.id) && !shell.isColVisible(column!.id)),
   }));
-  // Pin freezes checkbox chrome + the first visible (identity) column.
+  // Pin freezes checkbox chrome + the first visible (identity) column — same as Leads / native shell.
+  // Do not fall back to column.sticky when pin is off (Legacy tables often keep a stale local pin flag).
   const identityColumnIds = new Set(
     orderedWithVisibility
       .filter((column) => !column.hidden)
@@ -583,9 +605,7 @@ function LegacyMondayBoardTable<T extends { id: number | string }>(
   );
   const orderedColumns = orderedWithVisibility.map((column) => ({
     ...column,
-    sticky: shell.pinActive
-      ? identityColumnIds.has(column.id)
-      : (column.sticky ?? false),
+    sticky: shell.pinActive ? identityColumnIds.has(column.id) : false,
   }));
 
   let data = props.data.filter((row) =>

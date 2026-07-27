@@ -13,9 +13,6 @@ export function format360ShortDate(value: string | null | undefined): string {
 }
 
 export const TABLE_HEAD = "text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5 bg-muted/20";
-export const TABLE_HEAD_RIGHT = cn(TABLE_HEAD, "text-right");
-export const TABLE_CELL = "px-4 py-3 text-sm align-middle";
-export const TABLE_ROW = "border-b border-border/20 hover:bg-muted/20 transition-colors";
 
 export function SubTabPanel({
   title,
@@ -29,7 +26,7 @@ export function SubTabPanel({
   children: ReactNode;
 }) {
   return (
-    <div className="bg-white dark:bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden" data-testid={testId}>
+    <div className="bg-card rounded-xl border border-border/40 shadow-sm overflow-hidden" data-testid={testId}>
       <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-border/30 bg-muted/15">
         <h3 className="text-sm font-semibold">{title}</h3>
         {action}
@@ -49,7 +46,7 @@ export function ModuleNavLink({
   testId?: string;
 }) {
   return (
-    <Link href={href} className="text-xs font-medium text-[#0ea5e9] hover:underline" data-testid={testId}>
+    <Link href={href} className="text-xs font-medium text-sky-600 dark:text-sky-400 hover:underline" data-testid={testId}>
       {children}
     </Link>
   );
@@ -93,8 +90,11 @@ export function LoadingSubTabState() {
 export function StageBadge({ name, color }: { name: string; color?: string | null }) {
   return (
     <span
-      className="text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap"
-      style={{ backgroundColor: color ? `${color}20` : "#e5e7eb", color: color || "#666" }}
+      className={cn(
+        "text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap",
+        !color && "bg-muted text-muted-foreground",
+      )}
+      style={color ? { backgroundColor: `${color}33`, color } : undefined}
     >
       {name}
     </span>

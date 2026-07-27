@@ -9,6 +9,7 @@ type ReportInput = {
   };
   healthDashboard: Record<string, string> | null;
   level1Plan: { name: string; rag: string | null; progress: number; plannedStart: string | null; plannedEnd: string | null }[];
+  activityPlanRows?: { lane: string; codes: string }[];
   milestones: { name: string; targetDate: string | null; rag: string | null; status: string | null }[];
   raidSummary: {
     topRisks: { ref: string | null; description: string; severity: string | null }[];
@@ -136,6 +137,21 @@ export async function build360ReportPptx(input: ReportInput): Promise<Buffer> {
       ]);
       plan.addTable([...header, ...body] as never, {
         x: 0.5, y: CONTENT_TOP, w: 12, colW: [4.5, 1.5, 1.5, 2.25, 2.25],
+        fontSize: 10, border: { pt: 0.5, color: "CCCCCC" },
+        color: INK, align: "left", valign: "middle",
+      });
+    });
+  }
+
+  if (input.activityPlanRows?.length) {
+    chunk(input.activityPlanRows, 12).forEach((slice, idx, all) => {
+      const slide = prs.addSlide();
+      const title = all.length > 1 ? `3b. Activity Plan (${idx + 1}/${all.length})` : "3b. Activity Plan";
+      slide.addText(title, { x: 0.5, y: 0.3, w: 12, h: 0.45, fontSize: 18, bold: true, color: INK });
+      const header = [["Release / Lane", "Codes (weeks with activity)"]];
+      const body = slice.map((r) => [truncate(r.lane, 40), truncate(r.codes, 80)]);
+      slide.addTable([...header, ...body] as never, {
+        x: 0.5, y: CONTENT_TOP, w: 12, colW: [4, 8],
         fontSize: 10, border: { pt: 0.5, color: "CCCCCC" },
         color: INK, align: "left", valign: "middle",
       });
@@ -271,6 +287,7 @@ export function map360ReportToPptxInput(report: unknown, narrative?: string): Re
     };
     healthDashboard: HealthDims | null;
     level1Plan: ReportInput["level1Plan"];
+    activityPlan?: { name: string; lanes: { name: string; cells: string[] }[] }[];
     milestones: ReportInput["milestones"];
     raidSummary: ReportInput["raidSummary"];
     financialSummary: ReportInput["financialSummary"];
@@ -293,6 +310,14 @@ export function map360ReportToPptxInput(report: unknown, narrative?: string): Re
       ) as Record<string, string>)
     : null;
 
+  const activityPlanRows: { lane: string; codes: string }[] = [];
+  for (const rel of r.activityPlan || []) {
+    for (const lane of rel.lanes || []) {
+      const codes = [...new Set((lane.cells || []).filter(Boolean))].join(", ");
+      if (codes) activityPlanRows.push({ lane: `${rel.name} / ${lane.name}`, codes });
+    }
+  }
+
   return {
     executiveSummary: {
       projectName: r.executiveSummary.projectName,
@@ -304,6 +329,7 @@ export function map360ReportToPptxInput(report: unknown, narrative?: string): Re
     },
     healthDashboard: health,
     level1Plan: r.level1Plan || [],
+    activityPlanRows,
     milestones: r.milestones || [],
     raidSummary: {
       topRisks: r.raidSummary?.topRisks || [],

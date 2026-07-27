@@ -420,6 +420,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
     mutationFn: (data: any) => apiRequest("POST", "/api/pm/raidd", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "raidd", config.typeValue] });
+      queryClient.invalidateQueries({ queryKey: [`/api/portfolio/reports/360/${projectId}`] });
       setShowAddDialog(false);
       setNewItem({ title: "", category: "", priority: "Medium", workstream: "" });
       toast({ title: "Item created" });
@@ -430,6 +431,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
     mutationFn: ({ id, updates }: { id: number; updates: any }) => apiRequest("PUT", `/api/pm/raidd/${id}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "raidd", config.typeValue] });
+      queryClient.invalidateQueries({ queryKey: [`/api/portfolio/reports/360/${projectId}`] });
     },
   });
 
@@ -802,6 +804,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
         }
 
         queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "raidd", config.typeValue] });
+        queryClient.invalidateQueries({ queryKey: [`/api/portfolio/reports/360/${projectId}`] });
 
         if (failCount === 0) {
           toast({ title: `${successCount} items imported successfully` });

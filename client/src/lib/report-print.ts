@@ -204,7 +204,7 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export function ragClass(rag?: string | null): string {
+function ragClass(rag?: string | null): string {
   const s = (rag || "").toLowerCase();
   if (s.includes("red") || s === "r") return "rag-red";
   if (s.includes("amber") || s.includes("yellow") || s === "a") return "rag-amber";
