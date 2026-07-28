@@ -113,10 +113,9 @@ export const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
   reporting_dashboards: {
     title: "Reporting & Dashboards",
     icon: PmReportingDashboardsIcon,
-    tag: "Always included",
     tools: [
-      { id: "status_reporting", name: "Status Reporting", hint: "Weekly/monthly reports to steering committee & board", icon: PmStatusReportingIcon },
-      { id: "360_report", name: "360° Report", hint: "Full project health view for PM and Programme Manager", icon: Pm360ReportIcon },
+      { id: "status_reporting", name: "Status Reporting", hint: "Weekly/monthly reports — open from Projects → Status Reports", icon: PmStatusReportingIcon, pickerHidden: true },
+      { id: "360_report", name: "360° Report", hint: "Full project health — open from Projects → 360° Reports", icon: Pm360ReportIcon, pickerHidden: true },
       { id: "project_dashboard", name: "Overview", hint: "KPIs & health — velocity, burn-down, cycle time", icon: PmProjectDashboardIcon },
     ],
   },
@@ -176,19 +175,19 @@ export const MASTER_TOOL_ORDER: string[] = [
   "sow_tracker", "wbs", "whiteboard", "support_tickets",
 ];
 
-const ALWAYS_TOOLS = ["project_dashboard", "status_reporting", "360_report"] as const;
+const ALWAYS_TOOLS = ["project_dashboard"] as const;
 
 const DEFAULT_TOOLS: Record<string, string[]> = {
-  project: ["project_dashboard", "gantt_chart", "milestone_plan", "tracking_board", "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log", "dependencies_log", "change_log", "raci_model", "resource_tracker", "timesheets", "finance_tracker", "documentation", "deliverables_tracker", "test_tracker", "wbs"],
-  programme: ["project_dashboard", "gantt_chart", "milestone_plan", "status_reporting", "360_report", "risk_log", "issues_log"],
-  initiative: ["project_dashboard", "milestone_plan", "status_reporting", "360_report", "risk_log"],
-  campaign: ["project_dashboard", "agile", "milestone_plan", "status_reporting", "360_report"],
-  poc: ["project_dashboard", "agile", "status_reporting", "360_report"],
+  project: ["project_dashboard", "gantt_chart", "milestone_plan", "tracking_board", "risk_log", "issues_log", "assumptions_log", "dependencies_log", "change_log", "raci_model", "resource_tracker", "timesheets", "finance_tracker", "documentation", "deliverables_tracker", "test_tracker", "wbs"],
+  programme: ["project_dashboard", "gantt_chart", "milestone_plan", "risk_log", "issues_log"],
+  initiative: ["project_dashboard", "milestone_plan", "risk_log"],
+  campaign: ["project_dashboard", "agile", "milestone_plan"],
+  poc: ["project_dashboard", "agile"],
   user_defined: [...ALWAYS_TOOLS],
-  portfolio: ["project_dashboard", "status_reporting", "360_report"],
-  sub_project: ["project_dashboard", "gantt_chart", "agile", "risk_log", "issues_log", "status_reporting", "360_report"],
-  sprint: ["project_dashboard", "agile", "status_reporting", "360_report"],
-  pilot: ["project_dashboard", "milestone_plan", "risk_log", "status_reporting", "360_report"],
+  portfolio: ["project_dashboard"],
+  sub_project: ["project_dashboard", "gantt_chart", "agile", "risk_log", "issues_log"],
+  sprint: ["project_dashboard", "agile"],
+  pilot: ["project_dashboard", "milestone_plan", "risk_log"],
 };
 
 export function findToolDefinition(toolId: string): { name: string; category: string; icon: IconComp; pickerHidden?: boolean } | null {

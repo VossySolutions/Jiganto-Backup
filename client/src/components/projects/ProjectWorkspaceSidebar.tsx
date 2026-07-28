@@ -79,8 +79,11 @@ const SECTION_OVERRIDES: Record<string, string> = {
   raci_model: "reporting_dashboards",
 };
 
-const OVERVIEW_TOOL_IDS = ["project_dashboard", "360_report"] as const;
-const ALWAYS_TOOL_IDS = new Set<string>(["project_dashboard", "360_report", "status_reporting"]);
+const OVERVIEW_TOOL_IDS = ["project_dashboard"] as const;
+/** Always-on workspace tools — reports live on Projects landing, not in ops sidebar. */
+const ALWAYS_TOOL_IDS = new Set<string>(["project_dashboard"]);
+/** Moved to Projects landing tabs (360° Reports / Status Reports). */
+const LANDING_REPORT_TOOL_IDS = new Set<string>(["360_report", "status_reporting"]);
 
 function toolDisplayName(toolType: string, fallback?: string | null): string {
   if (toolType === "project_dashboard") return "Overview";
@@ -211,6 +214,8 @@ export function ProjectWorkspaceSidebar({
     const byCat = new Map<string, ProjectTool[]>();
     for (const tool of enabledTools) {
       if (overviewSet.has(tool.toolType)) continue;
+      // Reports are browsed from Projects landing — keep workspace ops-focused
+      if (LANDING_REPORT_TOOL_IDS.has(tool.toolType)) continue;
       const cat = toolSectionKey(tool);
       if (!byCat.has(cat)) byCat.set(cat, []);
       byCat.get(cat)!.push(tool);
@@ -228,6 +233,7 @@ export function ProjectWorkspaceSidebar({
     return getPickerToolIds()
       .map((id) => ({ id, def: findToolDefinition(id), active: enabledIds.has(id) }))
       .filter((x) => x.def)
+      .filter((x) => !LANDING_REPORT_TOOL_IDS.has(x.id))
       .filter((x) => !q || x.def!.name.toLowerCase().includes(q) || x.id.includes(q));
   }, [enabledIds, addQuery]);
 

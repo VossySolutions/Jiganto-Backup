@@ -22,7 +22,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
     desc: "SAP-recommended implementation methodology",
     icon: "⚙️",
     suggestedTools: [
-      "gantt_chart", "milestone_plan", "tracking_board", "status_reporting", "360_report",
+      "gantt_chart", "milestone_plan", "tracking_board",
       "risk_log", "issues_log", "assumptions_log", "dependencies_log", "change_log", "raci_model",
       "resource_tracker", "timesheets", "finance_tracker", "documentation", "deliverables_tracker",
       "test_tracker", "wbs",
@@ -41,7 +41,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
     name: "PRINCE2",
     desc: "Stage-gate with strong governance",
     icon: "👑",
-    suggestedTools: ["gantt_chart", "milestone_plan", "status_reporting", "360_report", "risk_log", "issues_log", "change_log", "raci_model", "documentation"],
+    suggestedTools: ["gantt_chart", "milestone_plan", "risk_log", "issues_log", "change_log", "raci_model", "documentation"],
     phases: [
       { name: "Starting Up", duration: "2 weeks", docs: [{ name: "Project Brief" }, { name: "Business Case" }] },
       { name: "Initiating", duration: "4 weeks", docs: [{ name: "PID" }, { name: "Risk Register" }] },
@@ -54,7 +54,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
     name: "Agile / Scrum",
     desc: "Iterative delivery in sprints",
     icon: "🔄",
-    suggestedTools: ["agile", "project_dashboard", "status_reporting", "360_report", "test_tracker"],
+    suggestedTools: ["agile", "project_dashboard", "test_tracker"],
     phases: [
       { name: "Discover", duration: "2 weeks", docs: [{ name: "Product Vision" }, { name: "Backlog Seed" }] },
       { name: "Build", duration: "Ongoing sprints", docs: [{ name: "Sprint Goals" }, { name: "Definition of Done" }] },
@@ -66,7 +66,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
     name: "SAFe",
     desc: "Scaled Agile Framework",
     icon: "🏗️",
-    suggestedTools: ["agile", "milestone_plan", "status_reporting", "360_report", "risk_log", "dependencies_log"],
+    suggestedTools: ["agile", "milestone_plan", "risk_log", "dependencies_log"],
     phases: [
       { name: "PI Planning", duration: "2 weeks", docs: [{ name: "PI Objectives" }, { name: "Program Board" }] },
       { name: "Execution", duration: "8–12 weeks", docs: [{ name: "Iteration Plans" }, { name: "System Demo Notes" }] },
@@ -78,7 +78,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
     name: "Waterfall",
     desc: "Sequential phases with sign-off gates — Gantt only for schedule",
     icon: "💧",
-    suggestedTools: ["gantt_chart", "milestone_plan", "wbs", "status_reporting", "360_report", "risk_log", "issues_log", "change_log", "documentation", "deliverables_tracker"],
+    suggestedTools: ["gantt_chart", "milestone_plan", "wbs", "risk_log", "issues_log", "change_log", "documentation", "deliverables_tracker"],
     phases: [
       { name: "Requirements", duration: "4 weeks", docs: [{ name: "Requirements Spec" }, { name: "Scope Statement" }] },
       { name: "Design", duration: "4 weeks", docs: [{ name: "Solution Design" }] },
@@ -92,7 +92,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
     name: "ITIL v4",
     desc: "IT service management",
     icon: "🎯",
-    suggestedTools: ["milestone_plan", "status_reporting", "360_report", "change_log", "issues_log", "risk_log", "documentation"],
+    suggestedTools: ["milestone_plan", "change_log", "issues_log", "risk_log", "documentation"],
     phases: [
       { name: "Engage", duration: "2 weeks", docs: [{ name: "Service Brief" }] },
       { name: "Design & Transition", duration: "6 weeks", docs: [{ name: "Service Design Package" }, { name: "Change Records" }] },
@@ -105,8 +105,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
     desc: "Waterfall governance + agile delivery — Gantt and Agile together",
     icon: "⚡",
     suggestedTools: [
-      "gantt_chart", "agile", "milestone_plan", "tracking_board",
-      "status_reporting", "360_report", "risk_log", "issues_log", "assumptions_log",
+      "gantt_chart", "agile", "milestone_plan", "tracking_board", "risk_log", "issues_log", "assumptions_log",
       "dependencies_log", "change_log", "raci_model", "deliverables_tracker", "wbs", "test_tracker",
     ],
     phases: [
@@ -121,7 +120,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
     name: "Workday Accelerate",
     desc: "Workday HCM & Finance deployment",
     icon: "☁️",
-    suggestedTools: ["gantt_chart", "milestone_plan", "status_reporting", "360_report", "risk_log", "issues_log", "change_log", "raci_model", "deliverables_tracker", "test_tracker"],
+    suggestedTools: ["gantt_chart", "milestone_plan", "risk_log", "issues_log", "change_log", "raci_model", "deliverables_tracker", "test_tracker"],
     phases: [
       { name: "Plan", duration: "3 weeks", docs: [{ name: "Project Plan" }, { name: "Tenant Strategy" }] },
       { name: "Architect", duration: "4 weeks", docs: [{ name: "Architecture Decisions" }] },
@@ -135,7 +134,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
     name: "Kanban",
     desc: "Continuous flow · no fixed sprints",
     icon: "📋",
-    suggestedTools: ["agile", "tracking_board", "project_dashboard", "status_reporting", "360_report"],
+    suggestedTools: ["agile", "tracking_board", "project_dashboard"],
     phases: [
       { name: "Flow Setup", duration: "1 week", docs: [{ name: "Board Policies" }, { name: "WIP Limits" }] },
       { name: "Delivery", duration: "Ongoing", docs: [{ name: "Flow Metrics", optional: true }] },
@@ -147,7 +146,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
     desc: "Define your own phases, documents and naming",
     icon: "🏷️",
     custom: true,
-    suggestedTools: ["gantt_chart", "milestone_plan", "status_reporting", "360_report", "risk_log", "issues_log"],
+    suggestedTools: ["gantt_chart", "milestone_plan", "risk_log", "issues_log"],
     phases: [],
   },
 ];

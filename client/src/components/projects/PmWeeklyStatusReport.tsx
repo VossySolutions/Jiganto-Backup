@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, type ReactNode } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -6,14 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import { Loader2, Plus, Printer, Save, Send } from "lucide-react";
-import {
-  modulePageTabsListClass,
-  modulePageTabsWrapClass,
-  modulePageTabTriggerClass,
-} from "@/components/ModulePageChrome";
 import { printWeeklyStatusReport } from "@/lib/print-weekly-status";
+import {
+  R360,
+  PUBLISH_GRADIENT,
+  r360Chrome,
+  ragPillStyle,
+  normR360Rag,
+} from "@/components/portfolio/report-360-theme";
 
 type Rag = "green" | "amber" | "red" | "blue";
 type VariantId = "standard" | "expanded" | "exec" | "financial" | "agile";
@@ -56,11 +59,6 @@ const VARIANTS: { id: VariantId; label: string; desc: string }[] = [
   { id: "agile", label: "Agile / Sprint", desc: "Sprint-oriented sections" },
 ];
 
-const variantTabClass = cn(
-  modulePageTabTriggerClass,
-  "data-[state=active]:bg-primary/10 data-[state=active]:text-primary",
-);
-
 const RAG_CYCLE: Rag[] = ["green", "amber", "red", "blue"];
 
 function nextRag(r: Rag): Rag {
@@ -72,14 +70,80 @@ function ragLetter(r: Rag) {
   return r === "green" ? "G" : r === "amber" ? "A" : r === "red" ? "R" : "B";
 }
 
-function ragBox(r: Rag, size: "lg" | "sm" = "sm") {
-  return cn(
-    "inline-flex items-center justify-center font-extrabold text-white cursor-pointer select-none",
-    size === "lg" ? "h-14 w-14 rounded-lg text-lg" : "h-5 w-7 rounded text-[9px]",
-    r === "green" && "bg-emerald-600",
-    r === "amber" && "bg-amber-500",
-    r === "red" && "bg-red-600",
-    r === "blue" && "bg-slate-600",
+function RagToggle({
+  value,
+  onCycle,
+  size = "sm",
+}: {
+  value: Rag;
+  onCycle: () => void;
+  size?: "sm" | "lg";
+}) {
+  const { resolvedTheme } = useTheme();
+  const style = ragPillStyle(normR360Rag(value), resolvedTheme === "dark");
+  return (
+    <button
+      type="button"
+      title="Click to cycle RAG"
+      onClick={onCycle}
+      className={cn(
+        "inline-flex items-center justify-center font-extrabold select-none transition-opacity hover:opacity-90",
+        size === "lg"
+          ? "h-12 min-w-[72px] rounded-lg px-3 text-sm"
+          : "h-6 min-w-[36px] rounded-md px-2 text-[10px]",
+      )}
+      style={{ background: style.background, color: style.color }}
+    >
+      {ragLetter(value)}
+    </button>
+  );
+}
+
+function Card({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={cn("rounded-xl overflow-hidden bg-card border border-border/40 shadow-sm", className)}>
+      {children}
+    </div>
+  );
+}
+
+function CardHead({
+  title,
+  subtitle,
+  action,
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-border/30 bg-muted/15">
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-foreground">{title}</div>
+        {subtitle && <div className="text-xs mt-0.5 text-muted-foreground">{subtitle}</div>}
+      </div>
+      {action && <div className="shrink-0">{action}</div>}
+    </div>
+  );
+}
+
+function Avatar({ name, size = 20 }: { name?: string | null; size?: number }) {
+  const label = name || "?";
+  const parts = label.trim().split(/\s+/).filter(Boolean);
+  const initials =
+    parts.length >= 2
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : (parts[0] || "?").slice(0, 2).toUpperCase();
+  const palette = [R360.brand, R360.green, R360.violet, R360.amber, R360.teal, R360.blue];
+  let h = 0;
+  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0;
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full font-bold text-white shrink-0 text-[10px]"
+      style={{ width: size, height: size, background: palette[h % palette.length], fontSize: Math.max(8, Math.round(size * 0.36)) }}
+    >
+      {initials}
+    </span>
   );
 }
 
@@ -211,7 +275,7 @@ function BulletEditor({
     <div className="space-y-1.5">
       {rows.map((item, idx) => (
         <div key={idx} className="group flex items-center gap-1.5">
-          <span className="text-indigo-600 font-bold text-xs w-3 shrink-0">•</span>
+          <span className="font-bold text-xs w-3 shrink-0" style={{ color: R360.brand }}>•</span>
           <Input
             value={item}
             placeholder={placeholder || `Item ${idx + 1}`}
@@ -272,8 +336,18 @@ function CellInput({
   );
 }
 
-export function PmWeeklyStatusReport({ projectId, project }: { projectId: number; project?: any }) {
+export function PmWeeklyStatusReport({
+  projectId,
+  project,
+  onClose,
+}: {
+  projectId: number;
+  project?: any;
+  onClose?: () => void;
+}) {
   const { toast } = useToast();
+  const { resolvedTheme } = useTheme();
+  const chrome = r360Chrome(resolvedTheme === "dark");
   const meta = (project?.metadata as Record<string, unknown>) || {};
   const saved = (meta.statusReports as WeeklyStatusReport[]) || [];
 
@@ -289,7 +363,6 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
   });
 
   const reports = useMemo(() => {
-    // migrate legacy {title,summary} stubs
     return (saved || []).map((r: any) => {
       if (r.weekCommencing && r.ragByType) return r as WeeklyStatusReport;
       return {
@@ -380,9 +453,13 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
 
   if (!draft) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <p className="text-sm text-muted-foreground">No weekly status reports yet.</p>
-        <Button size="sm" onClick={startNew}><Plus className="h-3.5 w-3.5 mr-1" /> Create first report</Button>
+      <div className="flex h-full min-h-0 flex-col rounded-xl overflow-hidden border border-border bg-background">
+        <div className="flex flex-col items-center justify-center py-16 gap-3 bg-muted/20 flex-1">
+          <p className="text-sm text-muted-foreground">No weekly status reports yet.</p>
+          <Button size="sm" style={{ background: R360.brand, color: "#fff" }} onClick={startNew}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> Create first report
+          </Button>
+        </div>
       </div>
     );
   }
@@ -391,34 +468,44 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
   const showFinanceEmphasis = variant === "financial" || variant === "standard" || variant === "expanded";
   const showExecCompact = variant === "exec";
   const showAgile = variant === "agile";
-
   const patch = (partial: Partial<WeeklyStatusReport>) => setDraft((d) => (d ? { ...d, ...partial } : d));
+  const projectName = project?.name || "Project";
+  const manager = project?.managerName || project?.ownerName || "";
+  const portfolio = project?.portfolioName || project?.customer || "";
+  const projectCode = project?.code || `PRJ-${projectId}`;
+  const isPersisted = reports.some((r) => r.id === draft.id);
+  const statusLabel = isPersisted ? draft.status : "unsaved";
+  const overallStyle = ragPillStyle(normR360Rag(draft.overallRag), resolvedTheme === "dark");
+
+  const metaItems: Array<{ label: string; value: string; person?: boolean; mono?: boolean }> = [
+    { label: "Project ID", value: projectCode, mono: true },
+    { label: "Programme manager", value: manager || "—", person: !!manager },
+    { label: "Portfolio", value: portfolio || "—" },
+    { label: "Week commencing", value: fmtWeek(draft.weekCommencing) },
+    { label: "Status", value: statusLabel },
+  ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-xl border border-border overflow-hidden bg-background">
-      <div className="shrink-0 border-b border-border/30 bg-card">
-        <div className="px-3 sm:px-4 py-2.5 flex flex-wrap items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold truncate">
-              {VARIANTS.find((v) => v.id === variant)?.label} Weekly Status Report
+    <div className="flex h-full min-h-0 flex-col rounded-xl overflow-hidden border border-border bg-background" data-testid="weekly-status-report">
+      {/* Header — match 360 chrome */}
+      <div className="shrink-0 px-4 sm:px-5 pt-3 pb-2.5 bg-card border-b border-border/30">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-2.5">
+          <div className="min-w-0">
+            <div className="text-sm sm:text-base font-semibold tracking-tight truncate text-foreground">
+              {projectName} — Weekly Status Report
             </div>
-            <div className="text-[11px] text-muted-foreground truncate">
-              {project?.name || "Project"} · W/C {fmtWeek(draft.weekCommencing)}
+            <div className="text-xs mt-0.5 text-muted-foreground">
+              {VARIANTS.find((v) => v.id === variant)?.label} · W/C {fmtWeek(draft.weekCommencing)}
             </div>
           </div>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <Select
-              value={activeId || draft?.id || undefined}
-              onValueChange={selectWeek}
-            >
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+            <Select value={activeId || draft.id} onValueChange={selectWeek}>
               <SelectTrigger
-                className="h-8 w-[200px] sm:w-[220px] text-xs gap-2 shrink-0 [&>span]:min-w-0 [&>span]:flex-1 [&>span]:truncate [&>span]:text-left"
+                className="h-8 w-[180px] sm:w-[210px] text-xs gap-2 shrink-0 [&>span]:min-w-0 [&>span]:flex-1 [&>span]:truncate [&>span]:text-left"
                 data-testid="status-report-week-select"
               >
                 <SelectValue placeholder="Select week">
-                  {draft
-                    ? (draft.title || `Week of ${fmtWeek(draft.weekCommencing)}`)
-                    : "Select week"}
+                  {draft.title || `Week of ${fmtWeek(draft.weekCommencing)}`}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -428,7 +515,7 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                     <span className="ml-1.5 text-muted-foreground capitalize">· {r.status}</span>
                   </SelectItem>
                 ))}
-                {draft && !reports.some((r) => r.id === draft.id) && (
+                {!isPersisted && (
                   <SelectItem value={draft.id} className="text-xs">
                     <span className="truncate">{draft.title || `Week of ${fmtWeek(draft.weekCommencing)}`}</span>
                     <span className="ml-1.5 text-muted-foreground">· unsaved</span>
@@ -436,393 +523,447 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                 )}
               </SelectContent>
             </Select>
-            {draft && (
-              <span
-                className={cn(
-                  "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                  draft.status === "submitted"
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                    : reports.some((r) => r.id === draft.id)
-                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
-                      : "bg-muted text-muted-foreground",
-                )}
-              >
-                {reports.some((r) => r.id === draft.id) ? draft.status : "unsaved"}
-              </span>
+            <Input
+              type="date"
+              value={draft.weekCommencing}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) return;
+                patch({ weekCommencing: v, title: `Week of ${fmtWeek(v)}` });
+              }}
+              className="h-8 w-[140px] text-xs"
+            />
+            <Button type="button" variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={startNew}>
+              <Plus className="h-3.5 w-3.5" /> New week
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              onClick={() =>
+                printWeeklyStatusReport({
+                  projectName,
+                  projectCode,
+                  manager,
+                  portfolio,
+                  variantLabel: VARIANTS.find((v) => v.id === variant)?.label || "Standard",
+                  draft,
+                })
+              }
+            >
+              <Printer className="h-3.5 w-3.5" /> Export PDF
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              disabled={persist.isPending}
+              onClick={() => saveDraft("draft")}
+            >
+              {persist.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+              Save draft
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 text-xs gap-1.5 border-0 hover:opacity-90"
+              style={{ background: PUBLISH_GRADIENT, color: "#fff" }}
+              disabled={persist.isPending}
+              onClick={() => saveDraft("submitted")}
+            >
+              {persist.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              Submit report
+            </Button>
+            {onClose && (
+              <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={onClose}>Close</Button>
             )}
           </div>
-          <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={startNew}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> New week
-          </Button>
-          <Input
-            type="date"
-            value={draft.weekCommencing}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (!v) return;
-              patch({ weekCommencing: v, title: `Week of ${fmtWeek(v)}` });
-            }}
-            className="h-8 w-[150px] text-xs"
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={() =>
-              printWeeklyStatusReport({
-                projectName: project?.name || "Project",
-                projectCode: project?.code || `PRJ-${projectId}`,
-                manager: project?.managerName || project?.ownerName || "",
-                portfolio: project?.portfolioName || project?.customer || "",
-                variantLabel: VARIANTS.find((v) => v.id === variant)?.label || "Standard",
-                draft,
-              })
-            }
-          >
-            <Printer className="h-3.5 w-3.5 mr-1" /> Print / PDF
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs"
-            disabled={persist.isPending}
-            onClick={() => saveDraft("draft")}
-          >
-            {persist.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-            Save draft
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-            disabled={persist.isPending}
-            onClick={() => saveDraft("submitted")}
-          >
-            <Send className="h-3.5 w-3.5 mr-1" /> Submit
-          </Button>
         </div>
 
-        <div className={modulePageTabsWrapClass}>
-          <div className={modulePageTabsListClass} role="tablist">
-            {VARIANTS.map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                role="tab"
-                title={v.desc}
-                aria-selected={variant === v.id}
-                data-state={variant === v.id ? "active" : "inactive"}
-                onClick={() => setVariant(v.id)}
-                className={variantTabClass}
-                data-testid={`status-variant-${v.id}`}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
+        <div className="flex overflow-x-auto border-t border-border/30 pt-2.5" style={{ scrollbarWidth: "none" }}>
+          {metaItems.map((m, i) => (
+            <div
+              key={m.label}
+              className={cn("pr-4 mr-4 shrink-0", i < metaItems.length - 1 && "border-r border-border/30")}
+            >
+              <div className="text-[10px] font-semibold uppercase tracking-wide mb-0.5 text-muted-foreground">{m.label}</div>
+              {m.person ? (
+                <div className="flex items-center gap-1.5">
+                  <Avatar name={m.value} size={20} />
+                  <div className="text-xs font-semibold text-foreground">{m.value}</div>
+                </div>
+              ) : (
+                <div
+                  className="text-xs font-semibold text-foreground capitalize"
+                  style={m.mono ? { fontFamily: "ui-monospace, SFMono-Regular, monospace" } : undefined}
+                >
+                  {m.value}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 bg-muted/20">
-          <div className="w-full rounded-xl border border-border overflow-hidden bg-card shadow-sm">
-            {/* Dark header */}
-            <div className="bg-[#1E1B4B] text-white">
-              <div className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-2.5 border-b border-white/10">
-                <div className="flex items-center gap-2 font-extrabold text-[13px]">
-                  <span className="h-7 w-7 rounded-md bg-indigo-600 inline-flex items-center justify-center text-[11px]">Ji</span>
-                  Jiganto
-                </div>
-                <div className="text-center">
-                  <div className="text-[13px] font-bold tracking-wide">WEEKLY PROJECT STATUS REPORT</div>
-                  <div className="text-[10px] text-white/50">
-                    {VARIANTS.find((v) => v.id === variant)?.label} variant
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[9px] uppercase tracking-wide text-white/40">Week commencing</div>
-                  <div className="text-sm font-bold">{fmtWeek(draft.weekCommencing)}</div>
-                </div>
+      {/* Variant tabs — same pattern as 360 section tabs */}
+      <div className="shrink-0 flex overflow-x-auto bg-card border-b border-border" style={{ scrollbarWidth: "none" }} role="tablist">
+        {VARIANTS.map((v) => {
+          const active = variant === v.id;
+          return (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              title={v.desc}
+              aria-selected={active}
+              data-state={active ? "active" : "inactive"}
+              data-testid={`status-variant-${v.id}`}
+              onClick={() => setVariant(v.id)}
+              className={cn(
+                "flex items-center gap-1.5 px-3.5 h-10 whitespace-nowrap text-xs shrink-0 border-b-2 -mb-px",
+                active
+                  ? "font-semibold border-primary text-primary"
+                  : "font-medium border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Workspace */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 space-y-3.5 bg-muted/20">
+        <div className="rounded-xl p-4 sm:p-5 flex flex-wrap items-center gap-5 bg-card border border-border/40 shadow-sm">
+          <div className="flex-1 min-w-[220px]">
+            <div className="text-sm font-semibold text-foreground mb-1">{projectName}</div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+              <div>
+                Code{" "}
+                <span className="font-semibold text-foreground ml-1 font-mono">{projectCode}</span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 border-b border-white/10">
-                {[
-                  ["Project name", project?.name || "—"],
-                  ["Project ID", project?.code || `PRJ-${projectId}`],
-                  ["Programme manager", project?.managerName || project?.ownerName || "—"],
-                  ["Portfolio", project?.portfolioName || project?.customer || "—"],
-                ].map(([label, value]) => (
-                  <div key={label} className="px-3.5 py-2 border-r border-white/10 last:border-0">
-                    <div className="text-[9px] uppercase tracking-wide text-white/40">{label}</div>
-                    <div className="text-[12px] font-semibold text-indigo-200 mt-0.5 truncate">{value}</div>
-                  </div>
-                ))}
+              {manager && (
+                <div>
+                  Manager <span className="font-semibold text-foreground ml-1">{manager}</span>
+                </div>
+              )}
+              {portfolio && (
+                <div>
+                  Portfolio <span className="font-semibold text-foreground ml-1">{portfolio}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <div className="text-center rounded-lg px-3.5 py-2.5 bg-muted/40 min-w-[72px]">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Overall</div>
+              <div className="text-xl font-bold tabular-nums mt-0.5" style={{ color: overallStyle.color }}>
+                {ragLetter(draft.overallRag)}
               </div>
             </div>
+            <div className="text-center rounded-lg px-3.5 py-2.5 bg-muted/40 min-w-[72px]">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Progress</div>
+              <div className="text-xl font-bold tabular-nums text-foreground">{draft.progressPct}%</div>
+            </div>
+            <div className="text-center rounded-lg px-3.5 py-2.5 bg-muted/40 min-w-[88px]">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Week</div>
+              <div className="text-sm font-bold text-foreground mt-1">{fmtWeek(draft.weekCommencing)}</div>
+            </div>
+          </div>
+        </div>
 
-            {/* Milestones / gates row (Excel) */}
+        {!showExecCompact && (
+          <Card>
+            <CardHead title="Milestones / gates" subtitle="Forecast vs actual by phase" />
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px] min-w-[720px]">
+                <thead>
+                  <tr className="bg-muted/30 text-muted-foreground">
+                    <th className="text-left p-2.5 font-semibold w-24">Milestones</th>
+                    {draft.gates.map((g, i) => (
+                      <th key={`gate-h-${i}`} className="p-2.5 font-semibold text-center">{g.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-border/40" style={{ background: chrome.blueL }}>
+                    <td className="p-2.5 font-semibold text-foreground">Forecast</td>
+                    {draft.gates.map((g, i) => (
+                      <td key={`gate-f-${i}`} className="p-1.5">
+                        <CellInput
+                          value={g.forecast}
+                          placeholder="TBC"
+                          onChange={(v) => {
+                            const gates = [...draft.gates];
+                            gates[i] = { ...gates[i], forecast: v };
+                            patch({ gates });
+                          }}
+                          className="text-center"
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="border-t border-border/40">
+                    <td className="p-2.5 font-semibold text-foreground">Actual</td>
+                    {draft.gates.map((g, i) => (
+                      <td key={`gate-a-${i}`} className="p-1.5">
+                        <CellInput
+                          value={g.actual}
+                          placeholder="Draft"
+                          onChange={(v) => {
+                            const gates = [...draft.gates];
+                            gates[i] = { ...gates[i], actual: v };
+                            patch({ gates });
+                          }}
+                          className="text-center"
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+
+        <div className={cn("grid gap-3.5", showExecCompact ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-2")}>
+          <div className="space-y-3.5">
+            <Card>
+              <CardHead title="RAG status" subtitle="This week vs last week · click to cycle" />
+              <div className="p-4">
+                <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-stretch">
+                  <div className="text-center rounded-lg p-3 bg-primary/10 ring-1 ring-primary/20">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-primary mb-2 leading-tight">
+                      This week<br />overall
+                    </div>
+                    <RagToggle value={draft.overallRag} size="lg" onCycle={() => patch({ overallRag: nextRag(draft.overallRag) })} />
+                  </div>
+                  <div className="rounded-lg border border-border/40 overflow-hidden">
+                    {(["budget", "resource", "schedule", "quality"] as const).map((key) => (
+                      <div key={key} className="grid grid-cols-[1fr_70px_1fr] items-center border-b border-border/40 last:border-0 bg-muted/20">
+                        <div className="flex justify-center py-1.5">
+                          <RagToggle
+                            value={draft.ragByType[key]}
+                            onCycle={() => patch({ ragByType: { ...draft.ragByType, [key]: nextRag(draft.ragByType[key]) } })}
+                          />
+                        </div>
+                        <div className="text-center text-[11px] font-semibold capitalize py-1.5 bg-muted/40">{key}</div>
+                        <div className="flex justify-center py-1.5 opacity-80">
+                          <RagToggle
+                            value={draft.lastWeekRagByType[key]}
+                            onCycle={() =>
+                              patch({
+                                lastWeekRagByType: {
+                                  ...draft.lastWeekRagByType,
+                                  [key]: nextRag(draft.lastWeekRagByType[key]),
+                                },
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    <div className="grid grid-cols-[1fr_70px_1fr] text-[9px] text-muted-foreground text-center py-1 bg-muted/30">
+                      <span>This week</span><span /><span>Last week</span>
+                    </div>
+                  </div>
+                  <div className="text-center rounded-lg p-3 bg-muted/50">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2 leading-tight">
+                      Last week<br />overall
+                    </div>
+                    <RagToggle
+                      value={draft.lastWeekOverallRag}
+                      size="lg"
+                      onCycle={() => patch({ lastWeekOverallRag: nextRag(draft.lastWeekOverallRag) })}
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-border/40">
+                  <div className="flex justify-between text-[10px] text-muted-foreground mb-1.5">
+                    <span className="font-semibold uppercase tracking-wide">Overall project completion</span>
+                    <span className="font-bold tabular-nums" style={{ color: R360.teal }}>{draft.progressPct}%</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={Math.min(100, Math.max(0, draft.progressPct))}
+                      onChange={(e) => patch({ progressPct: Number(e.target.value) })}
+                      className="flex-1"
+                      style={{ accentColor: R360.brand }}
+                    />
+                    <div className="relative w-16 shrink-0">
+                      <CellInput
+                        type="number"
+                        value={draft.progressPct}
+                        onChange={(v) => patch({ progressPct: Math.min(100, Math.max(0, Number(v) || 0)) })}
+                        className="pr-5 text-right"
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {!showAgile && (
+              <Card>
+                <CardHead title="Project summary / RAG commentary" subtitle="Scope · Budget · Resources · Schedule · Quality" />
+                <div className="p-4">
+                  <Textarea
+                    value={draft.commentary}
+                    onChange={(e) => patch({ commentary: e.target.value })}
+                    className="min-h-[110px] text-[12px] leading-relaxed bg-muted/25 border-border/50 focus-visible:bg-background"
+                    placeholder={"Scope:\nBudget:\nResources:\nSchedule:\nQuality:"}
+                  />
+                </div>
+              </Card>
+            )}
+
+            <Card>
+              <CardHead title={showAgile ? "Sprint completed" : "Achievements this period"} />
+              <div className="p-4">
+                <BulletEditor items={draft.achievements} onChange={(achievements) => patch({ achievements })} />
+              </div>
+            </Card>
+
             {!showExecCompact && (
-              <div className="border-b border-border overflow-x-auto">
-                <table className="w-full text-[10px] min-w-[720px]">
+              <Card>
+                <CardHead title="Achievements planned but not achieved" />
+                <div className="p-4">
+                  <BulletEditor items={draft.notAchieved} onChange={(notAchieved) => patch({ notAchieved })} />
+                </div>
+              </Card>
+            )}
+          </div>
+
+          <div className="space-y-3.5">
+            <Card>
+              <CardHead title={showAgile ? "Next sprint plan" : "Achievements planned for next period"} />
+              <div className="p-4">
+                <BulletEditor items={draft.plannedNext} onChange={(plannedNext) => patch({ plannedNext })} />
+              </div>
+            </Card>
+
+            {!showExecCompact && (
+              <Card>
+                <CardHead title="Gate tracking" subtitle="Last passed and upcoming gates" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 text-[11px]">
+                  <div className="border-b sm:border-b-0 sm:border-r border-border/40 p-4 space-y-1.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Last gate passed / date</div>
+                    {(draft.lastGatesPassed.length ? draft.lastGatesPassed : [{ name: "", date: "" }]).map((g, i) => (
+                      <div key={i} className="flex gap-1.5">
+                        <CellInput
+                          value={g.name}
+                          placeholder="Gate name"
+                          className="flex-1"
+                          onChange={(v) => {
+                            const lastGatesPassed = [...(draft.lastGatesPassed.length ? draft.lastGatesPassed : [{ name: "", date: "" }])];
+                            lastGatesPassed[i] = { ...lastGatesPassed[i], name: v };
+                            patch({ lastGatesPassed });
+                          }}
+                        />
+                        <CellInput
+                          value={g.date}
+                          placeholder="Date"
+                          className="w-[110px]"
+                          onChange={(v) => {
+                            const lastGatesPassed = [...(draft.lastGatesPassed.length ? draft.lastGatesPassed : [{ name: "", date: "" }])];
+                            lastGatesPassed[i] = { ...lastGatesPassed[i], date: v };
+                            patch({ lastGatesPassed });
+                          }}
+                        />
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="text-[11px] text-primary hover:underline"
+                      onClick={() => patch({ lastGatesPassed: [...draft.lastGatesPassed, { name: "", date: "" }] })}
+                    >
+                      + Add gate
+                    </button>
+                  </div>
+                  <div className="p-4 space-y-1.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Next gate(s) / date</div>
+                    {(draft.nextGates.length ? draft.nextGates : [{ name: "", date: "" }]).map((g, i) => (
+                      <div key={i} className="flex gap-1.5">
+                        <CellInput
+                          value={g.name}
+                          placeholder="Gate name"
+                          className="flex-1"
+                          onChange={(v) => {
+                            const nextGates = [...(draft.nextGates.length ? draft.nextGates : [{ name: "", date: "" }])];
+                            nextGates[i] = { ...nextGates[i], name: v };
+                            patch({ nextGates });
+                          }}
+                        />
+                        <CellInput
+                          value={g.date}
+                          placeholder="Date"
+                          className="w-[110px]"
+                          onChange={(v) => {
+                            const nextGates = [...(draft.nextGates.length ? draft.nextGates : [{ name: "", date: "" }])];
+                            nextGates[i] = { ...nextGates[i], date: v };
+                            patch({ nextGates });
+                          }}
+                        />
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="text-[11px] text-primary hover:underline"
+                      onClick={() => patch({ nextGates: [...draft.nextGates, { name: "", date: "" }] })}
+                    >
+                      + Add gate
+                    </button>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            <Card>
+              <CardHead
+                title={showExpandedRaid ? "Risks / Issues (Expanded)" : "Risks / Issues"}
+                subtitle="Click RAG to cycle"
+                action={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[10px]"
+                    onClick={() =>
+                      patch({
+                        riskIssues: [
+                          ...draft.riskIssues,
+                          { id: `R-${draft.riskIssues.length + 1}`, text: "", owner: "", rag: "green", kind: "R" },
+                        ],
+                      })
+                    }
+                  >
+                    + Add
+                  </Button>
+                }
+              />
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]">
                   <thead>
-                    <tr className="bg-muted/50">
-                      <th className="text-left p-2 font-bold w-24">Milestones</th>
-                      {draft.gates.map((g, i) => (
-                        <th key={`gate-h-${i}`} className="p-2 font-bold text-center">{g.name}</th>
-                      ))}
+                    <tr className="bg-muted/30 text-muted-foreground text-left">
+                      <th className="p-2.5 font-semibold w-14">ID</th>
+                      <th className="p-2.5 font-semibold">Risk / Issue</th>
+                      <th className="p-2.5 font-semibold w-24">Owner</th>
+                      <th className="p-2.5 font-semibold w-14 text-center">RAG</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="border-t border-border/60 bg-sky-50/50 dark:bg-sky-950/20">
-                      <td className="p-2 font-semibold">Forecast</td>
-                      {draft.gates.map((g, i) => (
-                        <td key={`gate-f-${i}`} className="p-1">
-                          <CellInput
-                            value={g.forecast}
-                            placeholder="TBC"
-                            onChange={(v) => {
-                              const gates = [...draft.gates];
-                              gates[i] = { ...gates[i], forecast: v };
-                              patch({ gates });
-                            }}
-                            className="text-center"
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                    <tr className="border-t border-border/60">
-                      <td className="p-2 font-semibold">Actual</td>
-                      {draft.gates.map((g, i) => (
-                        <td key={`gate-a-${i}`} className="p-1">
-                          <CellInput
-                            value={g.actual}
-                            placeholder="Draft"
-                            onChange={(v) => {
-                              const gates = [...draft.gates];
-                              gates[i] = { ...gates[i], actual: v };
-                              patch({ gates });
-                            }}
-                            className="text-center text-red-600 dark:text-red-400"
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <div className={cn("grid", showExecCompact ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-2")}>
-              {/* LEFT */}
-              <div className="border-r border-border">
-                {/* RAG */}
-                <section className="border-b border-border">
-                  <div className="bg-muted/40 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wide">RAG Status</div>
-                  <div className="p-2">
-                    <div className="grid grid-cols-[1fr_auto_1fr] gap-1 items-stretch">
-                      <div className="text-center p-2">
-                        <div className="text-[9px] font-bold uppercase text-muted-foreground mb-1.5 leading-tight">This week<br />overall</div>
-                        <button type="button" className={ragBox(draft.overallRag, "lg")} onClick={() => patch({ overallRag: nextRag(draft.overallRag) })}>
-                          {ragLetter(draft.overallRag)}
-                        </button>
-                      </div>
-                      <div className="border-x border-border">
-                        {(["budget", "resource", "schedule", "quality"] as const).map((key) => (
-                          <div key={key} className="grid grid-cols-[1fr_70px_1fr] items-center border-b border-border/60 last:border-0">
-                            <div className="flex justify-center py-1">
-                              <button type="button" className={ragBox(draft.ragByType[key])} onClick={() => patch({ ragByType: { ...draft.ragByType, [key]: nextRag(draft.ragByType[key]) } })}>
-                                {ragLetter(draft.ragByType[key])}
-                              </button>
-                            </div>
-                            <div className="text-center text-[11px] font-semibold capitalize bg-muted/40 py-1">{key}</div>
-                            <div className="flex justify-center py-1">
-                              <button type="button" className={ragBox(draft.lastWeekRagByType[key])} onClick={() => patch({ lastWeekRagByType: { ...draft.lastWeekRagByType, [key]: nextRag(draft.lastWeekRagByType[key]) } })}>
-                                {ragLetter(draft.lastWeekRagByType[key])}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        <div className="grid grid-cols-[1fr_70px_1fr] text-[8px] text-muted-foreground text-center py-0.5 bg-indigo-500/5">
-                          <span>This week</span><span /><span>Last week</span>
-                        </div>
-                      </div>
-                      <div className="text-center p-2">
-                        <div className="text-[9px] font-bold uppercase text-muted-foreground mb-1.5 leading-tight">Last week<br />overall</div>
-                        <button type="button" className={ragBox(draft.lastWeekOverallRag, "lg")} onClick={() => patch({ lastWeekOverallRag: nextRag(draft.lastWeekOverallRag) })}>
-                          {ragLetter(draft.lastWeekOverallRag)}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="px-2 pt-2 border-t border-border/60 mt-1">
-                      <div className="flex justify-between text-[9px] text-muted-foreground mb-1">
-                        <span>Overall project completion</span>
-                        <span className="font-bold text-emerald-600">{draft.progressPct}%</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="range"
-                          min={0}
-                          max={100}
-                          value={Math.min(100, Math.max(0, draft.progressPct))}
-                          onChange={(e) => patch({ progressPct: Number(e.target.value) })}
-                          className="flex-1 accent-emerald-600"
-                        />
-                        <div className="relative w-16 shrink-0">
-                          <CellInput
-                            type="number"
-                            value={draft.progressPct}
-                            onChange={(v) => patch({ progressPct: Math.min(100, Math.max(0, Number(v) || 0)) })}
-                            className="pr-5 text-right"
-                          />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                {!showAgile && (
-                  <section className="border-b border-border">
-                    <div className="bg-muted/40 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wide">Project summary / RAG commentary</div>
-                    <div className="p-3">
-                      <Textarea
-                        value={draft.commentary}
-                        onChange={(e) => patch({ commentary: e.target.value })}
-                        className="min-h-[110px] text-[12px] leading-relaxed bg-muted/25 border-border/50 focus-visible:bg-background"
-                        placeholder={"Scope:\nBudget:\nResources:\nSchedule:\nQuality:"}
-                      />
-                    </div>
-                  </section>
-                )}
-
-                <section className="border-b border-border">
-                  <div className="bg-muted/40 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wide">
-                    {showAgile ? "Sprint completed" : "Achievements this period"}
-                  </div>
-                  <div className="p-3">
-                    <BulletEditor items={draft.achievements} onChange={(achievements) => patch({ achievements })} />
-                  </div>
-                </section>
-
-                {!showExecCompact && (
-                  <section className="border-b border-border last:border-0">
-                    <div className="bg-muted/40 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wide">
-                      Achievements planned but not achieved
-                    </div>
-                    <div className="p-3">
-                      <BulletEditor items={draft.notAchieved} onChange={(notAchieved) => patch({ notAchieved })} />
-                    </div>
-                  </section>
-                )}
-              </div>
-
-              {/* RIGHT */}
-              <div>
-                <section className="border-b border-border">
-                  <div className="bg-muted/40 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wide">
-                    {showAgile ? "Next sprint plan" : "Achievements planned for next period"}
-                  </div>
-                  <div className="p-3">
-                    <BulletEditor items={draft.plannedNext} onChange={(plannedNext) => patch({ plannedNext })} />
-                  </div>
-                </section>
-
-                {!showExecCompact && (
-                  <section className="border-b border-border">
-                    <div className="bg-muted/40 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wide">Gate tracking</div>
-                    <div className="grid grid-cols-2 text-[11px]">
-                      <div className="border-r border-border p-2 space-y-1.5">
-                        <div className="text-[9px] font-bold text-muted-foreground">Last gate passed / date</div>
-                        {(draft.lastGatesPassed.length ? draft.lastGatesPassed : [{ name: "", date: "" }]).map((g, i) => (
-                          <div key={i} className="flex gap-1.5">
-                            <CellInput
-                              value={g.name}
-                              placeholder="Gate name"
-                              className="flex-1"
-                              onChange={(v) => {
-                                const lastGatesPassed = [...(draft.lastGatesPassed.length ? draft.lastGatesPassed : [{ name: "", date: "" }])];
-                                lastGatesPassed[i] = { ...lastGatesPassed[i], name: v };
-                                patch({ lastGatesPassed });
-                              }}
-                            />
-                            <CellInput
-                              value={g.date}
-                              placeholder="Date"
-                              className="w-[110px]"
-                              onChange={(v) => {
-                                const lastGatesPassed = [...(draft.lastGatesPassed.length ? draft.lastGatesPassed : [{ name: "", date: "" }])];
-                                lastGatesPassed[i] = { ...lastGatesPassed[i], date: v };
-                                patch({ lastGatesPassed });
-                              }}
-                            />
-                          </div>
-                        ))}
-                        <button
-                          type="button"
-                          className="text-[11px] text-primary hover:underline"
-                          onClick={() => patch({ lastGatesPassed: [...draft.lastGatesPassed, { name: "", date: "" }] })}
-                        >
-                          + Add gate
-                        </button>
-                      </div>
-                      <div className="p-2 space-y-1.5">
-                        <div className="text-[9px] font-bold text-muted-foreground">Next gate(s) / date</div>
-                        {(draft.nextGates.length ? draft.nextGates : [{ name: "", date: "" }]).map((g, i) => (
-                          <div key={i} className="flex gap-1.5">
-                            <CellInput
-                              value={g.name}
-                              placeholder="Gate name"
-                              className="flex-1"
-                              onChange={(v) => {
-                                const nextGates = [...(draft.nextGates.length ? draft.nextGates : [{ name: "", date: "" }])];
-                                nextGates[i] = { ...nextGates[i], name: v };
-                                patch({ nextGates });
-                              }}
-                            />
-                            <CellInput
-                              value={g.date}
-                              placeholder="Date"
-                              className="w-[110px]"
-                              onChange={(v) => {
-                                const nextGates = [...(draft.nextGates.length ? draft.nextGates : [{ name: "", date: "" }])];
-                                nextGates[i] = { ...nextGates[i], date: v };
-                                patch({ nextGates });
-                              }}
-                            />
-                          </div>
-                        ))}
-                        <button
-                          type="button"
-                          className="text-[11px] text-primary hover:underline"
-                          onClick={() => patch({ nextGates: [...draft.nextGates, { name: "", date: "" }] })}
-                        >
-                          + Add gate
-                        </button>
-                      </div>
-                    </div>
-                  </section>
-                )}
-
-                <section className="border-b border-border">
-                  <div className="bg-muted/40 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wide">
-                    {showExpandedRaid ? "Risks / Issues (Expanded)" : "Risks / Issues"}
-                  </div>
-                  <table className="w-full text-[11px]">
-                    <thead>
-                      <tr className="bg-muted/30 text-muted-foreground text-left">
-                        <th className="p-2 font-semibold w-14">ID</th>
-                        <th className="p-2 font-semibold">Risk / Issue</th>
-                        <th className="p-2 font-semibold w-24">Owner</th>
-                        <th className="p-2 font-semibold w-12 text-center">RAG</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {draft.riskIssues
-                        .map((row, i) => ({ row, i }))
-                        .filter(({ i }) => showExpandedRaid || i < 5)
-                        .map(({ row, i }) => (
-                        <tr key={`ri-${i}`} className="border-t border-border/50">
-                          <td className="p-1">
+                    {draft.riskIssues
+                      .map((row, i) => ({ row, i }))
+                      .filter(({ i }) => showExpandedRaid || i < 5)
+                      .map(({ row, i }) => (
+                        <tr key={`ri-${i}`} className="border-t border-border/40">
+                          <td className="p-1.5">
                             <CellInput
                               value={row.id}
                               className="font-mono w-14"
@@ -833,7 +974,7 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                               }}
                             />
                           </td>
-                          <td className="p-1">
+                          <td className="p-1.5">
                             <CellInput
                               value={row.text}
                               placeholder="Describe risk or issue…"
@@ -844,7 +985,7 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                               }}
                             />
                           </td>
-                          <td className="p-1">
+                          <td className="p-1.5">
                             <CellInput
                               value={row.owner}
                               placeholder="Owner"
@@ -856,104 +997,93 @@ export function PmWeeklyStatusReport({ projectId, project }: { projectId: number
                               }}
                             />
                           </td>
-                          <td className="p-1 text-center">
-                            <button
-                              type="button"
-                              title="Click to cycle RAG"
-                              className={ragBox(row.rag)}
-                              onClick={() => {
+                          <td className="p-1.5 text-center">
+                            <RagToggle
+                              value={row.rag}
+                              onCycle={() => {
                                 const riskIssues = [...draft.riskIssues];
                                 riskIssues[i] = { ...riskIssues[i], rag: nextRag(row.rag) };
                                 patch({ riskIssues });
                               }}
-                            >
-                              {ragLetter(row.rag)}
-                            </button>
+                            />
                           </td>
                         </tr>
                       ))}
-                    </tbody>
-                  </table>
-                  <button
-                    type="button"
-                    className="w-full text-center text-[11px] text-primary py-1.5 border-t border-dashed border-border hover:underline"
-                    onClick={() =>
-                      patch({
-                        riskIssues: [
-                          ...draft.riskIssues,
-                          { id: `R-${draft.riskIssues.length + 1}`, text: "", owner: "", rag: "green", kind: "R" },
-                        ],
-                      })
-                    }
-                  >
-                    + Add risk / issue
-                  </button>
-                </section>
-
-                {showFinanceEmphasis && (
-                  <section className="border-b border-border">
-                    <div className="bg-muted/40 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wide">Financial summary</div>
-                    <div className="grid grid-cols-2 sm:grid-cols-5 text-center text-[11px]">
-                      {([
-                        ["Baseline Budget (A)", "baseline"],
-                        ["Cost To Date (B)", "costToDate"],
-                        ["Cost to Complete (C)", "costToComplete"],
-                        ["Forecast Total Cost", "forecast"],
-                        ["Variance to Baseline", "variance"],
-                      ] as const).map(([label, key]) => (
-                        <div key={key} className="p-2 border-r border-border last:border-0">
-                          <div className="text-[9px] font-semibold uppercase text-muted-foreground mb-1.5 leading-tight">{label}</div>
-                          <CellInput
-                            type="number"
-                            value={draft.financials[key]}
-                            readOnly={key === "variance"}
-                            onChange={(v) => {
-                              if (key === "variance") return;
-                              const financials = { ...draft.financials, [key]: Number(v) || 0 };
-                              financials.variance = financials.baseline - financials.forecast;
-                              patch({ financials });
-                            }}
-                            className={cn(
-                              "text-center text-sm font-bold",
-                              key === "variance" && "cursor-default",
-                              key === "variance" && draft.financials.variance < 0 && "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300",
-                              key === "variance" && draft.financials.variance > 0 && "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
-                            )}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
+                  </tbody>
+                </table>
               </div>
-            </div>
+            </Card>
 
-            {/* Period RAG strip */}
-            {!showExecCompact && (
-              <div className="border-t border-border overflow-x-auto">
-                <div className="bg-muted/40 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wide">Reporting period</div>
-                <div className="flex min-w-[640px]">
-                  {draft.periodStrip.map((p, i) => (
-                    <div key={i} className="flex-1 border-r border-border last:border-0 text-center">
-                      <div className="text-[10px] py-1 border-b border-border/60">{fmtWeek(p.date)}</div>
+            {showFinanceEmphasis && (
+              <Card>
+                <CardHead title="Financial summary" subtitle="Baseline · cost to date · forecast · variance" />
+                <div className="grid grid-cols-2 sm:grid-cols-5 text-center text-[11px]">
+                  {([
+                    ["Baseline Budget (A)", "baseline"],
+                    ["Cost To Date (B)", "costToDate"],
+                    ["Cost to Complete (C)", "costToComplete"],
+                    ["Forecast Total Cost", "forecast"],
+                    ["Variance to Baseline", "variance"],
+                  ] as const).map(([label, key]) => (
+                    <div key={key} className="p-3 border-r border-border/40 last:border-0">
+                      <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5 leading-tight">{label}</div>
+                      <CellInput
+                        type="number"
+                        value={draft.financials[key]}
+                        readOnly={key === "variance"}
+                        onChange={(v) => {
+                          if (key === "variance") return;
+                          const financials = { ...draft.financials, [key]: Number(v) || 0 };
+                          financials.variance = financials.baseline - financials.forecast;
+                          patch({ financials });
+                        }}
+                        className={cn(
+                          "text-center text-sm font-bold",
+                          key === "variance" && "cursor-default",
+                          key === "variance" && draft.financials.variance < 0 && "text-red-700 dark:text-red-300",
+                          key === "variance" && draft.financials.variance > 0 && "text-emerald-700 dark:text-emerald-300",
+                        )}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+          </div>
+        </div>
+
+        {!showExecCompact && (
+          <Card>
+            <CardHead title="Reporting period" subtitle="Overall RAG by week — click a cell to cycle" />
+            <div className="overflow-x-auto p-3">
+              <div className="flex min-w-[640px] rounded-lg overflow-hidden border border-border/40">
+                {draft.periodStrip.map((p, i) => {
+                  const s = ragPillStyle(normR360Rag(p.rag), resolvedTheme === "dark");
+                  return (
+                    <div key={i} className="flex-1 border-r border-border/40 last:border-0 text-center">
+                      <div className="text-[10px] py-1.5 border-b border-border/40 bg-muted/20 font-semibold text-muted-foreground">
+                        {fmtWeek(p.date)}
+                      </div>
                       <button
                         type="button"
-                        className={cn("w-full h-8", ragBox(p.rag).replace("inline-flex", "flex").replace("h-5 w-7", "h-8 w-full rounded-none"))}
+                        className="w-full h-9 font-extrabold text-[11px] transition-opacity hover:opacity-90"
+                        style={{ background: s.background, color: s.color }}
                         onClick={() => {
                           const periodStrip = [...draft.periodStrip];
                           periodStrip[i] = { ...periodStrip[i], rag: nextRag(p.rag) };
                           patch({ periodStrip });
                         }}
-                      />
+                      >
+                        {ragLetter(p.rag)}
+                      </button>
                     </div>
-                  ))}
-                </div>
-                <div className="text-[9px] text-muted-foreground px-3 py-1">Overall RAG by week — click a cell to cycle</div>
+                  );
+                })}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
-

@@ -131,6 +131,7 @@ function ProjectDetailView({
   const { toast } = useToast();
   const { setCollapsed, setLockCollapsed } = useSidebarState();
   const searchString = useSearch();
+  const [, setLocation] = useLocation();
 
   // Prefer icon-rail layout on project pages (stops ModuleShell from auto-expanding).
   // User can still expand/collapse via the sidebar chevron — toggle clears the lock.
@@ -199,8 +200,8 @@ function ProjectDetailView({
   const enabledTools = useMemo(() => {
     const coalesced = coalesceAgileTools(enabledToolsSorted);
     const withAlways = [...coalesced];
-    // Always-on tools: Overview + Status Reporting + 360° even if missing from DB for older projects
-    for (const id of ["360_report", "status_reporting", "project_dashboard"] as const) {
+    // Always-on: Overview only. 360° / Status reports live on Projects landing tabs.
+    for (const id of ["project_dashboard"] as const) {
       if (!withAlways.some((t: any) => t.toolType === id)) {
         withAlways.unshift({
           id: -Math.abs(id.split("").reduce((a, c) => a + c.charCodeAt(0), 0)),
@@ -211,7 +212,10 @@ function ProjectDetailView({
         });
       }
     }
-    return withAlways;
+    // Strip report tools from workspace nav (even if still in DB for older projects)
+    return withAlways.filter(
+      (t: any) => t.toolType !== "360_report" && t.toolType !== "status_reporting",
+    );
   }, [enabledToolsSorted]);
 
   const lastUsedTool = useMemo(() => {
@@ -224,9 +228,11 @@ function ProjectDetailView({
 
   // Prefer last-used / Overview over Gantt so workspace open stays snappy
   const preferredDefault =
-    (lastUsedTool && enabledTools.find((t: any) => t.toolType === lastUsedTool)?.toolType) ||
+    (lastUsedTool &&
+      lastUsedTool !== "360_report" &&
+      lastUsedTool !== "status_reporting" &&
+      enabledTools.find((t: any) => t.toolType === lastUsedTool)?.toolType) ||
     enabledTools.find((t: any) => t.toolType === "project_dashboard")?.toolType ||
-    enabledTools.find((t: any) => t.toolType === "360_report")?.toolType ||
     enabledTools.find((t: any) => t.toolType === "gantt_chart")?.toolType ||
     enabledTools.find((t: any) => t.toolType === "agile")?.toolType ||
     enabledTools[0]?.toolType ||
@@ -256,10 +262,16 @@ function ProjectDetailView({
     [projectId],
   );
 
-  // Deep-link from 360 report (and elsewhere): /modules/projects/:id?tool=issues_log
+  // Deep-link: /modules/projects/:id?tool=issues_log
+  // Report tools redirect to Projects landing tabs (audience is leadership browse, not ops).
   useEffect(() => {
     const tool = new URLSearchParams(searchString).get("tool");
     if (!tool) return;
+    if (tool === "360_report" || tool === "status_reporting") {
+      const tab = tool === "360_report" ? "report360" : "status";
+      setLocation(`/modules/projects?tab=${tab}&projectId=${projectId}`);
+      return;
+    }
     selectTool(tool);
     try {
       const url = new URL(window.location.href);
@@ -268,7 +280,7 @@ function ProjectDetailView({
     } catch {
       /* ignore */
     }
-  }, [projectId, selectTool, searchString]);
+  }, [projectId, selectTool, searchString, setLocation]);
 
   const workspaceContentRef = useRef<HTMLDivElement>(null);
   const [isWorkspaceFullscreen, setIsWorkspaceFullscreen] = useState(false);

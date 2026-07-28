@@ -92,6 +92,11 @@ interface LandingProject {
 }
 
 const MilestoneTracker = lazy(() => import("@/components/projects/MilestoneTracker"));
+const ProjectsLandingReportsBrowser = lazy(() =>
+  import("@/components/projects/ProjectsLandingReportsBrowser").then((m) => ({
+    default: m.ProjectsLandingReportsBrowser,
+  })),
+);
 
 type LandingDisplayMode = "table" | "cards" | "kanban";
 
@@ -1045,15 +1050,39 @@ export function ProjectsLandingView({
   onNewProject: () => void;
 }) {
   const { user } = useAuth();
-  type DashTab = "projects" | "milestones" | "my";
-  const [dashTab, setDashTab] = useState<DashTab>("projects");
+  type DashTab = "projects" | "milestones" | "my" | "report360" | "status";
+
+  const readLandingParams = () => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const tab = sp.get("tab");
+      const projectIdRaw = sp.get("projectId");
+      const projectId = projectIdRaw ? Number(projectIdRaw) : null;
+      const validTab =
+        tab === "projects" || tab === "my" || tab === "milestones" || tab === "report360" || tab === "status"
+          ? tab
+          : null;
+      return {
+        tab: validTab as DashTab | null,
+        projectId: projectId && !Number.isNaN(projectId) ? projectId : null,
+      };
+    } catch {
+      return { tab: null as DashTab | null, projectId: null as number | null };
+    }
+  };
+
+  const initialParams = readLandingParams();
+  const [dashTab, setDashTab] = useState<DashTab>(initialParams.tab || "projects");
+  const [reportProjectId, setReportProjectId] = useState<number | null>(
+    initialParams.tab === "report360" || initialParams.tab === "status" ? initialParams.projectId : null,
+  );
   const [viewMode, setViewMode] = useState<LandingDisplayMode>("table");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [customerFilter, setCustomerFilter] = useState<string>("all");
   const [portfolioFilter, setPortfolioFilter] = useState<string>("all");
   const [healthFilter, setHealthFilter] = useState<string>("all");
-  const [mineFilter, setMineFilter] = useState(false);
+  const [mineFilter, setMineFilter] = useState(initialParams.tab === "my");
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebouncedValue(searchQuery);
   const [visibleCols, setVisibleCols] = useState<Record<ColumnId, boolean>>(loadVisibleColumns);
@@ -1084,6 +1113,29 @@ export function ProjectsLandingView({
   useEffect(() => {
     localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(visibleCols));
   }, [visibleCols]);
+
+  /** Keep landing report tabs shareable via ?tab=&projectId= */
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (dashTab === "projects") {
+        url.searchParams.delete("tab");
+      } else {
+        url.searchParams.set("tab", dashTab);
+      }
+      if ((dashTab === "report360" || dashTab === "status") && reportProjectId) {
+        url.searchParams.set("projectId", String(reportProjectId));
+      } else {
+        url.searchParams.delete("projectId");
+      }
+      const next = url.pathname + url.search + url.hash;
+      if (next !== window.location.pathname + window.location.search + window.location.hash) {
+        window.history.replaceState({}, "", next);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [dashTab, reportProjectId]);
 
   const openPreview = (p: LandingProject) => {
     setSelected(p);
@@ -1201,18 +1253,24 @@ export function ProjectsLandingView({
     { id: "projects", label: "All Projects", count: projects.length },
     { id: "my", label: "My Projects", count: projects.filter(isMine).length },
     { id: "milestones", label: "Milestones" },
+    { id: "report360", label: "360° Reports" },
+    { id: "status", label: "Status Reports" },
   ];
 
   return (
     <div className="font-sans min-h-full" data-testid="projects-landing">
       <div className={modulePageBannerWrapClass}>
-        <ModuleWelcomeBanner moduleKey="projects" features={["Portfolio views", "Milestones", "Kanban & table", "Work item wizard"]} />
+        <ModuleWelcomeBanner moduleKey="projects" features={["Portfolio views", "360° & status reports", "Milestones", "Kanban & table"]} />
       </div>
       <div className={modulePageStickyHeaderClass}>
         <ModuleHeader
           icon={PmProjectIcon}
           title="Projects"
-          subtitle="Click a project to open its workspace"
+          subtitle={
+            dashTab === "report360" || dashTab === "status"
+              ? "Browse reports across projects — delivery work stays inside each workspace"
+              : "Click a project to open its workspace"
+          }
           searchPlaceholder="Search projects..."
           searchValue={searchQuery}
           onSearchChange={(v) => { setSearchQuery(v); }}
@@ -1231,6 +1289,9 @@ export function ProjectsLandingView({
               setDashTab(next);
               if (next === "my") { setMineFilter(true); }
               if (next === "projects") { setMineFilter(false); }
+              if (next !== "report360" && next !== "status") {
+                setReportProjectId(null);
+              }
             }}
             data-testid="projects-dash-tabs"
           >
@@ -1259,6 +1320,28 @@ export function ProjectsLandingView({
         {dashTab === "milestones" && (
           <Suspense fallback={<div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
             <MilestoneTracker mode="cross-project" />
+          </Suspense>
+        )}
+
+        {dashTab === "report360" && (
+          <Suspense fallback={<div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+            <ProjectsLandingReportsBrowser
+              kind="360"
+              projects={projects}
+              initialProjectId={reportProjectId}
+              onProjectChange={setReportProjectId}
+            />
+          </Suspense>
+        )}
+
+        {dashTab === "status" && (
+          <Suspense fallback={<div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+            <ProjectsLandingReportsBrowser
+              kind="status"
+              projects={projects}
+              initialProjectId={reportProjectId}
+              onProjectChange={setReportProjectId}
+            />
           </Suspense>
         )}
 
