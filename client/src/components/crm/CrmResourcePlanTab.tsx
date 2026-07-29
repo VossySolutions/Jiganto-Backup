@@ -1838,7 +1838,7 @@ function TimelineView({ rows, weekStarts, monthGroups, onOpenPopover, onOpenBrea
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div className="mx-0.5 my-0.5 h-7 rounded flex items-center justify-center text-xs border border-dashed border-amber-400 dark:border-amber-600 cursor-help"
-                                style={{ background: "repeating-linear-gradient(45deg, #fef3c7, #fef3c7 3px, #fef9c3 3px, #fef9c3 8px)" }}>
+                                style={{ background: "repeating-linear-gradient(45deg, hsl(var(--status-amber) / 0.25), hsl(var(--status-amber) / 0.25) 3px, hsl(var(--status-amber) / 0.12) 3px, hsl(var(--status-amber) / 0.12) 8px)" }}>
                                 ⏸
                               </div>
                             </TooltipTrigger>

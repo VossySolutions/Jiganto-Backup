@@ -191,7 +191,7 @@ export function ContractFormDialog({ open, onClose, editing, accounts }: Props) 
           </div>
         </div>
 
-        <CrmFormSection icon={<ScrollText className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Contract details">
+        <CrmFormSection icon={<ScrollText className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Contract details">
           <div className="space-y-3.5">
             <div className="space-y-1.5">
               <CrmFieldLabel required>Contract name</CrmFieldLabel>

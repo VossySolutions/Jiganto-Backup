@@ -118,7 +118,7 @@ export function CrmLeadLabelEditorDialog({
                   type="button"
                   className={cn(
                     "h-9 w-9 rounded-[4px] flex items-center justify-center shrink-0",
-                    "text-[#676879] hover:bg-[#dcdfec]/60 hover:text-[#e2445c]",
+                    "text-[#676879] dark:text-muted-foreground hover:bg-[#dcdfec]/60 dark:hover:bg-muted hover:text-[#e2445c] dark:hover:text-red-400",
                     locked && "opacity-40 pointer-events-none",
                   )}
                   disabled={locked}

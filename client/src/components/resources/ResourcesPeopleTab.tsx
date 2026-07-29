@@ -749,7 +749,7 @@ export function ResourcesPeopleTab({
         disabled={!form.firstName || !form.lastName}
         size="lg"
       >
-        <FormSection icon={<UserRound className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Personal details">
+        <FormSection icon={<UserRound className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Personal details">
           <FieldGrid className="mb-3.5">
             <div className="space-y-1.5"><FieldLabel required>First name</FieldLabel><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
             <div className="space-y-1.5"><FieldLabel required>Last name</FieldLabel><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
@@ -762,7 +762,7 @@ export function ResourcesPeopleTab({
 
         <FormDivider />
 
-        <FormSection icon={<Building2 className="h-3.5 w-3.5 text-emerald-600" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Role & organisation">
+        <FormSection icon={<Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Role & organisation">
           <FieldGrid className="mb-3.5">
             <div className="space-y-1.5"><FieldLabel>Type</FieldLabel>
               <Select value={form.personType} onValueChange={(v) => setForm({ ...form, personType: v })}>
@@ -799,7 +799,7 @@ export function ResourcesPeopleTab({
 
         <FormDivider />
 
-        <FormSection icon={<DollarSign className="h-3.5 w-3.5 text-amber-600" />} iconClassName="bg-amber-50 dark:bg-amber-950/40" title="Rates & capacity">
+        <FormSection icon={<DollarSign className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />} iconClassName="bg-amber-50 dark:bg-amber-950/40" title="Rates & capacity">
           <FieldGrid className="mb-3.5">
             <div className="space-y-1.5"><FieldLabel>FTE</FieldLabel><Input type="number" step="0.1" min="0.1" max="1" value={form.fte} onChange={(e) => setForm({ ...form, fte: e.target.value })} /></div>
             <div className="space-y-1.5"><FieldLabel>Rate card</FieldLabel>

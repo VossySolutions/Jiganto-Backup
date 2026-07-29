@@ -10,9 +10,9 @@ type Props = {
 };
 
 const CHANGE_COLORS: Record<string, string> = {
-  added: "border-green-500 text-green-600",
-  removed: "border-red-500 text-red-600",
-  changed: "border-amber-500 text-amber-600",
+  added: "border-green-500 text-green-600 dark:text-green-400",
+  removed: "border-red-500 text-red-600 dark:text-red-400",
+  changed: "border-amber-500 text-amber-600 dark:text-amber-400",
   unchanged: "border-muted text-muted-foreground",
 };
 

@@ -12,10 +12,10 @@ interface TaskKpiStripProps {
 }
 
 const STATUS_KPI = [
-  { key: "todo" as const, label: "To Do", filter: { status: "todo" }, color: "text-slate-600", helpText: "Tasks not yet started." },
-  { key: "inProgress" as const, label: "In Progress", filter: { status: "in_progress" }, color: "text-emerald-600", helpText: "Tasks currently being worked on." },
-  { key: "completed" as const, label: "Completed", filter: { status: "completed" }, color: "text-blue-600", helpText: "Tasks marked done." },
-  { key: "overdue" as const, label: "Overdue", filter: { status: "overdue" }, color: "text-red-600", helpText: "Open tasks past their due date." },
+  { key: "todo" as const, label: "To Do", filter: { status: "todo" }, color: "text-slate-600 dark:text-slate-300", helpText: "Tasks not yet started." },
+  { key: "inProgress" as const, label: "In Progress", filter: { status: "in_progress" }, color: "text-emerald-600 dark:text-emerald-400", helpText: "Tasks currently being worked on." },
+  { key: "completed" as const, label: "Completed", filter: { status: "completed" }, color: "text-blue-600 dark:text-blue-400", helpText: "Tasks marked done." },
+  { key: "overdue" as const, label: "Overdue", filter: { status: "overdue" }, color: "text-red-600 dark:text-red-400", helpText: "Open tasks past their due date." },
 ];
 
 export function TaskKpiStrip({ summary, loading, onFilter }: TaskKpiStripProps) {

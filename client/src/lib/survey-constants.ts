@@ -127,7 +127,7 @@ export function qrCodeUrl(data: string) {
 }
 
 export function embedCode(url: string) {
-  return `<iframe src="${url}" width="100%" height="600" frameborder="0" style="border:1px solid #ddd;border-radius:8px;"></iframe>`;
+  return `<iframe src="${url}" width="100%" height="600" frameborder="0" style="border:1px solid rgba(128,128,128,.35);border-radius:8px;"></iframe>`;
 }
 
 export function wordFrequency(texts: string[], limit = 30): { word: string; count: number }[] {

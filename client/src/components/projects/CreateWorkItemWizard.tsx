@@ -1307,7 +1307,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
 
         <div className="mt-auto flex-shrink-0 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3.5">
           <div className="flex items-center gap-1.5 mb-1">
-            <Lightbulb className="h-3.5 w-3.5 text-amber-600" />
+            <Lightbulb className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
             <span className="text-[11px] font-semibold text-amber-900 dark:text-amber-200 font-sans">Tip</span>
           </div>
           <p className="text-[11px] text-amber-900/90 dark:text-amber-200/90 leading-relaxed font-sans">{TIPS[step]}</p>
@@ -1345,8 +1345,8 @@ function normalizeSelectedTools(ids: string[]): string[] {
                       onClick={() => { handleTypeSelect(t.id); setErrors((prev) => { const n = { ...prev }; delete n.workType; return n; }); }}
                       data-testid={`type-card-${t.id}`}
                     >
-                      <Icon className={cn("h-7 w-7 mx-auto mb-2", selected ? "text-indigo-600" : "text-muted-foreground")} />
-                      <div className={cn("text-sm font-bold", selected ? "text-indigo-700" : "text-foreground")}>{t.name}</div>
+                      <Icon className={cn("h-7 w-7 mx-auto mb-2", selected ? "text-indigo-600 dark:text-indigo-400" : "text-muted-foreground")} />
+                      <div className={cn("text-sm font-bold", selected ? "text-indigo-700 dark:text-indigo-300" : "text-foreground")}>{t.name}</div>
                       <div className="text-[10px] text-muted-foreground mt-1">{t.desc}</div>
                     </Card>
                   );
@@ -1354,7 +1354,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
               </div>
               <button
                 type="button"
-                className="text-xs font-semibold text-indigo-600 flex items-center gap-1 mb-4 bg-transparent border-0 cursor-pointer"
+                className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 mb-4 bg-transparent border-0 cursor-pointer"
                 onClick={() => setShowExtended(!showExtended)}
                 data-testid="toggle-extended-types"
               >
@@ -1373,8 +1373,8 @@ function normalizeSelectedTools(ids: string[]): string[] {
                         onClick={() => handleTypeSelect(t.id)}
                         data-testid={`type-card-${t.id}`}
                       >
-                        <Icon className={cn("h-6 w-6 mx-auto mb-1.5", selected ? "text-indigo-600" : "text-muted-foreground")} />
-                        <div className={cn("text-xs font-bold", selected ? "text-indigo-700" : "text-foreground")}>{t.name}</div>
+                        <Icon className={cn("h-6 w-6 mx-auto mb-1.5", selected ? "text-indigo-600 dark:text-indigo-400" : "text-muted-foreground")} />
+                        <div className={cn("text-xs font-bold", selected ? "text-indigo-700 dark:text-indigo-300" : "text-foreground")}>{t.name}</div>
                         <div className="text-[9px] text-muted-foreground mt-0.5">{t.desc}</div>
                       </Card>
                     );
@@ -1464,7 +1464,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                 </div>
               </FormSection>
 
-              <FormSection icon="👥" iconClass="bg-violet-100 text-violet-900 dark:bg-violet-900/40" title="People & governance" subtitle="Who is leading, governing and delivering this work?">
+              <FormSection icon="👥" iconClass="bg-violet-100 text-violet-900 dark:bg-violet-900/40 dark:text-violet-200" title="People & governance" subtitle="Who is leading, governing and delivering this work?">
                 <div className="space-y-1">
                   <FieldLabel required>Lead (PM / Programme Manager)</FieldLabel>
                   <UserPicker
@@ -1556,7 +1556,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                                 {chipInitials(label)}
                               </span>
                               {label}
-                              <button type="button" className="text-[#4338CA] font-extrabold" onClick={() => updateField("teamMemberIds", wizardData.teamMemberIds.filter((x) => x !== id))}>✕</button>
+                              <button type="button" className="text-[#4338CA] dark:text-indigo-300 font-extrabold" onClick={() => updateField("teamMemberIds", wizardData.teamMemberIds.filter((x) => x !== id))}>✕</button>
                             </span>
                           );
                         })}
@@ -1613,7 +1613,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                 </div>
               </FormSection>
 
-              <FormSection icon="📅" iconClass="bg-teal-100 text-teal-900 dark:bg-teal-900/40" title="Planning" subtitle="When does this run and how will it be reported?">
+              <FormSection icon="📅" iconClass="bg-teal-100 text-teal-900 dark:bg-teal-900/40 dark:text-teal-200" title="Planning" subtitle="When does this run and how will it be reported?">
                 <div className="space-y-1">
                   <FieldLabel required>Start date</FieldLabel>
                   <Input
@@ -1674,7 +1674,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                 </div>
               </FormSection>
 
-              <FormSection icon="🚦" iconClass="bg-green-100 text-green-900 dark:bg-green-900/40" title="Health & RAG" subtitle="Overall delivery health indicators.">
+              <FormSection icon="🚦" iconClass="bg-green-100 text-green-900 dark:bg-green-900/40 dark:text-green-200" title="Health & RAG" subtitle="Overall delivery health indicators.">
                 <div className="space-y-1">
                   <FieldLabel>Scope RAG</FieldLabel>
                   <Select value={wizardData.ragStatus} onValueChange={(v) => updateField("ragStatus", v)}>
@@ -1710,7 +1710,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                 </div>
               </FormSection>
 
-              <FormSection icon="💰" iconClass="bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40" title="Finance" subtitle="Budget, portfolio linkage and financial governance.">
+              <FormSection icon="💰" iconClass="bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200" title="Finance" subtitle="Budget, portfolio linkage and financial governance.">
                 <div className="space-y-1">
                   <FieldLabel>Budget</FieldLabel>
                   <div className="flex gap-1.5">
@@ -1864,7 +1864,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                   {phases.map((phase, idx) => (
                     <div key={phase.id} className="flex items-center flex-1 min-w-[110px]">
                       <div className="relative flex-1 rounded-lg border-[1.5px] border-[#818CF8] bg-[#EEF2FF] dark:bg-indigo-950/40 p-2.5 text-center">
-                        <div className="text-[9px] font-extrabold text-[#4338CA] uppercase tracking-wide mb-0.5">Phase {idx + 1}</div>
+                        <div className="text-[9px] font-extrabold text-[#4338CA] dark:text-indigo-300 uppercase tracking-wide mb-0.5">Phase {idx + 1}</div>
                         <Input
                           value={phase.name}
                           onChange={(e) => setPhases((prev) => prev.map((p) => p.id === phase.id ? { ...p, name: e.target.value } : p))}
@@ -1924,7 +1924,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                         )}
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 rounded-full border-[1.5px] border-dashed border-[#4338CA] px-2.5 py-1 text-[11px] font-bold text-[#4338CA]"
+                          className="inline-flex items-center gap-1 rounded-full border-[1.5px] border-dashed border-[#4338CA] dark:border-indigo-500 px-2.5 py-1 text-[11px] font-bold text-[#4338CA] dark:text-indigo-300"
                           onClick={() => {
                             const target = group.phases[0];
                             if (!target) return;
@@ -1990,7 +1990,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                         <Badge variant="secondary" className="text-[9px] font-bold">{cat.tag}</Badge>
                       )}
                       <div className="flex-1 h-px bg-border" />
-                      <button type="button" className="text-[11px] font-bold text-indigo-600" onClick={() => selectCategory(catKey)}>Select all</button>
+                      <button type="button" className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400" onClick={() => selectCategory(catKey)}>Select all</button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                       {cat.tools.map((tool) => {
@@ -2006,7 +2006,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                               "relative rounded-lg border-[1.5px] p-[11px] px-3 transition-colors cursor-pointer bg-white dark:bg-card",
                               always && "border-[#065F46] bg-[#D1FAE5] dark:bg-emerald-950/30",
                               !always && selected && "border-[#4338CA] bg-[#EEF2FF] dark:bg-indigo-950/30",
-                              suggested && "border-[#818CF8] bg-[rgba(129,140,248,0.05)]",
+                              suggested && "border-[#818CF8] bg-[rgba(129,140,248,0.05)] dark:border-indigo-500/50 dark:bg-indigo-950/20",
                               !always && !selected && !suggested && "border-[#E2E8F0] dark:border-border hover:bg-[#F8FAFC] dark:hover:bg-muted",
                               tool.crossModule && "border-dashed",
                             )}
@@ -2057,7 +2057,7 @@ function normalizeSelectedTools(ids: string[]): string[] {
                                 ))}
                                 <button
                                   type="button"
-                                  className="text-[10px] font-bold text-indigo-600"
+                                  className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400"
                                   onClick={() => updateField("toolInstances", {
                                     ...wizardData.toolInstances,
                                     [tool.id]: [...(instances.length ? instances : [`${tool.name} 1`]), `${tool.name} ${instances.length + 2}`],

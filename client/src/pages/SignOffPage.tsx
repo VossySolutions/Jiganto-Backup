@@ -1686,9 +1686,9 @@ ${metrics ? `<p><strong>Results:</strong> ${metrics}</p>` : ""}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
           {[
             { label: "Total", val: total, filter: "all", color: "text-foreground", helpText: "All e-sign requests in your tenant." },
-            { label: "Awaiting", val: awaiting, filter: "awaiting", color: "text-amber-600", helpText: "Requests sent and waiting for one or more signatures." },
-            { label: "Completed", val: completed, filter: "completed", color: "text-green-600", helpText: "Fully signed and closed requests." },
-            { label: "Declined", val: declined, filter: "declined", color: "text-red-600", helpText: "Requests where a signer declined to sign." },
+            { label: "Awaiting", val: awaiting, filter: "awaiting", color: "text-amber-600 dark:text-amber-400", helpText: "Requests sent and waiting for one or more signatures." },
+            { label: "Completed", val: completed, filter: "completed", color: "text-green-600 dark:text-green-400", helpText: "Fully signed and closed requests." },
+            { label: "Declined", val: declined, filter: "declined", color: "text-red-600 dark:text-red-400", helpText: "Requests where a signer declined to sign." },
             { label: "Expired", val: expired, filter: "expired", color: "text-muted-foreground", helpText: "Requests past their signing deadline." },
             { label: "Drafts", val: drafts, filter: "draft", color: "text-muted-foreground", helpText: "Requests saved but not yet sent." },
           ].map(({ label, val, filter, color, helpText }) => (

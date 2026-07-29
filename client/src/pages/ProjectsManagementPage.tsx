@@ -408,7 +408,7 @@ function ProjectDetailView({
           className="flex h-11 flex-shrink-0 items-center gap-2 border-b border-border bg-card px-4"
           data-testid="project-content-topbar"
         >
-          {ActiveIcon && <ActiveIcon className="h-4 w-4 flex-shrink-0 text-indigo-600" />}
+          {ActiveIcon && <ActiveIcon className="h-4 w-4 flex-shrink-0 text-indigo-600 dark:text-indigo-400" />}
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-extrabold text-foreground">
               {toolsLoading ? "Loading…" : activeToolTitle || "Select a tool"}

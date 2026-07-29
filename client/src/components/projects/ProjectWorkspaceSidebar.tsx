@@ -473,7 +473,7 @@ export function ProjectWorkspaceSidebar({
       <div className="flex flex-shrink-0 items-center gap-1 border-t border-border/70">
         <button
           type="button"
-          className="flex flex-1 items-center gap-2 px-3.5 py-2.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
+          className="flex flex-1 items-center gap-2 px-3.5 py-2.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
           onClick={() => setShowAdd(true)}
           data-testid="button-add-tool"
         >
@@ -548,12 +548,12 @@ export function ProjectWorkspaceSidebar({
                       </span>
                       <span className="flex-1 text-xs font-semibold">{def!.name}</span>
                       {active ? (
-                        <span className="text-[10px] font-bold text-emerald-600">✓ Active</span>
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">✓ Active</span>
                       ) : (
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-6 border-indigo-500 px-2 text-[10px] font-bold text-indigo-600"
+                          className="h-6 border-indigo-500 px-2 text-[10px] font-bold text-indigo-600 dark:text-indigo-400"
                           disabled={addingTool}
                           onClick={() => {
                             onAddTool(id);

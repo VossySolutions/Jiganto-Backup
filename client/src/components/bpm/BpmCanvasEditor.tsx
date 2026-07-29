@@ -2625,6 +2625,7 @@ function CanvasEditorInner({
               <MiniMap
                 position="bottom-right"
                 className="!bg-card !border !shadow-sm"
+                maskColor="hsl(var(--background) / 0.7)"
                 nodeColor={(n) => {
                   if (n.type === "start" || n.type === "end") return "hsl(var(--brand-green))";
                   if (n.type === "decision" || n.type?.includes("gateway")) return "hsl(var(--primary))";

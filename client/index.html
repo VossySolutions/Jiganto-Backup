@@ -16,6 +16,7 @@
             saved === "dark" ||
             (saved === "system" &&
               window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
           if (dark) document.documentElement.classList.add("dark");
         } catch (e) {}
       })();

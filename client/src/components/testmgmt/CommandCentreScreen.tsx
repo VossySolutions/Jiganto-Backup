@@ -90,7 +90,7 @@ export function CommandCentreScreen({ onNavigate }: Props) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <MetricCard title="Total Cases" value={kpis?.totalCases ?? cases.length} subtitle={`${activeCases} active`} helpText="All test cases in the selected project." valueClassName="text-primary font-mono" onClick={() => onNavigate("test-cases")} testId="kpi-card-total-cases" />
         <MetricCard title="Executed" value={kpis?.executed ?? activeRuns} subtitle={kpis ? `${kpis.executedPct}% of total cases` : undefined} helpText="Test cases with at least one execution run." valueClassName="text-blue-500 font-mono" onClick={() => onNavigate("execution")} testId="kpi-card-executed" />
-        <MetricCard title="Passed" value={kpis?.passed ?? "—"} subtitle={kpis ? `${kpis.passedPct}% pass rate` : undefined} helpText="Executions with a passed result." valueClassName="text-green-600 font-mono" onClick={() => onNavigate("execution")} testId="kpi-card-passed" />
+        <MetricCard title="Passed" value={kpis?.passed ?? "—"} subtitle={kpis ? `${kpis.passedPct}% pass rate` : undefined} helpText="Executions with a passed result." valueClassName="text-green-600 dark:text-green-400 font-mono" onClick={() => onNavigate("execution")} testId="kpi-card-passed" />
         <MetricCard title="Failed" value={kpis?.failed ?? "—"} subtitle={kpis ? `${kpis.failedPct}% of executed` : undefined} helpText="Executions with a failed result." valueClassName="text-red-500 font-mono" onClick={() => onNavigate("defect-triage")} testId="kpi-card-failed" />
         <MetricCard title="Open Defects" value={openDefects} subtitle={`${criticalDefects} critical`} helpText="Defects not resolved, closed, or won't-fix." valueClassName="text-amber-500 font-mono" onClick={() => onNavigate("defect-board")} testId="kpi-card-open-defects" />
       </div>
@@ -105,13 +105,13 @@ export function CommandCentreScreen({ onNavigate }: Props) {
           </div>
           <div className="bg-card border rounded-xl p-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Pass Rate</div>
-            <div className="text-3xl font-bold font-mono text-green-600">{kpis?.passRatePct ?? 0}%</div>
+            <div className="text-3xl font-bold font-mono text-green-600 dark:text-green-400">{kpis?.passRatePct ?? 0}%</div>
             <div className="text-[10px] text-muted-foreground mt-1">Passed ÷ executed runs</div>
             <div className="mt-2 bg-muted rounded-full h-2"><div className="h-full bg-green-500 rounded-full" style={{ width: `${kpis?.passRatePct ?? 0}%` }} /></div>
           </div>
           <div className="bg-card border rounded-xl p-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Release Readiness</div>
-            <div className={cn("text-3xl font-bold font-mono", (kpis?.releaseReadiness ?? 0) >= 80 ? "text-green-600" : "text-amber-600")}>{kpis?.releaseReadiness ?? 0}%</div>
+            <div className={cn("text-3xl font-bold font-mono", (kpis?.releaseReadiness ?? 0) >= 80 ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400")}>{kpis?.releaseReadiness ?? 0}%</div>
             <div className="text-[10px] text-muted-foreground mt-1">Weighted pass rate + defect penalty</div>
             {dashboard?.activeCycle && <div className="text-xs text-muted-foreground mt-1">Active cycle: {dashboard.activeCycle.name}</div>}
           </div>

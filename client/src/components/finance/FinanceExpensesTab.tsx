@@ -507,7 +507,7 @@ export function FinanceExpensesTab({ reports: reportsProp, isLoading: isLoadingP
 
         <FormDivider />
 
-        <FormSection icon={<Receipt className="h-3.5 w-3.5 text-emerald-600" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Line items">
+        <FormSection icon={<Receipt className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Line items">
           <div className="flex items-center gap-2 mb-3">
             <input type="checkbox" id="mileage" checked={useMileage} onChange={(e) => setUseMileage(e.target.checked)} />
             <Label htmlFor="mileage" className="text-xs font-semibold">Apply mileage to first line</Label>

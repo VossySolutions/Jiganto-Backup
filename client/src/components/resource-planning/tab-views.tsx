@@ -426,7 +426,7 @@ export function SchedulerTab() {
                     <td key={i} colSpan={bar.span} className="p-0.5">
                       {bar.type === "avail" ? (
                         <div
-                          className={cn("h-5 rounded bg-emerald-100 dark:bg-emerald-950/30 flex items-center justify-center text-[9px] text-emerald-700 font-semibold cursor-pointer hover:bg-emerald-600 hover:text-white transition-colors", draggedId && "ring-2 ring-primary/40")}
+                          className={cn("h-5 rounded bg-emerald-100 dark:bg-emerald-950/30 flex items-center justify-center text-[9px] text-emerald-700 dark:text-emerald-300 font-semibold cursor-pointer hover:bg-emerald-600 hover:text-white transition-colors", draggedId && "ring-2 ring-primary/40")}
                           onClick={() => { setForm((f) => ({ ...f, resourceId: row.id })); setDialogOpen(true); }}
                           onDragOver={(e) => { e.preventDefault(); }}
                           onDrop={() => handleDrop(row.id, startWeek)}
@@ -977,14 +977,14 @@ export function ScenarioPlanningTab() {
         <RpSectionCard title="Scenario Comparison">
           <RpTableWrap>
             <table className="w-full text-xs text-gray-700 dark:text-foreground">
-              <thead><tr className="border-b border-border/60 bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground"><th className="text-left py-2 px-3 font-bold">Metric</th><th className="text-amber-600 font-bold">Worst</th><th className="text-indigo-600 font-bold">Expected</th><th className="text-emerald-600 font-bold">Best</th></tr></thead>
+              <thead><tr className="border-b border-border/60 bg-gray-100 dark:bg-muted/80 text-gray-700 dark:text-foreground"><th className="text-left py-2 px-3 font-bold">Metric</th><th className="text-amber-600 dark:text-amber-400 font-bold">Worst</th><th className="text-indigo-600 dark:text-indigo-400 font-bold">Expected</th><th className="text-emerald-600 dark:text-emerald-400 font-bold">Best</th></tr></thead>
               <tbody>
                 {data.comparison.map((row) => (
                   <tr key={row.metric} className="border-b border-border/40">
                     <td className="py-2 px-3 font-semibold">{row.metric}</td>
-                    <td className="py-2 px-2 text-amber-600">{row.worst}</td>
-                    <td className="py-2 px-2 text-indigo-600">{row.expected}</td>
-                    <td className="py-2 px-2 text-emerald-600">{row.best}</td>
+                    <td className="py-2 px-2 text-amber-600 dark:text-amber-400">{row.worst}</td>
+                    <td className="py-2 px-2 text-indigo-600 dark:text-indigo-400">{row.expected}</td>
+                    <td className="py-2 px-2 text-emerald-600 dark:text-emerald-400">{row.best}</td>
                   </tr>
                 ))}
               </tbody>

@@ -1325,7 +1325,7 @@ export default function RaiddLogTool({ logType, projectId }: RaiddLogToolProps) 
                   ))}
                 </div>
                 <div className="flex gap-3.5 mt-2.5 flex-wrap">
-                  {[{ label: "Low 1-4", bg: "bg-green-100" }, { label: "Med 5-9", bg: "bg-amber-200" }, { label: "High 10-14", bg: "bg-orange-400" }, { label: "Critical 15-25", bg: "bg-red-400" }].map(l => (
+                  {[{ label: "Low 1-4", bg: "bg-green-100 dark:bg-green-900/50" }, { label: "Med 5-9", bg: "bg-amber-200 dark:bg-amber-800/70" }, { label: "High 10-14", bg: "bg-orange-400 dark:bg-orange-600" }, { label: "Critical 15-25", bg: "bg-red-400 dark:bg-red-600" }].map(l => (
                     <div key={l.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><div className={`w-2.5 h-2.5 rounded-sm ${l.bg}`} />{l.label}</div>
                   ))}
                 </div>

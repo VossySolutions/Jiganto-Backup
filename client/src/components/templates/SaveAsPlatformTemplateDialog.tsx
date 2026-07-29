@@ -49,7 +49,7 @@ export function SaveAsPlatformTemplateDialog({
       size="sm"
       testId="save-platform-template-dialog"
     >
-      <FormSection icon={<LayoutTemplate className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Template details">
+      <FormSection icon={<LayoutTemplate className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Template details">
         <div className="space-y-1.5 mb-3.5">
           <FieldLabel required>Template name</FieldLabel>
           <Input value={name} onChange={e => setName(e.target.value)} data-testid="platform-template-name" />

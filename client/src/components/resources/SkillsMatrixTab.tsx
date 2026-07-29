@@ -291,7 +291,7 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
     const cfg = getMatrixLevel(level);
     if (assess === "pending") {
       return <span className={cn("mx-auto flex items-center justify-center rounded font-extrabold", summary ? "h-6 w-10 text-[10px]" : "h-[22px] w-7 text-[11px]")}
-        style={{ background: "#FEF3C7", color: "#92400E", border: "1.5px solid #D97706" }}>?</span>;
+        style={{ background: "hsl(var(--status-amber) / 0.2)", color: "hsl(var(--status-amber-foreground))", border: "1.5px solid hsl(var(--status-amber))" }}>?</span>;
     }
     return <span className={cn("mx-auto flex items-center justify-center rounded font-extrabold", summary ? "h-6 w-10 text-[10px]" : "h-[22px] w-7 text-[11px]")}
       style={{ background: cfg.bg, color: cfg.text, border: assess === "self" ? `2px dashed ${cfg.text}` : "none" }}>{cfg.level}</span>;
@@ -359,9 +359,9 @@ export function SkillsMatrixTab({ resources, skills, categories, resourceSkills,
             ))}
             <span className="hidden h-4 w-px bg-border sm:block" />
             <span className="font-bold uppercase tracking-wide text-muted-foreground">Assessment:</span>
-            <span className="flex items-center gap-1.5"><span className="flex h-[18px] w-[22px] items-center justify-center rounded text-[10px] font-extrabold" style={{ background: "#5EEAD4", color: "#0F766E", border: "2px dashed #0F766E" }}>3</span>Self</span>
-            <span className="flex items-center gap-1.5"><span className="flex h-[18px] w-[22px] items-center justify-center rounded text-[10px] font-extrabold" style={{ background: "#FEF3C7", color: "#92400E", border: "1.5px solid #D97706" }}>?</span>Pending</span>
-            <span className="flex items-center gap-1.5"><span className="flex h-[18px] w-[22px] items-center justify-center rounded text-[10px] font-extrabold" style={{ background: "#5EEAD4", color: "#0F766E" }}>3</span>Validated</span>
+            <span className="flex items-center gap-1.5"><span className="flex h-[18px] w-[22px] items-center justify-center rounded text-[10px] font-extrabold" style={{ background: "hsl(var(--status-green) / 0.2)", color: "hsl(var(--status-green-foreground))", border: "2px dashed hsl(var(--status-green))" }}>3</span>Self</span>
+            <span className="flex items-center gap-1.5"><span className="flex h-[18px] w-[22px] items-center justify-center rounded text-[10px] font-extrabold" style={{ background: "hsl(var(--status-amber) / 0.2)", color: "hsl(var(--status-amber-foreground))", border: "1.5px solid hsl(var(--status-amber))" }}>?</span>Pending</span>
+            <span className="flex items-center gap-1.5"><span className="flex h-[18px] w-[22px] items-center justify-center rounded text-[10px] font-extrabold" style={{ background: "hsl(var(--status-green) / 0.2)", color: "hsl(var(--status-green-foreground))" }}>3</span>Validated</span>
             <span className="text-muted-foreground">· Click a cell to assess · Click a name for the full profile</span>
           </div>
 

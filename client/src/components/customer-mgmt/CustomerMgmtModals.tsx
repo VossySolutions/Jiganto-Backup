@@ -115,7 +115,7 @@ export function CreateProgrammeModal({
           </DialogDescription>
         </DialogHeader>
         {blocked && (
-          <p className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 rounded-lg px-3 py-2">
+          <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
             Free access cost is over your configured threshold. Enable programme creation in Settings
             or reduce active programmes first.
           </p>

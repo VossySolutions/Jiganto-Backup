@@ -311,7 +311,7 @@ export function ResourcesDashboardTab({ resources, allowedTabs, onNavigate, onOp
                 <p className="text-xs text-muted-foreground truncate">{r.jobTitle ?? "—"}</p>
               </div>
               <div className="hidden sm:block flex-1 max-w-[200px]"><Progress value={Math.min(r.util, 100)} className="h-2" /></div>
-              <Badge variant="outline" className={cn("shrink-0 tabular-nums", r.util > 100 && "border-red-300 text-red-700")}>{r.util}%</Badge>
+              <Badge variant="outline" className={cn("shrink-0 tabular-nums", r.util > 100 && "border-red-300 text-red-700 dark:border-red-800 dark:text-red-400")}>{r.util}%</Badge>
             </button>
           ))}
         </CardContent>

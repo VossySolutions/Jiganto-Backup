@@ -538,7 +538,7 @@ export function FinanceInvoicesTab({ invoices: invoicesProp, isLoading: isLoadin
 
         <FormDivider />
 
-        <FormSection icon={<CreditCard className="h-3.5 w-3.5 text-emerald-600" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Line items">
+        <FormSection icon={<CreditCard className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Line items">
           {formLines.map((line, idx) => (
             <div key={idx} className="grid grid-cols-12 gap-2 items-end mb-2">
               <div className="col-span-5">

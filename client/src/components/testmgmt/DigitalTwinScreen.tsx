@@ -56,9 +56,9 @@ export function DigitalTwinScreen({ onNavigate }: Props) {
 
       {/* Overall KPIs — from /api/tm/dashboard */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard title="Overall Pass Rate" value={`${overallPassRate}%`} subtitle="Passed ÷ executed" helpText="Percentage of test executions that passed across all suites." borderColor="#22c55e" valueClassName={overallPassRate >= 80 ? "text-green-600" : overallPassRate >= 60 ? "text-amber-600" : "text-red-600"} testId="dt-pass-rate" />
+        <MetricCard title="Overall Pass Rate" value={`${overallPassRate}%`} subtitle="Passed ÷ executed" helpText="Percentage of test executions that passed across all suites." borderColor="#22c55e" valueClassName={overallPassRate >= 80 ? "text-green-600 dark:text-green-400" : overallPassRate >= 60 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"} testId="dt-pass-rate" />
         <MetricCard title="Total Test Cases" value={totalCases} subtitle="In project" helpText="All test cases defined in the active test project." borderColor="#6366f1" testId="dt-total-cases" />
-        <MetricCard title="Open Defects" value={openDefTotal} subtitle="Unresolved" helpText="Defects linked to test failures that are still open." borderColor="#f59e0b" valueClassName={openDefTotal === 0 ? "text-green-600" : "text-amber-600"} testId="dt-open-defects" />
+        <MetricCard title="Open Defects" value={openDefTotal} subtitle="Unresolved" helpText="Defects linked to test failures that are still open." borderColor="#f59e0b" valueClassName={openDefTotal === 0 ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"} testId="dt-open-defects" />
         <MetricCard title="Modules Covered" value={`${suitesWithCases}/${suiteCount}`} subtitle="Suites with ≥1 case" helpText="Test suites that have at least one test case defined." borderColor="#3b82f6" testId="dt-modules-covered" />
       </div>
 
@@ -102,8 +102,8 @@ export function DigitalTwinScreen({ onNavigate }: Props) {
 
               <div className="grid grid-cols-4 gap-1 text-center">
                 {[
-                  { label: "Pass", val: suite.pass, cls: "text-green-600" },
-                  { label: "Fail", val: suite.fail, cls: "text-red-600" },
+                  { label: "Pass", val: suite.pass, cls: "text-green-600 dark:text-green-400" },
+                  { label: "Fail", val: suite.fail, cls: "text-red-600 dark:text-red-400" },
                   { label: "Blocked", val: suite.blocked, cls: "text-orange-600" },
                   { label: "Not Run", val: suite.notRun, cls: "text-muted-foreground" },
                 ].map((s) => (

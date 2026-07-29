@@ -842,7 +842,7 @@ export default function TemplatesPage() {
               <p className="font-medium">{applyTpl.name}</p>
               <p className="text-xs text-muted-foreground mt-1">{snapshotSummary(applyTpl)}</p>
             </div>
-            <FormSection icon={<LayoutTemplate className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="New item">
+            <FormSection icon={<LayoutTemplate className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="New item">
               <div className="space-y-1.5 mb-3.5">
                 <FieldLabel required>Name</FieldLabel>
                 <Input id="apply-name" value={applyName} onChange={e => setApplyName(e.target.value)} data-testid="apply-name-input" />
@@ -891,7 +891,7 @@ export default function TemplatesPage() {
         testId="create-template-dialog"
         saveTestId="create-template-go"
       >
-        <FormSection icon={<Plus className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Module type">
+        <FormSection icon={<Plus className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Module type">
           <div className="space-y-1.5">
             <FieldLabel required>Module type</FieldLabel>
             <Select value={createModule || undefined} onValueChange={setCreateModule}>
@@ -959,7 +959,7 @@ export default function TemplatesPage() {
         size="sm"
         testId="submit-template-dialog"
       >
-        <FormSection icon={<Send className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Review note">
+        <FormSection icon={<Send className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Review note">
           <div className="space-y-1.5">
             <FieldLabel>Optional note for reviewers</FieldLabel>
             <Textarea

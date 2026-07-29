@@ -26,9 +26,9 @@ export function WorkspaceKpiStrip({
 
   const items = [
     { key: "all", label: "All workspaces", value: total, tab: "all" as const, color: "text-primary" },
-    { key: "favorites", label: "Favorites", value: favorites, tab: "favorites" as const, color: "text-amber-600" },
-    { key: "active", label: "Active", value: active, tab: "all" as const, color: "text-emerald-600" },
-    { key: "shared", label: "Shared with me", value: shared, tab: "shared" as const, color: "text-blue-600" },
+    { key: "favorites", label: "Favorites", value: favorites, tab: "favorites" as const, color: "text-amber-600 dark:text-amber-400" },
+    { key: "active", label: "Active", value: active, tab: "all" as const, color: "text-emerald-600 dark:text-emerald-400" },
+    { key: "shared", label: "Shared with me", value: shared, tab: "shared" as const, color: "text-blue-600 dark:text-blue-400" },
     { key: "archived", label: "Archived", value: archived, tab: "all" as const, color: "text-muted-foreground" },
   ];
 

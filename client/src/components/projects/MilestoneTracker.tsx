@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import type { PmMilestone } from "@shared/models/projects";
 import { Button } from "@/components/ui/button";
@@ -30,9 +31,8 @@ const RAG_CONFIG: Record<string, { bg: string; bgDark: string; fg: string; fgDar
   Red: { bg: "#fee2e2", bgDark: "#450a0a", fg: "#991b1b", fgDark: "#fca5a5", dot: "#ef4444", label: "Delayed" },
   Blue: { bg: "#dbeafe", bgDark: "#172554", fg: "#1d4ed8", fgDark: "#93c5fd", dot: "#3b82f6", label: "Delivered" },
 };
-const isDark = () => document.documentElement.classList.contains("dark");
-const ragBg = (cfg: typeof RAG_CONFIG.Green) => isDark() ? cfg.bgDark : cfg.bg;
-const ragFg = (cfg: typeof RAG_CONFIG.Green) => isDark() ? cfg.fgDark : cfg.fg;
+const ragBg = (cfg: typeof RAG_CONFIG.Green, dark: boolean) => dark ? cfg.bgDark : cfg.bg;
+const ragFg = (cfg: typeof RAG_CONFIG.Green, dark: boolean) => dark ? cfg.fgDark : cfg.fg;
 const RAG_ORDER = ["Green", "Amber", "Red", "Blue"];
 
 const KPI_DEFS = [
@@ -103,6 +103,8 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
   const showProjectCol = mode !== "project";
   const showPortfolioCols = mode === "portfolio";
   const { toast } = useToast();
+  const { resolvedTheme } = useTheme();
+  const dark = resolvedTheme === "dark";
   const [view, setView] = useState<"table" | "timeline">("timeline");
   const [granularity, setGranularity] = useState("Monthly");
   const [groupBy, setGroupBy] = useState("Project");
@@ -264,7 +266,7 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
           return (
             <span
               className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
-              style={{ background: ragBg(cfg), color: ragFg(cfg) }}
+              style={{ background: ragBg(cfg, dark), color: ragFg(cfg, dark) }}
             >
               <span className="w-2 h-2 rounded-full" style={{ background: cfg.dot }} />
               {cfg.label}
@@ -275,7 +277,7 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
       { id: "commentary", header: "Commentary", type: "text", accessor: "commentary", width: "200px", editable: true },
     );
     return cols;
-  }, [showPortfolioCols, showProjectCol, ragStatusOptions]);
+  }, [showPortfolioCols, showProjectCol, ragStatusOptions, dark]);
 
   const onUpdate = useCallback((id: number, patch: any) => {
     updateMut.mutate({ id, data: patch });
@@ -445,7 +447,7 @@ export default function MilestoneTracker({ mode, projectId }: MilestoneTrackerPr
           renderRowActions={(row) => (
             <button
               type="button"
-              className="p-1 rounded border border-border hover:border-red-400 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+              className="p-1 rounded border border-border hover:border-red-400 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
               onClick={(e) => { e.stopPropagation(); onDelete(row.id); }}
               title="Delete"
               data-testid={`delete-milestone-${row.id}`}
@@ -514,6 +516,8 @@ function TimelineView({ milestones, granularity, setGranularity, groupBy, setGro
   setGroupBy: (g: string) => void;
   showProjectCol: boolean;
 }) {
+  const { resolvedTheme } = useTheme();
+  const dark = resolvedTheme === "dark";
   const [tooltip, setTooltip] = useState<PmMilestone | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
@@ -706,7 +710,7 @@ function TimelineView({ milestones, granularity, setGranularity, groupBy, setGro
                       >
                         <div
                           className="w-3.5 h-3.5 rounded-full border-2 border-background shrink-0 transition hover:scale-[1.4]"
-                          style={{ background: cfg.dot, boxShadow: `0 0 0 2.5px ${ragBg(cfg)}, 0 2px 6px rgba(0,0,0,0.18)` }}
+                          style={{ background: cfg.dot, boxShadow: `0 0 0 2.5px ${ragBg(cfg, dark)}, 0 2px 6px rgba(0,0,0,0.18)` }}
                         />
                         <span className={`text-[10.5px] font-semibold whitespace-nowrap max-w-[90px] overflow-hidden text-ellipsis mt-0.5 text-center ${od ? "text-red-600 dark:text-red-400" : "text-foreground"}`}>
                           {m.name.slice(0, 18)}{m.name.length > 18 ? "…" : ""}
@@ -878,6 +882,8 @@ function ImportMilestonesModal({ open, onClose, onImport, mode, projectId }: {
   mode: string;
   projectId?: number;
 }) {
+  const { resolvedTheme } = useTheme();
+  const dark = resolvedTheme === "dark";
   const [tab, setTab] = useState<"upload" | "template">("upload");
   const [parsed, setParsed] = useState<any[]>([]);
   const [status, setStatus] = useState<{ type: string; msg: string } | null>(null);
@@ -1005,7 +1011,7 @@ function ImportMilestonesModal({ open, onClose, onImport, mode, projectId }: {
                           <td className="px-2.5 py-1.5 truncate max-w-[200px]">{r.name}</td>
                           <td className="px-2.5 py-1.5 whitespace-nowrap">{fmt(r.targetDate)}</td>
                           <td className="px-2.5 py-1.5">
-                            <span className="inline-flex items-center gap-1 font-bold text-[11px]" style={{ color: RAG_CONFIG[r.ragStatus] ? ragFg(RAG_CONFIG[r.ragStatus]) : undefined }}>
+                            <span className="inline-flex items-center gap-1 font-bold text-[11px]" style={{ color: RAG_CONFIG[r.ragStatus] ? ragFg(RAG_CONFIG[r.ragStatus], dark) : undefined }}>
                               <span className="w-[7px] h-[7px] rounded-full inline-block" style={{ background: RAG_CONFIG[r.ragStatus]?.dot }} />
                               {r.ragStatus}
                             </span>

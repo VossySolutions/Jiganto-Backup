@@ -955,12 +955,12 @@ function ProjectKanban({
     },
   });
 
-  const colMeta: Record<string, { color: string; bg: string }> = {
-    draft: { color: "#94A3B8", bg: "#F8FAFC" },
-    planning: { color: "#D97706", bg: "#FEF3C7" },
-    active: { color: "#059669", bg: "#D1FAE5" },
-    on_hold: { color: "#DC2626", bg: "#FEE2E2" },
-    completed: { color: "#0D9488", bg: "#CCFBF1" },
+  const colMeta: Record<string, string> = {
+    draft: "bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-300",
+    planning: "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300",
+    active: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+    on_hold: "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300",
+    completed: "bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300",
   };
 
   const columns = useMemo(
@@ -984,8 +984,7 @@ function ProjectKanban({
                   {col.title}
                 </span>
                 <span
-                  className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                  style={{ backgroundColor: meta.bg, color: meta.color }}
+                  className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-full", meta)}
                 >
                   {count}
                 </span>

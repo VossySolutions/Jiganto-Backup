@@ -56,10 +56,10 @@ function accountBarColor(name: string): string {
 
 /** Fixed £ buckets — matches client mock (image 2) legend */
 const HEATMAP_LEGEND = [
-  { label: "<£50K", bg: "#f0f9ff", color: "#1e3a8a" },
-  { label: "£50–100K", bg: "#bfdbfe", color: "#1e40af" },
-  { label: "£100–150K", bg: "#60a5fa", color: "#ffffff" },
-  { label: "£150K+", bg: "#2563eb", color: "#ffffff" },
+  { label: "<£50K", bg: "hsl(var(--status-blue) / 0.12)", color: "hsl(var(--status-blue-foreground))" },
+  { label: "£50–100K", bg: "hsl(var(--status-blue) / 0.25)", color: "hsl(var(--status-blue-foreground))" },
+  { label: "£100–150K", bg: "hsl(var(--primary) / 0.7)", color: "hsl(var(--primary-foreground))" },
+  { label: "£150K+", bg: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" },
 ] as const;
 
 function heatmapCellStyle(value: number): React.CSSProperties {
@@ -437,7 +437,7 @@ export function ForecastMatrix({
                 className="inline-block h-4 w-9 rounded-sm border border-blue-200/60 shadow-sm"
                 style={{ backgroundColor: item.bg }}
               />
-              <span style={{ color: item.color === "#ffffff" ? undefined : item.color }}>{item.label}</span>
+              <span>{item.label}</span>
             </span>
           ))}
         </div>

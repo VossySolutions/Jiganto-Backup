@@ -57,6 +57,9 @@
   --dhx-banner-warn-fg:#e65100;
   --dhx-banner-on-bg:#ffebee;
   --dhx-banner-on-fg:#b71c1c;
+  --dhx-pred-pulse:#ffe0b2;
+  --dhx-critical-flash:#ffcdd2;
+  --dhx-hierarchy-flash:#fff9c4;
   --row-h:36px;
   --hdr-h:50px;
   --panel-footer-h:40px;
@@ -194,9 +197,9 @@ button.vb{appearance:none;-webkit-appearance:none;margin:0;}
 .dep-toast.show{opacity:1;}
 .th-pred-pulse{animation:predPulse 0.8s ease 3;background:#fff3e0!important;color:#e65100!important;}
 .pred-col-hint{background:#fff8e1!important;box-shadow:inset 0 0 0 1px #ffcc80;}
-@keyframes predPulse{0%,100%{background:var(--dhx-scrollbar-track);}50%{background:#ffe0b2;}}
+@keyframes predPulse{0%,100%{background:var(--dhx-scrollbar-track);}50%{background:var(--dhx-pred-pulse);}}
 .task-row.cp-flash,.list-tr.cp-flash{animation:cpFlash 1.2s ease;}
-@keyframes cpFlash{0%,100%{background:transparent;}30%{background:#ffcdd2;}}
+@keyframes cpFlash{0%,100%{background:transparent;}30%{background:var(--dhx-critical-flash);}}
 .list-tr.critical{background:var(--dhx-critical-bg);}
 .list-tr.critical td:first-child{box-shadow:inset 3px 0 0 var(--dhx-critical);}
 .list-tr.critical .list-title{color:var(--dhx-critical);font-weight:600;}
@@ -291,7 +294,7 @@ body.gantt-col-resizing *{cursor:col-resize!important;}
 .task-row.selected:focus-within{z-index:2;}
 .task-row.flash-hier{animation:ganttFlashHier .9s ease;}
 @keyframes ganttFlashHier{
-  0%{background:#fff9c4!important;}
+  0%{background:var(--dhx-hierarchy-flash)!important;}
   100%{background:transparent;}
 }
 .task-row.critical{border-left:3px solid var(--dhx-critical);}
@@ -512,7 +515,7 @@ body.gantt-col-resizing *{cursor:col-resize!important;}
 .gantt-bar:active{cursor:grabbing;}
 .bar-prog-fill{position:absolute;left:0;top:0;bottom:0;background:rgba(0,0,0,.18);pointer-events:none;border-radius:3px 0 0 3px;}
 .bar-label{position:relative;z-index:2;font-size:12px;font-weight:600;letter-spacing:.01em;color:#fff;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;text-align:center;line-height:1.2;text-shadow:0 1px 2px rgba(0,0,0,.35);}
-.bar-label-outside{position:absolute;z-index:16;font-size:12px;font-weight:600;color:var(--dhx-text);white-space:nowrap;pointer-events:none;max-width:240px;overflow:hidden;text-overflow:ellipsis;text-shadow:0 0 3px #fff,0 0 6px #fff,1px 0 0 #fff,-1px 0 0 #fff,0 1px 0 #fff,0 -1px 0 #fff;}
+.bar-label-outside{position:absolute;z-index:16;font-size:12px;font-weight:600;color:var(--dhx-text);white-space:nowrap;pointer-events:none;max-width:240px;overflow:hidden;text-overflow:ellipsis;text-shadow:0 0 3px var(--dhx-page-bg),0 0 6px var(--dhx-page-bg),1px 0 0 var(--dhx-page-bg),-1px 0 0 var(--dhx-page-bg),0 1px 0 var(--dhx-page-bg),0 -1px 0 var(--dhx-page-bg);}
 .bar-label-milestone{color:#7c3aed;font-weight:600;}
 .bar-resize-l,.bar-resize-r{position:absolute;top:0;bottom:0;width:6px;cursor:ew-resize;z-index:3;opacity:0;transition:opacity .12s;}
 .bar-resize-l{left:0;}
@@ -589,7 +592,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 .gantt-loading-overlay{
   position:fixed;inset:0;z-index:400;
   display:flex;align-items:center;justify-content:center;
-  background:rgba(255,255,255,.55);
+  background:color-mix(in srgb,var(--dhx-page-bg) 65%,transparent);
   backdrop-filter:blur(1px);
   opacity:0;pointer-events:none;transition:opacity .15s;
 }
@@ -783,6 +786,9 @@ html.dark{
   --dhx-banner-warn-fg:#fdba74;
   --dhx-banner-on-bg:#450a0a;
   --dhx-banner-on-fg:#fca5a5;
+  --dhx-pred-pulse:#7c2d12;
+  --dhx-critical-flash:#7f1d1d;
+  --dhx-hierarchy-flash:#713f12;
   --g100:#1e293b;
   --g200:#334155;
   --g500:#94a3b8;
@@ -816,6 +822,8 @@ html.dark .cp-banner-hint{border-bottom-color:#b45309;}
 html.dark .cp-banner-warn{border-bottom-color:#c2410c;}
 html.dark .cp-banner-on{border-bottom-color:#7f1d1d;}
 html.dark .cp-banner-x:hover{background:rgba(255,255,255,.12);}
+html.dark .cp-banner-action{background:rgba(255,255,255,.08);}
+html.dark .cp-banner-action:hover{background:rgba(255,255,255,.16);}
 html.dark .rag-opt.sel-a{background:#451a03;border-color:#f59e0b;color:#fcd34d;}
 html.dark .cp-toggle.on{border-color:#f87171;color:#fca5a5;}
 html.dark .gantt-sel-delete{color:#fca5a5;}

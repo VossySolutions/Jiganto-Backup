@@ -39,11 +39,11 @@ export type PersonTypeVisual = {
 };
 
 export const PERSON_TYPE_CONFIG: Record<string, PersonTypeVisual> = {
-  employee: { label: "Employee", bg: "#EEF2FF", text: "#4338CA", dot: "#4338CA", gradient: "linear-gradient(135deg,#4338CA,#6366F1)" },
-  contractor: { label: "Contractor", bg: "#FEF3C7", text: "#92400E", dot: "#D97706", gradient: "linear-gradient(135deg,#D97706,#F59E0B)" },
-  customer: { label: "Customer staff", bg: "#D1FAE5", text: "#065F46", dot: "#059669", gradient: "linear-gradient(135deg,#059669,#10B981)" },
-  partner: { label: "Partner", bg: "#EDE9FE", text: "#5B21B6", dot: "#7C3AED", gradient: "linear-gradient(135deg,#7C3AED,#A78BFA)" },
-  associate: { label: "Associate", bg: "#FCE7F3", text: "#9D174D", dot: "#DB2777", gradient: "linear-gradient(135deg,#DB2777,#F472B6)" },
+  employee: { label: "Employee", bg: "hsl(var(--status-blue) / 0.15)", text: "hsl(var(--status-blue-foreground))", dot: "#4338CA", gradient: "linear-gradient(135deg,#4338CA,#6366F1)" },
+  contractor: { label: "Contractor", bg: "hsl(var(--status-amber) / 0.15)", text: "hsl(var(--status-amber-foreground))", dot: "#D97706", gradient: "linear-gradient(135deg,#D97706,#F59E0B)" },
+  customer: { label: "Customer staff", bg: "hsl(var(--status-green) / 0.15)", text: "hsl(var(--status-green-foreground))", dot: "#059669", gradient: "linear-gradient(135deg,#059669,#10B981)" },
+  partner: { label: "Partner", bg: "hsl(var(--status-purple) / 0.15)", text: "hsl(var(--status-purple-foreground))", dot: "#7C3AED", gradient: "linear-gradient(135deg,#7C3AED,#A78BFA)" },
+  associate: { label: "Associate", bg: "hsl(var(--destructive) / 0.12)", text: "hsl(var(--destructive))", dot: "#DB2777", gradient: "linear-gradient(135deg,#DB2777,#F472B6)" },
 };
 
 /** Neutral styling for legacy / unknown person types found in the database. */
@@ -51,7 +51,7 @@ function neutralTypeVisual(type: string): PersonTypeVisual {
   const label = type
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (ch) => ch.toUpperCase());
-  return { label, bg: "#F1F5F9", text: "#475569", dot: "#94A3B8", gradient: "linear-gradient(135deg,#64748B,#94A3B8)" };
+  return { label, bg: "hsl(var(--muted))", text: "hsl(var(--muted-foreground))", dot: "#94A3B8", gradient: "linear-gradient(135deg,#64748B,#94A3B8)" };
 }
 
 export function getTypeConfig(type?: string | null): PersonTypeVisual {
@@ -98,10 +98,10 @@ export function daysUntilExpiry(endDate?: string | Date | null): number | null {
 export type StatusVisual = { label: string; bg: string; text: string; dot: string };
 
 export const STATUS_CONFIG: Record<EffectiveStatus, StatusVisual> = {
-  active: { label: "Active", bg: "#D1FAE5", text: "#065F46", dot: "#059669" },
-  inactive: { label: "Inactive", bg: "#F1F5F9", text: "#64748B", dot: "#94A3B8" },
-  expiring: { label: "Expiring", bg: "#FEF3C7", text: "#92400E", dot: "#D97706" },
-  expired: { label: "Expired", bg: "#FEE2E2", text: "#991B1B", dot: "#DC2626" },
+  active: { label: "Active", bg: "hsl(var(--status-green) / 0.15)", text: "hsl(var(--status-green-foreground))", dot: "#059669" },
+  inactive: { label: "Inactive", bg: "hsl(var(--muted))", text: "hsl(var(--muted-foreground))", dot: "#94A3B8" },
+  expiring: { label: "Expiring", bg: "hsl(var(--status-amber) / 0.15)", text: "hsl(var(--status-amber-foreground))", dot: "#D97706" },
+  expired: { label: "Expired", bg: "hsl(var(--status-red) / 0.15)", text: "hsl(var(--status-red-foreground))", dot: "#DC2626" },
 };
 
 /** People-view utilisation colour (client design: high utilisation = red / at risk). */
@@ -136,10 +136,10 @@ export function getProficiencyConfig(level: string | null | number) {
 export type MatrixLevel = { level: number; label: string; desc: string; bg: string; text: string };
 
 export const MATRIX_LEVELS: MatrixLevel[] = [
-  { level: 1, label: "Awareness", desc: "Basic theoretical knowledge, limited hands-on experience.", bg: "#CBD5E1", text: "#475569" },
-  { level: 2, label: "Practitioner", desc: "Works independently on standard tasks; some mentoring may be needed.", bg: "#93C5FD", text: "#1D4ED8" },
-  { level: 3, label: "Advanced", desc: "Leads delivery in this area, mentors others, handles complex scenarios.", bg: "#5EEAD4", text: "#0F766E" },
-  { level: 4, label: "Expert", desc: "Recognised authority; defines standards, architecture and practice direction.", bg: "#A78BFA", text: "#5B21B6" },
+  { level: 1, label: "Awareness", desc: "Basic theoretical knowledge, limited hands-on experience.", bg: "hsl(var(--muted))", text: "hsl(var(--muted-foreground))" },
+  { level: 2, label: "Practitioner", desc: "Works independently on standard tasks; some mentoring may be needed.", bg: "hsl(var(--status-blue) / 0.2)", text: "hsl(var(--status-blue-foreground))" },
+  { level: 3, label: "Advanced", desc: "Leads delivery in this area, mentors others, handles complex scenarios.", bg: "hsl(var(--status-green) / 0.2)", text: "hsl(var(--status-green-foreground))" },
+  { level: 4, label: "Expert", desc: "Recognised authority; defines standards, architecture and practice direction.", bg: "hsl(var(--status-purple) / 0.2)", text: "hsl(var(--status-purple-foreground))" },
 ];
 
 export function getMatrixLevel(level?: number | null): MatrixLevel {

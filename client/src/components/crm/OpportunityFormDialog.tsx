@@ -312,7 +312,7 @@ export function OpportunityFormDialog({
             <CrmForecastZone>
               <div className="flex items-center gap-2 mb-3.5">
                 <div className="w-[22px] h-[22px] rounded-md bg-white/70 dark:bg-background/40 flex items-center justify-center">
-                  <BarChart3 className="h-3.5 w-3.5 text-blue-700" />
+                  <BarChart3 className="h-3.5 w-3.5 text-blue-700 dark:text-blue-300" />
                 </div>
                 <h3 className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">Deal forecast</h3>
                 <span className="text-[10px] text-violet-700 dark:text-violet-400 font-semibold ml-auto">Drives revenue forecasting</span>
@@ -376,7 +376,7 @@ export function OpportunityFormDialog({
 
             <CrmFormDivider />
 
-            <CrmFormSection icon={<Clock className="h-3.5 w-3.5 text-teal-600" />} iconClassName="bg-teal-50 dark:bg-teal-950/40" title="Stage" tag="Custom stages supported">
+            <CrmFormSection icon={<Clock className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />} iconClassName="bg-teal-50 dark:bg-teal-950/40" title="Stage" tag="Custom stages supported">
               <CrmStageChips
                 stages={stages}
                 value={form.stageId}
@@ -417,7 +417,7 @@ export function OpportunityFormDialog({
 
             <CrmFormDivider />
 
-            <CrmFormSection icon={<DollarSign className="h-3.5 w-3.5 text-emerald-600" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Financials">
+            <CrmFormSection icon={<DollarSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Financials">
               <CrmFieldGrid cols={3}>
                 <div className="space-y-1.5">
                   <CrmFieldLabel>Revenue</CrmFieldLabel>
@@ -436,7 +436,7 @@ export function OpportunityFormDialog({
 
             <CrmFormDivider />
 
-            <CrmFormSection icon={<Target className="h-3.5 w-3.5 text-amber-600" />} iconClassName="bg-amber-50 dark:bg-amber-950/40" title="Source & competitive landscape">
+            <CrmFormSection icon={<Target className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />} iconClassName="bg-amber-50 dark:bg-amber-950/40" title="Source & competitive landscape">
               <CrmFieldGrid className="mb-3.5">
                 <div className="space-y-1.5">
                   <CrmFieldLabel>Source</CrmFieldLabel>
@@ -463,7 +463,7 @@ export function OpportunityFormDialog({
 
             <CrmFormDivider />
 
-            <CrmFormSection icon={<UserRound className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Ownership">
+            <CrmFormSection icon={<UserRound className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Ownership">
               <CrmFieldGrid>
                 <CrmOwnerSelect value={form.ownerUserId} onChange={(v) => set("ownerUserId", v)} testId="select-opp-owner" />
                 <div className="space-y-1.5">

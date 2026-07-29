@@ -2793,7 +2793,7 @@ function renderDeps(visible,start){
       const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
       bg.setAttribute('x',labelX-10); bg.setAttribute('y',labelY-7);
       bg.setAttribute('width',20); bg.setAttribute('height',14);
-      bg.setAttribute('rx',3); bg.setAttribute('fill','#fff');
+      bg.setAttribute('rx',3); bg.setAttribute('fill','var(--dhx-surface)');
       bg.setAttribute('stroke',color); bg.setAttribute('stroke-width','0.8');
       const lbl=document.createElementNS('http://www.w3.org/2000/svg','text');
       lbl.setAttribute('x',labelX); lbl.setAttribute('y',labelY+1);

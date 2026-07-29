@@ -157,7 +157,7 @@ export function ResourcesAllocationsTab({
         onSubmit={save}
         disabled={!form.resourceId || !form.startDate || !form.endDate}
       >
-        <FormSection icon={<Calendar className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Assignment">
+        <FormSection icon={<Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Assignment">
           <FieldGrid className="mb-3.5">
             <div className="space-y-1.5"><FieldLabel required>Resource</FieldLabel>
               <Select value={form.resourceId} onValueChange={(v) => setForm({ ...form, resourceId: v })}>

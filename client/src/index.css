@@ -214,6 +214,41 @@
   border-radius: 20px;
 }
 
+/* Recharts defaults use light-only #ccc grids and white tooltips. */
+.recharts-cartesian-grid line {
+  stroke: hsl(var(--border));
+}
+
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line {
+  stroke: hsl(var(--border));
+}
+
+.recharts-cartesian-axis-tick text,
+.recharts-polar-angle-axis-tick text {
+  fill: hsl(var(--muted-foreground));
+}
+
+.recharts-tooltip-cursor {
+  fill: hsl(var(--muted) / 0.4);
+  stroke: hsl(var(--border));
+}
+
+.recharts-default-tooltip {
+  background-color: hsl(var(--popover)) !important;
+  border-color: hsl(var(--popover-border)) !important;
+  color: hsl(var(--popover-foreground)) !important;
+  border-radius: var(--radius);
+}
+
+.recharts-tooltip-label {
+  color: hsl(var(--popover-foreground)) !important;
+}
+
+.recharts-legend-item-text {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
 /* ─── TipTap table column-resize ─────────────────────────────────────────── */
 .ProseMirror td,
 .ProseMirror th {

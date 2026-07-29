@@ -1424,9 +1424,9 @@ export default function CustomerManagementPage() {
               {view === "health" && (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <KpiCard label="Healthy (70–100)" value={dashboard.health.healthy} valueClassName="text-emerald-600" />
-                    <KpiCard label="Watch (40–69)" value={dashboard.health.watch} valueClassName="text-amber-600" sub="CSM outreach needed" subTone="warn" />
-                    <KpiCard label="At risk (0–39)" value={dashboard.health.atRisk} valueClassName="text-red-600" sub="Urgent intervention" subTone="dn" />
+                    <KpiCard label="Healthy (70–100)" value={dashboard.health.healthy} valueClassName="text-emerald-600 dark:text-emerald-400" />
+                    <KpiCard label="Watch (40–69)" value={dashboard.health.watch} valueClassName="text-amber-600 dark:text-amber-400" sub="CSM outreach needed" subTone="warn" />
+                    <KpiCard label="At risk (0–39)" value={dashboard.health.atRisk} valueClassName="text-red-600 dark:text-red-400" sub="Urgent intervention" subTone="dn" />
                     <KpiCard label="Average health score" value={dashboard.health.averageScore} sub={dashboard.health.averageDelta} subTone="up" />
                   </div>
                   <InfoAlert>
@@ -1776,7 +1776,7 @@ export default function CustomerManagementPage() {
                       value={formatGbp(dashboard.programmes.kpis.freeAccessCostPence)}
                       sub={`${dashboard.programmes.kpis.freeAccessCostPercent}% of MRR`}
                       subTone="warn"
-                      valueClassName="text-amber-600"
+                      valueClassName="text-amber-600 dark:text-amber-400"
                     />
                     <KpiCard label="Converted to paid" value={dashboard.programmes.kpis.convertedToPaid} subTone="up" sub="From completed programmes" />
                   </div>
@@ -2062,7 +2062,7 @@ export default function CustomerManagementPage() {
                       value={formatGbp(dashboard.billing.freeAccessCostPence)}
                       sub={`${dashboard.billing.freeAccessCostPercent}% of MRR — near limit`}
                       subTone="warn"
-                      valueClassName="text-amber-600"
+                      valueClassName="text-amber-600 dark:text-amber-400"
                     />
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">

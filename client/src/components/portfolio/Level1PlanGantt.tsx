@@ -54,20 +54,6 @@ const STATUS_CYCLE: PlanBarStatus[] = [
   "not_started", "in_progress", "at_risk", "delayed", "completed",
 ];
 
-const PHASE_NAME_COLOR: Record<PlanBarStatus, string> = {
-  not_started: R360.text3,
-  in_progress: R360.brandD,
-  at_risk: R360.amberD,
-  delayed: R360.redD,
-  completed: R360.tealD,
-};
-
-/** Light release band colours (no dark navy / teal headers). */
-const RELEASE_BANDS = [
-  { bg: R360.brandL, fg: R360.brandD, bar: R360.brandM, border: "#C7D2FE" },
-  { bg: R360.tealL, fg: R360.tealD, bar: R360.teal, border: "#99F6E4" },
-] as const;
-
 type Props = {
   rows: Level1PlanRow[];
   onChange: (rows: Level1PlanRow[]) => void;
@@ -166,7 +152,19 @@ type AddMilestoneDraft = {
 
 export function Level1PlanGantt({ rows, onChange, year = new Date().getFullYear() }: Props) {
   const { resolvedTheme } = useTheme();
-  const chrome = r360Chrome(resolvedTheme === "dark");
+  const dark = resolvedTheme === "dark";
+  const chrome = r360Chrome(dark);
+  const releaseBands = [
+    { bg: chrome.brandL, fg: chrome.brandFg, bar: R360.brandM, border: dark ? "rgba(129,140,248,0.35)" : "#C7D2FE" },
+    { bg: chrome.tealL, fg: chrome.tealFg, bar: R360.teal, border: dark ? "rgba(45,212,191,0.35)" : "#99F6E4" },
+  ];
+  const phaseNameColor: Record<PlanBarStatus, string> = {
+    not_started: chrome.text3,
+    in_progress: chrome.brandFg,
+    at_risk: chrome.amberFg,
+    delayed: chrome.redFg,
+    completed: chrome.tealFg,
+  };
   const [showMilestones, setShowMilestones] = useState(true);
   const [view, setView] = useState<"monthly" | "quarterly">("monthly");
   const [fullscreen, setFullscreen] = useState(false);
@@ -483,7 +481,10 @@ export function Level1PlanGantt({ rows, onChange, year = new Date().getFullYear(
       {selected && (
         <div
           className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-[11px]"
-          style={{ borderColor: "#C7D2FE", background: chrome.brandL }}
+          style={{
+            borderColor: resolvedTheme === "dark" ? "rgba(129,140,248,0.35)" : "#C7D2FE",
+            background: chrome.brandL,
+          }}
         >
           <span className="font-bold" style={{ color: R360.brandD }}>
             {selected.kind === "release" && "Release"}
@@ -810,7 +811,7 @@ export function Level1PlanGantt({ rows, onChange, year = new Date().getFullYear(
 
                 if (row.kind === "release") {
                   const ri = releaseIndexById.get(row.id) ?? 0;
-                  const band = RELEASE_BANDS[ri % RELEASE_BANDS.length];
+                  const band = releaseBands[ri % releaseBands.length];
                   const span = releaseSpan(row);
                   return (
                     <tr
@@ -976,7 +977,7 @@ export function Level1PlanGantt({ rows, onChange, year = new Date().getFullYear(
                 // phase
                 const meta = STATUS_META[row.status];
                 const isNow = row.id === nowPhaseId;
-                const nameColor = PHASE_NAME_COLOR[row.status];
+                const nameColor = phaseNameColor[row.status];
                 const rowBg = isNow ? chrome.brandL : isSelected ? chrome.softSelected : chrome.surface;
                 const labelCellBg = isNow || isSelected ? rowBg : chrome.surface;
 

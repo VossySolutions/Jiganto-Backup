@@ -407,7 +407,7 @@ export function ExecutionConsoleScreen() {
                 <Button variant="destructive" className="gap-2 flex-1 min-w-[100px]" onClick={() => setFailOpen(true)} disabled={submitMutation.isPending}>
                   <XCircle className="h-4 w-4" /> Fail <span className="text-[10px] opacity-70">(F)</span>
                 </Button>
-                <Button variant="outline" className="gap-2 border-amber-400 text-amber-700" onClick={() => setBlockedOpen(true)}>
+                <Button variant="outline" className="gap-2 border-amber-400 text-amber-700 dark:border-amber-700 dark:text-amber-300" onClick={() => setBlockedOpen(true)}>
                   <MinusCircle className="h-4 w-4" /> Blocked <span className="text-[10px] opacity-70">(B)</span>
                 </Button>
                 <Button variant="outline" className="gap-2" onClick={submitDeferred}>

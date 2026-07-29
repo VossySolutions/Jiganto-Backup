@@ -310,12 +310,12 @@ export function TestCyclesScreen() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
                   {[
                     { label: "Total", value: m.total, color: "text-foreground" },
-                    { label: "Executed", value: m.executed, color: "text-blue-600" },
-                    { label: "Passed", value: m.passed, color: "text-green-600" },
-                    { label: "Failed", value: m.failed, color: "text-red-600" },
-                    { label: "Blocked", value: m.blocked, color: "text-amber-600" },
+                    { label: "Executed", value: m.executed, color: "text-blue-600 dark:text-blue-400" },
+                    { label: "Passed", value: m.passed, color: "text-green-600 dark:text-green-400" },
+                    { label: "Failed", value: m.failed, color: "text-red-600 dark:text-red-400" },
+                    { label: "Blocked", value: m.blocked, color: "text-amber-600 dark:text-amber-400" },
                     { label: "Completion", value: `${m.completionPct}%`, color: "text-primary" },
-                    { label: "Pass Rate", value: `${m.passRatePct}%`, color: "text-green-600" },
+                    { label: "Pass Rate", value: `${m.passRatePct}%`, color: "text-green-600 dark:text-green-400" },
                     { label: "Deferred", value: m.deferred, color: "text-muted-foreground" },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="bg-muted/30 rounded-lg p-2 text-center">

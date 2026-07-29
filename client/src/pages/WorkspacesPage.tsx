@@ -14,6 +14,7 @@ import {
 } from "@/components/ModulePageChrome";
 import { WorkspacesIcon } from "@/components/icons/ModuleIcons";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useTheme } from "@/hooks/use-theme";
 import { TipTapEditor } from "@/components/TipTapEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -471,6 +472,7 @@ function EmojiPicker({
   triggerSize?: "sm" | "md" | "lg";
 }) {
   const [open, setOpen] = useState(false);
+  const { resolvedTheme } = useTheme();
   const sizeClasses = { sm: "text-base", md: "text-xl", lg: "text-4xl" };
 
   return (
@@ -488,7 +490,7 @@ function EmojiPicker({
         <Picker
           data={data}
           onEmojiSelect={(emoji: any) => { onSelect(emoji.native); setOpen(false); }}
-          theme="light"
+          theme={resolvedTheme}
           previewPosition="none"
           skinTonePosition="none"
         />

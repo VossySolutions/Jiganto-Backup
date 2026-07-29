@@ -204,9 +204,9 @@ export function PmoDashboard() {
                       variant="outline"
                       className={cn(
                         "capitalize shrink-0",
-                        p.ragStatus === "red" && "border-red-300 text-red-700",
-                        p.ragStatus === "amber" && "border-amber-300 text-amber-700",
-                        p.ragStatus === "green" && "border-green-300 text-green-700",
+                        p.ragStatus === "red" && "border-red-300 text-red-700 dark:border-red-800 dark:text-red-400",
+                        p.ragStatus === "amber" && "border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-400",
+                        p.ragStatus === "green" && "border-green-300 text-green-700 dark:border-green-800 dark:text-green-400",
                       )}
                     >
                       {p.ragStatus}

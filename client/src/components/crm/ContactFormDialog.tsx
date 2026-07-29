@@ -198,7 +198,7 @@ export function ContactFormDialog({
         </div>
       </div>
 
-      <CrmFormSection icon={<UserRound className="h-3.5 w-3.5 text-blue-600" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Contact details">
+      <CrmFormSection icon={<UserRound className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />} iconClassName="bg-blue-50 dark:bg-blue-950/40" title="Contact details">
         <CrmFieldGrid className="mb-3.5">
           <div className="space-y-1.5">
             <CrmFieldLabel required>First name</CrmFieldLabel>
@@ -258,7 +258,7 @@ export function ContactFormDialog({
 
       <CrmFormDivider />
 
-      <CrmFormSection icon={<Building2 className="h-3.5 w-3.5 text-emerald-600" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Account & role">
+      <CrmFormSection icon={<Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/40" title="Account & role">
         <CrmFieldGrid>
           <div className="space-y-1.5">
             <CrmFieldLabel>Account</CrmFieldLabel>
