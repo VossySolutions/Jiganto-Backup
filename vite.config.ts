@@ -17,6 +17,8 @@ export default defineConfig({
     include: ["react-konva", "konva", "@xyflow/react", "recharts"],
   },
   root: path.resolve(import.meta.dirname, "client"),
+  // .env lives at the repo root, not under client/ (which is Vite's default envDir).
+  envDir: path.resolve(import.meta.dirname),
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
