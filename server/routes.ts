@@ -2081,7 +2081,7 @@ export async function registerRoutes(
       return res.status(401).json({ message: "Not authenticated" });
     }
     const channelId = Number(req.params.id);
-    const { assertCanPostToChannel, afterChatMessageCreated } = await import("./chat/extended-routes");
+    const { afterChatMessageCreated } = await import("./chat/extended-routes");
     const gate = await assertCanPostToChannel(channelId, userId);
     if (!gate.ok) return res.status(gate.status).json({ message: gate.message });
 

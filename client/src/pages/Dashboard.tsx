@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronDown, Cog, Star, Check, Presentation, X, Plus, Sparkles, Search } from "lucide-react";
 import { ModuleDiscovery, useModuleDiscoveryShortcuts } from "@/components/ModuleDiscovery";
+import { DeleteDashboardButton, DeleteDashboardDialog } from "@/components/dashboard/DeleteDashboardButton";
 
 import {
 
@@ -147,6 +148,7 @@ export function Dashboard() {
 
   const [showAiDialog, setShowAiDialog] = useState(false);
   const [dashboardSearch, setDashboardSearch] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<{ id: number; name: string } | null>(null);
   const CONTEXT_KEY = "jiganto-dashboard-context";
   const [contextClientId, setContextClientId] = useState<number | null>(() => activeClient?.id ?? null);
   const [contextProjectId, setContextProjectId] = useState<number | null>(null);
@@ -375,7 +377,7 @@ export function Dashboard() {
 
           <div className="flex flex-wrap items-center gap-3">
 
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
 
               <DropdownMenuTrigger asChild>
 
@@ -531,33 +533,41 @@ export function Dashboard() {
 
                     <DropdownMenuSeparator />
 
-                    <DropdownMenuLabel className="text-xs font-medium text-muted-foreground bg-muted/50 py-1.5 px-2 -mx-1">My dashboards</DropdownMenuLabel>
+                    <DropdownMenuLabel className="text-xs font-medium text-muted-foreground bg-muted/50 py-1.5 px-2 -mx-1">
+                      My dashboards
+                    </DropdownMenuLabel>
 
-                    {filteredDashboards.custom.map((dashboard) => (
-
-                      <DropdownMenuItem
-
-                        key={dashboard.id}
-
-                        onClick={() => setCurrentDashboard(dashboard.id)}
-
-                        className="flex items-center justify-between cursor-pointer"
-
-                      >
-
-                        <div>
-
-                          <p className="font-medium">{dashboard.name}</p>
-
-                          <p className="text-xs text-muted-foreground">{dashboard.description}</p>
-
+                    {filteredDashboards.custom.map((dashboard) => {
+                      const id = parseCustomDashboardId(dashboard.id);
+                      return (
+                        <div
+                          key={dashboard.id}
+                          className="flex items-center gap-0.5 rounded-sm hover:bg-accent"
+                        >
+                          <DropdownMenuItem
+                            onSelect={() => setCurrentDashboard(dashboard.id)}
+                            className="flex flex-1 items-center justify-between gap-2 cursor-pointer min-w-0"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium truncate">{dashboard.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">{dashboard.description}</p>
+                            </div>
+                            {currentDashboard === dashboard.id && (
+                              <Check className="h-4 w-4 text-primary shrink-0" />
+                            )}
+                          </DropdownMenuItem>
+                          {id != null && (
+                            <DeleteDashboardButton
+                              dashboardId={id}
+                              dashboardName={dashboard.name}
+                              variant="icon"
+                              data-testid={`delete-dashboard-menu-${id}`}
+                              onRequestDelete={() => setPendingDelete({ id, name: dashboard.name })}
+                            />
+                          )}
                         </div>
-
-                        {currentDashboard === dashboard.id && <Check className="h-4 w-4 text-primary" />}
-
-                      </DropdownMenuItem>
-
-                    ))}
+                      );
+                    })}
 
                   </>
 
@@ -574,20 +584,22 @@ export function Dashboard() {
                     </p>
                   )}
 
-                <DropdownMenuItem onClick={() => setShowCreateDialog(true)} className="gap-2 cursor-pointer">
-
+                <DropdownMenuItem
+                  onSelect={() => setShowCreateDialog(true)}
+                  className="gap-2 cursor-pointer"
+                  data-testid="menu-create-dashboard"
+                >
                   <Plus className="h-4 w-4" />
-
                   Create custom dashboard
-
                 </DropdownMenuItem>
 
-                <DropdownMenuItem onClick={() => setShowAiDialog(true)} className="gap-2 cursor-pointer">
-
+                <DropdownMenuItem
+                  onSelect={() => setShowAiDialog(true)}
+                  className="gap-2 cursor-pointer"
+                  data-testid="menu-ai-dashboard"
+                >
                   <Sparkles className="h-4 w-4" />
-
                   AI dashboard builder
-
                 </DropdownMenuItem>
 
               </DropdownMenuContent>
@@ -628,13 +640,27 @@ export function Dashboard() {
 
             <>
 
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowCreateDialog(true)}>
-
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setShowCreateDialog(true)}
+                data-testid="create-dashboard-btn"
+              >
                 <Plus className="h-4 w-4" />
-
-                New
-
+                Create dashboard
               </Button>
+
+              {customId != null && currentDashboardInfo && (
+                <DeleteDashboardButton
+                  dashboardId={customId}
+                  dashboardName={currentDashboardInfo.name}
+                  clientId={contextClientId}
+                  projectId={contextProjectId}
+                  variant="header"
+                  data-testid="delete-dashboard-header"
+                />
+              )}
 
               <Button variant="outline" size="sm" className="gap-1.5" onClick={openAiInsights} data-testid="button-ai-insights">
 
@@ -740,6 +766,7 @@ export function Dashboard() {
         customDashboardId={customId}
         customDashboards={enabledDashboards.filter((d) => d.group === "custom")}
         onSelectCustomDashboard={setCurrentDashboard}
+        onCreateDashboard={() => setShowCreateDialog(true)}
         contextClientId={contextClientId}
         contextProjectId={contextProjectId}
       />
@@ -773,6 +800,20 @@ export function Dashboard() {
         projectId={contextProjectId}
 
       />
+
+      {pendingDelete && (
+        <DeleteDashboardDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setPendingDelete(null);
+          }}
+          dashboardId={pendingDelete.id}
+          dashboardName={pendingDelete.name}
+          clientId={contextClientId}
+          projectId={contextProjectId}
+          onDeleted={() => setPendingDelete(null)}
+        />
+      )}
 
     </div>
 

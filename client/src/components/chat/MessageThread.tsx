@@ -18,7 +18,6 @@ import {
   Smile,
   Sparkles,
   Trash2,
-  User,
   Users,
 } from "lucide-react";
 import { renderChatMessageContent } from "@/lib/chat-message-content";
@@ -36,12 +35,16 @@ import type { ChatAttachmentMeta, ChatInboxItem, ChatMessageWithMeta } from "@sh
 import {
   CHAT_ACCENT,
   displayPersonName,
+  chatPeerTitle,
   formatDateDivider,
   formatMessageTime,
   getUserInitials,
   shouldShowMessageHeader,
   QUICK_EMOJIS,
   chatFont,
+  presenceDotClass,
+  presenceLabel,
+  type ChatPresenceStatus,
 } from "@/lib/chat-utils";
 import { PollCard } from "@/components/chat/PollCard";
 import { ChatButtonSpinner } from "@/components/chat/ChatLoading";
@@ -51,7 +54,7 @@ export function MessageThread({
   messages,
   messagesLoading,
   currentUserId,
-  typingDisplay,
+  peerPresence,
   hasMore,
   loadingMore,
   aiEnabled,
@@ -71,7 +74,7 @@ export function MessageThread({
   messages: ChatMessageWithMeta[];
   messagesLoading: boolean;
   currentUserId: string;
-  typingDisplay: string | null;
+  peerPresence?: ChatPresenceStatus;
   hasMore: boolean;
   loadingMore: boolean;
   aiEnabled?: boolean;
@@ -88,7 +91,6 @@ export function MessageThread({
   onInvalidate: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const prevScrollHeightRef = useRef<number>(0);
   const [showJump, setShowJump] = useState(false);
   const [emojiFor, setEmojiFor] = useState<number | null>(null);
@@ -164,6 +166,21 @@ export function MessageThread({
     if (el.scrollTop < 120 && hasMore && !loadingMore) onLoadMore();
   };
 
+  const isDm = channel.type === "direct";
+  const peerName = isDm ? chatPeerTitle(channel.otherUser, channel.displayName) : channel.displayName;
+
+  const headerSubtitle = isDm
+    ? presenceLabel(peerPresence)
+    : channel.description
+      ? channel.description
+      : channel.type === "announcement"
+        ? channel.canPost === false
+          ? "Announcements only — admins can post"
+          : "Announcement channel"
+        : memberCount != null && memberCount > 0
+          ? `${memberCount} member${memberCount === 1 ? "" : "s"}`
+          : null;
+
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0 relative bg-gradient-to-br from-background to-muted/10" data-testid="message-area">
       {/* Channel header */}
@@ -180,24 +197,40 @@ export function MessageThread({
           </Button>
         )}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-          <div
-            className="p-1.5 sm:p-2 rounded-xl shrink-0 text-white"
-            style={{ backgroundColor: CHAT_ACCENT }}
-          >
-            {channel.type === "private" ? (
-              <Lock className="h-4 w-4" />
-            ) : channel.type === "direct" ? (
-              <User className="h-4 w-4" />
-            ) : channel.type === "announcement" ? (
-              <Megaphone className="h-4 w-4" />
-            ) : (
-              <Hash className="h-4 w-4" />
-            )}
-          </div>
+          {isDm && channel.otherUser ? (
+            <div className="relative shrink-0">
+              <Avatar className="h-9 w-9">
+                <AvatarImage src={channel.otherUser.profileImageUrl || undefined} />
+                <AvatarFallback className="text-xs">
+                  {getUserInitials(channel.otherUser.firstName, channel.otherUser.lastName)}
+                </AvatarFallback>
+              </Avatar>
+              <span
+                className={cn(
+                  "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-card",
+                  presenceDotClass(peerPresence),
+                )}
+                title={presenceLabel(peerPresence)}
+              />
+            </div>
+          ) : (
+            <div
+              className="p-1.5 sm:p-2 rounded-xl shrink-0 text-white"
+              style={{ backgroundColor: CHAT_ACCENT }}
+            >
+              {channel.type === "private" ? (
+                <Lock className="h-4 w-4" />
+              ) : channel.type === "announcement" ? (
+                <Megaphone className="h-4 w-4" />
+              ) : (
+                <Hash className="h-4 w-4" />
+              )}
+            </div>
+          )}
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h3 className={cn("truncate", chatFont.threadTitle)} data-testid="channel-name">
-                {channel.displayName}
+                {peerName}
               </h3>
               {bridgeActive && (
                 <span className={cn("inline-flex items-center gap-1 text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded-full shrink-0", chatFont.badge)}>
@@ -206,15 +239,19 @@ export function MessageThread({
                 </span>
               )}
             </div>
-            {channel.description ? (
-              <p className={cn("truncate max-w-[10rem] sm:max-w-xs hidden sm:block", chatFont.threadSubtitle)}>{channel.description}</p>
-            ) : channel.type === "announcement" ? (
-              <p className={cn("hidden sm:block", chatFont.threadSubtitle)}>
-                {channel.canPost === false
-                  ? "Announcements only — admins can post"
-                  : "Announcement channel"}
+            {headerSubtitle && (
+              <p
+                className={cn(
+                  "truncate max-w-[14rem] sm:max-w-xs",
+                  chatFont.threadSubtitle,
+                  isDm && peerPresence === "online" && "text-emerald-600",
+                  isDm && peerPresence === "away" && "text-amber-600",
+                )}
+                data-testid="channel-status"
+              >
+                {headerSubtitle}
               </p>
-            ) : null}
+            )}
           </div>
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
@@ -447,12 +484,7 @@ export function MessageThread({
                       )}
 
                       {/* Hover action bar */}
-                      <div
-                        className={cn(
-                          "absolute top-0 -translate-y-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-card border rounded-lg shadow-sm p-0.5 z-10",
-                          isOwn ? "right-0" : "right-0",
-                        )}
-                      >
+                      <div className="absolute top-0 right-0 -translate-y-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-card border rounded-lg shadow-sm p-0.5 z-10">
                         <Button
                           size="icon"
                           variant="ghost"
@@ -505,9 +537,6 @@ export function MessageThread({
                             )}
                           </Button>
                         )}
-                        <Button size="icon" variant="ghost" className="h-7 w-7" title="More">
-                          <MoreHorizontal className="h-3.5 w-3.5" />
-                        </Button>
                       </div>
 
                       {emojiFor === message.id && (
@@ -534,18 +563,11 @@ export function MessageThread({
               );
             })
           )}
-          <div ref={bottomRef} />
         </div>
       </div>
 
-      {typingDisplay && (
-        <div className={cn("px-4 sm:px-6 py-1.5 italic border-t bg-card/50 shrink-0", chatFont.messageMeta)}>
-          {typingDisplay}
-        </div>
-      )}
-
       {showJump && (
-        <div className="absolute bottom-20 sm:bottom-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
           <Button
             size="sm"
             variant="secondary"

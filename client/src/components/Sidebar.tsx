@@ -7,6 +7,7 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   SlidersHorizontal,
   Eye,
   EyeOff,
@@ -328,6 +329,11 @@ export function Sidebar() {
     toggleCollapse,
     toggleModuleVisibility,
     isModuleHidden,
+    selectAllModules,
+    deselectAllModules,
+    toggleGroupCollapsed,
+    isGroupCollapsed,
+    setGroupCollapsed,
     mobileNavOpen,
     setMobileNavOpen,
   } = useSidebarState();
@@ -406,13 +412,36 @@ export function Sidebar() {
     return groups;
   }, [settingsAccess.tier]);
 
+  const customizableModules = useMemo(
+    () => navGroups.flatMap((g) => g.items),
+    [navGroups],
+  );
+
+  const isNavItemActive = useCallback(
+    (item: ModuleItem) => {
+      const href = item.href === DASHBOARD_PATH ? dashboardHref : item.href;
+      if (item.href === DASHBOARD_PATH) return isDashboardPath(location);
+      return (
+        location === href ||
+        (href !== DASHBOARD_PATH && location.startsWith(href.split("?")[0]))
+      );
+    },
+    [dashboardHref, location],
+  );
+
+  // Keep the section open when the active route lives inside a collapsed group.
+  useEffect(() => {
+    for (const group of navGroups) {
+      if (!group.label || !isGroupCollapsed(group.label)) continue;
+      if (group.items.some(isNavItemActive)) {
+        setGroupCollapsed(group.label, false);
+      }
+    }
+  }, [navGroups, location, isNavItemActive, isGroupCollapsed, setGroupCollapsed]);
+
   const renderNavItem = (item: ModuleItem) => {
     const href = item.href === DASHBOARD_PATH ? dashboardHref : item.href;
-    const isActive =
-      item.href === DASHBOARD_PATH
-        ? isDashboardPath(location)
-        : location === href ||
-          (href !== DASHBOARD_PATH && location.startsWith(href));
+    const isActive = isNavItemActive(item);
     if (isModuleHidden(item.href)) return null;
     if (!canAccessNavPath(item.href)) return null;
     if (!isContractorNavAllowed(href)) return null;
@@ -856,22 +885,39 @@ export function Sidebar() {
               });
               if (visibleItems.length === 0) return null;
 
+              const groupCollapsed =
+                !!group.label && !showCollapsed && isGroupCollapsed(group.label);
+
               return (
                 <div
                   key={group.label || "pinned"}
                   className={groupIndex > 0 ? "pt-2" : ""}
                 >
                   {group.label && !showCollapsed && (
-                    <p className="px-3 text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5 mt-2">
-                      {group.label}
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroupCollapsed(group.label!)}
+                      aria-expanded={!groupCollapsed}
+                      data-testid={`nav-group-${group.label.toLowerCase().replace(/\s+/g, "-")}`}
+                      className="flex w-full items-center gap-1 px-3 py-1.5 mt-1 rounded-md text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider hover:bg-muted/60 hover:text-foreground transition-colors"
+                    >
+                      <span className="flex-1 text-left truncate">{group.label}</span>
+                      <ChevronDown
+                        className={cn(
+                          "h-3.5 w-3.5 shrink-0 opacity-70 transition-transform duration-200",
+                          groupCollapsed && "-rotate-90",
+                        )}
+                      />
+                    </button>
                   )}
                   {showCollapsed && group.label && groupIndex > 1 && (
                     <div className="mx-2 my-2 h-px bg-border/40" />
                   )}
-                  <div className="space-y-0.5">
-                    {group.items.map(renderNavItem)}
-                  </div>
+                  {!groupCollapsed && (
+                    <div className="space-y-0.5">
+                      {group.items.map(renderNavItem)}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1185,12 +1231,13 @@ export function Sidebar() {
               Customize Menu
             </DialogTitle>
             <DialogDescription>
-              Show or hide menu items to personalize your workspace
+              Show or hide menu items to personalize your workspace. Use Deselect
+              All for a minimal demo menu, then re-select what you need.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-1 py-4 max-h-[400px] overflow-y-auto">
-            {moduleGroups.map((group) => (
+            {navGroups.map((group) => (
               <div key={group.label || "pinned"}>
                 {group.label && (
                   <p className="px-3 pt-3 pb-1 text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest">
@@ -1234,20 +1281,27 @@ export function Sidebar() {
             ))}
           </div>
 
-          <div className="flex justify-between pt-2 border-t">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                allModuleItems.forEach((m) => {
-                  if (isModuleHidden(m.href)) {
-                    toggleModuleVisibility(m.href);
-                  }
-                });
-              }}
-            >
-              Show All
-            </Button>
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
+            <div className="flex flex-wrap gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={selectAllModules}
+                data-testid="customize-select-all"
+              >
+                Select All
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  deselectAllModules(customizableModules.map((m) => m.href))
+                }
+                data-testid="customize-deselect-all"
+              >
+                Deselect All
+              </Button>
+            </div>
             <Button onClick={() => setShowCustomizeDialog(false)}>Done</Button>
           </div>
         </DialogContent>

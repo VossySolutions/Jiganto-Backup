@@ -15,9 +15,8 @@ import {
 import type { ChannelBridgeConfig, ChatNotificationPref } from "@shared/models/chat";
 import {
   assertCanAccessChannel,
-  assertCanAccessMessage
+  assertCanAccessMessage,
 } from "./access";
-export { assertCanPostToChannel } from "./access";
 import { db } from "../db";
 import { users } from "@shared/models/auth";
 import { eq } from "drizzle-orm";
@@ -44,7 +43,19 @@ async function ensureJigantoBotUser(): Promise<void> {
 async function broadcastChannel(channelId: number, type: string, payload: Record<string, unknown>) {
   const { getChatWebSocket } = await import("../websocket");
   const wss = getChatWebSocket();
-  if (wss) wss.sendToChannel(channelId, { type: type as never, payload });
+  if (!wss) return;
+  const event = { type: type as never, payload: { ...payload, channelId } };
+  wss.sendToChannel(channelId, event);
+  // Also ping every channel member so inbox updates even if they haven't joined the channel
+  try {
+    const members = await storage.getChannelMembers(channelId);
+    wss.sendToUsers(
+      members.map((m) => m.userId),
+      event,
+    );
+  } catch {
+    // non-fatal — channel subscribers still got the event
+  }
 }
 
 export async function registerExtendedChatRoutes(

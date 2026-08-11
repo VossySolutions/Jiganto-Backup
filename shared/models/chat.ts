@@ -440,6 +440,7 @@ export type ChatInboxItem = {
     firstName: string | null;
     lastName: string | null;
     profileImageUrl: string | null;
+    email?: string | null;
   };
 };
 

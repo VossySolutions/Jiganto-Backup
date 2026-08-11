@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Star } from "lucide-react";
+import { Star, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardHistoryPanel } from "./DashboardHistoryPanel";
@@ -41,6 +41,7 @@ interface DashboardConfigDialogProps {
   customDashboardId?: number | null;
   customDashboards?: DashboardOption[];
   onSelectCustomDashboard?: (id: DashboardType) => void;
+  onCreateDashboard?: () => void;
   contextClientId?: number | null;
   contextProjectId?: number | null;
 }
@@ -57,6 +58,7 @@ export function DashboardConfigDialog({
   customDashboardId,
   customDashboards = [],
   onSelectCustomDashboard,
+  onCreateDashboard,
   contextClientId,
   contextProjectId,
 }: DashboardConfigDialogProps) {
@@ -128,6 +130,25 @@ export function DashboardConfigDialog({
             <p className="text-xs text-muted-foreground">
               Enable built-in dashboards, set your default, and manage custom dashboards (rename, layout, delete).
             </p>
+            {onCreateDashboard && (
+              <Button
+                size="sm"
+                className="gap-1.5 w-full sm:w-auto"
+                onClick={() => {
+                  onOpenChange(false);
+                  onCreateDashboard();
+                }}
+                data-testid="config-create-dashboard"
+              >
+                <Plus className="h-4 w-4" />
+                Create custom dashboard
+              </Button>
+            )}
+            {customDashboards.length === 0 && (
+              <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border/60 p-3">
+                You have no custom dashboards yet. Create one to add your own widgets, then rename or delete it from here or from the dashboard toolbar.
+              </p>
+            )}
             {customDashboards.length > 0 && (
               <div className="space-y-2">
                 <Label>Custom dashboard to manage</Label>
@@ -167,7 +188,10 @@ export function DashboardConfigDialog({
                 layout={bespokeDetail.layout}
                 clientId={contextClientId}
                 projectId={contextProjectId}
-                onDeleted={() => onOpenChange(false)}
+                onDeleted={() => {
+                  setSettingsCustomId(null);
+                  onOpenChange(false);
+                }}
               />
             )}
             {customDashboards.length > 0 && activeCustomId == null && (
@@ -204,16 +228,8 @@ export function DashboardConfigDialog({
           </TabsContent>
           <TabsContent value="widgets" className="mt-4 text-sm text-muted-foreground space-y-3 overflow-y-auto max-h-80">
             <p>
-              <span className="font-medium text-foreground">Built-in dashboards</span> (Home, Projects, etc.)
-              use fixed widget layouts with live workspace data — widgets cannot be rearranged here.
-            </p>
-            <p>
-              <span className="font-medium text-foreground">Custom dashboards</span> support add, remove, and
-              resize widgets: open the dashboard, click <strong>Edit layout</strong>, then drag widgets or use
-              the widget picker. Changes save automatically.
-            </p>
-            <p className="text-xs">
-              Tip: switch to a custom dashboard from the header dropdown before editing widgets.
+              Built-in dashboards use fixed layouts. On a custom dashboard, use{" "}
+              <strong>Edit widgets</strong> to add, remove, or reorder.
             </p>
           </TabsContent>
           <TabsContent value="history" className="mt-4 overflow-y-auto max-h-80">

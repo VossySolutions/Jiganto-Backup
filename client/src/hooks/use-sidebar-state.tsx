@@ -1,5 +1,18 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
+const COLLAPSED_GROUPS_KEY = "sidebar-collapsed-groups";
+
+function readCollapsedGroups(): string[] {
+  try {
+    const saved = localStorage.getItem(COLLAPSED_GROUPS_KEY);
+    if (!saved) return [];
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 interface SidebarStateContextType {
   isCollapsed: boolean;
   toggleCollapse: () => void;
@@ -10,6 +23,15 @@ interface SidebarStateContextType {
   hiddenModules: string[];
   toggleModuleVisibility: (moduleHref: string) => void;
   isModuleHidden: (moduleHref: string) => boolean;
+  /** Select All — clear personalization hides. */
+  selectAllModules: () => void;
+  /** Deselect All — hide every href in the provided list. */
+  deselectAllModules: (moduleHrefs: string[]) => void;
+  /** Accordion: group labels whose children are hidden. */
+  collapsedGroups: string[];
+  toggleGroupCollapsed: (groupLabel: string) => void;
+  isGroupCollapsed: (groupLabel: string) => boolean;
+  setGroupCollapsed: (groupLabel: string, collapsed: boolean) => void;
   mobileNavOpen: boolean;
   setMobileNavOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }
@@ -26,6 +48,8 @@ export function SidebarStateProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem('hidden-modules');
     return saved ? JSON.parse(saved) : [];
   });
+
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>(readCollapsedGroups);
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [lockCollapsed, setLockCollapsed] = useState(false);
@@ -49,6 +73,10 @@ export function SidebarStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     localStorage.setItem('hidden-modules', JSON.stringify(hiddenModules));
   }, [hiddenModules]);
+
+  useEffect(() => {
+    localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify(collapsedGroups));
+  }, [collapsedGroups]);
 
   const toggleCollapse = () => {
     // Project workspace locks the rail by default for layout, but the chevron
@@ -76,6 +104,32 @@ export function SidebarStateProvider({ children }: { children: ReactNode }) {
 
   const isModuleHidden = (moduleHref: string) => hiddenModules.includes(moduleHref);
 
+  const selectAllModules = () => setHiddenModules([]);
+
+  const deselectAllModules = (moduleHrefs: string[]) => {
+    setHiddenModules([...new Set(moduleHrefs)]);
+  };
+
+  const toggleGroupCollapsed = (groupLabel: string) => {
+    setCollapsedGroups((prev) =>
+      prev.includes(groupLabel)
+        ? prev.filter((l) => l !== groupLabel)
+        : [...prev, groupLabel],
+    );
+  };
+
+  const isGroupCollapsed = (groupLabel: string) =>
+    collapsedGroups.includes(groupLabel);
+
+  const setGroupCollapsed = (groupLabel: string, collapsed: boolean) => {
+    setCollapsedGroups((prev) => {
+      const has = prev.includes(groupLabel);
+      if (collapsed && !has) return [...prev, groupLabel];
+      if (!collapsed && has) return prev.filter((l) => l !== groupLabel);
+      return prev;
+    });
+  };
+
   return (
     <SidebarStateContext.Provider value={{
       isCollapsed,
@@ -86,6 +140,12 @@ export function SidebarStateProvider({ children }: { children: ReactNode }) {
       hiddenModules,
       toggleModuleVisibility,
       isModuleHidden,
+      selectAllModules,
+      deselectAllModules,
+      collapsedGroups,
+      toggleGroupCollapsed,
+      isGroupCollapsed,
+      setGroupCollapsed,
       mobileNavOpen,
       setMobileNavOpen,
     }}>

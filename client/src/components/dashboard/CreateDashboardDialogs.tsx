@@ -63,8 +63,12 @@ export function CreateBespokeDashboardDialog({
       }
       return res.json() as Promise<{ id: number }>;
     },
-    onSuccess: (created) => {
-      void queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
+    onSuccess: async (created) => {
+      if (!created?.id) {
+        throw new Error("Create succeeded but no dashboard id was returned");
+      }
+      await queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/dashboards"] });
       void queryClient.invalidateQueries({
         predicate: (query) =>
           typeof query.queryKey[0] === "string" &&
@@ -73,6 +77,7 @@ export function CreateBespokeDashboardDialog({
       toast({ title: "Dashboard created" });
       onCreated(customDashboardId(created.id));
       setName("");
+      setLayout("2-col");
       onOpenChange(false);
     },
     onError: (err: Error) =>
@@ -98,7 +103,14 @@ export function CreateBespokeDashboardDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="My delivery dashboard"
+              autoFocus
+              data-testid="create-dashboard-name"
             />
+            {name.trim().length > 0 && name.trim().length < 2 ? (
+              <p className="text-xs text-muted-foreground">Enter at least 2 characters to enable Create.</p>
+            ) : name.trim().length === 0 ? (
+              <p className="text-xs text-muted-foreground">Enter a name to create this dashboard.</p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label>Layout</Label>
@@ -120,8 +132,9 @@ export function CreateBespokeDashboardDialog({
           <Button
             type="submit"
             disabled={name.trim().length < 2 || createMutation.isPending}
+            data-testid="create-dashboard-submit"
           >
-            Create
+            {createMutation.isPending ? "Creating…" : "Create dashboard"}
           </Button>
         </DialogFooter>
         </SubmitForm>

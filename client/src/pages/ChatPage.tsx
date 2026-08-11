@@ -25,7 +25,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/hooks/use-permissions";
 import { apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import type { ChatInboxItem, ChatMessageWithMeta, Project } from "@shared/models/chat";
-import { loadChatSections, saveChatSections, renameCollapsedTeamKey, type ChatSectionState } from "@/lib/chat-utils";
+import { loadChatSections, saveChatSections, renameCollapsedTeamKey, displayPersonName, chatPeerTitle, type ChatSectionState, type ChatPresenceStatus } from "@/lib/chat-utils";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { MessageCompose } from "@/components/chat/MessageCompose";
@@ -57,8 +57,9 @@ export function ChatPage() {
   const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
   const [sections, setSections] = useState<ChatSectionState>(loadChatSections);
   const [rightPanel, setRightPanel] = useState<RightPanelMode>(null);
-  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
-  const [typingUsers, setTypingUsers] = useState<Map<number, Set<string>>>(new Map());
+  const [presenceByUser, setPresenceByUser] = useState<Map<string, ChatPresenceStatus>>(new Map());
+  /** channelId → userId → display name while typing */
+  const [typingUsers, setTypingUsers] = useState<Map<number, Map<string, string>>>(new Map());
   const [oldestLoadedId, setOldestLoadedId] = useState<number | undefined>();
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -71,7 +72,8 @@ export function ChatPage() {
   const [renameTeamTarget, setRenameTeamTarget] = useState<{ projectId: number; name: string } | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedChannelIdRef = useRef(selectedChannelId);
+  selectedChannelIdRef.current = selectedChannelId;
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedUserSearch(userSearchQuery), 300);
@@ -149,9 +151,39 @@ export function ChatPage() {
     enabled: isNewChatOpen && debouncedUserSearch.length >= 2,
   });
 
+  const enrichedInbox = useMemo(() => {
+    return inbox.map((item) => {
+      if (item.type !== "direct") return item;
+      const peerId = item.otherUser?.id;
+      const fromTenant = peerId ? tenantUsers.find((u) => u.id === peerId) : undefined;
+      const otherUser = item.otherUser
+        ? {
+            ...item.otherUser,
+            firstName: item.otherUser.firstName ?? fromTenant?.firstName ?? null,
+            lastName: item.otherUser.lastName ?? fromTenant?.lastName ?? null,
+            email: item.otherUser.email ?? fromTenant?.email ?? null,
+          }
+        : fromTenant
+          ? {
+              id: fromTenant.id,
+              firstName: fromTenant.firstName,
+              lastName: fromTenant.lastName,
+              profileImageUrl: null,
+              email: fromTenant.email,
+            }
+          : item.otherUser;
+      const name = chatPeerTitle(otherUser, item.displayName);
+      return {
+        ...item,
+        otherUser,
+        displayName: name,
+      };
+    });
+  }, [inbox, tenantUsers]);
+
   const selectedChannel = useMemo(
-    () => inbox.find((i) => i.channelId === selectedChannelId),
-    [inbox, selectedChannelId],
+    () => enrichedInbox.find((i) => i.channelId === selectedChannelId),
+    [enrichedInbox, selectedChannelId],
   );
 
   const { data: messages = [], isLoading: messagesLoading } = useQuery<ChatMessageWithMeta[]>({
@@ -186,6 +218,9 @@ export function ChatPage() {
     void queryClient.invalidateQueries({ queryKey: inboxQueryKey });
   }, [queryClient, selectedChannelId, messagesKey, inboxQueryKey]);
 
+  const invalidateChatRef = useRef(invalidateChat);
+  invalidateChatRef.current = invalidateChat;
+
   useChatSupabaseRealtime(
     selectedChannelId,
     Boolean(chatConfig?.supabaseRealtime),
@@ -199,34 +234,69 @@ export function ChatPage() {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      if (selectedChannelId) {
-        ws.send(JSON.stringify({ type: "join", payload: { channelId: selectedChannelId } }));
+      const channelId = selectedChannelIdRef.current;
+      if (channelId) {
+        ws.send(JSON.stringify({ type: "join", payload: { channelId } }));
       }
+      ws.send(JSON.stringify({ type: "presence_ping", payload: {} }));
     };
+
+    const pingTimer = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "presence_ping", payload: {} }));
+      }
+    }, 25_000);
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       switch (data.type) {
         case "message":
-        case "reaction":
-        case "delete":
-          invalidateChat();
+        case "reaction": {
+          const channelId = data.payload?.channelId as number | undefined;
+          void queryClient.invalidateQueries({ queryKey: inboxQueryKey });
+          if (channelId) {
+            void queryClient.invalidateQueries({
+              queryKey: [`/api/chat/channels/${channelId}/messages`],
+            });
+          } else {
+            invalidateChatRef.current();
+          }
           break;
+        }
         case "typing":
           setTypingUsers((prev) => {
+            const channelId = data.payload?.channelId as number;
+            const userId = data.payload?.userId as string;
+            if (!channelId || !userId) return prev;
             const next = new Map(prev);
-            const set = new Set(next.get(data.payload?.channelId) ?? []);
-            if (data.payload?.isTyping === false) set.delete(data.payload.userId);
-            else set.add(data.payload.userId);
-            next.set(data.payload.channelId, set);
+            const channelMap = new Map(next.get(channelId) ?? []);
+            if (data.payload?.isTyping === false) {
+              channelMap.delete(userId);
+            } else {
+              const fromPayload =
+                typeof data.payload?.displayName === "string" ? data.payload.displayName.trim() : "";
+              channelMap.set(userId, fromPayload || channelMap.get(userId) || "Someone");
+            }
+            if (channelMap.size === 0) next.delete(channelId);
+            else next.set(channelId, channelMap);
             return next;
           });
           break;
+        case "presence_snapshot": {
+          const users = (data.payload?.users ?? []) as Array<{ userId: string; status: ChatPresenceStatus }>;
+          setPresenceByUser(() => {
+            const next = new Map<string, ChatPresenceStatus>();
+            for (const u of users) next.set(u.userId, u.status);
+            return next;
+          });
+          break;
+        }
         case "presence":
-          setOnlineUsers((prev) => {
-            const next = new Set(prev);
-            if (data.payload?.isOnline) next.add(data.payload.userId);
-            else next.delete(data.payload.userId);
+          setPresenceByUser((prev) => {
+            const next = new Map(prev);
+            const status = (data.payload?.status as ChatPresenceStatus | undefined) ?? "offline";
+            if (status === "offline") next.delete(data.payload.userId);
+            else next.set(data.payload.userId, status);
             return next;
           });
           break;
@@ -238,8 +308,13 @@ export function ChatPage() {
       }
     };
 
-    return () => ws.close();
-  }, [user, invalidateChat, queryClient]);
+    return () => {
+      clearInterval(pingTimer);
+      ws.close();
+    };
+    // Connect once per user — channel joins handled separately
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedChannelId via ref
+  }, [user, queryClient, inboxQueryKey]);
 
   useEffect(() => {
     const ws = wsRef.current;
@@ -250,10 +325,10 @@ export function ChatPage() {
 
   useEffect(() => {
     // Desktop: auto-open first conversation; mobile: stay on list until user picks one
-    if (!selectedChannelId && inbox.length > 0 && !isMobile) {
-      selectChannel(inbox[0].channelId);
+    if (!selectedChannelId && enrichedInbox.length > 0 && !isMobile) {
+      selectChannel(enrichedInbox[0].channelId);
     }
-  }, [inbox, selectedChannelId, isMobile, selectChannel]);
+  }, [enrichedInbox, selectedChannelId, isMobile, selectChannel]);
 
   const showSidebar = !isMobile || !selectedChannelId;
   const showThread = !isMobile || !!selectedChannelId;
@@ -379,22 +454,72 @@ export function ChatPage() {
     }
   };
 
+  const lastTypingSentRef = useRef(0);
   const handleTyping = () => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN || !selectedChannelId) return;
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    ws.send(JSON.stringify({ type: "typing", payload: { channelId: selectedChannelId } }));
-    typingTimeoutRef.current = setTimeout(() => {
-      typingTimeoutRef.current = null;
-    }, 2000);
+    const now = Date.now();
+    // Keep the remote indicator fresh without flooding the socket
+    if (now - lastTypingSentRef.current < 1200) return;
+    lastTypingSentRef.current = now;
+    const displayName = displayPersonName(user);
+    ws.send(
+      JSON.stringify({
+        type: "typing",
+        payload: {
+          channelId: selectedChannelId,
+          displayName: displayName !== "User" ? displayName : undefined,
+        },
+      }),
+    );
   };
 
+  const resolveTypingName = useCallback(
+    (userId: string, fromEvent?: string): string => {
+      if (fromEvent && fromEvent !== "Someone") return fromEvent;
+      if (selectedChannel?.type === "direct" && selectedChannel.otherUser?.id === userId) {
+        return chatPeerTitle(selectedChannel.otherUser, selectedChannel.displayName);
+      }
+      const fromTenant = tenantUsers.find((u) => u.id === userId);
+      if (fromTenant) {
+        const name = displayPersonName(fromTenant);
+        if (name !== "User") return name;
+      }
+      return fromEvent || "Someone";
+    },
+    [selectedChannel, tenantUsers],
+  );
+
   const typingDisplay = useMemo(() => {
-    const set = typingUsers.get(selectedChannelId ?? 0);
-    if (!set || set.size === 0) return null;
-    const names = Array.from(set).slice(0, 3);
-    return `${names.join(", ")} ${set.size === 1 ? "is" : "are"} typing…`;
-  }, [typingUsers, selectedChannelId]);
+    const channelMap = typingUsers.get(selectedChannelId ?? 0);
+    if (!channelMap || channelMap.size === 0) return null;
+    const names = Array.from(channelMap.entries())
+      .filter(([id]) => id !== user?.id)
+      .map(([id, name]) => resolveTypingName(id, name))
+      .slice(0, 3);
+    if (names.length === 0) return null;
+    return `${names.join(", ")} ${names.length === 1 ? "is" : "are"} typing…`;
+  }, [typingUsers, selectedChannelId, user?.id, resolveTypingName]);
+
+  const typingByChannel = useMemo(() => {
+    const map = new Map<number, string>();
+    typingUsers.forEach((channelMap, channelId) => {
+      const names = Array.from(channelMap.entries())
+        .filter(([id]) => id !== user?.id)
+        .map(([id, name]) => resolveTypingName(id, name));
+      if (names.length === 0) return;
+      map.set(
+        channelId,
+        names.length === 1 ? `${names[0]} is typing…` : "Several people are typing…",
+      );
+    });
+    return map;
+  }, [typingUsers, user?.id, resolveTypingName]);
+
+  const peerPresence: ChatPresenceStatus | undefined =
+    selectedChannel?.type === "direct" && selectedChannel.otherUser
+      ? presenceByUser.get(selectedChannel.otherUser.id) ?? "offline"
+      : undefined;
 
   return (
     <>
@@ -445,11 +570,12 @@ export function ChatPage() {
         <div className="flex-1 flex overflow-hidden min-h-0 relative">
           {showSidebar && (
             <ConversationSidebar
-              inbox={inbox}
+              inbox={enrichedInbox}
               selectedChannelId={selectedChannelId}
               searchQuery={searchQuery}
               sections={sections}
-              onlineUsers={onlineUsers}
+              presenceByUser={presenceByUser}
+              typingByChannel={typingByChannel}
               onSearchChange={setSearchQuery}
               onSelectChannel={selectChannel}
               onToggleSection={toggleSection}
@@ -474,7 +600,7 @@ export function ChatPage() {
                   messages={mergedMessages}
                   messagesLoading={messagesLoading}
                   currentUserId={user?.id ?? ""}
-                  typingDisplay={typingDisplay}
+                  peerPresence={peerPresence}
                   hasMore={hasMore}
                   loadingMore={loadingMore}
                   aiEnabled={chatConfig?.aiEnabled}
@@ -510,6 +636,7 @@ export function ChatPage() {
                   value={newMessage}
                   mentionUsers={tenantUsers}
                   maxAttachments={chatConfig?.maxAttachmentsPerMessage ?? 5}
+                  typingDisplay={typingDisplay}
                   onChange={setNewMessage}
                   onSend={(attachmentIds) => {
                     const text = newMessage.trim();

@@ -1,22 +1,39 @@
 import { Server as HttpServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 
+type PresenceStatus = "online" | "away" | "offline";
+
 interface ChatClient {
   ws: WebSocket;
   userId: string;
   channelId?: number;
+  lastActive: number;
 }
 
 interface ChatEvent {
-  type: "message" | "edit" | "delete" | "typing" | "presence" | "join" | "leave" | "reaction" | "poll_vote";
+  type:
+    | "message"
+    | "delete"
+    | "typing"
+    | "presence"
+    | "presence_snapshot"
+    | "presence_ping"
+    | "join"
+    | "leave"
+    | "reaction"
+    | "poll_vote";
   payload: Record<string, any>;
 }
+
+const AWAY_AFTER_MS = 2 * 60 * 1000;
 
 class ChatWebSocketServer {
   private wss: WebSocketServer;
   private clients: Map<string, ChatClient> = new Map();
   private channelSubscriptions: Map<number, Set<string>> = new Map();
   private typingUsers: Map<number, Map<string, NodeJS.Timeout>> = new Map();
+  /** Latest known status per user (while they have at least one socket). */
+  private userStatus: Map<string, PresenceStatus> = new Map();
 
   constructor(server: HttpServer) {
     this.wss = new WebSocketServer({ noServer: true });
@@ -31,6 +48,7 @@ class ChatWebSocketServer {
       });
     });
 
+    setInterval(() => this.recomputeAwayStatuses(), 30_000);
     console.log("WebSocket server initialized on /ws/chat");
   }
 
@@ -45,13 +63,12 @@ class ChatWebSocketServer {
       }
 
       const clientId = `${userId}-${Date.now()}`;
-      const client: ChatClient = { ws, userId };
+      const client: ChatClient = { ws, userId, lastActive: Date.now() };
       this.clients.set(clientId, client);
 
-      console.log(`Client connected: ${clientId}`);
-
-      // Send presence update to all
-      this.broadcastPresence(userId, true);
+      // Snapshot of who is currently online/away for the new client
+      this.sendPresenceSnapshot(ws);
+      this.setUserStatus(userId, "online");
 
       ws.on("message", async (data) => {
         try {
@@ -63,22 +80,22 @@ class ChatWebSocketServer {
       });
 
       ws.on("close", () => {
-        const client = this.clients.get(clientId);
-        if (client) {
-          // Remove from all channel subscriptions
-          this.channelSubscriptions.forEach((subscribers, _channelId) => {
+        const c = this.clients.get(clientId);
+        if (c) {
+          this.channelSubscriptions.forEach((subscribers) => {
             subscribers.delete(clientId);
           });
-          // Clear typing indicators
           this.typingUsers.forEach((typingMap) => {
             const timeout = typingMap.get(userId);
             if (timeout) clearTimeout(timeout);
             typingMap.delete(userId);
           });
           this.clients.delete(clientId);
-          this.broadcastPresence(userId, false);
+          if (!this.hasOpenClient(userId)) {
+            this.setUserStatus(userId, "offline");
+            this.userStatus.delete(userId);
+          }
         }
-        console.log(`Client disconnected: ${clientId}`);
       });
 
       ws.on("error", (err) => {
@@ -87,47 +104,67 @@ class ChatWebSocketServer {
     });
   }
 
+  private hasOpenClient(userId: string): boolean {
+    for (const c of this.clients.values()) {
+      if (c.userId === userId && c.ws.readyState === WebSocket.OPEN) return true;
+    }
+    return false;
+  }
+
   private async handleEvent(clientId: string, event: ChatEvent) {
     const client = this.clients.get(clientId);
     if (!client) return;
+    client.lastActive = Date.now();
 
     switch (event.type) {
       case "join":
-        await this.handleJoin(clientId, event.payload.channelId as number);
-        break;
-      case "leave":
-        this.handleLeave(clientId, event.payload.channelId as number);
+        this.handleJoin(clientId, event.payload.channelId as number);
         break;
       case "typing":
-        this.handleTyping(client.userId, event.payload.channelId as number);
+        if (this.userStatus.get(client.userId) !== "online") {
+          this.setUserStatus(client.userId, "online");
+        }
+        await this.handleTyping(
+          client.userId,
+          event.payload.channelId as number,
+          typeof event.payload.displayName === "string" ? event.payload.displayName : undefined,
+        );
         break;
-      // Note: message, edit, delete, reaction are handled via REST API
-      // WebSocket only handles broadcasting (via sendToChannel public method)
-      // This prevents duplicate message creation and enforces REST authorization
+      case "presence_ping":
+        if (this.userStatus.get(client.userId) === "away") {
+          this.setUserStatus(client.userId, "online");
+        } else if (!this.userStatus.has(client.userId)) {
+          this.setUserStatus(client.userId, "online");
+        }
+        break;
+      default:
+        break;
     }
   }
 
-  private async handleJoin(clientId: string, channelId: number) {
+  private handleJoin(clientId: string, channelId: number) {
     const client = this.clients.get(clientId);
     if (!client) return;
 
-    // Leave previous channel if switching
     if (client.channelId && client.channelId !== channelId) {
       this.handleLeave(clientId, client.channelId);
     }
 
     client.channelId = channelId;
-    
+
     if (!this.channelSubscriptions.has(channelId)) {
       this.channelSubscriptions.set(channelId, new Set());
     }
     this.channelSubscriptions.get(channelId)!.add(clientId);
 
-    // Notify channel of new member
-    this.broadcastToChannel(channelId, {
-      type: "join",
-      payload: { userId: client.userId, channelId },
-    }, clientId);
+    this.broadcastToChannel(
+      channelId,
+      {
+        type: "join",
+        payload: { userId: client.userId, channelId },
+      },
+      clientId,
+    );
   }
 
   private handleLeave(clientId: string, channelId: number) {
@@ -139,7 +176,6 @@ class ChatWebSocketServer {
       subscribers.delete(clientId);
     }
 
-    // Clear typing indicator
     const typingMap = this.typingUsers.get(channelId);
     if (typingMap) {
       const timeout = typingMap.get(client.userId);
@@ -147,37 +183,69 @@ class ChatWebSocketServer {
       typingMap.delete(client.userId);
     }
 
-    this.broadcastToChannel(channelId, {
-      type: "leave",
-      payload: { userId: client.userId, channelId },
-    }, clientId);
+    this.broadcastToChannel(
+      channelId,
+      {
+        type: "leave",
+        payload: { userId: client.userId, channelId },
+      },
+      clientId,
+    );
   }
 
-  private handleTyping(userId: string, channelId: number) {
+  private async handleTyping(userId: string, channelId: number, displayName?: string) {
     if (!this.typingUsers.has(channelId)) {
       this.typingUsers.set(channelId, new Map());
     }
     const typingMap = this.typingUsers.get(channelId)!;
 
-    // Clear existing timeout
     const existingTimeout = typingMap.get(userId);
     if (existingTimeout) clearTimeout(existingTimeout);
 
-    // Set new timeout (typing indicator expires after 3 seconds)
+    let resolvedName = displayName?.trim() || "";
+    if (!resolvedName) {
+      try {
+        const { storage } = await import("./storage");
+        const members = await storage.getChannelMembers(channelId);
+        const member = members.find((m) => m.userId === userId);
+        const full = [member?.user.firstName, member?.user.lastName].filter(Boolean).join(" ");
+        resolvedName = full || "Someone";
+      } catch {
+        resolvedName = "Someone";
+      }
+    }
+
     const timeout = setTimeout(() => {
       typingMap.delete(userId);
-      this.broadcastToChannel(channelId, {
+      const stopEvent: ChatEvent = {
         type: "typing",
-        payload: { userId, channelId, isTyping: false },
-      });
+        payload: { userId, channelId, displayName: resolvedName, isTyping: false },
+      };
+      this.broadcastToChannel(channelId, stopEvent);
+      void this.notifyChannelMembers(channelId, stopEvent);
     }, 3000);
 
     typingMap.set(userId, timeout);
 
-    this.broadcastToChannel(channelId, {
+    const startEvent: ChatEvent = {
       type: "typing",
-      payload: { userId, channelId, isTyping: true },
-    });
+      payload: { userId, channelId, displayName: resolvedName, isTyping: true },
+    };
+    this.broadcastToChannel(channelId, startEvent);
+    await this.notifyChannelMembers(channelId, startEvent);
+  }
+
+  private async notifyChannelMembers(channelId: number, event: ChatEvent) {
+    try {
+      const { storage } = await import("./storage");
+      const members = await storage.getChannelMembers(channelId);
+      this.sendToUsers(
+        members.map((m) => m.userId),
+        event,
+      );
+    } catch {
+      /* non-fatal */
+    }
   }
 
   private broadcastToChannel(channelId: number, event: ChatEvent, excludeClientId?: string) {
@@ -185,22 +253,57 @@ class ChatWebSocketServer {
     if (!subscribers) return;
 
     const message = JSON.stringify(event);
-    subscribers.forEach((clientId) => {
-      if (clientId === excludeClientId) return;
-      const client = this.clients.get(clientId);
+    subscribers.forEach((id) => {
+      if (id === excludeClientId) return;
+      const client = this.clients.get(id);
       if (client && client.ws.readyState === WebSocket.OPEN) {
         client.ws.send(message);
       }
     });
   }
 
-  private broadcastPresence(userId: string, isOnline: boolean) {
+  private setUserStatus(userId: string, status: PresenceStatus) {
+    const prev = this.userStatus.get(userId);
+    if (prev === status) return;
+    this.userStatus.set(userId, status);
+    this.broadcastPresence(userId, status);
+  }
+
+  private recomputeAwayStatuses() {
+    const now = Date.now();
+    const seen = new Set<string>();
+    for (const client of this.clients.values()) {
+      if (client.ws.readyState !== WebSocket.OPEN) continue;
+      if (seen.has(client.userId)) continue;
+      seen.add(client.userId);
+      let latest = 0;
+      for (const c of this.clients.values()) {
+        if (c.userId === client.userId && c.ws.readyState === WebSocket.OPEN) {
+          latest = Math.max(latest, c.lastActive);
+        }
+      }
+      const next: PresenceStatus = now - latest > AWAY_AFTER_MS ? "away" : "online";
+      this.setUserStatus(client.userId, next);
+    }
+  }
+
+  private sendPresenceSnapshot(ws: WebSocket) {
+    const users: Array<{ userId: string; status: PresenceStatus }> = [];
+    this.userStatus.forEach((status, userId) => {
+      if (status !== "offline") users.push({ userId, status });
+    });
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "presence_snapshot", payload: { users } }));
+    }
+  }
+
+  private broadcastPresence(userId: string, status: PresenceStatus) {
     const event: ChatEvent = {
       type: "presence",
-      payload: { userId, isOnline },
+      payload: { userId, status },
     };
     const message = JSON.stringify(event);
-    
+
     this.clients.forEach((client) => {
       if (client.ws.readyState === WebSocket.OPEN) {
         client.ws.send(message);
@@ -208,9 +311,20 @@ class ChatWebSocketServer {
     });
   }
 
-  // Public method to send a message to a specific channel (for API use)
   public sendToChannel(channelId: number, event: ChatEvent) {
     this.broadcastToChannel(channelId, event);
+  }
+
+  /** Notify connected clients by user id (e.g. DM recipient not viewing that channel yet). */
+  public sendToUsers(userIds: string[], event: ChatEvent) {
+    if (!userIds.length) return;
+    const targets = new Set(userIds);
+    const message = JSON.stringify(event);
+    this.clients.forEach((client) => {
+      if (targets.has(client.userId) && client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(message);
+      }
+    });
   }
 }
 

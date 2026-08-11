@@ -1,7 +1,5 @@
 /** Module 02 accent — softer indigo aligned with platform palette */
 export const CHAT_ACCENT = "#6366F1";
-export const CHAT_ACCENT_SOFT = "rgb(99 102 241 / 0.12)";
-export const CHAT_ACCENT_TEXT = "#6366F1";
 
 const FIVE_MIN_MS = 5 * 60 * 1000;
 
@@ -45,26 +43,51 @@ export function shouldShowMessageHeader(
 export function getUserInitials(
   firstName?: string | null,
   lastName?: string | null,
-  username?: string | null,
 ): string {
   if (firstName && lastName) return `${firstName[0]}${lastName[0]}`.toUpperCase();
   if (firstName) return firstName.slice(0, 2).toUpperCase();
-  if (username) return username.slice(0, 2).toUpperCase();
   return "??";
 }
 
 export function displayPersonName(user?: {
   firstName?: string | null;
   lastName?: string | null;
-  username?: string | null;
+  email?: string | null;
 }): string {
   if (!user) return "User";
   const full = [user.firstName, user.lastName].filter(Boolean).join(" ");
-  return full || user.username || "User";
+  if (full) return full;
+  if (user.email) return user.email.split("@")[0] || user.email;
+  return "User";
 }
 
-export const CHAT_SECTIONS_KEY = "jiganto-chat-sections";
-export const CHAT_TEAM_COLLAPSE_KEY = "jiganto-chat-teams";
+/** Prefer a real person name; fall back to conversation displayName. */
+export function chatPeerTitle(
+  otherUser: { firstName?: string | null; lastName?: string | null; email?: string | null } | null | undefined,
+  displayName: string,
+): string {
+  const name = displayPersonName(otherUser ?? undefined);
+  if (name !== "User") return name;
+  if (displayName && displayName !== "Direct message") return displayName;
+  return name;
+}
+
+export type ChatPresenceStatus = "online" | "away" | "offline";
+
+export function presenceLabel(status: ChatPresenceStatus | undefined): string {
+  if (status === "online") return "online";
+  if (status === "away") return "away";
+  return "offline";
+}
+
+export function presenceDotClass(status: ChatPresenceStatus | undefined): string {
+  if (status === "online") return "bg-emerald-500";
+  if (status === "away") return "bg-amber-400";
+  return "bg-muted-foreground/40";
+}
+
+const CHAT_SECTIONS_KEY = "jiganto-chat-sections";
+const CHAT_TEAM_COLLAPSE_KEY = "jiganto-chat-teams";
 
 export type ChatSectionState = {
   favourites: boolean;

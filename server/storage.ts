@@ -629,7 +629,7 @@ export interface IStorage {
 
   // Direct Messages
   getOrCreateDMChannel(userId: string, otherUserId: string, tenantId: number): Promise<Channel>;
-  getDirectMessageChannels(userId: string, tenantId: number): Promise<(Channel & { otherUser: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]>;
+  getDirectMessageChannels(userId: string, tenantId: number): Promise<(Channel & { otherUser: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null; email: string | null } })[]>;
 
   // Chat inbox & favourites
   getChatInbox(userId: string, tenantId: number, clientId?: number): Promise<ChatInboxItem[]>;
@@ -2500,6 +2500,11 @@ export class DatabaseStorage implements IStorage {
       ));
     
     if (existing) {
+      // Ensure both participants are members (e.g. older DMs or partial creates)
+      await db.insert(channelMembers).values([
+        { channelId: existing.id, userId },
+        { channelId: existing.id, userId: otherUserId },
+      ]).onConflictDoNothing();
       return existing;
     }
     
@@ -2520,7 +2525,7 @@ export class DatabaseStorage implements IStorage {
     return channel;
   }
 
-  async getDirectMessageChannels(userId: string, tenantId: number): Promise<(Channel & { otherUser: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null } })[]> {
+  async getDirectMessageChannels(userId: string, tenantId: number): Promise<(Channel & { otherUser: { id: string; firstName: string | null; lastName: string | null; profileImageUrl: string | null; email: string | null } })[]> {
     // Single query: join channels → my membership → other member → other user profile
     const myMembership = alias(channelMembers, "my_cm");
     const otherMembership = alias(channelMembers, "other_cm");
@@ -2533,6 +2538,7 @@ export class DatabaseStorage implements IStorage {
           firstName: users.firstName,
           lastName: users.lastName,
           profileImageUrl: users.profileImageUrl,
+          email: users.email,
         },
       })
       .from(channels)
@@ -2551,7 +2557,7 @@ export class DatabaseStorage implements IStorage {
       })
       .map((r) => ({
         ...r.channel,
-        otherUser: r.otherUser ?? { id: "", firstName: null, lastName: null, profileImageUrl: null },
+        otherUser: r.otherUser ?? { id: "", firstName: null, lastName: null, profileImageUrl: null, email: null },
       }));
   }
 
@@ -2672,7 +2678,9 @@ export class DatabaseStorage implements IStorage {
 
       const displayName =
         ch.type === "direct" && ch.otherUser
-          ? [ch.otherUser.firstName, ch.otherUser.lastName].filter(Boolean).join(" ") || "Direct message"
+          ? [ch.otherUser.firstName, ch.otherUser.lastName].filter(Boolean).join(" ")
+            || (ch.otherUser as { email?: string | null }).email?.split("@")[0]
+            || "Direct message"
           : ch.name.startsWith("#")
             ? ch.name
             : `#${ch.name}`;
@@ -2711,8 +2719,11 @@ export class DatabaseStorage implements IStorage {
         const clientProjectIds = new Set(
           projectList.filter((p) => p.name === teamName).map((p) => p.id),
         );
+        // Always keep DMs — they have no projectId and must stay visible across workspaces
         filtered = items.filter(
-          (item) => item.projectId != null && clientProjectIds.has(item.projectId),
+          (item) =>
+            item.type === "direct" ||
+            (item.projectId != null && clientProjectIds.has(item.projectId)),
         );
       }
     }

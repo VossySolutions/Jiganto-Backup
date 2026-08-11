@@ -3,15 +3,27 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { GripVertical, Pencil, Share2, Trash2, Mail, Cog } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { BespokeDashboardPayload } from "@shared/models/dashboard";
+import { useDashboardSelector } from "@/hooks/use-dashboard-selector";
 import { BespokeWidgetRenderer } from "./BespokeWidgetRenderer";
 import { WidgetPickerSheet } from "./WidgetPickerSheet";
 import { ShareDashboardDialog, DigestDashboardDialog } from "./ShareDashboardDialog";
-import { bespokeGridClass, scopeQuery, widgetSpanClass } from "./dashboard-utils";
+import { bespokeGridClass, invalidateDashboardDetail, scopeQuery, widgetSpanClass } from "./dashboard-utils";
 import { DashboardPanelState } from "./DashboardPanelState";
+import { SubmitForm } from "@/components/ui/submit-form";
 
 const COLS: Record<string, number> = { "1-col": 1, "2-col": 2, "3-col": 3 };
 
@@ -28,10 +40,13 @@ export function BespokeDashboardView({
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { refreshCustomDashboards } = useDashboardSelector();
   const [editMode, setEditMode] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [digestOpen, setDigestOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
 
   const url = scopeQuery(`/api/dashboards/${dashboardId}`, clientId, projectId);
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -69,6 +84,31 @@ export function BespokeDashboardView({
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [url] }),
   });
 
+  const renameMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await fetchWithAuth(scopeQuery(`/api/dashboards/${dashboardId}`, clientId, projectId), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error("Rename failed");
+      return res.json() as Promise<BespokeDashboardPayload>;
+    },
+    onSuccess: async () => {
+      await refreshCustomDashboards();
+      invalidateDashboardDetail(queryClient, dashboardId);
+      setRenameOpen(false);
+      toast({ title: "Dashboard renamed" });
+    },
+    onError: () => {
+      toast({
+        title: "Could not rename dashboard",
+        description: "You may not have permission to edit this dashboard.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleDragEnd = (result: DropResult) => {
     if (!data || !result.destination) return;
     const sorted = [...data.widgets].sort((a, b) => a.positionY - b.positionY || a.positionX - b.positionX);
@@ -104,7 +144,7 @@ export function BespokeDashboardView({
                       className="h-7 w-7"
                       disabled={removeMutation.isPending}
                       onClick={() => removeMutation.mutate(widget.id)}
-                      title="Remove"
+                      title="Remove widget"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -124,13 +164,31 @@ export function BespokeDashboardView({
                 size="sm"
                 className="gap-1.5"
                 onClick={() => setEditMode((v) => !v)}
+                data-testid="edit-dashboard-widgets"
               >
                 <Pencil className="h-4 w-4" />
-                {editMode ? "Done editing" : "Edit layout"}
+                {editMode ? "Done" : "Edit widgets"}
               </Button>
               {editMode && (
                 <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
                   Add widget
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setRenameValue(data.name);
+                  setRenameOpen(true);
+                }}
+                data-testid="rename-dashboard-btn"
+              >
+                Rename
+              </Button>
+              {onOpenSettings && (
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={onOpenSettings}>
+                  <Cog className="h-4 w-4" />
+                  Settings
                 </Button>
               )}
               <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => setShareOpen(true)}>
@@ -141,12 +199,6 @@ export function BespokeDashboardView({
                 <Mail className="h-4 w-4" />
                 Email digest
               </Button>
-              {onOpenSettings && (
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={onOpenSettings}>
-                  <Cog className="h-4 w-4" />
-                  Settings
-                </Button>
-              )}
             </div>
 
             {sorted.length === 0 ? (
@@ -231,6 +283,38 @@ export function BespokeDashboardView({
               clientId={clientId}
               projectId={projectId}
             />
+
+            <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Rename dashboard</DialogTitle>
+                  <DialogDescription>This name appears in the dashboard switcher.</DialogDescription>
+                </DialogHeader>
+                <SubmitForm
+                  className="space-y-4"
+                  disabled={renameValue.trim().length < 2 || renameMutation.isPending}
+                  onSubmit={() => renameMutation.mutate(renameValue.trim())}
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="rename-dashboard">Name</Label>
+                    <Input
+                      id="rename-dashboard"
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setRenameOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={renameValue.trim().length < 2 || renameMutation.isPending}>
+                      Save
+                    </Button>
+                  </DialogFooter>
+                </SubmitForm>
+              </DialogContent>
+            </Dialog>
           </div>
         );
       })()}

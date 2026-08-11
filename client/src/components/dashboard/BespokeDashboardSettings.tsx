@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Copy, Trash2 } from "lucide-react";
+import { Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ import { fetchWithAuth } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { DashboardLayout } from "@shared/models/dashboard";
 import { customDashboardId, useDashboardSelector } from "@/hooks/use-dashboard-selector";
+import { DeleteDashboardButton } from "./DeleteDashboardButton";
 import { invalidateDashboardDetail, scopeQuery } from "./dashboard-utils";
 
 export function BespokeDashboardSettings({
@@ -65,15 +66,20 @@ export function BespokeDashboardSettings({
       toast({ title: "Dashboard updated" });
     },
     onError: () => {
-      toast({ title: "Could not update dashboard", description: "You may not have permission to edit this dashboard.", variant: "destructive" });
+      toast({
+        title: "Could not update dashboard",
+        description: "You may not have permission to edit this dashboard.",
+        variant: "destructive",
+      });
     },
   });
 
   const duplicateMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetchWithAuth(scopeQuery(`/api/dashboards/${dashboardId}/duplicate`, clientId, projectId), {
-        method: "POST",
-      });
+      const res = await fetchWithAuth(
+        scopeQuery(`/api/dashboards/${dashboardId}/duplicate`, clientId, projectId),
+        { method: "POST" },
+      );
       if (!res.ok) throw new Error("Duplicate failed");
       return res.json() as Promise<{ id: number }>;
     },
@@ -84,24 +90,6 @@ export function BespokeDashboardSettings({
     },
     onError: () => {
       toast({ title: "Could not duplicate dashboard", variant: "destructive" });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetchWithAuth(scopeQuery(`/api/dashboards/${dashboardId}`, clientId, projectId), {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Delete failed");
-    },
-    onSuccess: async () => {
-      await refreshCustomDashboards();
-      setCurrentDashboard("modules");
-      onDeleted?.();
-      toast({ title: "Dashboard deleted" });
-    },
-    onError: () => {
-      toast({ title: "Could not delete dashboard", description: "You may not have permission to delete this dashboard.", variant: "destructive" });
     },
   });
 
@@ -143,20 +131,15 @@ export function BespokeDashboardSettings({
           <Copy className="h-3.5 w-3.5" />
           Duplicate
         </Button>
-        <Button
-          size="sm"
-          variant="destructive"
-          className="gap-1"
-          disabled={deleteMutation.isPending}
-          onClick={() => {
-            if (window.confirm(`Delete "${dashName}"? This cannot be undone.`)) {
-              deleteMutation.mutate();
-            }
-          }}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          Delete
-        </Button>
+        <DeleteDashboardButton
+          dashboardId={dashboardId}
+          dashboardName={dashName}
+          clientId={clientId}
+          projectId={projectId}
+          onDeleted={onDeleted}
+          variant="toolbar"
+          data-testid="settings-delete-dashboard"
+        />
       </div>
     </div>
   );

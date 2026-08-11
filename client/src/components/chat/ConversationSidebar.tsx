@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { ChatInboxItem } from "@shared/models/chat";
-import { formatListTimestamp, getUserInitials, loadCollapsedTeams, saveCollapsedTeams, chatFont, type ChatSectionState } from "@/lib/chat-utils";
+import { formatListTimestamp, getUserInitials, loadCollapsedTeams, saveCollapsedTeams, chatFont, presenceDotClass, type ChatPresenceStatus, type ChatSectionState } from "@/lib/chat-utils";
 import { ChatSidebarSkeleton } from "@/components/chat/ChatLoading";
 
 function UnreadBadge({ count }: { count: number }) {
@@ -25,7 +25,7 @@ function UnreadBadge({ count }: { count: number }) {
   );
 }
 
-function ChannelIcon({ type }: { type: string; bridged?: boolean }) {
+function ChannelIcon({ type }: { type: string }) {
   if (type === "private") return <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
   if (type === "direct") return <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
   if (type === "announcement") return <Megaphone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
@@ -35,18 +35,22 @@ function ChannelIcon({ type }: { type: string; bridged?: boolean }) {
 function ConversationRow({
   item,
   selected,
-  online,
+  presence,
+  typingLabel,
   onSelect,
   onToggleFavorite,
   favoriting,
 }: {
   item: ChatInboxItem;
   selected: boolean;
-  online?: boolean;
+  presence?: ChatPresenceStatus;
+  typingLabel?: string | null;
   onSelect: () => void;
   onToggleFavorite: () => void;
   favoriting?: boolean;
 }) {
+  const title = item.displayName;
+
   return (
     <div
       role="button"
@@ -68,14 +72,13 @@ function ConversationRow({
               {getUserInitials(item.otherUser.firstName, item.otherUser.lastName)}
             </AvatarFallback>
           </Avatar>
-          {online !== undefined && (
-            <span
-              className={cn(
-                "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-card",
-                online ? "bg-emerald-500" : "bg-muted-foreground/40",
-              )}
-            />
-          )}
+          <span
+            className={cn(
+              "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-card",
+              presenceDotClass(presence),
+            )}
+            title={presence ?? "offline"}
+          />
         </div>
       ) : (
         <div className="h-8 w-8 rounded-lg bg-muted/60 flex items-center justify-center shrink-0 relative">
@@ -87,15 +90,17 @@ function ConversationRow({
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-1.5 min-w-0">
-          <span className={cn("truncate", chatFont.channelName, selected && "font-semibold")}>{item.displayName}</span>
+          <span className={cn("truncate", chatFont.channelName, selected && "font-semibold")}>{title}</span>
           <span className={cn("shrink-0 ml-auto", chatFont.channelMeta)}>
             {formatListTimestamp(item.lastMessageAt)}
           </span>
         </div>
         <div className="flex items-center gap-1 mt-0.5">
-          {item.lastMessagePreview && (
+          {typingLabel ? (
+            <p className={cn("truncate flex-1 italic text-emerald-600", chatFont.channelPreview)}>{typingLabel}</p>
+          ) : item.lastMessagePreview ? (
             <p className={cn("truncate flex-1", chatFont.channelPreview)}>{item.lastMessagePreview}</p>
-          )}
+          ) : null}
           <UnreadBadge count={item.unreadCount} />
         </div>
       </div>
@@ -236,7 +241,8 @@ export function ConversationSidebar({
   selectedChannelId,
   searchQuery,
   sections,
-  onlineUsers,
+  presenceByUser,
+  typingByChannel,
   onSearchChange,
   onSelectChannel,
   onToggleSection,
@@ -253,7 +259,8 @@ export function ConversationSidebar({
   selectedChannelId: number | null;
   searchQuery: string;
   sections: ChatSectionState;
-  onlineUsers: Set<string>;
+  presenceByUser: Map<string, ChatPresenceStatus>;
+  typingByChannel: Map<number, string>;
   onSearchChange: (q: string) => void;
   onSelectChannel: (id: number) => void;
   onToggleSection: (key: keyof ChatSectionState) => void;
@@ -317,7 +324,8 @@ export function ConversationSidebar({
         key={item.channelId}
         item={item}
         selected={selectedChannelId === item.channelId}
-        online={item.otherUser ? onlineUsers.has(item.otherUser.id) : undefined}
+        presence={item.otherUser ? presenceByUser.get(item.otherUser.id) ?? "offline" : undefined}
+        typingLabel={typingByChannel.get(item.channelId) ?? null}
         onSelect={() => onSelectChannel(item.channelId)}
         onToggleFavorite={() => onToggleFavorite(item.channelId, item.isFavorite)}
         favoriting={favoritingChannelId === item.channelId}

@@ -28,6 +28,7 @@ export function MessageCompose({
   disabled,
   sending,
   maxAttachments = 5,
+  typingDisplay,
   onChange,
   onSend,
   onTyping,
@@ -40,6 +41,7 @@ export function MessageCompose({
   disabled?: boolean;
   sending?: boolean;
   maxAttachments?: number;
+  typingDisplay?: string | null;
   onChange: (v: string) => void;
   onSend: (attachmentIds: number[]) => void;
   onTyping: () => void;
@@ -165,10 +167,32 @@ export function MessageCompose({
 
   return (
     <div
-      className="border-t p-2 sm:p-4 bg-card/80 backdrop-blur-sm shrink-0"
+      className="border-t bg-card/80 backdrop-blur-sm shrink-0"
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
     >
+      {/* Typing indicator — above the message input (Slack / WhatsApp style) */}
+      <div
+        className={cn(
+          "px-3 sm:px-4 pt-2 max-w-3xl mx-auto transition-all",
+          typingDisplay ? "min-h-[1.5rem] opacity-100" : "min-h-0 h-0 opacity-0 overflow-hidden pt-0",
+        )}
+        aria-live="polite"
+        data-testid="typing-indicator"
+      >
+        {typingDisplay && (
+          <p className={cn("flex items-center gap-1.5 text-emerald-600", chatFont.messageMeta)}>
+            <span className="inline-flex gap-0.5 items-center" aria-hidden>
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce" />
+            </span>
+            <span className="italic truncate">{typingDisplay}</span>
+          </p>
+        )}
+      </div>
+
+      <div className="p-2 sm:p-4 pt-1.5 sm:pt-2">
       <div className="max-w-3xl mx-auto relative">
         {pendingAttachments.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
@@ -337,6 +361,7 @@ export function MessageCompose({
             <BarChart2 className="h-4 w-4" />
           </Button>
         </div>
+      </div>
       </div>
     </div>
   );
