@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchWithAuth } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -353,10 +353,109 @@ export function PmFinanceTrackerTool({ projectId, project }: ToolProps) {
   );
 }
 
+/**
+ * CCN Detail — the design shows this as a drill-down of a single change
+ * request (breadcrumbed "← Change Request Register"), not a separate
+ * attachable tool, so it lives here as an expandable panel per row rather
+ * than its own pmToolTypeEnum entry. Built entirely on pmRaiddItems columns
+ * that already exist — no migration:
+ *   description → reason for change, response → technical impact assessment,
+ *   timelineImpact → schedule impact, decisionBody → decision owner,
+ *   decisionDate → target decision date, activityLog → contributor sign-off
+ * Not built (scoped down from the mockup, not silently dropped): a numeric
+ * cost-impact field (no matching column — would need real reuse of an
+ * unrelated field or a migration) and file attachments.
+ */
+function CcnDetailPanel({ item, projectId }: { item: any; projectId: number }) {
+  const { toast } = useToast();
+  const [reason, setReason] = useState(item.description || "");
+  const [techImpact, setTechImpact] = useState(item.response || "");
+  const [scheduleImpact, setScheduleImpact] = useState(item.timelineImpact || "");
+  const [decisionOwner, setDecisionOwner] = useState(item.decisionBody || "");
+  const [decisionDate, setDecisionDate] = useState(item.decisionDate || "");
+  const [contributorName, setContributorName] = useState("");
+  const contributors = (item.activityLog as Array<{ dot: string; text: string; time: string; type: string }>) || [];
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/pm/projects/${projectId}/raidd?type=change`] });
+
+  const saveDetail = useMutation({
+    mutationFn: () => apiRequest("PUT", `/api/pm/raidd/${item.id}`, {
+      description: reason,
+      response: techImpact,
+      timelineImpact: scheduleImpact,
+      decisionBody: decisionOwner,
+      decisionDate: decisionDate || null,
+    }),
+    onSuccess: () => { invalidate(); toast({ title: "CCN detail saved" }); },
+  });
+
+  const addContributor = useMutation({
+    mutationFn: () => apiRequest("PUT", `/api/pm/raidd/${item.id}`, {
+      activityLog: [...contributors, { dot: "person", text: `${contributorName} — Awaiting`, time: new Date().toISOString(), type: "contributor" }],
+    }),
+    onSuccess: () => { invalidate(); setContributorName(""); },
+  });
+
+  return (
+    <div className="px-4 py-4 bg-muted/20 border-t space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase">Reason for change</label>
+          <textarea className="w-full min-h-[60px] rounded-md border px-3 py-2 text-sm mt-1" value={reason} onChange={(e) => setReason(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase">Technical impact assessment</label>
+          <textarea className="w-full min-h-[60px] rounded-md border px-3 py-2 text-sm mt-1" value={techImpact} onChange={(e) => setTechImpact(e.target.value)} />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase">Schedule impact</label>
+          <Input value={scheduleImpact} onChange={(e) => setScheduleImpact(e.target.value)} placeholder="e.g. +3 weeks" className="mt-1" />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase">Decision owner</label>
+          <Input value={decisionOwner} onChange={(e) => setDecisionOwner(e.target.value)} placeholder="e.g. Steering Committee" className="mt-1" />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase">Target decision date</label>
+          <Input type="date" value={decisionDate ? String(decisionDate).slice(0, 10) : ""} onChange={(e) => setDecisionDate(e.target.value)} className="mt-1" />
+        </div>
+      </div>
+      <Button size="sm" disabled={saveDetail.isPending} onClick={() => saveDetail.mutate()}>
+        {saveDetail.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : null} Save detail
+      </Button>
+
+      <div className="pt-2 border-t">
+        <label className="text-xs font-semibold text-muted-foreground uppercase">Contributors — sign-off</label>
+        {contributors.length === 0 ? (
+          <p className="text-xs text-muted-foreground mt-1">No contributors added yet.</p>
+        ) : (
+          <ul className="mt-1.5 space-y-1">
+            {contributors.map((c, idx) => (
+              <li key={idx} className="text-sm flex items-center justify-between">
+                <span>{c.text}</span>
+                <span className="text-xs text-muted-foreground">{new Date(c.time).toLocaleDateString("en-GB")}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex gap-2 mt-2">
+          <Input placeholder="Name — role" value={contributorName} onChange={(e) => setContributorName(e.target.value)} className="max-w-xs h-8 text-xs" />
+          <Button size="sm" variant="outline" className="h-8 text-xs" disabled={!contributorName.trim() || addContributor.isPending} onClick={() => addContributor.mutate()}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> Add contributor
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PmChangeLogTool({ projectId }: ToolProps) {
   const { toast } = useToast();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const { data: items = [], isLoading } = useQuery<any[]>({
     queryKey: [`/api/pm/projects/${projectId}/raidd?type=change`],
   });
@@ -404,25 +503,37 @@ export function PmChangeLogTool({ projectId }: ToolProps) {
       <Card>
         <CardContent className="p-0">
           <Table>
-            <TableHeader><TableRow><TableHead>Title</TableHead><TableHead>Status</TableHead><TableHead>Priority</TableHead><TableHead>Owner</TableHead><TableHead className="w-[120px]">Actions</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Title</TableHead><TableHead>Status</TableHead><TableHead>Priority</TableHead><TableHead>Owner</TableHead><TableHead className="w-[180px]">Actions</TableHead></TableRow></TableHeader>
             <TableBody>
               {items.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No change requests yet.</TableCell></TableRow>
               ) : items.map((i: any) => (
-                <TableRow key={i.id}>
-                  <TableCell className="font-medium">{i.title}</TableCell>
-                  <TableCell>{i.status}</TableCell>
-                  <TableCell>{i.priority}</TableCell>
-                  <TableCell>{i.ownerName || i.owner || "—"}</TableCell>
-                  <TableCell>
-                    {i.status !== "approved" && (
-                      <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => updateStatus.mutate({ id: i.id, status: "approved" })}>Approve</Button>
-                    )}
-                    {i.status !== "closed" && (
-                      <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => updateStatus.mutate({ id: i.id, status: "closed" })}>Close</Button>
-                    )}
-                  </TableCell>
-                </TableRow>
+                <Fragment key={i.id}>
+                  <TableRow>
+                    <TableCell className="font-medium">{i.title}</TableCell>
+                    <TableCell>{i.status}</TableCell>
+                    <TableCell>{i.priority}</TableCell>
+                    <TableCell>{i.ownerName || i.owner || "—"}</TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => setExpandedId(expandedId === i.id ? null : i.id)}>
+                        {expandedId === i.id ? "Hide detail" : "CCN detail"}
+                      </Button>
+                      {i.status !== "approved" && (
+                        <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => updateStatus.mutate({ id: i.id, status: "approved" })}>Approve</Button>
+                      )}
+                      {i.status !== "closed" && (
+                        <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => updateStatus.mutate({ id: i.id, status: "closed" })}>Close</Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                  {expandedId === i.id && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="p-0">
+                        <CcnDetailPanel item={i} projectId={projectId} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
               ))}
             </TableBody>
           </Table>
@@ -432,17 +543,100 @@ export function PmChangeLogTool({ projectId }: ToolProps) {
   );
 }
 
-export function PmDocumentationTool({ projectId }: ToolProps) {
+export function PmDocumentationTool({ projectId, project }: ToolProps) {
+  const { toast } = useToast();
+  const [newDocTitle, setNewDocTitle] = useState("");
+  const meta = (project?.metadata as Record<string, unknown>) || {};
+  const folderId = typeof meta.documentFolderId === "number" ? (meta.documentFolderId as number) : null;
+
   const { data: docs = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/pm/projects", projectId, "documents"],
+  });
+  const { data: rootFolders = [] } = useQuery<any[]>({
+    queryKey: ["/api/documents/folders?parentId=null"],
+  });
+  const linkedFolder = rootFolders.find((f: any) => f.id === folderId);
+
+  const linkFolder = useMutation({
+    mutationFn: (id: number) => apiRequest("PUT", `/api/pm/projects/${projectId}`, { metadata: { ...meta, documentFolderId: id } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId] });
+      toast({ title: "Folder linked" });
+    },
+  });
+
+  const createFolder = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/documents/folders", {
+        name: project?.name || "Project documents",
+        parentId: null,
+        clientId: project?.clientId ?? null,
+      });
+      const folder = await res.json();
+      await apiRequest("PUT", `/api/pm/projects/${projectId}`, { metadata: { ...meta, documentFolderId: folder.id } });
+      return folder;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/folders?parentId=null"] });
+      toast({ title: "Project folder created and linked" });
+    },
+  });
+
+  const createDoc = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/documents", {
+      title: newDocTitle,
+      content: "",
+      type: "document",
+      status: "draft",
+      folderId,
+      clientId: project?.clientId ?? null,
+      metadata: { projectId },
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pm/projects", projectId, "documents"] });
+      setNewDocTitle("");
+      toast({ title: "Document created" });
+    },
   });
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
-        <Link href="/modules/documents">
-          <Button variant="outline" size="sm"><ExternalLink className="h-3.5 w-3.5 mr-1" /> Open Documents Module</Button>
-        </Link>
+      <Card>
+        <CardContent className="p-4 flex flex-wrap items-center gap-2 justify-between">
+          <div className="text-sm">
+            {linkedFolder ? (
+              <span>Linked folder: <span className="font-medium">{linkedFolder.name}</span></span>
+            ) : (
+              <span className="text-muted-foreground">No project folder linked yet — new documents won't be organised in the Documents module.</span>
+            )}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {!linkedFolder && (
+              <>
+                <Select onValueChange={(v) => linkFolder.mutate(Number(v))}>
+                  <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue placeholder="Link existing folder…" /></SelectTrigger>
+                  <SelectContent>
+                    {rootFolders.map((f: any) => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="sm" disabled={createFolder.isPending} onClick={() => createFolder.mutate()}>
+                  {createFolder.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
+                  Create project folder
+                </Button>
+              </>
+            )}
+            <Link href="/modules/documents">
+              <Button variant="outline" size="sm"><ExternalLink className="h-3.5 w-3.5 mr-1" /> Open Documents Module</Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+      <div className="flex gap-2">
+        <Input placeholder="New document title…" value={newDocTitle} onChange={(e) => setNewDocTitle(e.target.value)} className="max-w-xs" />
+        <Button size="sm" disabled={!newDocTitle.trim() || createDoc.isPending} onClick={() => createDoc.mutate()}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> New Document
+        </Button>
       </div>
       <Card>
         <CardContent className="p-0">

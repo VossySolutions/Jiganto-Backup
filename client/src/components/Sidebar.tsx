@@ -166,7 +166,7 @@ const moduleGroups: ModuleGroup[] = [
       {
         name: "Timesheets",
         icon: ResTimesheetsIcon,
-        href: "/modules/finance-mgmt?tab=timesheets",
+        href: "/modules/timesheets",
         description: "Submit and approve timesheets",
         color: "#0EA5E9",
       },
@@ -505,7 +505,10 @@ export function Sidebar() {
       )}
 
       {isMobile && (
-        <header className="fixed top-0 left-0 right-0 z-40 flex h-12 items-center gap-2.5 border-b border-border/50 bg-background/90 backdrop-blur-md px-3 shadow-sm md:hidden">
+        <header
+          aria-label="Mobile navigation"
+          className="fixed top-0 left-0 right-0 z-40 flex h-12 items-center gap-2.5 border-b border-border/50 bg-background/90 backdrop-blur-md px-3 shadow-sm md:hidden"
+        >
           <Button
             variant="ghost"
             size="icon"
@@ -528,7 +531,7 @@ export function Sidebar() {
           />
           <span
             className="font-display text-sm font-semibold tracking-tight truncate"
-            style={{ color: "#009EE2" }}
+            style={{ color: "var(--brand-wordmark)" }}
           >
             Jiganto
           </span>
@@ -578,7 +581,7 @@ export function Sidebar() {
                 <div className="min-w-0">
                   <h1
                     className="text-lg md:text-xl font-bold font-display tracking-tight leading-tight"
-                    style={{ color: "#009EE2" }}
+                    style={{ color: "var(--brand-wordmark)" }}
                   >
                     Jiganto
                   </h1>

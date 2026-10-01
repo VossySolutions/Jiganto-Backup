@@ -6373,7 +6373,7 @@ export class DatabaseStorage implements IStorage {
     const allowed = pickDefined(updates as Record<string, unknown>, [
       "name", "description", "assigneeId", "status", "priority", "progress", "ragStatus",
       "estimatedHours", "actualHours", "plannedStartDate", "plannedEndDate",
-      "actualStartDate", "actualEndDate", "predecessorIds", "successorIds",
+      "actualStartDate", "actualEndDate", "predecessorIds", "successorIds", "depType",
       "isSummary", "ganttType", "wbsCode", "order", "phaseId", "parentTaskId",
       "milestoneId", "phaseNumber", "methodology", "legacySource", "legacySourceId",
     ]) as Partial<InsertPmTask>;

@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 import type { ProjectToolBadges } from "@/components/projects/ProjectWorkspaceSidebar";
+import { findToolDefinition, getPickerToolIds } from "@/components/projects/CreateWorkItemWizard";
 
 type ProjectLike = {
   id: number;
@@ -64,9 +66,13 @@ function safePct(n: number | null | undefined): number {
 export default function ProjectOverview({
   project,
   onNavigateTool,
+  enabledTools,
+  onAddTool,
 }: {
   project: ProjectLike;
   onNavigateTool?: (toolId: string) => void;
+  enabledTools?: Array<{ toolType: string; label?: string | null }>;
+  onAddTool?: (toolId: string) => void;
 }) {
   const projectId = project.id;
 
@@ -227,6 +233,15 @@ export default function ProjectOverview({
           }
         />
       </div>
+
+      {enabledTools && onNavigateTool && (
+        <ToolsAttachedSection
+          enabledTools={enabledTools}
+          onNavigateTool={onNavigateTool}
+          onAddTool={onAddTool}
+          badges={badges}
+        />
+      )}
 
       <div className="grid gap-3.5 lg:grid-cols-2">
         <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -449,6 +464,116 @@ function StatCard({
         <span className={cn("mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold", deltaCls)}>
           {delta.text}
         </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * "Tools attached to this project" — the launcher grid from the Project
+ * Workspace design (Main.dc.html), which calls this out as "the core UX
+ * improvement": every attached tool as an open-able card, plus a quick way
+ * to add more, right on the page you land on. The sidebar (ProjectWorkspace-
+ * Sidebar) already has a mature nav + its own "Add tool" drawer — this
+ * doesn't replace that, it surfaces the same information as a discoverable
+ * launcher on the page most people see first, matching what the design
+ * actually asks for without restructuring the already-confirmed Option B
+ * nav pattern.
+ */
+const HIDDEN_FROM_TOOL_GRID = new Set(["project_dashboard", "360_report", "status_reporting"]);
+
+function ToolsAttachedSection({
+  enabledTools,
+  onNavigateTool,
+  onAddTool,
+  badges,
+}: {
+  enabledTools: Array<{ toolType: string; label?: string | null }>;
+  onNavigateTool: (toolId: string) => void;
+  onAddTool?: (toolId: string) => void;
+  badges?: ProjectToolBadges;
+}) {
+  const attached = enabledTools.filter((t) => !HIDDEN_FROM_TOOL_GRID.has(t.toolType));
+  const enabledIds = new Set(enabledTools.map((t) => t.toolType));
+  const suggestions = onAddTool
+    ? getPickerToolIds()
+        .filter((id) => !enabledIds.has(id) && !HIDDEN_FROM_TOOL_GRID.has(id))
+        .slice(0, 5)
+    : [];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-[15px] font-extrabold">Tools attached to this project</h3>
+        <span className="text-[11px] text-muted-foreground">
+          {attached.length} tool{attached.length === 1 ? "" : "s"} in use
+        </span>
+      </div>
+
+      {attached.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-[12px] text-muted-foreground">
+          No tools attached yet — add one below to get started.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
+          {attached.map((t) => {
+            const def = findToolDefinition(t.toolType);
+            const Icon = def?.icon;
+            const badge = badges?.badges?.[t.toolType];
+            return (
+              <div key={t.toolType} className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3.5">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                    {Icon ? <Icon className="h-4 w-4" /> : <span className="text-xs">•</span>}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold">
+                    {def?.name || t.label || t.toolType}
+                  </span>
+                </div>
+                {badge && (
+                  <div className="text-[11px] text-muted-foreground">
+                    {badge.count != null ? `${badge.count} ` : ""}
+                    {badge.label}
+                  </div>
+                )}
+                <Button
+                  size="sm"
+                  className="h-7 text-[11px]"
+                  onClick={() => onNavigateTool(t.toolType)}
+                  data-testid={`button-open-tool-${t.toolType}`}
+                >
+                  Open
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {suggestions.length > 0 && onAddTool && (
+        <div className="rounded-xl border border-dashed border-border bg-card/60 p-3.5">
+          <div className="mb-2 text-[12px] font-bold">Add a tool to this project</div>
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((id) => {
+              const def = findToolDefinition(id);
+              if (!def) return null;
+              const Icon = def.icon;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => onAddTool(id)}
+                  className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-[11.5px] font-semibold hover:bg-muted"
+                  data-testid={`button-quick-add-tool-${id}`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {def.name}
+                  <Plus className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );

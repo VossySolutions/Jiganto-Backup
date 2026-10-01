@@ -32,7 +32,28 @@ function normalizeTaskRags(t){
   if(!t.ragScp) t.ragScp=r;
   t.rag=t.ragScp||r;
   if(!t.depType) t.depType='FS';
+  // Additional predecessors beyond the primary predId — always FS-type (no UI
+  // to set a type per extra link yet). Absent/empty on every task that only
+  // ever had one predecessor, which is all real data as of this field's
+  // introduction — see predEdges() for how this stays a no-op for those.
+  if(!Array.isArray(t.extraPredIds)) t.extraPredIds=[];
   return t;
+}
+/** Every predecessor constraint a task has: its primary predId/depType (if
+ * any) plus any extraPredIds (always FS). For a task with no extraPredIds —
+ * true of all tasks before this field existed — this returns exactly the
+ * single {id,type} pair (or none) that predId/depType alone used to
+ * represent, so every caller built against this instead of predId directly
+ * behaves identically on that data. */
+function predEdges(t,byId){
+  const edges=[];
+  if(t.predId&&byId.has(t.predId)) edges.push({id:t.predId,type:t.depType||'FS'});
+  if(Array.isArray(t.extraPredIds)){
+    t.extraPredIds.forEach(id=>{
+      if(id&&id!==t.predId&&byId.has(id)) edges.push({id,type:'FS'});
+    });
+  }
+  return edges;
 }
 function buildRagPillCell(t,id,dim){
   const v=ragField(t,dim);
@@ -52,6 +73,9 @@ let collapsed={};
 let editingId=null;
 let currentRag='g';
 let currentDep='FS';
+/** Additional predecessor ids being edited in the modal, in-progress state
+ * mirroring currentRag/currentDep — flushed to t.extraPredIds on save. */
+let editingExtraPredIds=[];
 let zoom='week';
 let colW=28;
 let showCP=false;
@@ -1036,24 +1060,35 @@ function calcWBS(){
 }
 
 // ── CRITICAL PATH ────────────────────────────────────────────
-/** Classic ES/EF + LS/LF slack on the dependency network only (predId links). */
+/** Classic ES/EF + LS/LF slack on the dependency network (predId + extraPredIds links).
+ * Generalized from a single-predecessor-only version to also walk extraPredIds.
+ * For any task with no extraPredIds — true of all tasks before that field
+ * existed — predEdges(t) returns exactly the one {id,type} pair the old code
+ * built from predId/depType directly (or none), so this computes byte-for-byte
+ * the same ES/EF/LS/LF/critical-path result as before on that data: forward
+ * pass takes the max candidate start across edges (one edge ⇒ that candidate,
+ * unchanged), backward pass's per-successor edge type is captured at the same
+ * point the old code read s.depType, so it's the same value either way. */
 function computeCriticalPath(){
   criticalIds=new Set();
   if(!showCP) return;
-  if(!tasks.some(t=>t.predId)) return;
 
   const byId=new Map(tasks.map(t=>[t.id,t]));
-  const successors=new Map();
+  if(!tasks.some(t=>predEdges(t,byId).length)) return;
+
+  const successors=new Map(); // predecessor id -> [{succId,type}]
   tasks.forEach(t=>{
-    if(!t.predId||!byId.has(t.predId)) return;
-    if(!successors.has(t.predId)) successors.set(t.predId,[]);
-    successors.get(t.predId).push(t.id);
+    predEdges(t,byId).forEach(edge=>{
+      if(!successors.has(edge.id)) successors.set(edge.id,[]);
+      successors.get(edge.id).push({succId:t.id,type:edge.type});
+    });
   });
   const inNetwork=new Set();
   tasks.forEach(t=>{
-    if(t.predId&&byId.has(t.predId)){
+    const edges=predEdges(t,byId);
+    if(edges.length){
       inNetwork.add(t.id);
-      inNetwork.add(t.predId);
+      edges.forEach(e=>inNetwork.add(e.id));
     }
   });
   if(!inNetwork.size) return;
@@ -1063,7 +1098,9 @@ function computeCriticalPath(){
     return Math.max(1,taskDurationDays(t.start,t.end)+1);
   };
 
-  // Forward: earliest start / finish (in day units from an arbitrary epoch)
+  // Forward: earliest start / finish (in day units from an arbitrary epoch).
+  // A task waits for ALL its predecessors, so its earliest start is the
+  // latest (max) of each edge's candidate start.
   const es=new Map(), ef=new Map();
   function calcForward(id,visiting){
     if(es.has(id)) return;
@@ -1072,16 +1109,16 @@ function computeCriticalPath(){
     const t=byId.get(id);
     if(!t){ visiting.delete(id); return; }
     let start=0;
-    if(t.predId&&byId.has(t.predId)){
-      calcForward(t.predId,visiting);
-      const pred=byId.get(t.predId);
-      const dep=t.depType||'FS';
-      const pEs=es.get(t.predId)||0;
-      const pEf=ef.get(t.predId)||0;
-      if(dep==='FS') start=pEf;
-      else if(dep==='SS') start=pEs;
-      else start=Math.max(0,pEf-durDays(t)); // FF
-    }
+    predEdges(t,byId).forEach(edge=>{
+      calcForward(edge.id,visiting);
+      const pEs=es.get(edge.id)||0;
+      const pEf=ef.get(edge.id)||0;
+      let candidate;
+      if(edge.type==='FS') candidate=pEf;
+      else if(edge.type==='SS') candidate=pEs;
+      else candidate=Math.max(0,pEf-durDays(t)); // FF
+      if(candidate>start) start=candidate;
+    });
     es.set(id,start);
     ef.set(id,start+durDays(t));
     visiting.delete(id);
@@ -1098,17 +1135,15 @@ function computeCriticalPath(){
     visiting.add(id);
     const t=byId.get(id);
     if(!t){ visiting.delete(id); return; }
-    const succs=(successors.get(id)||[]).filter(sid=>inNetwork.has(sid));
+    const succs=(successors.get(id)||[]).filter(e=>inNetwork.has(e.succId));
     let finish=projectEnd;
     if(succs.length){
-      finish=Math.min(...succs.map(sid=>{
-        calcBackward(sid,visiting);
-        const s=byId.get(sid);
-        const dep=(s&&s.depType)||'FS';
-        const sLs=ls.get(sid)||0;
-        const sLf=lf.get(sid)||0;
-        if(dep==='FS') return sLs;          // pred must finish before succ starts
-        if(dep==='SS') return sLs;          // pred start aligned → treat LF as succ LS + pred dur later
+      finish=Math.min(...succs.map(e=>{
+        calcBackward(e.succId,visiting);
+        const sLs=ls.get(e.succId)||0;
+        const sLf=lf.get(e.succId)||0;
+        if(e.type==='FS') return sLs;          // pred must finish before succ starts
+        if(e.type==='SS') return sLs;          // pred start aligned → treat LF as succ LS + pred dur later
         return sLf;                        // FF
       }));
     }
@@ -3178,6 +3213,64 @@ function populatePredDropdown(excludeId){
     sel.appendChild(o);
   });
 }
+function populateExtraPredDropdown(excludeId){
+  const sel=document.getElementById('m-pred-extra');
+  if(!sel) return;
+  sel.innerHTML='';
+  const primaryVal=document.getElementById('m-pred')?.value;
+  const primaryId=primaryVal?parseInt(primaryVal):null;
+  const taken=new Set([primaryId,...editingExtraPredIds]);
+  const opts=persistablePredOptions(excludeId).filter(t=>!taken.has(t.id));
+  if(!opts.length){
+    sel.innerHTML='<option value="">No more available</option>';
+    sel.disabled=true;
+    return;
+  }
+  sel.disabled=false;
+  opts.forEach(t=>{
+    const o=document.createElement('option');
+    o.value=t.id;
+    o.textContent=(t.wbs||t.id)+' — '+(t.name||'').substring(0,30);
+    sel.appendChild(o);
+  });
+}
+function renderExtraPredList(){
+  const list=document.getElementById('extraPredList');
+  if(!list) return;
+  list.innerHTML=editingExtraPredIds.map(id=>{
+    const t=tasks.find(x=>x.id===id);
+    const label=t?((t.wbs||t.id)+' — '+(t.name||'').substring(0,24)):('#'+id);
+    return '<span class="extra-pred-chip">'+esc(label)+'<button type="button" onclick="removeExtraPred('+id+')" aria-label="Remove predecessor" title="Remove">×</button></span>';
+  }).join('');
+}
+function syncExtraPredUI(){
+  // Scoped to just the add-row (select + button), not the whole .fg — the
+  // already-added chips above it must stay removable even with no primary
+  // predecessor selected.
+  const row=document.getElementById('extraPredAddRow');
+  const primaryVal=document.getElementById('m-pred')?.value;
+  const hasPrimary=!!primaryVal;
+  if(row) row.classList.toggle('is-disabled',!hasPrimary);
+  const addBtn=document.getElementById('extraPredAddBtn');
+  if(addBtn) addBtn.disabled=!hasPrimary;
+  const sel=document.getElementById('m-pred-extra');
+  if(sel) sel.disabled=!hasPrimary;
+  if(hasPrimary) populateExtraPredDropdown(editingId);
+}
+function addExtraPred(){
+  const sel=document.getElementById('m-pred-extra');
+  if(!sel||!sel.value) return;
+  const id=parseInt(sel.value);
+  if(!id||editingExtraPredIds.includes(id)) return;
+  editingExtraPredIds.push(id);
+  renderExtraPredList();
+  populateExtraPredDropdown(editingId);
+}
+function removeExtraPred(id){
+  editingExtraPredIds=editingExtraPredIds.filter(x=>x!==id);
+  renderExtraPredList();
+  populateExtraPredDropdown(editingId);
+}
 function populateParentDropdown(excludeId){
   const sel=document.getElementById('m-parent');
   if(!sel) return;
@@ -3224,7 +3317,10 @@ function openEdit(id){
   populateParentDropdown(id);
   document.getElementById('m-pred').value=t.predId||'';
   document.getElementById('m-parent').value=t.parent||'';
+  editingExtraPredIds=Array.isArray(t.extraPredIds)?[...t.extraPredIds]:[];
+  renderExtraPredList();
   syncDepTypeUI();
+  syncExtraPredUI();
   document.getElementById('modalEdit').classList.add('open');
 }
 
@@ -3258,6 +3354,9 @@ function addItem(parentId,afterId){
   if(fsOpt) fsOpt.classList.add('sel');
   populatePredDropdown(null);
   populateParentDropdown(null);
+  editingExtraPredIds=[];
+  renderExtraPredList();
+  syncExtraPredUI();
   const sel=getSelectedTask();
   const defaultParent=parentId??(sel?sel.parent:null);
   if(defaultParent) document.getElementById('m-parent').value=defaultParent;
@@ -3377,6 +3476,9 @@ function saveItem(){
       t.predId=predVal?parseInt(predVal):null;
       if(t.predId&&predecessorIdsForSave(t.predId)===null){ showToast('Invalid predecessor','err',3000); t.predId=null; }
       t.depType=t.predId?(currentDep||'FS'):'FS';
+      // Extras only mean anything alongside a primary predecessor — see
+      // predecessorIdsForSave's own "no primary ⇒ drop extras" rule.
+      t.extraPredIds=t.predId?editingExtraPredIds.slice():[];
       if(t.parent!=null){
         const p=tasks.find(x=>x.id===t.parent);
         if(p&&promoteToContainerIfNeeded(p)&&!isUnsavedLocal(p)) void persistSave(p);
@@ -3401,6 +3503,7 @@ function saveItem(){
       notes:document.getElementById('m-notes').value,
       parent:parentVal?parseInt(parentVal):null,
       predId:predVal?parseInt(predVal):null,
+      extraPredIds:predVal?editingExtraPredIds.slice():[],
       depType:currentDep,
       color:LEVEL_COLORS[typeVal]||'#64748b',
       wbs:''
@@ -3595,6 +3698,15 @@ function selDep(el,d){
 }
 function onPredChange(){
   syncDepTypeUI();
+  const primaryVal=document.getElementById('m-pred')?.value;
+  const primaryId=primaryVal?parseInt(primaryVal):null;
+  if(primaryId&&editingExtraPredIds.includes(primaryId)){
+    // Picking the same task as both primary and an already-added extra would
+    // be a redundant duplicate link — drop it from extras, primary wins.
+    editingExtraPredIds=editingExtraPredIds.filter(id=>id!==primaryId);
+    renderExtraPredList();
+  }
+  syncExtraPredUI();
 }
 window.selRag=selRag;
 window.selDep=selDep;
@@ -5520,10 +5632,19 @@ function ganttIdToDbTaskId(ganttId){
   if(id===1||id>=LOCAL_ID_BASE) return null;
   return id;
 }
-function predecessorIdsForSave(predId){
-  if(!predId) return [];
+function predecessorIdsForSave(predId,extraPredIds){
+  if(!predId){
+    // No primary predecessor ⇒ extras alone aren't representable (primary is
+    // what depType/the edge-back-to-this-task's type applies to); drop them
+    // rather than save a predecessor set with no defined relationship type.
+    return [];
+  }
   const dbId=ganttIdToDbTaskId(predId);
-  return dbId!=null ? [dbId] : null;
+  if(dbId==null) return null;
+  const extraDbIds=Array.isArray(extraPredIds)
+    ? extraPredIds.map(ganttIdToDbTaskId).filter(id=>id!=null&&id!==dbId)
+    : [];
+  return [dbId,...new Set(extraDbIds)];
 }
 function persistablePredOptions(excludeId){
   return tasks.filter(x=>x.id!==excludeId&&x.type!==1&&x.id!==1&&getChildren(x.id).length===0&&!isLocalOnly(x));
@@ -5548,7 +5669,7 @@ async function persistCreate(t,opts){
   const gt=engineTypeToGanttFields(t.type,getChildren(t.id).length>0);
   try{
     const parentTaskId=(t.parent&&t.parent!==1)?ganttIdToDbTaskId(t.parent):null;
-    const predIds=predecessorIdsForSave(t.predId)||[];
+    const predIds=predecessorIdsForSave(t.predId,t.extraPredIds)||[];
     const created=await post('/api/pm/tasks',{
       tenantId,projectId,
       name:t.name,
@@ -5562,6 +5683,7 @@ async function persistCreate(t,opts){
       description:t.notes||null,
       parentTaskId,
       predecessorIds:predIds,
+      depType:t.depType||'FS',
       assigneeId:assigneeId||null,
       order:tasks.filter(x=>x.type!==1).length,
     });
@@ -5694,7 +5816,7 @@ async function persistSave(t){
   const gt=engineTypeToGanttFields(t.type,getChildren(t.id).length>0);
   try{
     const parentTaskId=(t.parent&&t.parent!==1)?ganttIdToDbTaskId(t.parent):null;
-    let predIds=predecessorIdsForSave(t.predId);
+    let predIds=predecessorIdsForSave(t.predId,t.extraPredIds);
     if(t.predId&&predIds===null){ t.predId=null; predIds=[]; }
     const assigneeId=t.owner?ownerMap[t.owner]||null:null;
     await put('/api/pm/tasks/'+t.id,{
@@ -5707,6 +5829,7 @@ async function persistSave(t){
       wbsCode:t.wbs||null,
       parentTaskId,
       predecessorIds:predIds||[],
+      depType:t.depType||'FS',
       assigneeId,
       isSummary:gt.isSummary,
       ganttType:gt.ganttType,

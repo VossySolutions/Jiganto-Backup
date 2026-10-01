@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getSupabaseAccessToken } from "@/lib/supabase-session";
 import { supabaseAuthEnabled } from "@/lib/supabase";
 import { useTheme } from "@/hooks/use-theme";
+import { useCurrentOrganisation } from "@/hooks/use-jiganto";
 import type {
   PmProject,
   PmTask,
@@ -87,6 +88,10 @@ interface V4Task {
   ragScp?: "g" | "a" | "r";
   parent: number | null;
   predId: number | null;
+  /** Additional predecessors beyond predId — always FS-type (no per-extra
+   * type picker in the UI yet). Optional/absent for every task that only
+   * ever had one predecessor. */
+  extraPredIds?: number[];
   depType: string;
   notes: string;
   color: string;
@@ -144,11 +149,38 @@ function ganttTypeToEngineType(ganttType?: string | null, isSummary?: boolean | 
   return 5;
 }
 
+const VALID_DEP_TYPES = new Set(["FS", "SS", "FF", "SF"]);
+
+// Default bar palette (unchanged) vs. Jiganto 2026 brand theme — see index.css's
+// .theme-jiganto2026 block for the source tokens (chart-1..5, primary, status-amber).
+const BAR_COLORS_DEFAULT: Record<number, string> = {
+  0: "#4338ca",
+  1: "#4f46e5",
+  2: "#0891b2",
+  3: "#059669",
+  4: "#64748b",
+  5: "#64748b",
+  6: "#f59e0b",
+  7: "#7c3aed",
+};
+const BAR_COLORS_JIGANTO2026: Record<number, string> = {
+  0: "#3E5C76", // program — chart-1
+  1: "#0E6E5C", // project — primary
+  2: "#2B7A8A", // phase — chart-5
+  3: "#3E8A74", // workstream — mid teal
+  4: "#66788A", // activity — muted-foreground
+  5: "#66788A", // task — muted-foreground
+  6: "#B4560F", // milestone — status-amber-foreground
+  7: "#5B4B8A", // release — chart-3
+};
+
 function buildGanttData(
   project: PmProject,
   tasks: PmTask[],
-  team: TeamMember[]
+  team: TeamMember[],
+  isBrandTheme = false
 ): GanttInitData {
+  const barColors = isBrandTheme ? BAR_COLORS_JIGANTO2026 : BAR_COLORS_DEFAULT;
   const items: V4Task[] = [];
   const today = new Date().toISOString().split("T")[0];
   const oneYearLater = new Date(Date.now() + 365 * 864e5).toISOString().split("T")[0];
@@ -184,7 +216,7 @@ function buildGanttData(
     predId: null,
     depType: "FS",
     notes: project.description ?? "",
-    color: "#4f46e5",
+    color: barColors[1],
     wbs: "",
   });
 
@@ -199,22 +231,15 @@ function buildGanttData(
     const ownerName = t.assigneeId ? ownerMap.get(t.assigneeId) ?? "" : "";
     const predRaw = t.predecessorIds && t.predecessorIds.length > 0 ? t.predecessorIds[0] : null;
     const predId = predRaw && idSet.has(predRaw) ? predRaw : null;
+    const extraPredIds = (t.predecessorIds || [])
+      .slice(1)
+      .filter((id) => idSet.has(id) && id !== predId);
     const start = safeDate(t.plannedStartDate, today);
     const end = type === 6 ? start : safeDate(t.plannedEndDate, start);
     const scopeRag =
       mapRag((t as { ragStatus?: string | null }).ragStatus) ||
       mapTaskVisualRag(t.status, t.progress ?? 0);
     const taskRags = deriveItemRags(scopeRag, t.progress ?? 0, t.status, start, end);
-    const colors: Record<number, string> = {
-      0: "#4338ca",
-      1: "#4f46e5",
-      2: "#0891b2",
-      3: "#059669",
-      4: "#64748b",
-      5: "#64748b",
-      6: "#f59e0b",
-      7: "#7c3aed",
-    };
     items.push({
       id: t.id,
       name: t.name,
@@ -226,9 +251,10 @@ function buildGanttData(
       ...taskRags,
       parent: parentId,
       predId,
-      depType: "FS",
+      extraPredIds: extraPredIds.length > 0 ? extraPredIds : undefined,
+      depType: VALID_DEP_TYPES.has(t.depType || "") ? t.depType! : "FS",
       notes: t.description ?? "",
-      color: colors[type] || "#64748b",
+      color: barColors[type] || barColors[5],
       wbs: t.wbsCode || "",
     });
   });
@@ -249,7 +275,68 @@ function buildGanttData(
   };
 }
 
-function buildSrcDoc(data: GanttInitData, projectName: string, isDark = false): string {
+// Jiganto 2026 brand theme override for the Gantt's DHTMLX-derived CSS custom
+// properties (client/public/gantt-v4-engine.css). Scoped to light mode only —
+// the engine's own .dark block already handles dark mode and the two aren't
+// combined anywhere else in the app yet. Values sourced from index.css's
+// .theme-jiganto2026 block so the two stay visually consistent.
+const GANTT_BRAND_THEME_CSS = `
+:root:not(.dark){
+  --dhx-primary:#0E6E5C;
+  --dhx-primary-dark:#0B5A49;
+  --dhx-primary-light:#E3F1ED;
+  --dhx-milestone:#B4560F;
+  --dhx-milestone-border:#8f4409;
+  --dhx-summary-l0:#0E6E5C;
+  --dhx-summary-l0-dark:#0B5A49;
+  --dhx-summary-l1:#4FA98F;
+  --dhx-summary-l1-dark:#3E8A74;
+  --dhx-summary-l2:#A9D9C9;
+  --dhx-summary-l2-dark:#8AC4B0;
+  --dhx-critical:#A03E52;
+  --dhx-border:#DDE4EA;
+  --dhx-border-light:#EAEEF2;
+  --dhx-grid-header:#EAEEF2;
+  --dhx-grid-odd:#F4F6F8;
+  --dhx-grid-even:#ffffff;
+  --dhx-weekend:#EAF3F0;
+  --dhx-today:#FCF3E6;
+  --dhx-today-line:#B4560F;
+  --dhx-text:#182635;
+  --dhx-text-muted:#66788A;
+  --dhx-text-light:#8593A0;
+  --dhx-surface:#ffffff;
+  --dhx-page-bg:#EFF2F5;
+  --dhx-elevated:#ffffff;
+  --dhx-row-hover:#E3F1ED;
+  --dhx-row-selected:#CFE8E1;
+  --dhx-row-checked:#E3F1ED;
+  --dhx-sel-bar-bg:#E3F1ED;
+  --dhx-sel-bar-border:#8FC9BB;
+  --dhx-sel-count:#0E6E5C;
+  --dhx-scrollbar-track:#EAEEF2;
+  --dhx-scrollbar-thumb:#C7D0D8;
+  --dhx-scrollbar-thumb-hover:#AEB9C2;
+  --dhx-critical-bg:#FBECEC;
+  --dhx-critical-border:#D9A9AE;
+  --dhx-green-bg:#E3F1ED;
+  --dhx-green-border:#9FCBB9;
+  --dhx-danger-bg:#FBECEC;
+  --dhx-banner-hint-bg:#FCF3E6;
+  --dhx-banner-hint-fg:#B4560F;
+  --dhx-banner-warn-bg:#FCF3E6;
+  --dhx-banner-warn-fg:#B4560F;
+  --dhx-banner-on-bg:#FBECEC;
+  --dhx-banner-on-fg:#A03E52;
+  --g500:#66788A;
+  --g600:#52606d;
+  --g800:#182635;
+  --amber:#B4560F;
+  --green:#0E6E5C;
+  --red:#A03E52;
+}`;
+
+function buildSrcDoc(data: GanttInitData, projectName: string, isDark = false, isBrandTheme = false): string {
   const dataJson = JSON.stringify(data);
 
   const toolbarHTML = `
@@ -485,6 +572,14 @@ function buildSrcDoc(data: GanttInitData, projectName: string, isDark = false): 
         <div class="dep-type-legend">FS Finish→Start · SS Start→Start · FF Finish→Finish</div>
       </div>
       <div class="fg">
+        <label class="fl">Additional predecessors <span class="fl-hint">optional — always Finish-to-Start</span></label>
+        <div id="extraPredList" class="extra-pred-list"></div>
+        <div class="extra-pred-add" id="extraPredAddRow">
+          <select id="m-pred-extra" class="fi"></select>
+          <button type="button" id="extraPredAddBtn" class="btn btn-ghost" onclick="addExtraPred()">+ Add</button>
+        </div>
+      </div>
+      <div class="fg">
         <label class="fl">Notes</label>
         <textarea id="m-notes" class="fi" rows="2" placeholder="Notes…" style="resize:vertical;"></textarea>
       </div>
@@ -613,6 +708,7 @@ function buildSrcDoc(data: GanttInitData, projectName: string, isDark = false): 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${projectName.replace(/</g, "&lt;")} — Gantt</title>
 <link rel="stylesheet" href="/gantt-v4-engine.css?v=20260724dark">
+${isBrandTheme ? `<style>${GANTT_BRAND_THEME_CSS}</style>` : ""}
 </head>
 <body>
 <div class="main">
@@ -646,6 +742,8 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
+  const { data: organisation } = useCurrentOrganisation();
+  const isBrandTheme = (organisation?.brandingConfig as { theme?: string } | null | undefined)?.theme === "jiganto2026";
   const [authToken, setAuthToken] = useState<string | undefined>(undefined);
   const [srcDoc, setSrcDoc] = useState<string | null>(null);
   const [versionReloadKey, setVersionReloadKey] = useState(0);
@@ -750,16 +848,16 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
   // versionReloadKey forces a remount after activating a plan version.
   useEffect(() => {
     if (isLoading || !project || !authReady || !authTokenReady) return;
-    const bootKey = `${projectId}:${versionReloadKey}:${isDark ? "dark" : "light"}`;
+    const bootKey = `${projectId}:${versionReloadKey}:${isDark ? "dark" : "light"}:${isBrandTheme ? "brand" : "std"}`;
     if (bootstrappedKeyRef.current === bootKey) return;
     bootstrappedKeyRef.current = bootKey;
     const data: GanttInitData = {
-      ...buildGanttData(project, dbTasks as PmTask[], team as TeamMember[]),
+      ...buildGanttData(project, dbTasks as PmTask[], team as TeamMember[], isBrandTheme),
       authToken: authToken || undefined,
     };
-    setSrcDoc(buildSrcDoc(data, project.name, isDark));
+    setSrcDoc(buildSrcDoc(data, project.name, isDark, isBrandTheme));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot bootstrap per projectId (+ version/theme remount)
-  }, [isLoading, authReady, authTokenReady, projectId, project, versionReloadKey, isDark]);
+  }, [isLoading, authReady, authTokenReady, projectId, project, versionReloadKey, isDark, isBrandTheme]);
 
   // Keep iframe dark class in sync if theme flips without a full remount race
   useEffect(() => {
@@ -789,7 +887,7 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
   return (
     <iframe
       ref={iframeRef}
-      key={`gantt-${projectId}-v20260724dark-${versionReloadKey}-${isDark ? "d" : "l"}`}
+      key={`gantt-${projectId}-v20260724dark-${versionReloadKey}-${isDark ? "d" : "l"}-${isBrandTheme ? "b" : "s"}`}
       title={`Gantt — ${project.name}`}
       srcDoc={srcDoc}
       className="block h-full w-full border-0"

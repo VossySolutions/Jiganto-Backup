@@ -99,6 +99,8 @@ export const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
     icon: PmPlanningSchedulingIcon,
     tools: [
       { id: "gantt_chart", name: "Gantt Chart", hint: "Timeline & dependencies", icon: PmGanttChartIcon, multiInstance: true },
+      { id: "level1_plan", name: "Level 1 Plan", hint: "Presentation-ready phase summary", icon: PmGanttChartIcon },
+      { id: "plan_health", name: "Plan Health", hint: "Missing owners, dates & dependency conflicts", icon: PmGanttChartIcon },
       { id: "milestone_plan", name: "Milestone Plan", hint: "Key deliverables & gates", icon: PmMilestonePlanIcon },
       {
         id: "agile",
@@ -117,6 +119,9 @@ export const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
       { id: "status_reporting", name: "Status Reporting", hint: "Weekly/monthly reports — open from Projects → Status Reports", icon: PmStatusReportingIcon, pickerHidden: true },
       { id: "360_report", name: "360° Report", hint: "Full project health — open from Projects → 360° Reports", icon: Pm360ReportIcon, pickerHidden: true },
       { id: "project_dashboard", name: "Overview", hint: "KPIs & health — velocity, burn-down, cycle time", icon: PmProjectDashboardIcon },
+      { id: "milestone_status_report", name: "Milestone Status Report", hint: "Read-only rollup of the plan's milestones — table or timeline", icon: PmMilestonePlanIcon },
+      { id: "resource_capacity_report", name: "Resource / Capacity Report", hint: "Who's allocated here, and how much headroom is left", icon: PmResourceTrackerIcon },
+      { id: "financial_report", name: "Financial Report", hint: "Budget vs. actual by cost category, feeds the 360° Overview", icon: PmFinanceTrackerIcon },
     ],
   },
   raid_governance: {
@@ -131,6 +136,9 @@ export const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
       { id: "raci_model", name: "RACI Model", hint: "Responsibility matrix", icon: PmRaciModelIcon },
       { id: "decisions_log", name: "Decisions Log", hint: "Key decision records", icon: PmDecisionsLogIcon },
       { id: "support_tickets", name: "Support Tickets", hint: "Help Desk tickets linked to this project", icon: PmIssuesLogIcon },
+      { id: "raid_report", name: "RAID Report", hint: "Rolled-up view across risks, issues, assumptions & dependencies", icon: PmRaidGovernanceIcon },
+      { id: "action_log", name: "Action Log", hint: "Day-to-day actions — owner, due date, status", icon: PmIssuesLogIcon },
+      { id: "governance_calendar", name: "Governance Calendar", hint: "Steering boards, status calls & gate reviews", icon: PmDecisionsLogIcon },
     ],
   },
   resources_finance: {
@@ -152,6 +160,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
       { id: "test_tracker", name: "Test Tracker", hint: "QA test management", icon: PmTestTrackerIcon, crossModule: "Test Management" },
       { id: "sow_tracker", name: "Statement of Work", hint: "Scope & deliverables contract", icon: PmSowTrackerIcon },
       { id: "wbs", name: "WBS", hint: "Work breakdown structure", icon: PmWbsIcon },
+      { id: "rtm", name: "RTM", hint: "Requirements ↔ deliverable ↔ test-case traceability", icon: PmDeliverablesTrackerIcon },
     ],
   },
   people_organisation: {
@@ -167,19 +176,21 @@ export const TOOL_DEFINITIONS: Record<string, ToolCategory> = {
 };
 
 export const MASTER_TOOL_ORDER: string[] = [
-  "project_dashboard", "360_report", "gantt_chart", "milestone_plan", "agile", "tracking_board",
+  "project_dashboard", "360_report", "gantt_chart", "level1_plan", "plan_health", "milestone_plan", "agile", "tracking_board",
   "status_reporting", "risk_log", "issues_log", "assumptions_log",
   "dependencies_log", "decisions_log", "change_log", "documentation", "org_chart",
   "stakeholder_map", "business_process_model", "deliverables_tracker",
   "raci_model", "resource_tracker", "test_tracker", "timesheets", "finance_tracker",
-  "sow_tracker", "wbs", "whiteboard", "support_tickets",
+  "sow_tracker", "wbs", "rtm", "whiteboard", "support_tickets",
+  "raid_report", "action_log", "governance_calendar",
+  "milestone_status_report", "resource_capacity_report", "financial_report",
 ];
 
 const ALWAYS_TOOLS = ["project_dashboard"] as const;
 
 const DEFAULT_TOOLS: Record<string, string[]> = {
-  project: ["project_dashboard", "gantt_chart", "milestone_plan", "tracking_board", "risk_log", "issues_log", "assumptions_log", "dependencies_log", "change_log", "raci_model", "resource_tracker", "timesheets", "finance_tracker", "documentation", "deliverables_tracker", "test_tracker", "wbs"],
-  programme: ["project_dashboard", "gantt_chart", "milestone_plan", "risk_log", "issues_log"],
+  project: ["project_dashboard", "gantt_chart", "level1_plan", "milestone_plan", "tracking_board", "risk_log", "issues_log", "assumptions_log", "dependencies_log", "change_log", "raci_model", "resource_tracker", "timesheets", "finance_tracker", "documentation", "deliverables_tracker", "test_tracker", "wbs"],
+  programme: ["project_dashboard", "gantt_chart", "level1_plan", "milestone_plan", "risk_log", "issues_log"],
   initiative: ["project_dashboard", "milestone_plan", "risk_log"],
   campaign: ["project_dashboard", "agile", "milestone_plan"],
   poc: ["project_dashboard", "agile"],

@@ -18,12 +18,15 @@ export const pmWorkTypeEnum = [
 ] as const;
 
 export const pmToolTypeEnum = [
-  "gantt_chart", "milestone_plan", "scrum_board", "kanban_board", "epics_stories", "wbs",
+  "gantt_chart", "level1_plan", "plan_health", "milestone_plan", "scrum_board", "kanban_board", "epics_stories", "wbs",
   "status_reporting", "project_dashboard", "360_report",
   "risk_log", "issues_log", "assumptions_log", "dependencies_log", "decisions_log", "change_log", "raci_model",
+  "raid_report", "rtm",
   "resource_tracker", "timesheets", "finance_tracker", "sow_tracker",
   "documentation", "deliverables_tracker", "test_tracker",
-  "org_chart", "stakeholder_map", "business_process_model"
+  "org_chart", "stakeholder_map", "business_process_model",
+  "action_log", "governance_calendar",
+  "milestone_status_report", "resource_capacity_report", "financial_report"
 ] as const;
 
 export const pmToolCategoryEnum = [
@@ -359,6 +362,11 @@ export const pmTasks = pgTable("pm_tasks", {
   actualEndDate: date("actual_end_date"),
   predecessorIds: integer("predecessor_ids").array(),
   successorIds: integer("successor_ids").array(),
+  /** FS | SS | FF | SF — type of the FIRST predecessor link only, matching the
+   * Gantt engine's current single-predecessor-per-task model. Previously
+   * chosen in the UI but never sent to the server (verified in persistSave());
+   * every dependency silently behaved as FS after a reload. */
+  depType: text("dep_type").default("FS"),
   isSummary: boolean("is_summary").default(false),
   ganttType: text("gantt_type").default("task"),
   phaseNumber: integer("phase_number"),

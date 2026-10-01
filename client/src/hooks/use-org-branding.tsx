@@ -29,13 +29,43 @@ function hexToHslChannels(hex: string): string | null {
   return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
-/** Applies organisation primary colour to CSS variables for sidebar/buttons. */
+/** Named, opt-in themes an org can switch to via brandingConfig.theme. */
+export const ORG_THEMES = [
+  { value: "default", label: "Default" },
+  { value: "jiganto2026", label: "Jiganto 2026 (preview)" },
+] as const;
+
+export type OrgThemeValue = (typeof ORG_THEMES)[number]["value"];
+
+/** Applies organisation theme + primary colour override to the document. */
 export function OrgBrandingSync() {
   const { data: organisation } = useCurrentOrganisation();
 
   useEffect(() => {
     const root = document.documentElement;
-    const cfg = organisation?.brandingConfig as { primaryColor?: string } | null | undefined;
+    const cfg = organisation?.brandingConfig as
+      | { primaryColor?: string; theme?: string }
+      | null
+      | undefined;
+
+    const themeChanged = ORG_THEMES.some(
+      ({ value }) => value !== "default" && root.classList.contains(`theme-${value}`) !== (cfg?.theme === value)
+    );
+    if (themeChanged) {
+      // Briefly enable transitions on colour-bearing properties so the swap
+      // reads as a fade rather than an instant flash, then remove the class
+      // so normal interactions (hover, focus rings, etc.) stay instant.
+      root.classList.add("theme-transition");
+      window.setTimeout(() => root.classList.remove("theme-transition"), 300);
+    }
+
+    ORG_THEMES.forEach(({ value }) => {
+      if (value === "default") return;
+      root.classList.toggle(`theme-${value}`, cfg?.theme === value);
+    });
+
+    // A tenant-picked primaryColor always wins over the theme's own accent,
+    // same as it did before named themes existed.
     const channels = cfg?.primaryColor ? hexToHslChannels(cfg.primaryColor) : null;
     if (channels) {
       root.style.setProperty("--primary", channels);

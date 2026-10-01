@@ -24,6 +24,7 @@ const ROUTE_PRELOADERS: Record<string, () => Promise<unknown>> = {
   "/modules/templates": () => import("@/pages/TemplatesPage"),
   "/modules/customer-mgmt": () => import("@/pages/CustomerManagementPage"),
   "/modules/finance-mgmt": () => import("@/pages/FinanceManagementPage"),
+  "/modules/timesheets": () => import("@/pages/TimesheetsPage"),
   "/clients": () => import("@/pages/ClientsPage"),
   "/settings": () => import("@/pages/SettingsPage"),
 };

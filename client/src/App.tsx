@@ -96,6 +96,7 @@ const ClientsPage = lazyPage(() => import("@/pages/ClientsPage"));
 const ClientDetailPage = lazyPage(() => import("@/pages/ClientDetailPage"));
 const CustomerManagementPage = lazyPage(() => import("@/pages/CustomerManagementPage"));
 const FinanceManagementPage = lazyPage(() => import("@/pages/FinanceManagementPage"));
+const TimesheetsPage = lazyPage(() => import("@/pages/TimesheetsPage"));
 const ModulePage = lazyPage(() => import("@/pages/ModulePage"), "ModulePage");
 
 function LegacyClientsDetailRedirect() {
@@ -259,6 +260,7 @@ function Router() {
           <Route path="/clients">{suspense(ClientsPage)}</Route>
           <Route path="/modules/customer-mgmt">{suspense(CustomerManagementPage)}</Route>
           <Route path="/modules/finance-mgmt">{suspense(FinanceManagementPage)}</Route>
+          <Route path="/modules/timesheets">{suspense(TimesheetsPage)}</Route>
           <Route path="/modules/finance">
             <Redirect to="/modules/finance-mgmt" />
           </Route>

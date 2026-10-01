@@ -12,7 +12,14 @@
   
   --primary: 203 74% 45%;
   --primary-foreground: 0 0% 100%;
-  
+
+  /* "Jiganto" wordmark in the sidebar header — kept independent of --primary
+   * historically (the logo's own blue, not the app's accent colour). Exists
+   * as its own token so it can be overridden per-theme (see
+   * .theme-jiganto2026 [aria-label="Main navigation"] below) without
+   * changing the wordmark colour for tenants still on the default theme. */
+  --brand-wordmark: #009EE2;
+
   --secondary: 216 33% 95%;
   --secondary-foreground: 221 39% 11%;
   
@@ -86,6 +93,123 @@
   --chart-5: 330 81% 60%;
   
   --radius: 0.5rem;
+}
+
+/*
+ * "Jiganto 2026" rebrand theme — additive and opt-in only.
+ * Applied via the `theme-jiganto2026` class on <html>, toggled per-tenant by
+ * OrgBrandingSync from brandingConfig.theme. The default palette above is
+ * untouched; this exists purely so the new theme can be trialled per org
+ * before it becomes anyone's default.
+ */
+.theme-jiganto2026 {
+  --font-sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  --background: 216 20% 95%;       /* #EFF2F5 paper */
+  --foreground: 209 30% 15%;       /* #182635 ink */
+
+  --primary: 165 82% 24%;          /* #0E6E5C accent */
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 216 20% 95%;
+  --secondary-foreground: 209 30% 15%;
+
+  --muted: 210 14% 92%;            /* #EAEEF2 muted-soft */
+  --muted-foreground: 205 15% 41%; /* #66788A muted */
+
+  --accent: 160 40% 92%;           /* #E3F1ED accent-soft */
+  --accent-foreground: 165 65% 15%;
+
+  --destructive: 345 40% 43%;      /* #A03E52 danger */
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 209 16% 87%;           /* #DDE4EA line */
+  --input: 209 16% 87%;
+  --ring: 165 82% 24%;
+  --button-outline: hsl(209 16% 80% / 0.3);
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 209 30% 15%;
+  --popover-border: 209 16% 87%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 209 30% 15%;
+  --card-border: 209 16% 87%;
+
+  --primary-border: hsl(165 82% 18%);
+  --secondary-border: hsl(209 16% 84%);
+  --muted-border: hsl(209 16% 84%);
+  --accent-border: hsl(160 40% 82%);
+  --destructive-border: hsl(345 40% 36%);
+
+  /* Sidebar — dark navy ink, matches the app-nav rail in the new designs */
+  --sidebar: 209 30% 15%;
+  --sidebar-foreground: 0 0% 100%;
+  --sidebar-border: 209 25% 22%;
+  --sidebar-ring: 165 82% 24%;
+  --sidebar-primary: 165 82% 24%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-primary-border: hsl(165 82% 18%);
+  --sidebar-accent: 209 25% 22%;
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-accent-border: hsl(209 25% 28%);
+
+  /* Status colours from the design tokens (warn/danger/accent) */
+  --status-green: 160 40% 92%;
+  --status-green-foreground: 165 65% 24%;
+  --status-amber: 32 89% 92%;      /* #FCF3E6 warn-soft */
+  --status-amber-foreground: 25 78% 38%; /* #B4560F warn */
+  --status-red: 345 55% 94%;       /* #FBECEC danger-soft */
+  --status-red-foreground: 345 40% 43%;
+  --status-blue: 190 30% 90%;      /* #DFEFF0 blue-soft */
+  --status-blue-foreground: 191 51% 34%; /* #2B7A8A blue */
+  --status-purple: 258 30% 91%;    /* #EAE4F3 violet-soft */
+  --status-purple-foreground: 258 27% 39%; /* #5B4B8A violet */
+
+  /* Chart colours — reuse the phase palette from the Plan Studio prototype */
+  --chart-1: 209 30% 32%;  /* #3E5C76 */
+  --chart-2: 165 82% 24%;  /* #0E6E5C */
+  --chart-3: 258 27% 39%;  /* #5B4B8A */
+  --chart-4: 345 40% 43%;  /* #A03E52 */
+  --chart-5: 191 51% 34%;  /* #2B7A8A */
+}
+
+/*
+ * Briefly applied by OrgBrandingSync while a theme switch is landing, so the
+ * colour swap reads as a quick fade instead of an instant flash. Removed
+ * again ~300ms later — left permanently on, this would make routine hover/
+ * focus interactions feel laggy across the whole app.
+ */
+.theme-transition,
+.theme-transition * {
+  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease !important;
+}
+
+/*
+ * Sidebar.tsx builds its whole tree on --card/--muted/--border/--foreground,
+ * not a dedicated --sidebar-* family (those tokens exist in :root/.dark but
+ * nothing actually consumes them). Rather than touch every utility class in
+ * that 1300-line component blind, override the tokens it does use, scoped to
+ * just the nav landmark via CSS custom-property inheritance. Popovers/
+ * dropdowns opened from it render through a Radix portal into <body>, outside
+ * this subtree, so they correctly stay unaffected (still light, as intended).
+ */
+.theme-jiganto2026 [aria-label="Main navigation"] {
+  --card: 209 30% 15%;              /* #182635 ink */
+  --foreground: 0 0% 100%;
+  --muted: 209 25% 22%;
+  --muted-foreground: 209 15% 70%;
+  --border: 209 25% 25%;
+  --brand-wordmark: #0E6E5C;         /* new accent, was the old brand blue */
+}
+
+/* Mobile top bar is a separate fixed header outside the nav landmark above
+ * (only the desktop sidebar gets the dark-navy treatment) — still give its
+ * wordmark the same themed colour so it isn't left showing the old brand
+ * blue on small screens while the desktop sidebar shows the new accent. */
+.theme-jiganto2026 [aria-label="Mobile navigation"] {
+  --brand-wordmark: #0E6E5C;
 }
 
 .dark {

@@ -10,6 +10,7 @@ import {
   FinanceIcon,
   ResourcePlanningIcon,
   ResourcesIcon,
+  ResTimesheetsIcon,
   ServiceDeskIcon,
   HelpDeskIcon,
   TestManagementIcon,
@@ -156,6 +157,17 @@ export const moduleMetadata: ModuleMetadata[] = [
     longDescription: "Budgets, actuals, invoicing and financial reporting across projects and departments.",
     category: "Management",
     color: "#10B981",
+  },
+  {
+    key: "timesheets",
+    name: "Timesheets",
+    icon: ResTimesheetsIcon,
+    href: "/modules/timesheets",
+    shortDescription: "Submit and approve timesheets",
+    longDescription:
+      "Weekly time entry with project manager and resource manager approval, plus utilisation and missing-timesheet reporting.",
+    category: "Management",
+    color: "#0EA5E9",
   },
   {
     key: "resource-mgmt",

@@ -63,6 +63,15 @@ const PmStakeholderTool = lazy(() => import("@/components/projects/PmSecondaryTo
 const PmBpmTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmBpmTool })));
 const PmSowTrackerTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmSowTrackerTool })));
 const PmWbsTool = lazy(() => import("@/components/projects/PmSecondaryTools").then((m) => ({ default: m.PmWbsTool })));
+const PmLevel1PlanTool = lazy(() => import("@/components/projects/PmLevel1PlanTool"));
+const PmPlanHealthTool = lazy(() => import("@/components/projects/PmPlanHealthTool"));
+const PmActionLogTool = lazy(() => import("@/components/projects/PmActionLogTool"));
+const PmGovernanceCalendarTool = lazy(() => import("@/components/projects/PmGovernanceCalendarTool"));
+const PmRaidReportTool = lazy(() => import("@/components/projects/PmRaidReportTool"));
+const PmRtmTool = lazy(() => import("@/components/projects/PmRtmTool"));
+const PmMilestoneStatusReportTool = lazy(() => import("@/components/projects/PmMilestoneStatusReportTool"));
+const PmResourceCapacityReportTool = lazy(() => import("@/components/projects/PmResourceCapacityReportTool"));
+const PmFinancialReportTool = lazy(() => import("@/components/projects/PmFinancialReportTool"));
 
 import {
   Loader2,
@@ -521,6 +530,8 @@ function ProjectDetailView({
                       toolId={toolId}
                       project={project}
                       onNavigateTool={selectTool}
+                      enabledTools={enabledTools}
+                      onAddTool={(id) => addToolMutation.mutate(id)}
                     />
                   </div>
                 ))}
@@ -529,6 +540,8 @@ function ProjectDetailView({
                     toolId={currentActiveTool}
                     project={project}
                     onNavigateTool={selectTool}
+                    enabledTools={enabledTools}
+                    onAddTool={(id) => addToolMutation.mutate(id)}
                   />
                 )}
               </>
@@ -930,10 +943,14 @@ function ToolPlaceholder({
   toolId,
   project,
   onNavigateTool,
+  enabledTools,
+  onAddTool,
 }: {
   toolId: string;
   project: any;
   onNavigateTool?: (toolId: string) => void;
+  enabledTools?: any[];
+  onAddTool?: (toolId: string) => void;
 }) {
   const def = findToolDefinition(toolId);
   const Icon = def?.icon || PmDocumentationIcon;
@@ -948,9 +965,20 @@ function ToolPlaceholder({
 
     switch (toolId) {
       case "project_dashboard":
-        return <ProjectOverview project={project} onNavigateTool={onNavigateTool} />;
+        return (
+          <ProjectOverview
+            project={project}
+            onNavigateTool={onNavigateTool}
+            enabledTools={enabledTools}
+            onAddTool={onAddTool}
+          />
+        );
       case "gantt_chart":
         return <ProjectGanttWrapper project={project} />;
+      case "level1_plan":
+        return <PmLevel1PlanTool projectId={project.id} />;
+      case "plan_health":
+        return <PmPlanHealthTool projectId={project.id} />;
       case "tracking_board":
         return <ProjectTrackingBoard projectId={project.id} />;
       case "risk_log":
@@ -982,7 +1010,7 @@ function ToolPlaceholder({
       case "status_reporting":
         return <PmStatusReportingTool projectId={project.id} project={project} />;
       case "documentation":
-        return <PmDocumentationTool projectId={project.id} />;
+        return <PmDocumentationTool projectId={project.id} project={project} />;
       case "org_chart":
         return <PmTeamOrgTool projectId={project.id} />;
       case "stakeholder_map":
@@ -999,6 +1027,20 @@ function ToolPlaceholder({
         return <PmTimesheetsTool projectId={project.id} />;
       case "test_tracker":
         return <PmTestTrackerTool projectId={project.id} />;
+      case "action_log":
+        return <PmActionLogTool projectId={project.id} project={project} />;
+      case "governance_calendar":
+        return <PmGovernanceCalendarTool projectId={project.id} project={project} />;
+      case "raid_report":
+        return <PmRaidReportTool projectId={project.id} />;
+      case "rtm":
+        return <PmRtmTool projectId={project.id} project={project} />;
+      case "milestone_status_report":
+        return <PmMilestoneStatusReportTool projectId={project.id} />;
+      case "resource_capacity_report":
+        return <PmResourceCapacityReportTool projectId={project.id} />;
+      case "financial_report":
+        return <PmFinancialReportTool projectId={project.id} project={project} />;
       default:
         return (
           <Card>

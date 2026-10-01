@@ -56,7 +56,8 @@ import {
   Plug,
   CreditCard,
   Bell,
-  Sparkles
+  Sparkles,
+  Loader2
 } from "lucide-react";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import type { Tenant, Profile, UserRole, UserInvitation, OrgUnit, CostCentre } from "@shared/schema";
@@ -75,6 +76,7 @@ import SettingsStaffAuditTab from "@/components/settings/SettingsStaffAuditTab";
 import SettingsWorkspaceRolesGuide from "@/components/settings/SettingsWorkspaceRolesGuide";
 import SettingsClientWorkspaceTab from "@/components/settings/SettingsClientWorkspaceTab";
 import { useClientContext } from "@/hooks/use-client-context";
+import { ORG_THEMES } from "@/hooks/use-org-branding";
 import SettingsIntegrationsTab from "@/components/settings/SettingsIntegrationsTab";
 import SettingsBillingTab from "@/components/settings/SettingsBillingTab";
 import SettingsDataGovernanceTab from "@/components/settings/SettingsDataGovernanceTab";
@@ -154,6 +156,8 @@ export default function SettingsPage() {
     h2Size: "22px",
     h3Size: "18px",
   });
+
+  const [isThemeSaving, setIsThemeSaving] = useState(false);
 
   const [isOrgUnitDialogOpen, setIsOrgUnitDialogOpen] = useState(false);
   const [editingOrgUnit, setEditingOrgUnit] = useState<OrgUnit | null>(null);
@@ -1531,6 +1535,49 @@ export default function SettingsPage() {
                         }} data-testid="font-preview">
                           The quick brown fox jumps over the lazy dog. 1234567890
                         </p>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-4 space-y-3">
+                      <h3 className="text-sm font-semibold flex items-center gap-2">
+                        <Palette className="h-4 w-4" />
+                        App Theme
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        Switches the whole application's look, not just documents. Safe to trial —
+                        it only applies to this organisation.
+                      </p>
+                      <div className="space-y-2 max-w-xs">
+                        <Label className="flex items-center gap-2">
+                          Theme
+                          {isThemeSaving && (
+                            <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Saving…
+                            </span>
+                          )}
+                        </Label>
+                        <Select
+                          disabled={isThemeSaving}
+                          value={(tenant?.brandingConfig as any)?.theme || "default"}
+                          onValueChange={(v) => {
+                            const currentBranding = (tenant?.brandingConfig as Record<string, unknown>) || {};
+                            setIsThemeSaving(true);
+                            updateTenantMutation.mutate(
+                              { brandingConfig: { ...currentBranding, theme: v } } as Partial<Tenant>,
+                              { onSettled: () => setIsThemeSaving(false) }
+                            );
+                          }}
+                        >
+                          <SelectTrigger data-testid="select-app-theme">
+                            <SelectValue placeholder="Select theme" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ORG_THEMES.map((t) => (
+                              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
 
