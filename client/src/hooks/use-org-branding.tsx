@@ -29,10 +29,19 @@ function hexToHslChannels(hex: string): string | null {
   return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
-/** Named, opt-in themes an org can switch to via brandingConfig.theme. */
+/**
+ * Named themes an org can switch to via brandingConfig.theme.
+ *
+ * "jiganto2026" is the default as of Oct 2026 (promoted from an opt-in
+ * preview — see client/src/index.css for the palette itself). "legacy" is
+ * the explicit opt-out for any org that wants the original blue theme back;
+ * it works "for free" because that palette is still what :root defines —
+ * picking "legacy" just means we don't add the theme-jiganto2026 class that
+ * overrides it.
+ */
 export const ORG_THEMES = [
-  { value: "default", label: "Default" },
-  { value: "jiganto2026", label: "Jiganto 2026 (preview)" },
+  { value: "jiganto2026", label: "Jiganto 2026 (default)" },
+  { value: "legacy", label: "Legacy (pre-2026)" },
 ] as const;
 
 export type OrgThemeValue = (typeof ORG_THEMES)[number]["value"];
@@ -48,9 +57,10 @@ export function OrgBrandingSync() {
       | null
       | undefined;
 
-    const themeChanged = ORG_THEMES.some(
-      ({ value }) => value !== "default" && root.classList.contains(`theme-${value}`) !== (cfg?.theme === value)
-    );
+    // Default to the new theme unless the org explicitly opted into "legacy".
+    // (Older saved configs with theme: "default" or no theme at all land here too.)
+    const wantsJiganto2026 = cfg?.theme !== "legacy";
+    const themeChanged = root.classList.contains("theme-jiganto2026") !== wantsJiganto2026;
     if (themeChanged) {
       // Briefly enable transitions on colour-bearing properties so the swap
       // reads as a fade rather than an instant flash, then remove the class
@@ -59,10 +69,7 @@ export function OrgBrandingSync() {
       window.setTimeout(() => root.classList.remove("theme-transition"), 300);
     }
 
-    ORG_THEMES.forEach(({ value }) => {
-      if (value === "default") return;
-      root.classList.toggle(`theme-${value}`, cfg?.theme === value);
-    });
+    root.classList.toggle("theme-jiganto2026", wantsJiganto2026);
 
     // A tenant-picked primaryColor always wins over the theme's own accent,
     // same as it did before named themes existed.

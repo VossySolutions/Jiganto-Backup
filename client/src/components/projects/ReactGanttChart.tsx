@@ -743,7 +743,9 @@ export function ReactGanttChart({ projectId }: ReactGanttChartProps) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   const { data: organisation } = useCurrentOrganisation();
-  const isBrandTheme = (organisation?.brandingConfig as { theme?: string } | null | undefined)?.theme === "jiganto2026";
+  // "jiganto2026" is now the default theme (see use-org-branding.tsx) — only
+  // an explicit "legacy" opt-out should fall back to the old chart palette.
+  const isBrandTheme = (organisation?.brandingConfig as { theme?: string } | null | undefined)?.theme !== "legacy";
   const [authToken, setAuthToken] = useState<string | undefined>(undefined);
   const [srcDoc, setSrcDoc] = useState<string | null>(null);
   const [versionReloadKey, setVersionReloadKey] = useState(0);

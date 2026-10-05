@@ -18,6 +18,14 @@
               window.matchMedia("(prefers-color-scheme: dark)").matches);
           document.documentElement.style.colorScheme = dark ? "dark" : "light";
           if (dark) document.documentElement.classList.add("dark");
+
+          // "Jiganto 2026" is the default visual theme as of Oct 2026 (was
+          // opt-in preview). Applied here too, before first paint, so it
+          // doesn't flash the old blue theme before OrgBrandingSync (which
+          // reads the org's brandingConfig) mounts. An org that explicitly
+          // opted into "legacy" is caught and corrected by OrgBrandingSync
+          // a moment later — see client/src/hooks/use-org-branding.tsx.
+          document.documentElement.classList.add("theme-jiganto2026");
         } catch (e) {}
       })();
     </script>

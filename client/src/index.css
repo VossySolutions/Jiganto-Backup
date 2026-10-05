@@ -96,11 +96,12 @@
 }
 
 /*
- * "Jiganto 2026" rebrand theme — additive and opt-in only.
- * Applied via the `theme-jiganto2026` class on <html>, toggled per-tenant by
- * OrgBrandingSync from brandingConfig.theme. The default palette above is
- * untouched; this exists purely so the new theme can be trialled per org
- * before it becomes anyone's default.
+ * "Jiganto 2026" rebrand theme — the default theme as of Oct 2026.
+ * Applied via the `theme-jiganto2026` class on <html>: added unconditionally
+ * in client/index.html before first paint, and kept in sync per-tenant by
+ * OrgBrandingSync (client/src/hooks/use-org-branding.tsx) from
+ * brandingConfig.theme. The :root palette above is the old default and is
+ * now the "legacy" fallback for any org that explicitly opts out.
  */
 .theme-jiganto2026 {
   --font-sans: 'Segoe UI', system-ui, -apple-system, sans-serif;

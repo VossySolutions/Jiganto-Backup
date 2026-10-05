@@ -1559,7 +1559,7 @@ export default function SettingsPage() {
                         </Label>
                         <Select
                           disabled={isThemeSaving}
-                          value={(tenant?.brandingConfig as any)?.theme || "default"}
+                          value={(tenant?.brandingConfig as any)?.theme || "jiganto2026"}
                           onValueChange={(v) => {
                             const currentBranding = (tenant?.brandingConfig as Record<string, unknown>) || {};
                             setIsThemeSaving(true);
