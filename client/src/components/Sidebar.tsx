@@ -18,6 +18,7 @@ import {
   Check,
   Menu,
   X,
+  Sparkles,
 } from "lucide-react";
 import {
   DashboardIcon,
@@ -108,10 +109,22 @@ const pinnedItem: ModuleItem = {
   color: "#1E88C8",
 };
 
+// "Ask Jiganto" — the AI landing page (see client/src/pages/AiLandingPage.tsx).
+// Pinned alongside Dashboard so AI is always one click away from every
+// screen, not just reachable via the floating chat button (which is itself
+// hidden on most routes — see AIAssistant.tsx's hideFab logic).
+const aiPinnedItem: ModuleItem = {
+  name: "Ask Jiganto",
+  icon: Sparkles,
+  href: "/ai",
+  description: "AI across your whole platform",
+  color: "#0E6E5C",
+};
+
 const moduleGroups: ModuleGroup[] = [
   {
     label: null,
-    items: [pinnedItem],
+    items: [pinnedItem, aiPinnedItem],
   },
   {
     label: "Collaboration",

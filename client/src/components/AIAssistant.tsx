@@ -30,12 +30,12 @@ const quickActions = [
 
 export function AIAssistantButton() {
   const [location] = useLocation();
-  const hideFab =
-    location.startsWith("/modules/") ||
-    location.startsWith("/dashboard") ||
-    location.startsWith("/ws/") ||
-    location.startsWith("/documents") ||
-    location.startsWith("/clients");
+  // Previously hidden across most of the app (/modules/*, /dashboard, /ws/*,
+  // /documents, /clients), which made the only AI entry point unreachable
+  // from almost every real screen. Now AI has its own dedicated landing page
+  // (see AiLandingPage.tsx, pinned in the sidebar as "Ask Jiganto"), so the
+  // floating assistant only needs to hide there to avoid duplicate AI UI.
+  const hideFab = location.startsWith("/ai");
   const { data: aiStatus, isLoading: aiStatusLoading } = useAiStatus(!hideFab);
   const aiEnabled = aiStatus?.modules.assistant ?? false;
   const [isOpen, setIsOpen] = useState(false);

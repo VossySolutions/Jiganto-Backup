@@ -98,6 +98,7 @@ const CustomerManagementPage = lazyPage(() => import("@/pages/CustomerManagement
 const FinanceManagementPage = lazyPage(() => import("@/pages/FinanceManagementPage"));
 const TimesheetsPage = lazyPage(() => import("@/pages/TimesheetsPage"));
 const ModulePage = lazyPage(() => import("@/pages/ModulePage"), "ModulePage");
+const AiLandingPage = lazyPage(() => import("@/pages/AiLandingPage"));
 
 function LegacyClientsDetailRedirect() {
   const [, params] = useRoute("/modules/clients/:id");
@@ -215,6 +216,7 @@ function Router() {
       <Switch>
           <Route path={DASHBOARD_PATH}>{suspense(DashboardRoute)}</Route>
           <Route path="/ws/:slug">{suspense(DashboardRoute)}</Route>
+          <Route path="/ai">{suspense(AiLandingPage)}</Route>
           <Route path="/">
             <RootRedirect />
           </Route>

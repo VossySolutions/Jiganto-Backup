@@ -71,7 +71,7 @@ export function registerChatRoutes(app: Express): void {
       }
 
       const conversationId = parseIdParam(req.params.id);
-      const { content } = req.body;
+      const { content, grounded } = req.body as { content: string; grounded?: boolean };
 
       const userId = (req as Request & { user?: { claims?: { sub?: string } } }).user?.claims
         ?.sub;
@@ -92,10 +92,30 @@ export function registerChatRoutes(app: Express): void {
       await chatStorage.createMessage(conversationId, "user", content);
 
       const messages = await chatStorage.getMessagesByConversation(conversationId);
-      const chatMessages = messages.map((m) => ({
+      const chatMessages: { role: "user" | "assistant" | "system"; content: string }[] = messages.map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
       }));
+
+      // Ask Jiganto (the AI landing page) requests grounding: prepend a
+      // system message built from the tenant's live dashboard/projects/CRM
+      // data so answers reference real figures instead of guessing. The
+      // floating assistant elsewhere in the app doesn't pass this flag, so
+      // its behaviour is unchanged.
+      if (grounded) {
+        try {
+          const { parseAiScope, buildAiGroundingSummary, buildGroundedSystemPrompt } = await import(
+            "../ai/landing-grounding"
+          );
+          const scope = parseAiScope(req);
+          if (scope) {
+            const summary = await buildAiGroundingSummary(scope);
+            chatMessages.unshift({ role: "system", content: buildGroundedSystemPrompt(summary) });
+          }
+        } catch (groundingErr) {
+          console.error("Failed to build AI grounding context:", groundingErr);
+        }
+      }
 
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
